@@ -1,0 +1,28 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # Pyflakes
+    "I",     # isort (import ordering)
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "ASYNC", # flake8-async
+    "S",     # flake8-bandit (security)
+    "DTZ",   # flake8-datetimez (datetime hygiene — Europe/Moscow project pin)
+    "N",     # pep8-naming
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-native rules
+]
+ignore = [
+    "S101",  # allow assert (used by pytest, lands in Phase 3)
+]
+
+[lint.per-file-ignores]
+# alembic env.py uses untyped Alembic API; skip security + import-order
+"alembic/env.py" = ["S", "I001"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
