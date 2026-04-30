@@ -29,10 +29,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Running `pnpm --filter admin-web test` from the repo root passes the existing Vitest suite without modification of test files.
   5. `packages/ui/` and `packages/api-client/` each contain only `package.json` + `README.md` (no source code).
 
-**Plans**: TBD
+**Plans**: 3 plans
 
-**Open questions** (to be resolved in plan-phase 1):
-  - `frontend/.git` strategy: absorb the sub-repo into the root repo via `git subtree add` (preserves the frontend's commit history) **or** collapse via `rm -rf frontend/.git` followed by a single new commit at the new location (clean root history, no preserved frontend history). Both are viable; user must choose before plan execution. Do NOT pre-commit to either path during roadmap creation.
+Plans:
+- [ ] 01-01-PLAN.md — Scaffold monorepo skeleton (pnpm-workspace.yaml, packages/ui, packages/api-client, infra/docker, infra/nginx)
+- [ ] 01-02-PLAN.md — Move frontend/ to apps/admin-web/ verbatim (clean-collapse frontend/.git per D-01)
+- [ ] 01-03-PLAN.md — Reconcile root lockfile + run full D-16 verification battery (typecheck/lint/lint:fixtures/test/build/dev smoke)
+
+**Open questions** (resolved during /gsd-discuss-phase 2026-04-30):
+  - ~~`frontend/.git` strategy~~ → **RESOLVED** as clean collapse (`rm -rf frontend/.git`) per locked decision D-01 in `.planning/phases/01-monorepo-restructure-frontend-move/01-CONTEXT.md`.
 
 ### Phase 2: Backend Skeleton with Quality Tooling
 **Goal**: A runnable FastAPI modular monolith exists at `apps/backend/app/` with the architectural style (`core` / `modules` / `integrations` / `workers` / `api`) physically realized, only `GET /healthz` as a real endpoint, Alembic configured async with empty `versions/`, and ruff + mypy strict + import-linter contracts that fail loudly on any violation.
@@ -67,7 +72,7 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Monorepo Restructure & Frontend Move | 0/TBD | Not started | - |
+| 1. Monorepo Restructure & Frontend Move | 0/3 | Not started | - |
 | 2. Backend Skeleton with Quality Tooling | 0/TBD | Not started | - |
 | 3. Tests, Dev Infrastructure & Documentation | 0/TBD | Not started | - |
 
