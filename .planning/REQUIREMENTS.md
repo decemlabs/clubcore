@@ -12,7 +12,7 @@
 
 - [x] **MONO-01**: Корневые папки `apps/`, `packages/`, `infra/` созданы; `apps/client-web` НЕ создаётся даже как пустая папка
 - [x] **MONO-02**: `pnpm-workspace.yaml` на корне настраивает workspaces для `apps/admin-web` и `packages/*`
-- [ ] **MONO-03**: Существующий `./frontend` перенесён в `apps/admin-web/` без изменения внутренней структуры, моков и истории файлов
+- [x] **MONO-03**: Существующий `./frontend` перенесён в `apps/admin-web/` без изменения внутренней структуры, моков и истории файлов
 - [x] **MONO-04**: `packages/ui/` создан с `package.json` + `README.md` без какого-либо реального кода
 - [x] **MONO-05**: `packages/api-client/` создан с `package.json` + `README.md` без какого-либо реального кода
 - [x] **MONO-06**: `infra/docker/` и `infra/nginx/` существуют как структура для будущих конфигов
@@ -163,7 +163,7 @@
 |-------------|-------|--------|
 | MONO-01 | Phase 1 | Complete |
 | MONO-02 | Phase 1 | Complete |
-| MONO-03 | Phase 1 | Pending |
+| MONO-03 | Phase 1 | Complete |
 | MONO-04 | Phase 1 | Complete |
 | MONO-05 | Phase 1 | Complete |
 | MONO-06 | Phase 1 | Complete |
