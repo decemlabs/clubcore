@@ -60,15 +60,15 @@
 
 ### Tooling & Quality Gates
 
-- [ ] **TOOL-01**: `pyproject.toml` со всеми deps под uv (Python 3.12, FastAPI 0.115+, SQLAlchemy 2.0+, Alembic, Pydantic v2, pydantic-settings, asyncpg, structlog, ARQ, redis, httpx, pytest, pytest-asyncio, ruff, mypy, import-linter)
-- [ ] **TOOL-02**: `ruff.toml` со строгим набором правил (E, F, I, B, UP, ASYNC, S, …)
-- [ ] **TOOL-03**: mypy в strict-режиме (через секцию в `pyproject.toml`)
-- [ ] **TOOL-04**: `importlinter.ini` с контрактами:
+- [x] **TOOL-01**: `pyproject.toml` со всеми deps под uv (Python 3.12, FastAPI 0.115+, SQLAlchemy 2.0+, Alembic, Pydantic v2, pydantic-settings, asyncpg, structlog, ARQ, redis, httpx, pytest, pytest-asyncio, ruff, mypy, import-linter)
+- [x] **TOOL-02**: `ruff.toml` со строгим набором правил (E, F, I, B, UP, ASYNC, S, …)
+- [x] **TOOL-03**: mypy в strict-режиме (через секцию в `pyproject.toml`)
+- [x] **TOOL-04**: `importlinter.ini` с контрактами:
   - `core` не импортирует `app.modules.*`
   - `app.modules.X` не импортирует `app.modules.Y` (X≠Y)
   - `app.integrations.*` не импортируют `app.modules.*` напрямую
-- [ ] **TOOL-05**: `.env.example` со всеми placeholder env переменными (DATABASE_URL, REDIS_URL, …)
-- [ ] **TOOL-06**: `apps/backend/.gitignore` корректно игнорирует `.venv/`, `__pycache__/`, `.mypy_cache/`, `.ruff_cache/`
+- [x] **TOOL-05**: `.env.example` со всеми placeholder env переменными (DATABASE_URL, REDIS_URL, …)
+- [x] **TOOL-06**: `apps/backend/.gitignore` корректно игнорирует `.venv/`, `__pycache__/`, `.mypy_cache/`, `.ruff_cache/`
 
 ### Test Scaffold
 
@@ -190,12 +190,12 @@
 | API-03 | Phase 2 | Pending |
 | DB-01 | Phase 2 | Pending |
 | DB-02 | Phase 2 | Pending |
-| TOOL-01 | Phase 2 | Pending |
-| TOOL-02 | Phase 2 | Pending |
-| TOOL-03 | Phase 2 | Pending |
-| TOOL-04 | Phase 2 | Pending |
-| TOOL-05 | Phase 2 | Pending |
-| TOOL-06 | Phase 2 | Pending |
+| TOOL-01 | Phase 2 | Complete |
+| TOOL-02 | Phase 2 | Complete |
+| TOOL-03 | Phase 2 | Complete |
+| TOOL-04 | Phase 2 | Complete |
+| TOOL-05 | Phase 2 | Complete |
+| TOOL-06 | Phase 2 | Complete |
 | TEST-01 | Phase 3 | Pending |
 | TEST-02 | Phase 3 | Pending |
 | TEST-03 | Phase 3 | Pending |

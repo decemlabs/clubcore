@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 context gathered
-last_updated: "2026-04-30T19:20:49.989Z"
-last_activity: 2026-04-30 -- Phase 02 planning complete
+last_updated: "2026-04-30T19:32:40.570Z"
+last_activity: 2026-04-30
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 11
-  completed_plans: 3
-  percent: 27
+  completed_plans: 4
+  percent: 36
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-30)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 1 — Monorepo Restructure & Frontend Move
+**Current focus:** Phase 02 — backend-skeleton-with-quality-tooling
 
 ## Current Position
 
-Phase: 1 (Monorepo Restructure & Frontend Move) — COMPLETE
-Plan: 3 of 3 (all complete)
+Phase: 02 (backend-skeleton-with-quality-tooling) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-04-30 -- Phase 02 planning complete
+Last activity: 2026-04-30
 
-Progress: [███░░░░░░░] 33% (1 of 3 phases complete)
+Progress: [████░░░░░░] 36%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [███░░░░░░░] 33% (1 of 3 phases complete)
 | Phase 01 P01 | 1m 36s | 3 tasks | 7 files |
 | Phase 01 P02 | 2m 56s | 3 tasks | 820 files |
 | Phase 01 P03 | ~25m  | 3 tasks | 1 created / 1 modified / 1 deleted (across 2 sessions; user-decision pause) |
+| Phase 02 P01 | 2min | 6 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 1 plan 01: pnpm workspace uses two-glob form (apps/*, packages/*); scoped placeholder names @sportzal/ui and @sportzal/api-client; .gitkeep used to track empty infra dirs
 - [Phase ?]: Phase 1 plan 02: frontend/.git collapsed via rm -rf (D-01); plain mv used since source was untracked; Tasks 1-3 consolidated into commit 6ef25d7
 - [Phase 1]: Phase 1 plan 03: single root pnpm-lock.yaml authoritative; per-app lockfile removed; `pnpm --filter sportzal-adminka` (manifest name) is canonical filter form; Rule-4 deviation — added eslint-import-resolver-typescript devDep to apps/admin-web/package.json per user decision (D-04/D-14 vs D-16 conflict resolution)
+- [Phase ?]: Phase 2 Plan 01: Standalone ruff.toml under [lint] (ruff v0.6 conv); honored CONTEXT.md D-15 [tool.uv] dev-dependencies over PEP 735; importlinter root_packages plural; alembic.ini placeholder sqlalchemy.url overridden by env.py at runtime
 
 ### Pending Todos
 
@@ -97,6 +99,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-30T18:37:06.427Z
+Last session: 2026-04-30T19:32:34.658Z
 Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-backend-skeleton-with-quality-tooling/02-CONTEXT.md
+Resume file: None

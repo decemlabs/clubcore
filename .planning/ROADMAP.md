@@ -54,7 +54,7 @@ Plans:
 **Plans**: 8 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Cleanup root backend/ + scaffold apps/backend/ tooling configs (pyproject, ruff, importlinter, alembic.ini, .env.example, .gitignore)
+- [x] 02-01-PLAN.md — Cleanup root backend/ + scaffold apps/backend/ tooling configs (pyproject, ruff, importlinter, alembic.ini, .env.example, .gitignore)
 - [ ] 02-02-PLAN.md — uv lock + uv sync; verify all dev tools and runtime deps resolve and import
 - [ ] 02-03-PLAN.md — app/core/ infrastructure (config, database lifespan, logging, exceptions, middleware, security/dependencies/pagination placeholders)
 - [ ] 02-04-PLAN.md — app/modules/ placeholders (auth subtree + 8 module __init__.py)
