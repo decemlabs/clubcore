@@ -8,6 +8,7 @@ Do NOT import the FastAPI application factory module — that would trigger
 FastAPI lifespan + structlog configuration during `alembic revision` /
 `alembic upgrade` (RESEARCH.md Pitfall 2).
 """
+
 import asyncio
 from logging.config import fileConfig
 
