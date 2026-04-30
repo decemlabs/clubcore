@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-02-PLAN.md (uv lock + sync, 52 packages)
-last_updated: "2026-04-30T19:54:20.019Z"
+last_updated: "2026-04-30T19:59:25.700Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 11
-  completed_plans: 8
-  percent: 73
+  completed_plans: 9
+  percent: 82
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-30)
 ## Current Position
 
 Phase: 02 (backend-skeleton-with-quality-tooling) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-04-30
 
-Progress: [███████░░░] 73%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [███████░░░] 73%
 | Phase 02 P03 | 2min | 1 tasks | 10 files |
 | Phase 02 P04 | 1m 24s | 2 tasks | 14 files |
 | Phase 02 P05 | 2m 21s | 2 tasks | 15 files |
+| Phase 02 P06 | 1m 27s | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,7 @@ Recent decisions affecting current work:
 - [Phase 02]: Phase 02 plan 04: billing/__init__.py docstring split to multi-line — single-line plan-spec was 104 chars and tripped ruff E501 (line-length=100); preserved 'TODO Phase B+' and 'ЮKassa (Stripe forbidden in RU)' tokens
 - [Phase 02]: Phase 02 plan 05: WorkerSettings.functions typed as ClassVar[list[Any]] (over plan-spec list[Any]) — ruff RUF012 requires ClassVar wrapper; ARQ's WorkerSettings IS a class-level config so semantically correct
 - [Phase 02]: Phase 02 plan 05: get_settings() called at module import time in arq_app.py (fail-fast on missing REDIS_URL) — intentional; ARQ worker process needs Redis to run anyway
+- [Phase 02]: Phase 02 plan 06: smoke verified GET /healthz via httpx ASGITransport inside app.router.lifespan_context — keeps test self-contained (no httpx lifespan='on' coupling); create_async_engine lazy so no Postgres needed for in-process smoke
 
 ### Pending Todos
 
@@ -112,6 +114,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-30T19:52:45.455Z
+Last session: 2026-04-30T19:58:29.303Z
 Stopped at: Completed 02-02-PLAN.md (uv lock + sync, 52 packages)
 Resume file: None

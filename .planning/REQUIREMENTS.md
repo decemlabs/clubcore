@@ -20,7 +20,7 @@
 ### Backend Core
 
 - [x] **BE-01**: `apps/backend/app/` — корень Python-пакета с именем `app` (не `sportzal`, не `src/sportzal`)
-- [ ] **BE-02**: `app/main.py` экспортирует `create_app()` factory, поднимает FastAPI с подключённым api-роутером, structlog и middleware
+- [x] **BE-02**: `app/main.py` экспортирует `create_app()` factory, поднимает FastAPI с подключённым api-роутером, structlog и middleware
 - [x] **BE-03**: `app/core/config.py` — `Settings` через `pydantic-settings` + cached `get_settings()`, читает env только здесь
 - [x] **BE-04**: `app/core/database.py` — async engine, `async_sessionmaker`, `Base`, `get_db` dependency
 - [x] **BE-05**: `app/core/security.py` — пустой модуль с заготовкой под будущие helper-функции; никакой реальной auth-логики
@@ -49,9 +49,9 @@
 
 ### Backend API Surface
 
-- [ ] **API-01**: `app/api/router.py` подключает v1 router
-- [ ] **API-02**: `app/api/v1/router.py` подключает health (и потом модули)
-- [ ] **API-03**: `app/api/v1/health.py` — `GET /healthz` возвращает `{"status": "ok"}` (единственный реальный endpoint в Phase A)
+- [x] **API-01**: `app/api/router.py` подключает v1 router
+- [x] **API-02**: `app/api/v1/router.py` подключает health (и потом модули)
+- [x] **API-03**: `app/api/v1/health.py` — `GET /healthz` возвращает `{"status": "ok"}` (единственный реальный endpoint в Phase A)
 
 ### Database Migrations
 
@@ -168,7 +168,7 @@
 | MONO-05 | Phase 1 | Complete |
 | MONO-06 | Phase 1 | Complete |
 | BE-01 | Phase 2 | Complete |
-| BE-02 | Phase 2 | Pending |
+| BE-02 | Phase 2 | Complete |
 | BE-03 | Phase 2 | Complete |
 | BE-04 | Phase 2 | Complete |
 | BE-05 | Phase 2 | Complete |
@@ -185,9 +185,9 @@
 | WORK-01 | Phase 2 | Complete |
 | WORK-02 | Phase 2 | Complete |
 | WORK-03 | Phase 2 | Complete |
-| API-01 | Phase 2 | Pending |
-| API-02 | Phase 2 | Pending |
-| API-03 | Phase 2 | Pending |
+| API-01 | Phase 2 | Complete |
+| API-02 | Phase 2 | Complete |
+| API-03 | Phase 2 | Complete |
 | DB-01 | Phase 2 | Pending |
 | DB-02 | Phase 2 | Pending |
 | TOOL-01 | Phase 2 | Complete |
