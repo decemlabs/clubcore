@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: ROADMAP.md + STATE.md created; REQUIREMENTS.md traceability updated; awaiting `/gsd-plan-phase 1`
-last_updated: "2026-04-30T14:53:02.235Z"
+stopped_at: Phase 1 complete (3/3 plans, all D-16 gates green); ready for `/gsd-plan-phase 2`
+last_updated: "2026-04-30T20:53:00.000Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 67
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-30)
 
 ## Current Position
 
-Phase: 1 (Monorepo Restructure & Frontend Move) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
+Phase: 1 (Monorepo Restructure & Frontend Move) — COMPLETE
+Plan: 3 of 3 (all complete)
+Status: Phase 1 closed; awaiting `/gsd-plan-phase 2`
 Last activity: 2026-04-30
 
-Progress: [███████░░░] 67%
+Progress: [███░░░░░░░] 33% (1 of 3 phases complete)
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [███████░░░] 67%
 *Updated after each plan completion*
 | Phase 01 P01 | 1m 36s | 3 tasks | 7 files |
 | Phase 01 P02 | 2m 56s | 3 tasks | 820 files |
+| Phase 01 P03 | ~25m  | 3 tasks | 1 created / 1 modified / 1 deleted (across 2 sessions; user-decision pause) |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Recent decisions affecting current work:
 - `import-linter` enforced from Phase A onward — locked
 - [Phase ?]: Phase 1 plan 01: pnpm workspace uses two-glob form (apps/*, packages/*); scoped placeholder names @sportzal/ui and @sportzal/api-client; .gitkeep used to track empty infra dirs
 - [Phase ?]: Phase 1 plan 02: frontend/.git collapsed via rm -rf (D-01); plain mv used since source was untracked; Tasks 1-3 consolidated into commit 6ef25d7
+- [Phase 1]: Phase 1 plan 03: single root pnpm-lock.yaml authoritative; per-app lockfile removed; `pnpm --filter sportzal-adminka` (manifest name) is canonical filter form; Rule-4 deviation — added eslint-import-resolver-typescript devDep to apps/admin-web/package.json per user decision (D-04/D-14 vs D-16 conflict resolution)
 
 ### Pending Todos
 
@@ -78,7 +80,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Phase 1 open question (deferred to plan-phase 1):** `frontend/.git` strategy — absorb history via `git subtree add` vs. collapse via `rm -rf frontend/.git` + new commit. User decision required before Phase 1 execution.
+None — all Phase 1 blockers resolved.
+
+**Resolved during Phase 1:**
+- ~~`frontend/.git` strategy~~ → resolved as clean collapse (D-01) during planning.
+- ~~D-04/D-14 vs D-16 conflict (missing `eslint-import-resolver-typescript` devDep)~~ → resolved 2026-04-30 via user decision (Option 1: add the missing devDep). Documented in `01-03-SUMMARY.md` as a Rule-4 deviation. Commit `f01c1ab`.
 
 ## Deferred Items
 
@@ -90,6 +96,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-30T14:52:52.614Z
-Stopped at: ROADMAP.md + STATE.md created; REQUIREMENTS.md traceability updated; awaiting `/gsd-plan-phase 1`
+Last session: 2026-04-30T20:53:00.000Z
+Stopped at: Phase 1 complete (3/3 plans, all D-16 gates green); awaiting `/gsd-plan-phase 2`
 Resume file: None

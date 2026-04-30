@@ -12,7 +12,7 @@ Phase A is a **skeleton-only** milestone: zero business features, zero auth, zer
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Monorepo Restructure & Frontend Move** — Establish `apps/`/`packages/`/`infra/` skeleton at repo root and relocate the existing `frontend/` into `apps/admin-web/` without rewriting it.
+- [x] **Phase 1: Monorepo Restructure & Frontend Move** — Establish `apps/`/`packages/`/`infra/` skeleton at repo root and relocate the existing `frontend/` into `apps/admin-web/` without rewriting it. **Completed 2026-04-30.**
 - [ ] **Phase 2: Backend Skeleton with Quality Tooling** — Bring up the FastAPI modular monolith (`apps/backend/app/`) with `core`/`modules`/`integrations`/`workers`/`api`, the single real endpoint `GET /healthz`, async Alembic config, and ruff + mypy strict + import-linter contracts enforced from day one.
 - [ ] **Phase 3: Tests, Dev Infrastructure & Documentation** — Add pytest scaffold (httpx ASGITransport), Dockerfile + dev `docker-compose.yml` (backend + Postgres 16 + Redis 7), placeholder scripts, and architecture/conventions/ADR docs.
 
@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Scaffold monorepo skeleton (pnpm-workspace.yaml, packages/ui, packages/api-client, infra/docker, infra/nginx)
 - [x] 01-02-PLAN.md — Move frontend/ to apps/admin-web/ verbatim (clean-collapse frontend/.git per D-01)
-- [ ] 01-03-PLAN.md — Reconcile root lockfile + run full D-16 verification battery (typecheck/lint/lint:fixtures/test/build/dev smoke)
+- [x] 01-03-PLAN.md — Reconcile root lockfile + run full D-16 verification battery (typecheck/lint/lint:fixtures/test/build/dev smoke)
 
 **Open questions** (resolved during /gsd-discuss-phase 2026-04-30):
   - ~~`frontend/.git` strategy~~ → **RESOLVED** as clean collapse (`rm -rf frontend/.git`) per locked decision D-01 in `.planning/phases/01-monorepo-restructure-frontend-move/01-CONTEXT.md`.
@@ -72,7 +72,7 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Monorepo Restructure & Frontend Move | 0/3 | Not started | - |
+| 1. Monorepo Restructure & Frontend Move | 3/3 | Complete | 2026-04-30 |
 | 2. Backend Skeleton with Quality Tooling | 0/TBD | Not started | - |
 | 3. Tests, Dev Infrastructure & Documentation | 0/TBD | Not started | - |
 
