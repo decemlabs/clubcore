@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-04-30T19:32:40.570Z"
+stopped_at: Completed 02-02-PLAN.md (uv lock + sync, 52 packages)
+last_updated: "2026-04-30T19:37:03.474Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 11
-  completed_plans: 4
-  percent: 36
+  completed_plans: 5
+  percent: 45
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-30)
 ## Current Position
 
 Phase: 02 (backend-skeleton-with-quality-tooling) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-04-30
 
-Progress: [████░░░░░░] 36%
+Progress: [█████░░░░░] 45%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [████░░░░░░] 36%
 | Phase 01 P02 | 2m 56s | 3 tasks | 820 files |
 | Phase 01 P03 | ~25m  | 3 tasks | 1 created / 1 modified / 1 deleted (across 2 sessions; user-decision pause) |
 | Phase 02 P01 | 2min | 6 tasks | 6 files |
+| Phase 02-backend-skeleton-with-quality-tooling P02 | 1m | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 1 plan 02: frontend/.git collapsed via rm -rf (D-01); plain mv used since source was untracked; Tasks 1-3 consolidated into commit 6ef25d7
 - [Phase 1]: Phase 1 plan 03: single root pnpm-lock.yaml authoritative; per-app lockfile removed; `pnpm --filter sportzal-adminka` (manifest name) is canonical filter form; Rule-4 deviation — added eslint-import-resolver-typescript devDep to apps/admin-web/package.json per user decision (D-04/D-14 vs D-16 conflict resolution)
 - [Phase ?]: Phase 2 Plan 01: Standalone ruff.toml under [lint] (ruff v0.6 conv); honored CONTEXT.md D-15 [tool.uv] dev-dependencies over PEP 735; importlinter root_packages plural; alembic.ini placeholder sqlalchemy.url overridden by env.py at runtime
+- [Phase 02]: Did NOT migrate to PEP 735 [dependency-groups] despite uv 0.11.6 deprecation warning — Plan 01 D-15 lock on [tool.uv] dev-dependencies is the source of truth for Phase 2; warning is informational and does not block any tool.
+- [Phase 02]: Accepted resolver-chosen versions above floor pins for all 52 packages — Examples: fastapi 0.136.1 vs floor 0.115; mypy 1.20.2 vs floor 1.10. No conflicts and uv hash-verified install mitigates T-02-04 (lockfile tampering).
 
 ### Pending Todos
 
@@ -99,6 +102,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-30T19:32:34.658Z
-Stopped at: Phase 2 context gathered
+Last session: 2026-04-30T19:37:03.470Z
+Stopped at: Completed 02-02-PLAN.md (uv lock + sync, 52 packages)
 Resume file: None
