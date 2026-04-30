@@ -1,0 +1,128 @@
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
+import importPlugin from 'eslint-plugin-import'
+
+const RAW_PALETTE_REGEX =
+  /\b(?:bg|text|border|ring|from|to|via|fill|stroke|outline|divide|placeholder|caret|accent|decoration|shadow)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b|\b(?:bg|text|border)-(?:white|black)\b/
+
+export default tseslint.config(
+  {
+    ignores: [
+      'dist',
+      'node_modules',
+      'src/routeTree.gen.ts',
+      'src/__fixtures/**',
+      'coverage',
+      '.planning/**',
+      '.claude/**',
+      '.omc/**',
+      'scripts/**',
+    ],
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      js.configs.recommended,
+      ...tseslint.configs.recommended,
+      reactHooks.configs['recommended-latest'],
+      reactRefresh.configs.vite,
+    ],
+    plugins: {
+      import: importPlugin,
+    },
+    languageOptions: {
+      ecmaVersion: 2023,
+      globals: globals.browser,
+    },
+    settings: {
+      'import/resolver': {
+        typescript: true,
+        node: true,
+      },
+    },
+    rules: {
+      // SC4: prevent UI/feature/route/entity/shared.ui code from importing service impls directly
+      'import/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            {
+              target: [
+                './src/features/**',
+                './src/routes/**',
+                './src/entities/**',
+                './src/shared/ui/**',
+                './src/app/**',
+              ],
+              from: [
+                './src/shared/api/services/mock/**',
+                './src/shared/api/services/http/**',
+              ],
+              message:
+                'Go through services container or a TanStack Query hook (do not import mock/http impls directly).',
+            },
+          ],
+        },
+      ],
+      // SC4: ban raw Tailwind palette colors in JSX className strings
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `JSXAttribute[name.name='className'] Literal[value=/${RAW_PALETTE_REGEX.source}/]`,
+          message:
+            'Use semantic shadcn tokens (bg-background, text-foreground, ...) instead of raw palette colors.',
+        },
+        {
+          selector: `JSXAttribute[name.name='className'] TemplateElement[value.raw=/${RAW_PALETTE_REGEX.source}/]`,
+          message:
+            'Use semantic shadcn tokens (bg-background, text-foreground, ...) instead of raw palette colors.',
+        },
+      ],
+      'react/no-danger': 'off',
+    },
+  },
+  {
+    // VITE_API_MODE access only allowed inside src/shared/api/**
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/shared/api/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "MemberExpression[property.name='VITE_API_MODE']",
+          message:
+            'Read VITE_API_MODE only via @/shared/api/config/env (single chokepoint).',
+        },
+      ],
+    },
+  },
+  {
+    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
+  {
+    // shadcn primitives (copied into src/shared/ui) co-locate variant exports with components.
+    // react-refresh/only-export-components would flag every one; disable for these files only.
+    files: [
+      'src/shared/ui/button.tsx',
+      'src/shared/ui/sidebar.tsx',
+      'src/shared/ui/sonner.tsx',
+      'src/shared/ui/dropdown-menu.tsx',
+      'src/shared/ui/sheet.tsx',
+      'src/shared/ui/tooltip.tsx',
+      'src/shared/ui/avatar.tsx',
+      'src/shared/ui/separator.tsx',
+      'src/shared/ui/skeleton.tsx',
+      'src/shared/ui/input.tsx',
+    ],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+)

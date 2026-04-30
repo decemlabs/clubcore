@@ -1,0 +1,21 @@
+{
+  "mode": "interactive",
+  "granularity": "fine",
+  "execution": "auto-waves",
+  "git": "phase-commits",
+  "research": "full",
+  "plan_checker": true,
+  "verifier": true,
+  "models": {
+    "researcher": "opus",
+    "synthesizer": "opus",
+    "roadmapper": "opus",
+    "planner": "opus"
+  },
+  "commit_docs": true,
+  "language": {
+    "user_communication": "ru",
+    "docs": "en"
+  },
+  "created_at": "2026-04-21"
+}
