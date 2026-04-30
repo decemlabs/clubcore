@@ -38,14 +38,14 @@
 
 ### Backend Integrations (placeholders)
 
-- [ ] **INT-01**: `app/integrations/telegram/{bot.py,handlers.py,sender.py}` — placeholder-модули, **никаких** вызовов aiogram или Telegram API
-- [ ] **INT-02**: `app/integrations/email/{client.py, templates/.gitkeep}` — placeholder, **никаких** SMTP-вызовов
+- [x] **INT-01**: `app/integrations/telegram/{bot.py,handlers.py,sender.py}` — placeholder-модули, **никаких** вызовов aiogram или Telegram API
+- [x] **INT-02**: `app/integrations/email/{client.py, templates/.gitkeep}` — placeholder, **никаких** SMTP-вызовов
 
 ### Backend Workers
 
-- [ ] **WORK-01**: `app/workers/arq_app.py` — `WorkerSettings` skeleton без реальных задач
-- [ ] **WORK-02**: `app/workers/tasks/{notifications,reminders,reports}.py` — placeholder-функции с TODO
-- [ ] **WORK-03**: `app/workers/scheduler.py` — placeholder
+- [x] **WORK-01**: `app/workers/arq_app.py` — `WorkerSettings` skeleton без реальных задач
+- [x] **WORK-02**: `app/workers/tasks/{notifications,reminders,reports}.py` — placeholder-функции с TODO
+- [x] **WORK-03**: `app/workers/scheduler.py` — placeholder
 
 ### Backend API Surface
 
@@ -180,11 +180,11 @@
 | MOD-01 | Phase 2 | Complete |
 | MOD-02 | Phase 2 | Complete |
 | MOD-03 | Phase 2 | Pending |
-| INT-01 | Phase 2 | Pending |
-| INT-02 | Phase 2 | Pending |
-| WORK-01 | Phase 2 | Pending |
-| WORK-02 | Phase 2 | Pending |
-| WORK-03 | Phase 2 | Pending |
+| INT-01 | Phase 2 | Complete |
+| INT-02 | Phase 2 | Complete |
+| WORK-01 | Phase 2 | Complete |
+| WORK-02 | Phase 2 | Complete |
+| WORK-03 | Phase 2 | Complete |
 | API-01 | Phase 2 | Pending |
 | API-02 | Phase 2 | Pending |
 | API-03 | Phase 2 | Pending |
