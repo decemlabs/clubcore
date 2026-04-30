@@ -161,59 +161,59 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MONO-01 | TBD | Pending |
-| MONO-02 | TBD | Pending |
-| MONO-03 | TBD | Pending |
-| MONO-04 | TBD | Pending |
-| MONO-05 | TBD | Pending |
-| MONO-06 | TBD | Pending |
-| BE-01 | TBD | Pending |
-| BE-02 | TBD | Pending |
-| BE-03 | TBD | Pending |
-| BE-04 | TBD | Pending |
-| BE-05 | TBD | Pending |
-| BE-06 | TBD | Pending |
-| BE-07 | TBD | Pending |
-| BE-08 | TBD | Pending |
-| BE-09 | TBD | Pending |
-| BE-10 | TBD | Pending |
-| MOD-01 | TBD | Pending |
-| MOD-02 | TBD | Pending |
-| MOD-03 | TBD | Pending |
-| INT-01 | TBD | Pending |
-| INT-02 | TBD | Pending |
-| WORK-01 | TBD | Pending |
-| WORK-02 | TBD | Pending |
-| WORK-03 | TBD | Pending |
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| DB-01 | TBD | Pending |
-| DB-02 | TBD | Pending |
-| TOOL-01 | TBD | Pending |
-| TOOL-02 | TBD | Pending |
-| TOOL-03 | TBD | Pending |
-| TOOL-04 | TBD | Pending |
-| TOOL-05 | TBD | Pending |
-| TOOL-06 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| INFRA-01 | TBD | Pending |
-| INFRA-02 | TBD | Pending |
-| INFRA-03 | TBD | Pending |
-| INFRA-04 | TBD | Pending |
-| DOCS-01 | TBD | Pending |
-| DOCS-02 | TBD | Pending |
-| DOCS-03 | TBD | Pending |
-| DOCS-04 | TBD | Pending |
+| MONO-01 | Phase 1 | Pending |
+| MONO-02 | Phase 1 | Pending |
+| MONO-03 | Phase 1 | Pending |
+| MONO-04 | Phase 1 | Pending |
+| MONO-05 | Phase 1 | Pending |
+| MONO-06 | Phase 1 | Pending |
+| BE-01 | Phase 2 | Pending |
+| BE-02 | Phase 2 | Pending |
+| BE-03 | Phase 2 | Pending |
+| BE-04 | Phase 2 | Pending |
+| BE-05 | Phase 2 | Pending |
+| BE-06 | Phase 2 | Pending |
+| BE-07 | Phase 2 | Pending |
+| BE-08 | Phase 2 | Pending |
+| BE-09 | Phase 2 | Pending |
+| BE-10 | Phase 2 | Pending |
+| MOD-01 | Phase 2 | Pending |
+| MOD-02 | Phase 2 | Pending |
+| MOD-03 | Phase 2 | Pending |
+| INT-01 | Phase 2 | Pending |
+| INT-02 | Phase 2 | Pending |
+| WORK-01 | Phase 2 | Pending |
+| WORK-02 | Phase 2 | Pending |
+| WORK-03 | Phase 2 | Pending |
+| API-01 | Phase 2 | Pending |
+| API-02 | Phase 2 | Pending |
+| API-03 | Phase 2 | Pending |
+| DB-01 | Phase 2 | Pending |
+| DB-02 | Phase 2 | Pending |
+| TOOL-01 | Phase 2 | Pending |
+| TOOL-02 | Phase 2 | Pending |
+| TOOL-03 | Phase 2 | Pending |
+| TOOL-04 | Phase 2 | Pending |
+| TOOL-05 | Phase 2 | Pending |
+| TOOL-06 | Phase 2 | Pending |
+| TEST-01 | Phase 3 | Pending |
+| TEST-02 | Phase 3 | Pending |
+| TEST-03 | Phase 3 | Pending |
+| TEST-04 | Phase 3 | Pending |
+| INFRA-01 | Phase 3 | Pending |
+| INFRA-02 | Phase 3 | Pending |
+| INFRA-03 | Phase 3 | Pending |
+| INFRA-04 | Phase 3 | Pending |
+| DOCS-01 | Phase 3 | Pending |
+| DOCS-02 | Phase 3 | Pending |
+| DOCS-03 | Phase 3 | Pending |
+| DOCS-04 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 46 total
-- Mapped to phases: 0 (заполняется ROADMAP.md)
-- Unmapped: 46 ⚠️
+- v1 requirements: 47 total
+- Mapped to phases: 47 (Phase 1: 6, Phase 2: 29, Phase 3: 12)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-30*
-*Last updated: 2026-04-30 after initial definition*
+*Last updated: 2026-04-30 after roadmap creation (47/47 mapped)*
