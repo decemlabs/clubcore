@@ -32,8 +32,8 @@
 
 ### Backend Modules (placeholders)
 
-- [ ] **MOD-01**: `app/modules/auth/` — `__init__.py`, `router.py` (`APIRouter()` без endpoints, TODO), `service.py`/`models.py`/`schemas.py` пустые с TODO; **БЕЗ** User/RefreshToken моделей
-- [ ] **MOD-02**: `app/modules/{members,memberships,visits,trainers,schedule,bookings,billing,notifications}/__init__.py` существуют, остальное пусто
+- [x] **MOD-01**: `app/modules/auth/` — `__init__.py`, `router.py` (`APIRouter()` без endpoints, TODO), `service.py`/`models.py`/`schemas.py` пустые с TODO; **БЕЗ** User/RefreshToken моделей
+- [x] **MOD-02**: `app/modules/{members,memberships,visits,trainers,schedule,bookings,billing,notifications}/__init__.py` существуют, остальное пусто
 - [ ] **MOD-03**: import-linter проверяет, что `modules/*` не импортируют друг друга напрямую
 
 ### Backend Integrations (placeholders)
@@ -177,8 +177,8 @@
 | BE-08 | Phase 2 | Complete |
 | BE-09 | Phase 2 | Complete |
 | BE-10 | Phase 2 | Pending |
-| MOD-01 | Phase 2 | Pending |
-| MOD-02 | Phase 2 | Pending |
+| MOD-01 | Phase 2 | Complete |
+| MOD-02 | Phase 2 | Complete |
 | MOD-03 | Phase 2 | Pending |
 | INT-01 | Phase 2 | Pending |
 | INT-02 | Phase 2 | Pending |
