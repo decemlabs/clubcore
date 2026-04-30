@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold monorepo skeleton (pnpm-workspace.yaml, packages/ui, packages/api-client, infra/docker, infra/nginx)
+- [x] 01-01-PLAN.md — Scaffold monorepo skeleton (pnpm-workspace.yaml, packages/ui, packages/api-client, infra/docker, infra/nginx)
 - [ ] 01-02-PLAN.md — Move frontend/ to apps/admin-web/ verbatim (clean-collapse frontend/.git per D-01)
 - [ ] 01-03-PLAN.md — Reconcile root lockfile + run full D-16 verification battery (typecheck/lint/lint:fixtures/test/build/dev smoke)
 
