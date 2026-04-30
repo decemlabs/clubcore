@@ -51,7 +51,17 @@ Plans:
   5. Running `uv run alembic upgrade head` succeeds against an empty database (no migration files in `alembic/versions/`, only `.gitkeep`); `alembic/env.py` reads the async DATABASE_URL from `Settings`.
   6. The Python package is named `app` (importable as `from app.main import create_app`); `app/modules/{auth,members,memberships,visits,trainers,schedule,bookings,billing,notifications}/__init__.py` all exist and contain no business logic; `app/integrations/{telegram,email}/` contain only placeholder modules with zero real Telegram/SMTP calls.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Cleanup root backend/ + scaffold apps/backend/ tooling configs (pyproject, ruff, importlinter, alembic.ini, .env.example, .gitignore)
+- [ ] 02-02-PLAN.md — uv lock + uv sync; verify all dev tools and runtime deps resolve and import
+- [ ] 02-03-PLAN.md — app/core/ infrastructure (config, database lifespan, logging, exceptions, middleware, security/dependencies/pagination placeholders)
+- [ ] 02-04-PLAN.md — app/modules/ placeholders (auth subtree + 8 module __init__.py)
+- [ ] 02-05-PLAN.md — app/integrations/ + app/workers/ placeholders + ARQ WorkerSettings
+- [ ] 02-06-PLAN.md — app/main.py create_app() factory + api/v1 router chain mounting GET /healthz at root
+- [ ] 02-07-PLAN.md — alembic async env.py + script.py.mako + versions/.gitkeep
+- [ ] 02-08-PLAN.md — Verification battery: ruff/mypy/lint-imports/synthetic-violation/uvicorn-curl/conditional alembic upgrade
 
 ### Phase 3: Tests, Dev Infrastructure & Documentation
 **Goal**: The skeleton becomes verifiable and operable: pytest passes including a real `/healthz` integration test via `httpx ASGITransport`, the full local dev stack comes up via `docker compose`, and architecture/conventions/ADR documents capture the modular-monolith decision so the next milestone has unambiguous ground rules.
