@@ -13,7 +13,7 @@ Phase A is a **skeleton-only** milestone: zero business features, zero auth, zer
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Monorepo Restructure & Frontend Move** — Establish `apps/`/`packages/`/`infra/` skeleton at repo root and relocate the existing `frontend/` into `apps/admin-web/` without rewriting it. **Completed 2026-04-30.**
-- [ ] **Phase 2: Backend Skeleton with Quality Tooling** — Bring up the FastAPI modular monolith (`apps/backend/app/`) with `core`/`modules`/`integrations`/`workers`/`api`, the single real endpoint `GET /healthz`, async Alembic config, and ruff + mypy strict + import-linter contracts enforced from day one.
+- [x] **Phase 2: Backend Skeleton with Quality Tooling** — Bring up the FastAPI modular monolith (`apps/backend/app/`) with `core`/`modules`/`integrations`/`workers`/`api`, the single real endpoint `GET /healthz`, async Alembic config, and ruff + mypy strict + import-linter contracts enforced from day one. **Completed 2026-04-30** (criterion #5 deferred to Phase 3 — no Postgres in env).
 - [ ] **Phase 3: Tests, Dev Infrastructure & Documentation** — Add pytest scaffold (httpx ASGITransport), Dockerfile + dev `docker-compose.yml` (backend + Postgres 16 + Redis 7), placeholder scripts, and architecture/conventions/ADR docs.
 
 ## Phase Details
@@ -61,7 +61,7 @@ Plans:
 - [x] 02-05-PLAN.md — app/integrations/ + app/workers/ placeholders + ARQ WorkerSettings
 - [x] 02-06-PLAN.md — app/main.py create_app() factory + api/v1 router chain mounting GET /healthz at root
 - [x] 02-07-PLAN.md — alembic async env.py + script.py.mako + versions/.gitkeep
-- [ ] 02-08-PLAN.md — Verification battery: ruff/mypy/lint-imports/synthetic-violation/uvicorn-curl/conditional alembic upgrade
+- [x] 02-08-PLAN.md — Verification battery: ruff/mypy/lint-imports/synthetic-violation/uvicorn-curl/conditional alembic upgrade
 
 ### Phase 3: Tests, Dev Infrastructure & Documentation
 **Goal**: The skeleton becomes verifiable and operable: pytest passes including a real `/healthz` integration test via `httpx ASGITransport`, the full local dev stack comes up via `docker compose`, and architecture/conventions/ADR documents capture the modular-monolith decision so the next milestone has unambiguous ground rules.
@@ -83,7 +83,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Monorepo Restructure & Frontend Move | 3/3 | Complete | 2026-04-30 |
-| 2. Backend Skeleton with Quality Tooling | 3/8 | In Progress|  |
+| 2. Backend Skeleton with Quality Tooling | 8/8 | Complete | 2026-04-30 |
 | 3. Tests, Dev Infrastructure & Documentation | 0/TBD | Not started | - |
 
 ---

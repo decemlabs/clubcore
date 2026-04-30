@@ -185,5 +185,22 @@ Verifying claims before final commit:
 
 ---
 
+## Post-Hoc Addendum (2026-04-30, during Plan 02-08 execution)
+
+`apps/backend/importlinter.ini` was renamed to `apps/backend/.importlinter` ahead of Plan 02-08's
+synthetic-violation battery. Reason: import-linter auto-discovers `.importlinter` (canonical
+filename) when run as a bare `uv run lint-imports` (no `--config` flag) — and ROADMAP success
+criterion #3 wording calls for `uv run lint-imports` verbatim. With the previous filename
+(`importlinter.ini`), the tool either required `--config importlinter.ini` or relied on
+fallback discovery that is brittle across versions. The rename is content-preserving
+(only the filename changed; the three locked architectural contracts from D-01 are unchanged
+and were re-verified KEPT after the rename).
+
+- Commit: `72880b1` — `chore(02-08): rename importlinter.ini to .importlinter for auto-discovery`
+- Affected key-file row in this SUMMARY (`apps/backend/importlinter.ini`) should be read as
+  `apps/backend/.importlinter` from this commit forward.
+
+---
+
 *Phase: 02-backend-skeleton-with-quality-tooling*
 *Completed: 2026-04-30*

@@ -28,13 +28,13 @@
 - [x] **BE-07**: `app/core/exceptions.py` — `AppError`, `NotFoundError`, `ForbiddenError`, `ConflictError`, `ValidationAppError`
 - [x] **BE-08**: `app/core/pagination.py` — `LimitOffsetParams` + generic `Page[T]`
 - [x] **BE-09**: `app/core/dependencies.py` + `app/core/middleware.py` — placeholders + рабочие request_id, timing, exception handlers
-- [ ] **BE-10**: `app/core` импорт-линтер: `core` не импортирует ничего из `app.modules` (проверяемо)
+- [x] **BE-10**: `app/core` импорт-линтер: `core` не импортирует ничего из `app.modules` (проверяемо)
 
 ### Backend Modules (placeholders)
 
 - [x] **MOD-01**: `app/modules/auth/` — `__init__.py`, `router.py` (`APIRouter()` без endpoints, TODO), `service.py`/`models.py`/`schemas.py` пустые с TODO; **БЕЗ** User/RefreshToken моделей
 - [x] **MOD-02**: `app/modules/{members,memberships,visits,trainers,schedule,bookings,billing,notifications}/__init__.py` существуют, остальное пусто
-- [ ] **MOD-03**: import-linter проверяет, что `modules/*` не импортируют друг друга напрямую
+- [x] **MOD-03**: import-linter проверяет, что `modules/*` не импортируют друг друга напрямую
 
 ### Backend Integrations (placeholders)
 
@@ -176,10 +176,10 @@
 | BE-07 | Phase 2 | Complete |
 | BE-08 | Phase 2 | Complete |
 | BE-09 | Phase 2 | Complete |
-| BE-10 | Phase 2 | Pending |
+| BE-10 | Phase 2 | Complete |
 | MOD-01 | Phase 2 | Complete |
 | MOD-02 | Phase 2 | Complete |
-| MOD-03 | Phase 2 | Pending |
+| MOD-03 | Phase 2 | Complete |
 | INT-01 | Phase 2 | Complete |
 | INT-02 | Phase 2 | Complete |
 | WORK-01 | Phase 2 | Complete |
