@@ -55,8 +55,8 @@
 
 ### Database Migrations
 
-- [ ] **DB-01**: `alembic.ini` + `alembic/env.py` (async настройка, читает URL из Settings) + `alembic/script.py.mako`
-- [ ] **DB-02**: `alembic/versions/.gitkeep` — папка существует, бизнес-миграций нет
+- [x] **DB-01**: `alembic.ini` + `alembic/env.py` (async настройка, читает URL из Settings) + `alembic/script.py.mako`
+- [x] **DB-02**: `alembic/versions/.gitkeep` — папка существует, бизнес-миграций нет
 
 ### Tooling & Quality Gates
 
@@ -188,8 +188,8 @@
 | API-01 | Phase 2 | Complete |
 | API-02 | Phase 2 | Complete |
 | API-03 | Phase 2 | Complete |
-| DB-01 | Phase 2 | Pending |
-| DB-02 | Phase 2 | Pending |
+| DB-01 | Phase 2 | Complete |
+| DB-02 | Phase 2 | Complete |
 | TOOL-01 | Phase 2 | Complete |
 | TOOL-02 | Phase 2 | Complete |
 | TOOL-03 | Phase 2 | Complete |

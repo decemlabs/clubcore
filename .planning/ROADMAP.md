@@ -60,7 +60,7 @@ Plans:
 - [x] 02-04-PLAN.md — app/modules/ placeholders (auth subtree + 8 module __init__.py)
 - [x] 02-05-PLAN.md — app/integrations/ + app/workers/ placeholders + ARQ WorkerSettings
 - [x] 02-06-PLAN.md — app/main.py create_app() factory + api/v1 router chain mounting GET /healthz at root
-- [ ] 02-07-PLAN.md — alembic async env.py + script.py.mako + versions/.gitkeep
+- [x] 02-07-PLAN.md — alembic async env.py + script.py.mako + versions/.gitkeep
 - [ ] 02-08-PLAN.md — Verification battery: ruff/mypy/lint-imports/synthetic-violation/uvicorn-curl/conditional alembic upgrade
 
 ### Phase 3: Tests, Dev Infrastructure & Documentation
