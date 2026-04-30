@@ -1,0 +1,10 @@
+{
+  "name": "@sportzal/ui",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Phase 1 placeholder for shared UI primitives. Real implementation lands in a later phase.",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
