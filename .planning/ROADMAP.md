@@ -56,7 +56,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Cleanup root backend/ + scaffold apps/backend/ tooling configs (pyproject, ruff, importlinter, alembic.ini, .env.example, .gitignore)
 - [x] 02-02-PLAN.md — uv lock + uv sync; verify all dev tools and runtime deps resolve and import
-- [ ] 02-03-PLAN.md — app/core/ infrastructure (config, database lifespan, logging, exceptions, middleware, security/dependencies/pagination placeholders)
+- [x] 02-03-PLAN.md — app/core/ infrastructure (config, database lifespan, logging, exceptions, middleware, security/dependencies/pagination placeholders)
 - [ ] 02-04-PLAN.md — app/modules/ placeholders (auth subtree + 8 module __init__.py)
 - [ ] 02-05-PLAN.md — app/integrations/ + app/workers/ placeholders + ARQ WorkerSettings
 - [ ] 02-06-PLAN.md — app/main.py create_app() factory + api/v1 router chain mounting GET /healthz at root
@@ -83,7 +83,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Monorepo Restructure & Frontend Move | 3/3 | Complete | 2026-04-30 |
-| 2. Backend Skeleton with Quality Tooling | 0/TBD | Not started | - |
+| 2. Backend Skeleton with Quality Tooling | 3/8 | In Progress|  |
 | 3. Tests, Dev Infrastructure & Documentation | 0/TBD | Not started | - |
 
 ---

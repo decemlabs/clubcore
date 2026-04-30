@@ -19,15 +19,15 @@
 
 ### Backend Core
 
-- [ ] **BE-01**: `apps/backend/app/` — корень Python-пакета с именем `app` (не `sportzal`, не `src/sportzal`)
+- [x] **BE-01**: `apps/backend/app/` — корень Python-пакета с именем `app` (не `sportzal`, не `src/sportzal`)
 - [ ] **BE-02**: `app/main.py` экспортирует `create_app()` factory, поднимает FastAPI с подключённым api-роутером, structlog и middleware
-- [ ] **BE-03**: `app/core/config.py` — `Settings` через `pydantic-settings` + cached `get_settings()`, читает env только здесь
-- [ ] **BE-04**: `app/core/database.py` — async engine, `async_sessionmaker`, `Base`, `get_db` dependency
-- [ ] **BE-05**: `app/core/security.py` — пустой модуль с заготовкой под будущие helper-функции; никакой реальной auth-логики
-- [ ] **BE-06**: `app/core/logging.py` — structlog setup, JSON в проде / colorized в dev
-- [ ] **BE-07**: `app/core/exceptions.py` — `AppError`, `NotFoundError`, `ForbiddenError`, `ConflictError`, `ValidationAppError`
-- [ ] **BE-08**: `app/core/pagination.py` — `LimitOffsetParams` + generic `Page[T]`
-- [ ] **BE-09**: `app/core/dependencies.py` + `app/core/middleware.py` — placeholders + рабочие request_id, timing, exception handlers
+- [x] **BE-03**: `app/core/config.py` — `Settings` через `pydantic-settings` + cached `get_settings()`, читает env только здесь
+- [x] **BE-04**: `app/core/database.py` — async engine, `async_sessionmaker`, `Base`, `get_db` dependency
+- [x] **BE-05**: `app/core/security.py` — пустой модуль с заготовкой под будущие helper-функции; никакой реальной auth-логики
+- [x] **BE-06**: `app/core/logging.py` — structlog setup, JSON в проде / colorized в dev
+- [x] **BE-07**: `app/core/exceptions.py` — `AppError`, `NotFoundError`, `ForbiddenError`, `ConflictError`, `ValidationAppError`
+- [x] **BE-08**: `app/core/pagination.py` — `LimitOffsetParams` + generic `Page[T]`
+- [x] **BE-09**: `app/core/dependencies.py` + `app/core/middleware.py` — placeholders + рабочие request_id, timing, exception handlers
 - [ ] **BE-10**: `app/core` импорт-линтер: `core` не импортирует ничего из `app.modules` (проверяемо)
 
 ### Backend Modules (placeholders)
@@ -167,15 +167,15 @@
 | MONO-04 | Phase 1 | Complete |
 | MONO-05 | Phase 1 | Complete |
 | MONO-06 | Phase 1 | Complete |
-| BE-01 | Phase 2 | Pending |
+| BE-01 | Phase 2 | Complete |
 | BE-02 | Phase 2 | Pending |
-| BE-03 | Phase 2 | Pending |
-| BE-04 | Phase 2 | Pending |
-| BE-05 | Phase 2 | Pending |
-| BE-06 | Phase 2 | Pending |
-| BE-07 | Phase 2 | Pending |
-| BE-08 | Phase 2 | Pending |
-| BE-09 | Phase 2 | Pending |
+| BE-03 | Phase 2 | Complete |
+| BE-04 | Phase 2 | Complete |
+| BE-05 | Phase 2 | Complete |
+| BE-06 | Phase 2 | Complete |
+| BE-07 | Phase 2 | Complete |
+| BE-08 | Phase 2 | Complete |
+| BE-09 | Phase 2 | Complete |
 | BE-10 | Phase 2 | Pending |
 | MOD-01 | Phase 2 | Pending |
 | MOD-02 | Phase 2 | Pending |

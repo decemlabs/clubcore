@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-02-PLAN.md (uv lock + sync, 52 packages)
-last_updated: "2026-04-30T19:37:03.474Z"
+last_updated: "2026-04-30T19:42:50.459Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 11
-  completed_plans: 5
-  percent: 45
+  completed_plans: 6
+  percent: 55
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-30)
 ## Current Position
 
 Phase: 02 (backend-skeleton-with-quality-tooling) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-04-30
 
-Progress: [█████░░░░░] 45%
+Progress: [██████░░░░] 55%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█████░░░░░] 45%
 | Phase 01 P03 | ~25m  | 3 tasks | 1 created / 1 modified / 1 deleted (across 2 sessions; user-decision pause) |
 | Phase 02 P01 | 2min | 6 tasks | 6 files |
 | Phase 02-backend-skeleton-with-quality-tooling P02 | 1m | 1 tasks | 1 files |
+| Phase 02 P03 | 2min | 1 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 2 Plan 01: Standalone ruff.toml under [lint] (ruff v0.6 conv); honored CONTEXT.md D-15 [tool.uv] dev-dependencies over PEP 735; importlinter root_packages plural; alembic.ini placeholder sqlalchemy.url overridden by env.py at runtime
 - [Phase 02]: Did NOT migrate to PEP 735 [dependency-groups] despite uv 0.11.6 deprecation warning — Plan 01 D-15 lock on [tool.uv] dev-dependencies is the source of truth for Phase 2; warning is informational and does not block any tool.
 - [Phase 02]: Accepted resolver-chosen versions above floor pins for all 52 packages — Examples: fastapi 0.136.1 vs floor 0.115; mypy 1.20.2 vs floor 1.10. No conflicts and uv hash-verified install mitigates T-02-04 (lockfile tampering).
+- [Phase ?]: Used PEP 695 generics syntax (class Page[T](BaseModel):) instead of Generic[T] — required by ruff UP046 under py312
+- [Phase ?]: Removed plan-spec '# type: ignore[call-arg]' on Settings() — unused under mypy strict with pydantic.mypy plugin (init_typed=true)
+- [Phase ?]: Honored REVERSED middleware add order: TimingMiddleware first, RequestIdMiddleware second — RequestId runs FIRST on incoming so timing log carries request_id
 
 ### Pending Todos
 
@@ -102,6 +106,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-30T19:37:03.470Z
+Last session: 2026-04-30T19:42:43.741Z
 Stopped at: Completed 02-02-PLAN.md (uv lock + sync, 52 packages)
 Resume file: None
