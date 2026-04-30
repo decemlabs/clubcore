@@ -1,0 +1,22 @@
+# Python virtualenv (uv creates .venv/ in this dir)
+.venv/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Coverage
+.coverage
+.coverage.*
+
+# IDE/editor
+.idea/
+.vscode/
+
+# OS
+.DS_Store
