@@ -170,28 +170,95 @@ Explicit exclusions. Documented to prevent scope creep and to make the rejection
 
 ## Traceability
 
-Mapping populated by `/gsd-roadmapper` after roadmap approval.
+REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01..07 | TBD | Pending |
-| AUTH-01..07 | TBD | Pending |
-| AUTH-EP-01..05 | TBD | Pending |
-| AUTH-TG-01..06 | TBD | Pending |
-| AUTH-LO-01..04 | TBD | Pending |
-| CSRF-01..02 | TBD | Pending |
-| RBAC-01..05 | TBD | Pending |
-| CLIENTS-01..09 | TBD | Pending |
-| AUDIT-01..03 | TBD | Pending |
-| API-01..07 | TBD | Pending |
-| FE-01..07 | TBD | Pending |
-| TEST-01..08 | TBD | Pending |
+| INFRA-01 | Phase 4 | Pending |
+| INFRA-02 | Phase 4 | Pending |
+| INFRA-03 | Phase 5 | Pending |
+| INFRA-04 | Phase 8 | Pending |
+| INFRA-05 | Phase 4 | Pending |
+| INFRA-06 | Phase 7 | Pending |
+| INFRA-07 | Phase 4 | Pending |
+| AUTH-01 | Phase 4 | Pending |
+| AUTH-02 | Phase 4 | Pending |
+| AUTH-03 | Phase 4 | Pending |
+| AUTH-04 | Phase 4 | Pending |
+| AUTH-05 | Phase 5 | Pending |
+| AUTH-06 | Phase 5 | Pending |
+| AUTH-07 | Phase 5 | Pending |
+| AUTH-EP-01 | Phase 5 | Pending |
+| AUTH-EP-02 | Phase 5 | Pending |
+| AUTH-EP-03 | Phase 5 | Pending |
+| AUTH-EP-04 | Phase 5 | Pending |
+| AUTH-EP-05 | Phase 5 | Pending |
+| AUTH-TG-01 | Phase 7 | Pending |
+| AUTH-TG-02 | Phase 7 | Pending |
+| AUTH-TG-03 | Phase 7 | Pending |
+| AUTH-TG-04 | Phase 7 | Pending |
+| AUTH-TG-05 | Phase 7 | Pending |
+| AUTH-TG-06 | Phase 7 | Pending |
+| AUTH-LO-01 | Phase 5 | Pending |
+| AUTH-LO-02 | Phase 5 | Pending |
+| AUTH-LO-03 | Phase 5 | Pending |
+| AUTH-LO-04 | Phase 5 | Pending |
+| CSRF-01 | Phase 4 | Pending |
+| CSRF-02 | Phase 6 | Pending |
+| RBAC-01 | Phase 4 | Pending |
+| RBAC-02 | Phase 6 | Pending |
+| RBAC-03 | Phase 6 | Pending |
+| RBAC-04 | Phase 6 | Pending |
+| RBAC-05 | Phase 6 | Pending |
+| CLIENTS-01 | Phase 8 | Pending |
+| CLIENTS-02 | Phase 8 | Pending |
+| CLIENTS-03 | Phase 8 | Pending |
+| CLIENTS-04 | Phase 8 | Pending |
+| CLIENTS-05 | Phase 8 | Pending |
+| CLIENTS-06 | Phase 8 | Pending |
+| CLIENTS-07 | Phase 8 | Pending |
+| CLIENTS-08 | Phase 8 | Pending |
+| CLIENTS-09 | Phase 8 | Pending |
+| AUDIT-01 | Phase 8 | Pending |
+| AUDIT-02 | Phase 8 | Pending |
+| AUDIT-03 | Phase 8 | Pending |
+| API-01 | Phase 9 | Pending |
+| API-02 | Phase 9 | Pending |
+| API-03 | Phase 4 | Pending |
+| API-04 | Phase 4 | Pending |
+| API-05 | Phase 9 | Pending |
+| API-06 | Phase 9 | Pending |
+| API-07 | Phase 9 | Pending |
+| FE-01 | Phase 10 | Pending |
+| FE-02 | Phase 10 | Pending |
+| FE-03 | Phase 10 | Pending |
+| FE-04 | Phase 10 | Pending |
+| FE-05 | Phase 10 | Pending |
+| FE-06 | Phase 10 | Pending |
+| FE-07 | Phase 10 | Pending |
+| TEST-01 | Phase 5 | Pending |
+| TEST-02 | Phase 5 | Pending |
+| TEST-03 | Phase 7 | Pending |
+| TEST-04 | Phase 5 | Pending |
+| TEST-05 | Phase 6 | Pending |
+| TEST-06 | Phase 6 | Pending |
+| TEST-07 | Phase 6 | Pending |
+| TEST-08 | Phase 5 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 70 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 70 ⚠️ (will resolve when roadmapper runs)
+- Mapped to phases: 70 ✓
+- Unmapped: 0
+
+**Distribution:**
+- Phase 4 (Auth Foundations): 12 requirements
+- Phase 5 (User Schema + Email/Password): 17 requirements
+- Phase 6 (RBAC Wiring + Parity Tests): 8 requirements
+- Phase 7 (Telegram OTP Channel): 8 requirements
+- Phase 8 (Clients Module + Audit Log): 13 requirements
+- Phase 9 (OpenAPI Pipeline + api-client): 5 requirements
+- Phase 10 (admin-web Auth + Clients Wiring): 7 requirements
 
 ---
 *Requirements defined: 2026-05-01*
-*Last updated: 2026-05-01 — initial v1.1 definition (after research synthesis)*
+*Last updated: 2026-05-01 — traceability populated after roadmap approval (phases 4-10)*
