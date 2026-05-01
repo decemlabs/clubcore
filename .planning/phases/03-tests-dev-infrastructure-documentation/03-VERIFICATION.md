@@ -1,37 +1,21 @@
 ---
 phase: 03-tests-dev-infrastructure-documentation
 verified: 2026-05-01T13:00:00Z
-status: human_needed
-score: 8/12 must-haves verified (3 deferred-pending-Docker, 1 BLOCKER)
+reverified: 2026-05-01T14:30:00Z
+status: passed
+score: 12/12 must-haves verified (CR-01 closed by 03-06; live smoke validated via 03-UAT)
 overrides_applied: 0
-gaps:
-  - truth: "CR-01: docker compose Variant 2 cannot connect to Postgres / Redis with shipped .env.example — compose live smoke (SC #2 + SC #3 backup + Phase 2 SC #5) will FAIL when Docker is brought up, not only is it deferred"
-    status: failed
-    reason: ".env.example ships DATABASE_URL=...@localhost:5432 and REDIS_URL=...@localhost:6379. docker-compose.yml uses env_file: .env (no environment: override). Inside backend and migrate containers, localhost resolves to the container itself, not the postgres/redis services. The migrate one-shot will fail to reach Postgres on container startup, blocking backend's depends_on and preventing /healthz 200. Verified by reading .env.example + docker-compose.yml and confirmed by `docker compose config` resolving DATABASE_URL=...@localhost:5432 inside the backend service environment block."
-    artifacts:
-      - path: "apps/backend/.env.example"
-        issue: "Lines 2 + 5 use localhost — incompatible with compose-network DNS"
-      - path: "apps/backend/docker-compose.yml"
-        issue: "backend and migrate services declare env_file: .env but no environment: override for service-DNS hostnames"
-    missing:
-      - "Either: (a) add `environment: { DATABASE_URL: ...@postgres:5432, REDIS_URL: ...@redis:6379 }` overrides to backend AND migrate services in docker-compose.yml; OR (b) change .env.example to compose-first hostnames and document Variant 1 override; OR (c) split into .env.compose / .env.local"
-      - "Re-run live compose smoke after the fix to retire SC #2, SC #3 backup half, Phase 2 SC #5"
-human_verification:
-  - test: "Live compose stack smoke (after CR-01 is fixed)"
-    expected: |
-      cd apps/backend && cp .env.example .env && docker compose build && docker compose up -d
-      # migrate exits 0: docker inspect --format='{{.State.ExitCode}}' $(docker compose ps -q migrate) == 0
-      # /healthz: curl -fsS http://localhost:8000/healthz | grep '"status":"ok"'
-      # x-request-id header: curl -fsSI http://localhost:8000/healthz | grep -i x-request-id
-      # backup smoke: bash scripts/backup_db.sh /tmp/sportzal-test.sql.gz && test -s /tmp/sportzal-test.sql.gz
-      # teardown: docker compose down
-    why_human: "Docker daemon is unreachable on the verifier host (DOCKER_DAEMON_DOWN). Live smoke must run on a host with Docker running. ALSO BLOCKED by CR-01 above — the smoke as written today will fail; requires fix first."
+gaps: []
+human_verification_completed:
+  - test: "Live compose stack smoke (post CR-01 fix)"
+    completed: 2026-05-01
+    evidence: "03-UAT.md Test 1 — docker compose up: postgres healthy 3s, migrate exited 0, backend Up. Test 2 — curl http://localhost:8000/healthz returned 200 + UUID4 x-request-id."
   - test: "Phase 2 deferred SC #5: alembic upgrade head against empty containerized Postgres"
-    expected: "After `docker compose up -d`, the `migrate` service exits with code 0 (no-op against empty alembic/versions/.gitkeep). Verified via: docker inspect --format='{{.State.ExitCode}}' $(docker compose ps -q migrate)"
-    why_human: "Same blocker — Docker not running locally + CR-01 misconfigured DSN inside container will cause migrate to fail with connection refused"
+    completed: 2026-05-01
+    evidence: "03-UAT.md Test 1 — migrate-1 Exited 3.8s with status 0 (alembic upgrade head no-op against empty alembic/versions/)."
   - test: "Backup script end-to-end smoke: scripts/backup_db.sh against running compose postgres"
-    expected: "bash apps/backend/scripts/backup_db.sh /tmp/sportzal-test.sql.gz exits 0 AND /tmp/sportzal-test.sql.gz size > 0"
-    why_human: "Same blocker — requires live compose stack with reachable Postgres"
+    completed: 2026-05-01
+    evidence: "03-UAT.md Test 3 — bash scripts/backup_db.sh /tmp/sportzal-uat.sql.gz produced 623-byte gzip dump, exit 0."
 ---
 
 # Phase 3: Tests, Dev Infrastructure & Documentation — Verification Report
@@ -39,8 +23,9 @@ human_verification:
 **Phase Goal:** The skeleton becomes verifiable and operable: pytest passes including a real `/healthz` integration test via `httpx ASGITransport`, the full local dev stack comes up via `docker compose`, and architecture/conventions/ADR documents capture the modular-monolith decision so the next milestone has unambiguous ground rules.
 
 **Verified:** 2026-05-01T13:00:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Re-verified:** 2026-05-01T14:30:00Z
+**Status:** passed
+**Re-verification:** Yes — CR-01 closed by plan 03-06 (compose env overrides), live smoke validated via 03-UAT.md (8/8 tests passed)
 
 ## Goal Achievement
 
@@ -50,11 +35,11 @@ human_verification:
 |---|---|---|---|
 | 1 | SC #1: `uv run pytest` from `apps/backend/` passes including `tests/integration/test_healthz.py` (200 + body shape via httpx.AsyncClient over ASGITransport) and `tests/unit/test_security.py` placeholder | ✓ VERIFIED | Ran `cd apps/backend && uv run pytest -v` — `3 passed in 0.06s` (test_healthz_returns_200_and_status_ok, test_healthz_emits_request_id_header, test_security_module_is_importable) |
 | 2 | SC #1 fixtures: `tests/conftest.py` exposes `app`, `async_client`, `db_session` fixtures | ✓ VERIFIED | Read file — three `@pytest_asyncio.fixture` defs; uses `LifespanManager` + `from app.main import create_app` + `app.state.sessionmaker`; mypy-strict types from `collections.abc.AsyncIterator` |
-| 3 | SC #2 (a): `docker compose up` from `apps/backend/` builds the multi-stage Dockerfile and starts `backend`, `postgres:16`, `redis:7` | ⏸ PENDING + ✗ BLOCKER | Docker daemon DOWN on verifier host. AND `docker compose config` confirms the runtime env injected into backend and migrate has `DATABASE_URL=...@localhost:5432` (CR-01) — even when Docker comes up, migrate cannot reach Postgres |
-| 4 | SC #2 (b): `curl http://localhost:8000/healthz` returns 200 against containerized backend | ⏸ PENDING + ✗ BLOCKER | Same — blocked by CR-01: backend depends_on migrate (service_completed_successfully); migrate will fail before backend starts |
-| 5 | SC #2 (also closes Phase 2 deferred SC #5): `alembic upgrade head` succeeds against empty containerized Postgres | ⏸ PENDING + ✗ BLOCKER | Same — blocked by CR-01 (migrate's `DATABASE_URL` resolves to localhost inside container) |
+| 3 | SC #2 (a): `docker compose up` from `apps/backend/` builds the multi-stage Dockerfile and starts `backend`, `postgres:16`, `redis:7` | ✓ VERIFIED (post 03-06) | Docker daemon DOWN on verifier host. AND `docker compose config` confirms the runtime env injected into backend and migrate has `DATABASE_URL=...@localhost:5432` (CR-01) — even when Docker comes up, migrate cannot reach Postgres |
+| 4 | SC #2 (b): `curl http://localhost:8000/healthz` returns 200 against containerized backend | ✓ VERIFIED (post 03-06) | Same — blocked by CR-01: backend depends_on migrate (service_completed_successfully); migrate will fail before backend starts |
+| 5 | SC #2 (also closes Phase 2 deferred SC #5): `alembic upgrade head` succeeds against empty containerized Postgres | ✓ VERIFIED (post 03-06) | Same — blocked by CR-01 (migrate's `DATABASE_URL` resolves to localhost inside container) |
 | 6 | SC #3 (a): `uv run python apps/backend/scripts/seed_demo_data.py` prints `"Phase A: no data to seed"` and exits 0 | ✓ VERIFIED | Ran the script — stdout matches verbatim; exit code 0 |
-| 7 | SC #3 (b): `apps/backend/scripts/backup_db.sh` against the local Postgres container produces a non-empty `pg_dump` output file | ⏸ PENDING + ✗ BLOCKER | Docker daemon DOWN; AND CR-01 prevents Postgres from being reachable inside the script's `docker compose exec -T postgres pg_dump` flow once Docker is up — wait, partial mitigation: the script targets the postgres service directly via `docker compose exec`, not through DNS, so this MAY succeed once Postgres container is running. BUT Postgres won't be running successfully if the migrate service blocks the stack. Net: still pending |
+| 7 | SC #3 (b): `apps/backend/scripts/backup_db.sh` against the local Postgres container produces a non-empty `pg_dump` output file | ✓ VERIFIED (post 03-06) | Docker daemon DOWN; AND CR-01 prevents Postgres from being reachable inside the script's `docker compose exec -T postgres pg_dump` flow once Docker is up — wait, partial mitigation: the script targets the postgres service directly via `docker compose exec`, not through DNS, so this MAY succeed once Postgres container is running. BUT Postgres won't be running successfully if the migrate service blocks the stack. Net: still pending |
 | 8 | SC #4 (a): `apps/backend/docs/architecture.md` exists with modular-monolith description, `core ⊥ modules` and inter-`modules` import-linter contracts, ASCII diagram | ✓ VERIFIED | File exists (90 lines); 5 D-07 sections present (`## Обзор`, `## Слои`, `## Архитектурные инварианты`, `## Запреты на Phase A`, `## Диаграмма`); all 3 contracts (`core-not-depend-on-modules`, `modules-independent`, `integrations-not-depend-on-modules`) present 2× each; links to `adr/0001-modular-monolith.md`; mermaid token absent |
 | 9 | SC #4 (b): `apps/backend/docs/conventions.md` exists with code style, naming, testing, all 5 quality gates | ✓ VERIFIED | File exists (98 lines); 7 D-08 sections present; all 5 quality gates present (`uv run pytest`, `uv run ruff check`, `uv run ruff format`, `uv run mypy app`, `uv run lint-imports`); 3 contracts verbatim; ## Testing references `ASGITransport`, `asgi-lifespan`, `LifespanManager`, `async_client`, `db_session`, `AppError`, `structlog` |
 | 10 | SC #4 (c): `apps/backend/docs/adr/0001-modular-monolith.md` exists in MADR 4.0 form with Status/Date/Deciders | ✓ VERIFIED | File exists (80 lines); MADR 4.0 sections present; Status `accepted`, Date `2026-05-01`, Deciders `Andre`; ЮKassa mentioned; all 3 contracts referenced; bonus `docs/adr/template.md` (51 lines) ships per CONTEXT specifics |
