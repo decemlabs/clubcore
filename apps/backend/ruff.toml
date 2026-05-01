@@ -22,6 +22,10 @@ ignore = [
 [lint.per-file-ignores]
 # alembic env.py uses untyped Alembic API; skip security + import-order
 "alembic/env.py" = ["S", "I001"]
+# tests/conftest.py carries a locked `# noqa: BLE001` comment per Phase 3 plan 01 D-10
+# (rationale-bearing). BLE rule is not in `select`, so the noqa would otherwise be
+# flagged as redundant (RUF100). Plan locks the literal except form — preserve it.
+"tests/conftest.py" = ["RUF100"]
 
 [format]
 quote-style = "double"
