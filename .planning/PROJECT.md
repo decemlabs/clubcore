@@ -49,9 +49,29 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 - ✓ Утилитарные скрипты: `scripts/seed_demo_data.py` (Phase A placeholder), `scripts/backup_db.sh` (pg_dump через docker compose exec) — v1.0
 - ✓ `.env.example`, `pyproject.toml`, `ruff.toml`, `.importlinter`, `alembic.ini` — v1.0
 
-### Active (v1.1 TBD)
+### Active (v1.1 — Auth + Clients)
 
-Define via `/gsd-new-milestone`. Логичный первый бизнес-милстоун — **auth (через Telegram) + clients CRUD**: фундамент, на котором висит всё остальное (subscriptions, visits, schedule, trainers, billing, notifications).
+См. подробный список в `.planning/REQUIREMENTS.md` (REQ-IDs `AUTH-*`, `RBAC-*`, `CLIENTS-*`, `API-*`, `FE-*`).
+
+Кратко:
+
+- **Auth (двухканальный):** Telegram bot deep-link + одноразовый код (primary) + email/password fallback; JWT access (~15min) + refresh (~30d) в httpOnly Secure cookie с rotation; sessions tracking в Redis для revoke.
+- **RBAC server-side:** паритет с `apps/admin-web/src/shared/session/can.ts`; FastAPI dependency `require_permission(action, resource)` на каждом business-endpoint; reception lockouts по `OWNER_ONLY`.
+- **Clients CRUD + поиск/фильтры:** Postgres-таблица `clients` с soft-delete; первая бизнес-миграция Alembic; `POST/GET/PATCH/DELETE /api/v1/clients`; server-side pagination (`{items,total,page,pageSize}`); ILIKE-поиск по ФИО/phone.
+- **Frontend wiring:** admin-web routes `/login` + `/clients/*` идут через `VITE_API_MODE=http` swap-seam → `packages/api-client`; остальные домены остаются на mocks до v1.2+.
+- **`packages/api-client` (типизированный):** FastAPI пишет `openapi.json` → `openapi-typescript` генерит TS-типы; тонкий fetch wrapper с cookie credentials и typed `ApiError`; CI check `git diff --exit-code` против drift.
+
+## Current Milestone: v1.1 Auth + Clients
+
+**Goal:** Поднять первый бизнес-слой — двухканальная аутентификация (Telegram + email/password) с серверным RBAC и полный Clients CRUD с поиском, доведённый до admin-web через типизированный HTTP-клиент.
+
+**Target features:**
+
+- Auth — двухканальный (Telegram bot deep-link primary + email/password fallback) + JWT access/refresh в httpOnly cookie + Redis sessions
+- RBAC server-side — паритет с frontend `can(role, action, resource)` через FastAPI dependency
+- Clients CRUD — полный CRUD + server-side pagination + ILIKE-поиск + soft-delete; первая бизнес-миграция Alembic
+- Frontend wiring — `apps/admin-web` routes auth/clients через real HTTP swap-seam (`VITE_API_MODE=http`); остальные модули продолжают идти через mocks
+- `packages/api-client` — типизированный клиент (openapi-typescript codegen + CI drift check) для auth + clients endpoints
 
 ### Out of Scope
 
@@ -121,4 +141,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-01 after v1.0 milestone close (Phase A: Skeleton — shipped)*
+*Last updated: 2026-05-01 — v1.1 (Auth + Clients) milestone started*
