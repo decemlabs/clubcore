@@ -57,7 +57,7 @@ Pre-commit / pre-push гейтов пять. Все запускаются че�
 - **`async_client`** — `httpx.AsyncClient(transport=ASGITransport(app), base_url="http://test")`.
 - **`db_session`** — per-test `AsyncSession`, создаётся через `app.state.sessionmaker`, rolled back на teardown (TEST-04 contract). В Phase A не используется в тестах — Phase B+ exercise когда появятся бизнес-модули. **Не удалять "as unused"**.
 
-**`asgi-lifespan`** — required dev-dependency (`asgi-lifespan>=2.1` в `[tool.uv] dev-dependencies`). FastAPI lifespan не fires автоматически под `httpx.ASGITransport` — `LifespanManager` принудительно вызывает startup/shutdown. Альтернатива (manual `app.router.startup()` / `shutdown()`) — менее идиоматична. Не удалять library "for being unused" — это tax for ASGITransport correctness.
+**`asgi-lifespan`** — required dev-dependency (`asgi-lifespan>=2.1` в `[dependency-groups] dev`). FastAPI lifespan не fires автоматически под `httpx.ASGITransport` — `LifespanManager` принудительно вызывает startup/shutdown. Альтернатива (manual `app.router.startup()` / `shutdown()`) — менее идиоматична. Не удалять library "for being unused" — это tax for ASGITransport correctness.
 
 **Раскладка тестов:**
 

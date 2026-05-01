@@ -17,10 +17,8 @@ dependencies = [
     "uvicorn[standard]>=0.30",
 ]
 
-# CONTEXT.md D-15 Discretion: user locked `[tool.uv] dev-dependencies = [...]`.
-# (PEP 735 `[dependency-groups]` is the modern equivalent — both work; honor user's choice.)
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "ruff>=0.6",
     "mypy>=1.10",
     "import-linter>=2.0",
