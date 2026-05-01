@@ -20,3 +20,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Local DB dumps (created by scripts/backup_db.sh)
+backups/
