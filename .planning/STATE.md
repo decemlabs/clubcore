@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-30)
 Phase: 03 (tests-dev-infrastructure-documentation) — EXECUTING
 Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-05-01
+Last activity: 2026-05-01 - Completed quick task 260501-ndi: migrate uv dev deps to dependency-groups (PEP 735)
 
 Progress: [██████████] 100%
 
@@ -108,6 +108,12 @@ None yet.
 ### Blockers/Concerns
 
 None — all Phase 1 blockers resolved.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260501-ndi | Migrate uv dev deps from `[tool.uv].dev-dependencies` to `[dependency-groups].dev` (PEP 735) | 2026-05-01 | 71f28de | [260501-ndi-fix-pyproject-toml-migrate-dev-deps-from](./quick/260501-ndi-fix-pyproject-toml-migrate-dev-deps-from/) |
 
 **Resolved during Phase 1:**
 
