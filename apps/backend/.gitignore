@@ -21,5 +21,8 @@ __pycache__/
 # OS
 .DS_Store
 
+# Local env (created by `cp .env.example .env`; never commit)
+.env
+
 # Local DB dumps (created by scripts/backup_db.sh)
 backups/
