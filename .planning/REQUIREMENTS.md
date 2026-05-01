@@ -80,7 +80,7 @@
 ### Dev Infrastructure
 
 - [ ] **INFRA-01**: `apps/backend/Dockerfile` — multi-stage build, slim Python 3.12 base, uv для install
-- [ ] **INFRA-02**: `apps/backend/docker-compose.yml` поднимает `backend`, `postgres:16`, `redis:7` для локальной разработки
+- [x] **INFRA-02**: `apps/backend/docker-compose.yml` поднимает `backend`, `postgres:16`, `redis:7` для локальной разработки
 - [ ] **INFRA-03**: `apps/backend/scripts/seed_demo_data.py` — placeholder, печатает `"Phase A: no data to seed"`
 - [ ] **INFRA-04**: `apps/backend/scripts/backup_db.sh` — рабочий `pg_dump` против локального Postgres
 
@@ -201,7 +201,7 @@
 | TEST-03 | Phase 3 | Pending |
 | TEST-04 | Phase 3 | Pending |
 | INFRA-01 | Phase 3 | Pending |
-| INFRA-02 | Phase 3 | Pending |
+| INFRA-02 | Phase 3 | Complete |
 | INFRA-03 | Phase 3 | Pending |
 | INFRA-04 | Phase 3 | Pending |
 | DOCS-01 | Phase 3 | Pending |

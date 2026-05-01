@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Monorepo Restructure & Frontend Move** — Establish `apps/`/`packages/`/`infra/` skeleton at repo root and relocate the existing `frontend/` into `apps/admin-web/` without rewriting it. **Completed 2026-04-30.**
 - [x] **Phase 2: Backend Skeleton with Quality Tooling** — Bring up the FastAPI modular monolith (`apps/backend/app/`) with `core`/`modules`/`integrations`/`workers`/`api`, the single real endpoint `GET /healthz`, async Alembic config, and ruff + mypy strict + import-linter contracts enforced from day one. **Completed 2026-04-30** (criterion #5 deferred to Phase 3 — no Postgres in env).
-- [ ] **Phase 3: Tests, Dev Infrastructure & Documentation** — Add pytest scaffold (httpx ASGITransport), Dockerfile + dev `docker-compose.yml` (backend + Postgres 16 + Redis 7), placeholder scripts, and architecture/conventions/ADR docs.
+- [x] **Phase 3: Tests, Dev Infrastructure & Documentation** — Add pytest scaffold (httpx ASGITransport), Dockerfile + dev `docker-compose.yml` (backend + Postgres 16 + Redis 7), placeholder scripts, and architecture/conventions/ADR docs. (completed 2026-05-01)
 
 ## Phase Details
 
@@ -81,7 +81,7 @@ Plans:
 - [x] 03-03-PLAN.md — scripts/seed_demo_data.py (Phase A placeholder) + scripts/backup_db.sh (pg_dump via docker compose exec) + .gitignore backups/ (INFRA-03, INFRA-04)
 - [x] 03-04-PLAN.md — docs/{architecture.md, conventions.md, adr/0001-modular-monolith.md, adr/template.md} + README.md (mixed-language D-05, MADR 4.0 D-06; DOCS-01..04)
 - [x] 03-05-PLAN.md — docker-compose.yml (backend + migrate + postgres:16 + redis:7 per D-12) + end-to-end smoke (closes ROADMAP SC #2 + Phase 2 deferred SC #5; INFRA-02)
-- [ ] 03-06-PLAN.md — [gap-closure, wave 3] Patch docker-compose.yml with environment: overrides for backend+migrate (compose-network DSNs); closes CR-01 from 03-VERIFICATION.md (INFRA-02)
+- [x] 03-06-PLAN.md — [gap-closure, wave 3] Patch docker-compose.yml with environment: overrides for backend+migrate (compose-network DSNs); closes CR-01 from 03-VERIFICATION.md (INFRA-02)
 
 ## Progress
 
@@ -92,7 +92,7 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Monorepo Restructure & Frontend Move | 3/3 | Complete | 2026-04-30 |
 | 2. Backend Skeleton with Quality Tooling | 8/8 | Complete | 2026-04-30 |
-| 3. Tests, Dev Infrastructure & Documentation | 0/6 | Not started | - |
+| 3. Tests, Dev Infrastructure & Documentation | 6/6 | Complete   | 2026-05-01 |
 
 ---
 *Roadmap created: 2026-04-30*
