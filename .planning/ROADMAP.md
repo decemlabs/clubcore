@@ -76,10 +76,10 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — pytest scaffold: pyproject pytest config + asgi-lifespan dev-dep + tests/{conftest,integration/test_healthz,unit/test_security,factories/__init__}.py (TEST-01..04)
-- [ ] 03-02-PLAN.md — apps/backend/Dockerfile (multi-stage uv builder + non-root runtime per D-01..D-04) + .dockerignore (INFRA-01)
-- [ ] 03-03-PLAN.md — scripts/seed_demo_data.py (Phase A placeholder) + scripts/backup_db.sh (pg_dump via docker compose exec) + .gitignore backups/ (INFRA-03, INFRA-04)
-- [ ] 03-04-PLAN.md — docs/{architecture.md, conventions.md, adr/0001-modular-monolith.md, adr/template.md} + README.md (mixed-language D-05, MADR 4.0 D-06; DOCS-01..04)
+- [x] 03-01-PLAN.md — pytest scaffold: pyproject pytest config + asgi-lifespan dev-dep + tests/{conftest,integration/test_healthz,unit/test_security,factories/__init__}.py (TEST-01..04)
+- [x] 03-02-PLAN.md — apps/backend/Dockerfile (multi-stage uv builder + non-root runtime per D-01..D-04) + .dockerignore (INFRA-01)
+- [x] 03-03-PLAN.md — scripts/seed_demo_data.py (Phase A placeholder) + scripts/backup_db.sh (pg_dump via docker compose exec) + .gitignore backups/ (INFRA-03, INFRA-04)
+- [x] 03-04-PLAN.md — docs/{architecture.md, conventions.md, adr/0001-modular-monolith.md, adr/template.md} + README.md (mixed-language D-05, MADR 4.0 D-06; DOCS-01..04)
 - [ ] 03-05-PLAN.md — docker-compose.yml (backend + migrate + postgres:16 + redis:7 per D-12) + end-to-end smoke (closes ROADMAP SC #2 + Phase 2 deferred SC #5; INFRA-02)
 
 ## Progress
