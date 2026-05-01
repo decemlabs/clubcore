@@ -40,7 +40,16 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   3. Running `alembic revision --autogenerate -m noop` against a clean Postgres immediately after `alembic upgrade head` produces an empty migration body — proving `MetaData(naming_convention=...)` is set before any business model lands.
   4. `app/modules/members/` no longer exists; `app/modules/clients/` is its successor and `.importlinter` `modules-independent` contract lists `clients` (not `members`); `lint-imports` stays GREEN.
   5. `app.core.pagination.Page[T]` exposes `{items, total, page, pageSize}`; a Pydantic base response/request model with `alias_generator=to_camel` + `populate_by_name=True` is in place; FastAPI's emitted JSON (sample response) contains no `snake_case` property names.
-**Plans**: TBD
+**Plans:** 9 plans
+- [ ] 04-01-PLAN.md — Dependencies + Settings extension (pyjwt/argon2-cffi/python-telegram-bot deps + 4 new env-driven Settings fields)
+- [ ] 04-02-PLAN.md — Module rename `members → clients` + `.importlinter` update; `lint-imports` GREEN
+- [ ] 04-03-PLAN.md — DB foundations (Base.metadata naming_convention + UUIDPkMixin/TimestampMixin/SoftDeleteMixin)
+- [ ] 04-04-PLAN.md — RBAC primitives (`Role`/`Action`/`Resource` StrEnums + `OWNER_ONLY` frozenset + `can()`) + 3 new exception subclasses
+- [ ] 04-05-PLAN.md — Wire-format contract `app/core/schemas.py` (ContractModel hierarchy + ResponseEnvelope[T] + ProblemDetails)
+- [ ] 04-06-PLAN.md — Pagination rewrite (PageQuery + PaginatedData[T]); old LimitOffsetParams/Page[T] deleted
+- [ ] 04-07-PLAN.md — Security helpers (JWT HS256, Argon2id, OTP/deep-link/refresh/CSRF generators, `issue_session_cookies`)
+- [ ] 04-08-PLAN.md — Dependencies scaffold (CurrentUser Protocol + register_user_loader + get_current_user + require_permission)
+- [ ] 04-09-PLAN.md — Verification suite (4 unit tests + alembic-clean integration test — Phase 4 SC #1/#3/#5 gates)
 
 ### Phase 5: User Schema + Email/Password Auth
 **Goal**: Operator can log in with email/password, receive httpOnly access + refresh cookies, refresh those cookies safely under parallel-request races, log out (current session and all sessions), and read `/auth/me`.

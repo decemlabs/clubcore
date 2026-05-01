@@ -1130,27 +1130,31 @@ def test_envelope_camel_wire() -> None:
 | A4 | `pydantic.alias_generators.to_camel` correctly transforms `page_size` → `pageSize` (not `PageSize` or `pageSize`) | Pattern 6, API-04 | None — verified by Pydantic docs for `to_camel`; if wrong, the `test_envelope_camel_wire` unit test would catch it before merge. |
 | A5 | `alembic check` is reliable across Alembic 1.13 → 1.18 (no breaking change to exit codes / stdout format) | Pitfall B, Pattern Verification | LOW — Alembic is stable; only the Python API surface changes. CLI semantics for `check` are part of the public contract since 1.13. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where exactly does `PaginatedData[T]` live — `schemas.py` or `pagination.py`?**
    - What we know: D-10 places it in `pagination.py` ("Pagination shape in `app/core/pagination.py`"). D-09 places `ContractModel`/`ResponseData` in `schemas.py`.
    - What's unclear: Co-location implies `pagination.py` imports `ResponseData` from `schemas.py` (or vice-versa).
    - Recommendation: Put `PaginatedData[T]` in `pagination.py`, importing `ResponseData` from `schemas.py`. Schemas is the leaf module; pagination depends on it. Single import direction prevents circulars. **Confidence: MEDIUM (Assumption A3).**
+   - **RESOLVED:** `PaginatedData[T]` lives in `app/core/pagination.py` and imports `ResponseData` from `app/core/schemas.py` (single direction: pagination -> schemas). Locked into Plan 04-06.
 
 2. **Is `tests/integration/test_alembic_clean.py` allowed to be skip-when-DB-down per Phase 3 D-12?**
    - What we know: Phase 3 conftest's `db_session` fixture skips if Postgres is unreachable.
    - What's unclear: SC #3 requires a green run. CI must run with compose Postgres up; local devs may run with DB down.
    - Recommendation: The test runs only when `db_session` succeeds (use the existing skip pattern). CI's `make test` job depends on `make db-up`. Document in `tests/integration/README.md`.
+   - **RESOLVED:** `tests/integration/test_alembic_clean.py` reuses Phase 3 D-12 skip-on-DB-down idiom via the `db_session` fixture. CI gates on DB-up; locally the test SKIPs (never FAILs). Locked into Plan 04-09.
 
 3. **Should `app/main.py` register a stub `_user_loader` in Phase 4 to make `get_current_user` testable in isolation?**
    - What we know: D-24 says the loader is registered in Phase 5 by `create_app` from `app.modules.auth.service.load_user_by_id`. Phase 4 ships only the slot.
    - What's unclear: If a Phase 4 test imports `get_current_user`, the function raises "user_loader_not_registered". This is fine for unit tests of `decode_access_token` etc., but `test_security.py` doesn't exercise `get_current_user`.
    - Recommendation: Don't register a stub in Phase 4. The Protocol slot remains None until Phase 5 wires `load_user_by_id`. Defensive raise documented in dependencies.py docstring.
+   - **RESOLVED:** Phase 4 does NOT register a stub `_user_loader`. The Protocol slot stays `None`; `get_current_user` raises a clear `RuntimeError("user_loader_not_registered")` until Phase 5 wires it via `app.modules.auth.service.load_user_by_id` (D-24). Locked into Plan 04-08.
 
 4. **`Settings.environment` is `Literal["dev", "staging", "prod"]` — D-25 says the prod assertion key is `"prod"`. Is that consistent across the codebase?**
    - What we know: `apps/backend/app/core/config.py:21` uses `Literal["dev", "staging", "prod"]`. PITFALLS.md #2 example uses `"production"`.
    - What's unclear: Mismatch.
    - Recommendation: Use `"prod"` (matches the existing `Literal`). The PITFALLS.md snippet was illustrative.
+   - **RESOLVED:** `Settings.environment` uses the literal value `"prod"` (matches `Literal["dev", "staging", "prod"]` in `app/core/config.py`). The PITFALLS.md `"production"` example was illustrative; all Phase 4 code uses `"prod"`. Locked into Plans 04-08 / 04-09.
 
 ## Environment Availability
 
