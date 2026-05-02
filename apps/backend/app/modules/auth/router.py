@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import emit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_authenticated, verify_csrf
@@ -35,11 +36,16 @@ from app.core.security import (
     clear_session_cookies,
     issue_session_cookies,
 )
+from app.modules.auth import telegram_service
+from app.modules.auth.exceptions import BotNotStarted
 from app.modules.auth.models import User
 from app.modules.auth.schemas import (
     LoginRequest,
     LoginResponse,
     MeResponse,
+    TelegramStartResponse,
+    TelegramStatusResponse,
+    TelegramVerifyRequest,
     UserPublic,
 )
 from app.modules.auth.service import (
@@ -168,3 +174,97 @@ async def me(
             has_telegram=u.telegram_chat_id is not None,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 — Telegram OTP channel (AUTH-TG-01, AUTH-TG-03, AUTH-TG-04, AUTH-TG-06).
+#
+# All three endpoints are UNAUTHENTICATED. Per Phase 6 D-04 + D-09 they are
+# pre-listed in the TEST-07 introspection exclusion AND carry NO verify_csrf
+# (identity is in the body, not in cookies).
+# ---------------------------------------------------------------------------
+
+
+def _build_deep_link_url(token: str) -> str:
+    """Compose the canonical t.me deep-link URL for a raw deep-link token."""
+    settings = get_settings()
+    return f"https://t.me/{settings.telegram_bot_username}?start={token}"
+
+
+@router.post(
+    "/telegram/start",
+    response_model=ResponseEnvelope[TelegramStartResponse],
+)
+async def telegram_start(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[TelegramStartResponse]:
+    """Mint a deep-link token (AUTH-TG-01).
+
+    Returns the deep-link URL the FE shows to the operator. The OtpCode row
+    is created with code_hash=NULL — the bot will fill it after /start <token>.
+    """
+    raw_token, _hash = await telegram_service.start_deep_link(session)
+    return envelope(
+        TelegramStartResponse(
+            deep_link_url=_build_deep_link_url(raw_token),
+            deep_link_token=raw_token,
+        )
+    )
+
+
+@router.get(
+    "/telegram/status",
+    response_model=ResponseEnvelope[TelegramStatusResponse],
+)
+async def telegram_status(
+    token: str,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[TelegramStatusResponse]:
+    """Poll: has the bot DMed the code yet? (AUTH-TG-03).
+
+    Per D-19: never raises; unknown / expired / consumed all return bound=False
+    (do NOT leak token validity).
+    """
+    bound = await telegram_service.get_status(session, token)
+    return envelope(TelegramStatusResponse(bound=bound))
+
+
+@router.post(
+    "/telegram/verify",
+    response_model=ResponseEnvelope[LoginResponse],
+)
+async def telegram_verify(
+    payload: TelegramVerifyRequest,
+    request: Request,
+    response: Response,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> ResponseEnvelope[LoginResponse]:
+    """Verify the 6-digit OTP and issue session cookies (AUTH-TG-04, AUTH-TG-06).
+
+    On success: mints tokens + cookies identical to /login, then emits
+    `login_success` with `channel='telegram'` (D-14). Distinct error codes
+    per D-13 ride the AppError envelope handler. BotNotStarted is re-raised
+    with `fields={'deepLinkUrl': ...}` so the FE can re-display the deep-link
+    button (D-13 row 1).
+    """
+    settings = get_settings()
+    try:
+        user = await telegram_service.consume(session, payload.deep_link_token, payload.code)
+    except BotNotStarted as exc:
+        raise BotNotStarted(
+            exc.message,
+            fields={"deepLinkUrl": _build_deep_link_url(payload.deep_link_token)},
+        ) from exc
+
+    access, refresh, csrf = await issue_tokens(session, redis, user)
+    issue_session_cookies(
+        response,
+        access_token=access,
+        refresh_token=refresh,
+        csrf_token=csrf,
+        secure=settings.cookie_secure,
+    )
+    ip = request.client.host if request.client is not None else None
+    emit("login_success", user_id=str(user.id), ip=ip, channel="telegram")
+    return envelope(LoginResponse(user=UserPublic.model_validate(user)))
