@@ -95,7 +95,15 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   2. After `/start <token>` in the bot, the operator receives a 6-digit DM (TTL 5 min, max 5 verification attempts); `POST /api/v1/auth/telegram/verify { token, code }` upserts the user by `telegram_chat_id`, issues the same cookie pair as the email/password path, and emits `otp_consumed` audit.
   3. Invoking the verify endpoint when the user has not yet started a chat with the bot returns 409 `bot_not_started` carrying the deep-link URL; expired OTP, wrong code, and exceeded-attempts paths all return distinct error codes.
   4. `docker compose up` brings up a fourth `telegram-bot` service (`restart: unless-stopped`) that runs `python -m app.workers.telegram_bot` long-polling — separate from the API and ARQ worker processes.
-**Plans**: TBD
+**Plans:** 8 plans
+- [ ] 07-01-PLAN.md — Settings + .env.example + reusable db/redis lifespan managers (D-08, D-10)
+- [ ] 07-02-PLAN.md — Migration 0003_telegram_username + User.telegram_username column (D-02, D-18)
+- [ ] 07-03-PLAN.md — Auth domain exceptions for D-13 verify failure modes
+- [ ] 07-04-PLAN.md — telegram_service (start/bind/commit/consume/get_status) + DTOs + audit names (D-11, D-13, D-19)
+- [ ] 07-05-PLAN.md — integrations/telegram (sender + handlers + bot factory) with HandlerContext closure (D-04, D-05, D-09)
+- [ ] 07-06-PLAN.md — Auth router 3 telegram endpoints + login_success channel kwarg (D-13, D-14)
+- [ ] 07-07-PLAN.md — workers/telegram_bot.py + docker-compose telegram-bot service + seed script (INFRA-06, D-03, D-06)
+- [ ] 07-08-PLAN.md — TEST-03 stub_telegram_sender fixture + 4 test files
 **UI hint**: yes
 
 ### Phase 8: Clients Module + Audit Log
@@ -143,7 +151,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 4. Auth Foundations & Cookie/RBAC Primitives | v1.1 | 0/TBD | Not started | — |
 | 5. User Schema + Email/Password Auth | v1.1 | 0/8 | Not started | — |
 | 6. RBAC Wiring + Parity Tests | v1.1 | 0/TBD | Not started | — |
-| 7. Telegram OTP Channel | v1.1 | 0/TBD | Not started | — |
+| 7. Telegram OTP Channel | v1.1 | 0/8 | Not started | — |
 | 8. Clients Module + Audit Log | v1.1 | 0/TBD | Not started | — |
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
 | 10. admin-web Auth + Clients Wiring | v1.1 | 0/TBD | Not started | — |
