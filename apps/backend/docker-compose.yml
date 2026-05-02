@@ -19,6 +19,20 @@ services:
       redis:
         condition: service_started
 
+  telegram-bot:
+    build: .
+    command: python -m app.workers.telegram_bot
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
   migrate:
     build: .
     command: alembic upgrade head
