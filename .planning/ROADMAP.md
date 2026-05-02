@@ -63,7 +63,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 **Plans:** 8 plans
 - [x] 05-01-PLAN.md — Pinned redis>=5,<6 + refresh_reuse_window_seconds Settings + .env.example (D-08, D-13, D-25)
 - [x] 05-02-PLAN.md — app/core/redis.py lifespan + app/core/audit.py emit + clear_session_cookies (D-08, D-17, D-21)
-- [ ] 05-03-PLAN.md — User/RefreshToken/OtpCode ORM models + alembic 0001_auth migration (INFRA-03, TEST-08, D-01..D-07)
+- [x] 05-03-PLAN.md — User/RefreshToken/OtpCode ORM models + alembic 0001_auth migration (INFRA-03, TEST-08, D-01..D-07)
 - [ ] 05-04-PLAN.md — Auth service (authenticate/issue_tokens/rotate_refresh/revoke_session/revoke_all_sessions) + rate_limit (AUTH-05/06/07, D-09..D-14, D-18..D-20)
 - [ ] 05-05-PLAN.md — Auth schemas + router /login /refresh /logout /logout-all /me (AUTH-EP-01/02/05, AUTH-LO-01/02/04)
 - [ ] 05-06-PLAN.md — app/main composition (combined_lifespan + register_user_loader) + /api/v1 prefix flip + seed_demo_data.py (AUTH-EP-04, D-15, D-16)
