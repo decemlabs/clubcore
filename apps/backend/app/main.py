@@ -33,7 +33,12 @@ from app.modules.auth.service import load_user_by_id
 
 @asynccontextmanager
 async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Chain db_lifespan + redis_lifespan (D-08)."""
+    """Chain db_lifespan + redis_lifespan adapters (Phase 5 D-08, refactored Phase 7 D-08).
+
+    The adapters internally open db_lifespan_manager() / redis_lifespan_manager()
+    so the bot worker (app/workers/telegram_bot.py) can reuse the managers
+    without FastAPI app.state coupling.
+    """
     async with db_lifespan(app), redis_lifespan(app):
         yield
 

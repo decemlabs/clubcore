@@ -18,12 +18,13 @@ from app.core.config import get_settings
 
 
 @asynccontextmanager
-async def redis_lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Open a Redis connection pool on startup, dispose on shutdown.
+async def redis_lifespan_manager() -> AsyncIterator[Redis]:
+    """Reusable Redis lifespan manager (Phase 7 D-08).
 
-    Composes alongside `db_lifespan` via a `combined_lifespan` chain in `app.main`
-    (D-08): both touch `app.state`, so they are wrapped in a single
-    `@asynccontextmanager` that enters both contexts.
+    Yields the Redis client for any caller — FastAPI lifespan adapter,
+    bot worker, ad-hoc scripts. Closes the client on exit.
+
+    Constraint: MUST NOT import app.modules.* (importlinter `core-not-depend-on-modules`).
     """
     settings = get_settings()
     client: Redis = from_url(  # type: ignore[no-untyped-call]
@@ -31,11 +32,23 @@ async def redis_lifespan(app: FastAPI) -> AsyncIterator[None]:
         decode_responses=True,
         encoding="utf-8",
     )
-    app.state.redis = client
     try:
-        yield
+        yield client
     finally:
         await client.aclose()
+
+
+@asynccontextmanager
+async def redis_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """FastAPI adapter for redis_lifespan_manager — assigns client to app.state.redis.
+
+    Composes alongside `db_lifespan` via a `combined_lifespan` chain in `app.main`
+    (D-08): both touch `app.state`, so they are wrapped in a single
+    `@asynccontextmanager` that enters both contexts.
+    """
+    async with redis_lifespan_manager() as client:
+        app.state.redis = client
+        yield
 
 
 def get_redis(request: Request) -> Redis:
