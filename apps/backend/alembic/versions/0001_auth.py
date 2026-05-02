@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("password_hash", sa.Text(), nullable=False),
         sa.Column(
             "role",
-            sa.Enum("OWNER", "RECEPTION", name="role", native_enum=False, length=16),
+            sa.Enum("owner", "reception", name="role", native_enum=False, length=16),
             nullable=False,
         ),
         sa.Column("full_name", sa.Text(), nullable=False),
