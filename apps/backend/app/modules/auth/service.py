@@ -1,4 +1,488 @@
-"""Auth service placeholder.
+"""Auth service — SQL+Redis seam (Phase 5).
 
-TODO Phase C+: business logic — register_user, authenticate, issue_tokens, rotate_refresh.
+Decisions implemented:
+  D-09  — Redis session value JSON {family_id, last_seen_at, refresh_token_hash}
+  D-10  — auth:user_sessions:{user_id} SET of family_ids for logout-all
+  D-11  — Redis-first fast-path, Postgres authoritative for state changes
+  D-13  — DB-led rotation chain via replaced_by_id + auth:rotate:{hash} 5s cache (Task 2b)
+  D-14  — /auth/logout flow (revoke single family + clear cookies) (Task 2b)
+  D-18  — rate-limit BEFORE password verify (AUTH-EP-03)
+  D-20  — locked structlog event names (incl. password_changed_revokes_sessions)
+
+The service NEVER bypasses the DB for state changes (revoke, rotate). Redis is a
+follower: a flush degrades latency but does not lose correctness.
 """
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Awaitable
+from datetime import UTC, datetime, timedelta
+from typing import cast
+from uuid import UUID, uuid4
+
+from redis.asyncio import Redis
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.audit import emit
+from app.core.config import get_settings
+from app.core.exceptions import InvalidAccessToken, InvalidPassword
+from app.core.security import (
+    encode_access_token,
+    generate_csrf_token,
+    generate_refresh_token,
+    hash_password,
+    verify_password,
+)
+from app.modules.auth.models import RefreshToken, User
+from app.modules.auth.rate_limit import bump_login_rate, check_login_rate
+
+# ---------------------------------------------------------------------------
+# Sentinel hash for timing-equivalent user-not-found path (Phase 4 D-28, AUTH-EP-02).
+# Generated lazily on first call (avoid blocking the event loop at import time).
+# ---------------------------------------------------------------------------
+
+_SENTINEL_HASH: str | None = None
+
+
+async def _get_sentinel_hash() -> str:
+    """Return a fixed Argon2id hash of an unused random password.
+
+    The hash is computed once per process. `verify_password` against it always
+    raises InvalidPassword, but the wall-clock time matches a real verify —
+    which is the AUTH-EP-02 timing-equivalence requirement.
+    """
+    global _SENTINEL_HASH
+    if _SENTINEL_HASH is None:
+        # Random secret; never sent over the wire, never persisted.
+        _SENTINEL_HASH = await hash_password("__sentinel__never__matches__")
+    return _SENTINEL_HASH
+
+
+def _sha256_hex(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Loader — Phase 4 D-24 slot (registered in app.main.create_app per Plan 06)
+# ---------------------------------------------------------------------------
+
+
+async def load_user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
+    """Loader registered via register_user_loader() in create_app() (D-15).
+
+    Returns None when no user with that id exists. The dependency at
+    app.core.dependencies.get_current_user surfaces None as
+    InvalidAccessToken('user_not_found').
+    """
+    return await session.get(User, user_id)
+
+
+# ---------------------------------------------------------------------------
+# Authenticate (login) — D-18 + AUTH-EP-02 timing equivalence
+# ---------------------------------------------------------------------------
+
+
+async def authenticate(
+    session: AsyncSession,
+    redis: Redis,
+    email: str,
+    password: str,
+    *,
+    ip: str | None = None,
+) -> User:
+    """Verify credentials, raise InvalidPassword on any failure.
+
+    Timing-equivalence: even when the email is unknown, a real Argon2 verify
+    runs against a sentinel hash so wall-clock latency matches the success
+    path (Phase 4 D-28).
+
+    Rate limit (D-18): the per-email counter is checked BEFORE the user
+    lookup so the response code goes 429 → 401 → 200 without leaking which
+    emails exist.
+    """
+    email_lower = email.lower()
+
+    # 1. Rate limit BEFORE Argon2 (D-18). RateLimited is a 429 — propagate.
+    await check_login_rate(redis, email_lower)
+
+    user = await session.scalar(select(User).where(User.email == email_lower))
+    target_hash = user.password_hash if user is not None else await _get_sentinel_hash()
+
+    try:
+        await verify_password(password, target_hash)
+    except InvalidPassword:
+        await bump_login_rate(redis, email_lower)
+        emit(
+            "login_failed",
+            email=email_lower,
+            reason="invalid_credentials",
+            ip=ip,
+        )
+        raise
+
+    if user is None:
+        # Verify against sentinel succeeded only via implausible collision; treat
+        # as failure (D-28). Bump rate + emit + raise.
+        await bump_login_rate(redis, email_lower)
+        emit(
+            "login_failed",
+            email=email_lower,
+            reason="invalid_credentials",
+            ip=ip,
+        )
+        raise InvalidPassword("invalid_credentials")
+
+    emit("login_success", user_id=str(user.id), email=email_lower, ip=ip)
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Issue tokens — initial mint (called from /login)
+# ---------------------------------------------------------------------------
+
+
+async def issue_tokens(
+    session: AsyncSession,
+    redis: Redis,
+    user: User,
+) -> tuple[str, str, str]:
+    """Mint a fresh (access, refresh, csrf) tuple and persist DB+Redis state.
+
+    Returns:
+        (access_jwt, raw_refresh_token, csrf_token) — caller writes cookies.
+
+    Side effects:
+        - INSERT new row into refresh_tokens with new family_id.
+        - SET auth:session:{user_id}:{family_id} with EX=refresh_token_ttl_seconds.
+        - SADD auth:user_sessions:{user_id} family_id; EXPIRE same TTL.
+    """
+    settings = get_settings()
+    now = datetime.now(tz=UTC)
+    family_id = uuid4()
+
+    raw_refresh, refresh_hash = generate_refresh_token()
+    access = encode_access_token(user.id, user.role, now=now)
+    csrf = generate_csrf_token()
+
+    rt = RefreshToken(
+        user_id=user.id,
+        family_id=family_id,
+        token_hash=refresh_hash,
+        expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
+    )
+    session.add(rt)
+    await session.commit()
+
+    await _write_session_keys(
+        redis,
+        user_id=user.id,
+        family_id=family_id,
+        refresh_hash=refresh_hash,
+        ttl=settings.refresh_token_ttl_seconds,
+        now=now,
+    )
+
+    return access, raw_refresh, csrf
+
+
+async def _write_session_keys(
+    redis: Redis,
+    *,
+    user_id: UUID,
+    family_id: UUID,
+    refresh_hash: str,
+    ttl: int,
+    now: datetime,
+) -> None:
+    """Write D-09 session JSON + D-10 user_sessions SET membership."""
+    session_value = json.dumps(
+        {
+            "family_id": str(family_id),
+            "last_seen_at": now.isoformat(),
+            "refresh_token_hash": refresh_hash,
+        }
+    )
+    pipe = redis.pipeline()
+    pipe.set(f"auth:session:{user_id}:{family_id}", session_value, ex=ttl)
+    pipe.sadd(f"auth:user_sessions:{user_id}", str(family_id))
+    pipe.expire(f"auth:user_sessions:{user_id}", ttl)
+    await pipe.execute()
+
+
+# ---------------------------------------------------------------------------
+# Password-change wrapper — AUTH-LO-03 / D-20 call site
+# ---------------------------------------------------------------------------
+# The admin password-change endpoint itself is deferred (D-20). The wrapper
+# exists NOW so whoever lands the admin endpoint can call it without inventing
+# a new event name. It delegates to revoke_all_sessions (defined in Task 2b)
+# and re-emits with the locked event name `password_changed_revokes_sessions`.
+
+
+async def revoke_sessions_on_password_change(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: UUID,
+) -> int:
+    """Revoke every alive refresh-token family for the user after a password change.
+
+    Locked call site for AUTH-LO-03 (D-20). NOT wired to any Phase 5 route — the
+    admin password-change endpoint is deferred. The wrapper exists so the event
+    name `password_changed_revokes_sessions` is already in source when the
+    admin endpoint lands; Phase 8 audit-DB swap-in does not need a rename.
+
+    Returns the family count (same as revoke_all_sessions).
+    """
+    family_count = await revoke_all_sessions(session, redis, user_id)
+    emit(
+        "password_changed_revokes_sessions",
+        user_id=str(user_id),
+        family_count=family_count,
+    )
+    return family_count
+
+
+# ---------------------------------------------------------------------------
+# Rotate refresh — D-13 (THE Phase 5 hot path)
+# ---------------------------------------------------------------------------
+
+
+async def rotate_refresh(
+    session: AsyncSession,
+    redis: Redis,
+    presented_token: str,
+) -> tuple[str, str, str]:
+    """Rotate a refresh token; return new (access, refresh, csrf).
+
+    Three explicit branches per D-13:
+
+      (A) ACTIVE — `revoked_at IS NULL AND replaced_by_id IS NULL AND not expired`:
+          Mint new pair, INSERT new row, UPDATE old (replaced_by_id, replaced_at).
+          Cache the new pair at `auth:rotate:{old_hash}` for refresh_reuse_window_seconds.
+
+      (B) REPLACED-WITHIN-WINDOW — `replaced_by_id IS NOT NULL AND replaced_at > now - W`:
+          Look up `auth:rotate:{old_hash}`. If hit, return the cached pair (idempotent
+          same-pair return for the second of two parallel callers). Cache miss falls
+          through to (C).
+
+      (C) REUSE/REVOKED — anything else:
+          UPDATE refresh_tokens SET revoked_at = now WHERE user_id+family_id alive.
+          DEL auth:session:{user_id}:{family_id}.
+          emit('family_reuse_detected', presented_token_hash_prefix=hash[:8]).
+          Raise InvalidAccessToken('family_reuse_detected').
+
+    SELECT ... FOR UPDATE acquires a row lock so two parallel rotators serialize on
+    the DB (Postgres is the source of truth — D-11). Redis cache is an optimization
+    on top of the DB chain, not the gate.
+    """
+    settings = get_settings()
+    presented_hash = _sha256_hex(presented_token)
+    now = datetime.now(tz=UTC)
+    window = timedelta(seconds=settings.refresh_reuse_window_seconds)
+
+    # Begin transaction so SELECT ... FOR UPDATE holds the row-lock through mint.
+    async with session.begin():
+        row = await session.scalar(
+            select(RefreshToken)
+            .where(RefreshToken.token_hash == presented_hash)
+            .with_for_update()
+        )
+
+        if row is None:
+            raise InvalidAccessToken("refresh_not_found")
+
+        # ---- Branch (A): ACTIVE — rotate ------------------------------------
+        if (
+            row.revoked_at is None
+            and row.replaced_by_id is None
+            and row.expires_at > now
+        ):
+            user_loaded = await session.get(User, row.user_id)
+            if user_loaded is None:
+                raise InvalidAccessToken("user_not_found")
+
+            raw_refresh, refresh_hash = generate_refresh_token()
+            access = encode_access_token(user_loaded.id, user_loaded.role, now=now)
+            csrf = generate_csrf_token()
+
+            new_row = RefreshToken(
+                user_id=row.user_id,
+                family_id=row.family_id,
+                token_hash=refresh_hash,
+                expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
+            )
+            session.add(new_row)
+            await session.flush()
+            row.replaced_by_id = new_row.id
+            row.replaced_at = now
+
+            # Race-window cache — NX so a concurrent caller cannot overwrite the pair.
+            await redis.set(
+                f"auth:rotate:{presented_hash}",
+                json.dumps(
+                    {
+                        "access_token": access,
+                        "refresh_token": raw_refresh,
+                        "csrf_token": csrf,
+                    }
+                ),
+                ex=settings.refresh_reuse_window_seconds,
+                nx=True,
+            )
+
+            await _write_session_keys(
+                redis,
+                user_id=row.user_id,
+                family_id=row.family_id,
+                refresh_hash=refresh_hash,
+                ttl=settings.refresh_token_ttl_seconds,
+                now=now,
+            )
+            return access, raw_refresh, csrf
+
+        # ---- Branch (B): REPLACED-WITHIN-WINDOW — same-pair return -----------
+        if (
+            row.replaced_by_id is not None
+            and row.replaced_at is not None
+            and row.replaced_at > now - window
+        ):
+            cached = await redis.get(f"auth:rotate:{presented_hash}")
+            if cached is not None:
+                payload = json.loads(cached)
+                return (
+                    payload["access_token"],
+                    payload["refresh_token"],
+                    payload["csrf_token"],
+                )
+            # Cache miss: window expired between caller and us. Fall through to (C).
+
+        # ---- Branch (C): REUSE/REVOKED — family revocation -------------------
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == row.user_id,
+                RefreshToken.family_id == row.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+
+    # Outside the DB tx: clean Redis (best-effort; DB already holds truth).
+    # `srem` is typed as `Awaitable[int] | int` (redis-py shares stubs across
+    # sync/async clients); cast to disambiguate for mypy.
+    await redis.delete(f"auth:session:{row.user_id}:{row.family_id}")
+    await cast(
+        "Awaitable[int]",
+        redis.srem(f"auth:user_sessions:{row.user_id}", str(row.family_id)),
+    )
+
+    emit(
+        "family_reuse_detected",
+        user_id=str(row.user_id),
+        family_id=str(row.family_id),
+        presented_token_hash_prefix=presented_hash[:8],
+    )
+    raise InvalidAccessToken("family_reuse_detected")
+
+
+# ---------------------------------------------------------------------------
+# Revoke session (single family) — /auth/logout (D-14)
+# ---------------------------------------------------------------------------
+
+
+async def revoke_session(
+    session: AsyncSession,
+    redis: Redis,
+    presented_token: str,
+) -> None:
+    """Revoke the family the presented refresh token belongs to (D-14).
+
+    Idempotent: if the token doesn't exist (already-revoked / unknown), the
+    DB UPDATE is a no-op and Redis DEL is a no-op. The route handler always
+    clears cookies regardless.
+
+    IMPLEMENTATION NOTE — single transaction context:
+    The SELECT (to derive user_id + family_id from token_hash) and the UPDATE
+    live in ONE `async with session.begin():` block. A previous draft did the
+    SELECT outside the block and then opened `session.begin()` for the UPDATE —
+    this raises InvalidRequestError because AsyncSession autobegins on the
+    first statement, and the explicit begin() then collides with the autobegun
+    transaction. Keep both statements inside the same begin().
+    """
+    presented_hash = _sha256_hex(presented_token)
+    now = datetime.now(tz=UTC)
+
+    async with session.begin():
+        row = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
+        )
+        if row is None:
+            # Idempotent: unknown token, nothing to revoke. Exit the tx clean.
+            return
+
+        user_id = row.user_id
+        family_id = row.family_id
+
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.family_id == family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+
+    # Outside the tx: clean Redis (DB is authoritative; Redis follows).
+    pipe = redis.pipeline()
+    pipe.delete(f"auth:session:{user_id}:{family_id}")
+    pipe.srem(f"auth:user_sessions:{user_id}", str(family_id))
+    await pipe.execute()
+
+    emit("session_revoked", user_id=str(user_id), family_id=str(family_id))
+
+
+# ---------------------------------------------------------------------------
+# Revoke all sessions — /auth/logout-all (D-10, AUTH-LO-02, AUTH-LO-03)
+# ---------------------------------------------------------------------------
+
+
+async def revoke_all_sessions(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: UUID,
+) -> int:
+    """Revoke every alive refresh-token family for the user. Return family count.
+
+    Enumerates via SMEMBERS auth:user_sessions:{user_id} (no SCAN — bounded by
+    the user's active families, typically 1-3). Postgres is authoritative:
+    the UPDATE always runs even if Redis SET is empty (e.g. after a flush).
+    """
+    # `smembers` is typed `Awaitable[set] | set` (sync/async shared stubs); cast.
+    family_ids_raw = await cast(
+        "Awaitable[set[str]]",
+        redis.smembers(f"auth:user_sessions:{user_id}"),
+    )
+    family_count = len(family_ids_raw)
+
+    if family_count > 0:
+        pipe = redis.pipeline()
+        for fid in family_ids_raw:
+            pipe.delete(f"auth:session:{user_id}:{fid}")
+        pipe.delete(f"auth:user_sessions:{user_id}")
+        await pipe.execute()
+
+    async with session.begin():
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(tz=UTC))
+        )
+
+    emit("session_revoked_all", user_id=str(user_id), family_count=family_count)
+    return family_count
