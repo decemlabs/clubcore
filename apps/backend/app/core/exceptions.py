@@ -26,6 +26,19 @@ class ForbiddenError(AppError):
     status_code = 403
 
 
+class CsrfMismatch(AppError):  # noqa: N818
+    """Double-submit CSRF check failure (Phase 6 D-08, D-21).
+
+    Emitted by `app.core.dependencies.verify_csrf` when the `sportzal_csrf` cookie
+    is missing, the `X-CSRF-Token` header is missing, or the two values do not match
+    (constant-time compare). Distinct from `ForbiddenError` so the frontend can branch
+    on `code` (csrf_mismatch → silent refresh; forbidden → user-actionable).
+    """
+
+    code = "csrf_mismatch"
+    status_code = 403
+
+
 class ConflictError(AppError):
     code = "conflict"
     status_code = 409
