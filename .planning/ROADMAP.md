@@ -67,8 +67,8 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] 05-04-PLAN.md — Auth service (authenticate/issue_tokens/rotate_refresh/revoke_session/revoke_all_sessions) + rate_limit (AUTH-05/06/07, D-09..D-14, D-18..D-20)
 - [x] 05-05-PLAN.md — Auth schemas + router /login /refresh /logout /logout-all /me (AUTH-EP-01/02/05, AUTH-LO-01/02/04)
 - [x] 05-06-PLAN.md — app/main composition (combined_lifespan + register_user_loader) + /api/v1 prefix flip + seed_demo_data.py (AUTH-EP-04, D-15, D-16)
-- [ ] 05-07-PLAN.md — SAVEPOINT-based db_session fixture + smoke test (TEST-01, D-22)
-- [ ] 05-08-PLAN.md — Integration tests test_login.py / test_refresh.py / test_logout.py (TEST-02, TEST-04, AUTH-LO-01/02/04)
+- [x] 05-07-PLAN.md — SAVEPOINT-based db_session fixture + smoke test (TEST-01, D-22)
+- [x] 05-08-PLAN.md — Integration tests test_login.py / test_refresh.py / test_logout.py (TEST-02, TEST-04, AUTH-LO-01/02/04)
 
 ### Phase 6: RBAC Wiring + Parity Tests
 **Goal**: Every protected route refuses unauthenticated callers with 401 and unauthorized callers with 403 before any side-effect runs, and the `OWNER_ONLY` matrix can never silently drift from the frontend.
