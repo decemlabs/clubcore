@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     jwt_clock_leeway_seconds: int = 30            # PyJWT decode leeway for cross-container drift
     cookie_secure: bool = False  # prod startup must ASSERT True (Phase 5 adds assertion)
 
+    # Phase 5 addition (D-13, AUTH-06): refresh-rotation reuse-window in seconds.
+    # Two parallel /auth/refresh calls within this window return the same new pair
+    # (idempotent same-pair return) — the lower bound on cache TTL at auth:rotate:{hash}.
+    refresh_reuse_window_seconds: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

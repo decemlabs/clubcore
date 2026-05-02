@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
 stopped_at: Phase 5 context gathered
-last_updated: "2026-05-02T09:42:38.340Z"
-last_activity: 2026-05-02 -- Phase 05 planning complete
+last_updated: "2026-05-02T09:46:38.897Z"
+last_activity: 2026-05-02 -- Phase 05 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 04 — auth-foundations-cookie-rbac-primitives
+**Current focus:** Phase 05 — user-schema-email-password-auth
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-02 -- Phase 05 planning complete
+Phase: 05 (user-schema-email-password-auth) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 05
+Last activity: 2026-05-02 -- Phase 05 execution started
 
 ## Performance Metrics
 
