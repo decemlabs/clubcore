@@ -252,3 +252,41 @@ def issue_session_cookies(
         secure=secure,
         samesite="lax",
     )
+
+
+def clear_session_cookies(response: Response, *, secure: bool) -> None:
+    """Clear sz_access + sz_refresh + sportzal_csrf, mirroring issue_session_cookies (D-17).
+
+    Browsers only delete a cookie when the deletion request matches the original
+    Path / SameSite / Secure / HttpOnly tuple. Mismatched attributes produce a
+    silent no-op delete that leaves stale cookies in the jar. This helper mirrors
+    `issue_session_cookies` exactly so callers cannot drift across logout sites
+    (Phase 5 /auth/logout, future Phase 5/7 admin password-change).
+
+    `secure` MUST be passed from `settings.cookie_secure` for symmetry with the
+    issuer (prod startup asserts `cookie_secure is True` per D-25).
+    """
+    # sz_access — Path=/ (matches issuer)
+    response.delete_cookie(
+        key="sz_access",
+        path="/",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    # sz_refresh — Path=/api/v1/auth (matches issuer; browsers will not delete on Path=/)
+    response.delete_cookie(
+        key="sz_refresh",
+        path="/api/v1/auth",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    # sportzal_csrf — Path=/, NOT httpOnly (matches issuer)
+    response.delete_cookie(
+        key="sportzal_csrf",
+        path="/",
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+    )
