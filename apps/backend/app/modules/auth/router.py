@@ -1,10 +1,18 @@
-"""Auth router — /login, /refresh, /logout, /logout-all, /me (Phase 5).
+"""Auth router — /login, /refresh, /logout, /logout-all, /me (Phase 5 + Phase 6).
 
 Endpoints declare ResponseEnvelope[X] as their response_model per Phase 4 D-14
-— no envelope-wrapping middleware. `/login` and `/refresh` are CSRF-exempt at the
-server level (Phase 6 CSRF-02 explicitly skips them). `Depends(get_current_user)`
-fronts `/logout`, `/logout-all`, `/me`; `/login` and `/refresh` resolve identity
-from the body and from the `sz_refresh` cookie respectively.
+— no envelope-wrapping middleware. `/login` and `/refresh` are CSRF-exempt at
+the server level (Phase 6 D-09: identity is in the body / sz_refresh cookie).
+
+Phase 6 wiring (D-02, D-09):
+  - `/me`, `/logout`, `/logout-all` declare the `require_authenticated()`
+    factory dep (the bare core-level identity loader is banned for
+    protected routes per D-03; the introspection test fails the build
+    if it appears).
+  - `/logout` and `/logout-all` declare `verify_csrf` as a SIGNATURE dep
+    AFTER the auth dep so the RBAC-04 invariant (401 before 403) is
+    preserved — FastAPI resolves signature deps in declaration order.
+  - `/me` does NOT declare `verify_csrf` (GET — would short-circuit anyway).
 
 `require_permission` is NOT used here — Phase 6 wires it onto every other
 business route (RBAC-02..05). Auth endpoints don't need RBAC because login
@@ -19,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, get_current_user
+from app.core.dependencies import CurrentUser, require_authenticated, verify_csrf
 from app.core.exceptions import InvalidAccessToken
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
@@ -77,10 +85,10 @@ async def refresh(
 ) -> ResponseEnvelope[None]:
     """Rotate the refresh token; reissue all three cookies (AUTH-05/06).
 
-    Reads `sz_refresh` cookie directly (NOT via `Depends(get_current_user)` — an
-    expired access token must NOT block a refresh call). The body is empty on
+    Reads `sz_refresh` cookie directly (NOT via the auth dep — an expired
+    access token must NOT block a refresh call). The body is empty on
     success: the new tokens travel in cookies. CSRF dep is exempt (Phase 6
-    CSRF-02 list).
+    CSRF-02 / D-09 list).
     """
     settings = get_settings()
     presented = request.cookies.get("sz_refresh")
@@ -103,7 +111,11 @@ async def logout(
     request: Request,
     response: Response,
     # CurrentUser ensures the access cookie is valid; otherwise 401 short-circuits.
-    _user: Annotated[CurrentUser, Depends(get_current_user)],
+    # verify_csrf is a SIGNATURE dep AFTER require_authenticated so RBAC-04 (D-22)
+    # is preserved: unauth caller → 401 invalid_token (auth fires first), not 403
+    # csrf_mismatch. FastAPI resolves signature deps in declaration order.
+    _user: Annotated[CurrentUser, Depends(require_authenticated())],
+    _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> ResponseEnvelope[None]:
@@ -123,7 +135,8 @@ async def logout(
 @router.post("/logout-all", response_model=ResponseEnvelope[None])
 async def logout_all(
     response: Response,
-    user: Annotated[CurrentUser, Depends(get_current_user)],
+    user: Annotated[CurrentUser, Depends(require_authenticated())],
+    _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> ResponseEnvelope[None]:
@@ -136,7 +149,7 @@ async def logout_all(
 
 @router.get("/me", response_model=ResponseEnvelope[MeResponse])
 async def me(
-    user: Annotated[CurrentUser, Depends(get_current_user)],
+    user: Annotated[CurrentUser, Depends(require_authenticated())],
 ) -> ResponseEnvelope[MeResponse]:
     """Return the authenticated user's profile (AUTH-LO-04).
 
