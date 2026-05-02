@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 from sqlalchemy import DateTime, MetaData, func, text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -105,8 +106,14 @@ class SoftDeleteMixin:
 
 
 @asynccontextmanager
-async def db_lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """FastAPI lifespan: create engine + sessionmaker on startup, dispose on shutdown."""
+async def db_lifespan_manager() -> AsyncIterator[tuple[AsyncEngine, async_sessionmaker[AsyncSession]]]:
+    """Reusable DB lifespan manager (Phase 7 D-08).
+
+    Yields `(engine, sessionmaker)` for any caller — FastAPI lifespan adapter,
+    bot worker, ad-hoc scripts. Disposes engine on exit.
+
+    Constraint: MUST NOT import app.modules.* (importlinter `core-not-depend-on-modules`).
+    """
     settings = get_settings()
     engine = create_async_engine(
         str(settings.database_url),
@@ -118,12 +125,19 @@ async def db_lifespan(app: FastAPI) -> AsyncIterator[None]:
         expire_on_commit=False,
         class_=AsyncSession,
     )
-    app.state.engine = engine
-    app.state.sessionmaker = session_factory
     try:
-        yield
+        yield engine, session_factory
     finally:
         await engine.dispose()
+
+
+@asynccontextmanager
+async def db_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """FastAPI adapter for db_lifespan_manager — assigns engine + sessionmaker to app.state."""
+    async with db_lifespan_manager() as (engine, session_factory):
+        app.state.engine = engine
+        app.state.sessionmaker = session_factory
+        yield
 
 
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
