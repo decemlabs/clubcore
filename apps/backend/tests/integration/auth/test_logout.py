@@ -1,10 +1,14 @@
-"""Integration tests for /api/v1/auth/logout + /logout-all (AUTH-LO-01 / AUTH-LO-02).
+"""Integration tests for /api/v1/auth/logout + /logout-all.
+
+Covers AUTH-LO-01 / AUTH-LO-02 (Phase 5) and Phase 6 CSRF-02 wiring.
 
 Asserts:
   - /logout: revokes the current family in DB + Redis, clears all three cookies,
     emits structlog event=session_revoked.
   - /logout-all: revokes ALL alive families for the user, emits event=session_revoked_all.
-  - /logout without auth → 401 (AUTH endpoints require sz_access).
+  - /logout without auth → 401 (Phase 6 RBAC-04: 401 fires before any 403 path).
+  - /logout authenticated without X-CSRF-Token → 403 csrf_mismatch (Phase 6 D-09).
+  - /logout authenticated with wrong X-CSRF-Token → 403 csrf_mismatch.
 """
 
 from __future__ import annotations
@@ -77,7 +81,10 @@ async def test_logout_revokes_family_and_clears_cookies(
     family_id = rows_before[0].family_id
 
     with capture_logs() as captured:
-        r = await async_client.post("/api/v1/auth/logout")
+        r = await async_client.post(
+            "/api/v1/auth/logout",
+            headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+        )
 
     assert r.status_code == 200, r.text
 
@@ -154,7 +161,10 @@ async def test_logout_all_revokes_all_families(
     assert len(rows_before) == 2
 
     with capture_logs() as captured:
-        r = await async_client.post("/api/v1/auth/logout-all")
+        r = await async_client.post(
+            "/api/v1/auth/logout-all",
+            headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+        )
 
     assert r.status_code == 200, r.text
     events = [c.get("event") for c in captured]
@@ -175,3 +185,53 @@ async def test_logout_all_revokes_all_families(
 
     # The unused first_cookies serve as documentation of the second-device scenario.
     assert "sz_refresh" in first_cookies  # belt-and-braces sanity
+
+
+async def test_logout_authenticated_without_csrf_header_returns_403(
+    async_client: AsyncClient,
+    seeded_owner: User,
+    redis_clean: Redis,
+) -> None:
+    """Authenticated /logout WITHOUT X-CSRF-Token header → 403 csrf_mismatch.
+
+    Locks Phase 6 D-09 wiring: verify_csrf is a signature dep on /logout, runs
+    AFTER require_authenticated (RBAC-04, D-22), so an authenticated caller
+    without the CSRF header gets 403 csrf_mismatch (NOT 401).
+    """
+    await _login(async_client)
+    # Login minted sportzal_csrf into the jar; deliberately omit the header.
+    r = await async_client.post("/api/v1/auth/logout")
+    assert r.status_code == 403, r.text
+    body = r.json()
+    assert body["code"] == "csrf_mismatch"
+
+
+async def test_logout_authenticated_with_wrong_csrf_header_returns_403(
+    async_client: AsyncClient,
+    seeded_owner: User,
+    redis_clean: Redis,
+) -> None:
+    """Mismatched X-CSRF-Token vs sportzal_csrf cookie → 403 csrf_mismatch."""
+    await _login(async_client)
+    r = await async_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": "deadbeef" * 8},  # wrong value, length-OK
+    )
+    assert r.status_code == 403, r.text
+    assert r.json()["code"] == "csrf_mismatch"
+
+
+async def test_logout_unauthenticated_returns_401_even_without_csrf(
+    async_client: AsyncClient,
+    redis_clean: Redis,
+) -> None:
+    """RBAC-04 ordering canary (D-22): unauth /logout → 401 invalid_token, NOT 403 csrf_mismatch.
+
+    verify_csrf is a SIGNATURE dep AFTER require_authenticated (Plan 06-03 Task 1
+    Step 2). FastAPI resolves signature deps in declaration order, so the auth
+    check fires first and returns 401 before verify_csrf can return 403.
+    """
+    # No _login call; no cookies in jar; no header.
+    r = await async_client.post("/api/v1/auth/logout")
+    assert r.status_code == 401, r.text
+    assert r.json()["code"] == "invalid_token"
