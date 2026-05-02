@@ -49,6 +49,11 @@ class User(Base, UUIDPkMixin, TimestampMixin):
         nullable=True,
         unique=True,
     )
+    telegram_username: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        unique=True,
+    )
 
     __table_args__ = (
         CheckConstraint("role IN ('owner', 'reception')", name="role"),
