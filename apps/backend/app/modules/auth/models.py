@@ -34,7 +34,13 @@ class User(Base, UUIDPkMixin, TimestampMixin):
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[Role] = mapped_column(
-        SAEnum(Role, native_enum=False, length=16, validate_strings=True),
+        SAEnum(
+            Role,
+            native_enum=False,
+            length=16,
+            validate_strings=True,
+            values_callable=lambda enum: [m.value for m in enum],
+        ),
         nullable=False,
     )
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
