@@ -106,7 +106,9 @@ class SoftDeleteMixin:
 
 
 @asynccontextmanager
-async def db_lifespan_manager() -> AsyncIterator[tuple[AsyncEngine, async_sessionmaker[AsyncSession]]]:
+async def db_lifespan_manager() -> (
+    AsyncIterator[tuple[AsyncEngine, async_sessionmaker[AsyncSession]]]
+):
     """Reusable DB lifespan manager (Phase 7 D-08).
 
     Yields `(engine, sessionmaker)` for any caller — FastAPI lifespan adapter,
