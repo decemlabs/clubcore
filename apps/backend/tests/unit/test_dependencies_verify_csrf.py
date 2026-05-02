@@ -38,7 +38,7 @@ def _req(
 
 
 def test_safe_methods_constant_is_locked() -> None:
-    assert _SAFE_METHODS == frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+    assert frozenset({"GET", "HEAD", "OPTIONS", "TRACE"}) == _SAFE_METHODS
 
 
 @pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS", "TRACE"])

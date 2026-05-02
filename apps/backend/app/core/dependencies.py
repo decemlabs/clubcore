@@ -14,6 +14,7 @@ body (`app.main` is exempt from `core-not-depend-on-modules` because that contra
 Phase 4 ships only the factory.
 """
 
+import secrets
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Protocol
 from uuid import UUID
@@ -23,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import emit
 from app.core.database import get_db
-from app.core.exceptions import ForbiddenError, InvalidAccessToken
+from app.core.exceptions import CsrfMismatch, ForbiddenError, InvalidAccessToken
 from app.core.permissions import Action, Resource, Role, can
 from app.core.security import decode_access_token
 
@@ -159,3 +160,46 @@ def require_authenticated() -> Callable[..., Awaitable[CurrentUser]]:
         return user
 
     return _checker
+
+
+_SAFE_METHODS: frozenset[str] = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+async def verify_csrf(request: Request) -> None:
+    """Double-submit CSRF check (D-07). Short-circuits on safe methods (D-06).
+
+    Validation:
+      1. If method is in {GET, HEAD, OPTIONS, TRACE}, return None (read-only —
+         no CSRF check; T-06-07 accept).
+      2. Otherwise, read `sportzal_csrf` cookie + `X-CSRF-Token` header.
+      3. If either is missing OR they don't match (`secrets.compare_digest`,
+         constant-time per T-06-05 mitigation), emit `event=csrf_mismatch` and
+         raise `CsrfMismatch`.
+
+    `verify_csrf` runs BEFORE `get_current_user` per FastAPI's `dependencies=[...]`
+    execution order, so `user_id` is best-effort `None` (D-23). Emit kwargs include
+    only `has_cookie` / `has_header` booleans — never the raw token strings
+    (T-06-09 mitigation).
+
+    Raises:
+      CsrfMismatch (403, code='csrf_mismatch') with locked envelope per D-21.
+    """
+    if request.method in _SAFE_METHODS:
+        return
+    cookie_val = request.cookies.get("sportzal_csrf")
+    header_val = request.headers.get("x-csrf-token")
+    if (
+        cookie_val is None
+        or header_val is None
+        or not secrets.compare_digest(cookie_val, header_val)
+    ):
+        emit(
+            "csrf_mismatch",
+            user_id=None,
+            path=request.url.path,
+            method=request.method,
+            ip=request.client.host if request.client is not None else None,
+            has_cookie=cookie_val is not None,
+            has_header=header_val is not None,
+        )
+        raise CsrfMismatch("csrf_mismatch")
