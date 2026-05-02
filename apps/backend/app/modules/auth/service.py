@@ -135,7 +135,7 @@ async def authenticate(
         )
         raise InvalidPassword("invalid_credentials")
 
-    emit("login_success", user_id=str(user.id), email=email_lower, ip=ip)
+    emit("login_success", user_id=str(user.id), email=email_lower, ip=ip, channel="email_password")
     return user
 
 
