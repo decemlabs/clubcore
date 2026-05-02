@@ -21,13 +21,15 @@ from typing import Any
 
 import structlog
 
-_logger = structlog.get_logger("audit")
-
 
 def emit(event: str, **fields: Any) -> None:
     """Emit an audit event. Phase 5: structlog INFO. Phase 8: structlog INFO + DB INSERT.
 
     `event` becomes the structlog message; all `fields` become structured kwargs
     carried under `request_id` from RequestIdMiddleware (already bound to contextvars).
+
+    The logger is resolved per-call (not cached at module scope) so
+    `structlog.testing.capture_logs()` patches reach this emitter — same pattern
+    `RequestIdMiddleware` uses for `request_complete`.
     """
-    _logger.info(event, **fields)
+    structlog.get_logger("audit").info(event, **fields)
