@@ -79,7 +79,12 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   2. Every business route declares `Depends(require_permission(...))` on its signature and never inside the service body — verified by an introspection test that enumerates `app.routes` (excluding `/healthz`, `/auth/login`, `/auth/telegram/*`, `/auth/refresh`).
   3. A parity test imports both `app.core.permissions.OWNER_ONLY` and `apps/admin-web/src/shared/session/can.ts` and fails the build if the two sets of `(action, resource)` pairs differ.
   4. Mutating requests (POST/PATCH/DELETE) without a valid `X-CSRF-Token` matching the `sportzal_csrf` cookie return 403; `/auth/login` and the Telegram server-side endpoints are correctly exempted.
-**Plans**: TBD
+**Plans:** 5 plans
+- [ ] 06-01-PLAN.md — Add CsrfMismatch(AppError) subclass to app/core/exceptions.py (D-08)
+- [ ] 06-02-PLAN.md — Add require_authenticated() factory + verify_csrf dependency + audit emit on require_permission (D-01, D-05..D-07, D-23)
+- [ ] 06-03-PLAN.md — Migrate auth router /me /logout /logout-all to require_authenticated; add CSRF signature dep on /logout /logout-all preserving RBAC-04 ordering; update test_logout.py (D-02, D-09, D-22, D-24)
+- [ ] 06-04-PLAN.md — TEST-05 fixture-router built dynamically from OWNER_ONLY + RBAC integration tests (owner=200 / reception=403 / unauth=401) (D-10, D-11, D-12)
+- [ ] 06-05-PLAN.md — TEST-06 three-way parity test against can.ts/registry.ts + TEST-07 route-introspection guard (D-13..D-19)
 
 ### Phase 7: Telegram OTP Channel
 **Goal**: Operator without a password can log in by tapping a deep-link to the bot, pressing `/start`, receiving a 6-digit DM, and pasting it into the admin-web — with all DM-blocked / wrong-code / expired-code edges handled deterministically.
