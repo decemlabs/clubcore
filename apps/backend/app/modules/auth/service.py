@@ -414,26 +414,33 @@ async def revoke_session(
     presented_hash = _sha256_hex(presented_token)
     now = datetime.now(tz=UTC)
 
-    async with session.begin():
-        row = await session.scalar(
-            select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
-        )
-        if row is None:
-            # Idempotent: unknown token, nothing to revoke. Exit the tx clean.
-            return
+    # The route's `get_current_user` dependency may already have issued a SELECT
+    # on this session, autobegining a transaction. Calling `session.begin()` on
+    # an already-begun session raises InvalidRequestError. Rely on the autobegun
+    # transaction (or trigger one via the SELECT below) and `session.commit()`
+    # explicitly at the end. Equivalent semantics to `async with session.begin()`
+    # for our purposes: select + update + commit; rollback on raise (callers
+    # propagate; the get_db dep cleans up via `async with sessionmaker()`).
+    row = await session.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
+    )
+    if row is None:
+        # Idempotent: unknown token, nothing to revoke. Exit the tx clean.
+        return
 
-        user_id = row.user_id
-        family_id = row.family_id
+    user_id = row.user_id
+    family_id = row.family_id
 
-        await session.execute(
-            update(RefreshToken)
-            .where(
-                RefreshToken.user_id == user_id,
-                RefreshToken.family_id == family_id,
-                RefreshToken.revoked_at.is_(None),
-            )
-            .values(revoked_at=now)
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.family_id == family_id,
+            RefreshToken.revoked_at.is_(None),
         )
+        .values(revoked_at=now)
+    )
+    await session.commit()
 
     # Outside the tx: clean Redis (DB is authoritative; Redis follows).
     pipe = redis.pipeline()
@@ -474,15 +481,18 @@ async def revoke_all_sessions(
         pipe.delete(f"auth:user_sessions:{user_id}")
         await pipe.execute()
 
-    async with session.begin():
-        await session.execute(
-            update(RefreshToken)
-            .where(
-                RefreshToken.user_id == user_id,
-                RefreshToken.revoked_at.is_(None),
-            )
-            .values(revoked_at=datetime.now(tz=UTC))
+    # See revoke_session for the rationale: rely on autobegin + explicit commit
+    # so this works whether or not the route's dep chain (get_current_user) has
+    # already issued a query that started a transaction on this session.
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
         )
+        .values(revoked_at=datetime.now(tz=UTC))
+    )
+    await session.commit()
 
     emit("session_revoked_all", user_id=str(user_id), family_count=family_count)
     return family_count
