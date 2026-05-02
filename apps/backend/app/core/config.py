@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # (idempotent same-pair return) — the lower bound on cache TTL at auth:rotate:{hash}.
     refresh_reuse_window_seconds: int = 5
 
+    # Phase 7 additions (D-10, D-03): Telegram OTP channel.
+    telegram_bot_token: SecretStr
+    telegram_bot_username: str  # without leading `@`
+    otp_deep_link_ttl_seconds: int = 600  # 10 min — AUTH-TG-01
+    otp_code_ttl_seconds: int = 300       # 5 min  — AUTH-TG-02
+    otp_max_attempts: int = 5             # AUTH-TG-02
+
 
 @lru_cache
 def get_settings() -> Settings:
