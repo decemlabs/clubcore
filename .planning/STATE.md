@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
-stopped_at: Phase 7 Wave 1 complete (3/8 plans)
+stopped_at: Phase 7 Wave 2 complete (5/8 plans)
 last_updated: "2026-05-02T19:21:03.285Z"
-last_activity: 2026-05-02 -- Phase 07 Wave 1 merged to master
+last_activity: 2026-05-02 -- Phase 07 Wave 2 merged to master
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 30
-  completed_plans: 25
-  percent: 83
+  completed_plans: 27
+  percent: 90
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 
 ## Current Position
 
-Phase: 07 (Telegram OTP Channel) — EXECUTING (Wave 1 complete; Waves 2-4 pending)
-Plan: 3 of 8 (07-01, 07-02, 07-03 done; 07-04..07-08 remaining)
-Status: Paused after Wave 1 per user choice
-Last activity: 2026-05-02 -- Phase 07 Wave 1 merged to master (commit 03ed840)
+Phase: 07 (Telegram OTP Channel) — EXECUTING (Waves 1+2 complete; Waves 3-4 pending)
+Plan: 5 of 8 (07-01..07-05 done; 07-06, 07-07, 07-08 remaining)
+Status: Paused after Wave 2
+Last activity: 2026-05-02 -- Phase 07 Wave 2 merged to master (commit d70ad02)
 
 ## Performance Metrics
 
