@@ -1,4 +1,7 @@
-"""Unit tests for require_authenticated factory + require_permission audit emit (Phase 6 D-01, D-03, D-23)."""
+"""Unit tests for require_authenticated + require_permission audit emit.
+
+Phase 6 — D-01, D-03, D-23.
+"""
 
 from __future__ import annotations
 
@@ -55,9 +58,8 @@ async def test_require_permission_emits_rbac_forbidden_for_reception() -> None:
     dep = require_permission(Action.DELETE, Resource.CLIENTS)
     user = _stub_user(Role.RECEPTION)
     request = _stub_request()
-    with capture_logs() as captured:
-        with pytest.raises(ForbiddenError):
-            await dep(request=request, user=user)  # type: ignore[arg-type]
+    with capture_logs() as captured, pytest.raises(ForbiddenError):
+        await dep(request=request, user=user)  # type: ignore[arg-type]
     events = [c for c in captured if c.get("event") == "rbac_forbidden"]
     assert len(events) == 1
     ev = events[0]
@@ -83,8 +85,7 @@ async def test_require_permission_emits_with_ip_none_when_client_missing() -> No
     dep = require_permission(Action.DELETE, Resource.CLIENTS)
     user = _stub_user(Role.RECEPTION)
     request = _stub_request(host=None)
-    with capture_logs() as captured:
-        with pytest.raises(ForbiddenError):
-            await dep(request=request, user=user)  # type: ignore[arg-type]
-    ev = [c for c in captured if c.get("event") == "rbac_forbidden"][0]
+    with capture_logs() as captured, pytest.raises(ForbiddenError):
+        await dep(request=request, user=user)  # type: ignore[arg-type]
+    ev = next(c for c in captured if c.get("event") == "rbac_forbidden")
     assert ev["ip"] is None

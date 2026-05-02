@@ -21,6 +21,7 @@ from uuid import UUID
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import emit
 from app.core.database import get_db
 from app.core.exceptions import ForbiddenError, InvalidAccessToken
 from app.core.permissions import Action, Resource, Role, can
@@ -108,16 +109,53 @@ def require_permission(
             ...
         ): ...
 
+    Emits structlog `event=rbac_forbidden` with the locked key set
+    (`user_id, role, action, resource, path, ip`) BEFORE raising `ForbiddenError`,
+    so the Phase 8 audit_log DB writer (INFRA-04) latches on without renaming (D-23).
+
+    The `request: Request` parameter is auto-injected by FastAPI; route-level callers
+    declare only `Depends(require_permission(Action.X, Resource.Y))` — the dependency
+    graph fills `request` and `user` automatically.
+
     Raises:
       ForbiddenError (403, code='forbidden') if `can(user.role, action, resource)` is False.
       (Whatever get_current_user raises — 401 paths — propagates upward unchanged.)
     """
 
     async def _checker(
+        request: Request,
         user: Annotated[CurrentUser, Depends(get_current_user)],
     ) -> CurrentUser:
         if not can(user.role, action, resource):
+            emit(
+                "rbac_forbidden",
+                user_id=str(user.id),
+                role=user.role.value,
+                action=action.value,
+                resource=resource.value,
+                path=request.url.path,
+                ip=request.client.host if request.client is not None else None,
+            )
             raise ForbiddenError(f"forbidden:{action.value}:{resource.value}")
+        return user
+
+    return _checker
+
+
+def require_authenticated() -> Callable[..., Awaitable[CurrentUser]]:
+    """Return a FastAPI dependency that resolves CurrentUser without a role gate.
+
+    Sibling of `require_permission(...)` (D-01). Used by routes that need an
+    authenticated caller but no RBAC check (`/auth/me`, `/auth/logout`,
+    `/auth/logout-all`). The introspection test (TEST-07, Plan 06-05)
+    identifies this factory via `__qualname__.startswith('require_authenticated.')`,
+    so the closure name MUST be `_checker` and the function MUST be a single
+    wrapping layer over `get_current_user` (do NOT nest inside another factory).
+    """
+
+    async def _checker(
+        user: Annotated[CurrentUser, Depends(get_current_user)],
+    ) -> CurrentUser:
         return user
 
     return _checker
