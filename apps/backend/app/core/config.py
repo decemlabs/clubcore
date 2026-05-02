@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: SecretStr
 
+    # Phase 4 additions (D-05, D-25): JWT TTLs + cookie Secure flag, env-driven
+    access_token_ttl_seconds: int = 900           # 15 min — access JWT lifetime
+    refresh_token_ttl_seconds: int = 2_592_000    # 30 days — refresh token lifetime
+    jwt_clock_leeway_seconds: int = 30            # PyJWT decode leeway for cross-container drift
+    cookie_secure: bool = False  # prod startup must ASSERT True (Phase 5 adds assertion)
+
 
 @lru_cache
 def get_settings() -> Settings:
