@@ -1,10 +1,77 @@
-"""Phase A placeholder. Real seeding lands in Phase B+ when business modules exist."""
+"""Seed the bootstrap owner (AUTH-EP-04 / D-25).
+
+Idempotent: INSERT ... ON CONFLICT (email) DO NOTHING. Re-running the script
+after the owner exists is a no-op. The compose stack does NOT auto-run this —
+it is a one-shot operator command:
+
+    uv run python -m scripts.seed_demo_data
+
+Reads SEED_OWNER_EMAIL + SEED_OWNER_PASSWORD from the environment. Both must
+be set; otherwise the script exits 1 with a clear message.
+
+The created owner has full_name='Owner' (D-01: single column). Operators can
+update it via a future admin endpoint or `psql` once the owner has logged in.
+"""
+
 from __future__ import annotations
+
+import asyncio
+import os
+import sys
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.config import get_settings
+from app.core.permissions import Role
+from app.core.security import hash_password
+from app.modules.auth.models import User
+
+
+async def _run() -> int:
+    email = os.environ.get("SEED_OWNER_EMAIL")
+    password = os.environ.get("SEED_OWNER_PASSWORD")
+    if not email or not password:
+        print(
+            "SEED_OWNER_EMAIL and SEED_OWNER_PASSWORD must be set "
+            "(see .env.example).",
+            file=sys.stderr,
+        )
+        return 1
+    if len(password) < 12:
+        print(
+            "SEED_OWNER_PASSWORD must be at least 12 characters "
+            "(AUTH-EP-05 / NIST 800-63B 2024).",
+            file=sys.stderr,
+        )
+        return 1
+
+    email_lower = email.lower()
+    settings = get_settings()
+    engine = create_async_engine(str(settings.database_url))
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with sessionmaker() as session:
+            stmt = (
+                pg_insert(User)
+                .values(
+                    email=email_lower,
+                    password_hash=await hash_password(password),
+                    role=Role.OWNER.value,
+                    full_name="Owner",
+                )
+                .on_conflict_do_nothing(index_elements=["email"])
+            )
+            await session.execute(stmt)
+            await session.commit()
+            print(f"Seeded owner {email_lower} (idempotent: no-op if existed).")
+    finally:
+        await engine.dispose()
+    return 0
 
 
 def main() -> int:
-    print("Phase A: no data to seed")
-    return 0
+    return asyncio.run(_run())
 
 
 if __name__ == "__main__":
