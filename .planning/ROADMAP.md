@@ -49,7 +49,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] 04-06-PLAN.md — Pagination rewrite (PageQuery + PaginatedData[T]); old LimitOffsetParams/Page[T] deleted
 - [x] 04-07-PLAN.md — Security helpers (JWT HS256, Argon2id, OTP/deep-link/refresh/CSRF generators, `issue_session_cookies`)
 - [x] 04-08-PLAN.md — Dependencies scaffold (CurrentUser Protocol + register_user_loader + get_current_user + require_permission)
-- [ ] 04-09-PLAN.md — Verification suite (4 unit tests + alembic-clean integration test — Phase 4 SC #1/#3/#5 gates)
+- [x] 04-09-PLAN.md — Verification suite (4 unit tests + alembic-clean integration test — Phase 4 SC #1/#3/#5 gates)
 
 ### Phase 5: User Schema + Email/Password Auth
 **Goal**: Operator can log in with email/password, receive httpOnly access + refresh cookies, refresh those cookies safely under parallel-request races, log out (current session and all sessions), and read `/auth/me`.
