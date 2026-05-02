@@ -36,6 +36,34 @@ class ValidationAppError(AppError):
     status_code = 422
 
 
+class InvalidAccessToken(AppError):  # noqa: N818
+    """JWT decode/expire failure (Phase 4 — used by app.core.security.decode_access_token)."""
+
+    code = "invalid_token"
+    status_code = 401
+
+
+class InvalidPassword(AppError):  # noqa: N818
+    """Argon2id verify mismatch / malformed hash.
+
+    Phase 4 — used by app.core.security.verify_password.
+
+    Phase 5 AUTH-EP-02 timing equivalence: callers always run verify_password (with a
+    sentinel hash for user-not-found) so this exception fires regardless of whether the
+    email exists, masking enumeration.
+    """
+
+    code = "invalid_credentials"
+    status_code = 401
+
+
+class RateLimited(AppError):  # noqa: N818
+    """Per-actor throttle exhausted (Phase 5 AUTH-EP-03 — 5 failed logins / 15 min)."""
+
+    code = "rate_limited"
+    status_code = 429
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
