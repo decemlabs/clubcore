@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID, uuid4
 
 from redis.asyncio import Redis
@@ -36,7 +38,6 @@ from app.core.security import (
 )
 from app.modules.auth.models import RefreshToken, User
 from app.modules.auth.rate_limit import bump_login_rate, check_login_rate
-
 
 # ---------------------------------------------------------------------------
 # Sentinel hash for timing-equivalent user-not-found path (Phase 4 D-28, AUTH-EP-02).
@@ -240,4 +241,248 @@ async def revoke_sessions_on_password_change(
         user_id=str(user_id),
         family_count=family_count,
     )
+    return family_count
+
+
+# ---------------------------------------------------------------------------
+# Rotate refresh — D-13 (THE Phase 5 hot path)
+# ---------------------------------------------------------------------------
+
+
+async def rotate_refresh(
+    session: AsyncSession,
+    redis: Redis,
+    presented_token: str,
+) -> tuple[str, str, str]:
+    """Rotate a refresh token; return new (access, refresh, csrf).
+
+    Three explicit branches per D-13:
+
+      (A) ACTIVE — `revoked_at IS NULL AND replaced_by_id IS NULL AND not expired`:
+          Mint new pair, INSERT new row, UPDATE old (replaced_by_id, replaced_at).
+          Cache the new pair at `auth:rotate:{old_hash}` for refresh_reuse_window_seconds.
+
+      (B) REPLACED-WITHIN-WINDOW — `replaced_by_id IS NOT NULL AND replaced_at > now - W`:
+          Look up `auth:rotate:{old_hash}`. If hit, return the cached pair (idempotent
+          same-pair return for the second of two parallel callers). Cache miss falls
+          through to (C).
+
+      (C) REUSE/REVOKED — anything else:
+          UPDATE refresh_tokens SET revoked_at = now WHERE user_id+family_id alive.
+          DEL auth:session:{user_id}:{family_id}.
+          emit('family_reuse_detected', presented_token_hash_prefix=hash[:8]).
+          Raise InvalidAccessToken('family_reuse_detected').
+
+    SELECT ... FOR UPDATE acquires a row lock so two parallel rotators serialize on
+    the DB (Postgres is the source of truth — D-11). Redis cache is an optimization
+    on top of the DB chain, not the gate.
+    """
+    settings = get_settings()
+    presented_hash = _sha256_hex(presented_token)
+    now = datetime.now(tz=UTC)
+    window = timedelta(seconds=settings.refresh_reuse_window_seconds)
+
+    # Begin transaction so SELECT ... FOR UPDATE holds the row-lock through mint.
+    async with session.begin():
+        row = await session.scalar(
+            select(RefreshToken)
+            .where(RefreshToken.token_hash == presented_hash)
+            .with_for_update()
+        )
+
+        if row is None:
+            raise InvalidAccessToken("refresh_not_found")
+
+        # ---- Branch (A): ACTIVE — rotate ------------------------------------
+        if (
+            row.revoked_at is None
+            and row.replaced_by_id is None
+            and row.expires_at > now
+        ):
+            user_loaded = await session.get(User, row.user_id)
+            if user_loaded is None:
+                raise InvalidAccessToken("user_not_found")
+
+            raw_refresh, refresh_hash = generate_refresh_token()
+            access = encode_access_token(user_loaded.id, user_loaded.role, now=now)
+            csrf = generate_csrf_token()
+
+            new_row = RefreshToken(
+                user_id=row.user_id,
+                family_id=row.family_id,
+                token_hash=refresh_hash,
+                expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
+            )
+            session.add(new_row)
+            await session.flush()
+            row.replaced_by_id = new_row.id
+            row.replaced_at = now
+
+            # Race-window cache — NX so a concurrent caller cannot overwrite the pair.
+            await redis.set(
+                f"auth:rotate:{presented_hash}",
+                json.dumps(
+                    {
+                        "access_token": access,
+                        "refresh_token": raw_refresh,
+                        "csrf_token": csrf,
+                    }
+                ),
+                ex=settings.refresh_reuse_window_seconds,
+                nx=True,
+            )
+
+            await _write_session_keys(
+                redis,
+                user_id=row.user_id,
+                family_id=row.family_id,
+                refresh_hash=refresh_hash,
+                ttl=settings.refresh_token_ttl_seconds,
+                now=now,
+            )
+            return access, raw_refresh, csrf
+
+        # ---- Branch (B): REPLACED-WITHIN-WINDOW — same-pair return -----------
+        if (
+            row.replaced_by_id is not None
+            and row.replaced_at is not None
+            and row.replaced_at > now - window
+        ):
+            cached = await redis.get(f"auth:rotate:{presented_hash}")
+            if cached is not None:
+                payload = json.loads(cached)
+                return (
+                    payload["access_token"],
+                    payload["refresh_token"],
+                    payload["csrf_token"],
+                )
+            # Cache miss: window expired between caller and us. Fall through to (C).
+
+        # ---- Branch (C): REUSE/REVOKED — family revocation -------------------
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == row.user_id,
+                RefreshToken.family_id == row.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+
+    # Outside the DB tx: clean Redis (best-effort; DB already holds truth).
+    # `srem` is typed as `Awaitable[int] | int` (redis-py shares stubs across
+    # sync/async clients); cast to disambiguate for mypy.
+    await redis.delete(f"auth:session:{row.user_id}:{row.family_id}")
+    await cast(
+        "Awaitable[int]",
+        redis.srem(f"auth:user_sessions:{row.user_id}", str(row.family_id)),
+    )
+
+    emit(
+        "family_reuse_detected",
+        user_id=str(row.user_id),
+        family_id=str(row.family_id),
+        presented_token_hash_prefix=presented_hash[:8],
+    )
+    raise InvalidAccessToken("family_reuse_detected")
+
+
+# ---------------------------------------------------------------------------
+# Revoke session (single family) — /auth/logout (D-14)
+# ---------------------------------------------------------------------------
+
+
+async def revoke_session(
+    session: AsyncSession,
+    redis: Redis,
+    presented_token: str,
+) -> None:
+    """Revoke the family the presented refresh token belongs to (D-14).
+
+    Idempotent: if the token doesn't exist (already-revoked / unknown), the
+    DB UPDATE is a no-op and Redis DEL is a no-op. The route handler always
+    clears cookies regardless.
+
+    IMPLEMENTATION NOTE — single transaction context:
+    The SELECT (to derive user_id + family_id from token_hash) and the UPDATE
+    live in ONE `async with session.begin():` block. A previous draft did the
+    SELECT outside the block and then opened `session.begin()` for the UPDATE —
+    this raises InvalidRequestError because AsyncSession autobegins on the
+    first statement, and the explicit begin() then collides with the autobegun
+    transaction. Keep both statements inside the same begin().
+    """
+    presented_hash = _sha256_hex(presented_token)
+    now = datetime.now(tz=UTC)
+
+    async with session.begin():
+        row = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
+        )
+        if row is None:
+            # Idempotent: unknown token, nothing to revoke. Exit the tx clean.
+            return
+
+        user_id = row.user_id
+        family_id = row.family_id
+
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.family_id == family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+
+    # Outside the tx: clean Redis (DB is authoritative; Redis follows).
+    pipe = redis.pipeline()
+    pipe.delete(f"auth:session:{user_id}:{family_id}")
+    pipe.srem(f"auth:user_sessions:{user_id}", str(family_id))
+    await pipe.execute()
+
+    emit("session_revoked", user_id=str(user_id), family_id=str(family_id))
+
+
+# ---------------------------------------------------------------------------
+# Revoke all sessions — /auth/logout-all (D-10, AUTH-LO-02, AUTH-LO-03)
+# ---------------------------------------------------------------------------
+
+
+async def revoke_all_sessions(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: UUID,
+) -> int:
+    """Revoke every alive refresh-token family for the user. Return family count.
+
+    Enumerates via SMEMBERS auth:user_sessions:{user_id} (no SCAN — bounded by
+    the user's active families, typically 1-3). Postgres is authoritative:
+    the UPDATE always runs even if Redis SET is empty (e.g. after a flush).
+    """
+    # `smembers` is typed `Awaitable[set] | set` (sync/async shared stubs); cast.
+    family_ids_raw = await cast(
+        "Awaitable[set[str]]",
+        redis.smembers(f"auth:user_sessions:{user_id}"),
+    )
+    family_count = len(family_ids_raw)
+
+    if family_count > 0:
+        pipe = redis.pipeline()
+        for fid in family_ids_raw:
+            pipe.delete(f"auth:session:{user_id}:{fid}")
+        pipe.delete(f"auth:user_sessions:{user_id}")
+        await pipe.execute()
+
+    async with session.begin():
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(tz=UTC))
+        )
+
+    emit("session_revoked_all", user_id=str(user_id), family_count=family_count)
     return family_count
