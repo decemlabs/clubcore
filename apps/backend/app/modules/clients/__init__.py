@@ -1,1 +1,1 @@
-"""Members module placeholder. TODO Phase B+: client/member entity + CRUD endpoints."""
+"""Clients module placeholder. TODO Phase 8: client entity + CRUD endpoints (REQ CLIENTS-01..09)."""

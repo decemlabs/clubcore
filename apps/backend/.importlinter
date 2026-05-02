@@ -15,7 +15,7 @@ name = modules cannot import each other
 type = independence
 modules =
     app.modules.auth
-    app.modules.members
+    app.modules.clients
     app.modules.memberships
     app.modules.visits
     app.modules.trainers
