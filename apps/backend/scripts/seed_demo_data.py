@@ -19,6 +19,7 @@ import asyncio
 import os
 import sys
 
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -65,6 +66,23 @@ async def _run() -> int:
             await session.execute(stmt)
             await session.commit()
             print(f"Seeded owner {email_lower} (idempotent: no-op if existed).")
+
+            # Phase 7 D-03 — optional Telegram username binding.
+            telegram_username = os.environ.get("TELEGRAM_OWNER_USERNAME")
+            if telegram_username:
+                tg_lower = telegram_username.lstrip("@").lower()
+                user = await session.scalar(
+                    select(User).where(User.email == email_lower)
+                )
+                if user is not None and user.telegram_username != tg_lower:
+                    user.telegram_username = tg_lower
+                    await session.commit()
+                    print(f"Bound telegram_username={tg_lower} to {email_lower}.")
+                elif user is not None:
+                    print(
+                        f"telegram_username for {email_lower} already set to "
+                        f"{tg_lower} (no-op)."
+                    )
     finally:
         await engine.dispose()
     return 0
