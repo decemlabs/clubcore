@@ -1,44 +1,78 @@
-"""Application factory (BE-02).
+"""Application factory (Phase 5 — composition root for auth wiring).
 
-Run with `uvicorn app.main:create_app --factory` so each invocation creates
-a fresh FastAPI instance — required for test isolation (Phase 3 conftest creates
-a new app per test) and for the lifespan-managed engine pattern (D-06/D-08).
+Run with `uvicorn app.main:create_app --factory`. Each call creates a fresh
+FastAPI instance.
 
-DO NOT add a module-level `app = create_app()` here. That would break the factory
-contract and reintroduce module-level engine singletons.
+DO NOT add a module-level `app = create_app()` here. That breaks the factory
+contract.
+
+Phase 5 additions:
+- combined_lifespan chains db_lifespan + redis_lifespan (D-08).
+- register_user_loader(load_user_by_id) fills the Phase 4 D-24 slot (D-15).
+   app.main is exempt from core-not-depend-on-modules because that contract
+   scopes source_modules = app.core, not app.
+- Prod startup assertion: cookie_secure MUST be True when environment=='prod'
+   (Phase 4 D-25 — fail-fast at startup, not at first login).
 """
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app.api.router import api
 from app.core.config import get_settings
 from app.core.database import db_lifespan
+from app.core.dependencies import register_user_loader
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
+from app.core.redis import redis_lifespan
+from app.modules.auth.service import load_user_by_id
+
+
+@asynccontextmanager
+async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Chain db_lifespan + redis_lifespan (D-08)."""
+    async with db_lifespan(app), redis_lifespan(app):
+        yield
 
 
 def create_app() -> FastAPI:
     """Compose and return a FastAPI application instance.
 
     Composition order matters:
-      1. configure_logging — must run before any structlog calls.
-      2. FastAPI(lifespan=db_lifespan) — registers engine startup/shutdown.
-      3. register_middleware — adds Timing then RequestId (REVERSED add order;
-         see app/core/middleware.py docstring).
-      4. register_exception_handlers — attaches AppError → JSONResponse handler.
-      5. include_router(api) — mounts /healthz (Phase A's only real endpoint).
+      1. configure_logging (must precede any structlog calls).
+      2. Prod-mode assertion: cookie_secure must be True (Phase 4 D-25).
+      3. FastAPI(lifespan=combined_lifespan) registers DB + Redis lifecycles.
+      4. register_middleware adds Timing then RequestId (REVERSED add order).
+      5. register_exception_handlers attaches AppError → JSONResponse handler.
+      6. register_user_loader(load_user_by_id) fills the Phase 4 D-24 slot.
+      7. include_router(api) mounts /healthz at root + /api/v1/auth/*.
     """
     settings = get_settings()
     configure_logging(settings)
 
+    if settings.environment == "prod" and not settings.cookie_secure:
+        raise RuntimeError(
+            "COOKIE_SECURE must be true in prod (Phase 4 D-25). "
+            "Set COOKIE_SECURE=true in the environment."
+        )
+
     app = FastAPI(
         title="Sportzal API",
-        lifespan=db_lifespan,
+        lifespan=combined_lifespan,
         docs_url="/docs" if settings.environment == "dev" else None,
         redoc_url=None,
     )
     register_middleware(app)
     register_exception_handlers(app)
+
+    # D-15: composition root fills the Phase 4 loader slot. This is the ONLY
+    # place where app.main reaches into app.modules.*. The importlinter
+    # contract scopes source_modules=app.core, so app.main is intentionally
+    # outside the scope.
+    register_user_loader(load_user_by_id)
+
     app.include_router(api)
     return app
