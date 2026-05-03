@@ -30,7 +30,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import emit
+from app.core import audit
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.security import generate_deep_link_token, generate_otp_code
@@ -97,8 +97,16 @@ async def start_deep_link(session: AsyncSession) -> tuple[str, str]:
         consumed_at=None,
     )
     session.add(row)
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
+    # the OtpCode placeholder INSERT.
+    await audit.emit(
+        session,
+        "telegram_deep_link_issued",
+        actor_user_id=None,
+        resource_type="otp",
+        deep_link_token_hash=token_hash,
+    )
     await session.commit()
-    emit("telegram_deep_link_issued", deep_link_token_hash=token_hash)
     return raw_token, token_hash
 
 
@@ -185,8 +193,16 @@ async def commit_otp(
     otp_row.telegram_chat_id = telegram_chat_id
     otp_row.expires_at = now + timedelta(seconds=settings.otp_code_ttl_seconds)
     otp_row.attempts = 0
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
+    # the OtpCode + User mutations.
+    await audit.emit(
+        session,
+        "otp_issued",
+        actor_user_id=user.id,
+        resource_type="otp",
+        chat_id=telegram_chat_id,
+    )
     await session.commit()
-    emit("otp_issued", user_id=str(user.id), chat_id=telegram_chat_id)
 
 
 # ---------------------------------------------------------------------------
@@ -248,12 +264,20 @@ async def consume(
         # also sets user_id. Treat the inconsistency as token-unknown.
         await session.commit()
         raise TokenUnknown("user_disappeared")
-    await session.commit()
     user = await session.scalar(select(User).where(User.id == user_id))
     if user is None:
         # Race / corruption -- treat as unknown.
+        await session.commit()
         raise TokenUnknown("user_disappeared")
-    emit("otp_consumed", user_id=str(user.id))
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
+    # the consumed_at stamp.
+    await audit.emit(
+        session,
+        "otp_consumed",
+        actor_user_id=user.id,
+        resource_type="otp",
+    )
+    await session.commit()
     return user
 
 

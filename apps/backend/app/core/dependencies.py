@@ -22,7 +22,7 @@ from uuid import UUID
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import emit
+from app.core import audit
 from app.core.database import get_db
 from app.core.exceptions import CsrfMismatch, ForbiddenError, InvalidAccessToken
 from app.core.permissions import Action, Resource, Role, can
@@ -126,14 +126,16 @@ def require_permission(
     async def _checker(
         request: Request,
         user: Annotated[CurrentUser, Depends(get_current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
     ) -> CurrentUser:
         if not can(user.role, action, resource):
-            emit(
+            await audit.emit(
+                session,
                 "rbac_forbidden",
-                user_id=str(user.id),
+                actor_user_id=user.id,
+                resource_type=resource.value,
                 role=user.role.value,
                 action=action.value,
-                resource=resource.value,
                 path=request.url.path,
                 ip=request.client.host if request.client is not None else None,
             )
@@ -165,7 +167,10 @@ def require_authenticated() -> Callable[..., Awaitable[CurrentUser]]:
 _SAFE_METHODS: frozenset[str] = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 
 
-async def verify_csrf(request: Request) -> None:
+async def verify_csrf(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
     """Double-submit CSRF check (D-07). Short-circuits on safe methods (D-06).
 
     Validation:
@@ -193,9 +198,11 @@ async def verify_csrf(request: Request) -> None:
         or header_val is None
         or not secrets.compare_digest(cookie_val, header_val)
     ):
-        emit(
+        await audit.emit(
+            session,
             "csrf_mismatch",
-            user_id=None,
+            actor_user_id=None,
+            resource_type="csrf",
             path=request.url.path,
             method=request.method,
             ip=request.client.host if request.client is not None else None,
