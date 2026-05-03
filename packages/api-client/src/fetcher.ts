@@ -123,18 +123,19 @@ export async function request<
 >(method: M, path: P, init?: RequestInitWithBody): Promise<unknown> {
   const url = interpolatePath(path as unknown as string, init?.params)
   const upper = (method as string).toUpperCase()
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    ...((init?.headers as Record<string, string> | undefined) ?? {}),
-  }
+  // WR-02: use the Headers constructor so callers passing a `Headers` instance
+  // or `[string, string][]` shape are normalized correctly. A naive
+  // `{ ...init.headers }` spread silently drops both shapes.
+  const headers = new Headers(init?.headers)
+  headers.set('Accept', 'application/json')
   let bodyPayload: BodyInit | undefined
   if (init?.body !== undefined) {
-    headers['Content-Type'] = 'application/json'
+    headers.set('Content-Type', 'application/json')
     bodyPayload = JSON.stringify(init.body)
   }
   if (isMutating(upper)) {
     const csrf = readCsrfCookie()
-    if (csrf) headers['X-CSRF-Token'] = csrf
+    if (csrf) headers.set('X-CSRF-Token', csrf)
     // D-11: missing-cookie → still send; server returns 403 csrf_mismatch via standard error path.
   }
   // Strip `params` (and the existing `body` rebind) from the RequestInit spread —
@@ -184,11 +185,11 @@ export async function request<
 
   // D-A4: retry original ONCE. Refresh-cookies just rotated; rebuild CSRF
   // header from the freshly-set cookie.
-  const retryHeaders: Record<string, string> = { ...headers }
+  const retryHeaders = new Headers(headers)
   if (isMutating(upper)) {
     const csrf = readCsrfCookie()
-    if (csrf) retryHeaders['X-CSRF-Token'] = csrf
-    else delete retryHeaders['X-CSRF-Token']
+    if (csrf) retryHeaders.set('X-CSRF-Token', csrf)
+    else retryHeaders.delete('X-CSRF-Token')
   }
   let retryRes: Response
   try {
