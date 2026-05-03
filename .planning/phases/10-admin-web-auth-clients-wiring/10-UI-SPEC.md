@@ -76,13 +76,13 @@ All type is rendered in Russian. Font stack is system sans-serif inherited from 
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Body | 14px (text-sm) | 400 (regular) | 1.5 | DataGrid cell text, form helper text, dialog body, ProfileMenu items, sidebar labels |
-| Label | 14px (text-sm) | 500 (medium) | 1.4 | Form field labels, tab labels, column headers, toolbar button text |
+| Label | 14px (text-sm) | 400 (regular) | 1.4 | Form field labels, tab labels, column headers, toolbar button text |
 | Heading | 20px (text-xl) | 600 (semibold) | 1.2 | Dialog titles, page heading ("Клиенты"), login card heading ("Войти в систему") |
-| Display | 28px (text-3xl) | 700 (bold) | 1.1 | Splash screen logo text only — one instance total |
+| Display | 28px (text-3xl) | 600 (semibold) | 1.1 | Splash screen logo text only — one instance total |
 
 **Constraints:**
-- Only 4 sizes declared; no intermediate sizes (text-base, text-lg, text-2xl) in Phase 10 surfaces.
-- Only 2 weights in body/label/heading context: 400 and 600. Weight 500 (medium) applies to label role only. Weight 700 (bold) is splash-only.
+- Exactly 4 sizes declared; no intermediate sizes (text-base, text-lg, text-2xl) in Phase 10 surfaces.
+- Exactly 2 weights: 400 (regular) for body and label roles; 600 (semibold) for heading and display roles. No 500 (medium) or 700 (bold).
 - Monospace for InputOTP digit cells: system monospace (`font-mono`) at 20px / weight 600 — ensures digit alignment.
 
 ---
@@ -234,6 +234,7 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 | Edit dialog heading | "Редактировать клиента" |
 | Save button (form) | "Сохранить" |
 | Cancel button | "Отмена" |
+| Edit row action tooltip | "Редактировать клиента" |
 | Delete row action tooltip | "Удалить клиента" |
 | Empty state heading | "Клиентов пока нет" |
 | Empty state body | "Добавьте первого клиента, нажав «Новый клиент»." |
@@ -251,7 +252,7 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 | Dialog heading | "Удалить клиента?" |
 | Dialog body | "Клиент {ФИО} будет скрыт из списков. Данные сохранятся в базе (мягкое удаление)." |
 | Confirm button | "Удалить" (destructive variant) |
-| Cancel button | "Отмена" |
+| Cancel button | "Не удалять" |
 
 ### Clients Form Validation Errors
 
@@ -300,8 +301,8 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 - Default sort: `created_at DESC` (newest first)
 - Row density: compact (ReUI DataGrid default density — do not override)
 - No row selection checkboxes in Phase 10 (bulk actions deferred)
-- Actions cell: `<RoleGate action="delete" resource="clients">` wrapping Trash2 icon button; reception gets no DOM node (D-11)
-- Edit action (pencil icon): visible to all roles; opens Edit Dialog
+- Actions cell: edit action (Pencil icon, tooltip "Редактировать клиента") visible to all roles; `<RoleGate action="delete" resource="clients">` wrapping Trash2 icon button (tooltip "Удалить клиента") — reception gets no DOM node (D-11)
+- Edit action opens Edit Dialog
 - Sticky header: yes (DataGrid scroll area handles this)
 - Virtualization: not required (~30 mock rows); DataGrid default behavior
 
@@ -319,6 +320,7 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 
 - Triggered by Trash2 row action click
 - Confirm button: `variant="destructive"` (red background)
+- Cancel button: "Не удалять" — clearly non-destructive label
 - On confirm: `useMutation` `onMutate` removes row from cached list optimistically; `onError` rolls back; `onSettled` invalidates `clientsKeys.lists()`
 - Cancel restores normal state; no side effects
 
@@ -333,7 +335,7 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 
 - Renders when `main.tsx` is awaiting `ensureQueryData(authKeys.me)` in http-mode
 - Layout: full viewport, centered content, `bg-background`
-- Content: app logo/name (display 28px, bold) + loading spinner below (24px, `text-muted-foreground`)
+- Content: app logo/name (display 28px, weight 600) + loading spinner below (24px, `text-muted-foreground`)
 - Spinner: Lucide `Loader2` with `animate-spin` class
 - Duration: ~150-300ms RTT; no artificial minimum delay
 
