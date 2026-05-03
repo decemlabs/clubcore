@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import emit
+from app.core import audit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_authenticated, verify_csrf
@@ -266,5 +266,13 @@ async def telegram_verify(
         secure=settings.cookie_secure,
     )
     ip = request.client.host if request.client is not None else None
-    emit("login_success", user_id=str(user.id), ip=ip, channel="telegram")
+    await audit.emit(
+        session,
+        "login_success",
+        actor_user_id=user.id,
+        resource_type="session",
+        resource_id=None,
+        ip=ip,
+        channel="telegram",
+    )
     return envelope(LoginResponse(user=UserPublic.model_validate(user)))

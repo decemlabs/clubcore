@@ -24,6 +24,8 @@ from typing import Any, NamedTuple
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.audit import emit as audit_emit
+
 # NOTE: NO `from app.modules.auth import ...` -- integrations perp modules.
 # Domain modules arrive via HandlerContext.
 
@@ -111,8 +113,11 @@ async def start_handler(
             )
         except ctx.telegram_service.TelegramUnknownAccount:
             # D-04 stranger path -- DM fixed Russian message, leave OtpCode untouched.
-            logger.warning(
+            await audit_emit(
+                session,
                 "telegram_unknown_start",
+                actor_user_id=None,
+                resource_type="otp",
                 username=username,
                 chat_id=chat_id,
                 deep_link_token_hash=deep_link_token_hash,
@@ -125,8 +130,11 @@ async def start_handler(
             # (integrations perp modules; we import them transitively via the service module).
             cls_name = type(exc).__name__
             if cls_name == "OtpAlreadyConsumed":
-                logger.info(
+                await audit_emit(
+                    session,
                     "telegram_replay_attempt",
+                    actor_user_id=None,
+                    resource_type="otp",
                     chat_id=chat_id,
                     deep_link_token_hash=deep_link_token_hash,
                 )
@@ -149,9 +157,22 @@ async def start_handler(
             # commit_otp emits otp_issued internally.
             return
         if send_result.blocked:
-            logger.warning("telegram_dm_blocked", chat_id=chat_id)
+            await audit_emit(
+                session,
+                "telegram_dm_blocked",
+                actor_user_id=None,
+                resource_type="otp",
+                chat_id=chat_id,
+            )
             # No commit -- OtpCode keeps code_hash IS NULL ->
             # /verify will return bot_not_started.
             return
         # Transient failure.
-        logger.warning("telegram_dm_failed", chat_id=chat_id, error=send_result.error)
+        await audit_emit(
+            session,
+            "telegram_dm_failed",
+            actor_user_id=None,
+            resource_type="otp",
+            chat_id=chat_id,
+            error=send_result.error,
+        )
