@@ -137,7 +137,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 **Plans:** 3 plans
 - [x] 09-01-PLAN.md — Lifespan-safe export script (apps/backend/scripts/export_openapi.py) + first openapi.json artifact + FastAPI version pin (API-01, D-04..D-06)
 - [x] 09-02-PLAN.md — packages/api-client real package (tsconfig + errors.ts + fetcher.ts with single-flight refresh + generated/committed schema.d.ts + index.ts barrel + README) (API-05, API-06, D-A1..D-A4, D-07, D-09..D-12)
-- [ ] 09-03-PLAN.md — .github/workflows/ci.yml drift gates (backend + frontend parallel jobs) + admin-web predev hook + workspace dep + REQUIREMENTS API-05 deviation closure (API-02, API-07, D-01..D-03, D-08)
+- [x] 09-03-PLAN.md — .github/workflows/ci.yml drift gates (backend + frontend parallel jobs) + admin-web predev hook + workspace dep + REQUIREMENTS API-05 deviation closure (API-02, API-07, D-01..D-03, D-08)
 
 ### Phase 10: admin-web Auth + Clients Wiring
 **Goal**: An operator running the admin-web with `VITE_API_MODE=http` can log in (email/password OR Telegram OTP), see the real Clients list/detail/create/edit/delete backed by Postgres, and never falls into a 401-redirect loop — while every other domain (memberships, billing, etc.) keeps using the existing mock services unchanged.
