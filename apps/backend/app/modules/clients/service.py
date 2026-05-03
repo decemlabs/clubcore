@@ -40,9 +40,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
+from app.core.dependencies import CurrentUser
 from app.core.exceptions import ClientNotFoundError, PhoneExistsError
 from app.core.pagination import PaginatedData
-from app.modules.auth.models import User
 from app.modules.clients import repository
 from app.modules.clients.schemas import (
     ClientCreateRequest,
@@ -102,7 +102,7 @@ def _is_phone_conflict(exc: IntegrityError) -> bool:
 
 async def create_client(
     session: AsyncSession,
-    actor: User,
+    actor: CurrentUser,
     data: ClientCreateRequest,
 ) -> ClientResponse:
     """Create a new client (CLIENTS-06).
@@ -139,7 +139,7 @@ async def create_client(
 
 async def update_client(
     session: AsyncSession,
-    actor: User,
+    actor: CurrentUser,
     client_id: UUID,
     data: ClientUpdateRequest,
 ) -> ClientResponse:
@@ -186,12 +186,17 @@ async def update_client(
         resource_id=client.id,
         **payload,
     )
+    # SA 2.0 expires the row's attributes after flush by default. Refresh the
+    # ORM-managed `updated_at` (server-side `now()`) before Pydantic
+    # serialisation so the response carries the fresh value without triggering
+    # an implicit lazy-load (which would raise MissingGreenlet under async).
+    await session.refresh(client, attribute_names=["updated_at"])
     return ClientResponse.model_validate(client)
 
 
 async def soft_delete_client(
     session: AsyncSession,
-    actor: User,
+    actor: CurrentUser,
     client_id: UUID,
 ) -> None:
     """Soft-delete the client (CLIENTS-08).

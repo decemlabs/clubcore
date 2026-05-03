@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
+from app.core.audit_models import AuditLog
 from app.core.permissions import Role
 from app.core.security import hash_password
 from app.modules.auth.models import RefreshToken, User
@@ -170,3 +171,39 @@ async def test_refresh_without_cookie_returns_401(
     r = await async_client.post("/api/v1/auth/refresh")
     assert r.status_code == 401
     assert r.json()["code"] == "invalid_token"
+
+
+async def test_refresh_reuse_writes_family_reuse_detected_audit_row(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+    seeded_owner: User,
+) -> None:
+    """AUDIT-02: refresh-token reuse outside the race window writes
+    family_reuse_detected audit row (D-04 row 5)."""
+    await _login(async_client)
+    old_refresh = async_client.cookies["sz_refresh"]
+    old_hash = _sha256_hex(old_refresh)
+
+    r1 = await async_client.post("/api/v1/auth/refresh")
+    assert r1.status_code == 200
+
+    # Drop the race-window cache so branch B falls through to branch C.
+    await redis_clean.delete(f"auth:rotate:{old_hash}")
+
+    async_client.cookies.delete("sz_refresh")
+    async_client.cookies.set("sz_refresh", old_refresh, path="/api/v1/auth")
+
+    r2 = await async_client.post("/api/v1/auth/refresh")
+    assert r2.status_code == 401, r2.text
+
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(AuditLog.action == "family_reuse_detected")
+        )
+    ).all()
+    assert len(rows) >= 1
+    row = rows[-1]
+    assert row.actor_user_id == seeded_owner.id
+    assert row.resource_type == "session"
+    assert row.resource_id is not None  # family_id

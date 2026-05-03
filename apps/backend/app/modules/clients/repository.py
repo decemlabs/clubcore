@@ -13,7 +13,17 @@ the ONLY mutation point that touches `deleted_at`.
 Transaction control (D-03): NO `session.commit()` and NO `session.flush()` calls
 live here. The caller (Plan 06 service) owns the transactional moment so it can
 co-write the audit log row in the same UoW.
+
+`from __future__ import annotations` is required: `list_alive` is annotated with
+`PaginatedData[Client]`, and `Client` is a SQLAlchemy ORM class without a Pydantic
+core schema. Without PEP 563 deferred evaluation, importing this module triggers
+`PaginatedData.__class_getitem__(Client)` at runtime, which delegates to Pydantic's
+generic schema-builder and raises `PydanticSchemaGenerationError`. Deferring
+annotation evaluation keeps the type information for mypy while preventing the
+import-time schema build (Plan 08-08 acknowledged repository import issue).
 """
+
+from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
@@ -39,13 +49,22 @@ async def get_alive(session: AsyncSession, client_id: UUID) -> Client | None:
         Client.id == client_id,
         Client.deleted_at.is_(None),
     )
-    return await session.scalar(stmt)
+    result: Client | None = await session.scalar(stmt)
+    return result
 
 
 async def list_alive(
     session: AsyncSession, query: ClientListQuery
 ) -> PaginatedData[Client]:
-    """Paginated list of alive clients with filters + sort applied (CLIENTS-03/04)."""
+    """Paginated list of alive clients with filters + sort applied (CLIENTS-03/04).
+
+    Returns a `PaginatedData` instance constructed via `model_construct` to skip
+    Pydantic validation against the generic parameter. The SQLAlchemy `Client`
+    ORM is not a Pydantic-compatible type and `PaginatedData[Client](...)` would
+    trigger a `PydanticSchemaGenerationError` at the runtime parametrisation
+    step. The service layer (Plan 06) immediately re-wraps the result as
+    `PaginatedData[ClientResponse]`, so skipping validation here is safe.
+    """
 
     predicates: list[Any] = [Client.deleted_at.is_(None)]
 
@@ -106,7 +125,7 @@ async def list_alive(
 
     rows = (await session.scalars(stmt)).all()
 
-    return PaginatedData[Client](
+    return PaginatedData.model_construct(
         items=list(rows),
         total=total,
         page=query.page,

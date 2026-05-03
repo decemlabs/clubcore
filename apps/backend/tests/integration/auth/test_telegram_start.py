@@ -13,6 +13,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit_models import AuditLog
 from app.modules.auth.models import OtpCode
 
 
@@ -39,3 +40,23 @@ async def test_telegram_start_returns_deep_link_and_creates_otp_row(
     assert len(rows) >= 1
     matching = [r for r in rows if r.code_hash is None]
     assert len(matching) >= 1, "expected at least one OtpCode with code_hash IS NULL"
+
+
+async def test_telegram_start_writes_deep_link_issued_audit_row(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """AUDIT-02 + D-04: /telegram/start writes telegram_deep_link_issued row
+    with actor_user_id NULL (D-06 — no user identified yet)."""
+    r = await async_client.post("/api/v1/auth/telegram/start")
+    assert r.status_code == 200
+
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(AuditLog.action == "telegram_deep_link_issued")
+        )
+    ).all()
+    assert len(rows) >= 1
+    row = rows[-1]
+    assert row.actor_user_id is None  # D-06 — actor-less
+    assert row.resource_type == "otp"
