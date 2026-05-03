@@ -18,8 +18,9 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly fields?: Record<string, unknown>,
+    options?: { cause?: unknown },
   ) {
-    super(message)
+    super(message, options)
     this.name = 'ApiError'
   }
 }
