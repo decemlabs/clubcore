@@ -130,8 +130,25 @@ export async function request<
   headers.set('Accept', 'application/json')
   let bodyPayload: BodyInit | undefined
   if (init?.body !== undefined) {
-    headers.set('Content-Type', 'application/json')
-    bodyPayload = JSON.stringify(init.body)
+    // WR-03: only JSON-stringify plain values. For binary / multipart / form
+    // bodies, pass through verbatim and let fetch() infer the Content-Type
+    // (multipart boundary, etc.). JSON-stringifying these would corrupt the
+    // payload and force the wrong Content-Type.
+    const b = init.body
+    if (
+      b instanceof FormData ||
+      b instanceof Blob ||
+      b instanceof URLSearchParams ||
+      b instanceof ArrayBuffer ||
+      ArrayBuffer.isView(b) ||
+      b instanceof ReadableStream
+    ) {
+      bodyPayload = b as BodyInit
+      // Content-Type intentionally NOT set — fetch derives it from the body type.
+    } else {
+      headers.set('Content-Type', 'application/json')
+      bodyPayload = JSON.stringify(b)
+    }
   }
   if (isMutating(upper)) {
     const csrf = readCsrfCookie()
