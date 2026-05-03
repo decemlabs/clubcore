@@ -11,6 +11,7 @@ FastAPI lifespan + structlog configuration during `alembic revision` /
 
 import asyncio
 from logging.config import fileConfig
+from typing import Any
 
 from alembic import context
 from sqlalchemy import pool
@@ -37,9 +38,40 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _include_object(
+    object_: Any,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: Any,
+) -> bool:
+    """Skip raw-DDL GIN trigram expression indexes from autogenerate comparison.
+
+    These indexes are created via op.execute() in the Phase 8 clients
+    migration because `lower(col) gin_trgm_ops` cannot be reliably
+    expressed in SQLAlchemy `__table_args__`. Excluding them here keeps
+    `alembic check` clean (TEST-08 supporting; Pitfall 1 from RESEARCH.md).
+
+    Only affects autogenerate diffing; actual upgrade/downgrade sequences
+    are unchanged.
+    """
+    return not (
+        type_ == "index"
+        and name
+        in (
+            "ix_clients_last_name_trgm",
+            "ix_clients_first_name_trgm",
+        )
+    )
+
+
 def do_run_migrations(connection: Connection) -> None:
     """Synchronous migration runner invoked via connection.run_sync()."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=_include_object,  # Pitfall 1: skip raw-DDL GIN trgm indexes
+    )
     with context.begin_transaction():
         context.run_migrations()
 
