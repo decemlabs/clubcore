@@ -6,26 +6,32 @@ so wire format is camelCase via `alias_generator=to_camel` while Python stays sn
 Decisions enforced here at the DTO boundary (defence-in-depth — DB constraints in
 models.py / migration are the second line):
 
+- D-01  ClientUpdateRequest rejects explicit `null` (PATCH semantics: omit key to leave
+        unchanged; explicit clear is unsupported in v1.1).
 - D-10  E.164 phone validation `^\\+[1-9]\\d{1,14}$` for Client.phone and
         EmergencyContact.phone.
+- D-12  ClientListQuery.q < 2 chars after strip → normalised to None (service skips
+        ILIKE filter — no full-table scan).
+- D-14  ClientListQuery.created_from / created_to accept date or datetime; date-only
+        inputs are normalised to UTC boundaries (00:00:00 / 23:59:59.999999).
 - D-15  Gender uses the StrEnum from models.py (closed enum: male / female).
 - D-16  tags array: max 16 items, max 32 chars/tag, lowercase. Allowed chars:
         ASCII a-z + 0-9 + Cyrillic lowercase + hyphen + underscore. Regex defined
         in TAG_REGEX below. Same rules apply on create + update.
 - D-17  EmergencyContact is a Pydantic model (JSONB shape on the wire).
 
-ClientUpdateRequest + ClientListQuery are added in the next task — D-01 (null-rejection),
-D-12 (q minimum), D-14 (datetime boundaries) live there.
-
 No ORM imports cross this boundary except `Gender` (a pure StrEnum, not an ORM class).
 """
 
 import re
-from datetime import date, datetime
+from datetime import UTC, date, datetime
+from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
-from pydantic import EmailStr, Field, field_validator
+from pydantic import EmailStr, Field, ValidationInfo, field_validator, model_validator
 
+from app.core.pagination import PageQuery
 from app.core.schemas import RequestContract, ResponseData
 from app.modules.clients.models import Gender
 
@@ -41,13 +47,20 @@ MAX_TAGS = 16
 MAX_TAG_LENGTH = 32
 
 
+class ClientSort(StrEnum):
+    """Client list sort modes (CLIENTS-04)."""
+
+    CREATED_AT_DESC = "created_at_desc"  # default — newest first
+    LAST_NAME_ASC = "last_name_asc"
+
+
 # ---------------------------------------------------------------------------
-# Tag validator — shared between ClientCreateRequest and (future) ClientUpdateRequest
+# Tag validator — shared between ClientCreateRequest and ClientUpdateRequest
 # ---------------------------------------------------------------------------
 
 
 def _validate_tags(v: list[str]) -> list[str]:
-    """D-16: lowercase + size + regex normalisation.
+    """D-16: lowercase + dedupe-rule-free normalisation.
 
     Rules:
       * len(tags) <= MAX_TAGS (16)
@@ -112,6 +125,53 @@ class ClientCreateRequest(RequestContract):
 
 
 # ---------------------------------------------------------------------------
+# ClientUpdateRequest (CLIENTS-07, D-01, D-16)
+# ---------------------------------------------------------------------------
+
+
+class ClientUpdateRequest(RequestContract):
+    """PATCH /api/v1/clients/{id} body.
+
+    Semantics: caller sends only the fields they want to change; service does
+    `model_dump(exclude_unset=True)` and applies that subset. D-01 forbids explicit
+    null in v1.1 — to leave a field unchanged, OMIT the key entirely.
+    """
+
+    last_name: str | None = Field(default=None, min_length=1, max_length=128)
+    first_name: str | None = Field(default=None, min_length=1, max_length=128)
+    middle_name: str | None = Field(default=None, max_length=128)
+    phone: str | None = Field(default=None, pattern=PHONE_REGEX)
+    email: EmailStr | None = None
+    birthday: date | None = None
+    gender: Gender | None = None
+    tags: list[str] | None = None
+    notes: str | None = Field(default=None, max_length=4096)
+    emergency_contact: EmergencyContact | None = None
+    telegram_user_id: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_explicit_null(cls, data: Any) -> Any:
+        """D-01: explicit `{"key": null}` is rejected. Caller must omit the key."""
+        if isinstance(data, dict):
+            null_keys = [k for k, v in data.items() if v is None]
+            if null_keys:
+                raise ValueError(
+                    f"Explicit null not supported for: {sorted(null_keys)}. "
+                    "Omit the key to leave the field unchanged."
+                )
+        return data
+
+    @field_validator("tags")
+    @classmethod
+    def _normalise_tags(cls, v: list[str] | None) -> list[str] | None:
+        """D-16: same rules as create. None bypasses validation (PATCH-absent)."""
+        if v is None:
+            return v
+        return _validate_tags(v)
+
+
+# ---------------------------------------------------------------------------
 # ClientResponse — read-side DTO
 # ---------------------------------------------------------------------------
 
@@ -139,3 +199,64 @@ class ClientResponse(ResponseData):
     created_by_user_id: UUID
     created_at: datetime
     updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# ClientListQuery (CLIENTS-04, D-12, D-14)
+# ---------------------------------------------------------------------------
+
+
+class ClientListQuery(PageQuery):
+    """GET /api/v1/clients query params.
+
+    Inherits page + page_size from PageQuery (1-based pagination).
+    Wire mapping: created_from→createdFrom, created_to→createdTo, has_telegram→hasTelegram
+    (alias_generator=to_camel inherited via PageQuery → RequestContract → ContractModel).
+    """
+
+    q: str | None = Field(default=None, max_length=128)
+    tag: str | None = Field(default=None, max_length=MAX_TAG_LENGTH)
+    gender: Gender | None = None
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    has_telegram: bool | None = None
+    sort: ClientSort = ClientSort.CREATED_AT_DESC
+
+    @field_validator("created_from", "created_to", mode="before")
+    @classmethod
+    def _normalise_date_boundary(cls, v: Any, info: ValidationInfo) -> Any:
+        """D-14: date-only inputs normalised to UTC boundaries.
+
+        - created_from on date-only → 00:00:00.000000 UTC (start of day)
+        - created_to on date-only   → 23:59:59.999999 UTC (end of day, inclusive)
+        - datetime inputs pass through unchanged.
+        """
+        if v is None:
+            return v
+        # String input: detect "YYYY-MM-DD" without time component.
+        if isinstance(v, str) and len(v) == 10 and v.count("-") == 2:
+            try:
+                parsed = datetime.strptime(v, "%Y-%m-%d").replace(tzinfo=UTC)
+            except ValueError:
+                return v  # let pydantic surface the parse error with its own message
+            if info.field_name == "created_to":
+                return parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return parsed
+        # date instance (NOT datetime — datetime is a subclass of date).
+        if isinstance(v, date) and not isinstance(v, datetime):
+            base = datetime(v.year, v.month, v.day, tzinfo=UTC)
+            if info.field_name == "created_to":
+                return base.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return base
+        return v
+
+    @field_validator("q")
+    @classmethod
+    def _normalise_q(cls, v: str | None) -> str | None:
+        """D-12: q < 2 chars after strip → None (service skips ILIKE filter)."""
+        if v is None:
+            return None
+        stripped = v.strip()
+        if len(stripped) < 2:
+            return None
+        return stripped
