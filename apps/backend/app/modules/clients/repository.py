@@ -1,0 +1,107 @@
+"""Clients repository — single point of access to the `Client` ORM (CLIENTS-09, D-02).
+
+This is the ONLY module in the codebase that imports the `Client` ORM model. The
+service layer (Plan 06) calls these module-level async helpers and never executes
+`select(Client)` directly. That single rule constructively guarantees CLIENTS-09:
+"all queries through `list_alive` / `get_alive`" — the service layer simply has
+no reference to the ORM table.
+
+Soft-delete invariant (CLIENTS-05, CLIENTS-09): every read helper appends
+`Client.deleted_at IS NULL` as the first predicate. `soft_delete_client` is
+the ONLY mutation point that touches `deleted_at`.
+
+Transaction control (D-03): NO `session.commit()` and NO `session.flush()` calls
+live here. The caller (Plan 06 service) owns the transactional moment so it can
+co-write the audit log row in the same UoW.
+"""
+
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import Select, and_, func, or_, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.pagination import PaginatedData
+from app.modules.clients.models import Client
+from app.modules.clients.schemas import ClientListQuery, ClientSort
+
+
+async def get_alive(session: AsyncSession, client_id: UUID) -> Client | None:
+    """Return alive client by id, or None for missing/soft-deleted (CLIENTS-05)."""
+    stmt: Select[tuple[Client]] = select(Client).where(
+        Client.id == client_id,
+        Client.deleted_at.is_(None),
+    )
+    return await session.scalar(stmt)
+
+
+async def list_alive(
+    session: AsyncSession, query: ClientListQuery
+) -> PaginatedData[Client]:
+    """Paginated list of alive clients with filters + sort applied (CLIENTS-03/04)."""
+
+    predicates: list[Any] = [Client.deleted_at.is_(None)]
+
+    # D-12: q ILIKE on lower(last + ' ' + first + ' ' + coalesce(middle, '')) OR phone ILIKE.
+    # Note: ClientListQuery.q is already None when shorter than 2 chars (D-12 normaliser).
+    if query.q is not None:
+        like_pattern = f"%{query.q.lower()}%"
+        full_name_expr = func.lower(
+            Client.last_name
+            + " "
+            + Client.first_name
+            + " "
+            + func.coalesce(Client.middle_name, "")
+        )
+        predicates.append(
+            or_(
+                full_name_expr.ilike(like_pattern),
+                # phone is canonical E.164, ILIKE on raw value is sufficient
+                Client.phone.ilike(f"%{query.q}%"),
+            )
+        )
+
+    # D-13: tag exact match via ANY() — parameterised bind, no SQL injection.
+    if query.tag is not None:
+        predicates.append(text(":tag = ANY(clients.tags)").bindparams(tag=query.tag))
+
+    # D-14: gender exact match
+    if query.gender is not None:
+        predicates.append(Client.gender == query.gender)
+
+    # D-14: createdFrom / createdTo inclusive (DTO normalises date-only to UTC boundaries).
+    if query.created_from is not None:
+        predicates.append(Client.created_at >= query.created_from)
+    if query.created_to is not None:
+        predicates.append(Client.created_at <= query.created_to)
+
+    # D-14: hasTelegram bool
+    if query.has_telegram is True:
+        predicates.append(Client.telegram_user_id.is_not(None))
+    elif query.has_telegram is False:
+        predicates.append(Client.telegram_user_id.is_(None))
+
+    # Total count — same predicate list, no ORDER/LIMIT.
+    total_stmt = select(func.count()).select_from(Client).where(and_(*predicates))
+    total = await session.scalar(total_stmt) or 0
+
+    # Items
+    stmt: Select[tuple[Client]] = select(Client).where(and_(*predicates))
+    if query.sort == ClientSort.LAST_NAME_ASC:
+        # tie-breaker on created_at desc to keep order stable
+        stmt = stmt.order_by(Client.last_name.asc(), Client.created_at.desc())
+    else:  # default CREATED_AT_DESC
+        # stable tie-break on id desc
+        stmt = stmt.order_by(Client.created_at.desc(), Client.id.desc())
+
+    offset = (query.page - 1) * query.page_size
+    stmt = stmt.offset(offset).limit(query.page_size)
+
+    rows = (await session.scalars(stmt)).all()
+
+    return PaginatedData[Client](
+        items=list(rows),
+        total=total,
+        page=query.page,
+        page_size=query.page_size,
+    )
