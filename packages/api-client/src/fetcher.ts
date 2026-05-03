@@ -51,7 +51,10 @@ function readCsrfCookie(): string | undefined {
   return undefined
 }
 
-// D-A4: module-scoped single-flight promise. Reset in .finally().
+// D-A4: module-scoped single-flight promise. Concurrent awaiters share the
+// same promise. The slot is cleared on the *next microtask* after settle so
+// that a 401 storm arriving in the same tick latches onto the in-flight
+// promise instead of triggering a second refresh (CR-02).
 // No Subject / EventEmitter — plain shared promise, as decided.
 let inFlightRefresh: Promise<Response> | null = null
 
@@ -61,7 +64,11 @@ function refreshOnce(): Promise<Response> {
     method: 'POST',
     credentials: 'include',
   }).finally(() => {
-    inFlightRefresh = null
+    // Defer slot reset so concurrent awaiters in the same microtask
+    // observe the in-flight promise rather than starting a fresh refresh.
+    queueMicrotask(() => {
+      inFlightRefresh = null
+    })
   })
   return inFlightRefresh
 }
@@ -160,8 +167,16 @@ export async function request<
   let refreshRes: Response
   try {
     refreshRes = await refreshOnce()
-  } catch {
-    throw new ApiError('session_expired', 'Session expired, please log in again.')
+  } catch (err) {
+    // WR-01: preserve the original network error as `cause` so consumers
+    // can distinguish offline / DNS failures from a genuine token-expired
+    // refresh response.
+    throw new ApiError(
+      'session_expired',
+      'Session expired, please log in again.',
+      undefined,
+      { cause: err },
+    )
   }
   if (!refreshRes.ok) {
     throw new ApiError('session_expired', 'Session expired, please log in again.')
