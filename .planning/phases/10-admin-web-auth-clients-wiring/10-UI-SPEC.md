@@ -103,7 +103,7 @@ All colors use semantic shadcn CSS custom property tokens. Raw palette classes (
 **Accent (`bg-primary`) reserved for:**
 1. Login submit button ("Войти") — primary action CTA only
 2. "Новый клиент" button in clients toolbar — primary action CTA only
-3. Confirm button in ClientForm Dialog save action ("Сохранить")
+3. Confirm button in ClientForm Dialog save action ("Добавить клиента" / "Сохранить изменения")
 4. Active tab indicator underline on Login tabs (email/password, Telegram)
 5. Pagination "current page" active state
 
@@ -232,8 +232,9 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 | Primary CTA (create) | "Новый клиент" |
 | Create dialog heading | "Добавить клиента" |
 | Edit dialog heading | "Редактировать клиента" |
-| Save button (form) | "Сохранить" |
-| Cancel button | "Отмена" |
+| Save button (create mode) | "Добавить клиента" |
+| Save button (edit mode) | "Сохранить изменения" |
+| Cancel button | "Не сохранять" |
 | Edit row action tooltip | "Редактировать клиента" |
 | Delete row action tooltip | "Удалить клиента" |
 | Empty state heading | "Клиентов пока нет" |
@@ -243,7 +244,7 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 | Loading state | DataGrid skeleton rows (no text overlay) |
 | Error state heading | "Не удалось загрузить клиентов" |
 | Error state body | "Проверьте соединение или обновите страницу." |
-| Error retry button | "Повторить" |
+| Error retry button | "Повторить загрузку" |
 
 ### Clients Delete Confirmation (AlertDialog)
 
@@ -315,6 +316,8 @@ All copy is Russian. Source: `src/shared/i18n/ru.ts` dictionary (extend existing
 - Submit button at Dialog footer, right-aligned; Cancel left-aligned
 - Dirty-guard: if form is dirty and user clicks Cancel or backdrop, show no extra confirmation (Phase 10 scope — add dirty-guard in later phase if UX feedback demands)
 - Create vs Edit: same `ClientForm` component, `mode` prop controls heading + submit label
+- Submit label in create mode: "Добавить клиента"; submit label in edit mode: "Сохранить изменения"
+- Cancel label: "Не сохранять" (in both create and edit mode)
 
 ### Delete Confirmation (AlertDialog)
 
