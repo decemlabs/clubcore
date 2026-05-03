@@ -10,7 +10,7 @@ class AppError(Exception):
     code: str = "app_error"
     status_code: int = 500
 
-    def __init__(self, message: str, *, fields: dict[str, object] | None = None) -> None:
+    def __init__(self, message: str = "", *, fields: dict[str, object] | None = None) -> None:
         self.message = message
         self.fields = fields
         super().__init__(message)
@@ -76,6 +76,27 @@ class RateLimited(AppError):  # noqa: N818
 
     code = "rate_limited"
     status_code = 429
+
+
+class ClientNotFoundError(NotFoundError):
+    """Raised when GET/PATCH/DELETE references a non-existent or soft-deleted client."""
+
+    code = "client_not_found"
+    status_code = 404
+
+
+class PhoneExistsError(ConflictError):
+    """Raised on POST/PATCH when phone collides with an alive client (Phase 8 D-11)."""
+
+    code = "phone_exists"
+    status_code = 409
+
+
+class InvalidPhoneError(ValidationAppError):
+    """Raised on POST/PATCH when phone fails E.164 regex validation (Phase 8 D-10)."""
+
+    code = "invalid_phone"
+    status_code = 422
 
 
 def register_exception_handlers(app: FastAPI) -> None:
