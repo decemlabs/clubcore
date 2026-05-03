@@ -186,6 +186,11 @@ async def update_client(
         resource_id=client.id,
         **payload,
     )
+    # SA 2.0 expires the row's attributes after flush by default. Refresh the
+    # ORM-managed `updated_at` (server-side `now()`) before Pydantic
+    # serialisation so the response carries the fresh value without triggering
+    # an implicit lazy-load (which would raise MissingGreenlet under async).
+    await session.refresh(client, attribute_names=["updated_at"])
     return ClientResponse.model_validate(client)
 
 

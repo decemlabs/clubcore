@@ -56,7 +56,15 @@ async def get_alive(session: AsyncSession, client_id: UUID) -> Client | None:
 async def list_alive(
     session: AsyncSession, query: ClientListQuery
 ) -> PaginatedData[Client]:
-    """Paginated list of alive clients with filters + sort applied (CLIENTS-03/04)."""
+    """Paginated list of alive clients with filters + sort applied (CLIENTS-03/04).
+
+    Returns a `PaginatedData` instance constructed via `model_construct` to skip
+    Pydantic validation against the generic parameter. The SQLAlchemy `Client`
+    ORM is not a Pydantic-compatible type and `PaginatedData[Client](...)` would
+    trigger a `PydanticSchemaGenerationError` at the runtime parametrisation
+    step. The service layer (Plan 06) immediately re-wraps the result as
+    `PaginatedData[ClientResponse]`, so skipping validation here is safe.
+    """
 
     predicates: list[Any] = [Client.deleted_at.is_(None)]
 
@@ -117,7 +125,7 @@ async def list_alive(
 
     rows = (await session.scalars(stmt)).all()
 
-    return PaginatedData[Client](
+    return PaginatedData.model_construct(
         items=list(rows),
         total=total,
         page=query.page,
