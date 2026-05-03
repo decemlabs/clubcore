@@ -21,7 +21,9 @@ from app.core.config import get_settings
 from app.core.database import Base
 
 # Register all ORM models with Base.metadata for autogenerate (TEST-08 / Phase 5 INFRA-03).
-import app.modules.auth.models  # noqa: F401
+import app.modules.auth.models
+import app.modules.clients.models
+import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
 config = context.config
