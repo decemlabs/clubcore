@@ -33,14 +33,26 @@ Service does NOT re-check RBAC; the router-layer `require_permission` dependency
 (Plan 07) gates access before service is called.
 """
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ClientNotFoundError
+from app.core import audit
+from app.core.exceptions import ClientNotFoundError, PhoneExistsError
 from app.core.pagination import PaginatedData
+from app.modules.auth.models import User
 from app.modules.clients import repository
-from app.modules.clients.schemas import ClientListQuery, ClientResponse
+from app.modules.clients.schemas import (
+    ClientCreateRequest,
+    ClientListQuery,
+    ClientResponse,
+    ClientUpdateRequest,
+)
+
+if TYPE_CHECKING:
+    from app.modules.clients.models import Client
 
 
 async def list_clients(
@@ -70,3 +82,143 @@ async def get_client(
     if client is None:
         raise ClientNotFoundError("client_not_found")
     return ClientResponse.model_validate(client)
+
+
+def _full_name(client: "Client") -> str:
+    """Render a Client's full name for audit payloads (last first [middle])."""
+    parts = [client.last_name, client.first_name]
+    if client.middle_name:
+        parts.append(client.middle_name)
+    return " ".join(parts)
+
+
+def _is_phone_conflict(exc: IntegrityError) -> bool:
+    """Return True iff `exc` was caused by `uq_clients_phone_alive` (D-11)."""
+    constraint = getattr(exc.orig, "constraint_name", None) or ""
+    if constraint == "uq_clients_phone_alive":
+        return True
+    return "uq_clients_phone_alive" in str(exc.orig)
+
+
+async def create_client(
+    session: AsyncSession,
+    actor: User,
+    data: ClientCreateRequest,
+) -> ClientResponse:
+    """Create a new client (CLIENTS-06).
+
+    Order: insert → flush (surface DB constraints) → emit audit on success (D-03).
+    For inserts we cannot emit before flush — the IntegrityError on
+    `uq_clients_phone_alive` surfaces only when the row hits the DB. Catching
+    the IntegrityError and translating to PhoneExistsError satisfies D-11.
+    """
+    client = await repository.insert_client(session, actor.id, data)
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_phone_conflict(exc):
+            raise PhoneExistsError("phone_exists") from exc
+        raise
+
+    # D-08 client_created payload: minimal PD-safe fields only
+    # (no notes / birthday / emergency_contact).
+    await audit.emit(
+        session,
+        "client_created",
+        actor_user_id=actor.id,
+        resource_type="client",
+        resource_id=client.id,
+        full_name=_full_name(client),
+        phone=client.phone,
+        has_email=client.email is not None,
+        has_telegram=client.telegram_user_id is not None,
+    )
+    return ClientResponse.model_validate(client)
+
+
+async def update_client(
+    session: AsyncSession,
+    actor: User,
+    client_id: UUID,
+    data: ClientUpdateRequest,
+) -> ClientResponse:
+    """Partial update with PATCH semantics (CLIENTS-07, D-01).
+
+    Skips audit emit + flush when no fields actually changed (D-09 no-op).
+    Translates phone-uniqueness IntegrityError to PhoneExistsError (D-11).
+    """
+    client = await repository.get_alive(session, client_id)
+    if client is None:
+        raise ClientNotFoundError("client_not_found")
+
+    # changed_previous: dict[field_name, previous_value] — only fields that
+    # actually changed value (after pydantic exclude_unset). Empty dict on no-op.
+    changed_previous = await repository.update_client(session, client, data)
+
+    if not changed_previous:
+        # D-09: idempotent no-op PATCH → skip emit, skip flush, return current state.
+        return ClientResponse.model_validate(client)
+
+    # Flush early to surface phone-conflict before emitting audit (D-11). For
+    # non-phone updates this is a cheap UPDATE; for phone changes it gives us
+    # the IntegrityError we need to translate.
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_phone_conflict(exc):
+            raise PhoneExistsError("phone_exists") from exc
+        raise
+
+    # D-08 client_updated payload:
+    #   - changed_fields: sorted list of field names that actually changed
+    #   - previous_phone: only when phone was among the changed fields
+    payload: dict[str, object] = {"changed_fields": sorted(changed_previous.keys())}
+    if "phone" in changed_previous:
+        payload["previous_phone"] = changed_previous["phone"]
+
+    await audit.emit(
+        session,
+        "client_updated",
+        actor_user_id=actor.id,
+        resource_type="client",
+        resource_id=client.id,
+        **payload,
+    )
+    return ClientResponse.model_validate(client)
+
+
+async def soft_delete_client(
+    session: AsyncSession,
+    actor: User,
+    client_id: UUID,
+) -> None:
+    """Soft-delete the client (CLIENTS-08).
+
+    Owner-only enforcement happens at the router via `require_permission` (Plan 07).
+    Captures `full_name` and `phone` BEFORE the soft-delete sets `deleted_at`, so
+    the audit payload reflects pre-deletion state (D-08).
+    """
+    client = await repository.get_alive(session, client_id)
+    if client is None:
+        raise ClientNotFoundError("client_not_found")
+
+    # Capture before mutating — soft-delete only sets deleted_at, but capture
+    # makes the audit payload independent of post-delete ORM state.
+    captured_full_name = _full_name(client)
+    captured_phone = client.phone
+
+    await repository.soft_delete_client(session, client)
+
+    # Emit BEFORE flush — soft-delete only flips deleted_at, no constraint risk.
+    await audit.emit(
+        session,
+        "client_soft_deleted",
+        actor_user_id=actor.id,
+        resource_type="client",
+        resource_id=client.id,
+        full_name=captured_full_name,
+        phone=captured_phone,
+    )
+    await session.flush()
