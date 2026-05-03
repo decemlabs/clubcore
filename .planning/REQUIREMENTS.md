@@ -88,7 +88,7 @@ This milestone delivers the first business slice on top of the v1.0 skeleton: tw
 - [ ] **API-02**: CI step regenerates `openapi.json` and runs `git diff --exit-code` to block drift between code and the checked-in spec
 - [ ] **API-03**: Backend wire format is **camelCase** via Pydantic `alias_generator=to_camel` + `populate_by_name=True` on a base response/request model; Python identifiers stay snake_case internally
 - [ ] **API-04**: Pagination envelope is `{items, total, page, pageSize}`; `app/core/pagination.py` is updated to the new shape (replaces v1.0 `limit/offset`); frontend contract becomes the single source of truth
-- [ ] **API-05**: `packages/api-client` adds `openapi-typescript@^7.13.0` as a devDependency and a `codegen` script that produces `src/schema.d.ts` (gitignored) from `apps/backend/openapi.json`
+- [ ] **API-05**: `packages/api-client` adds `openapi-typescript@^7.13.0` as a devDependency and a `codegen` script that produces `src/schema.d.ts` (committed to git per Phase 9 D-07 — required for API-07 drift-gate to be meaningful) from `apps/backend/openapi.json`
 - [ ] **API-06**: `packages/api-client/src/fetcher.ts` (~80 LOC) exposes `request<P, M>(method, path, init)` with `credentials: 'include'`, automatic `X-CSRF-Token` injection, typed `ApiError` with `code/message/fields`, and module-scoped single-flight `/auth/refresh` on 401
 - [ ] **API-07**: CI step runs `pnpm --filter @sportzal/api-client codegen && git diff --exit-code` to block schema drift
 
