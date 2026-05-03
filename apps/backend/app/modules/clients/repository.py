@@ -15,6 +15,7 @@ live here. The caller (Plan 06 service) owns the transactional moment so it can
 co-write the audit log row in the same UoW.
 """
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -23,7 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedData
 from app.modules.clients.models import Client
-from app.modules.clients.schemas import ClientListQuery, ClientSort
+from app.modules.clients.schemas import (
+    ClientCreateRequest,
+    ClientListQuery,
+    ClientSort,
+    ClientUpdateRequest,
+    EmergencyContact,
+)
 
 
 async def get_alive(session: AsyncSession, client_id: UUID) -> Client | None:
@@ -105,3 +112,67 @@ async def list_alive(
         page=query.page,
         page_size=query.page_size,
     )
+
+
+async def insert_client(
+    session: AsyncSession,
+    actor_user_id: UUID,
+    data: ClientCreateRequest,
+) -> Client:
+    """Insert a new client; caller owns the transactional flush + audit emit (D-03)."""
+    emergency = data.emergency_contact.model_dump() if data.emergency_contact else None
+
+    client = Client(
+        last_name=data.last_name,
+        first_name=data.first_name,
+        middle_name=data.middle_name,
+        phone=data.phone,
+        email=data.email,
+        birthday=data.birthday,
+        gender=data.gender,
+        tags=data.tags,
+        notes=data.notes,
+        emergency_contact=emergency,
+        telegram_user_id=data.telegram_user_id,
+        created_by_user_id=actor_user_id,
+    )
+    session.add(client)
+    return client
+
+
+async def update_client(
+    session: AsyncSession,
+    client: Client,
+    data: ClientUpdateRequest,
+) -> dict[str, object]:
+    """Apply PATCH update to an existing alive Client.
+
+    Returns a dict of {field_name: previous_value} for the fields that actually
+    changed. Service layer (Plan 06) uses this to (a) decide whether to emit
+    `client_updated` (D-09 no-op skip) and (b) attach `previous_phone` to the
+    audit payload (D-08).
+    """
+    updates = data.model_dump(exclude_unset=True)
+    changed: dict[str, object] = {}
+
+    for key, value in updates.items():
+        # emergency_contact arrives as Pydantic instance; serialise to dict for JSONB.
+        if (
+            key == "emergency_contact"
+            and value is not None
+            and isinstance(value, EmergencyContact)
+        ):
+            value = value.model_dump()
+        # otherwise it's already a dict (model_dump above produced it)
+        previous = getattr(client, key)
+        if previous != value:
+            changed[key] = previous
+            setattr(client, key, value)
+
+    return changed
+
+
+async def soft_delete_client(session: AsyncSession, client: Client) -> Client:
+    """Soft-delete: set deleted_at to now(); never DELETE the row (CLIENTS-08)."""
+    client.deleted_at = datetime.now(tz=UTC)
+    return client
