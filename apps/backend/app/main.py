@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Sportzal API",
+        version="1.1.0",
         lifespan=combined_lifespan,
         docs_url="/docs" if settings.environment == "dev" else None,
         redoc_url=None,
