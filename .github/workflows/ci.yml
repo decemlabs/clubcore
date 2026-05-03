@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# D-03: cancel stale runs on push-to-PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege GITHUB_TOKEN. The drift-gate jobs only read the repo —
+# they never push, comment, or release. Mitigates workflow-injection
+# blast radius (Phase 9 threat T-09-13).
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (drift gates + statics)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv (Python 3.12)
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+
+      - name: uv sync --frozen
+        run: uv sync --frozen
+
+      - name: ruff check
+        run: uv run ruff check
+
+      - name: ruff format --check
+        run: uv run ruff format --check
+
+      - name: mypy
+        run: uv run mypy
+
+      - name: lint-imports
+        run: uv run lint-imports
+
+      - name: Export OpenAPI spec
+        run: uv run python -m scripts.export_openapi
+
+      # D-02 / API-02: any Pydantic schema change that did not regenerate
+      # apps/backend/openapi.json fails this step.
+      - name: Drift gate — apps/backend/openapi.json
+        working-directory: ${{ github.workspace }}
+        run: git diff --exit-code apps/backend/openapi.json
+
+  frontend:
+    name: Frontend (drift gates + statics)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # W-02 fix: pin pnpm major version explicitly. Without `version: 9`,
+      # pnpm/action-setup@v3 reads root package.json `packageManager` field;
+      # if absent, it falls back to a runner-image default which can drift
+      # between GitHub Actions image releases — causing nondeterministic
+      # dependency resolution and silent lockfile churn that undermines
+      # `pnpm install --frozen-lockfile` and the schema.d.ts drift-gate.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (workspaces)
+        run: pnpm -r lint
+
+      - name: Typecheck (workspaces)
+        run: pnpm -r typecheck
+
+      - name: Test (workspaces)
+        run: pnpm -r test
+
+      - name: Codegen — packages/api-client
+        run: pnpm --filter @sportzal/api-client codegen
+
+      # D-02 / API-07: any backend-schema change that did not regenerate
+      # packages/api-client/src/schema.d.ts (locally + commit) fails here.
+      - name: Drift gate — packages/api-client/src/schema.d.ts
+        run: git diff --exit-code packages/api-client/src/schema.d.ts
