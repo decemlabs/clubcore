@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -140,3 +141,60 @@ async def async_client(
             yield client
     finally:
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 -- Telegram sender stub (D-07, D-16). TEST-03 dependency.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class StubSenderResult:
+    """Result returned by stubbed sender functions (mirrors SendResult shape)."""
+
+    ok: bool = True
+    blocked: bool = False
+    error: str | None = None
+
+
+# Backwards-compat alias for any callsite that prefers the underscored name
+# the plan's interfaces section used.
+_StubSenderResult = StubSenderResult
+
+
+@dataclass
+class StubTelegramSender:
+    """Recorder + result-injector for app.integrations.telegram.sender.* (D-07, D-16).
+
+    Tests read `.calls` (list of (chat_id, code) tuples for send_otp_dm) and
+    `.text_calls` (for send_text_dm -- stranger / replay messages). Set
+    `.next_result` to control the return value for the next send_otp_dm call.
+    Default: ok=True for both functions.
+    """
+
+    calls: list[tuple[int, str]] = field(default_factory=list)
+    text_calls: list[tuple[int, str]] = field(default_factory=list)
+    next_result: StubSenderResult = field(default_factory=StubSenderResult)
+
+
+_StubTelegramSender = StubTelegramSender
+
+
+@pytest.fixture
+def stub_telegram_sender(monkeypatch: pytest.MonkeyPatch) -> StubTelegramSender:
+    """Monkey-patch send_otp_dm + send_text_dm -- D-07/D-16."""
+    from app.integrations.telegram import sender as sender_mod
+
+    stub = StubTelegramSender()
+
+    async def _fake_send_otp_dm(bot: Any, chat_id: int, code: str) -> StubSenderResult:
+        stub.calls.append((chat_id, code))
+        return stub.next_result
+
+    async def _fake_send_text_dm(bot: Any, chat_id: int, text: str) -> StubSenderResult:
+        stub.text_calls.append((chat_id, text))
+        return StubSenderResult(ok=True)
+
+    monkeypatch.setattr(sender_mod, "send_otp_dm", _fake_send_otp_dm)
+    monkeypatch.setattr(sender_mod, "send_text_dm", _fake_send_text_dm)
+    return stub
