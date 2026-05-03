@@ -18,9 +18,11 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
+from app.core.audit_models import AuditLog
 from app.core.permissions import Role
 from app.core.security import hash_password
 from app.modules.auth import telegram_service
@@ -117,3 +119,14 @@ async def test_telegram_verify_happy_path(
     for entry in caplog:
         for value in entry.values():
             assert raw_code not in str(value), f"raw OTP code leaked in event: {entry}"
+
+    # 8. AUDIT-02: otp_consumed audit_log row exists with the upserted user.id.
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(AuditLog.action == "otp_consumed")
+        )
+    ).all()
+    assert len(rows) >= 1
+    row = rows[-1]
+    assert row.actor_user_id is not None  # bound user (D-04 row 9)
+    assert row.resource_type == "otp"

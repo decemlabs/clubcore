@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
+from app.core.audit_models import AuditLog
 from app.core.permissions import Role
 from app.core.security import hash_password
 from app.modules.auth.models import RefreshToken, User
@@ -235,3 +236,29 @@ async def test_logout_unauthenticated_returns_401_even_without_csrf(
     r = await async_client.post("/api/v1/auth/logout")
     assert r.status_code == 401, r.text
     assert r.json()["code"] == "invalid_token"
+
+
+async def test_logout_writes_session_revoked_audit_row(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> None:
+    """AUDIT-02: /logout writes session_revoked row with family_id resource_id."""
+    await _login(async_client)
+    r = await async_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+    )
+    assert r.status_code == 200, r.text
+
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(
+                AuditLog.action == "session_revoked",
+                AuditLog.actor_user_id == seeded_owner.id,
+            )
+        )
+    ).all()
+    assert len(rows) == 1, "Pitfall 2 fix: emit must run BEFORE the route's commit"
+    assert rows[0].resource_type == "session"
+    assert rows[0].resource_id is not None  # family_id

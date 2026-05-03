@@ -11,8 +11,10 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit_models import AuditLog
 from app.core.permissions import Role
 from app.core.security import hash_password
 from app.modules.auth.models import User
@@ -156,3 +158,50 @@ async def test_me_authenticated_returns_user(
     assert body["data"]["fullName"] == "Login Owner"
     assert body["data"]["role"] == "owner"
     assert body["data"]["hasTelegram"] is False
+
+
+async def test_login_success_writes_audit_row(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> None:
+    """AUDIT-02 + D-04: successful /login writes login_success audit row."""
+    r = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
+    )
+    assert r.status_code == 200, r.text
+
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(AuditLog.action == "login_success")
+        )
+    ).all()
+    assert len(rows) >= 1
+    row = next(r for r in rows if r.actor_user_id == seeded_owner.id)
+    assert row.resource_type == "session"
+    assert row.payload["channel"] == "email_password"
+
+
+async def test_login_failed_writes_audit_row_with_null_actor(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> None:
+    """AUDIT-02 + D-06: failed login writes login_failed row with actor_user_id NULL."""
+    r = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": OWNER_EMAIL, "password": BAD_PASSWORD},
+    )
+    assert r.status_code == 401
+
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(AuditLog.action == "login_failed")
+        )
+    ).all()
+    assert len(rows) >= 1
+    row = rows[-1]
+    assert row.actor_user_id is None  # D-06 actor-less event
+    assert row.resource_type == "login_attempt"
+    assert row.payload["email"] == OWNER_EMAIL
