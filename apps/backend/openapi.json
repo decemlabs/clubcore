@@ -1,0 +1,1376 @@
+{
+  "components": {
+    "schemas": {
+      "ClientCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/clients body. Required: lastName, firstName, phone.",
+        "properties": {
+          "birthday": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birthday"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "emergencyContact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmergencyContact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstName": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Firstname",
+            "type": "string"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gender"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastName": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Lastname",
+            "type": "string"
+          },
+          "middleName": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Middlename"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "pattern": "^\\+[1-9]\\d{1,14}$",
+            "title": "Phone",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "telegramUserId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegramuserid"
+          }
+        },
+        "required": [
+          "lastName",
+          "firstName",
+          "phone"
+        ],
+        "title": "ClientCreateRequest",
+        "type": "object"
+      },
+      "ClientResponse": {
+        "description": "Single client read DTO. `from_attributes=True` (inherited via ContractModel)\nallows `ClientResponse.model_validate(orm_client_instance)`.\n\n`deleted_at` is intentionally omitted — soft-deleted rows are 404'd at the\nrepository boundary (Plan 04 `get_alive`); the response shape never carries it.",
+        "properties": {
+          "birthday": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birthday"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "createdByUserId": {
+            "format": "uuid",
+            "title": "Createdbyuserid",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "emergencyContact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmergencyContact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstName": {
+            "title": "Firstname",
+            "type": "string"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gender"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lastName": {
+            "title": "Lastname",
+            "type": "string"
+          },
+          "middleName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Middlename"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "telegramUserId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegramuserid"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lastName",
+          "firstName",
+          "phone",
+          "tags",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "ClientResponse",
+        "type": "object"
+      },
+      "ClientSort": {
+        "description": "Client list sort modes (CLIENTS-04).",
+        "enum": [
+          "created_at_desc",
+          "last_name_asc"
+        ],
+        "title": "ClientSort",
+        "type": "string"
+      },
+      "ClientUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/clients/{id} body.\n\nSemantics: caller sends only the fields they want to change; service does\n`model_dump(exclude_unset=True)` and applies that subset. D-01 forbids explicit\nnull in v1.1 — to leave a field unchanged, OMIT the key entirely.",
+        "properties": {
+          "birthday": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birthday"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "emergencyContact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmergencyContact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstName": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstname"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gender"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastName": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastname"
+          },
+          "middleName": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Middlename"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{1,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "telegramUserId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegramuserid"
+          }
+        },
+        "title": "ClientUpdateRequest",
+        "type": "object"
+      },
+      "EmergencyContact": {
+        "description": "Free-shape contact owned by UI (D-17). Same E.164 phone as Client.phone.",
+        "properties": {
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "pattern": "^\\+[1-9]\\d{1,14}$",
+            "title": "Phone",
+            "type": "string"
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation"
+          }
+        },
+        "required": [
+          "name",
+          "phone"
+        ],
+        "title": "EmergencyContact",
+        "type": "object"
+      },
+      "Gender": {
+        "description": "Client gender (D-15). Closed enum — only male/female v1.",
+        "enum": [
+          "male",
+          "female"
+        ],
+        "title": "Gender",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/auth/login body.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 12,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "LoginResponse": {
+        "description": "POST /api/v1/auth/login response body (wrapped in ResponseEnvelope).",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserPublic"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "title": "LoginResponse",
+        "type": "object"
+      },
+      "MeResponse": {
+        "description": "GET /api/v1/auth/me response body (wrapped in ResponseEnvelope).",
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "hasTelegram": {
+            "title": "Hastelegram",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "fullName",
+          "email",
+          "hasTelegram"
+        ],
+        "title": "MeResponse",
+        "type": "object"
+      },
+      "PaginatedData_ClientResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_LoginResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LoginResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[LoginResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_MeResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MeResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[MeResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_NoneType_": {
+        "properties": {
+          "data": {
+            "title": "Data",
+            "type": "null"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[NoneType]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ClientResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_TelegramStartResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TelegramStartResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[TelegramStartResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_TelegramStatusResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TelegramStatusResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[TelegramStatusResponse]",
+        "type": "object"
+      },
+      "Role": {
+        "enum": [
+          "owner",
+          "reception"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "TelegramStartResponse": {
+        "description": "POST /auth/telegram/start success body (AUTH-TG-01).\n\nsnake_case → camelCase auto: `deep_link_url` → `deepLinkUrl`,\n`deep_link_token` → `deepLinkToken`.",
+        "properties": {
+          "deepLinkToken": {
+            "title": "Deeplinktoken",
+            "type": "string"
+          },
+          "deepLinkUrl": {
+            "title": "Deeplinkurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deepLinkUrl",
+          "deepLinkToken"
+        ],
+        "title": "TelegramStartResponse",
+        "type": "object"
+      },
+      "TelegramStatusResponse": {
+        "description": "GET /auth/telegram/status success body (AUTH-TG-03).",
+        "properties": {
+          "bound": {
+            "title": "Bound",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bound"
+        ],
+        "title": "TelegramStatusResponse",
+        "type": "object"
+      },
+      "TelegramVerifyRequest": {
+        "additionalProperties": false,
+        "description": "POST /auth/telegram/verify request body (AUTH-TG-04).\n\n`code` must be exactly 6 digits — short-circuits non-digit input\nbefore the service hits Postgres.",
+        "properties": {
+          "code": {
+            "maxLength": 6,
+            "minLength": 6,
+            "pattern": "^\\d{6}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "deepLinkToken": {
+            "title": "Deeplinktoken",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deepLinkToken",
+          "code"
+        ],
+        "title": "TelegramVerifyRequest",
+        "type": "object"
+      },
+      "UserPublic": {
+        "description": "Subset of User exposed on login response.",
+        "properties": {
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "fullName"
+        ],
+        "title": "UserPublic",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Sportzal API",
+    "version": "1.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Authenticate email+password; issue cookies + envelope (AUTH-EP-01..02, AUTH-EP-05).",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_LoginResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Revoke current family + clear cookies (AUTH-LO-01).\n\nIdempotent: if the refresh cookie is absent or already revoked, the cookie\nclear still runs so the browser ends in a clean state.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "description": "Revoke ALL alive families for the user + clear caller's cookies (AUTH-LO-02).",
+        "operationId": "logout_all_api_v1_auth_logout_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout All",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "Return the authenticated user's profile (AUTH-LO-04).\n\n`CurrentUser` is a Protocol with `id` + `role` only. The route knows the\nruntime instance is the SA `User` model (registered via register_user_loader\nin app.main.create_app), so we cast for access to email / full_name /\ntelegram_chat_id. The cast is safe because the loader is fixed at composition.",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `sz_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/telegram/start": {
+      "post": {
+        "description": "Mint a deep-link token (AUTH-TG-01).\n\nReturns the deep-link URL the FE shows to the operator. The OtpCode row\nis created with code_hash=NULL — the bot will fill it after /start <token>.",
+        "operationId": "telegram_start_api_v1_auth_telegram_start_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TelegramStartResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Telegram Start",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/telegram/status": {
+      "get": {
+        "description": "Poll: has the bot DMed the code yet? (AUTH-TG-03).\n\nPer D-19: never raises; unknown / expired / consumed all return bound=False\n(do NOT leak token validity).",
+        "operationId": "telegram_status_api_v1_auth_telegram_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TelegramStatusResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Telegram Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/telegram/verify": {
+      "post": {
+        "description": "Verify the 6-digit OTP and issue session cookies (AUTH-TG-04, AUTH-TG-06).\n\nOn success: mints tokens + cookies identical to /login, then emits\n`login_success` with `channel='telegram'` (D-14). Distinct error codes\nper D-13 ride the AppError envelope handler. BotNotStarted is re-raised\nwith `fields={'deepLinkUrl': ...}` so the FE can re-display the deep-link\nbutton (D-13 row 1).",
+        "operationId": "telegram_verify_api_v1_auth_telegram_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_LoginResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Telegram Verify",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/clients": {
+      "get": {
+        "description": "List alive clients (CLIENTS-03/04). VIEW permission required (D-21).",
+        "operationId": "list_clients_api_v1_clients_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gender",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Gender"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gender"
+            }
+          },
+          {
+            "in": "query",
+            "name": "createdFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Createdfrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "createdTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Createdto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasTelegram",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hastelegram"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ClientSort",
+              "default": "created_at_desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List alive clients with filters and pagination",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "description": "Create a client (CLIENTS-06). EDIT permission + CSRF required (D-21).",
+        "operationId": "create_client_api_v1_clients_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a new client (E.164 phone; 409 phone_exists on partial-unique conflict)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{client_id}": {
+      "delete": {
+        "description": "Soft-delete an alive client (CLIENTS-08).\n\nOwner-only: (DELETE, CLIENTS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content;\nFastAPI emits an empty body for 204 status_code.",
+        "operationId": "soft_delete_client_api_v1_clients__client_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soft-delete a client (owner-only; sets deleted_at, never hard-deletes)",
+        "tags": [
+          "clients"
+        ]
+      },
+      "get": {
+        "description": "Read one alive client (CLIENTS-05). 404 for missing or soft-deleted ids.",
+        "operationId": "get_client_api_v1_clients__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a single alive client by id (404 if soft-deleted or missing)",
+        "tags": [
+          "clients"
+        ]
+      },
+      "patch": {
+        "description": "Partial update of an alive client (CLIENTS-07). EDIT + CSRF (D-21).",
+        "operationId": "update_client_api_v1_clients__client_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Liveness probe. Returns {\"status\": \"ok\"} with HTTP 200.",
+        "operationId": "health_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    }
+  }
+}
