@@ -28,6 +28,11 @@ def _stub_request(
     return SimpleNamespace(url=url, client=client)
 
 
+def _stub_session() -> SimpleNamespace:
+    """Stub AsyncSession sufficient for audit.emit's session.add() call."""
+    return SimpleNamespace(add=lambda _row: None)
+
+
 def test_require_authenticated_factory_qualname_prefix() -> None:
     """TEST-07 (Plan 06-05) discriminates by __qualname__.startswith('require_authenticated.')."""
     dep = require_authenticated()
@@ -58,15 +63,16 @@ async def test_require_permission_emits_rbac_forbidden_for_reception() -> None:
     dep = require_permission(Action.DELETE, Resource.CLIENTS)
     user = _stub_user(Role.RECEPTION)
     request = _stub_request()
+    session = _stub_session()
     with capture_logs() as captured, pytest.raises(ForbiddenError):
-        await dep(request=request, user=user)  # type: ignore[arg-type]
+        await dep(request=request, user=user, session=session)  # type: ignore[arg-type]
     events = [c for c in captured if c.get("event") == "rbac_forbidden"]
     assert len(events) == 1
     ev = events[0]
-    assert ev["user_id"] == str(user.id)
+    # Phase 8 D-04: actor_user_id and resource_type moved to AuditLog DB columns;
+    # structlog event keeps only payload kwargs (role/action/path/ip).
     assert ev["role"] == "reception"
     assert ev["action"] == "delete"
-    assert ev["resource"] == "clients"
     assert ev["path"] == "/_t/delete/clients"
     assert ev["ip"] == "127.0.0.1"
 
@@ -75,8 +81,9 @@ async def test_require_permission_no_emit_for_owner() -> None:
     dep = require_permission(Action.DELETE, Resource.CLIENTS)
     user = _stub_user(Role.OWNER)
     request = _stub_request()
+    session = _stub_session()
     with capture_logs() as captured:
-        result = await dep(request=request, user=user)  # type: ignore[arg-type]
+        result = await dep(request=request, user=user, session=session)  # type: ignore[arg-type]
     assert result is user
     assert not [c for c in captured if c.get("event") == "rbac_forbidden"]
 
@@ -85,7 +92,8 @@ async def test_require_permission_emits_with_ip_none_when_client_missing() -> No
     dep = require_permission(Action.DELETE, Resource.CLIENTS)
     user = _stub_user(Role.RECEPTION)
     request = _stub_request(host=None)
+    session = _stub_session()
     with capture_logs() as captured, pytest.raises(ForbiddenError):
-        await dep(request=request, user=user)  # type: ignore[arg-type]
+        await dep(request=request, user=user, session=session)  # type: ignore[arg-type]
     ev = next(c for c in captured if c.get("event") == "rbac_forbidden")
     assert ev["ip"] is None

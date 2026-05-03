@@ -65,7 +65,9 @@ async def test_reception_denial_emits_rbac_forbidden_event(
     """Smoke-test for D-23 wiring (Plan 06-02 Task 1) — event reaches structlog.
 
     Picks one OWNER_ONLY pair (`delete`/`clients` — a canonical owner-only
-    action) and asserts the audit event was emitted with the locked key set.
+    action) and asserts the audit event was emitted with the locked payload keys.
+    Phase 8 D-04: `actor_user_id` and `resource_type` are now AuditLog DB columns,
+    not structlog kwargs (verified by Plan 08-08 DB-row tests).
     """
     a, r_ = Action.DELETE, Resource.CLIENTS
     with capture_logs() as captured:
@@ -76,6 +78,4 @@ async def test_reception_denial_emits_rbac_forbidden_event(
     ev = events[-1]
     assert ev["role"] == "reception"
     assert ev["action"] == "delete"
-    assert ev["resource"] == "clients"
     assert ev["path"] == f"/_t/{a.value}/{r_.value}"
-    assert "user_id" in ev  # the seeded reception user's UUID, str
