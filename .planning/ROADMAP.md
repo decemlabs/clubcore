@@ -115,7 +115,15 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   2. `POST /api/v1/clients` creates a client with E.164 phone validation; `PATCH /api/v1/clients/{id}` partial-updates; `DELETE /api/v1/clients/{id}` is owner-only and is a soft-delete (sets `deleted_at`, never hard-deletes); `GET /api/v1/clients/{id}` returns 404 for soft-deleted rows.
   3. After soft-deleting a client with phone `+79991234567`, creating a new client with the same phone succeeds — the partial unique index `WHERE deleted_at IS NULL` is in place; all queries flow through `list_alive` / `get_alive` repository helpers (no raw `select(Client)` in service layer).
   4. Successful login, logout, OTP issue/consume, session revoke, family-reuse-detected, client created/updated/soft-deleted events all produce one row each in `audit_log` with `{actor_user_id, action, resource_type, resource_id, payload, created_at}`; no `GET /audit-log` endpoint is exposed (deferred to v1.2).
-**Plans**: TBD
+**Plans:** 8 plans
+- [ ] 08-01-PLAN.md — Migration 0002_clients + AuditLog/Client ORM + 3 DomainError subclasses (INFRA-04, CLIENTS-01, CLIENTS-02, AUDIT-01)
+- [ ] 08-02-PLAN.md — audit.emit async refactor + DB INSERT body (AUDIT-01, AUDIT-02 partial)
+- [ ] 08-03-PLAN.md — Pydantic schemas (Create/Update/Response/ListQuery/EmergencyContact) (CLIENTS-01, CLIENTS-04, CLIENTS-06, CLIENTS-07)
+- [ ] 08-04-PLAN.md — repository.py — sole owner of select(Client); list_alive/get_alive/insert/update/soft_delete (CLIENTS-02..05, CLIENTS-09)
+- [ ] 08-05-PLAN.md — Migrate 15 audit.emit call-sites across auth/service, auth/router, telegram_service, integrations/telegram/handlers (AUDIT-02)
+- [ ] 08-06-PLAN.md — service.py orchestration + IntegrityError 409 + D-08 payloads + D-09 no-op skip (CLIENTS-02, CLIENTS-05..08, AUDIT-02)
+- [ ] 08-07-PLAN.md — router.py 5 endpoints + RBAC + CSRF + mount in /api/v1/clients (CLIENTS-03, CLIENTS-05..08)
+- [ ] 08-08-PLAN.md — Integration tests (5 new clients files + audit-row assertions in 5 auth files) + alembic env.py include_object filter (CLIENTS-02..09, AUDIT-02, AUDIT-03, INFRA-04 verification)
 
 ### Phase 9: OpenAPI Pipeline + packages/api-client
 **Goal**: A change to a backend Pydantic schema either updates `apps/backend/openapi.json` and the generated TS types in the same PR, or CI fails — making FE/BE drift impossible without an explicit "I really meant it" commit.
@@ -152,7 +160,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 5. User Schema + Email/Password Auth | v1.1 | 0/8 | Not started | — |
 | 6. RBAC Wiring + Parity Tests | v1.1 | 0/TBD | Not started | — |
 | 7. Telegram OTP Channel | v1.1 | 0/8 | Not started | — |
-| 8. Clients Module + Audit Log | v1.1 | 0/TBD | Not started | — |
+| 8. Clients Module + Audit Log | v1.1 | 0/8 | Not started | — |
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
 | 10. admin-web Auth + Clients Wiring | v1.1 | 0/TBD | Not started | — |
 
