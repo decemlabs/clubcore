@@ -227,7 +227,20 @@ async function finishResponse(res: Response): Promise<unknown> {
     if (res.status === 204) return undefined
     const ct = res.headers.get('content-type') ?? ''
     if (ct.includes('application/json')) {
-      return (await res.json()) as unknown
+      // WR-04: an OK response that advertises application/json but ships an
+      // empty body (proxies, some FastAPI endpoints) makes res.json() throw
+      // SyntaxError. Read text first, return undefined for empty bodies, and
+      // wrap parse failures in ApiError so consumers can catch them via the
+      // \`instanceof ApiError\` discriminator.
+      const text = await res.text()
+      if (!text) return undefined
+      try {
+        return JSON.parse(text) as unknown
+      } catch (err) {
+        throw new ApiError('unknown_error', 'Failed to parse JSON response', undefined, {
+          cause: err,
+        })
+      }
     }
     return undefined
   }
