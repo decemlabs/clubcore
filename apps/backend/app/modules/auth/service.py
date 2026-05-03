@@ -26,7 +26,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import emit
+from app.core import audit
 from app.core.config import get_settings
 from app.core.exceptions import InvalidAccessToken, InvalidPassword
 from app.core.security import (
@@ -115,8 +115,11 @@ async def authenticate(
         await verify_password(password, target_hash)
     except InvalidPassword:
         await bump_login_rate(redis, email_lower)
-        emit(
+        await audit.emit(
+            session,
             "login_failed",
+            actor_user_id=None,
+            resource_type="login_attempt",
             email=email_lower,
             reason="invalid_credentials",
             ip=ip,
@@ -127,15 +130,27 @@ async def authenticate(
         # Verify against sentinel succeeded only via implausible collision; treat
         # as failure (D-28). Bump rate + emit + raise.
         await bump_login_rate(redis, email_lower)
-        emit(
+        await audit.emit(
+            session,
             "login_failed",
+            actor_user_id=None,
+            resource_type="login_attempt",
             email=email_lower,
             reason="invalid_credentials",
             ip=ip,
         )
         raise InvalidPassword("invalid_credentials")
 
-    emit("login_success", user_id=str(user.id), email=email_lower, ip=ip, channel="email_password")
+    await audit.emit(
+        session,
+        "login_success",
+        actor_user_id=user.id,
+        resource_type="session",
+        resource_id=None,
+        email=email_lower,
+        ip=ip,
+        channel="email_password",
+    )
     return user
 
 
@@ -236,11 +251,15 @@ async def revoke_sessions_on_password_change(
     Returns the family count (same as revoke_all_sessions).
     """
     family_count = await revoke_all_sessions(session, redis, user_id)
-    emit(
+    await audit.emit(
+        session,
         "password_changed_revokes_sessions",
-        user_id=str(user_id),
+        actor_user_id=user_id,
+        resource_type="user",
+        resource_id=user_id,
         family_count=family_count,
     )
+    await session.commit()
     return family_count
 
 
@@ -270,7 +289,7 @@ async def rotate_refresh(
       (C) REUSE/REVOKED — anything else:
           UPDATE refresh_tokens SET revoked_at = now WHERE user_id+family_id alive.
           DEL auth:session:{user_id}:{family_id}.
-          emit('family_reuse_detected', presented_token_hash_prefix=hash[:8]).
+          await audit.emit(session, 'family_reuse_detected', ...) before tx exits.
           Raise InvalidAccessToken('family_reuse_detected').
 
     SELECT ... FOR UPDATE acquires a row lock so two parallel rotators serialize on
@@ -368,6 +387,17 @@ async def rotate_refresh(
             )
             .values(revoked_at=now)
         )
+        # Pitfall 2: emit BEFORE the `async with session.begin()` block exits
+        # (which auto-commits). Co-transactional audit row enrolls in the same
+        # transaction as the family revocation UPDATE.
+        await audit.emit(
+            session,
+            "family_reuse_detected",
+            actor_user_id=row.user_id,
+            resource_type="session",
+            resource_id=row.family_id,
+            presented_token_hash_prefix=presented_hash[:8],
+        )
 
     # Outside the DB tx: clean Redis (best-effort; DB already holds truth).
     # `srem` is typed as `Awaitable[int] | int` (redis-py shares stubs across
@@ -378,12 +408,6 @@ async def rotate_refresh(
         redis.srem(f"auth:user_sessions:{row.user_id}", str(row.family_id)),
     )
 
-    emit(
-        "family_reuse_detected",
-        user_id=str(row.user_id),
-        family_id=str(row.family_id),
-        presented_token_hash_prefix=presented_hash[:8],
-    )
     raise InvalidAccessToken("family_reuse_detected")
 
 
@@ -440,6 +464,15 @@ async def revoke_session(
         )
         .values(revoked_at=now)
     )
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
+    # the revocation UPDATE.
+    await audit.emit(
+        session,
+        "session_revoked",
+        actor_user_id=user_id,
+        resource_type="session",
+        resource_id=family_id,
+    )
     await session.commit()
 
     # Outside the tx: clean Redis (DB is authoritative; Redis follows).
@@ -447,8 +480,6 @@ async def revoke_session(
     pipe.delete(f"auth:session:{user_id}:{family_id}")
     pipe.srem(f"auth:user_sessions:{user_id}", str(family_id))
     await pipe.execute()
-
-    emit("session_revoked", user_id=str(user_id), family_id=str(family_id))
 
 
 # ---------------------------------------------------------------------------
@@ -492,7 +523,16 @@ async def revoke_all_sessions(
         )
         .values(revoked_at=datetime.now(tz=UTC))
     )
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
+    # the bulk revocation UPDATE.
+    await audit.emit(
+        session,
+        "session_revoked_all",
+        actor_user_id=user_id,
+        resource_type="user",
+        resource_id=user_id,
+        family_count=family_count,
+    )
     await session.commit()
 
-    emit("session_revoked_all", user_id=str(user_id), family_count=family_count)
     return family_count
