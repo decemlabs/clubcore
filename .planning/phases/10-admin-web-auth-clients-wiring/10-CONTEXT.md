@@ -18,6 +18,7 @@ Phase 10 закрывает цикл "frontend ↔ backend" для **двух д
 6. **Глобальный `session_expired` handler** — `QueryClient` с `queryCache + mutationCache` `onError`; module-flag в redirect-helper гарантирует single-flight `router.navigate({to:'/login', search:{next:...}})` (FE-05). Logout — пункт в существующем `ProfileMenu`, один клик без confirm, очищает `queryClient.clear()` + редирект на `/login` (FE-06).
 7. **ESLint rule** запрещающий `fetch(` вне `packages/api-client/src/` и `apps/admin-web/src/shared/api/services/http/`; negative-test fixture (FE-07).
 8. **`VITE_API_MODE=http`** становится валидным runtime-режимом (раньше только type-checked) — chokepoint в `apps/admin-web/src/shared/api/config/env.ts` уже готов из Phase 1.
+9. **ReUI registry установлен и используется** — `apps/admin-web/components.json` сконфигурирован с `@reui` namespace + `style: 'base-nova'` (D-13/D-14); selected primitives + `DataGrid` + `InputOTP` установлены через `pnpm dlx shadcn add @reui/<name>` (D-16); Sidebar и AppShell не мигрируются (D-15); прочие неиспользуемые в Phase 10 примитивы — не мигрируются (D-17).
 
 **В scope (Phase 10 REQ-IDs):** FE-01, FE-02, FE-03, FE-04, FE-05, FE-06, FE-07.
 
@@ -69,6 +70,33 @@ Phase 10 закрывает цикл "frontend ↔ backend" для **двух д
   - `services.mock.auth`: hardcoded "fake user" с persisted role из `useSessionStore`; `me()` возвращает `{id: 'mock-owner-uuid', role: useSessionStore.getState().role, fullName: 'Owner Demo'}`; `login()` — no-op + 200мс задержка; `logout()` — no-op; `telegramStart/Status/Verify` — стейт-машина с timeoutами для realism.
   - `RoleSwitcher` (dev affordance) **продолжает работать в mock-mode** — переключает `useSessionStore.role`, `services.mock.auth.me()` следующий раз вернёт обновлённый role. В http-mode `RoleSwitcher` не виден (через `API_MODE === 'mock'` гард в компоненте).
 
+### UI Component Source — ReUI Registry
+
+- **D-13 [LOCKED]:** **ReUI (`https://reui.io/r/{style}/{name}.json`) становится primary UI component registry для `apps/admin-web`.** Конфигурируется через `apps/admin-web/components.json`:
+  ```json
+  {
+    "style": "base-nova",
+    "registries": {
+      "@reui": "https://reui.io/r/{style}/{name}.json"
+    }
+  }
+  ```
+  Установка компонентов: `pnpm dlx shadcn add @reui/<name>` (с правами на запись в `apps/admin-web/src/shared/ui/`). Используем **Radix-варианты** ReUI (consistency с существующим shadcn-стеком на Radix). Это **не замена shadcn-CLI**, а namespaced registry поверх него.
+
+- **D-14 [LOCKED]:** **Style switch `new-york` → `base-nova`.** Пользователь явно выбрал base-nova как новый default style. Последствие: визуальный сдвиг существующих shadcn-компонентов, переустановленных через ReUI. **AppShell layout-структура (header / Sidebar / main wrapper) остаётся**, но primitive-уровень обновится. Theme tokens в `src/app/index.css` `@theme` блоке могут потребовать корректировки под base-nova палитру; semantic-token convention (CLAUDE.md "raw palette banned") сохраняется.
+
+- **D-15 [LOCKED]:** **Sidebar carve-out — у ReUI нет sidebar-компонента, существующий `apps/admin-web/src/shared/ui/app-shell/Sidebar.tsx` (и весь AppShell) НЕ мигрируется.** Sidebar остаётся на текущей реализации; Phase 10 не трогает его, кроме того что планировалось ранее (никаких изменений к Sidebar). Аналогично `RoleSwitcher`, `ProfileMenu` — остаются shadcn-based, Phase 10 модифицирует их по D-08 / D-12 без миграции на ReUI.
+
+- **D-16 [LOCKED]:** **Phase 10 components, мигрируемые на ReUI:**
+  - **`Button`, `Input`, `Form`, `Label`, `DropdownMenu`, `Dialog`, `AlertDialog`** — `pnpm dlx shadcn add @reui/<name>`; перезаписывают существующие файлы в `src/shared/ui/`.
+  - **`DataGrid`** (ReUI in-house) → используется в `ClientsTable` для `/clients` вместо ручной разметки на `@tanstack/react-table`. ReUI DataGrid сам обёртка над `@tanstack/react-table` — keys factory, optimistic mutations и URL-driven search/pagination остаются (D-09, D-10) — DataGrid принимает `data`, `columns`, `pagination`, `state` props.
+  - **`InputOTP`** (ReUI / shadcn primitive) → 6-значный код в `TelegramLoginTab` после `bound: true` (D-04). Заменяет ручную верификацию.
+  - **Phone input** — если у ReUI есть `PhoneInput` / mask-input, используем; иначе остаётся в Claude's Discretion (см. ниже).
+  - **`Toaster`** (Sonner-обёртка) — оставляем существующий (Sonner уже в стеке per CLAUDE.md); если ReUI предлагает свою — Claude discretion в planner'е.
+  - **Splash** — нет в ReUI, остаётся ручной (D-06).
+
+- **D-17 [LOCKED]:** **Migration scope в Phase 10 — только primitives, перечисленные в D-16, плюс DataGrid + InputOTP.** Остальные shadcn-компоненты в `src/shared/ui/` (`Card`, `Badge`, `Avatar`, `Tabs`, `Tooltip`, etc., если присутствуют) **в Phase 10 не мигрируются** — будут мигрированы по мере необходимости в последующих phase'ах (lazy migration). Это снижает blast-radius визуального change и держит Phase 10 в рамках "auth + clients wiring".
+
 ### Claude's Discretion
 
 Пункты, которые planner свободен решать в рамках выше зафиксированного:
@@ -76,11 +104,13 @@ Phase 10 закрывает цикл "frontend ↔ backend" для **двух д
 - Имена branded ID типов (`type ClientId = Brand<string, 'ClientId'>`) и где живут — `entities/client/types.ts` или inline.
 - Точный shape `clientsKeys` factory (рекомендация: `{all: ['clients'], lists: () => [...all, 'list'], list: (filter) => [...lists(), filter], details: () => [...all, 'detail'], detail: (id) => [...details(), id]}` per TkDodo).
 - Фактический набор полей в `ClientForm` (минимум: `fullName`, `phone`; possibly `email`, `birthDate`, `notes` — что Phase 8 положил в `clients` таблицу).
-- Phone input mask (`+7 (XXX) XXX-XX-XX`) — выбрать lib (input-mask, react-imask) или ручной regex.
+- Phone input mask (`+7 (XXX) XXX-XX-XX`) — если ReUI предоставляет `PhoneInput`, использовать; иначе выбрать lib (react-imask, input-mask) или ручной regex.
 - Search debounce (typically 300мс).
-- DataTable: virtualized или native (~30 строк не требуют virtualization, но Phase 8 положил pagination для больших объёмов).
+- DataGrid props (pageSize default, sortable columns, sticky header, density) — следовать ReUI defaults где возможно.
 - Empty/loading/error state copy (Russian; per CLAUDE.md i18n).
 - Splash component design (centered logo + spinner — детали).
+- Theme token diff `new-york` → `base-nova` в `src/app/index.css` — корректировки под ReUI base-nova палитру при сохранении semantic-naming (background, foreground, primary, muted, etc.).
+- Toaster — оставить текущий Sonner-based или взять ReUI-вариант, если предложит лучший UX.
 
 </decisions>
 
@@ -132,11 +162,18 @@ Phase 10 закрывает цикл "frontend ↔ backend" для **двух д
 - `apps/admin-web/src/test/__fixtures__/raw-fetch-leak.ts` — NEW: negative-test fixture доказывает что rule срабатывает (FE-07, по аналогии с существующими `api-mode-leak.ts`).
 - `apps/admin-web/.env.example` / `apps/admin-web/.env.development` — UPDATE: документировать `VITE_API_MODE=http` как валидный режим.
 - `apps/admin-web/package.json` — UPDATE: добавить `@sportzal/api-client: 'workspace:*'` в dependencies (если ещё не добавлено в Phase 9).
+- **`apps/admin-web/components.json`** — UPDATE: переключить `style` на `base-nova`, добавить `registries: { "@reui": "https://reui.io/r/{style}/{name}.json" }` (D-13).
+- **`apps/admin-web/src/app/index.css`** — UPDATE: ревизия `@theme` блока под палитру base-nova; semantic-token naming сохраняется (D-14).
+- **`apps/admin-web/src/shared/ui/{button,input,form,label,dropdown-menu,dialog,alert-dialog}.tsx`** — REPLACE через `pnpm dlx shadcn add @reui/<name>` (D-16). Существующие файлы перезаписываются ReUI-вариантами.
+- **`apps/admin-web/src/shared/ui/data-grid.tsx`** — NEW (`pnpm dlx shadcn add @reui/data-grid`) — для `ClientsTable`.
+- **`apps/admin-web/src/shared/ui/input-otp.tsx`** — NEW (`pnpm dlx shadcn add @reui/input-otp`) — для Telegram OTP в `TelegramLoginTab`.
 
 ### External docs (consulted)
 - TanStack Router docs — `createFileRoute` + `validateSearch` + `loader` + `loaderDeps` + pathless layout-routes (`_public.tsx`, `_protected.tsx`); typed search params; `redirect()` from `beforeLoad`.
 - TanStack Query v5 docs — `QueryCache`/`MutationCache` `onError` hooks; `ensureQueryData`; optimistic mutations pattern (`onMutate`/`onError`/`onSettled`); query key factory pattern (TkDodo).
-- shadcn/ui — `Dialog`, `AlertDialog`, `DropdownMenu`, `Form` (RHF integration), `Input`, `Button`, `Table`.
+- **ReUI registry (`https://reui.io/r/{style}/{name}.json`)** — primary UI source per D-13. shadcn-CLI compatible; namespaced via `@reui` в `components.json`. Style: `base-nova` (D-14). Используем Radix-варианты компонентов.
+- ReUI components в Phase 10: `Button`, `Input`, `Form`, `Label`, `DropdownMenu`, `Dialog`, `AlertDialog`, `DataGrid`, `InputOTP` (D-16).
+- shadcn/ui (legacy primitives оставшиеся после миграции D-17) — `Sidebar` и AppShell-внутренние компоненты остаются на текущем shadcn-стеке.
 - react-hook-form + Zod resolver — controlled forms with shared schema.
 
 </canonical_refs>
@@ -192,6 +229,11 @@ Phase 10 закрывает цикл "frontend ↔ backend" для **двух д
 - **URL-driven search/page через validateSearch + Zod** (D-10) — schema в самом маршруте, loader-deps для invalidation.
 - **AlertDialog confirm + RoleGate скрывает delete для reception** (D-11) — Reception для кнопки даже не получает DOM-узла.
 - **Полные mock-имплементации auth+clients** (D-12) — НЕ thin stubs. Faker.seed=42, latency, RBAC, persisted localStorage. RoleSwitcher продолжает работать в mock-mode.
+- **ReUI как primary registry** (D-13) — добавляется namespace `@reui` в `components.json`, style меняется на `base-nova`. Используются Radix-варианты ReUI.
+- **Style switch new-york → base-nova** (D-14) — primitives, мигрируемые через ReUI (Button, Input, Form, Label, DropdownMenu, Dialog, AlertDialog), визуально сдвинутся; AppShell-внутренние компоненты (Sidebar, ProfileMenu, RoleSwitcher) — нет (D-15).
+- **DataGrid вместо ручной @tanstack/react-table разметки** (D-16) — для `/clients`. Keys factory + optimistic mutations + URL-driven search/pagination остаются (D-09, D-10).
+- **InputOTP** (D-16) — для 6-значного Telegram-кода после `bound: true` (D-04).
+- **Lazy migration** (D-17) — Phase 10 НЕ мигрирует все shadcn-компоненты, только перечисленные в D-16.
 
 </specifics>
 
@@ -210,6 +252,8 @@ Phase 10 закрывает цикл "frontend ↔ backend" для **двух д
 - **Rate-limit (429) UX на /login** — Phase 5 определяет 6-я попытка → 429. Базовый UX (toast "Слишком много попыток, попробуйте через {N} секунд") — Claude discretion в Phase 10. Фичу "блокировка формы с countdown timer" — deferred.
 - **Phone input mask library decision** — Claude discretion в planner; если решит ввести зависимость — deferred к согласованию.
 - **DataTable virtualization** — ~30 mock-клиентов не требуют. Если в продакшне зал вырастет (>1000 клиентов) — backlog.
+- **Migration остальных shadcn-компонентов на ReUI** (Card, Badge, Avatar, Tabs, Tooltip, etc., Sidebar — отсутствует у ReUI) — lazy, по мере необходимости в последующих phase'ах (D-17).
+- **ReUI Pro компоненты** — open-source часть достаточна для Phase 10. Pro-tier не рассматриваем.
 
 </deferred>
 
