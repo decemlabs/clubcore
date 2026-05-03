@@ -90,13 +90,31 @@ async function parseErrorBody(
 
 export interface RequestInitWithBody extends Omit<RequestInit, 'method' | 'body'> {
   body?: unknown
+  /**
+   * Path-parameter values for templated `paths` keys (e.g. `{client_id}`).
+   * Each value is `encodeURIComponent`-escaped before being substituted into
+   * the URL. A missing key throws `ApiError('client_error', ...)` so the
+   * failure is loud, not silent.
+   */
+  params?: Record<string, string | number>
+}
+
+function interpolatePath(path: string, params?: Record<string, string | number>): string {
+  if (!path.includes('{')) return path
+  return path.replace(/\{(\w+)\}/g, (_, key: string) => {
+    const v = params?.[key]
+    if (v === undefined) {
+      throw new ApiError('client_error', `Missing path param '${key}' for ${path}`)
+    }
+    return encodeURIComponent(String(v))
+  })
 }
 
 export async function request<
   P extends keyof paths,
   M extends keyof paths[P] & string,
 >(method: M, path: P, init?: RequestInitWithBody): Promise<unknown> {
-  const url = path as unknown as string
+  const url = interpolatePath(path as unknown as string, init?.params)
   const upper = (method as string).toUpperCase()
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -112,8 +130,14 @@ export async function request<
     if (csrf) headers['X-CSRF-Token'] = csrf
     // D-11: missing-cookie → still send; server returns 403 csrf_mismatch via standard error path.
   }
+  // Strip `params` (and the existing `body` rebind) from the RequestInit spread —
+  // they are not recognized by fetch().
+  const { params: _params, body: _body, headers: _headers, ...restInit } = init ?? {}
+  void _params
+  void _body
+  void _headers
   const baseInit: RequestInit = {
-    ...init,
+    ...restInit,
     method: upper,
     credentials: 'include',
     headers,
