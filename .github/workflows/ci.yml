@@ -52,9 +52,16 @@ jobs:
 
       # D-02 / API-02: any Pydantic schema change that did not regenerate
       # apps/backend/openapi.json fails this step.
+      #
+      # WR-06: assert the file is tracked before diffing. `git diff --exit-code`
+      # silently passes (exit 0) when the path is untracked or gitignored, so
+      # without `git ls-files --error-unmatch` a misconfiguration could turn
+      # the drift gate into a no-op.
       - name: Drift gate — apps/backend/openapi.json
         working-directory: ${{ github.workspace }}
-        run: git diff --exit-code apps/backend/openapi.json
+        run: |
+          git ls-files --error-unmatch apps/backend/openapi.json
+          git diff --exit-code apps/backend/openapi.json
 
   frontend:
     name: Frontend (drift gates + statics)
@@ -97,5 +104,11 @@ jobs:
 
       # D-02 / API-07: any backend-schema change that did not regenerate
       # packages/api-client/src/schema.d.ts (locally + commit) fails here.
+      #
+      # WR-06: see comment on the backend drift gate above — assert tracked
+      # before diffing so an accidental gitignore does not silently disable
+      # the gate.
       - name: Drift gate — packages/api-client/src/schema.d.ts
-        run: git diff --exit-code packages/api-client/src/schema.d.ts
+        run: |
+          git ls-files --error-unmatch packages/api-client/src/schema.d.ts
+          git diff --exit-code packages/api-client/src/schema.d.ts
