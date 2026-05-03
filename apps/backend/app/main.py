@@ -78,6 +78,13 @@ def create_app() -> FastAPI:
     # place where app.main reaches into app.modules.*. The importlinter
     # contract scopes source_modules=app.core, so app.main is intentionally
     # outside the scope.
+    #
+    # WR-05 (Phase 9 review): register_user_loader is idempotent by design —
+    # see app/core/dependencies.py:54-61. Re-registering replaces the slot,
+    # which is intentional so tests can inject a stub loader through
+    # create_app(). Calling it on every create_app() (per-test, per-export)
+    # is therefore safe; the export script never enters lifespan and tests
+    # use the slot to swap in fakes deterministically.
     register_user_loader(load_user_by_id)
 
     app.include_router(api)
