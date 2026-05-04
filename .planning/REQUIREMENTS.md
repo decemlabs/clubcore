@@ -95,7 +95,7 @@ This milestone delivers the first business slice on top of the v1.0 skeleton: tw
 ### Frontend Wiring (admin-web)
 
 - [x] **FE-01**: `apps/admin-web/src/shared/api/services/http/auth.ts` and `http/clients.ts` implement the existing service contracts using `@sportzal/api-client`; mock services for other domains remain untouched
-- [ ] **FE-02**: `apps/admin-web/src/features/auth/*` provides a `/login` route with two tabs (email/password, Telegram OTP); the Telegram tab polls the status endpoint and prompts for the code once the chat is bound
+- [x] **FE-02**: `apps/admin-web/src/features/auth/*` provides a `/login` route with two tabs (email/password, Telegram OTP); the Telegram tab polls the status endpoint and prompts for the code once the chat is bound
 - [x] **FE-03**: `VITE_API_MODE=http` is wired only for `/login` and `/clients/*` routes via the existing swap seam; running `VITE_API_MODE=mock` keeps the legacy mock behavior for those routes (no regression)
 - [x] **FE-04**: TanStack Query hooks for clients use a `clientsKeys` factory; route loaders call `queryClient.ensureQueryData` with the same keys; mutations use `onMutate`/`onError`/`onSettled` for optimistic updates with rollback
 - [x] **FE-05**: On 401 the fetch wrapper attempts a single-flight refresh; on refresh failure it redirects to `/login?next=<encoded-from>` (one-shot module flag prevents redirect loops); successful login restores the original location
@@ -230,7 +230,7 @@ REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 | API-06 | Phase 9 | Pending |
 | API-07 | Phase 9 | Pending |
 | FE-01 | Phase 10 | Complete |
-| FE-02 | Phase 10 | Pending |
+| FE-02 | Phase 10 | Complete |
 | FE-03 | Phase 10 | Complete |
 | FE-04 | Phase 10 | Complete |
 | FE-05 | Phase 10 | Complete |

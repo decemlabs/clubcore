@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-05-04T13:30:32.435Z"
+stopped_at: Completed 10-05-PLAN.md
+last_updated: "2026-05-04T13:41:00Z"
 last_activity: 2026-05-04
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 48
-  completed_plans: 45
-  percent: 94
+  completed_plans: 47
+  percent: 98
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 ## Current Position
 
 Phase: 10 (admin-web-auth-clients-wiring) — EXECUTING
-Plan: 4 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-05-04
 
@@ -62,6 +62,7 @@ Last activity: 2026-05-04
 *Updated after each plan completion*
 | Phase 10 P03 | 196 | 2 tasks | 7 files |
 | Phase 10 P04 | 6 | 3 tasks | 12 files |
+| Phase 10 P05 | 9 | 3 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase ?]: HTTP methods lowercase for openapi paths type compliance; fetcher uppercases internally
 - [Phase ?]: Lazy dynamic import in redirect-on-session-expired breaks queryClient<->router circular dep
 - [Phase ?]: useCurrentRole hook unifies role source: mock=Zustand, http=TanStack Query cache, both branch on API_MODE
+- [Phase 10 P05]: Tabs primitive: standard shadcn tabs installed as fallback — ReUI tabs 404'd from base-nova registry; uses @base-ui/react
+- [Phase 10 P05]: base-ui tabs use aria-selected=true for active tab (not data-state=active like Radix); tests adapted
+- [Phase 10 P05]: Test files need import/no-restricted-paths exemption for mock DB access in test setup
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-04T13:30:32.431Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-05-04T13:41:00Z
+Stopped at: Completed 10-05-PLAN.md
 Resume file: None
