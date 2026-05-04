@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
-stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
-last_updated: "2026-05-04T19:53:02.939Z"
-last_activity: 2026-05-04 -- Phase 11 execution started
+stopped_at: Completed Phase 11 (clients-http-shape-adapter) — VERIFIED passed; SC #4 deferred to Phase 12.1
+last_updated: "2026-05-04T20:30:00.000Z"
+last_activity: 2026-05-04 -- Phase 11 verified passed, SC #4 deferred to Phase 12.1
 progress:
-  total_phases: 11
-  completed_phases: 7
-  total_plans: 51
-  completed_plans: 49
+  total_phases: 14
+  completed_phases: 8
+  total_plans: 53
+  completed_plans: 51
   percent: 96
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 11 — clients-http-shape-adapter
+**Current focus:** Phase 12 — v1.1 Verification Backfill (next)
 
 ## Current Position
 
-Phase: 11 (clients-http-shape-adapter) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 11
-Last activity: 2026-05-04 -- Phase 11 execution started
+Phase: 11 (clients-http-shape-adapter) — COMPLETE & VERIFIED
+Plan: 2 of 2 (both plans executed; SC #4 deferred to Phase 12.1)
+Status: Ready to execute Phase 12 or Phase 12.1
+Last activity: 2026-05-04 -- Phase 11 verified passed (9/9 must-haves)
 
 ## Performance Metrics
 
