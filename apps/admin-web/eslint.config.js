@@ -127,6 +127,7 @@ export default tseslint.config(
       'src/shared/ui/alert-dialog.tsx',
       'src/shared/ui/data-grid.tsx',
       'src/shared/ui/input-otp.tsx',
+      'src/shared/ui/tabs.tsx',
       // ReUI DataGrid multi-file component (radix-nova style, co-locates variant exports)
       'src/components/reui/**/*.tsx',
     ],
