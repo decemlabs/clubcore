@@ -23,8 +23,8 @@ const raw = readFileSync(resolve(__dirname, '../../../components.json'), 'utf8')
 const json = JSON.parse(raw) as ComponentsJson
 
 describe('components.json lock', () => {
-  it('uses the new-york style and neutral base color', () => {
-    expect(json.style).toBe('new-york')
+  it('uses the base-nova style and neutral base color', () => {
+    expect(json.style).toBe('base-nova')
     expect(json.tailwind.baseColor).toBe('neutral')
   })
 
