@@ -1,0 +1,24 @@
+# Root-level ignores for the Sportzal monorepo.
+# Per-app rules live in apps/*/.gitignore — keep this file for cross-cutting noise only.
+
+# macOS Finder metadata
+.DS_Store
+
+# Editor / IDE
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Root-level dependency caches (per-app caches are covered by the per-app .gitignore files)
+node_modules/
+
+# Claude Code per-project installation (GSD agents/hooks/settings — user-specific, auto-generated)
+.claude/
+
+# Logs
+*.log
+pnpm-debug.log*
+yarn-debug.log*
+npm-debug.log*
