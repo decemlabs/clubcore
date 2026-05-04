@@ -101,6 +101,21 @@ export default tseslint.config(
     },
   },
   {
+    // FE-07: raw fetch() banned outside the http transport layer
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/shared/api/services/http/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='fetch']",
+          message:
+            'Use @sportzal/api-client.request<P,M> instead of raw fetch(). Direct fetch is allowed only inside src/shared/api/services/http/**.',
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': 'off',

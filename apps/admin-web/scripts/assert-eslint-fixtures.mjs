@@ -19,6 +19,7 @@ const EXPECTED = [
   { file: 'src/__fixtures/raw-palette.tsx', rule: 'no-restricted-syntax' },
   { file: 'src/__fixtures/features/illegal-mock-import.ts', rule: 'import/no-restricted-paths' },
   { file: 'src/__fixtures/api-mode-leak.ts', rule: 'no-restricted-syntax' },
+  { file: 'src/__fixtures/raw-fetch-leak.ts', rule: 'no-restricted-syntax' },
 ]
 
 const eslint = new ESLint({

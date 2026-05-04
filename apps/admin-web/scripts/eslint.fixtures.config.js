@@ -62,6 +62,11 @@ export default tseslint.config(
           selector: "MemberExpression[property.name='VITE_API_MODE']",
           message: 'Read VITE_API_MODE only via @/shared/api/config/env (single chokepoint).',
         },
+        {
+          selector: "CallExpression[callee.name='fetch']",
+          message:
+            'Use @sportzal/api-client.request<P,M> instead of raw fetch(). Direct fetch is allowed only inside src/shared/api/services/http/**.',
+        },
       ],
     },
   },
