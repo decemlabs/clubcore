@@ -1,4 +1,6 @@
-import { useSessionStore } from '@/shared/session/store'
+import { useMutation } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { LogOut } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import {
@@ -10,11 +12,28 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { t } from '@/shared/i18n'
+import { useCurrentRole } from '@/shared/session'
+import { services } from '@/shared/api/services'
+import { queryClient } from '@/app/queryClient'
 
 export function ProfileMenu() {
-  const role = useSessionStore((s) => s.role)
+  const role = useCurrentRole()
+  const navigate = useNavigate()
   const initials = role === 'owner' ? 'ВЛ' : 'РЦ'
   const label = role === 'owner' ? t('shell.roleSwitch.owner') : t('shell.roleSwitch.reception')
+
+  const logout = useMutation({
+    mutationFn: () => services.auth.logout(),
+    onSuccess: () => {
+      queryClient.clear()
+      void navigate({ to: '/login', replace: true })
+    },
+    onError: () => {
+      // Even on failure, clear local cache + navigate so the operator can retry login.
+      queryClient.clear()
+      void navigate({ to: '/login', replace: true })
+    },
+  })
 
   return (
     <DropdownMenu>
@@ -26,14 +45,18 @@ export function ProfileMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{label}</span>
-            <span className="text-muted-foreground text-xs">{t('shell.profile.demoMode')}</span>
-          </div>
-        </DropdownMenuLabel>
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>{t('shell.profile.logout')}</DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            logout.mutate()
+          }}
+          disabled={logout.isPending}
+        >
+          <LogOut className="mr-2 size-4" />
+          {t('shell.profile.logout')}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
