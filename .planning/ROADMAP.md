@@ -18,7 +18,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 
 </details>
 
-### 🚧 v1.1 Auth + Clients (Phases 4-10)
+### 🚧 v1.1 Auth + Clients (Phases 4-14)
 
 - [ ] **Phase 4: Auth Foundations & Cookie/RBAC Primitives** — Lift JWT/Argon2/cookie/RBAC primitives into `core`, set Alembic naming convention, flip pagination contract, rename `members` → `clients`
 - [ ] **Phase 5: User Schema + Email/Password Auth** — First business migration; `/auth/login|refresh|logout|logout-all|me` end-to-end with refresh-rotation family + Redis sessions
@@ -27,6 +27,10 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [ ] **Phase 8: Clients Module + Audit Log** — First business CRUD with soft-delete partial unique index, ILIKE/`pg_trgm` search, owner-only delete, `audit_log` writes from auth + clients
 - [ ] **Phase 9: OpenAPI Pipeline + packages/api-client** — Lifespan-safe OpenAPI export, CI drift gate, `openapi-typescript` codegen, hand-rolled `fetcher.ts` with single-flight refresh + typed `ApiError`
 - [x] **Phase 10: admin-web Auth + Clients Wiring** — `VITE_API_MODE=http` for `/login` + `/clients/*` only; Telegram + email/password tabs; ESLint ban on raw `fetch(`; redirect-back + 401-loop guard (completed 2026-05-04)
+- [ ] **Phase 11: Clients HTTP-mode Shape Adapter** *(gap closure — must)* — DTO mappers `ClientResponse ↔ Client` and `ClientCreate/UpdateInput ↔ ClientCreate/UpdateRequest` so `VITE_API_MODE=http` clients flow actually works against the live backend (closes INTEGRATION-CHECK F-01, F-02)
+- [ ] **Phase 12: v1.1 Verification Backfill** *(gap closure — should)* — Produce `09-VERIFICATION.md`, refresh `10-VERIFICATION.md`, run Phase 6 live RBAC integration tests on Postgres+Redis, take Phase 8 CR-01 acceptance decision
+- [ ] **Phase 13: v1.1 Minor Drift & Hygiene Cleanup** *(gap closure — should)* — Drop dead `expiresAt` from Telegram contracts, replace `as never` query-string casts with typed `query` param in api-client, delete empty `app/modules/members/`, add `TELEGRAM_BOT_*` safe defaults, add vitest to `@sportzal/api-client`, refresh REQUIREMENTS.md `Pending → Complete`, backfill SUMMARY frontmatter (closes F-03, F-04, F-06 + procedural debt)
+- [ ] **Phase 14: Clients Search PII Hardening** *(gap closure — should, security)* — LIKE-escape `%`/`_`/`\` in `clients.list_alive` ILIKE pattern, with regression test that `?q=%25` matches the literal `%` and not the wildcard (closes Phase 8 CR-01 PII security warning)
 
 ## Phase Details
 
@@ -152,6 +156,64 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 **Plans**: TBD
 **UI hint**: yes
 
+### Phase 11: Clients HTTP-mode Shape Adapter
+**Goal**: Make Phase 10's success criterion #2 ("`VITE_API_MODE=http` lists/searches/creates/edits/deletes clients via `@sportzal/api-client`") actually true on a running backend. Today the FE `Client` domain type and create/update inputs were never reconciled with the backend `ClientResponse` / `ClientCreateRequest` shapes — every list row reads `client.fullName === undefined`, every create returns 422 (`birthDate` is unknown under `extra="forbid"`), and the optimistic-update path crashes on `undefined.split(' ')`.
+**Depends on**: Phase 10
+**Gap closure**: Closes INTEGRATION-CHECK findings F-01 (BLOCKER) and F-02 (BLOCKER)
+**Requirements**: CLIENTS-01, CLIENTS-05, CLIENTS-06, CLIENTS-07, FE-01, FE-04 (in `VITE_API_MODE=http`)
+**Success Criteria** (what must be TRUE):
+  1. `apps/admin-web/src/shared/api/services/http/clients.ts` adapts every `ClientResponse` from the backend into the FE `Client` shape: `fullName` is composed from `lastName + firstName + middleName` (single space separators, trimmed), `birthDate` is renamed from backend `birthday`, and the FE-only fields not present in `ClientResponse` are populated as `undefined` rather than missing.
+  2. The same http impl converts FE `ClientCreateInput` / `ClientUpdateInput` to backend `ClientCreateRequest` / `ClientUpdateRequest` before sending: `fullName` is split into `lastName/firstName/middleName` (≥2 tokens required, third+ tokens collapse into `middleName`), `birthDate` is renamed to `birthday`, and empty-string fields (`email`, `notes`, `birthDate`, etc.) are omitted from the request body so the backend's `extra="forbid"` + `EmailStr` validators do not fail.
+  3. `useUpdateClient`'s optimistic-update path no longer relies on splitting `current.fullName` by space — it either re-derives `fullName` only when create-input fields change, or falls back to a stable name source that is always defined for live backend rows.
+  4. A live E2E walkthrough against `docker-compose up` + `pnpm -F admin-web dev` with `VITE_API_MODE=http` lists clients (real names visible, not `undefined`), creates a client (returns 201, shows in list), edits the client (returns 200, table reflects), and deletes as owner (returns 204) — all without surfacing `TypeError: Cannot read properties of undefined` or `422 Unprocessable Entity` in the network tab.
+  5. Existing `VITE_API_MODE=mock` flow regresses zero tests in `pnpm -F admin-web test`.
+**Plans**: TBD
+**UI hint**: no (data adapter, not UI)
+
+### Phase 12: v1.1 Verification Backfill
+**Goal**: Close the procedural verification gaps that prevented `/gsd-audit-milestone v1.1` from passing without inventing new code work. This phase produces missing verification artifacts and runs the live CI sweeps that human-needed phases were waiting on, so the v1.1 audit can flip to `passed`.
+**Depends on**: Phase 11 (so `10-VERIFICATION.md` reflects the http-mode fix as well)
+**Gap closure**: Closes MILESTONE-AUDIT findings (Phase 9 missing VERIFICATION.md, Phase 10 stale `gaps_found`, Phase 6 + 8 `human_needed`)
+**Requirements**: API-01, API-02, API-05, API-06, API-07 (Phase 9 partials → satisfied with artifact), no new REQ-IDs
+**Success Criteria**:
+  1. `.planning/phases/09-openapi-pipeline-api-client/09-VERIFICATION.md` exists, status `passed`, with each Phase 9 success criterion mapped to file/line evidence aggregated from UAT.md + REVIEW-FIX.md.
+  2. `.planning/phases/10-admin-web-auth-clients-wiring/10-VERIFICATION.md` re-rendered with status `passed`, citing the post-fix state of `components-json.test.ts` (asserts `'base-nova'`) plus the Phase 11 http-mode evidence.
+  3. Phase 6 RBAC integration tests run on a live Postgres+Redis CI host (or a documented local equivalent): `cd apps/backend && uv run pytest tests/integration/auth/test_logout.py tests/integration/rbac/test_owner_only.py -v` exits green; results appended to `06-VERIFICATION.md` body and frontmatter status flipped from `human_needed` to `passed`.
+  4. Phase 8 `human_needed` resolved: either CR-01 (ILIKE wildcard escape) is accepted with a documented warning in `08-VERIFICATION.md` and tracked as Phase 14, OR the audit is updated to reflect that Phase 14 owns the closure. CR-02 (rollback inside service) accept-or-fix decision recorded similarly.
+  5. Re-running `/gsd-audit-milestone v1.1` after this phase produces an audit with `status: passed` (no `unverified_phases`, no `human_needed_phases`, no stale `gaps_found_phases`).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 13: v1.1 Minor Drift & Hygiene Cleanup
+**Goal**: Tidy the small contract-drift and metadata-rot items the audit surfaced — none individually block the milestone, but together they accumulate developer friction (dead types, casted `as never` query strings, stale traceability table, fresh-clone boot failures, REQUIREMENTS.md `Pending` rows that lie). Single phase keeps related cleanups in one commit chain.
+**Depends on**: Phase 11
+**Gap closure**: Closes INTEGRATION-CHECK F-03 (MINOR), F-04 (MINOR), F-06 (MINOR); closes Phase 9 UAT Gap 1 + Gap 2; refreshes REQUIREMENTS.md traceability and SUMMARY frontmatter omissions
+**Requirements**: No new REQ-IDs (housekeeping)
+**Success Criteria**:
+  1. `apps/admin-web/src/shared/api/contracts/auth.ts` no longer declares `expiresAt` on `TelegramStartResponse` or `TelegramStatusResponse` — both types match the backend's actual `{deepLinkUrl, deepLinkToken}` and `{bound}` shapes byte-for-byte.
+  2. `packages/api-client/src/fetcher.ts` `RequestInitWithBody` accepts a typed `query?: Record<string, string | number | boolean>` field; `apps/admin-web/src/shared/api/services/http/{auth,clients}.ts` use that field instead of building URLs by string concatenation and casting with `as never`. The TODO comment on the cast is removed.
+  3. `apps/backend/app/modules/members/` is deleted from the working tree (including stale `__pycache__`); `import-linter` stays GREEN; `Phase 4 INFRA-05` no longer has the "stale dir contradicts SUMMARY" footnote.
+  4. `apps/backend/app/core/config.py` (or `.env.example`) provides safe-default values for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` so a fresh-clone developer can run `docker-compose up` + `pnpm -F admin-web dev` with `VITE_API_MODE=http` without setting bot env vars first; the bot worker still warns/exits cleanly when the token is the placeholder.
+  5. `packages/api-client/` has a working test runner (vitest), the throwaway test that was used to verify CR-01/CR-02 fetcher fixes is committed as a permanent regression test, and the package has at least 1 `pnpm test` invocation in CI.
+  6. `.planning/REQUIREMENTS.md` traceability table reflects reality: 63 stale `Pending` rows for v1.1 REQs flip to `Complete` (or to `Phase 11/13/14` for the few that gap-closure phases touch); coverage count at the top of the file matches.
+  7. SUMMARY.md frontmatter `requirements-completed:` arrays in Phase 04, 05, 06, 08 are backfilled to list every REQ-ID those phases closed (currently 4 + 12 + 4 + 1 = 21 missing entries per the audit) so the next audit's 3-source check sees consistent records.
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 14: Clients Search PII Hardening
+**Goal**: Close the Phase 8 CR-01 security warning. Today `clients.list_alive(q=...)` interpolates the user-supplied search term directly into an ILIKE pattern with no escaping of the SQL `LIKE` metacharacters `%`, `_`, or `\`. A reception user searching `"%"` returns the entire client roster (PII over-exposure). This phase escapes those metacharacters and locks the behaviour with a regression test.
+**Depends on**: Phase 12 (so the human_needed flag on Phase 8 is resolved before adding new tests against that surface)
+**Gap closure**: Closes Phase 8 CR-01 (PII security warning)
+**Requirements**: CLIENTS-04 (search semantics, hardened)
+**Success Criteria**:
+  1. `apps/backend/app/modules/clients/repository.py` `list_alive` (or whatever helper builds the ILIKE pattern) escapes `%`, `_`, and `\` in the user-supplied `q` value before wrapping it as `%{q}%`. The escape is opt-out only via an explicit caller flag (no caller currently sets it).
+  2. A regression test in `apps/backend/tests/integration/clients/test_search.py` (or sibling) confirms: searching `?q=%25` (URL-encoded `%`) returns ZERO rows when no client name literally contains `%`; previously it returned all rows.
+  3. The same test confirms `?q=_test_` matches a client with `_test_` literally in the name and does NOT match a client with `atest`-pattern names (i.e. `_` no longer functions as a single-character wildcard).
+  4. No regression on existing search behaviour: substring matches on plain alphanumeric queries still hit (`q=Иванов` returns the Ivanov family).
+  5. `08-VERIFICATION.md` CR-01 entry is updated to status `resolved` with a back-reference to this phase's commits.
+**Plans**: TBD
+**UI hint**: no
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status   | Completed  |
@@ -166,6 +228,10 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 8. Clients Module + Audit Log | v1.1 | 0/8 | Not started | — |
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
 | 10. admin-web Auth + Clients Wiring | v1.1 | 8/8 | Complete   | 2026-05-04 |
+| 11. Clients HTTP-mode Shape Adapter | v1.1 | 0/TBD | Not started | — |
+| 12. v1.1 Verification Backfill | v1.1 | 0/TBD | Not started | — |
+| 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 0/TBD | Not started | — |
+| 14. Clients Search PII Hardening | v1.1 | 0/TBD | Not started | — |
 
 ## Coverage Report
 

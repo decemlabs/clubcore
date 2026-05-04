@@ -210,13 +210,13 @@ REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 | RBAC-03 | Phase 6 | Pending |
 | RBAC-04 | Phase 6 | Pending |
 | RBAC-05 | Phase 6 | Pending |
-| CLIENTS-01 | Phase 8 | Pending |
+| CLIENTS-01 | Phase 8, 11 | Pending |
 | CLIENTS-02 | Phase 8 | Pending |
 | CLIENTS-03 | Phase 8 | Pending |
-| CLIENTS-04 | Phase 8 | Pending |
-| CLIENTS-05 | Phase 8 | Pending |
-| CLIENTS-06 | Phase 8 | Pending |
-| CLIENTS-07 | Phase 8 | Pending |
+| CLIENTS-04 | Phase 8, 14 | Pending |
+| CLIENTS-05 | Phase 8, 11 | Pending |
+| CLIENTS-06 | Phase 8, 11 | Pending |
+| CLIENTS-07 | Phase 8, 11 | Pending |
 | CLIENTS-08 | Phase 8 | Pending |
 | CLIENTS-09 | Phase 8 | Pending |
 | AUDIT-01 | Phase 8 | Pending |
@@ -229,10 +229,10 @@ REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 | API-05 | Phase 9 | Pending |
 | API-06 | Phase 9 | Pending |
 | API-07 | Phase 9 | Pending |
-| FE-01 | Phase 10 | Complete |
+| FE-01 | Phase 10, 11 | Pending |
 | FE-02 | Phase 10 | Complete |
 | FE-03 | Phase 10 | Complete |
-| FE-04 | Phase 10 | Complete |
+| FE-04 | Phase 10, 11 | Pending |
 | FE-05 | Phase 10 | Complete |
 | FE-06 | Phase 10 | Complete |
 | FE-07 | Phase 10 | Complete |
