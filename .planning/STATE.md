@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
 stopped_at: Phase 10 UI-SPEC approved
-last_updated: "2026-05-04T12:20:58.826Z"
-last_activity: 2026-05-04 -- Phase 10 planning complete
+last_updated: "2026-05-04T13:13:31.928Z"
+last_activity: 2026-05-04
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 48
-  completed_plans: 41
-  percent: 85
+  completed_plans: 43
+  percent: 90
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 09 — openapi-pipeline-api-client
+**Current focus:** Phase 10 — admin-web-auth-clients-wiring
 
 ## Current Position
 
-Phase: 09 (openapi-pipeline-api-client) — EXECUTING
-Plan: 1 of 3
+Phase: 10 (admin-web-auth-clients-wiring) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-05-04 -- Phase 10 planning complete
+Last activity: 2026-05-04
 
 ## Performance Metrics
 
@@ -108,6 +108,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-03T20:03:44.351Z
+Last session: 2026-05-04T13:13:31.924Z
 Stopped at: Phase 10 UI-SPEC approved
-Resume file: .planning/phases/10-admin-web-auth-clients-wiring/10-UI-SPEC.md
+Resume file: None
