@@ -99,8 +99,8 @@ This milestone delivers the first business slice on top of the v1.0 skeleton: tw
 - [x] **FE-03**: `VITE_API_MODE=http` is wired only for `/login` and `/clients/*` routes via the existing swap seam; running `VITE_API_MODE=mock` keeps the legacy mock behavior for those routes (no regression)
 - [x] **FE-04**: TanStack Query hooks for clients use a `clientsKeys` factory; route loaders call `queryClient.ensureQueryData` with the same keys; mutations use `onMutate`/`onError`/`onSettled` for optimistic updates with rollback
 - [x] **FE-05**: On 401 the fetch wrapper attempts a single-flight refresh; on refresh failure it redirects to `/login?next=<encoded-from>` (one-shot module flag prevents redirect loops); successful login restores the original location
-- [ ] **FE-06**: Logout clears the TanStack Query cache and redirects to `/login`
-- [ ] **FE-07**: ESLint rule bans direct `fetch(` outside `packages/api-client/src/` and `apps/admin-web/src/shared/api/services/http/`; a negative-test fixture keeps the rule honest
+- [x] **FE-06**: Logout clears the TanStack Query cache and redirects to `/login`
+- [x] **FE-07**: ESLint rule bans direct `fetch(` outside `packages/api-client/src/` and `apps/admin-web/src/shared/api/services/http/`; a negative-test fixture keeps the rule honest
 
 ### Tests
 
@@ -234,8 +234,8 @@ REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 | FE-03 | Phase 10 | Complete |
 | FE-04 | Phase 10 | Complete |
 | FE-05 | Phase 10 | Complete |
-| FE-06 | Phase 10 | Pending |
-| FE-07 | Phase 10 | Pending |
+| FE-06 | Phase 10 | Complete |
+| FE-07 | Phase 10 | Complete |
 | TEST-01 | Phase 5 | Pending |
 | TEST-02 | Phase 5 | Pending |
 | TEST-03 | Phase 7 | Pending |

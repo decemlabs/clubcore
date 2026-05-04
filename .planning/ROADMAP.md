@@ -26,7 +26,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [ ] **Phase 7: Telegram OTP Channel** — Standalone bot worker (ptb 22 long-polling), deep-link + 6-digit OTP flow, ARQ send-OTP task, DM-blocked → 409 path
 - [ ] **Phase 8: Clients Module + Audit Log** — First business CRUD with soft-delete partial unique index, ILIKE/`pg_trgm` search, owner-only delete, `audit_log` writes from auth + clients
 - [ ] **Phase 9: OpenAPI Pipeline + packages/api-client** — Lifespan-safe OpenAPI export, CI drift gate, `openapi-typescript` codegen, hand-rolled `fetcher.ts` with single-flight refresh + typed `ApiError`
-- [ ] **Phase 10: admin-web Auth + Clients Wiring** — `VITE_API_MODE=http` for `/login` + `/clients/*` only; Telegram + email/password tabs; ESLint ban on raw `fetch(`; redirect-back + 401-loop guard
+- [x] **Phase 10: admin-web Auth + Clients Wiring** — `VITE_API_MODE=http` for `/login` + `/clients/*` only; Telegram + email/password tabs; ESLint ban on raw `fetch(`; redirect-back + 401-loop guard (completed 2026-05-04)
 
 ## Phase Details
 
@@ -165,7 +165,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 7. Telegram OTP Channel | v1.1 | 0/8 | Not started | — |
 | 8. Clients Module + Audit Log | v1.1 | 0/8 | Not started | — |
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
-| 10. admin-web Auth + Clients Wiring | v1.1 | 6/7 | In Progress|  |
+| 10. admin-web Auth + Clients Wiring | v1.1 | 7/7 | Complete   | 2026-05-04 |
 
 ## Coverage Report
 
