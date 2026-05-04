@@ -120,6 +120,15 @@ export default tseslint.config(
       'src/shared/ui/separator.tsx',
       'src/shared/ui/skeleton.tsx',
       'src/shared/ui/input.tsx',
+      // ReUI primitives installed in Phase 10 (D-16)
+      'src/shared/ui/form.tsx',
+      'src/shared/ui/label.tsx',
+      'src/shared/ui/dialog.tsx',
+      'src/shared/ui/alert-dialog.tsx',
+      'src/shared/ui/data-grid.tsx',
+      'src/shared/ui/input-otp.tsx',
+      // ReUI DataGrid multi-file component (radix-nova style, co-locates variant exports)
+      'src/components/reui/**/*.tsx',
     ],
     rules: {
       'react-refresh/only-export-components': 'off',
