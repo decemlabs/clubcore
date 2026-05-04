@@ -104,6 +104,8 @@ export default tseslint.config(
     files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': 'off',
+      // Test setup code may need direct access to mock DB and service impls for fixtures/resets
+      'import/no-restricted-paths': 'off',
     },
   },
   {
