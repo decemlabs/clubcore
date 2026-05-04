@@ -6,7 +6,7 @@ const searchSchema = z.object({
   forbidden: z.string().optional(),
 })
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_protected/')({
   validateSearch: searchSchema,
   component: IndexPage,
 })

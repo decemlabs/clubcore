@@ -1,6 +1,5 @@
 import { createRootRouteWithContext, Outlet, ScrollRestoration } from '@tanstack/react-router'
 import { Suspense, lazy } from 'react'
-import { AppShell } from '@/shared/ui/app-shell'
 import type { RouterContext } from '@/app/router'
 
 const TanStackRouterDevtools = import.meta.env.DEV
@@ -22,9 +21,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootComponent() {
   return (
     <>
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      <Outlet />
       <ScrollRestoration />
       {import.meta.env.DEV && (
         <Suspense fallback={null}>
