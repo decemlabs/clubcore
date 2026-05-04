@@ -6,7 +6,10 @@ export const Route = createFileRoute('/_protected/finance')({
   beforeLoad: ({ context, location }) => {
     const { role } = context.getSession()
     if (!can(role, 'view', 'finance')) {
-      throw redirect({ to: '/', search: { forbidden: location.href } })
+      throw redirect({
+        to: '/',
+        search: { forbidden: location.pathname + (location.search ?? '') },
+      })
     }
   },
   component: FinancePage,

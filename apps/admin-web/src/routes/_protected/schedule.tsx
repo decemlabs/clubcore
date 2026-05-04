@@ -6,7 +6,10 @@ export const Route = createFileRoute('/_protected/schedule')({
   beforeLoad: ({ context, location }) => {
     const { role } = context.getSession()
     if (!can(role, 'view', 'schedule')) {
-      throw redirect({ to: '/', search: { forbidden: location.href } })
+      throw redirect({
+        to: '/',
+        search: { forbidden: location.pathname + (location.search ?? '') },
+      })
     }
   },
   component: SchedulePage,

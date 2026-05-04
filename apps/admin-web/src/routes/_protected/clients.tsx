@@ -16,7 +16,10 @@ export const Route = createFileRoute('/_protected/clients')({
   beforeLoad: ({ context, location }) => {
     const { role } = context.getSession()
     if (!can(role, 'view', 'clients')) {
-      throw redirect({ to: '/', search: { forbidden: location.href } })
+      throw redirect({
+        to: '/',
+        search: { forbidden: location.pathname + (location.search ?? '') },
+      })
     }
   },
   loaderDeps: ({ search }) => ({ search }),
