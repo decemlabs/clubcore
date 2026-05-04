@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: complete
 phase: 10-admin-web-auth-clients-wiring
 source:
   - 10-01-SUMMARY.md
@@ -9,10 +9,12 @@ source:
   - 10-05-SUMMARY.md
   - 10-06-SUMMARY.md
   - 10-07-SUMMARY.md
+  - 10-08-SUMMARY.md
 started: 2026-05-04T20:30:00Z
-updated: 2026-05-04T21:05:00Z
-verifier: Claude (chrome-devtools MCP, headless)
+updated: 2026-05-04T18:35:00Z
+verifier: Claude (chrome-devtools MCP, dev server localhost:5179)
 dev_url: http://localhost:5179
+re_verification: "Test 8 re-tested 2026-05-04T18:35Z after Plan 10-08 — gap resolved"
 ---
 
 ## Current Test
@@ -90,29 +92,20 @@ note: |
 expected: |
   Reception role → переход на /finance, /settings → редирект на /?forbidden=<path> с
   сообщением "Доступ запрещён: <path>".
-result: issue
-reported: |
-  /finance и /settings вместо редиректа крашат с TypeError: "Cannot convert object to primitive value"
-  (на странице красная ошибка "Something went wrong! Cannot convert object to primitive value",
-  React error boundary ловит). Sidebar фильтруется правильно (Финансы/Настройки скрыты для
-  reception); /staff и /schedule доступны (они НЕ owner-only). Crash — регрессия от CR-01 фикса.
-severity: blocker
-root_cause: |
-  CR-01 fix заменил `location.href` на `location.pathname + (location.search ?? '')`
-  в beforeLoad. В TanStack Router `location.search` — это **парсенный объект**
-  (типа `{ page: 1, pageSize: 20 }`), не строка. Конкатенация объекта со строкой через `+`
-  вызывает `Symbol.toPrimitive`/`toString()` на объекте → TypeError, потому что у
-  ParsedLocation.search нет primitive coercion в этом контексте (или он бросает).
-artifacts:
-  - apps/admin-web/src/routes/_protected/finance.tsx:9
-  - apps/admin-web/src/routes/_protected/settings.tsx:9
-  - apps/admin-web/src/routes/_protected/schedule.tsx:9
-  - apps/admin-web/src/routes/_protected/staff.tsx:9
-  - apps/admin-web/src/routes/_protected/clients.tsx:19
-  - apps/admin-web/src/routes/_protected.tsx (тот же паттерн в http-mode 401-ветке)
-fix_options:
-  - "Использовать `location.href` (в TanStack Router это **относительный** href, без origin — был ошибочно отвергнут в CR-01 review как 'full URL включая origin'; на самом деле это `pathname + searchStr + hash`, что и есть нужный формат)."
-  - "Либо `location.pathname + (location.searchStr ?? '')` — searchStr это закодированная строка с лидирующим '?'."
+result: pass
+re_verified: 2026-05-04T18:35:00Z
+re_verifier: Claude (chrome-devtools MCP, dev server localhost:5179)
+fix_plan: 10-08
+note: |
+  После Plan 10-08 (commit 5e5324e: location.search → location.searchStr в 6 redirect-сайтах):
+  - GET /finance → 302 на /?forbidden=%2Ffinance, alert "Доступ запрещён: /finance" виден.
+  - GET /settings → 302 на /?forbidden=%2Fsettings, alert "Доступ запрещён: /settings" виден.
+  - GET /finance?page=2 → 302 на /?forbidden=%2Ffinance%3Fpage%3D2 (querystring сохранён через
+    searchStr).
+  - DevTools console: 0 errors. 3 неотносящихся warnings (ScrollRestoration deprecation × 2,
+    router-devtools package rename notice).
+  - React error boundary не сработал, "Cannot convert object to primitive value" не наблюдается.
+  - Sidebar для reception скрывает Финансы и Настройки (по-прежнему корректно).
 
 ### 9. Logout Flow
 expected: |
@@ -126,8 +119,8 @@ note: |
 ## Summary
 
 total: 9
-passed: 8
-issues: 1
+passed: 9
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -135,7 +128,10 @@ blocked: 0
 ## Gaps
 
 - truth: "Reception role accessing owner-only routes (/finance, /settings) should redirect to / with forbidden notice"
-  status: failed
+  status: resolved
+  resolved_by: 10-08
+  resolved_at: 2026-05-04T18:35:00Z
+  resolution_evidence: "Re-verified via chrome-devtools MCP against dev server localhost:5179: /finance and /settings redirect cleanly to /?forbidden=<encoded-path>, alert renders, console has 0 errors, no error boundary. Querystring preservation also confirmed via /finance?page=2 → /?forbidden=%2Ffinance%3Fpage%3D2."
   reason: "User reported via verifier: TypeError 'Cannot convert object to primitive value' instead of redirect — CR-01 fix introduced regression"
   severity: blocker
   test: 8
