@@ -19,3 +19,5 @@ export type {
   ClientId,
   Pagination,
 } from './clients'
+export { emailLoginSchema, telegramOtpSchema } from './authSchema'
+export type { EmailLoginFormInput, TelegramOtpFormInput } from './authSchema'

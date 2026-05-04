@@ -9,10 +9,7 @@ import type { Client, ClientId, Pagination } from '@/entities/client'
 import { DomainError } from '@/shared/api/errors'
 import { can } from '@/shared/session/can'
 import { useSessionStore } from '@/shared/session/store'
-import {
-  clientCreateSchema,
-  clientUpdateSchema,
-} from '@/features/clients/model/schema'
+import { clientCreateSchema, clientUpdateSchema } from '@/entities/client/schema'
 import { loadDB, saveDB } from './_db'
 import { delay } from './_latency'
 

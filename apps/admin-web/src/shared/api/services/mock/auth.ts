@@ -9,7 +9,7 @@ import type {
 } from '@/shared/api/contracts/auth'
 import { DomainError } from '@/shared/api/errors'
 import { useSessionStore } from '@/shared/session/store'
-import { emailLoginSchema } from '@/features/auth/model/schema'
+import { emailLoginSchema } from '@/shared/api/contracts/authSchema'
 import { delay } from './_latency'
 
 const MOCK_USER_ID = '00000000-0000-4000-8000-000000000001'

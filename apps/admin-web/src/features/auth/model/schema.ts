@@ -1,12 +1,14 @@
-import { z } from 'zod'
+// Schemas live in src/shared/api/contracts/authSchema.ts so mock services can
+// validate the same shape the form submits without crossing the features → shared
+// boundary in reverse.
+export {
+  emailLoginSchema,
+  telegramOtpSchema,
+  type EmailLoginFormInput,
+  type TelegramOtpFormInput,
+} from '@/shared/api/contracts/authSchema'
 
-export const emailLoginSchema = z.object({
-  email: z.string().email('Введите корректный email'),
-  password: z.string().min(1, 'Введите пароль'),
-})
-export type EmailLoginInput = z.infer<typeof emailLoginSchema>
+import type { EmailLoginFormInput, TelegramOtpFormInput } from '@/shared/api/contracts/authSchema'
 
-export const telegramOtpSchema = z.object({
-  code: z.string().regex(/^\d{6}$/, 'Введите 6-значный код'),
-})
-export type TelegramOtpInput = z.infer<typeof telegramOtpSchema>
+export type EmailLoginInput = EmailLoginFormInput
+export type TelegramOtpInput = TelegramOtpFormInput
