@@ -1,4 +1,4 @@
-import { ApiError } from '@sportzal/api-client'
+import { ApiError } from '@/shared/api/errors'
 import { queryClient } from '@/app/queryClient'
 
 let redirecting = false
