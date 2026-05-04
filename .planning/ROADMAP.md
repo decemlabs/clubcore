@@ -27,7 +27,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [ ] **Phase 8: Clients Module + Audit Log** — First business CRUD with soft-delete partial unique index, ILIKE/`pg_trgm` search, owner-only delete, `audit_log` writes from auth + clients
 - [ ] **Phase 9: OpenAPI Pipeline + packages/api-client** — Lifespan-safe OpenAPI export, CI drift gate, `openapi-typescript` codegen, hand-rolled `fetcher.ts` with single-flight refresh + typed `ApiError`
 - [x] **Phase 10: admin-web Auth + Clients Wiring** — `VITE_API_MODE=http` for `/login` + `/clients/*` only; Telegram + email/password tabs; ESLint ban on raw `fetch(`; redirect-back + 401-loop guard (completed 2026-05-04)
-- [ ] **Phase 11: Clients HTTP-mode Shape Adapter** *(gap closure — must)* — DTO mappers `ClientResponse ↔ Client` and `ClientCreate/UpdateInput ↔ ClientCreate/UpdateRequest` so `VITE_API_MODE=http` clients flow actually works against the live backend (closes INTEGRATION-CHECK F-01, F-02)
+- [x] **Phase 11: Clients HTTP-mode Shape Adapter** *(gap closure — must)* — DTO mappers `ClientResponse ↔ Client` and `ClientCreate/UpdateInput ↔ ClientCreate/UpdateRequest` so `VITE_API_MODE=http` clients flow actually works against the live backend (closes INTEGRATION-CHECK F-01, F-02) (completed 2026-05-04)
 - [ ] **Phase 12: v1.1 Verification Backfill** *(gap closure — should)* — Produce `09-VERIFICATION.md`, refresh `10-VERIFICATION.md`, run Phase 6 live RBAC integration tests on Postgres+Redis, take Phase 8 CR-01 acceptance decision
 - [ ] **Phase 13: v1.1 Minor Drift & Hygiene Cleanup** *(gap closure — should)* — Drop dead `expiresAt` from Telegram contracts, replace `as never` query-string casts with typed `query` param in api-client, delete empty `app/modules/members/`, add `TELEGRAM_BOT_*` safe defaults, add vitest to `@sportzal/api-client`, refresh REQUIREMENTS.md `Pending → Complete`, backfill SUMMARY frontmatter (closes F-03, F-04, F-06 + procedural debt)
 - [ ] **Phase 14: Clients Search PII Hardening** *(gap closure — should, security)* — LIKE-escape `%`/`_`/`\` in `clients.list_alive` ILIKE pattern, with regression test that `?q=%25` matches the literal `%` and not the wildcard (closes Phase 8 CR-01 PII security warning)
@@ -167,9 +167,9 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   3. `useUpdateClient`'s optimistic-update path no longer relies on splitting `current.fullName` by space — it either re-derives `fullName` only when create-input fields change, or falls back to a stable name source that is always defined for live backend rows.
   4. A live E2E walkthrough against `docker-compose up` + `pnpm -F admin-web dev` with `VITE_API_MODE=http` lists clients (real names visible, not `undefined`), creates a client (returns 201, shows in list), edits the client (returns 200, table reflects), and deletes as owner (returns 204) — all without surfacing `TypeError: Cannot read properties of undefined` or `422 Unprocessable Entity` in the network tab.
   5. Existing `VITE_API_MODE=mock` flow regresses zero tests in `pnpm -F admin-web test`.
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 - [x] 11-01-PLAN.md — Adapter mappers (responseToClient / createInputToRequest / updateInputToRequest) wired into http/clients.ts; closes F-01 + F-02 shape mismatch
-- [ ] 11-02-PLAN.md — Harden useUpdateClient optimistic-update against undefined fullName + regression test + live E2E runbook (human-verify gate)
+- [x] 11-02-PLAN.md — Harden useUpdateClient optimistic-update against undefined fullName + regression test + live E2E runbook (human-verify gate)
 **UI hint**: no (data adapter, not UI)
 
 ### Phase 12: v1.1 Verification Backfill
@@ -183,6 +183,19 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   3. Phase 6 RBAC integration tests run on a live Postgres+Redis CI host (or a documented local equivalent): `cd apps/backend && uv run pytest tests/integration/auth/test_logout.py tests/integration/rbac/test_owner_only.py -v` exits green; results appended to `06-VERIFICATION.md` body and frontmatter status flipped from `human_needed` to `passed`.
   4. Phase 8 `human_needed` resolved: either CR-01 (ILIKE wildcard escape) is accepted with a documented warning in `08-VERIFICATION.md` and tracked as Phase 14, OR the audit is updated to reflect that Phase 14 owns the closure. CR-02 (rollback inside service) accept-or-fix decision recorded similarly.
   5. Re-running `/gsd-audit-milestone v1.1` after this phase produces an audit with `status: passed` (no `unverified_phases`, no `human_needed_phases`, no stale `gaps_found_phases`).
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 12.1: Clients Service Commit Fix
+**Goal**: Make every clients write actually persist. Today `apps/backend/app/modules/clients/service.py` returns 201/200/204 from POST/PATCH/DELETE without calling `await session.commit()`, so `get_db` (`apps/backend/app/core/database.py:145`) auto-rolls-back at request exit and the row never lands in Postgres. Discovered while auto-verifying Phase 11 SC #4 — Phase 11 FE work is correct, but the live-stack runbook cannot tick through until backend writes commit. `auth/service.py` already commits at every write site; `clients/service.py` mirrors that pattern.
+**Depends on**: Phase 11 (uses the http-mode FE adapter as the verification harness)
+**Gap closure**: Unblocks Phase 11 SC #4 (deferred via `11-HUMAN-UAT.md`); root-cause for the rolled-back-201 symptom logged in that file
+**Requirements**: CLIENTS-06, CLIENTS-07, CLIENTS-08 (write paths, made durable — no new REQ-IDs)
+**Success Criteria**:
+  1. `apps/backend/app/modules/clients/service.py` calls `await session.commit()` exactly once at the end of each successful write path (`create_client`, `update_client`, `soft_delete_client`, `import_clients_csv` if present), mirroring the pattern in `apps/backend/app/modules/auth/service.py`. Rollback paths (e.g. `IntegrityError → PhoneExistsError`) remain explicit and do NOT swallow the original transaction.
+  2. New integration test in `apps/backend/tests/integration/clients/test_persistence.py`: spin up the test stack, `POST /api/v1/clients` with valid body → assert `GET /api/v1/clients` immediately after returns the row (today this would fail because of the rollback). Same for PATCH (mutated value visible after) and DELETE (`deleted_at` set after).
+  3. Re-running Phase 11 `11-E2E-RUNBOOK.md` end-to-end against `docker compose up` + `pnpm -F admin-web dev` (`VITE_API_MODE=http`) ticks every checkbox: list shows real Russian names after creates, PATCH `firstName` updates the row visibly, DELETE removes it. `11-HUMAN-UAT.md` `status:` flips from `deferred` to `resolved`, and Phase 11 `10-VERIFICATION.md` evidence (referenced from Phase 12 SC #2) is regenerated.
+  4. SQLAlchemy logs no longer show `ROLLBACK` after `client_created` / `client_updated` / `client_deleted` audit events — they show `COMMIT`. (Quick local verification: tail `uvicorn` output during the runbook walkthrough.)
 **Plans**: TBD
 **UI hint**: no
 
@@ -230,7 +243,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 8. Clients Module + Audit Log | v1.1 | 0/8 | Not started | — |
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
 | 10. admin-web Auth + Clients Wiring | v1.1 | 8/8 | Complete   | 2026-05-04 |
-| 11. Clients HTTP-mode Shape Adapter | v1.1 | 1/2 | In Progress|  |
+| 11. Clients HTTP-mode Shape Adapter | v1.1 | 2/2 | Complete   | 2026-05-04 |
 | 12. v1.1 Verification Backfill | v1.1 | 0/TBD | Not started | — |
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 0/TBD | Not started | — |
 | 14. Clients Search PII Hardening | v1.1 | 0/TBD | Not started | — |
