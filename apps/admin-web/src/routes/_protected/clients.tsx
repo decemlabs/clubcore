@@ -18,7 +18,7 @@ export const Route = createFileRoute('/_protected/clients')({
     if (!can(role, 'view', 'clients')) {
       throw redirect({
         to: '/',
-        search: { forbidden: location.pathname + (location.search ?? '') },
+        search: { forbidden: location.pathname + (location.searchStr ?? '') },
       })
     }
   },

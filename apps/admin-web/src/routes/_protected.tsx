@@ -16,7 +16,7 @@ export const Route = createFileRoute('/_protected')({
       // WARNING #4 (Plan 04): TanStack Router serializes search params; pass raw pathname+search,
       // not full href. Origin is dropped to keep cross-origin out of `next` (LoginPage sanitizeNext
       // is the second line of defense — see Plan 04 + Plan 05 LoginPage.sanitizeNext).
-      throw redirect({ to: '/login', search: { next: location.pathname + (location.search ?? '') } })
+      throw redirect({ to: '/login', search: { next: location.pathname + (location.searchStr ?? '') } })
     }
   },
   component: () => (
