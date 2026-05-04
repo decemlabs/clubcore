@@ -39,15 +39,17 @@ type UpdateVars = { id: ClientId; input: ClientUpdateInput }
 
 // Mock service mirrors this composition (split-by-space). When the backend ships
 // in Phase 8, fullName will be replaced with three separate columns; revisit then.
+// Hardened for Phase 11: tolerates `current.fullName === undefined` (a future
+// adapter regression) without throwing — see hooks.test.ts.
 function buildOptimisticFullName(current: Client, input: ClientUpdateInput): string {
-  const parts = current.fullName.split(' ')
+  const parts = (current.fullName ?? '').split(' ')
   const last = input.lastName ?? parts[0] ?? ''
   const first = input.firstName ?? parts[1] ?? ''
   const middle = input.middleName ?? parts[2]
   return [last, first, middle].filter(Boolean).join(' ')
 }
 
-function applyOptimisticUpdate(current: Client, input: ClientUpdateInput): Client {
+export function applyOptimisticUpdate(current: Client, input: ClientUpdateInput): Client {
   const nameChanged =
     input.lastName !== undefined || input.firstName !== undefined || input.middleName !== undefined
   return {
