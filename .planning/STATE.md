@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
-stopped_at: Phase 10 UI-SPEC approved
-last_updated: "2026-05-04T13:20:01.449Z"
+stopped_at: Completed 10-04-PLAN.md
+last_updated: "2026-05-04T13:30:32.435Z"
 last_activity: 2026-05-04
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 48
-  completed_plans: 44
-  percent: 92
+  completed_plans: 45
+  percent: 94
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 ## Current Position
 
 Phase: 10 (admin-web-auth-clients-wiring) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-05-04
 
@@ -61,6 +61,7 @@ Last activity: 2026-05-04
 
 *Updated after each plan completion*
 | Phase 10 P03 | 196 | 2 tasks | 7 files |
+| Phase 10 P04 | 6 | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,9 @@ Recent decisions affecting current work:
 - `app/modules/members/` is renamed to `app/modules/clients/` in Phase 4 (frontend term canonical)
 - Telegram bot is a SEPARATE process (`python -m app.workers.telegram_bot`), NOT an ARQ task — long-polling is a wrong fit for ARQ
 - New deps in Phase 4: `pyjwt>=2.12.1,<3`, `argon2-cffi>=25.1.0,<26`, `python-telegram-bot>=22.7,<23`; rejected: `passlib`, `python-jose`, `aiogram`, `fastapi-csrf-protect`, `Casbin/Oso/OPA`
+- [Phase ?]: HTTP methods lowercase for openapi paths type compliance; fetcher uppercases internally
+- [Phase ?]: Lazy dynamic import in redirect-on-session-expired breaks queryClient<->router circular dep
+- [Phase ?]: useCurrentRole hook unifies role source: mock=Zustand, http=TanStack Query cache, both branch on API_MODE
 
 ### Pending Todos
 
@@ -109,6 +113,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-04T13:20:01.445Z
-Stopped at: Phase 10 UI-SPEC approved
+Last session: 2026-05-04T13:30:32.431Z
+Stopped at: Completed 10-04-PLAN.md
 Resume file: None
