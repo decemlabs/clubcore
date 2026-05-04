@@ -12,6 +12,7 @@ export function useClientsList(query: ClientsListQuery) {
   return useQuery({
     queryKey: clientsKeys.list(query),
     queryFn: () => services.clients.list(query),
+    staleTime: 30_000,
   })
 }
 
@@ -20,6 +21,7 @@ export function useClient(id: ClientId) {
     queryKey: clientsKeys.detail(id),
     queryFn: () => services.clients.get(id),
     enabled: !!id,
+    staleTime: 30_000,
   })
 }
 
