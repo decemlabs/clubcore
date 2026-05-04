@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
-stopped_at: Completed 10-05-PLAN.md
-last_updated: "2026-05-04T13:41:00Z"
+stopped_at: Completed 10-06-PLAN.md
+last_updated: "2026-05-04T13:52:01.436Z"
 last_activity: 2026-05-04
 progress:
   total_phases: 7
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 ## Current Position
 
 Phase: 10 (admin-web-auth-clients-wiring) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-05-04
 
@@ -63,6 +63,7 @@ Last activity: 2026-05-04
 | Phase 10 P03 | 196 | 2 tasks | 7 files |
 | Phase 10 P04 | 6 | 3 tasks | 12 files |
 | Phase 10 P05 | 9 | 3 tasks | 23 files |
+| Phase 10 P06 | 4 | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,7 @@ Recent decisions affecting current work:
 - [Phase 10 P05]: Tabs primitive: standard shadcn tabs installed as fallback — ReUI tabs 404'd from base-nova registry; uses @base-ui/react
 - [Phase 10 P05]: base-ui tabs use aria-selected=true for active tab (not data-state=active like Radix); tests adapted
 - [Phase 10 P05]: Test files need import/no-restricted-paths exemption for mock DB access in test setup
+- [Phase ?]: useReactTable must be called before early returns (react-hooks/rules-of-hooks); vi.hoisted() for mock factories in vi.mock()
 
 ### Pending Todos
 
@@ -117,6 +119,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-04T13:41:00Z
-Stopped at: Completed 10-05-PLAN.md
+Last session: 2026-05-04T13:52:01.432Z
+Stopped at: Completed 10-06-PLAN.md
 Resume file: None
