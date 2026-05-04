@@ -27,46 +27,9 @@ interface Props {
 
 export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreateFromEmpty }: Props) {
   const navigate = useNavigate({ from: ClientsRoute.fullPath })
-
-  if (query.isError) {
-    return (
-      <div className="space-y-3 rounded-md border p-6 text-center">
-        <h2 className="text-lg font-semibold">Не удалось загрузить клиентов</h2>
-        <p className="text-muted-foreground text-sm">Проверьте соединение или обновите страницу.</p>
-        <Button onClick={onRetry}>Повторить загрузку</Button>
-      </div>
-    )
-  }
-
   const data = query.data
-  if (!data) {
-    // WARNING #9 fix + RESEARCH Open Question #2 RESOLVED: render skeleton rows matching the
-    // canonical CLAUDE.md List template (empty/loading/error) and UI-SPEC skeleton-rows reference.
-    return <ClientsTableSkeleton />
-  }
 
-  if (data.total === 0 && !search.q) {
-    return (
-      <div className="space-y-3 rounded-md border p-6 text-center">
-        <h2 className="text-lg font-semibold">Клиентов пока нет</h2>
-        <p className="text-muted-foreground text-sm">
-          Добавьте первого клиента, нажав «Новый клиент».
-        </p>
-        <Button onClick={onCreateFromEmpty}>Новый клиент</Button>
-      </div>
-    )
-  }
-  if (data.items.length === 0) {
-    return (
-      <div className="space-y-2 rounded-md border p-6 text-center">
-        <h2 className="text-lg font-semibold">Ничего не найдено</h2>
-        <p className="text-muted-foreground text-sm">
-          Попробуйте изменить запрос или очистить фильтры.
-        </p>
-      </div>
-    )
-  }
-
+  // Always call useReactTable unconditionally (React Hooks rules)
   const columns: ColumnDef<Client>[] = [
     { accessorKey: 'fullName', header: 'ФИО' },
     { accessorKey: 'phone', header: 'Телефон' },
@@ -120,15 +83,19 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
   ]
 
   const table = useReactTable({
-    data: data.items,
+    data: data?.items ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
-    pageCount: Math.ceil(data.total / data.pageSize),
+    pageCount: data ? Math.ceil(data.total / data.pageSize) : 0,
     state: {
-      pagination: { pageIndex: data.page - 1, pageSize: data.pageSize },
+      pagination: {
+        pageIndex: data ? data.page - 1 : 0,
+        pageSize: data?.pageSize ?? search.pageSize,
+      },
     },
     onPaginationChange: (updater) => {
+      if (!data) return
       const next =
         typeof updater === 'function'
           ? updater({ pageIndex: data.page - 1, pageSize: data.pageSize })
@@ -142,6 +109,44 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
       })
     },
   })
+
+  if (query.isError) {
+    return (
+      <div className="space-y-3 rounded-md border p-6 text-center">
+        <h2 className="text-lg font-semibold">Не удалось загрузить клиентов</h2>
+        <p className="text-muted-foreground text-sm">Проверьте соединение или обновите страницу.</p>
+        <Button onClick={onRetry}>Повторить загрузку</Button>
+      </div>
+    )
+  }
+
+  if (!data) {
+    // WARNING #9 fix + RESEARCH Open Question #2 RESOLVED: render skeleton rows matching the
+    // canonical CLAUDE.md List template (empty/loading/error) and UI-SPEC skeleton-rows reference.
+    return <ClientsTableSkeleton />
+  }
+
+  if (data.total === 0 && !search.q) {
+    return (
+      <div className="space-y-3 rounded-md border p-6 text-center">
+        <h2 className="text-lg font-semibold">Клиентов пока нет</h2>
+        <p className="text-muted-foreground text-sm">
+          Добавьте первого клиента, нажав «Новый клиент».
+        </p>
+        <Button onClick={onCreateFromEmpty}>Новый клиент</Button>
+      </div>
+    )
+  }
+  if (data.items.length === 0) {
+    return (
+      <div className="space-y-2 rounded-md border p-6 text-center">
+        <h2 className="text-lg font-semibold">Ничего не найдено</h2>
+        <p className="text-muted-foreground text-sm">
+          Попробуйте изменить запрос или очистить фильтры.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <DataGrid table={table} recordCount={data.total} tableLayout={{ headerSticky: true }}>
