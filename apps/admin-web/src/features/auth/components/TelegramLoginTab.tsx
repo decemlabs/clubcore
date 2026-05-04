@@ -87,17 +87,23 @@ export function TelegramLoginTab({ onSuccess }: Props) {
 
   const bound = !!status.data?.bound
 
-  // Timed-out state
+  // Timed-out state — keep `timedOut=true` until handleStart's onSuccess flips it
+  // (handleStart already resets timedOut on success). If start fails, the error stays
+  // visible and the user can retry.
   if (timedOut) {
     return (
       <div className="space-y-4">
         <p className="text-muted-foreground text-sm">Срок действия ссылки истёк.</p>
+        {start.isError && (
+          <p className="text-destructive text-sm" role="alert">
+            Не удалось получить ссылку. Попробуйте ещё раз.
+          </p>
+        )}
         <Button
           type="button"
           onClick={() => {
             setToken(null)
             setDeepLink(null)
-            setTimedOut(false)
             startedAtRef.current = null
             handleStart()
           }}
