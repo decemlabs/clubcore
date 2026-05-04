@@ -95,6 +95,9 @@ export function ClientForm({ mode, initial, onSuccess, onCancel }: Props) {
       <div className="space-y-2">
         <Label htmlFor="middleName">Отчество</Label>
         <Input id="middleName" {...form.register('middleName')} />
+        {form.formState.errors.middleName && (
+          <p className="text-destructive text-sm">{form.formState.errors.middleName.message}</p>
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="phone">Телефон*</Label>
@@ -113,10 +116,16 @@ export function ClientForm({ mode, initial, onSuccess, onCancel }: Props) {
       <div className="space-y-2">
         <Label htmlFor="birthDate">Дата рождения</Label>
         <Input id="birthDate" type="date" {...form.register('birthDate')} />
+        {form.formState.errors.birthDate && (
+          <p className="text-destructive text-sm">{form.formState.errors.birthDate.message}</p>
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="notes">Заметки</Label>
         <Input id="notes" {...form.register('notes')} />
+        {form.formState.errors.notes && (
+          <p className="text-destructive text-sm">{form.formState.errors.notes.message}</p>
+        )}
       </div>
       {form.formState.errors.root && (
         <div
