@@ -1,0 +1,6 @@
+export { RoleGate, type Action, type Resource } from './RoleGate'
+export { useCurrentRole } from './useCurrentRole'
+export { useSessionStore, SESSION_STORAGE_KEY } from './store'
+export { can, OWNER_ONLY } from './can'
+export { routeRegistry } from './registry'
+export type { Role, SessionState } from './types'
