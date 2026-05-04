@@ -1206,24 +1206,27 @@ These are non-negotiable directives the planner MUST honor — they are at the s
 
 > Risk levels are LOW for all assumptions — each has a cheap mitigation. None warrant blocking the plan; surface to discuss-phase if uncertainty grows during execution.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-> All open questions from the additional_context (research focus areas 1-20) are answered above. Remaining genuine uncertainties:
+> All open questions from the additional_context (research focus areas 1-20) are answered above. Resolutions for the three uncertainties below are folded back into Plan 06 (WARNING #9 fix) and confirmed for Plan 04/06 (Toaster behavior).
 
 1. **PhoneInput vs raw masked input — final choice.**
    - What we know: ReUI offers `@reui/phone-input` (react-phone-number-input wrapper, E.164 + country dropdown). UI-SPEC says "Claude's discretion." Default country `RU` makes sense for РФ/СНГ market.
    - What's unclear: Bundle-size cost (`react-phone-number-input` ships ~30 KB gz — comparable to date-fns base, acceptable) vs feature value of country dropdown for RU-only project (low — but enables future BY/KZ/UZ tenants).
    - Recommendation: Use `@reui/phone-input` with `defaultCountry="RU"`. Tradeoff is in the phase budget; switching later to a hand-rolled mask is trivial.
+   - **RESOLVED: DEFER** — Phase 10 ships a raw `<Input type="tel" placeholder="+7 (XXX) XXX-XX-XX">` (Plan 06 Task 3). Phone-input mask via `@reui/phone-input` (or `react-imask`) is deferred to v1.2+. Per CONTEXT D-16 ("Phone input — if ReUI has PhoneInput, use; otherwise remains Claude's Discretion") this is within the locked discretion area; backend Phase 8 validates E.164 server-side, and the Zod regex on `clientCreateSchema.phone` rejects malformed input client-side. Rationale: scope-control — Phase 10 is already large.
 
 2. **Toaster for non-blocking acks during Phase 10.**
    - What we know: `<Toaster>` already mounted in `main.tsx`. CONTEXT D-12 says reception delete is RoleGate-hidden, so no "denied" toast. Optimistic mutation rollback should "feel" silent unless server fails.
    - What's unclear: Whether to fire a sonner toast on successful create/update/delete ("Клиент добавлен" etc.) or only on error.
    - Recommendation: silent on success (the optimistic update IS the feedback); toast only on `onError` rollback to surface the failure. Per CLAUDE.md "non-blocking acks via Sonner toast" guidance.
+   - **RESOLVED: ADOPTED** — silent on success; toast only on error. Confirmed in Plan 04 (login form: inline error mapping, no success toast — navigation IS the feedback) and Plan 06 (`ClientDeleteDialog` fires `toast.error(...)` only on rollback; create/update/delete success paths close the dialog silently and let the optimistic-cache update speak for itself).
 
 3. **Suspense boundary placement.**
    - What we know: `useSuspenseQuery` in `ClientsTable` requires a `<Suspense>` ancestor. TanStack Router has built-in `pendingComponent` per-route which acts as the suspense fallback.
    - What's unclear: Whether to use TanStack's `pendingComponent` (declarative, route-level) or wrap the table in a manual `<Suspense fallback={<Skeleton/>}>`.
    - Recommendation: TanStack `pendingComponent: () => <ClientsTableSkeleton />` on `/clients` route — co-located with route, matches "DataGrid skeleton rows" per UI-SPEC.
+   - **RESOLVED: ADOPTED** — Plan 06 ships `apps/admin-web/src/features/clients/components/ClientsTableSkeleton.tsx` (8 fake rows using existing `<Skeleton>` primitive at `apps/admin-web/src/shared/ui/skeleton.tsx`). `ClientsPage` renders it whenever `query.isPending && !query.data`. We do NOT use TanStack's `pendingComponent` because the route loader already prefetches via `ensureQueryData` (FE-04 same-key invariant), so initial render has data on the cache-hit path; the skeleton covers cache-miss / refetch paths only. This satisfies CLAUDE.md canonical List template (empty / loading / error) and the WARNING #9 fix from the Phase 10 review.
 
 ## Metadata
 
