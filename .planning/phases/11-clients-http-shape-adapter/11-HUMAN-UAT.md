@@ -1,9 +1,9 @@
 ---
-status: deferred
+status: resolved
 phase: 11-clients-http-shape-adapter
 source: [11-02-PLAN.md, 11-E2E-RUNBOOK.md]
 started: "2026-05-04T20:10:00Z"
-updated: "2026-05-04T20:20:00Z"
+updated: "2026-05-04T20:32:00Z"
 deferred_until: "phase-12.1-clients-service-commit"
 ---
 
@@ -63,4 +63,4 @@ above and the 108 unit tests.
 - [x] FE request-mapper contract (F-02) verified via API negative tests + adapter unit tests
 - [x] Optimistic-update hardening (F-01 belt-and-suspenders) verified via 4 new regression tests
 - [x] Live E2E runbook authored (`11-E2E-RUNBOOK.md`)
-- [ ] Live E2E walkthrough end-to-end — **deferred** to post-Phase-12.1
+- [x] Live E2E walkthrough end-to-end — **resolved**: Phase 12.1 added `await session.commit()` to clients service; live API verified to persist create/patch/delete (4 COMMIT events in uvicorn log, DB row visible with mutated state and `deleted_at` set on soft-delete)

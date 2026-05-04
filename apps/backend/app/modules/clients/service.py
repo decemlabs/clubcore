@@ -6,6 +6,10 @@ Module-level async functions (D-18). Each mutation function:
   3. Handles `IntegrityError` on `uq_clients_phone_alive` → raises `PhoneExistsError` (D-11)
   4. `await audit.emit(session, ...)` (D-03 co-transactional)
   5. `await session.flush()` to surface DB-level constraint conflicts before route exit
+  6. `await session.commit()` to persist the unit of work (Phase 12.1 — was missing pre-fix,
+     so successful 201/200/204 responses were rolled back at request scope exit; mirrors
+     the auth/service.py pattern). Tests use SAVEPOINT-mode session, so commit becomes a
+     nested-transaction release the outer fixture rolls back.
 
 Architectural boundary (D-02 / CLIENTS-09):
   - `from app.modules.clients import repository` — fine.
@@ -134,6 +138,7 @@ async def create_client(
         has_email=client.email is not None,
         has_telegram=client.telegram_user_id is not None,
     )
+    await session.commit()
     return ClientResponse.model_validate(client)
 
 
@@ -191,6 +196,7 @@ async def update_client(
     # serialisation so the response carries the fresh value without triggering
     # an implicit lazy-load (which would raise MissingGreenlet under async).
     await session.refresh(client, attribute_names=["updated_at"])
+    await session.commit()
     return ClientResponse.model_validate(client)
 
 
@@ -227,3 +233,4 @@ async def soft_delete_client(
         phone=captured_phone,
     )
     await session.flush()
+    await session.commit()
