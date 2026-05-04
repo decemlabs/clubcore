@@ -1,12 +1,13 @@
 /**
- * HTTP service implementations (real-API, Phase 7+).
- *
- * Populated later once the backend is defined. Phase 1 ships an empty container
- * so the swap seam type-checks with `VITE_API_MODE=http` as a legal option.
+ * HTTP service implementations container.
  *
  * Rules:
- * - Must implement the same `Contracts` as `mock/`.
+ * - Must implement the same Contracts as mock/.
  * - No UI imports, no React — pure transport layer.
- * - Error mapping (HTTP → DomainError) lives here, not in UI.
+ * - Error mapping (HTTP -> ApiError) lives in @sportzal/api-client.
+ * - Response envelope unwrap (D-07 {data:T} -> T) lives in _envelope.ts.
  */
-export const services = {} as const
+import { auth } from './auth'
+import { clients } from './clients'
+
+export const services = { auth, clients } as const
