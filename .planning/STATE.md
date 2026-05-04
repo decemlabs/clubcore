@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: complete
-stopped_at: Phase 10 verified — 73/73 tests pass, all 5 SCs satisfied
-last_updated: "2026-05-04T17:10:00.000Z"
-last_activity: 2026-05-04
+stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
+last_updated: "2026-05-04T18:28:30.000Z"
+last_activity: 2026-05-04 -- Plan 10-08 executed (RBAC redirect crash fix)
 progress:
   total_phases: 7
   completed_phases: 7
-  total_plans: 48
-  completed_plans: 48
+  total_plans: 49
+  completed_plans: 49
   percent: 100
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 ## Current Position
 
 Phase: 10 (admin-web-auth-clients-wiring) — COMPLETE & VERIFIED
-Plan: 7 of 7 (all plans executed)
-Status: VERIFICATION.md produced; lock-test gap fixed (c7bf05b); 73/73 tests pass; all 5 success criteria satisfied
-Last activity: 2026-05-04
+Plan: 8 of 8 (all plans executed; UAT-08 blocker closed by Plan 10-08)
+Status: 78/78 admin-web tests pass; UAT Test 8 (RBAC redirect) unblocked
+Last activity: 2026-05-04 -- Plan 10-08 executed (RBAC redirect crash fix)
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Last activity: 2026-05-04
 | Phase 10 P05 | 9 | 3 tasks | 23 files |
 | Phase 10 P06 | 4 | 3 tasks | 12 files |
 | Phase 10 P07 | 6 | 3 tasks | 11 files |
+| Phase 10 P08 | 6 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,7 @@ Recent decisions affecting current work:
 - [Phase 10 P07]: userEvent.setup() required for Radix DropdownMenu in tests — fireEvent.click does not dispatch pointer events
 - [Phase 10 P07]: Hooks must be called before API_MODE early returns (react-hooks/rules-of-hooks applies to all early returns)
 - [Phase 10 P07]: ESLint flat config fetch ban: separate file-targeted block per no-restricted-syntax selector — stacks additively with existing rules
+- [Phase 10 P08]: TanStack Router ParsedLocation.search is the parsed object form; never concatenate with `+` (triggers Symbol.toPrimitive on the proxy → "Cannot convert object to primitive value"). Use ParsedLocation.searchStr (encoded string '' or '?...') in redirect-builders. Both are origin-free, so security guarantee of CR-01 (no scheme/host in forbidden/next) is preserved.
 
 ### Pending Todos
 
@@ -123,6 +125,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-04T14:06:00.000Z
-Stopped at: Completed 10-07-PLAN.md (Phase 10 complete)
+Last session: 2026-05-04T18:28:30.000Z
+Stopped at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
 Resume file: None

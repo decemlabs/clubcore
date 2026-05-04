@@ -165,7 +165,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 7. Telegram OTP Channel | v1.1 | 0/8 | Not started | — |
 | 8. Clients Module + Audit Log | v1.1 | 0/8 | Not started | — |
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
-| 10. admin-web Auth + Clients Wiring | v1.1 | 7/7 | Complete   | 2026-05-04 |
+| 10. admin-web Auth + Clients Wiring | v1.1 | 8/8 | Complete   | 2026-05-04 |
 
 ## Coverage Report
 
