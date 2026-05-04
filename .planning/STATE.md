@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
 stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
-last_updated: "2026-05-04T19:50:47.045Z"
-last_activity: 2026-05-04 -- Phase 11 planning complete
+last_updated: "2026-05-04T19:53:02.939Z"
+last_activity: 2026-05-04 -- Phase 11 execution started
 progress:
   total_phases: 11
   completed_phases: 7
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 10 — admin-web-auth-clients-wiring
+**Current focus:** Phase 11 — clients-http-shape-adapter
 
 ## Current Position
 
-Phase: 10 (admin-web-auth-clients-wiring) — COMPLETE & VERIFIED
-Plan: 8 of 8 (all plans executed; UAT-08 blocker closed by Plan 10-08)
-Status: Ready to execute
-Last activity: 2026-05-04 -- Phase 11 planning complete
+Phase: 11 (clients-http-shape-adapter) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 11
+Last activity: 2026-05-04 -- Phase 11 execution started
 
 ## Performance Metrics
 
