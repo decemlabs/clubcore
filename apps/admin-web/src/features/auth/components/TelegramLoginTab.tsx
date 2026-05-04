@@ -32,6 +32,12 @@ export function TelegramLoginTab({ onSuccess }: Props) {
   const handleStart = () => {
     start.mutate(undefined, {
       onSuccess: (r) => {
+        // Refuse non-https://t.me/ URLs to prevent javascript: or data: href injection
+        // when the backend response is untrusted (real-mode transport).
+        if (!r.deepLinkUrl.startsWith('https://t.me/')) {
+          console.error('[TelegramLoginTab] Unexpected deepLinkUrl:', r.deepLinkUrl)
+          return
+        }
         setToken(r.deepLinkToken)
         setDeepLink(r.deepLinkUrl)
         setTimedOut(false)
