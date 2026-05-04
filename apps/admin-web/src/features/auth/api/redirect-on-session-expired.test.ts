@@ -77,4 +77,14 @@ describe('redirectOnSessionExpired', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(__getRedirectingForTests()).toBe(false)
   })
+
+  it('resets the flag and skips queryClient.clear when navigate rejects', async () => {
+    navigateMock.mockRejectedValueOnce(new Error('navigate failed'))
+    redirectOnSessionExpired(new ApiError('session_expired', 'a'))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(__getRedirectingForTests()).toBe(false)
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    // CR-04 fix: cache is cleared only after navigate succeeds.
+    expect(clearMock).not.toHaveBeenCalled()
+  })
 })

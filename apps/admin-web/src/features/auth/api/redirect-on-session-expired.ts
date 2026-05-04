@@ -22,9 +22,10 @@ export function redirectOnSessionExpired(error: unknown): void {
   if (error.code !== 'session_expired') return
   if (redirecting) return
   redirecting = true
-  queryClient.clear()
   // Lazy import to break circular dep -- fire-and-forget is fine because
   // navigate completion is not awaited by the caller (cache onError signature is sync).
+  // Clear the query cache AFTER navigation resolves so a failed navigate (module load
+  // error, navigate throw) doesn't leave the user on a protected page with empty caches.
   void import('@/app/router')
     .then(({ router }) => {
       // WARNING #4 fix: pass `next` raw -- TanStack Router serializes search params automatically.
@@ -39,11 +40,16 @@ export function redirectOnSessionExpired(error: unknown): void {
         to: '/login',
         search: { next },
         replace: true,
+      }).then(() => {
+        queryClient.clear()
       })
     })
     .finally(() => {
       redirecting = false
     })
+    // Swallow rejections (router import / navigate failure) so they don't surface as
+    // unhandled promise rejections; the next session_expired will retry.
+    .catch(() => {})
 }
 
 /** Test-only -- resets the module flag between cases. NOT exported in barrels. */
