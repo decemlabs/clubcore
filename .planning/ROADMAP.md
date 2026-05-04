@@ -167,7 +167,9 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   3. `useUpdateClient`'s optimistic-update path no longer relies on splitting `current.fullName` by space — it either re-derives `fullName` only when create-input fields change, or falls back to a stable name source that is always defined for live backend rows.
   4. A live E2E walkthrough against `docker-compose up` + `pnpm -F admin-web dev` with `VITE_API_MODE=http` lists clients (real names visible, not `undefined`), creates a client (returns 201, shows in list), edits the client (returns 200, table reflects), and deletes as owner (returns 204) — all without surfacing `TypeError: Cannot read properties of undefined` or `422 Unprocessable Entity` in the network tab.
   5. Existing `VITE_API_MODE=mock` flow regresses zero tests in `pnpm -F admin-web test`.
-**Plans**: TBD
+**Plans:** 2 plans
+- [ ] 11-01-PLAN.md — Adapter mappers (responseToClient / createInputToRequest / updateInputToRequest) wired into http/clients.ts; closes F-01 + F-02 shape mismatch
+- [ ] 11-02-PLAN.md — Harden useUpdateClient optimistic-update against undefined fullName + regression test + live E2E runbook (human-verify gate)
 **UI hint**: no (data adapter, not UI)
 
 ### Phase 12: v1.1 Verification Backfill
