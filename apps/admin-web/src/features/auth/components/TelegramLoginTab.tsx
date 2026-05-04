@@ -63,6 +63,11 @@ export function TelegramLoginTab({ onSuccess }: Props) {
               type: 'server',
               message: 'Вы ещё не написали боту. Перейдите по ссылке.',
             })
+          } else if (c === 'otp_max_attempts') {
+            otpForm.setError('code', {
+              type: 'server',
+              message: 'Код заблокирован. Начните процесс заново.',
+            })
           } else {
             otpForm.setError('code', {
               type: 'server',
