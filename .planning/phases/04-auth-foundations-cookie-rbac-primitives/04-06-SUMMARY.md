@@ -3,6 +3,7 @@ phase: 04-auth-foundations-cookie-rbac-primitives
 plan: "06"
 subsystem: backend/core
 tags: [pagination, pydantic, contracts, api]
+requirements-completed: [API-04]
 dependency_graph:
   requires: [04-05]
   provides: [PageQuery, PaginatedData]
