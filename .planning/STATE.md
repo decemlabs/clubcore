@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
-status: ready_to_plan
+status: executing
 stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
-last_updated: "2026-05-05T09:48:26.584Z"
-last_activity: 2026-05-05 -- Phase 12 execution started
+last_updated: "2026-05-05T10:44:15.958Z"
+last_activity: 2026-05-05 -- Phase 13 execution started
 progress:
   total_phases: 12
   completed_phases: 9
-  total_plans: 56
-  completed_plans: 51
-  percent: 75
+  total_plans: 60
+  completed_plans: 56
+  percent: 93
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 12 — v1.1-verification-backfill
+**Current focus:** Phase 13 — v1.1-minor-cleanup
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-05
+Phase: 13 (v1.1-minor-cleanup) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 13
+Last activity: 2026-05-05 -- Phase 13 execution started
 
 ## Performance Metrics
 
