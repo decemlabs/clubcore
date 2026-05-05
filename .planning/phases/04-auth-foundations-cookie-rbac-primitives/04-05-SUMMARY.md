@@ -3,6 +3,7 @@ phase: 04-auth-foundations-cookie-rbac-primitives
 plan: "05"
 subsystem: backend/core
 tags: [pydantic, schemas, wire-format, camelcase, generics, api-contract]
+requirements-completed: [API-03]
 dependency_graph:
   requires: []
   provides:

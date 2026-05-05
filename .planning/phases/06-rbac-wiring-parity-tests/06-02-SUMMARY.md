@@ -7,10 +7,7 @@ tags:
   - csrf
   - dependencies
   - audit
-requirements:
-  - RBAC-02
-  - RBAC-04
-  - CSRF-02
+requirements-completed: [RBAC-02, RBAC-04, CSRF-02]
 dependency_graph:
   requires:
     - app.core.dependencies (existing — Phase 4 D-24, Phase 5 D-15)

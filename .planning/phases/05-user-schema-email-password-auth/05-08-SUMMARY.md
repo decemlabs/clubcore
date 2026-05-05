@@ -3,6 +3,7 @@ phase: 05-user-schema-email-password-auth
 plan: 08
 subsystem: auth
 tags: [tests, integration, auth, login, refresh, logout, rbac, audit]
+requirements-completed: [TEST-02, TEST-04]
 dependency-graph:
   requires:
     - 05-04 (auth service: authenticate, issue_tokens, rotate_refresh, revoke_session, revoke_all_sessions)

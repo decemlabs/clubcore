@@ -3,6 +3,7 @@ phase: 04-auth-foundations-cookie-rbac-primitives
 plan: 09
 subsystem: backend/tests
 tags: [testing, jwt, argon2, rbac, pagination, alembic, phase4-gates]
+requirements-completed: []  # verification suite — no new REQ-IDs closed here; gates SC #1/#3/#5 for INFRA-01/INFRA-02/INFRA-05/RBAC-01/API-03/API-04
 dependency_graph:
   requires: [04-01, 04-02, 04-03, 04-04, 04-05, 04-06, 04-07, 04-08]
   provides: [phase4-verification-suite, SC1-verified, SC2-verified, SC3-structural-guard, SC5-verified]
