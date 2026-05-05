@@ -1,18 +1,16 @@
 ---
 phase: 10-admin-web-auth-clients-wiring
-verified: 2026-05-04T17:10:00Z
-status: gaps_found
-score: 4/5 must-haves verified
+verified: 2026-05-04T23:45:00Z
+status: passed
+score: 5/5 must-haves verified; 7/7 requirement IDs satisfied; gap resolved on 2026-05-04
 overrides_applied: 0
-gaps:
-  - truth: "Test suite is clean — all tests pass"
-    status: failed
-    reason: "Pre-existing test src/shared/ui/components-json.test.ts expects style: 'new-york' but Plan 01 changed components.json to style: 'base-nova'. Test was not updated. Result: 72 pass, 1 fail across 18 test files."
-    artifacts:
-      - path: "apps/admin-web/src/shared/ui/components-json.test.ts"
-        issue: "Test asserts json.style === 'new-york' but components.json now reads 'base-nova' (line 27). Lock test was not updated when Plan 01 changed the registry style."
-    missing:
-      - "Update the components-json.test.ts lock test: change expect(json.style).toBe('new-york') to expect(json.style).toBe('base-nova')"
+re_verification: true
+gaps: []
+deferred: []
+re_verified_notes:
+  - "Original gap (components-json.test.ts asserting 'new-york') resolved on disk: line 27 now asserts 'base-nova', matching components.json line 3. pnpm exec vitest run src/shared/ui/components-json.test.ts exits 0."
+  - "Phase 11 (clients HTTP-mode shape adapter, status: passed 2026-05-04T23:30:00Z) closes the integration gap surfaced post-Phase-10 — INTEGRATION-CHECK F-01 (response shape) and F-02 (request shape) — making SC #2 durable against the real backend."
+  - "Phase 12.1 quick-task (commit ba14aba, 2026-05-04) added await session.commit() to clients/service.py write paths, unblocking the Phase 11 SC #4 live-runbook walkthrough that depends on Phase 10 SC #2 in http-mode. Persistence regression test added at apps/backend/tests/integration/clients/test_persistence.py."
 ---
 
 # Phase 10: admin-web Auth + Clients Wiring — Verification Report
@@ -40,7 +38,7 @@ gaps:
 
 ### Test Suite Health
 
-All Phase 10 feature tests pass (72 tests across 17 test files). **One pre-existing test fails:** `src/shared/ui/components-json.test.ts` asserts `json.style === 'new-york'` (line 27), but Plan 01 changed `components.json` to `style: "base-nova"`. This lock test was not updated. The test was authored as a Phase 1 snapshot guard and was not included in Plan 01's `files_modified` list. All plans from Plan 03 onward document this as "pre-existing test failure introduced in Plan 03" — however it originates from Plan 01's change to `components.json`.
+All Phase 10 feature tests pass. The previously failing pre-existing lock test `src/shared/ui/components-json.test.ts` was updated to assert `'base-nova'` matching the Plan 01 registry switch — `pnpm exec vitest run src/shared/ui/components-json.test.ts` now exits 0 (verified 2026-05-04). Phase 11 added 5 more test files (adapter + optimistic-update regression) bringing the admin-web suite to 21 files / 108 tests, all green (`pnpm -F admin-web test` exit 0).
 
 ### Required Artifacts
 
@@ -153,7 +151,7 @@ All Phase 10 feature tests pass (72 tests across 17 test files). **One pre-exist
 | Delete hook optimistic + rollback | `npx vitest run src/features/clients/api/hooks.delete.test.tsx` | 3 tests pass | ✓ PASS |
 | ESLint fetch ban + all fixtures | `node scripts/assert-eslint-fixtures.mjs` | All 4 fixtures trigger expected rules | ✓ PASS |
 | lint + typecheck | `npx eslint . && npx tsc -b --noEmit` | 0 errors, 2 warnings (pre-existing) | ✓ PASS |
-| Full test suite | `npx vitest run` | 72 pass, 1 fail (pre-existing components-json.test.ts) | ✗ PARTIAL |
+| Full test suite | `pnpm -F admin-web test` | 21 files / 108 tests pass (re-verified 2026-05-04 after components-json.test.ts fix + Phase 11 adapter tests) | ✓ PASS |
 
 ### Requirements Coverage
 
@@ -171,7 +169,7 @@ All Phase 10 feature tests pass (72 tests across 17 test files). **One pre-exist
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `src/shared/ui/components-json.test.ts` | 27 | Lock test not updated after style switch (new-york → base-nova) | ✗ BLOCKER | Test fails — 1/18 test files broken, reduces test suite trust |
+| `src/shared/ui/components-json.test.ts` | 27 | (resolved 2026-05-04) Lock test now asserts `'base-nova'` matching `components.json:3`. Originally asserted `'new-york'` after Plan 01 registry switch — closed during Phase 12 verification backfill. | ✓ RESOLVED | n/a |
 
 ### Human Verification Required
 
@@ -181,20 +179,22 @@ None required — all critical behaviors are covered by the automated test suite
 
 ## Gaps Summary
 
-**One gap blocks a clean test run.** The `components-json.test.ts` lock test asserts `style: 'new-york'` at line 27, but Plan 01 changed `components.json` to `style: "base-nova"` as a core deliverable. The test was not updated. This is a documentation/maintenance omission — the Phase 10 goal is achieved, but the test suite as committed has 1 failing test that every subsequent phase inherits.
+**No outstanding gaps as of re-verification 2026-05-04T23:45:00Z.**
 
-All 5 ROADMAP success criteria are satisfied by the codebase:
-- SC#1 (login tabs + Telegram poll): VERIFIED
-- SC#2 (clients CRUD via api-client + optimistic): VERIFIED  
-- SC#3 (mock mode no regression): VERIFIED
-- SC#4 (single-flight refresh + redirect + logout cache clear): VERIFIED
-- SC#5 (ESLint fetch ban + fixture): VERIFIED
+The original gap — `src/shared/ui/components-json.test.ts` line 27 asserted `'new-york'` while `components.json` declared `'base-nova'` — is **resolved on disk**. The lock test now reads `expect(json.style).toBe('base-nova')` (line 27, verified 2026-05-04), matching `components.json` (`"style": "base-nova"`, line 3). `pnpm exec vitest run src/shared/ui/components-json.test.ts` exits 0.
 
-All 7 FE requirements (FE-01 through FE-07) are satisfied.
+**Cross-phase reinforcement of SC #2 (clients HTTP-mode):**
 
-**Fix required:** Update `src/shared/ui/components-json.test.ts` line 27 to `expect(json.style).toBe('base-nova')`.
+- **Phase 11 (clients HTTP-mode shape adapter)** shipped 2026-05-04 with `status: passed` (9/9 must-haves; see `.planning/phases/11-clients-http-shape-adapter/11-VERIFICATION.md`). The phase added pure adapter helpers (`responseToClient`, `createInputToRequest`, `updateInputToRequest` in `apps/admin-web/src/shared/api/services/http/_clientsAdapter.ts`) so `VITE_API_MODE=http` `/clients/*` calls correctly map between FE `Client` shape and backend `ClientResponse` / `ClientCreateRequest` shapes — closing INTEGRATION-CHECK F-01 (response shape: `fullName` composition + `birthday → birthDate`) and F-02 (request shape: `birthDate → birthday` + empty-string omission).
+- **Phase 12.1 (clients service commit fix)** shipped 2026-05-04 (commit `ba14aba`, quick-task `260504-fst`). Added `await session.commit()` to `apps/backend/app/modules/clients/service.py` write paths (`create_client`, `update_client`, `soft_delete_client`), mirroring the auth/service.py pattern, plus a persistence regression test at `apps/backend/tests/integration/clients/test_persistence.py`. This unblocks the Phase 11 SC #4 live-runbook walkthrough — the only remaining human-verify item that touches Phase 10 SC #2 in http-mode.
+
+All 5 ROADMAP SCs (SC #1 login tabs + Telegram poll, SC #2 clients CRUD via api-client, SC #3 mock-mode no regression, SC #4 single-flight refresh + redirect-back, SC #5 ESLint fetch ban) remain VERIFIED. All 7 FE requirements (FE-01..FE-07) remain SATISFIED.
 
 ---
 
 _Verified: 2026-05-04T17:10:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+_Re-verified: 2026-05-04T23:45:00Z_
+_Re-verifier: Claude (gsd-verifier, Phase 12 backfill)_
+_Re-verification reason: gap resolved (components-json.test.ts asserts 'base-nova' on disk); Phase 11 + Phase 12.1 reinforce SC #2 in http-mode_
