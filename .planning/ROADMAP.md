@@ -29,7 +29,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [x] **Phase 10: admin-web Auth + Clients Wiring** — `VITE_API_MODE=http` for `/login` + `/clients/*` only; Telegram + email/password tabs; ESLint ban on raw `fetch(`; redirect-back + 401-loop guard (completed 2026-05-04)
 - [x] **Phase 11: Clients HTTP-mode Shape Adapter** *(gap closure — must)* — DTO mappers `ClientResponse ↔ Client` and `ClientCreate/UpdateInput ↔ ClientCreate/UpdateRequest` so `VITE_API_MODE=http` clients flow actually works against the live backend (closes INTEGRATION-CHECK F-01, F-02) (completed 2026-05-04)
 - [x] **Phase 12: v1.1 Verification Backfill** *(gap closure — should)* — Produce `09-VERIFICATION.md`, refresh `10-VERIFICATION.md`, run Phase 6 live RBAC integration tests on Postgres+Redis, take Phase 8 CR-01 acceptance decision (completed 2026-05-05)
-- [ ] **Phase 13: v1.1 Minor Drift & Hygiene Cleanup** *(gap closure — should)* — Drop dead `expiresAt` from Telegram contracts, replace `as never` query-string casts with typed `query` param in api-client, delete empty `app/modules/members/`, add `TELEGRAM_BOT_*` safe defaults, add vitest to `@sportzal/api-client`, refresh REQUIREMENTS.md `Pending → Complete`, backfill SUMMARY frontmatter (closes F-03, F-04, F-06 + procedural debt)
+- [x] **Phase 13: v1.1 Minor Drift & Hygiene Cleanup** *(gap closure — should)* — Drop dead `expiresAt` from Telegram contracts, replace `as never` query-string casts with typed `query` param in api-client, delete empty `app/modules/members/`, add `TELEGRAM_BOT_*` safe defaults, add vitest to `@sportzal/api-client`, refresh REQUIREMENTS.md `Pending → Complete`, backfill SUMMARY frontmatter (closes F-03, F-04, F-06 + procedural debt) (completed 2026-05-05)
 - [ ] **Phase 14: Clients Search PII Hardening** *(gap closure — should, security)* — LIKE-escape `%`/`_`/`\` in `clients.list_alive` ILIKE pattern, with regression test that `?q=%25` matches the literal `%` and not the wildcard (closes Phase 8 CR-01 PII security warning)
 
 ## Phase Details
@@ -212,11 +212,11 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   5. `packages/api-client/` has a working test runner (vitest), the throwaway test that was used to verify CR-01/CR-02 fetcher fixes is committed as a permanent regression test, and the package has at least 1 `pnpm test` invocation in CI.
   6. `.planning/REQUIREMENTS.md` traceability table reflects reality: 63 stale `Pending` rows for v1.1 REQs flip to `Complete` (or to `Phase 11/13/14` for the few that gap-closure phases touch); coverage count at the top of the file matches.
   7. SUMMARY.md frontmatter `requirements-completed:` arrays in Phase 04, 05, 06, 08 are backfilled to list every REQ-ID those phases closed (currently 4 + 12 + 4 + 1 = 21 missing entries per the audit) so the next audit's 3-source check sees consistent records.
-**Plans:** 4 plans
-- [ ] 13-01-PLAN.md — Drop dead expiresAt + delete members/ + Telegram env defaults (SC #1, #3, #4)
-- [ ] 13-02-PLAN.md — Backfill SUMMARY frontmatter requirements-completed for Phases 4/5/6/8 (SC #7)
-- [ ] 13-03-PLAN.md — Typed query field in fetcher + drop as never casts + vitest + CI (SC #2, #5)
-- [ ] 13-04-PLAN.md — Refresh REQUIREMENTS.md traceability table to reflect reality (SC #6)
+**Plans:** 4/4 plans complete
+- [x] 13-01-PLAN.md — Drop dead expiresAt + delete members/ + Telegram env defaults (SC #1, #3, #4)
+- [x] 13-02-PLAN.md — Backfill SUMMARY frontmatter requirements-completed for Phases 4/5/6/8 (SC #7)
+- [x] 13-03-PLAN.md — Typed query field in fetcher + drop as never casts + vitest + CI (SC #2, #5)
+- [x] 13-04-PLAN.md — Refresh REQUIREMENTS.md traceability table to reflect reality (SC #6)
 **UI hint**: no
 
 ### Phase 14: Clients Search PII Hardening
@@ -249,7 +249,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 10. admin-web Auth + Clients Wiring | v1.1 | 8/8 | Complete   | 2026-05-04 |
 | 11. Clients HTTP-mode Shape Adapter | v1.1 | 2/2 | Complete   | 2026-05-04 |
 | 12. v1.1 Verification Backfill | v1.1 | 5/5 | Complete    | 2026-05-05 |
-| 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 0/TBD | Not started | — |
+| 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 4/4 | Complete   | 2026-05-05 |
 | 14. Clients Search PII Hardening | v1.1 | 0/TBD | Not started | — |
 
 ## Coverage Report
