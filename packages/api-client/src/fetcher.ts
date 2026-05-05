@@ -104,6 +104,14 @@ export interface RequestInitWithBody extends Omit<RequestInit, 'method' | 'body'
    * failure is loud, not silent.
    */
   params?: Record<string, string | number>
+  /**
+   * Typed query-string parameters. Serialized via URLSearchParams — values
+   * are coerced to string via `String(v)`. Empty object → no `?` suffix.
+   * Replaces the prior pattern of building URLs with string concatenation
+   * and casting the path with `as never` to bypass the openapi-fetch
+   * typed `paths` key (see admin-web Phase 13 SC #2).
+   */
+  query?: Record<string, string | number | boolean>
 }
 
 function interpolatePath(path: string, params?: Record<string, string | number>): string {
@@ -117,11 +125,29 @@ function interpolatePath(path: string, params?: Record<string, string | number>)
   })
 }
 
+function appendQuery(
+  url: string,
+  query?: Record<string, string | number | boolean>,
+): string {
+  if (!query) return url
+  const sp = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) {
+    sp.set(k, String(v))
+  }
+  const qs = sp.toString()
+  if (!qs) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}${qs}`
+}
+
 export async function request<
   P extends keyof paths,
   M extends keyof paths[P] & string,
 >(method: M, path: P, init?: RequestInitWithBody): Promise<unknown> {
-  const url = interpolatePath(path as unknown as string, init?.params)
+  const url = appendQuery(
+    interpolatePath(path as unknown as string, init?.params),
+    init?.query,
+  )
   const upper = (method as string).toUpperCase()
   // WR-02: use the Headers constructor so callers passing a `Headers` instance
   // or `[string, string][]` shape are normalized correctly. A naive
@@ -157,10 +183,17 @@ export async function request<
   }
   // Strip `params` (and the existing `body` rebind) from the RequestInit spread —
   // they are not recognized by fetch().
-  const { params: _params, body: _body, headers: _headers, ...restInit } = init ?? {}
+  const {
+    params: _params,
+    body: _body,
+    headers: _headers,
+    query: _query,
+    ...restInit
+  } = init ?? {}
   void _params
   void _body
   void _headers
+  void _query
   const baseInit: RequestInit = {
     ...restInit,
     method: upper,
