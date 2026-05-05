@@ -34,8 +34,12 @@ class Settings(BaseSettings):
     refresh_reuse_window_seconds: int = 5
 
     # Phase 7 additions (D-10, D-03): Telegram OTP channel.
-    telegram_bot_token: SecretStr
-    telegram_bot_username: str  # without leading `@`
+    # Placeholder defaults so fresh-clone dev boot of `web` + admin-web does NOT
+    # require setting bot credentials first. The bot worker process must check
+    # for this sentinel and refuse to start (see app/workers/telegram_bot.py).
+    # Real deployments override via .env / docker-compose env.
+    telegram_bot_token: SecretStr = SecretStr("placeholder-telegram-bot-token-not-real")
+    telegram_bot_username: str = "placeholder_bot"  # without leading `@`
     otp_deep_link_ttl_seconds: int = 600  # 10 min — AUTH-TG-01
     otp_code_ttl_seconds: int = 300       # 5 min  — AUTH-TG-02
     otp_max_attempts: int = 5             # AUTH-TG-02
