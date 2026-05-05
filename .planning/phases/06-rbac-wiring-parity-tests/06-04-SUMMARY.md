@@ -7,6 +7,7 @@ tags:
   - tests
   - fixture-router
   - integration
+requirements-completed: [RBAC-05, TEST-05]
 
 # Dependency graph
 requires:

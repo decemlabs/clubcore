@@ -3,6 +3,7 @@ phase: 08-clients-module-audit-log
 plan: 01
 subsystem: backend-foundation
 tags: [migration, orm, audit, clients, schema]
+requirements-completed: [INFRA-04, CLIENTS-01, AUDIT-01]
 requires:
   - 0001_auth migration (users table)
   - 0003_telegram_username migration (Phase 7 chain head)

@@ -3,6 +3,7 @@ phase: 08-clients-module-audit-log
 plan: 04
 subsystem: clients
 tags: [repository, sqlalchemy, soft-delete, pagination, search]
+requirements-completed: [CLIENTS-09]
 requires:
   - 08-01 (Client ORM + Gender)
   - 08-03 (schemas: ClientCreateRequest/UpdateRequest/ListQuery/Sort + EmergencyContact) — wave 2 sibling
