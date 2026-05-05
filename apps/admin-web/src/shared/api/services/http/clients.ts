@@ -24,20 +24,19 @@ interface PaginatedClientResponse {
 
 export const clients: ClientsService = {
   async list(query: ClientsListQuery) {
-    // Append query params to URL -- RequestInitWithBody has no `query` field.
-    // The `as never` cast satisfies the openapi paths type while keeping the URL dynamic.
-    const params = new URLSearchParams()
-    if (query.q) params.set('q', query.q)
-    params.set('page', String(query.page))
-    params.set('pageSize', String(query.pageSize))
+    const q: Record<string, string | number> = {
+      page: query.page,
+      pageSize: query.pageSize,
+    }
+    if (query.q) q.q = query.q
     const raw = unwrap<PaginatedClientResponse>(
-      await request('get', `/api/v1/clients?${params.toString()}` as never),
+      await request('get', '/api/v1/clients', { query: q }),
     )
     return { ...raw, items: raw.items.map(responseToClient) }
   },
   async get(id: ClientId) {
     const raw = unwrap<ClientResponse>(
-      await request('get', '/api/v1/clients/{client_id}', { params: { client_id: id } } as never),
+      await request('get', '/api/v1/clients/{client_id}', { params: { client_id: id } }),
     )
     return responseToClient(raw)
   },
@@ -52,7 +51,7 @@ export const clients: ClientsService = {
       await request('patch', '/api/v1/clients/{client_id}', {
         params: { client_id: id },
         body: updateInputToRequest(input),
-      } as never),
+      }),
     )
     return responseToClient(raw)
   },
@@ -60,6 +59,6 @@ export const clients: ClientsService = {
     // 204 No Content -- pass through (no unwrap needed).
     await request('delete', '/api/v1/clients/{client_id}', {
       params: { client_id: id },
-    } as never)
+    })
   },
 }

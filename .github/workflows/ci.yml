@@ -99,6 +99,9 @@ jobs:
       - name: Test (workspaces)
         run: pnpm -r test
 
+      - name: Test @sportzal/api-client
+        run: pnpm -F @sportzal/api-client test
+
       - name: Codegen — packages/api-client
         run: pnpm --filter @sportzal/api-client codegen
 
