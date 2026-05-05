@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
-stopped_at: Completed Phase 11 (clients-http-shape-adapter) — VERIFIED passed; SC #4 deferred to Phase 12.1
-last_updated: "2026-05-04T20:30:00.000Z"
-last_activity: 2026-05-04 -- Phase 11 verified passed, SC #4 deferred to Phase 12.1
+stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
+last_updated: "2026-05-05T09:45:54.510Z"
+last_activity: 2026-05-05 -- Phase 12 planning complete
 progress:
-  total_phases: 14
+  total_phases: 12
   completed_phases: 8
-  total_plans: 53
+  total_plans: 56
   completed_plans: 51
-  percent: 96
+  percent: 91
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 
 Phase: 11 (clients-http-shape-adapter) — COMPLETE & VERIFIED
 Plan: 2 of 2 (both plans executed; SC #4 deferred to Phase 12.1)
-Status: Ready to execute Phase 12 or Phase 12.1
-Last activity: 2026-05-04 -- Phase 11 verified passed (9/9 must-haves)
+Status: Ready to execute
+Last activity: 2026-05-05 -- Phase 12 planning complete
 
 ## Performance Metrics
 
