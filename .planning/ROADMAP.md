@@ -212,7 +212,11 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
   5. `packages/api-client/` has a working test runner (vitest), the throwaway test that was used to verify CR-01/CR-02 fetcher fixes is committed as a permanent regression test, and the package has at least 1 `pnpm test` invocation in CI.
   6. `.planning/REQUIREMENTS.md` traceability table reflects reality: 63 stale `Pending` rows for v1.1 REQs flip to `Complete` (or to `Phase 11/13/14` for the few that gap-closure phases touch); coverage count at the top of the file matches.
   7. SUMMARY.md frontmatter `requirements-completed:` arrays in Phase 04, 05, 06, 08 are backfilled to list every REQ-ID those phases closed (currently 4 + 12 + 4 + 1 = 21 missing entries per the audit) so the next audit's 3-source check sees consistent records.
-**Plans**: TBD
+**Plans:** 4 plans
+- [ ] 13-01-PLAN.md — Drop dead expiresAt + delete members/ + Telegram env defaults (SC #1, #3, #4)
+- [ ] 13-02-PLAN.md — Backfill SUMMARY frontmatter requirements-completed for Phases 4/5/6/8 (SC #7)
+- [ ] 13-03-PLAN.md — Typed query field in fetcher + drop as never casts + vitest + CI (SC #2, #5)
+- [ ] 13-04-PLAN.md — Refresh REQUIREMENTS.md traceability table to reflect reality (SC #6)
 **UI hint**: no
 
 ### Phase 14: Clients Search PII Hardening
