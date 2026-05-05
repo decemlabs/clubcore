@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Auth + Clients
 status: executing
 stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
-last_updated: "2026-05-05T09:45:54.510Z"
-last_activity: 2026-05-05 -- Phase 12 planning complete
+last_updated: "2026-05-05T09:48:26.584Z"
+last_activity: 2026-05-05 -- Phase 12 execution started
 progress:
   total_phases: 12
   completed_phases: 8
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 12 — v1.1 Verification Backfill (next)
+**Current focus:** Phase 12 — v1.1-verification-backfill
 
 ## Current Position
 
-Phase: 11 (clients-http-shape-adapter) — COMPLETE & VERIFIED
-Plan: 2 of 2 (both plans executed; SC #4 deferred to Phase 12.1)
-Status: Ready to execute
-Last activity: 2026-05-05 -- Phase 12 planning complete
+Phase: 12 (v1.1-verification-backfill) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 12
+Last activity: 2026-05-05 -- Phase 12 execution started
 
 ## Performance Metrics
 
