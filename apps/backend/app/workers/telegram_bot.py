@@ -17,6 +17,8 @@ import asyncio
 import signal
 from contextlib import AsyncExitStack, suppress
 
+import structlog
+
 from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
 from app.core.logging import configure_logging
@@ -26,11 +28,28 @@ from app.integrations.telegram.bot import build_application
 from app.integrations.telegram.handlers import HandlerContext, start_handler
 from app.modules.auth import telegram_service  # D-06 relaxation
 
+# Sentinel matched against settings.telegram_bot_token; fresh-clone default
+# from app/core/config.py. The worker refuses to start while this value is
+# in effect — real deployments override via .env / docker-compose env.
+_PLACEHOLDER_TELEGRAM_BOT_TOKEN = "placeholder-telegram-bot-token-not-real"  # noqa: S105
+
 
 async def main() -> None:
     """Long-polling bot main loop."""
     settings = get_settings()
     configure_logging(settings)
+
+    if settings.telegram_bot_token.get_secret_value() == _PLACEHOLDER_TELEGRAM_BOT_TOKEN:
+        log = structlog.get_logger("workers.telegram_bot")
+        log.error(
+            "telegram_bot_placeholder_token",
+            message=(
+                "TELEGRAM_BOT_TOKEN is the placeholder default — the bot worker "
+                "cannot start. Set TELEGRAM_BOT_TOKEN (from @BotFather) and "
+                "TELEGRAM_BOT_USERNAME in .env or docker-compose env."
+            ),
+        )
+        raise SystemExit(2)
 
     async with AsyncExitStack() as stack:
         _engine, sessionmaker = await stack.enter_async_context(db_lifespan_manager())
