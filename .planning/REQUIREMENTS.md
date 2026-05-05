@@ -84,13 +84,13 @@ This milestone delivers the first business slice on top of the v1.0 skeleton: tw
 
 ### API Surface (OpenAPI + packages/api-client)
 
-- [ ] **API-01**: `apps/backend/scripts/export_openapi.py` calls `create_app().openapi()` (lifespan-safe, no DB required) and writes `apps/backend/openapi.json` with deterministic byte-stable output (`indent=2, sort_keys=True`)
-- [ ] **API-02**: CI step regenerates `openapi.json` and runs `git diff --exit-code` to block drift between code and the checked-in spec
+- [x] **API-01**: `apps/backend/scripts/export_openapi.py` calls `create_app().openapi()` (lifespan-safe, no DB required) and writes `apps/backend/openapi.json` with deterministic byte-stable output (`indent=2, sort_keys=True`)
+- [x] **API-02**: CI step regenerates `openapi.json` and runs `git diff --exit-code` to block drift between code and the checked-in spec
 - [ ] **API-03**: Backend wire format is **camelCase** via Pydantic `alias_generator=to_camel` + `populate_by_name=True` on a base response/request model; Python identifiers stay snake_case internally
 - [ ] **API-04**: Pagination envelope is `{items, total, page, pageSize}`; `app/core/pagination.py` is updated to the new shape (replaces v1.0 `limit/offset`); frontend contract becomes the single source of truth
-- [ ] **API-05**: `packages/api-client` adds `openapi-typescript@^7.13.0` as a devDependency and a `codegen` script that produces `src/schema.d.ts` (committed to git per Phase 9 D-07 — required for API-07 drift-gate to be meaningful) from `apps/backend/openapi.json`
-- [ ] **API-06**: `packages/api-client/src/fetcher.ts` (~80 LOC) exposes `request<P, M>(method, path, init)` with `credentials: 'include'`, automatic `X-CSRF-Token` injection, typed `ApiError` with `code/message/fields`, and module-scoped single-flight `/auth/refresh` on 401
-- [ ] **API-07**: CI step runs `pnpm --filter @sportzal/api-client codegen && git diff --exit-code` to block schema drift
+- [x] **API-05**: `packages/api-client` adds `openapi-typescript@^7.13.0` as a devDependency and a `codegen` script that produces `src/schema.d.ts` (committed to git per Phase 9 D-07 — required for API-07 drift-gate to be meaningful) from `apps/backend/openapi.json`
+- [x] **API-06**: `packages/api-client/src/fetcher.ts` (~80 LOC) exposes `request<P, M>(method, path, init)` with `credentials: 'include'`, automatic `X-CSRF-Token` injection, typed `ApiError` with `code/message/fields`, and module-scoped single-flight `/auth/refresh` on 401
+- [x] **API-07**: CI step runs `pnpm --filter @sportzal/api-client codegen && git diff --exit-code` to block schema drift
 
 ### Frontend Wiring (admin-web)
 
@@ -222,13 +222,13 @@ REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 | AUDIT-01 | Phase 8 | Pending |
 | AUDIT-02 | Phase 8 | Pending |
 | AUDIT-03 | Phase 8 | Pending |
-| API-01 | Phase 9 | Pending |
-| API-02 | Phase 9 | Pending |
+| API-01 | Phase 9 | Complete |
+| API-02 | Phase 9 | Complete |
 | API-03 | Phase 4 | Pending |
 | API-04 | Phase 4 | Pending |
-| API-05 | Phase 9 | Pending |
-| API-06 | Phase 9 | Pending |
-| API-07 | Phase 9 | Pending |
+| API-05 | Phase 9 | Complete |
+| API-06 | Phase 9 | Complete |
+| API-07 | Phase 9 | Complete |
 | FE-01 | Phase 10, 11 | Pending |
 | FE-02 | Phase 10 | Complete |
 | FE-03 | Phase 10 | Complete |
