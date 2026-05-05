@@ -69,7 +69,6 @@ export const auth: AuthService = {
     const r: TelegramStartResponse = {
       deepLinkUrl: `https://t.me/sportzal_mock_bot?start=${token}`,
       deepLinkToken: token,
-      expiresAt: new Date(issuedAt + TELEGRAM_TOKEN_TTL_MS).toISOString(),
     }
     return r
   },
@@ -89,7 +88,6 @@ export const auth: AuthService = {
     }
     const r: TelegramStatusResponse = {
       bound: session.bound,
-      expiresAt: new Date(session.issuedAt + TELEGRAM_TOKEN_TTL_MS).toISOString(),
     }
     return r
   },

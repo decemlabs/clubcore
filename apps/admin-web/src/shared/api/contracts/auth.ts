@@ -16,12 +16,10 @@ export interface EmailLoginInput {
 export interface TelegramStartResponse {
   deepLinkUrl: string
   deepLinkToken: string
-  expiresAt: string // ISO
 }
 
 export interface TelegramStatusResponse {
   bound: boolean
-  expiresAt?: string
 }
 
 export interface TelegramVerifyInput {
