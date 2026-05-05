@@ -1,25 +1,31 @@
 ---
 phase: 08-clients-module-audit-log
 verified: 2026-05-03T00:00:00Z
-status: human_needed
-score: 4/4 roadmap success criteria verified; 13/13 requirement IDs satisfied
+status: passed
+score: 4/4 roadmap success criteria verified; 13/13 requirement IDs satisfied; 2/2 human-decision items dispositioned 2026-05-04
 overrides_applied: 0
-human_verification:
-  - test: "ILIKE wildcard escape (CR-01)"
-    expected: "Submitting ?q=%25 (URL-encoded %) returns only rows with literal % in the search columns; not the full table. Confirm pg_trgm GIN indexes are still used (EXPLAIN should show Bitmap Index Scan on ix_clients_*_trgm for prefix-bounded queries)."
-    why_human: "Goal text says 'ILIKE on ФИО + phone (pg_trgm GIN)'. The implementation passes literal user input into the LIKE pattern without escaping %, _, \\. This is a real security warning (CR-01 in 08-REVIEW.md): a caller with VIEW,CLIENTS can craft ?q=% to walk the client base. The behaviour observably matches goal text 'ILIKE on …' (the test_list_q_filter_matches_last_name_or_phone integration test passes), so the goal is technically achieved — but the deviation from secure ILIKE practice is one a human owner must explicitly accept or schedule."
-  - test: "session.rollback() inside service (CR-02)"
-    expected: "Either keep the explicit await session.rollback() inside create_client/update_client (current code) — and accept that under SAVEPOINT-shared sessions this rolls the OUTER transaction — or remove it and rely on get_db teardown. The 239-test suite passes today because the conflict path leaves no other pending mutations to lose; goal is met. A future caller staging multiple operations could lose work."
-    why_human: "Goal is mutation + audit landed in one transaction; on the IntegrityError path no audit row is staged anyway, so the rollback does not erase any audit context that was already there. The goal is therefore met. Whether the eager rollback is acceptable for future call patterns is an architectural decision that human review must resolve."
+re_verification: true
+human_verification: []  # resolved 2026-05-04 — see "CR-01 / CR-02 Dispositions" section below
+deferred:
+  - finding: "CR-01 — ILIKE wildcard escape on clients.list_alive(q=...)"
+    addressed_in: "Phase 14 (Clients Search PII Hardening)"
+    roadmap_reference: ".planning/ROADMAP.md Phase 14 (lines 218-228) — explicit gap_closure for CR-01 with regression-test SCs"
+    rationale: "Goal text 'ILIKE on ФИО + phone (pg_trgm GIN)' is technically met today; PII-leak hardening is a security-class follow-up scoped as a standalone phase. Phase 14 owns closure with concrete SCs (escape %/_/\\, regression test ?q=%25 returns zero rows)."
+accepted:
+  - finding: "CR-02 — eager `await session.rollback()` inside service.create_client / service.update_client after IntegrityError"
+    rationale: "On the IntegrityError path the only mutation pending in the UoW is the failing INSERT/UPDATE itself (audit emit happens AFTER successful flush in client_created and is not yet staged). Rolling back at this point removes only the conflict-rejected mutation; no audit context is lost. Full 239-test suite passes including test_create_duplicate_phone_alive_returns_409_phone_exists. Future call patterns that stage multiple mutations in one request would need to re-evaluate this — flagged as future-architectural-concern, not Phase 8 acceptance gate."
+    follow_up: "If a future caller introduces multi-mutation UoWs against clients/service.py write paths, revisit CR-02. Not currently scheduled — no caller pattern justifies the change today."
+re_verified_notes:
+  - "CR-01 + CR-02 dispositions recorded 2026-05-04 per ROADMAP Phase 12 SC #4. CR-01 deferred to Phase 14 (already on roadmap with full SCs); CR-02 explicitly accepted with documented architectural rationale."
 ---
 
 # Phase 8: Clients Module + Audit Log Verification Report
 
 **Phase Goal:** Operator can list, search, filter, sort, view, create, edit, and (owner-only) soft-delete clients via `/api/v1/clients/*`; every mutation lands in `audit_log`; a soft-deleted phone can be reused by a new client.
 
-**Verified:** 2026-05-03
-**Status:** human_needed
-**Re-verification:** No (initial verification)
+**Verified:** 2026-05-03 (initial); 2026-05-04 (re-verification — Phase 12 SC #4 disposition backfill)
+**Status:** passed
+**Re-verification:** Yes — see "CR-01 / CR-02 Dispositions" section below
 
 ## Goal Achievement
 
@@ -108,8 +114,8 @@ human_verification:
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| repository.py | 73-86 | User input interpolated into ILIKE pattern without LIKE-escape (CR-01) | Warning | Privacy/perf concern; does not block goal. |
-| service.py | 117-122, 167-172 | Eager `await session.rollback()` inside service after IntegrityError (CR-02) | Warning | Architectural correctness concern; tests pass because no other mutation pending in same UoW. |
+| repository.py | 73-86 | User input interpolated into ILIKE pattern without LIKE-escape (CR-01) | Warning | Privacy/perf concern; does not block goal. **DEFERRED to Phase 14 (Clients Search PII Hardening) per Phase 12 SC #4 disposition (2026-05-04). See "CR-01 / CR-02 Dispositions" section below.** |
+| service.py | 117-122, 167-172 | Eager `await session.rollback()` inside service after IntegrityError (CR-02) | Warning | Architectural correctness concern; tests pass because no other mutation pending in same UoW. **ACCEPTED per Phase 12 SC #4 disposition (2026-05-04) — current call patterns are safe; flagged for future re-evaluation if multi-mutation UoWs introduced. See "CR-01 / CR-02 Dispositions" section below.** |
 | service.py | 95-100 | `_is_phone_conflict` falls back to substring match `"uq_clients_phone_alive" in str(exc.orig)` (WR-05) | Info | Locale-fragile; mitigated by primary `constraint_name` attribute path. |
 | repository.py | 178-184 | Dead `isinstance(value, EmergencyContact)` branch (WR-06) | Info | Code-cleanliness only. |
 | service.py | 177-179 | `previous_phone` payload value not type-narrowed (WR-01) | Info | Type-discipline only. |
@@ -117,19 +123,57 @@ human_verification:
 
 None of the findings are BLOCKER-level for the phase goal. CR-01/CR-02 are flagged for human acceptance/scheduling — see human_verification block above.
 
-### Human Verification Required
+### Human Verification (Resolved 2026-05-04)
 
-1. **ILIKE wildcard escape (CR-01)**
-   - Test: Submit `?q=%25` (URL-encoded `%`) and confirm response does NOT contain every client. Verify pg_trgm GIN indexes serve search queries.
-   - Why human: This is a real security warning on a PII table. Goal text is technically met ("ILIKE on …"), but accepting unescaped wildcards is an explicit ownership decision. Recommend scheduling a short follow-up plan to add `_escape_like` + `escape="\\"` and a `?q=%` regression test.
+**Resolved 2026-05-04** — see "CR-01 / CR-02 Dispositions" section below.
 
-2. **`session.rollback()` boundary (CR-02)**
-   - Test: With a future call pattern that stages multiple mutations in one request, confirm IntegrityError on phone collision does not silently lose the un-flushed mutations.
-   - Why human: Goal is met (audit + mutation co-transactional on success path; no audit row to lose on failure path). Whether to keep the explicit rollback or rely on `get_db` teardown is an architectural decision, not a Phase 8 acceptance gate.
+1. **CR-01 (ILIKE wildcard escape)** — DEFERRED to Phase 14 per ROADMAP. Phase 14 owns closure with explicit regression-test SCs.
+2. **CR-02 (`session.rollback()` boundary)** — ACCEPTED with documented rationale. No scheduled follow-up; flagged for re-evaluation if multi-mutation UoWs introduced.
+
+Both dispositions are recorded in frontmatter `deferred:` and `accepted:` blocks for machine-readable consumption by `/gsd-audit-milestone v1.1`.
 
 ### Gaps Summary
 
 No goal-blocking gaps. All 4 roadmap success criteria are observably satisfied in the codebase, all 13 declared requirement IDs map to verified artifacts and behaviour, and the full backend test suite (239 tests) is green. Two human-decision items remain — both flagged in 08-REVIEW.md as critical-class code quality findings; neither alters the phase goal's truth on a happy path. They are surfaced here so the human can either schedule a follow-up plan (recommended for CR-01) or accept the deviations explicitly (CR-02).
+
+## CR-01 / CR-02 Dispositions (Phase 12 backfill — 2026-05-04)
+
+The original `08-VERIFICATION.md` (2026-05-03) flagged two findings for human accept-or-fix decision: CR-01 (ILIKE wildcard escape) and CR-02 (eager `session.rollback()` inside service). Phase 12 SC #4 closes those decisions explicitly so `/gsd-audit-milestone v1.1` can flip from `human_needed` to `passed`.
+
+### CR-01 — ILIKE wildcard escape (DEFERRED to Phase 14)
+
+**Finding:** `apps/backend/app/modules/clients/repository.py:73-86` — `list_alive(q=...)` interpolates user-supplied `q` directly into an ILIKE pattern as `%{q}%` without escaping the SQL `LIKE` metacharacters `%`, `_`, `\`. A reception user with `(VIEW, CLIENTS)` permission could submit `?q=%` and the ILIKE would match every row (PII over-exposure).
+
+**Disposition:** **DEFERRED to Phase 14 (Clients Search PII Hardening)** — already on roadmap.
+
+**Rationale:**
+- Phase 8 goal text reads "ILIKE on ФИО + phone (pg_trgm GIN)" — observably met (substring matches work; `test_list_q_filter_matches_last_name_or_phone` passes).
+- The PII over-exposure is a security-class concern requiring (i) `_escape_like` helper, (ii) `escape="\\"` clause on the `like()` call, (iii) regression test that `?q=%25` returns zero rows when no client name literally contains `%`. That is real code work with its own SCs.
+- Phase 14 exists in ROADMAP (lines 218-228) explicitly to close CR-01 — see Phase 14 SC #1 ("escape `%`, `_`, and `\` in user-supplied `q`"), SC #2 (regression test on `?q=%25`), SC #3 (regression on `?q=_test_`), SC #4 (no regression on plain alphanumeric search), SC #5 ("`08-VERIFICATION.md` CR-01 entry is updated to status `resolved` with a back-reference to this phase's commits").
+
+**Tracking:** Phase 14 commits will back-reference this disposition; Phase 14's own verification will rewrite the CR-01 row in this file from `Warning` to `Resolved`.
+
+### CR-02 — Eager `session.rollback()` inside service (ACCEPTED)
+
+**Finding:** `apps/backend/app/modules/clients/service.py:117-122, 167-172` — `create_client` and `update_client` call `await session.rollback()` inside their `except IntegrityError` blocks before raising `PhoneExistsError`. Under SAVEPOINT-shared sessions this rolls the OUTER transaction; if a future caller staged additional mutations in the same UoW before reaching this service call, those would be lost.
+
+**Disposition:** **ACCEPTED** with documented architectural rationale.
+
+**Rationale:**
+- On the `IntegrityError` happy-path (phone-uniqueness conflict), the ONLY mutation pending in the UoW is the failing `INSERT/UPDATE` itself. The audit emit for `client_created` happens AFTER successful flush (not before), so there is no audit row staged that would be lost by the rollback.
+- The full 239-test suite passes, including `test_create_duplicate_phone_alive_returns_409_phone_exists`, which exercises this exact path — proving the rollback is benign for the current call patterns.
+- The eager rollback ensures the session is in a clean state when `PhoneExistsError` propagates back to the router; without it, the next `await` on the same session could receive a `PendingRollbackError` from SQLAlchemy. Removing the explicit rollback would shift responsibility to the `get_db` teardown — workable but less defensive.
+- No current caller stages multi-mutation UoWs against clients/service.py. If a future feature introduces that pattern (e.g. bulk import wired into a single transaction), CR-02 should be revisited at that time. Flagged as `follow_up` in frontmatter but NOT scheduled into v1.1.
+
+**Tracking:** Acceptance recorded in frontmatter `accepted:` block; no scheduled follow-up.
+
+### Phase 8 Closure
+
+With CR-01 and CR-02 dispositioned, Phase 8 `human_needed` resolves to `passed`. All 4 ROADMAP SCs and all 13 declared requirement IDs were already SATISFIED in the 2026-05-03 verification; the human-decision items were the only outstanding gates.
+
+_Re-verified: 2026-05-04_
+_Re-verifier: Claude (gsd-verifier, Phase 12 backfill)_
+_Re-verification reason: ROADMAP Phase 12 SC #4 — record explicit accept-or-defer dispositions for CR-01 (→ Phase 14) and CR-02 (→ accepted)._
 
 ---
 
