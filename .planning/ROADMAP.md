@@ -250,7 +250,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 11. Clients HTTP-mode Shape Adapter | v1.1 | 2/2 | Complete   | 2026-05-04 |
 | 12. v1.1 Verification Backfill | v1.1 | 5/5 | Complete    | 2026-05-05 |
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 4/4 | Complete   | 2026-05-05 |
-| 14. Clients Search PII Hardening | v1.1 | 1/3 | In Progress|  |
+| 14. Clients Search PII Hardening | v1.1 | 2/3 | In Progress|  |
 
 ## Coverage Report
 
