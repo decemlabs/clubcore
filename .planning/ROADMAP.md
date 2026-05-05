@@ -244,7 +244,7 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 | 9. OpenAPI Pipeline + packages/api-client | v1.1 | 0/TBD | Not started | — |
 | 10. admin-web Auth + Clients Wiring | v1.1 | 8/8 | Complete   | 2026-05-04 |
 | 11. Clients HTTP-mode Shape Adapter | v1.1 | 2/2 | Complete   | 2026-05-04 |
-| 12. v1.1 Verification Backfill | v1.1 | 0/TBD | Not started | — |
+| 12. v1.1 Verification Backfill | v1.1 | 4/5 | In Progress|  |
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 0/TBD | Not started | — |
 | 14. Clients Search PII Hardening | v1.1 | 0/TBD | Not started | — |
 
