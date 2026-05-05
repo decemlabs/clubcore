@@ -3,6 +3,7 @@ phase: 05-user-schema-email-password-auth
 plan: 03
 subsystem: backend/auth-schema
 tags: [orm, alembic, schema, users, refresh-tokens, otp]
+requirements-completed: [INFRA-03, AUTH-05, TEST-08]
 requires:
   - 05-01-foundations  # Phase 4 NAMING_CONVENTION + UUIDPkMixin + TimestampMixin
   - 05-02-permissions  # Role StrEnum

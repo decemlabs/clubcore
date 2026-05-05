@@ -3,6 +3,7 @@ phase: 05-user-schema-email-password-auth
 plan: 05
 subsystem: backend/auth
 tags: [auth, router, schemas, pydantic, fastapi, cookies, envelope]
+requirements-completed: [AUTH-EP-01, AUTH-EP-02, AUTH-EP-05, AUTH-LO-04]
 dependency_graph:
   requires:
     - "05-01"   # Settings: cookie_secure, refresh_reuse_window_seconds

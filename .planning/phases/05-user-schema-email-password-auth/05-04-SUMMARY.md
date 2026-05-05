@@ -3,6 +3,7 @@ phase: 05-user-schema-email-password-auth
 plan: 04
 subsystem: auth-service
 tags: [auth, rate-limit, refresh-rotation, session, redis, postgres]
+requirements-completed: [AUTH-05, AUTH-06, AUTH-EP-03, AUTH-LO-03]
 requires:
   - apps/backend/app/core/security.py
   - apps/backend/app/core/exceptions.py

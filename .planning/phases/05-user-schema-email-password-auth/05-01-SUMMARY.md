@@ -3,7 +3,7 @@ phase: 05-user-schema-email-password-auth
 plan: 01
 subsystem: backend-config
 tags: [config, dependencies, env, settings]
-requirements: ["AUTH-06", "AUTH-EP-04"]
+requirements-completed: [AUTH-06, AUTH-EP-04]
 dependency_graph:
   requires: []
   provides:
