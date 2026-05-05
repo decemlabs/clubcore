@@ -174,91 +174,93 @@ REQ-ID → Phase mapping populated by `/gsd-roadmapper` on 2026-05-01.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 4 | Pending |
-| INFRA-02 | Phase 4 | Pending |
-| INFRA-03 | Phase 5 | Pending |
-| INFRA-04 | Phase 8 | Pending |
-| INFRA-05 | Phase 4 | Pending |
-| INFRA-06 | Phase 7 | Pending |
-| INFRA-07 | Phase 4 | Pending |
-| AUTH-01 | Phase 4 | Pending |
-| AUTH-02 | Phase 4 | Pending |
-| AUTH-03 | Phase 4 | Pending |
-| AUTH-04 | Phase 4 | Pending |
-| AUTH-05 | Phase 5 | Pending |
-| AUTH-06 | Phase 5 | Pending |
-| AUTH-07 | Phase 5 | Pending |
-| AUTH-EP-01 | Phase 5 | Pending |
-| AUTH-EP-02 | Phase 5 | Pending |
-| AUTH-EP-03 | Phase 5 | Pending |
-| AUTH-EP-04 | Phase 5 | Pending |
-| AUTH-EP-05 | Phase 5 | Pending |
-| AUTH-TG-01 | Phase 7 | Pending |
-| AUTH-TG-02 | Phase 7 | Pending |
-| AUTH-TG-03 | Phase 7 | Pending |
-| AUTH-TG-04 | Phase 7 | Pending |
-| AUTH-TG-05 | Phase 7 | Pending |
-| AUTH-TG-06 | Phase 7 | Pending |
-| AUTH-LO-01 | Phase 5 | Pending |
-| AUTH-LO-02 | Phase 5 | Pending |
-| AUTH-LO-03 | Phase 5 | Pending |
-| AUTH-LO-04 | Phase 5 | Pending |
-| CSRF-01 | Phase 4 | Pending |
-| CSRF-02 | Phase 6 | Pending |
-| RBAC-01 | Phase 4 | Pending |
-| RBAC-02 | Phase 6 | Pending |
-| RBAC-03 | Phase 6 | Pending |
-| RBAC-04 | Phase 6 | Pending |
-| RBAC-05 | Phase 6 | Pending |
-| CLIENTS-01 | Phase 8, 11 | Pending |
-| CLIENTS-02 | Phase 8 | Pending |
-| CLIENTS-03 | Phase 8 | Pending |
+| INFRA-01 | Phase 4 | Complete |
+| INFRA-02 | Phase 4 | Complete |
+| INFRA-03 | Phase 5 | Complete |
+| INFRA-04 | Phase 8 | Complete |
+| INFRA-05 | Phase 4 | Complete |
+| INFRA-06 | Phase 7 | Complete |
+| INFRA-07 | Phase 4 | Complete |
+| AUTH-01 | Phase 4 | Complete |
+| AUTH-02 | Phase 4 | Complete |
+| AUTH-03 | Phase 4 | Complete |
+| AUTH-04 | Phase 4 | Complete |
+| AUTH-05 | Phase 5 | Complete |
+| AUTH-06 | Phase 5 | Complete |
+| AUTH-07 | Phase 5 | Complete |
+| AUTH-EP-01 | Phase 5 | Complete |
+| AUTH-EP-02 | Phase 5 | Complete |
+| AUTH-EP-03 | Phase 5 | Complete |
+| AUTH-EP-04 | Phase 5 | Complete |
+| AUTH-EP-05 | Phase 5 | Complete |
+| AUTH-TG-01 | Phase 7 | Complete |
+| AUTH-TG-02 | Phase 7 | Complete |
+| AUTH-TG-03 | Phase 7 | Complete |
+| AUTH-TG-04 | Phase 7 | Complete |
+| AUTH-TG-05 | Phase 7 | Complete |
+| AUTH-TG-06 | Phase 7 | Complete |
+| AUTH-LO-01 | Phase 5 | Complete |
+| AUTH-LO-02 | Phase 5 | Complete |
+| AUTH-LO-03 | Phase 5 | Complete |
+| AUTH-LO-04 | Phase 5 | Complete |
+| CSRF-01 | Phase 4 | Complete |
+| CSRF-02 | Phase 6 | Complete |
+| RBAC-01 | Phase 4 | Complete |
+| RBAC-02 | Phase 6 | Complete |
+| RBAC-03 | Phase 6 | Complete |
+| RBAC-04 | Phase 6 | Complete |
+| RBAC-05 | Phase 6 | Complete |
+| CLIENTS-01 | Phase 8, 11 | Complete |
+| CLIENTS-02 | Phase 8 | Complete |
+| CLIENTS-03 | Phase 8 | Complete |
 | CLIENTS-04 | Phase 8, 14 | Pending |
-| CLIENTS-05 | Phase 8, 11 | Pending |
-| CLIENTS-06 | Phase 8, 11 | Pending |
-| CLIENTS-07 | Phase 8, 11 | Pending |
-| CLIENTS-08 | Phase 8 | Pending |
-| CLIENTS-09 | Phase 8 | Pending |
-| AUDIT-01 | Phase 8 | Pending |
-| AUDIT-02 | Phase 8 | Pending |
-| AUDIT-03 | Phase 8 | Pending |
+| CLIENTS-05 | Phase 8, 11 | Complete |
+| CLIENTS-06 | Phase 8, 11 | Complete |
+| CLIENTS-07 | Phase 8, 11 | Complete |
+| CLIENTS-08 | Phase 8 | Complete |
+| CLIENTS-09 | Phase 8 | Complete |
+| AUDIT-01 | Phase 8 | Complete |
+| AUDIT-02 | Phase 8 | Complete |
+| AUDIT-03 | Phase 8 | Complete |
 | API-01 | Phase 9 | Complete |
 | API-02 | Phase 9 | Complete |
-| API-03 | Phase 4 | Pending |
-| API-04 | Phase 4 | Pending |
+| API-03 | Phase 4 | Complete |
+| API-04 | Phase 4 | Complete |
 | API-05 | Phase 9 | Complete |
 | API-06 | Phase 9 | Complete |
 | API-07 | Phase 9 | Complete |
-| FE-01 | Phase 10, 11 | Pending |
+| FE-01 | Phase 10, 11 | Complete |
 | FE-02 | Phase 10 | Complete |
 | FE-03 | Phase 10 | Complete |
-| FE-04 | Phase 10, 11 | Pending |
+| FE-04 | Phase 10, 11 | Complete |
 | FE-05 | Phase 10 | Complete |
 | FE-06 | Phase 10 | Complete |
 | FE-07 | Phase 10 | Complete |
-| TEST-01 | Phase 5 | Pending |
-| TEST-02 | Phase 5 | Pending |
-| TEST-03 | Phase 7 | Pending |
-| TEST-04 | Phase 5 | Pending |
-| TEST-05 | Phase 6 | Pending |
-| TEST-06 | Phase 6 | Pending |
-| TEST-07 | Phase 6 | Pending |
-| TEST-08 | Phase 5 | Pending |
+| TEST-01 | Phase 5 | Complete |
+| TEST-02 | Phase 5 | Complete |
+| TEST-03 | Phase 7 | Complete |
+| TEST-04 | Phase 5 | Complete |
+| TEST-05 | Phase 6 | Complete |
+| TEST-06 | Phase 6 | Complete |
+| TEST-07 | Phase 6 | Complete |
+| TEST-08 | Phase 5 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 70 total
 - Mapped to phases: 70 ✓
 - Unmapped: 0
+- Complete: 69
+- Pending: 1 (CLIENTS-04 — gap-closure scheduled for Phase 14: Clients Search PII Hardening)
 
-**Distribution:**
-- Phase 4 (Auth Foundations): 12 requirements
-- Phase 5 (User Schema + Email/Password): 17 requirements
-- Phase 6 (RBAC Wiring + Parity Tests): 8 requirements
-- Phase 7 (Telegram OTP Channel): 8 requirements
-- Phase 8 (Clients Module + Audit Log): 13 requirements
-- Phase 9 (OpenAPI Pipeline + api-client): 5 requirements
-- Phase 10 (admin-web Auth + Clients Wiring): 7 requirements
+**Distribution (primary phase):**
+- Phase 4 (Auth Foundations): 12 requirements — all Complete
+- Phase 5 (User Schema + Email/Password): 17 requirements — all Complete
+- Phase 6 (RBAC Wiring + Parity Tests): 8 requirements — all Complete
+- Phase 7 (Telegram OTP Channel): 8 requirements — all Complete
+- Phase 8 (Clients Module + Audit Log): 13 requirements — 12 Complete, 1 Pending (CLIENTS-04 → Phase 14)
+- Phase 9 (OpenAPI Pipeline + api-client): 5 requirements — all Complete
+- Phase 10 (admin-web Auth + Clients Wiring): 7 requirements — all Complete
 
 ---
 *Requirements defined: 2026-05-01*
-*Last updated: 2026-05-01 — traceability populated after roadmap approval (phases 4-10)*
+*Last updated: 2026-05-05 — Phase 13 SC #6 traceability refresh (63 Pending → Complete; CLIENTS-04 retained as Pending for Phase 14)*
