@@ -272,10 +272,15 @@ async def db_session_real_commit() -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
 
-    # Cleanup: wipe VIS-TEST-01 data so the next test starts clean.
-    # TRUNCATE both tables because VIS-TEST-01 asserts on audit_log row count.
+    # Cleanup: wipe everything VIS-TEST-01 inserts so the next test starts clean.
+    # Real-commit writes are NOT rolled back (unlike SAVEPOINT-isolated tests),
+    # so we must TRUNCATE every table the test seeds: users + plans + clients +
+    # memberships + visits + audit_log. CASCADE handles the FK chain order.
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE visits, audit_log RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE users, membership_plans, clients, memberships, "
+                "visits, audit_log RESTART IDENTITY CASCADE"
+            )
         )
     await engine.dispose()

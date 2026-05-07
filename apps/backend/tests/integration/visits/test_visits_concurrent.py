@@ -12,7 +12,7 @@ After the burst, audit_log has exactly:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_models import AuditLog
+from app.core.config import get_settings
 from app.core.permissions import Role
 from app.core.security import hash_password
 from app.modules.auth.models import User
@@ -54,6 +55,7 @@ async def _build_authed_client(app: FastAPI) -> AsyncClient:
 async def test_concurrent_check_in_one_wins(
     db_session_real_commit: AsyncSession,
     app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """VIS-TEST-01 -- 10 parallel POST => exactly 1x201 + 9x409 duplicate_checkin.
 
@@ -62,6 +64,11 @@ async def test_concurrent_check_in_one_wins(
     because SAVEPOINT-isolated db_session interferes with concurrent insert
     serialisation.
     """
+    # Open gym hours wide so the test runs at any wall-clock time
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gym_hours_start", time(0, 0))
+    monkeypatch.setattr(settings, "gym_hours_end", time(23, 59))
+
     # Seed owner user + client + plan + membership via real-commit session
     hashed = await hash_password(_CONCURRENT_OWNER_PASSWORD)
     owner = User(
@@ -72,6 +79,8 @@ async def test_concurrent_check_in_one_wins(
     )
     db_session_real_commit.add(owner)
     await db_session_real_commit.commit()
+    await db_session_real_commit.refresh(owner)
+    owner_id = owner.id
 
     plan = MembershipPlan(
         name=f"ConcPlan-{uuid4().hex[:6]}",
@@ -87,6 +96,7 @@ async def test_concurrent_check_in_one_wins(
         last_name=f"ConcClient-{uuid4().hex[:6]}",
         first_name="Test",
         phone=f"+7906{phone_suffix:07d}",
+        created_by_user_id=owner_id,
     )
     db_session_real_commit.add(client_obj)
     await db_session_real_commit.commit()
