@@ -42,7 +42,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 ### 🚧 v1.2 Memberships + Visits (Phases 15-23)
 
 - [x] **Phase 15: Foundations — RBAC + audit taxonomy + helper hoisting** — extend `Action`/`Resource`/`OWNER_ONLY` (backend ↔ admin-web byte parity), hoist `escape_like_pattern` to `core/sql.py`, lock audit-event taxonomy, ship `BackendSchemaBase` + `BusinessService` template + AST commit gate, log v1.2 Key Decisions. (completed 2026-05-07)
-- [ ] **Phase 16: Membership Plans Catalog (backend)** — `membership_plans` table + module + 4 owner-only endpoints + audit events; first piece of v1.2 business surface.
+- [x] **Phase 16: Membership Plans Catalog (backend)** — `membership_plans` table + module + 4 owner-only endpoints + audit events; first piece of v1.2 business surface. (completed 2026-05-07)
 - [ ] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events.
 - [ ] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding.
 - [ ] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test.
@@ -85,7 +85,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 16-02-PLAN.md — schemas.py (Create/Update/Response/ListQuery/Sort) + PlanNameExistsError + PlanNotFoundError — MEM-PLAN-02, MEM-PLAN-EP-01..03
   - [x] 16-03-PLAN.md — repository.py + service.py + AST commit gate extension — MEM-PLAN-02, MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
   - [x] 16-04-PLAN.md — router.py with 5 endpoints + v1 wiring + openapi.json regen — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
-  - [ ] 16-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit) + unit schemas test — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
+  - [x] 16-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit) + unit schemas test — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
 
 ### Phase 17: Membership Instances + Resolver (backend)
 **Goal**: Reception can sell a membership to a client and the system can answer the single question "does this client have an active membership today?" — the foundation Visits will validate against.
@@ -190,7 +190,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 4/4 | Complete | 2026-05-05 |
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 16. Membership Plans Catalog (backend) | v1.2 | 4/5 | In Progress|  |
+| 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 0/TBD | Not started | — |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
