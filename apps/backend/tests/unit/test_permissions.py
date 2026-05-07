@@ -13,10 +13,10 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_nine_entries() -> None:
-    # Mirrors apps/admin-web/src/shared/session/can.ts:12-22 (9 entries).
-    # Phase 6 TEST-06 will add a regex-based parity test against can.ts.
-    assert len(OWNER_ONLY) == 9
+def test_owner_only_has_exactly_fifteen_entries() -> None:
+    # Mirrors apps/admin-web/src/shared/session/can.ts (15 entries: 9 v1.1 + 6 v1.2 INFRA-08).
+    # Phase 6 TEST-06 / Phase 15 TESTS-08 add regex-based parity tests against can.ts.
+    assert len(OWNER_ONLY) == 15
 
 
 def test_role_value_set() -> None:
@@ -24,12 +24,21 @@ def test_role_value_set() -> None:
 
 
 def test_action_value_set() -> None:
-    assert {a.value for a in Action} == {"view", "create", "edit", "delete", "refund"}
+    # 5 v1.1 + 2 v1.2 INFRA-08 (cancel, check_in).
+    assert {a.value for a in Action} == {
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "refund",
+        "cancel",
+        "check_in",
+    }
 
 
 def test_resource_value_set() -> None:
-    # Verbatim from apps/admin-web/src/shared/session/registry.ts (11 values).
-    # Note: OWNER_AREA Python identifier maps to "owner-area" string value (hyphen).
+    # Verbatim from apps/admin-web/src/shared/session/registry.ts (14 values: 11 v1.1 + 3 v1.2).
+    # Note: OWNER_AREA / MEMBERSHIP_PLANS Python identifiers map to hyphenated string values.
     assert {r.value for r in Resource} == {
         "dashboard",
         "clients",
@@ -42,6 +51,9 @@ def test_resource_value_set() -> None:
         "templates",
         "settings",
         "owner-area",
+        "memberships",
+        "membership-plans",
+        "visits",
     }
 
 
@@ -81,7 +93,7 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check the 9 known-locked entries — drift tripwire."""
+    """Spot-check the 15 known-locked entries (9 v1.1 + 6 v1.2 INFRA-08) — drift tripwire."""
     expected = frozenset({
         (Action.VIEW, Resource.FINANCE),
         (Action.VIEW, Resource.REPORTS),
@@ -92,5 +104,12 @@ def test_specific_owner_only_membership() -> None:
         (Action.EDIT, Resource.TEMPLATES),
         (Action.DELETE, Resource.CLIENTS),
         (Action.REFUND, Resource.FINANCE),
+        # Phase 15 INFRA-08
+        (Action.VIEW, Resource.MEMBERSHIP_PLANS),
+        (Action.EDIT, Resource.MEMBERSHIP_PLANS),
+        (Action.CREATE, Resource.MEMBERSHIP_PLANS),
+        (Action.DELETE, Resource.MEMBERSHIP_PLANS),
+        (Action.CANCEL, Resource.MEMBERSHIPS),
+        (Action.DELETE, Resource.MEMBERSHIPS),
     })
     assert expected == OWNER_ONLY
