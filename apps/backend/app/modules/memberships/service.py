@@ -347,15 +347,16 @@ async def create_membership(
 
     # 6: emit audit BEFORE commit (Phase 16 D-14 co-transactional contract).
     # MEM-AUDIT-01 payload: membership_id is in resource_id; payload carries
-    # client_id, plan_id, end_date (ISO string for JSONB-serialisability).
+    # client_id, plan_id (str-cast for JSONB-serialisability — UUIDs are not
+    # natively JSON-serialisable), end_date (ISO string).
     await audit.emit(
         session,
         "membership_created",  # LITERAL (Phase 15 D-11 — AST gate enforces)
         actor_user_id=actor.id,
         resource_type="membership",  # LITERAL
         resource_id=membership.id,
-        client_id=membership.client_id,
-        plan_id=membership.plan_id,
+        client_id=str(membership.client_id),
+        plan_id=str(membership.plan_id),
         end_date=membership.end_date.isoformat(),
     )
     # 7: commit the unit of work (SVC001 AST gate enforces explicit commit)
@@ -403,6 +404,8 @@ async def cancel_membership(
     await session.flush()
 
     # D-14: emit audit BEFORE commit; OMIT `reason` key when None (NOT reason=None).
+    # client_id is str-cast for JSONB-serialisability (UUIDs are not natively
+    # JSON-serialisable); resource_id stays UUID-typed (column is UUID, not JSONB).
     kwargs: dict[str, Any] = {} if data.reason is None else {"reason": data.reason}
     await audit.emit(
         session,
@@ -410,7 +413,7 @@ async def cancel_membership(
         actor_user_id=actor.id,
         resource_type="membership",  # LITERAL
         resource_id=membership.id,
-        client_id=membership.client_id,
+        client_id=str(membership.client_id),
         **kwargs,
     )
     # SA 2.0 expires attributes after flush; refresh `updated_at` for response.
