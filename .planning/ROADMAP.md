@@ -83,7 +83,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 **Plans**: 5 plans
   - [x] 16-01-PLAN.md — Migration 0004_membership_plans + MembershipPlan ORM + alembic env.py extension — MEM-PLAN-01, MEM-PLAN-02
   - [x] 16-02-PLAN.md — schemas.py (Create/Update/Response/ListQuery/Sort) + PlanNameExistsError + PlanNotFoundError — MEM-PLAN-02, MEM-PLAN-EP-01..03
-  - [ ] 16-03-PLAN.md — repository.py + service.py + AST commit gate extension — MEM-PLAN-02, MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
+  - [x] 16-03-PLAN.md — repository.py + service.py + AST commit gate extension — MEM-PLAN-02, MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
   - [ ] 16-04-PLAN.md — router.py with 5 endpoints + v1 wiring + openapi.json regen — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
   - [ ] 16-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit) + unit schemas test — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
 
@@ -190,7 +190,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 4/4 | Complete | 2026-05-05 |
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 16. Membership Plans Catalog (backend) | v1.2 | 2/5 | In Progress|  |
+| 16. Membership Plans Catalog (backend) | v1.2 | 3/5 | In Progress|  |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 0/TBD | Not started | — |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
