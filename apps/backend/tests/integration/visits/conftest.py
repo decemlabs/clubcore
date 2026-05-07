@@ -183,6 +183,10 @@ async def make_visit_setup(
 ) -> Callable[..., Awaitable[tuple[Client, Membership]]]:
     """Seed (client, plan, active-membership) tuple in one call.
 
+    Internally seeds a system owner user for the required `created_by_user_id`
+    FK (clients.created_by_user_id NOT NULL). The seeded user is unique per
+    factory call (email based on uuid4) to avoid duplicate email conflicts.
+
     Usage:
         client, membership = await make_visit_setup()
         client, membership = await make_visit_setup(end_date=date.today())
@@ -194,6 +198,16 @@ async def make_visit_setup(
         end_date: date | None = None,
         telegram_user_id: int | None = None,
     ) -> tuple[Client, Membership]:
+        # Seed a system owner user for created_by_user_id FK
+        creator = User(
+            email=f"setup-owner-{uuid4().hex[:8]}@example.com",
+            password_hash="$argon2id$notreal",  # noqa: S106
+            role=Role.OWNER,
+            full_name="Setup Owner",
+        )
+        db_session.add(creator)
+        await db_session.flush()
+
         plan = MembershipPlan(
             name=f"Plan-{uuid4().hex[:8]}",
             duration_days=30,
@@ -205,9 +219,11 @@ async def make_visit_setup(
 
         phone_suffix = uuid4().int % 10**7
         c = Client(
-            full_name=f"Client-{uuid4().hex[:8]}",
+            last_name=f"Client-{uuid4().hex[:8]}",
+            first_name="Test",
             phone=f"+7901{phone_suffix:07d}",
             telegram_user_id=telegram_user_id,
+            created_by_user_id=creator.id,
         )
         db_session.add(c)
         await db_session.flush()
