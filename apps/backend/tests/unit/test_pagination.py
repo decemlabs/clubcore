@@ -38,7 +38,7 @@ def test_page_query_rejects_page_size_below_one() -> None:
 
 
 def test_page_query_rejects_unknown_query_param() -> None:
-    # PageQuery extends RequestContract (extra='forbid')
+    # PageQuery extends BackendSchemaBase (extra='forbid')
     with pytest.raises(ValidationError):
         PageQuery.model_validate({"page": 1, "unknown": "boom"})
 

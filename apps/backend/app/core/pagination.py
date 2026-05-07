@@ -14,14 +14,14 @@ ContractModel via alias_generator=to_camel (D-09).
 
 from pydantic import Field
 
-from app.core.schemas import RequestContract, ResponseData
+from app.core.schemas import BackendSchemaBase, ResponseData
 
 
-class PageQuery(RequestContract):
+class PageQuery(BackendSchemaBase):
     """Page-based pagination query params for list endpoints (D-10).
 
     Bounds match the deleted LimitOffsetParams.limit (1..100); default page_size=20.
-    Wire: ?page=1&pageSize=20 (RequestContract inherits alias_generator=to_camel and
+    Wire: ?page=1&pageSize=20 (BackendSchemaBase inherits alias_generator=to_camel and
     accepts both snake_case and camelCase via validate_by_name + validate_by_alias).
     """
 

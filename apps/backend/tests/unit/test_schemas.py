@@ -13,9 +13,9 @@ from pydantic.alias_generators import to_camel
 
 from app.core.exceptions import AppError
 from app.core.schemas import (
+    BackendSchemaBase,
     ContractModel,
     ProblemDetails,
-    RequestContract,
     ResponseData,
     ResponseEnvelope,
     envelope,
@@ -27,7 +27,7 @@ class _Sample(ContractModel):
     page_size: int = 20
 
 
-class _SampleRequest(RequestContract):
+class _SampleRequest(BackendSchemaBase):
     user_name: str
     page_size: int = 20
 
@@ -53,8 +53,8 @@ def test_contract_model_config_has_from_attributes_true() -> None:
     assert ContractModel.model_config["from_attributes"] is True
 
 
-def test_request_contract_config_uses_extra_forbid() -> None:
-    assert RequestContract.model_config["extra"] == "forbid"
+def test_backend_schema_base_config_uses_extra_forbid() -> None:
+    assert BackendSchemaBase.model_config["extra"] == "forbid"
 
 
 def test_no_populate_by_name_in_module_source() -> None:

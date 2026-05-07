@@ -1,6 +1,6 @@
 """Clients module Pydantic DTOs (Phase 8 — CLIENTS-01, CLIENTS-04, CLIENTS-06, CLIENTS-07).
 
-All DTOs inherit the ContractModel chain (RequestContract / ResponseData / PageQuery)
+All DTOs inherit the ContractModel chain (BackendSchemaBase / ResponseData / PageQuery)
 so wire format is camelCase via `alias_generator=to_camel` while Python stays snake_case.
 
 Decisions enforced here at the DTO boundary (defence-in-depth — DB constraints in
@@ -32,7 +32,7 @@ from uuid import UUID
 from pydantic import EmailStr, Field, ValidationInfo, field_validator, model_validator
 
 from app.core.pagination import PageQuery
-from app.core.schemas import RequestContract, ResponseData
+from app.core.schemas import BackendSchemaBase, ResponseData
 from app.modules.clients.models import Gender
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ class EmergencyContact(ResponseData):
 # ---------------------------------------------------------------------------
 
 
-class ClientCreateRequest(RequestContract):
+class ClientCreateRequest(BackendSchemaBase):
     """POST /api/v1/clients body. Required: lastName, firstName, phone."""
 
     last_name: str = Field(min_length=1, max_length=128)
@@ -129,7 +129,7 @@ class ClientCreateRequest(RequestContract):
 # ---------------------------------------------------------------------------
 
 
-class ClientUpdateRequest(RequestContract):
+class ClientUpdateRequest(BackendSchemaBase):
     """PATCH /api/v1/clients/{id} body.
 
     Semantics: caller sends only the fields they want to change; service does
@@ -211,7 +211,7 @@ class ClientListQuery(PageQuery):
 
     Inherits page + page_size from PageQuery (1-based pagination).
     Wire mapping: created_from→createdFrom, created_to→createdTo, has_telegram→hasTelegram
-    (alias_generator=to_camel inherited via PageQuery → RequestContract → ContractModel).
+    (alias_generator=to_camel inherited via PageQuery → BackendSchemaBase → ContractModel).
     """
 
     q: str | None = Field(default=None, max_length=128)

@@ -33,8 +33,17 @@ class ContractModel(BaseModel):
     )
 
 
-class RequestContract(ContractModel):
-    """Inbound request body / query params. Strict on extras (extra='forbid')."""
+class BackendSchemaBase(ContractModel):
+    """Inbound request body / query params. Strict on extras (extra='forbid').
+
+    Locked in Phase 15 (INFRA-12 / D-06) as the single source of truth for v1.2
+    inbound DTOs.
+
+    `model_config` keeps `validate_by_name=True + validate_by_alias=True` (Pydantic
+    2.11+ canonical pair, D-07). The older deprecated alias flag is intentionally
+    NOT used; `tests/unit/test_schemas.py` asserts the deprecated spelling never
+    appears in module source.
+    """
 
     model_config = ConfigDict(
         alias_generator=to_camel,

@@ -19,7 +19,7 @@ signature dependencies in declaration order, so 401 (auth) fires before 403 (rba
 preserving the invariant that an unauthenticated caller never sees a CSRF error.
 
 Wire format (Phase 4):
-  - Request bodies are RequestContract subclasses (camelCase via alias_generator).
+  - Request bodies are BackendSchemaBase subclasses (camelCase via alias_generator).
   - Successful responses wrap payloads in ResponseEnvelope[T] via envelope() (D-14).
   - POST → 201 Created; DELETE → 204 No Content; others → 200 OK.
 

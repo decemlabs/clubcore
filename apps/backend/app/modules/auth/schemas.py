@@ -16,10 +16,10 @@ from uuid import UUID
 from pydantic import EmailStr, Field
 
 from app.core.permissions import Role
-from app.core.schemas import RequestContract, ResponseData
+from app.core.schemas import BackendSchemaBase, ResponseData
 
 
-class LoginRequest(RequestContract):
+class LoginRequest(BackendSchemaBase):
     """POST /api/v1/auth/login body."""
 
     email: EmailStr
@@ -72,7 +72,7 @@ class TelegramStatusResponse(ResponseData):
     bound: bool
 
 
-class TelegramVerifyRequest(RequestContract):
+class TelegramVerifyRequest(BackendSchemaBase):
     """POST /auth/telegram/verify request body (AUTH-TG-04).
 
     `code` must be exactly 6 digits — short-circuits non-digit input
