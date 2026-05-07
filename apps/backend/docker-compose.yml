@@ -33,6 +33,21 @@ services:
       redis:
         condition: service_started
 
+  arq-worker:
+    build: .
+    command: uv run arq app.workers.WorkerSettings
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
+      REDIS_URL: redis://redis:6379/0
+      TZ: UTC
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
   migrate:
     build: .
     command: alembic upgrade head
