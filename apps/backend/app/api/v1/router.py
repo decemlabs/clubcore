@@ -9,7 +9,9 @@ from fastapi import APIRouter
 
 from app.modules.auth.router import router as auth_router
 from app.modules.clients.router import router as clients_router
+from app.modules.memberships.router import router as plans_router
 
 v1 = APIRouter()
 v1.include_router(auth_router, prefix="/auth", tags=["auth"])
 v1.include_router(clients_router, prefix="/clients", tags=["clients"])
+v1.include_router(plans_router, prefix="/membership-plans", tags=["membership-plans"])
