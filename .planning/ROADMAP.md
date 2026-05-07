@@ -138,7 +138,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 19-01-PLAN.md — Migration 0006_visits + Visit ORM + schemas (BackendSchemaBase) + 5 new exceptions + GYM_HOURS env + Settings model_validator + audit.py:46-49 docstring reconciliation — VIS-01, VIS-02, VIS-05, VIS-AUDIT-01
   - [x] 19-02-PLAN.md — core/dependencies.py ClientByTelegram Protocol + setter + consumer + clients.service.resolve_client_by_telegram_user_id + app.main wiring (D-02 third resolver slot) — VIS-04
   - [x] 19-03-PLAN.md — repository.py + service.py (anti-fraud chain + reception path + self-checkin path + 4 audit emits) — VIS-02, VIS-03, VIS-04, VIS-AUDIT-01
-  - [ ] 19-04-PLAN.md — router.py (3 endpoints) + v1 mount + openapi.json regen [BLOCKING migration apply] — VIS-EP-01..03, VIS-AUDIT-01
+  - [x] 19-04-PLAN.md — router.py (3 endpoints) + v1 mount + openapi.json regen [BLOCKING migration apply] — VIS-EP-01..03, VIS-AUDIT-01
   - [ ] 19-05-PLAN.md — Integration tests (CRUD/RBAC/audit/concurrent VIS-TEST-01/self-checkin/migration) + unit tests (schemas/anti_fraud_helpers/config) — VIS-TEST-01, VIS-EP-01..03, VIS-AUDIT-01, VIS-03..05
 
 ### Phase 20: Telegram bot `/checkin` self check-in
@@ -209,7 +209,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
-| 19. Visits — DB + reception check-in (backend) | v1.2 | 3/5 | In Progress|  |
+| 19. Visits — DB + reception check-in (backend) | v1.2 | 4/5 | In Progress|  |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
