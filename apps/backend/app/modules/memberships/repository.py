@@ -24,16 +24,19 @@ the import-time schema build (mirrors clients/repository.py:18-23).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedData
-from app.modules.memberships.models import MembershipPlan
+from app.modules.memberships.models import Membership, MembershipPlan
 from app.modules.memberships.schemas import (
+    MembershipCreateRequest,
+    MembershipListQuery,
+    MembershipListSort,
     MembershipPlanCreateRequest,
     MembershipPlanListQuery,
     MembershipPlanSort,
@@ -149,3 +152,153 @@ async def soft_delete_plan(session: AsyncSession, plan: MembershipPlan) -> Membe
     """Soft-delete: set deleted_at to now(); never DELETE the row (MEM-PLAN-02)."""
     plan.deleted_at = datetime.now(tz=UTC)
     return plan
+
+
+# ===========================================================================
+# Phase 17 — Membership instance helpers (MEM-01..04)
+# ===========================================================================
+
+
+async def insert_membership(
+    session: AsyncSession,
+    data: MembershipCreateRequest,
+    *,
+    plan: MembershipPlan,
+    start_date: date,
+    end_date: date,
+) -> Membership:
+    """Create a Membership row. Caller MUST flush + commit (D-04 + Phase 16 pattern).
+
+    Snapshot fields are copied from the resolved `plan` ORM ref so subsequent
+    plan edits never propagate to this row (locked MEM-02). `activation_policy`
+    is intentionally omitted — server_default `'purchase_date'` covers it.
+    """
+    membership = Membership(
+        client_id=data.client_id,
+        plan_id=plan.id,
+        plan_name_snapshot=plan.name,
+        duration_days_snapshot=plan.duration_days,
+        price_kopecks_snapshot=plan.price_kopecks,
+        start_date=start_date,
+        end_date=end_date,
+        status="active",
+        paid_at=data.paid_at,
+        notes=data.notes,
+    )
+    session.add(membership)
+    return membership
+
+
+async def get_membership(session: AsyncSession, membership_id: UUID) -> Membership | None:
+    """Return Membership by id, or None.
+
+    NO soft-delete filter — Memberships have no `deleted_at` column (Phase 17 D-12 /
+    CONTEXT.md domain line 12). Cancelled/expired rows are still returned;
+    lifecycle is purely status-based.
+    """
+    stmt: Select[tuple[Membership]] = select(Membership).where(Membership.id == membership_id)
+    result: Membership | None = await session.scalar(stmt)
+    return result
+
+
+async def list_memberships(
+    session: AsyncSession, query: MembershipListQuery
+) -> PaginatedData[Membership]:
+    """Paginated list of memberships with optional client_id + status filters (Phase 17 D-09).
+
+    No `deleted_at` filter — Memberships use status, not soft-delete (D-12).
+    Sort enum branches per D-09; default CREATED_AT_DESC. Stable tie-break
+    appended on every branch (id desc) so identical timestamps don't shuffle
+    between pages.
+
+    Returns `PaginatedData[Membership]` via `model_construct` to skip Pydantic
+    validation against the SA ORM generic parameter (mirrors `list_alive`
+    rationale at line 60-65 above).
+    """
+    predicates: list[Any] = []
+
+    if query.client_id is not None:
+        predicates.append(Membership.client_id == query.client_id)
+    if query.status is not None:
+        predicates.append(Membership.status == query.status.value)
+
+    where_clause = and_(*predicates) if predicates else true()
+
+    total_stmt = select(func.count()).select_from(Membership).where(where_clause)
+    total = await session.scalar(total_stmt) or 0
+
+    stmt: Select[tuple[Membership]] = select(Membership).where(where_clause)
+    if query.sort == MembershipListSort.END_DATE_DESC:
+        stmt = stmt.order_by(
+            Membership.end_date.desc(),
+            Membership.created_at.desc(),
+            Membership.id.desc(),
+        )
+    elif query.sort == MembershipListSort.START_DATE_DESC:
+        stmt = stmt.order_by(
+            Membership.start_date.desc(),
+            Membership.created_at.desc(),
+            Membership.id.desc(),
+        )
+    else:  # CREATED_AT_DESC default
+        stmt = stmt.order_by(Membership.created_at.desc(), Membership.id.desc())
+
+    offset = (query.page - 1) * query.page_size
+    stmt = stmt.offset(offset).limit(query.page_size)
+
+    rows = (await session.scalars(stmt)).all()
+
+    return PaginatedData.model_construct(
+        items=list(rows),
+        total=total,
+        page=query.page,
+        page_size=query.page_size,
+    )
+
+
+async def update_membership_status(
+    session: AsyncSession,
+    membership: Membership,
+    *,
+    status: str,
+    cancelled_at: datetime | None = None,
+    cancel_reason: str | None = None,
+) -> Membership:
+    """Narrow setter for lifecycle transitions (D-12, D-19).
+
+    Used by both cancel (active -> cancelled, sets cancelled_at + reason) and
+    Phase 18 ARQ expire (active -> expired, no extra fields). Caller owns
+    flush + commit. No model_dump diff: lifecycle transitions touch a fixed
+    set of fields, and audit payload is hand-built per event.
+    """
+    membership.status = status
+    if cancelled_at is not None:
+        membership.cancelled_at = cancelled_at
+    if cancel_reason is not None:
+        membership.cancel_reason = cancel_reason
+    return membership
+
+
+async def find_active_for_client(
+    session: AsyncSession, client_id: UUID
+) -> Membership | None:
+    """Return the canonical active membership for `client_id`, or None (MEM-04).
+
+    Tiebreak: ORDER BY end_date DESC, created_at DESC LIMIT 1 (D-17 — silent,
+    no structlog warning, no audit event). The composite index
+    `ix_memberships_client_id_status_end_date` on
+    `(client_id, status, end_date DESC)` covers this query.
+
+    Date filter is intentionally NOT applied here: per D-13, status field is
+    the gate, not end_date. Phase 18 ARQ flips status -> 'expired' on its own
+    cadence; until then a row whose end_date has passed but whose status is
+    still 'active' is the canonical row.
+    """
+    stmt = (
+        select(Membership)
+        .where(Membership.client_id == client_id, Membership.status == "active")
+        .order_by(Membership.end_date.desc(), Membership.created_at.desc())
+        .limit(1)
+    )
+    result: Membership | None = await session.scalar(stmt)
+    return result
