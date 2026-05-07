@@ -1,356 +1,240 @@
-# Feature Research — v1.1 Auth + Clients
+# Feature Research — v1.2 Memberships + Visits
 
-**Domain:** Single-gym CRM backend (FastAPI modular monolith) — auth + first business module (clients)
-**Region:** РФ/СНГ — Telegram primary channel, ЮKassa, Stripe forbidden
-**Researched:** 2026-05-01
-**Confidence:** HIGH (Telegram + JWT + RBAC patterns are well-documented; gym client-schema fields verified across multiple CRM vendors)
+**Domain:** Single-gym CRM, RU/CIS market — "Memberships catalog + per-client membership instances + reception/Telegram visit check-in"
+**Researched:** 2026-05-07
+**Confidence:** MEDIUM-HIGH (RU CRM market behavior triangulated from FitBase, 1С:Фитнес-клуб, fitness365, impulseCRM, Mobifitness public docs and articles; pet-project anti-fraud heuristics extrapolated from real-club practices documented in those sources)
 
----
-
-## Scope Reminder
-
-What is **already shipped** in v1.0 and must NOT be re-listed as new:
-
-- Frontend admin-web (React 19 SPA) with full mock services and FSD-lite layering
-- Frontend RBAC: `Role = 'owner' | 'reception'`, `OWNER_ONLY` matrix, `can(role, action, resource)` in `apps/admin-web/src/shared/session/can.ts`
-- Resource taxonomy in `apps/admin-web/src/shared/session/registry.ts` — `dashboard | clients | schedule | staff | finance | reports | payroll | compensation | templates | settings | owner-area`
-- Backend FastAPI skeleton with `core / modules / integrations / workers / api`, `import-linter` enforced, `GET /healthz` only
-- Mock-side `clients` UX is fully scaffolded and behaves correctly with role-aware 403-analogs
-
-This research therefore covers **only the server-side gap**: real auth, real RBAC enforcement, real Postgres `clients` table with CRUD. Frontend wiring of `/login` + `/clients/*` to `VITE_API_MODE=http` is included only because it is part of the same milestone.
+**Goal of this document:** validate that the **locked v1.2 scope** covers daily-operations table stakes for a single-gym CRM, surface cheap wins inside the locked scope, and explicitly reject features that look reasonable but are out-of-scope traps. Categorized by **Memberships / Visits / admin-web wiring / Anti-fraud**, with complexity (S/M/L) and dependency on existing v1.1 patterns.
 
 ---
 
-## 1. Auth — Telegram Bot Deep-Link OTP (Primary)
+## TL;DR — Validation of locked v1.2 scope
 
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---|---|---|---|
-| Bot deep-link `https://t.me/<bot>?start=<login_token>` | Standard Telegram-login pattern; user clicks link from `/login` page, lands in bot already authenticated by Telegram | **S** | One endpoint to mint `login_token` (random 32-byte URL-safe), one bot `/start <token>` handler |
-| One-time code displayed by bot | User sees 6-digit code in Telegram, pastes into web `/login` form. Code is bound to the `login_token` | **S** | Code stored in Redis with short TTL (3-5 min). Hash before storing (HMAC-SHA256, not bcrypt — speed matters; codes are ephemeral and high-entropy enough at 6 digits + rate limiting) |
-| Code expiration (3-5 min) | Industry standard for OTP — long enough to paste, short enough to limit brute force | **S** | Redis `SETEX` |
-| Rate limiting on code submission | 5 attempts per code, then code is invalidated and user must restart from bot | **S** | Redis `INCR` counter keyed by `login_token` |
-| Bot must verify chat type is `private` | Group/channel posts must not initiate auth flow | **S** | Single `if` in bot handler |
-| Account binding: `telegram_user_id ↔ user_id` | Required to know **which** Sportzal user is logging in | **S** | Postgres `user.telegram_user_id` UNIQUE column. First-time login → bind + audit log entry |
-| `/login` page polls or uses short-lived "login pending" status | UX: user pastes code → server validates → cookies issued → redirect | **S** | Single POST endpoint accepts `{login_token, code}`, returns 204 + Set-Cookie or 401 |
-| Bot blocked / user never opens link | Login token must expire (10-15 min) and be reusable-only-once | **S** | TTL on Redis key; `DEL` on success |
-| Wrong account (Telegram user not provisioned) | Reject with explicit message: "Этот Telegram-аккаунт не привязан к Sportzal. Обратитесь к администратору." | **S** | Lookup by `telegram_user_id`; if no row, 403 with code `TELEGRAM_NOT_LINKED` |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| Webhook-based bot (vs polling) | Lower latency, scales beyond hobby project | **M** | ARQ worker is already in stack; webhook endpoint sits in `app/api/webhooks/telegram.py`. Required for production but **NOT for v1.1 dev** — long-polling via `python-telegram-bot` getUpdates is acceptable for single-gym pet project |
-| Magic-link variant (no code at all) | Even simpler UX: bot replies with a clickable link that hits `/api/v1/auth/telegram/callback?token=...` and sets cookies | **M** | Adds a second flow; for v1.1 keep ONE flow (code-based) |
-| "Remember this device" pre-shared with bot | After first login, repeated logins skip the OTP step | **L** | Cookie-bound device fingerprint + Redis whitelist. Postpone — doesn't pay back for one-zal CRM |
-
-### Anti-Features
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---|---|---|---|
-| **Telegram Login Widget** (`oauth.telegram.org`) | "Telegram already provides auth!" | Widget requires public HTTPS domain bound to `@bot` for setDomain; awkward for `localhost` dev. Also: widget gives only Telegram identity, you still need to bind to a Sportzal user — you don't save logic. | Keep deep-link OTP. We control the flow end-to-end and dev-friendly |
-| **Telegram Passport** | "Verified phone/passport!" | Massive overkill for gym staff login; designed for KYC/financial flows | Not in scope, not in next 5 milestones |
-| Public self-registration via bot | "User just types /start and gets account" | Single-gym CRM = **admin-provisioned only**. Self-reg leaks the door wide open | Owner provisions reception users via admin UI (later milestone). v1.1 has seed-script + manual `INSERT` |
-| SMS fallback | "What if Telegram is down?" | SMS in РФ requires legal-entity contracts (СМС-агрегатор), кириллица caps at 70 chars, costs ~3 ₽/msg. Not worth it for single-zal pet | Email/password fallback is enough |
-
----
-
-## 2. Auth — Email/Password Fallback
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---|---|---|---|
-| Login by email + password | Owner needs a way in if Telegram bot dies / token expires / phone is broken | **S** | Standard `passlib[argon2]` hash, single POST endpoint `/api/v1/auth/login` |
-| Argon2id password hashing (not bcrypt) | Argon2id is OWASP-recommended since 2021 and is the sane default in 2026 | **S** | `passlib.hash.argon2`; bcrypt is acceptable but Argon2id is the modern pick |
-| Admin-provisioned only (no public registration) | Single-gym CRM. There is no "sign up" page | **S** | No `/register` endpoint at all. Seed script creates the owner; owner provisions reception via admin UI in a later milestone |
-| Rate limit on login (5 attempts / 15 min per email) | Prevents trivial brute force | **S** | Redis `INCR` keyed by lowercased email, expire 15 min. **Don't** lock account permanently — that's a denial-of-service vector |
-| Generic error messages | "Неверный email или пароль" — never leak which one was wrong | **S** | One-line decision in handler |
-| Password complexity: minimum 12 chars | NIST 800-63B (2024 rev): length > complexity rules. No forced symbols/uppercase | **S** | One Pydantic validator. Don't add a "password strength meter" — overkill |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| Password reset via Telegram bot | More secure and simpler than email reset for our user base | **M** | Reuse the OTP flow with a different intent (`reset` vs `login`). Allowed because owner already has a bound `telegram_user_id` |
-| Pwned-password check (HIBP k-anonymity API) | Blocks reuse of leaked passwords on set/change | **M** | Single outbound call to `api.pwnedpasswords.com/range/<sha1prefix>`. Worth it; keeps owner out of trouble |
-
-### Anti-Features
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---|---|---|---|
-| Password reset via email link | "Standard everywhere" | Requires real SMTP integration with deliverability, DKIM/SPF, bounce handling. Email is **not** primary channel here. Adds a whole subsystem for a feature used 1×/year per user | Telegram bot reset (above) |
-| Forced password rotation every 90 days | "Compliance!" | NIST explicitly **deprecated** this in 2017. Causes weaker passwords (Password1!, Password2!). | Don't do it |
-| Password complexity rules (1 upper, 1 digit, 1 symbol) | "Strong passwords" | Same NIST guidance: complexity rules degrade entropy. Length is what matters | Min 12 chars + HIBP check |
-| Account lockout after N failures | "Security!" | DoS vector — anyone who knows owner's email can lock him out | Rate limiting (slow down) yes; lockout (deny) no |
-| 2FA / TOTP | "Banks have it" | Owner already has Telegram bot OTP as primary; email/password is a **fallback**. Stacking 2FA on the fallback is theatre for a 1-gym pet | Out of scope. If added later, do it on email/password only |
-| CAPTCHA on login | "Bots!" | Login is gated behind admin provisioning; nobody can guess emails. No bot problem to solve | Rate limiting is sufficient |
-
----
-
-## 3. JWT Access + Refresh — Rotation, Sessions, Revocation
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---|---|---|---|
-| Short-lived access token (15 min) in httpOnly cookie | OWASP/Auth0 standard; survives a refresh roundtrip | **S** | `python-jose` or `pyjwt`, HS256 with single secret in env. Keep it simple — RS256 has no payback for monolith |
-| Long-lived refresh token (30d) in **separate** httpOnly cookie | Rotation needs a token that survives access expiry | **S** | Cookie scoped to `/api/v1/auth/refresh` only, `Secure`, `SameSite=Lax` (Lax over Strict because admin-web is same-site anyway and Strict breaks bot deep-link flow if browsers ever cross origins) |
-| Refresh token **rotation** on every use | Detection of refresh-token theft (reuse → revoke entire family) | **M** | Family-id + per-token `jti` stored in Redis. On refresh: verify, mint new pair, mark old as `consumed`. If a `consumed` token is presented again → revoke entire family + log security event. **This is table stakes in 2026, not a differentiator.** |
-| Server-side session record in Redis | Required to revoke / "logout everywhere" | **S** | `session:{user_id}:{family_id} → {created_at, last_used, ua, ip}` with TTL = refresh lifetime |
-| `/api/v1/auth/logout` invalidates current session | Standard | **S** | `DEL session:{...}` + `Set-Cookie` with `Max-Age=0` for both cookies |
-| Idle timeout (no refresh use for 7 days) | Defense in depth; refresh that's been idle a week is suspicious for a daily-use CRM | **S** | TTL on `last_used` key; fail refresh if past idle window |
-| Absolute timeout = refresh lifetime (30d) | A session can never live forever | **S** | Refresh token has hard `exp` claim; rotation does **not** extend the absolute expiry beyond 30d from initial login |
-| CSRF protection | Cookie-based auth requires it | **S** | Double-submit cookie pattern: server sets non-HttpOnly `csrf_token` cookie + client sends matching `X-CSRF-Token` header on mutating verbs. FastAPI dependency checks header == cookie. Simpler than synchronizer-token-pattern; sufficient for SameSite=Lax |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| "Active sessions" UI — list devices, revoke individually | User-visible session control | **M** | `GET /api/v1/auth/sessions` + `DELETE /api/v1/auth/sessions/{id}`. Read from Redis. Worth the small effort because reception staff = multiple devices reality |
-| "Logout everywhere" button | One-click revoke of all sessions | **S** | `DEL session:{user_id}:*` (SCAN pattern). Cheap if active-sessions UI already exists |
-| User-Agent + IP captured on session create | Visible in active-sessions UI; helps spot suspicious | **S** | Pull from request, store on session record |
-
-### Anti-Features
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---|---|---|---|
-| LocalStorage / Authorization-header bearer tokens | "REST API standard" | XSS-stealable, no CSRF protection comes free, no `Set-Cookie` attribute hardening. Adds token-storage code on frontend that admin-web doesn't have | httpOnly cookies — already aligned with frontend's `services/{mock,http}` swap-seam expectations |
-| Stateless JWT with no server-side session | "JWT is supposed to be stateless!" | Cannot revoke. A stolen refresh = 30-day breach window. Reuse-detection requires state | Stateful refresh family in Redis (above). Access tokens stay stateless |
-| Passwordless via "magic link emailed on every login" | "Modern!" | Already covered by Telegram bot — that **is** the magic link. Adding email magic links duplicates the surface | Stick with Telegram + email/password |
-| Per-request DB lookup of access-token validity | "More secure" | Defeats the point of JWT. 200ms login latency before you do anything | Trust signed access tokens until expiry; revoke at refresh time |
-
-### Token-rotation-flow detail (load-bearing for plan)
-
-```
-On login:
-  family_id = uuid4()
-  refresh_jti = uuid4()
-  Redis SET session:{user_id}:{family_id} = {refresh_jti, created_at, last_used, ua, ip} EX 30d
-  Issue access (15m, claims: sub=user_id, role) + refresh (30d, claims: sub, family_id, jti)
-
-On /auth/refresh:
-  verify refresh sig + exp
-  fetch session:{sub}:{family_id}
-    if missing → 401 SESSION_REVOKED
-    if stored.refresh_jti != incoming.jti → REUSE: DEL session, log security event, 401 TOKEN_REUSE
-  rotate: new_jti = uuid4()
-  Redis SET session:{sub}:{family_id} = {new_jti, ...same..., last_used=now} EX 30d
-  Issue new access + refresh pair (refresh keeps original family_id, new jti)
-```
-
----
-
-## 4. Clients CRUD — Field Set for Single Gym
-
-### Table Stakes (must ship in v1.1)
-
-| Field | Why Expected | Notes |
+| Locked scope item | Verdict | Reason |
 |---|---|---|
-| `id: ClientId` (UUIDv4) | Stable cross-system reference | Branded UUID, matches frontend `ClientId` brand |
-| `last_name`, `first_name`, `middle_name` (отчество, optional) | РФ standard ФИО triple. Reception searches and addresses clients by ФИО | Three separate columns. Don't store concatenated `full_name` — derived |
-| `phone` (E.164) | Primary contact in РФ. Search target | Stored as `+7XXXXXXXXXX`; UI handles `+7 (XXX) XXX-XX-XX` mask. UNIQUE with `WHERE deleted_at IS NULL` |
-| `birthday: date` (nullable) | Age-based pricing, birthday greetings | Nullable — reception sometimes doesn't ask up front |
-| `gender: 'male' \| 'female' \| null` | РФ market norm; some pricing/locker logic later depends on it | Enum, nullable |
-| `email` (nullable, optional) | Receipts / fallback comms | Nullable — many clients don't volunteer email in РФ |
-| `notes: text` (nullable) | Reception's freeform memory ("платит наличкой", "ходит с мамой") | Single textarea; do NOT split into structured sub-fields |
-| `created_at`, `updated_at` (timestamptz, UTC) | Audit basics | SQLAlchemy `server_default=func.now()` |
-| `deleted_at` (timestamptz, nullable) | Soft delete only — never hard delete clients (financial audit, returning clients) | All queries filter `WHERE deleted_at IS NULL`. Owner-only operation |
-| `created_by_user_id` (FK → users.id) | Auditability of who entered the client | NOT NULL |
+| `MembershipPlan` (name + duration_days + price_kopecks + active flag) | **Sufficient** | Matches FitBase/1С "услуга/абонемент" minimum: name + срок + цена + active toggle. |
+| `Membership` instance with **snapshot** of price/duration | **Correct, table-stakes** | Standard CRM pattern — price changes in catalog must not retroactively rewrite sold memberships. FitBase/1С both snapshot. |
+| `start_date` = purchase date, `end_date` = `start_date + duration_days` | **Acceptable but missed table-stakes alternative** | Russian market convention is **`start_date = first visit OR fallback day N`** (1С default, FitBase opt-in). Pure purchase-date semantics is simpler but less common; **see "Activation policy" below — recommended addition: explicit `activation_policy: 'purchase_date'` constant column** so v1.3 can flip to `'first_visit'` without migration of existing rows. |
+| `status: active | expired | cancelled` | **Sufficient** | Matches market norm. `frozen` deliberately deferred. |
+| ARQ daily `expire_memberships` job | **Sufficient with one boundary clarification** | Need explicit decision on **end_date inclusive vs exclusive** — see "Boundary semantics" pitfall in PITFALLS.md (recommendation: inclusive — membership valid through 23:59:59 Europe/Moscow on `end_date`). |
+| Manual cancel (owner-only) | **Sufficient for pet-project** | Real CRMs add proportional refund — explicitly out-of-scope per locked v1.3 deferral. v1.2 cancel = "stop counting", **no money refund logic**. |
+| Reception manual check-in | **Sufficient** | Matches v1.1 pattern: search → button → audit. |
+| Telegram bot `/checkin` | **Sufficient + differentiating** | RU market norm is **QR + turnstile** (Sigur/PocketKey). Telegram bot self-check-in is a cheap-win differentiator for a 1-gym pet project — no turnstile hardware required. |
+| Anti-fraud: gym-hours window + 1/day/client → 409 | **Minimum viable, not "real-club grade"** | Sufficient for honest clients; weak against motivated fraud (proxy check-in, friend's phone). Real RU clubs use photo verification at turnstile + biometrics (out-of-scope). **See Anti-Fraud section below for cheap additions inside scope.** |
+| `/memberships/*` + `/visits/*` admin-web routes | **Sufficient** | Mirrors v1.1 `/clients/*` wiring pattern. |
+| Active sessions UI + revoke | **Out-of-scope-but-tracked, hygiene-grade** | Already-built JWT family infra exists; this is just rendering. S complexity. |
 
-**Estimated migration size:** ~1 Alembic revision, ~12 columns + 2 indexes (phone unique-where-not-deleted, last_name lower-trgm for ILIKE). **Complexity: S.**
-
-### Differentiators
-
-| Field | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| `tags: text[]` (Postgres array) | Fast segmentation: "VIP", "должник", "новичок" | **S** | Postgres `text[]` + GIN index. No separate `tags` table needed for single-gym scale. Enforce normalized lowercase server-side |
-| `telegram_user_id` (BIGINT, nullable, UNIQUE) | Future client-bot for self-service | **S** | Add column now, populate later. Reuses the same constraint pattern as `users.telegram_user_id` |
-| `emergency_contact: jsonb` (`{name, phone, relation}`) | Liability concern (gym injury) | **S** | Single JSONB column avoids a side table for one optional struct. Validate via Pydantic |
-| Client photo (URL) | Reception verifies identity at door | **M** | Requires file storage decision (S3-compatible? local volume?). **Defer to a later milestone** — just reserve `photo_url: text` nullable column now |
-| Medical waiver flag (`medical_clearance: bool`) | РФ clubs ask for справка от врача in some cases | **S** | Bool nullable + free-text `medical_notes`. **Differentiator, not table stakes** for v1.1 — owner can put it in `notes` for now |
-| Membership-freeze status | Industry-standard pause for vacations / illness | **L** | **Belongs to memberships module, NOT clients.** Out of scope for v1.1 |
-| Parent-link for minors | Family-account use case | **L** | `parent_client_id` self-FK. Defer — gym is adults-first |
-| Check-in history join | Quick "last visit" column in list view | **M** | Belongs to visits module — out of scope for v1.1 (visits table doesn't exist yet) |
-
-### Anti-Features
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---|---|---|---|
-| Hard delete | "GDPR right to erasure!" | РФ has 152-ФЗ (similar but different). Hard-deleting kills financial audit trail, breaks FK from future visits/payments. ЦБ/ФНС audits expect data retention | Soft delete + a separate "anonymize PII" operation in a later milestone if a real request comes in |
-| Custom field schema (admin-defined fields) | "Every gym is different" | Forces JSONB-everywhere or EAV. Massive complexity. Single-gym pet doesn't need it | `notes` + `tags[]` cover 95% of requests. Hard-code the schema |
-| Bulk import (CSV/Excel) | "I have 200 clients in a spreadsheet" | Validation hell, encoding hell (Windows-1251 vs UTF-8 in РФ Excel exports). Owner has time to add 200 manually for a pet project | Defer. If shipped later, do it as a one-off owner-only endpoint, not a UI |
-| Per-client custom pricing | "Friend discount" | Belongs to memberships/billing, not clients | Out of scope |
-| Activity feed / timeline on client detail | "See everything they've done" | Requires every other module to exist | Defer to a milestone where >2 modules talk to each other |
-| Free-text full-text search (tsvector / Elasticsearch) | "Search all the things!" | Premature for single zal with <2000 clients. ILIKE on `lower(last_name)` and `phone` covers all real reception queries | ILIKE + `pg_trgm` GIN index — covered below |
+**Headline gap to surface:** v1.2 does not name an explicit **activation policy**. Without that decision encoded as a column-level constant (even if locked to one value), v1.3 will pay a migration cost. **Recommend: add `activation_policy: str = 'purchase_date'` to `Membership` schema today, even though the only allowed value in v1.2 is `'purchase_date'`.** See "Table stakes inside locked scope" item M-2.
 
 ---
 
-## 5. Search & Filters on `/api/v1/clients`
+## Feature Landscape
 
-### Table Stakes
+### Table Stakes (Users Expect These) — INSIDE locked scope
 
-| Feature | Why Expected | Complexity | Notes |
+Features users expect from any gym CRM. These are **the locked v1.2 scope re-validated**, plus three small additions the locked scope is silent on.
+
+#### Memberships
+
+| Feature | Why Expected | Complexity | Notes / Dependency |
 |---|---|---|---|
-| Pagination `{items, total, page, pageSize}` | Already a project-wide contract from frontend; reception list view paginates | **S** | LIMIT/OFFSET with `count(*) OVER ()` window for `total`. For <100k rows OFFSET is fine; if it ever isn't, switch to keyset later |
-| ILIKE search across `last_name + first_name + phone` | Reception types "иван" or "+7916" and finds the row | **S** | One query parameter `q`. Build `WHERE (lower(last_name) LIKE %q% OR lower(first_name) LIKE %q% OR phone LIKE %q%) AND deleted_at IS NULL`. **`pg_trgm` GIN index** on `lower(last_name)` and `lower(first_name)` keeps it sub-50ms even at 50k rows |
-| Sort: `created_at DESC` default | Newest clients first matches reception's mental model | **S** | Single `ORDER BY` |
-| Soft-delete filter applied automatically | Deleted clients never leak into list | **S** | One `WHERE deleted_at IS NULL` shared by all reads |
+| **M-1. MembershipPlan catalog (owner-only CRUD)** | Every RU gym CRM has it (FitBase "Прайс абонементов", 1С "Виды услуг/Пакеты"). Reception sells from a closed list; owner edits prices/active flag. | **S** | Reuses **v1.1 module template** (`router/service/repository/schemas`) + RBAC `OWNER_ONLY` matrix (`{action: 'edit', resource: 'templates'}`). Existing `clients` migration patterns (Alembic naming convention, `MetaData(...)`, `UUIDPkMixin`/`TimestampMixin`) apply directly. Likely **soft-delete** via `SoftDeleteMixin` + partial-unique on `name WHERE deleted_at IS NULL` if name uniqueness is desired. |
+| **M-2. Membership instance with price/duration snapshot** | Catalog price changes must not retroactively rewrite sold memberships. Universal in RU CRMs. | **S** | Plain columns `snapshot_price_kopecks INTEGER NOT NULL` + `snapshot_duration_days INTEGER NOT NULL`. **Recommendation: add `activation_policy VARCHAR NOT NULL DEFAULT 'purchase_date'` now** (CHECK constraint to single value `'purchase_date'`); v1.3 will widen the CHECK to include `'first_visit'`. Without this column, v1.3 needs a migration to add it AND backfill semantics. |
+| **M-3. Active/expired/cancelled status enum** | Standard tri-state. Matches FitBase ("активен/закончен/расторгнут") and 1С. | **S** | `StrEnum` in `models.py`; ARQ daily job transitions `active → expired` by `end_date` comparison; manual cancel sets `status='cancelled'` + `cancelled_at = now()`. |
+| **M-4. ARQ daily expiry job** | Without it, "expired" never appears — reception sees stale data. | **S-M** | First real ARQ scheduled job (skeleton exists from v1.0). Idempotent: `UPDATE memberships SET status='expired' WHERE status='active' AND end_date < CURRENT_DATE`. **Pitfall**: must run AFTER local-midnight Europe/Moscow (see PITFALLS). |
+| **M-5. Manual cancel (owner-only)** | Required for "клиент сдал, верну позже / медотвод / переезд". | **S** | RBAC: add `{action: 'cancel', resource: 'memberships'}` to `OWNER_ONLY`. `cancelled_at` timestamp + audit row. **No proportional refund** in v1.2 (deferred to v1.3 billing). |
+| **M-6. Audit-log writes (create/cancel/expire)** | v1.1 pattern; without it, "who cancelled this" is unanswerable. | **S** | Reuse v1.1 `audit_log` writer. ARQ-driven `expire` events: log with `actor_user_id = NULL, actor_kind = 'system'`. |
 
-### Differentiators
+#### Missing-but-trivial (recommended additions inside locked scope)
 
-| Feature | Value Proposition | Complexity | Notes |
+| Feature | Why It's Table-Stakes | Complexity | Recommendation |
 |---|---|---|---|
-| Filter by `tags` (any-of) | Segmentation: "show me all VIPs" | **S** | `WHERE tags && ARRAY[...]::text[]` — Postgres array overlap, GIN-indexed |
-| Filter by signup date range | Cohort analysis ("clients added this month") | **S** | Two query params, BETWEEN clause |
-| Filter by `gender` | Locker assignment edge cases | **S** | One enum filter. Cheap if the column is in the table |
-| Filter by `has_telegram` | "Who can I message?" | **S** | `telegram_user_id IS NOT NULL` |
-| Sort by `last_name ASC` (alphabetical) | Russian gym staff often want alphabetical printouts | **S** | Add as one of two allowed sort modes |
+| **M-7. `paid_at` timestamp on Membership** | Owner sells today — needs to know "когда продал" for end-of-month informal reporting (no billing module yet). 1С/FitBase always store this. | **S** | One nullable timestamp column, set by `POST /memberships`. Even without ЮKassa, this is the seed for v1.3 billing reconciliation. |
+| **M-8. `activation_policy` column with single allowed value** | See M-2 — guards v1.3 migration cost. | **S** | `VARCHAR NOT NULL DEFAULT 'purchase_date' CHECK (activation_policy = 'purchase_date')`. Schema-level placeholder. |
+| **M-9. `notes` free-text column on Membership** | Reception inevitably needs "оплатил наличными", "акция 1+1", "перенос с прошлого зала". Universal in RU CRMs. | **S** | `TEXT NULL`. No semantic logic; just storage. |
 
-### Anti-Features
+#### Visits
 
-| Feature | Why Requested | Why Problematic | Alternative |
+| Feature | Why Expected | Complexity | Notes / Dependency |
 |---|---|---|---|
-| Saved filters / smart segments | "CRM should remember!" | Owner-side configuration UI, persistence model, share-between-users — three new subsystems | Defer until proven need (v2+) |
-| Boolean query language ("Иван AND VIP NOT debtor") | "Power user!" | Parsing, validation, injection-safe building. ILIKE + tag filter covers the same use cases for 95% less code | Multiple filter params (above) |
-| Last-visit-date filter | "Find lapsed clients" | Requires visits module that doesn't exist yet in v1.1 | Defer to milestone where visits exist |
-| Server-side CSV export | Standard CRM expectation | Ties up an HTTP worker on large exports, encoding gotchas (БОМ for Excel) | Defer. If shipped, do it as a worker (ARQ already in stack) |
-| Geo / radius search | "Find clients near branch X" | Single-zal CRM has one location | Hard-no for v1.x |
+| **V-1. Reception manual check-in (search → button)** | Mirrors v1.1 `/clients/*` UX exactly: ILIKE search → list → action button. | **S** | Reuses `pg_trgm` GIN-indexed search + LIKE-escape from CR-01. New endpoint `POST /visits/check-in` with body `{client_id, channel: 'reception'}`. |
+| **V-2. Telegram self check-in `/checkin`** | Anti-stakes for v1.2 differentiation. | **M** | Extends existing ptb-22 long-polling worker (Phase 7). Bot resolves `telegram_chat_id → user → client_id`, calls internal service, replies "✅ Отмечено в HH:MM". Cross-module callback via Protocol (existing pattern). |
+| **V-3. Active-membership validation** | Without it, expired clients can self-check-in. | **S** | Service-layer guard: `SELECT 1 FROM memberships WHERE client_id = :id AND status='active' AND CURRENT_DATE BETWEEN start_date AND end_date`. **409 Conflict** if no active membership; bot replies "❌ Активный абонемент не найден". |
+| **V-4. Anti-fraud: 1 visit per day per client** | Universal "1 заход в день" cap in RU clubs (premierfit/dorfit рули правила). Without it, accidental double-tap creates noise. | **S** | DB-level: partial unique index `UNIQUE (client_id, (checked_in_at::date AT TIME ZONE 'Europe/Moscow'))`. On conflict → 409. |
+| **V-5. Anti-fraud: gym-hours window** | Server-time `08:00–23:00 Europe/Moscow` from env. Outside → 409. | **S** | Env var `GYM_HOURS_START=08:00 / GYM_HOURS_END=23:00`. Service-layer check before insert. **Note**: must use `Europe/Moscow` zone-aware comparison, not UTC. |
+| **V-6. Audit-log writes** | v1.1 pattern. | **S** | `actor_user_id` for reception channel; `actor_kind='telegram_bot'` for bot channel. |
+| **V-7. Visit-history per client** | Reception needs "когда был последний раз". Standard in every RU CRM. | **S** | Read-only endpoint `GET /clients/:id/visits?limit=20`; renders in client-detail page. |
 
----
+### Differentiators (Cheap-Win, FIT inside locked scope)
 
-## 6. Server-Side RBAC — Parity with Frontend
+These are not in the explicit locked-scope text but are **computed views over already-locked data** — no new tables, no new domain concepts, very small backend code, clear daily-operations value. Owner saves money on a turnstile by getting these for free in admin-web.
 
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
+| Feature | Value Proposition | Complexity | Notes / Dependency |
 |---|---|---|---|
-| `Role` enum in DB matches frontend (`'owner' \| 'reception'`) | Mirrors `apps/admin-web/src/shared/session/types.ts` | **S** | Postgres ENUM or constrained text. ENUM is fine since values are stable |
-| `OWNER_ONLY` matrix lives in **one** place server-side | Single source of truth, mirrors `apps/admin-web/src/shared/session/can.ts` | **S** | `app/modules/auth/permissions.py` with the same `(action, resource)` tuple list. Add a unit test that asserts byte-equal parity with the frontend list (read frontend's TS file? No — duplicate the list and add a `test_rbac_parity_with_frontend.py` that just hard-codes the expected pairs) |
-| `require_permission(action, resource)` FastAPI dependency | Plug into every business endpoint with `Depends(require_permission('view', 'clients'))` | **S** | Reads role from access-token claim, calls `can()`, raises `HTTPException(403, code='FORBIDDEN')`. Idiomatic FastAPI, exactly the pattern in the search results |
-| 403 response shape matches frontend's `DomainError` contract | Frontend already throws/expects `{ code, message, fields? }` from mock services | **S** | One global exception handler maps `PermissionError` → 403 + JSON body |
-| `delete clients` is owner-only at server | Mirrors frontend `OWNER_ONLY` | **S** | Falls out of `require_permission('delete', 'clients')` automatically |
+| **D-1. "Кто сейчас в зале" (currently checked-in)** | Reception/owner glanceable: "сейчас 7 человек". RU CRM staple — Gymdesk/PushPress have it; FitBase displays via attendance dashboard. | **S** | Pure read: `SELECT clients.* FROM visits JOIN clients ON ... WHERE checked_in_at::date = CURRENT_DATE AT TIME ZONE 'Europe/Moscow'`. **No "checkout"** event is in scope, so this is "checked in today" — adequate for a 1-gym pet project where physical presence is loosely tracked. Display as a card on the visits index page. |
+| **D-2. "Истекает сегодня / на этой неделе" filter** | Owner runs this once per morning to pre-emptively call clients before silence-churn. Universal upsell hook in RU CRMs. | **S** | Pure read: `SELECT * FROM memberships WHERE status='active' AND end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7`. Add as `?expiringWithinDays=N` query param on `GET /memberships`. **No notifications** — just a filter (notifications deferred to v1.3). |
+| **D-3. "Истёк сегодня" filter** | Critical UX moment: client walks in expecting to train, reception sees "истёк сегодня" badge in red, can immediately offer renewal. Without it, reception sees just "expired" with no urgency cue. | **S** | Computed badge in admin-web: if `end_date == today` AND `status='expired'` → render "истёк сегодня" red badge. Pure frontend — no backend change. |
+| **D-4. "Renewal stack" — chronological plan history per client** | When client renews 5×, reception needs to see "купил 30-day → 90-day → 90-day → ..." chronologically. Trivial join, but **only valuable if rendered as a timeline** in client-detail. Builds trust ("система помнит всё"). | **S** | Pure read; existing `GET /clients/:id` enrichment OR separate `GET /clients/:id/memberships`. Render as vertical timeline in client-detail tab. |
+| **D-5. Telegram bot reply enrichment: "до конца N дней"** | When bot replies "✅ Отмечено", append "Абонемент действует ещё 12 дней" — trivial computation, but converts every check-in into a passive churn-prevention nudge. | **S** | Compute `(end_date - CURRENT_DATE).days` server-side, include in bot reply text. Especially valuable when N ≤ 7 (urgency nudge). |
+| **D-6. Reception view: "сегодняшние посещения" log** | End-of-shift reception wants to see "кого я сегодня отмечал" for handoff. Standard in 1С. | **S** | `GET /visits?date=today&channel=reception&actor=:current_user_id`. List view with timestamps. |
+| **D-7. Membership "снимок" view (sold-with-these-prices)** | Owner runs catalog price increase, then 3 months later wonders "сколько у меня клиентов на старой цене". Snapshot column already exists (M-2) — only needs a filter UI: "Активные мемберы по проданной цене". | **S** | `GET /memberships?soldPriceMin=...&soldPriceMax=...`. Pure SQL filter. |
 
-### Differentiators
+### Anti-Features (DO NOT BUILD in v1.2 — explicit reject list)
 
-| Feature | Value Proposition | Complexity | Notes |
+These are features that look reasonable for a "gym CRM" but cost a lot for a single-gym pet-project. **Each is documented here so v1.2 planners can point at this list when stakeholders ask.**
+
+| Feature | Why Requested | Why Problematic for v1.2 | Alternative / When to Reconsider |
 |---|---|---|---|
-| **Audit log table** (`audit_log`: actor_user_id, action, resource_type, resource_id, before/after JSONB, ip, ua, ts) | Owner-visible "who did what" — high value for trust in reception, low cost to ship now | **M** | One table, one SQLAlchemy event listener / explicit `audit.log(...)` call in service-layer mutations. **Worth shipping in v1.1** — adding it later requires retrofitting every endpoint. Read endpoints later (defer to a viewer milestone) |
-| Audit-log SELECT endpoint with pagination | Owner-only viewer | **S** | Falls out naturally if the table exists. Could also be deferred — write in v1.1, read UI later |
-| Per-resource permission strings (e.g. `clients.delete`) | More flexible than `(action, resource)` tuples | **S** | Cosmetic; not needed since frontend already uses tuples. **Keep tuples** for parity |
-| Object-level permissions ("user X can edit only their own resource Y") | Multi-user-data scenarios | **L** | No use case in single-zal CRM where reception sees all clients | **Out of scope** |
+| **AF-1. Per-class booking / group lessons** | "Mindbody has it" / "FitBase has it". | Requires `Schedule` + `Class` + `Booking` + `Trainer` modules — at minimum 4 new entities, calendar UX (react-big-calendar wiring), waitlists, no-show penalties. Multiplies v1.2 LOC ~3×. | Wait for v1.3+ (already reserved as "trainers / schedule / bookings — TBD" in PROJECT.md). v1.2 ships **time-based** memberships only — no per-class accounting. |
+| **AF-2. Family / corporate memberships (one plan, many clients)** | "Семейная карта на двоих, со скидкой". | Requires N:M between `Membership` and `Client`, "primary holder" semantics, billing distribution, per-member visit attribution. Doubles complexity of every membership query. | Single-client memberships only in v1.2. If owner sells to 2 family members, owner sells 2 memberships. Reconsider only if owner brings real demand and business case. |
+| **AF-3. Visit-count plans ("10 занятий")** | RU market norm — "пакет на 10/20/30 занятий". | Need decrementing counter, lifecycle "5 of 10 used → 0 of 10 used → expired by count OR by date (whichever first)", refund-on-cancel proportional to unused visits. Cancel-with-partial-use multiplies edge cases. **Already explicitly deferred** in PROJECT.md to v1.3. | v1.2 only ships time-based plans. v1.3 can add `plan_kind: 'time' | 'count'` discriminator. |
+| **AF-4. Membership freeze / pause** | RU market table-stakes for **commercial** clubs ("заморозка на отпуск"). | Requires extra state (`frozen`), freeze-window tracking (start/end of pause), end-date arithmetic ("end_date += paused_days"), per-day idle-extension policies. **Already explicitly deferred** in PROJECT.md to v1.3. | Not in v1.2. If owner of pet-project gym wants it informally, owner extends `end_date` manually — no UX. v1.3 introduces real freeze. |
+| **AF-5. Proportional refund on cancel** | Russian consumer protection law (ст. 32 ЗоЗПП) requires proportional refund on early cancel. | Requires money math, paid_amount tracking with billing trail, and **really** wants ЮKassa refund integration. v1.2 has no billing module. | v1.2 cancel = "stop counting"; owner handles real-money refund out-of-band (cash or bank transfer). v1.3 billing module owns refund logic. **Document this constraint visibly in admin-web cancel dialog**: "Это не вернёт деньги клиенту — обработайте возврат отдельно". |
+| **AF-6. Expiring-soon notifications (Telegram DM, email, SMS)** | Every commercial CRM has it. | Requires notification scheduling (ARQ), per-client opt-in, deduplication ("не слать дважды в один день"), template management, GDPR/152-ФЗ consent tracking. **Already explicitly deferred** in PROJECT.md. | v1.2 ships D-2 ("expiring filter") instead — owner pulls instead of system pushes. Achieves 80% of the value at 5% of complexity. |
+| **AF-7. Per-trainer commission / payroll on membership sale** | "Тренер должен получить % с проданного абонемента". | Requires Trainer module (not in v1.2), commission rules engine, payroll calc. RBAC `OWNER_ONLY` already blocks reception from `compensation` resource — keep it that way. | v1.3+ trainers module. v1.2 memberships have no `sold_by_trainer_id`. |
+| **AF-8. CSV import of legacy memberships** | "У меня есть Excel с 200 клиентами и их датами окончания". | Bulk import of dated/snapshot data is a UX rabbit hole (validation errors per row, partial commits, idempotent re-runs). | v1.2 reception types them in. v1.3 ships CSV import (already deferred in PROJECT.md). For 1-gym pet project, manual entry of <200 rows is one-evening's work; building robust CSV import is a week. |
+| **AF-9. Photo upload on client / facial verification at check-in** | Real RU clubs do this (1С:Фитнес + PocketKey/Sigur — see Anti-Fraud section). | Requires file storage (S3-compatible, MinIO?), image processing, EXIF stripping, GDPR/152-ФЗ implications. **Already explicitly deferred** in PROJECT.md. | v1.2 ships text-only. The TG-bot self-check-in differentiates **without** turnstile hardware — that's the v1.2 value prop. |
+| **AF-10. Live websocket "currently in gym" auto-refresh** | "Хочу видеть в реальном времени". | Websocket infra cost (sticky sessions, scaling, FastAPI websocket lifecycle, frontend reconnect logic) for a 1-gym pet project where peak occupancy is ~20 people and reception refreshes the page anyway. | v1.2 D-1 ships as **stale-30s React Query auto-refresh**. Reception clicks refresh. Sufficient. v2+ websocket only if >100 concurrent visits. |
+| **AF-11. Multi-gym scoping (`gym_id` on every table)** | "А вдруг откроется второй зал?" | **Explicitly out-of-scope** in PROJECT.md ("Multi-tenancy — добавим только когда появится второй покупатель"). Every preemptive scoping column is structural debt that bleeds through every query. | Add `tenant_id` columns ONLY when second gym is real and paying. Until then, single-tenant assumption. |
+| **AF-12. Audit-log read API + UI** | Owner wants to see "кто что сделал". | Already exists in `audit_log` table (writes only). Read API + UI is its own slice with filters, pagination, PII concerns, retention. **Already deferred** in PROJECT.md to v1.3+. | v1.2 audit is write-only — debugging via direct SQL access. v1.3 ships read UI. |
 
-### Anti-Features
+### Anti-Fraud — what real RU gyms actually do, and what fits inside v1.2
 
-| Feature | Why Requested | Why Problematic | Alternative |
+**Question from prompt:** Is `gym-hours window + 1/day` enough?
+
+**Verdict:** **Sufficient for an honest single-gym pet project; insufficient against motivated fraud. The locked scope is correct for v1.2 — do not over-engineer.**
+
+#### Real-club fraud landscape (RU/CIS)
+
+Distilled from FitBase, 1С:Фитнес, fitness365, Sigur public docs:
+
+| Fraud vector | Real-club countermeasure | v1.2 self-check-in exposure | v1.2 mitigation |
 |---|---|---|---|
-| Casbin / Oso / external policy engine | "Industry standard for RBAC" | Two-role static matrix doesn't justify a policy engine. Adds a dependency, a DSL, a learning curve | Hard-coded `OWNER_ONLY` tuple list. Replace if and only if dynamic roles ever ship |
-| Permission decorator macro (vs `Depends`) | "Decorators look cleaner" | FastAPI `Depends` integrates with OpenAPI schema generation, request lifecycle, and testing fixtures. Decorators don't | `Depends(require_permission(...))` |
-| Multi-tenancy / row-level security / `SET LOCAL tenant_id` | "Future-proof for multi-zal" | Explicitly Out of Scope per `PROJECT.md`. Adding it now leaks into every model and migration | Defer until 2nd customer exists |
-| Dynamic role creation in admin UI | "Customers want custom roles!" | Two-role matrix is a deliberate product decision. Custom roles imply policy engine, UI, conflict resolution | Hard-no for v1.x |
-| Audit log full-text search / filter UI | "Compliance!" | The viewer is itself deferred; search on top of a viewer that doesn't exist yet is double-deferred | Out of scope. v1.1 ships the **table + writes only** |
+| **Friend's card / proxy entry** ("даю свою карту другу") | (a) Photo on file shown to admin at turnstile; (b) facial recognition at turnstile; (c) biometric (fingerprint/palm vein) — 1С + PocketKey/Sigur. | TG-bot `/checkin` is **bound to `telegram_chat_id`** (verified during v1.1 OTP flow → upsert by chat_id). To proxy-check-in, friend would need access to the client's Telegram account. Higher friction than swiping a card. | **Already strong** — Telegram account compromise is a much higher bar than card swap. **Reception manual check-in is the weak spot** (administrator can fake a check-in for a friend) — see CR-mitigations below. |
+| **Replay / duplicate check-in** ("отметился, а потом ещё раз через 5 минут") | DB unique constraint on `(client_id, date)`. | Locked: 1/day partial unique index. | **Already adequate** — V-4 covers this. |
+| **Off-hours sneak-in** ("пришёл в 7:00, зал работает с 8") | Turnstile schedule + access-list. | Locked: gym-hours window. | **Already adequate** — V-5 covers this. Note: server time, not client local time. |
+| **Reception-administrator collusion** ("админ отмечает свою подругу без абонемента") | (a) `Membership` validation BEFORE check-in (system blocks if expired); (b) audit-log + retro-review by owner; (c) photo verification. | Reception can `POST /visits/check-in {client_id}` for any client with active membership; can fake-check-in a real member's record (no money cost, but inflates visit data). | **Acceptable for v1.2** because: (1) `Membership` validation already blocks check-in for clients without active membership — admin can't conjure fake clients; (2) audit-log records `actor_user_id` — owner can retro-review; (3) for 1-gym pet project the single owner often IS the reception, so "collusion" is inapplicable until staff grows. |
+| **Expired-but-walked-in client** ("истёк сегодня, реcепшн пропускает") | System hard-blocks at turnstile. Some clubs allow grace window via "истекает сегодня" amber badge but require manual override + audit. | Depends on **boundary semantics** (see PITFALLS.md). Locked: `end_date < CURRENT_DATE` → expired by ARQ. So `end_date == today` is **still active** until midnight. **This is correct behavior** for client UX; reception sees green "active". | **Already adequate** — ARQ daily job runs after midnight, so client whose `end_date == today` can train all day. Surface "истекает сегодня" badge (D-3 differentiator) so reception can offer renewal at the door. |
+
+#### Cheap anti-fraud additions that fit inside locked scope
+
+| Addition | Cost | Value |
+|---|---|---|
+| **AF-cheap-1. `channel` column on Visit (`reception | telegram_bot`)** | **Already in locked scope.** | Owner can audit-review by channel: "сколько отметок reception сделал сам, без TG-подтверждения от клиента" — high-friction reception fraud signal. |
+| **AF-cheap-2. `checked_in_by` column = the User who actioned** | **Already in locked scope.** | For reception channel = staff user_id; for telegram_bot channel = NULL or the client's user_id. Audit-log dedup: who clicked. |
+| **AF-cheap-3. Hard-block check-in if Membership.status != 'active'** | S — already implied in V-3. | Admin cannot bypass UI to check in expired client without first reactivating the membership (which is owner-only). Cuts reception-admin collusion vectors. |
+| **AF-cheap-4. Daily summary log line per visit (structlog)** | S — reuses v1.0 structlog infra. | `event=visit.checked_in client_id=... channel=... actor=...` — owner greps logs, retroreview. |
+| **AF-cheap-5. Telegram bot replies with timestamp + days-remaining** | S (already D-5). | Two-way confirmation: client sees "✅ Отмечено в 18:42, 12 дней до окончания" — if reception fakes a check-in for that client, the client doesn't get the message and can complain. Cheap accountability layer **only on telegram_bot channel**. |
+
+**What we explicitly DO NOT add for anti-fraud in v1.2:**
+
+- IP/device-binding for TG-bot check-in (overkill; bot already binds to `telegram_chat_id`)
+- Geofencing ("you must be within 100m of the gym to /checkin") — requires location handler, privacy implications, false negatives (bad GPS indoors)
+- Photo verification at reception (out-of-scope per PROJECT.md anti-features)
+- "Two-step" admin check-in requiring client TG confirmation (creates UX friction; v1.2 reception channel must remain a single click)
 
 ---
 
 ## Feature Dependencies
 
 ```
-Postgres `users` table
-    └──required by──> Postgres `clients.created_by_user_id` FK
-    └──required by──> JWT subject claim (sub = user_id)
-    └──required by──> Audit log actor_user_id
+M-1 (MembershipPlan)
+  └──required-by──> M-2 (Membership instance, snapshots from plan)
+                       ├──required-by──> M-3 (status enum)
+                       │                    └──required-by──> M-4 (ARQ expire job)
+                       ├──required-by──> M-5 (manual cancel)
+                       └──required-by──> V-3 (active-membership validation)
 
-Telegram bot deep-link OTP
-    └──requires──> users.telegram_user_id (UNIQUE)
-    └──requires──> Redis (for login_token + OTP code storage)
-    └──requires──> python-telegram-bot dependency added to backend
+V-1 (reception check-in) ──independent──> V-2 (TG bot check-in)
+   both depend on V-3 (active-membership validation)
+   both required-by V-4 (1/day unique) + V-5 (gym hours)
+   both required-by V-6 (audit) + V-7 (visit history)
 
-Email/password fallback
-    └──requires──> users.email (UNIQUE) + users.password_hash
-    └──requires──> argon2-cffi via passlib
+D-1 ("currently in gym") ──reads──> Visit table — pure-read, no schema change
+D-2 ("expiring soon") ──reads──> Membership table — pure-read, parameterized query
+D-3 ("expired today" badge) ──reads──> Membership(status, end_date) — pure-frontend
+D-4 (renewal stack) ──reads──> Membership filtered by client_id — pure-read
+D-5 (TG-bot days-remaining reply) ──reads──> Membership.end_date — text concatenation
+D-6 (today's visits) ──reads──> Visit filtered by date+channel — pure-read
+D-7 (snapshot price filter) ──reads──> Membership.snapshot_price — pure-SQL filter
 
-JWT access + refresh rotation
-    └──requires──> Redis (session:{user_id}:{family_id} records)
-    └──requires──> CSRF double-submit (cookie + header validator)
-
-require_permission() dependency
-    └──requires──> JWT access-token claim with `role`
-    └──requires──> OWNER_ONLY matrix in app/modules/auth/permissions.py
-    └──enhances──> Every business endpoint (clients CRUD is the first consumer)
-
-Clients CRUD
-    └──requires──> users (for created_by FK)
-    └──requires──> require_permission()
-    └──requires──> first business Alembic migration
-    └──enhances──> packages/api-client (codegen target)
-
-packages/api-client
-    └──requires──> FastAPI exporting openapi.json
-    └──requires──> openapi-typescript at build time
-    └──enhances──> apps/admin-web /login + /clients/* routes
-
-Audit log
-    └──requires──> users (FK)
-    └──enhances──> Clients CRUD (mutations write audit entries)
-    └──enhances──> Auth flows (login/logout/refresh-reuse events)
+M-7 (paid_at) ──seed-for──> v1.3 billing reconciliation
+M-8 (activation_policy column) ──seed-for──> v1.3 first-visit activation
 ```
 
-### Dependency Notes
+### Critical Notes
 
-- **Auth must ship before clients CRUD** — clients endpoints have `Depends(require_permission(...))`, which needs role-claim-bearing JWT, which needs user table + login flow.
-- **`packages/api-client` codegen requires the API to exist first** — order inside the milestone: backend auth → backend clients → openapi.json → codegen → admin-web wiring.
-- **Audit log table must exist before mutation endpoints write** — otherwise retrofitting writes into 6+ endpoints later is rework.
-- **Conflict: Telegram Login Widget vs deep-link OTP** — picking one. Deep-link OTP wins (dev-friendly, full control).
-- **Conflict: stateless JWT vs revocable sessions** — picking stateful refresh families with stateless access. Standard 2026 pattern.
+- **M-1 must ship before any Membership-instance work** because instance schema imports plan_id FK.
+- **M-2 + M-8 should ship in same migration** — adding `activation_policy` later means backfilling existing rows.
+- **V-3 (active-membership validation) is the critical join** between Memberships and Visits modules. It must be a **service-layer call**, not a direct cross-module SQL query, to preserve `modules-independent` import-linter contract. Use the existing v1.1 cross-module Protocol pattern (`HandlerContext`-style).
+- **D-1 through D-7 are all post-MVP polish** — none block the v1.2 ship. Recommend cutting any that don't fit phase budget; D-3 + D-2 are the highest ROI.
+- **AF-cheap-1 + AF-cheap-2 are already inside locked scope** — they're columns on `Visit`. Just make sure they're queried in the audit views (D-6).
 
 ---
 
-## v1.1 Scope Definition
+## MVP Definition (for v1.2)
 
-### Launch With (v1.1)
+### Launch With (locked v1.2 — the minimum viable slice)
 
-Minimum viable for "first business slice with auth":
+#### Memberships module
 
-- [ ] `users` table + Alembic migration (id, email UNIQUE, password_hash, telegram_user_id UNIQUE nullable, role enum, created_at, updated_at)
-- [ ] Argon2id password hashing via passlib
-- [ ] `POST /api/v1/auth/login` (email + password) → access + refresh cookies
-- [ ] Telegram bot deep-link OTP flow: `POST /api/v1/auth/telegram/start` → returns `login_token` → bot `/start <token>` posts 6-digit code → `POST /api/v1/auth/telegram/verify` with `{login_token, code}` → cookies
-- [ ] Telegram bot uses long-polling in dev (webhook deferred)
-- [ ] `POST /api/v1/auth/refresh` with rotation + reuse-detection
-- [ ] `POST /api/v1/auth/logout` — single session
-- [ ] `POST /api/v1/auth/logout-all` — all sessions for current user
-- [ ] CSRF double-submit cookie pattern for mutating endpoints
-- [ ] `OWNER_ONLY` matrix in `app/modules/auth/permissions.py` + parity unit test
-- [ ] `require_permission(action, resource)` FastAPI dependency
-- [ ] `clients` table + first business Alembic migration (table-stakes fields only — see §4)
-- [ ] `pg_trgm` extension migration + GIN indexes on `lower(last_name)`, `lower(first_name)`
-- [ ] `GET /api/v1/clients?q=&page=&pageSize=&tag=&gender=&signup_from=&signup_to=&sort=` returns `{items, total, page, pageSize}`
-- [ ] `POST /api/v1/clients` (reception+owner)
-- [ ] `GET /api/v1/clients/{id}` (reception+owner)
-- [ ] `PATCH /api/v1/clients/{id}` (reception+owner)
-- [ ] `DELETE /api/v1/clients/{id}` (owner-only, soft delete)
-- [ ] `audit_log` table + writes from auth flows + clients mutations (read endpoint deferred)
-- [ ] `packages/api-client` typed client generated from `openapi.json` (auth + clients endpoints)
-- [ ] CI drift check: `git diff --exit-code` on regenerated openapi.json + ts types
-- [ ] `apps/admin-web` `/login` and `/clients/*` routes wired through `VITE_API_MODE=http`
+- [x] **M-1** — `MembershipPlan` CRUD (owner-only)
+- [x] **M-2** — `Membership` instance with `snapshot_price_kopecks` + `snapshot_duration_days`
+- [+] **M-2-add** — also add `activation_policy VARCHAR DEFAULT 'purchase_date' CHECK (...)` column **even though only one value is allowed in v1.2** (zero-cost forward compat with v1.3 first-visit activation)
+- [x] **M-3** — status `active|expired|cancelled`
+- [x] **M-4** — ARQ daily `expire_memberships` job
+- [x] **M-5** — manual cancel (owner-only)
+- [x] **M-6** — audit-log writes (create / cancel / expire)
+- [+] **M-7-add** — `paid_at` timestamp column on Membership (one column; seeds v1.3 billing)
+- [+] **M-9-add** — `notes` TEXT NULL on Membership (one column; cost = nothing, daily-ops value high)
 
-### Add After Validation (v1.2+)
+#### Visits module
 
-- Active-sessions UI (list + revoke individual)
-- Audit log read endpoint + owner-only viewer
-- Password reset via Telegram bot
-- HIBP pwned-password check on password set
-- Tags-table normalization if `text[]` proves limiting
-- Webhook-based Telegram bot (replace long-polling)
+- [x] **V-1** — reception manual check-in via admin-web
+- [x] **V-2** — Telegram bot `/checkin` (extends existing ptb-22 worker)
+- [x] **V-3** — active-membership validation (cross-module via Protocol callback)
+- [x] **V-4** — 1/day partial unique index on `(client_id, checked_in_at::date AT TIME ZONE 'Europe/Moscow')`
+- [x] **V-5** — gym-hours window from env (`GYM_HOURS_START` / `GYM_HOURS_END`, Europe/Moscow)
+- [x] **V-6** — audit-log writes
+- [x] **V-7** — visit-history per client
 
-### Future Consideration (v2+)
+#### admin-web wiring (`VITE_API_MODE=http`)
 
-- Reception-user provisioning UI (currently seed-script only)
-- Photo upload for clients (requires storage decision)
-- Medical clearance structured fields
-- Bulk CSV import
-- Visits/check-in module → unlocks last-visit filter
+- [x] `/memberships/plans` — owner-only CRUD list/form
+- [x] `/memberships` — list of all memberships (filter by status, by client name search via existing v1.1 ILIKE)
+- [x] `/visits` — today's-visits list (filter by date/channel)
+- [x] `/visits/check-in` — search-and-button page
+- [x] client-detail enhancements — Memberships tab + Visits tab
+- [x] Active sessions UI + revoke (renders existing JWT-family data)
+
+#### Hygiene
+
+- [x] CR-01: Argon2 verify-error → 401 (not 500)
+- [x] CR-02: invalid UUID in cookie → 401 (not 500)
+
+### Add If Phase Budget Permits (cheap-win differentiators)
+
+Strongest ROI first — pick top-N from this list per phase budget:
+
+- [+] **D-3** — "истёк сегодня" red badge in admin-web membership list (pure frontend, S)
+- [+] **D-2** — "истекает в течение N дней" filter (1 query param + 1 frontend filter UI, S)
+- [+] **D-5** — TG-bot reply enrichment "до конца N дней" (1 line of bot code, S)
+- [+] **D-1** — "Кто сейчас в зале" card on visits page (1 query, S)
+- [+] **D-4** — renewal stack timeline in client-detail (1 query, S frontend timeline component)
+- [+] **D-6** — today's-visits log filtered by current reception user (1 query param, S)
+- [+] **D-7** — filter by snapshot-price range (1 query, S)
+
+### Defer to v1.3+ (already on PROJECT.md deferred list)
+
+- [ ] AF-3: visit-count plans
+- [ ] AF-4: freeze
+- [ ] AF-5: proportional refund (depends on billing module)
+- [ ] AF-6: expiring-soon notifications (Telegram DM, email)
+- [ ] AF-8: CSV bulk import
+- [ ] AF-9: photo upload, biometrics
+- [ ] AF-12: audit-log read API + UI
+- [ ] Billing / ЮKassa integration
+- [ ] Trainers / schedule / bookings module(s)
 
 ---
 
@@ -358,82 +242,100 @@ Minimum viable for "first business slice with auth":
 
 | Feature | User Value | Implementation Cost | Priority |
 |---|---|---|---|
-| Email/password login | HIGH (only path until Telegram bot is set up) | LOW | **P1** |
-| Telegram bot OTP login | HIGH (primary daily-use path) | MEDIUM | **P1** |
-| JWT access + refresh rotation | HIGH (security core) | MEDIUM | **P1** |
-| Server-side RBAC parity | HIGH (frontend already enforces it; backend MUST match or it's a bypass) | LOW | **P1** |
-| Clients CRUD (table-stakes fields) | HIGH (the whole point of v1.1) | LOW | **P1** |
-| ILIKE search + paginated list | HIGH (reception's #1 daily action) | LOW | **P1** |
-| Soft delete | HIGH (financial audit) | LOW (one column + filter) | **P1** |
-| Audit log writes (table + writes only) | MEDIUM (retrofitting later costs more) | LOW–MEDIUM | **P1** |
-| `tags[]` + filter | MEDIUM | LOW | **P1** |
-| `emergency_contact` JSONB | MEDIUM | LOW | **P2** |
-| `telegram_user_id` on clients | LOW–MEDIUM (future-proofing) | LOW | **P1** (cheap, prevents migration later) |
-| Active-sessions UI | MEDIUM | MEDIUM | **P2** |
-| Password reset via Telegram | LOW (rare event) | MEDIUM | **P2** |
-| Audit log viewer | MEDIUM | MEDIUM | **P2** |
-| Photo upload | MEDIUM | HIGH (storage decision) | **P3** |
-| Bulk import | LOW (200 clients = manual) | HIGH | **P3** |
-| Multi-tenancy | ZERO (one zal) | HIGH | **never in v1.x** |
+| M-1 MembershipPlan CRUD | HIGH | LOW | **P1 (locked)** |
+| M-2 Membership instance + snapshots | HIGH | LOW | **P1 (locked)** |
+| M-2-add activation_policy column placeholder | LOW (now) HIGH (v1.3) | LOW | **P1 (recommended add)** |
+| M-3 status enum | HIGH | LOW | **P1 (locked)** |
+| M-4 ARQ daily expire | HIGH | MEDIUM | **P1 (locked)** |
+| M-5 manual cancel | HIGH | LOW | **P1 (locked)** |
+| M-6 audit | HIGH | LOW | **P1 (locked)** |
+| M-7 paid_at column | MEDIUM | LOW | **P1 (recommended add)** |
+| M-9 notes column | MEDIUM | LOW | **P1 (recommended add)** |
+| V-1 reception check-in | HIGH | LOW | **P1 (locked)** |
+| V-2 TG-bot check-in | HIGH | MEDIUM | **P1 (locked)** |
+| V-3 active-membership validation | HIGH | LOW | **P1 (locked)** |
+| V-4 1/day unique | HIGH | LOW | **P1 (locked)** |
+| V-5 gym-hours | MEDIUM | LOW | **P1 (locked)** |
+| V-6 audit | HIGH | LOW | **P1 (locked)** |
+| V-7 visit history | HIGH | LOW | **P1 (locked)** |
+| D-1 currently in gym | MEDIUM | LOW | **P2** |
+| D-2 expiring-soon filter | HIGH | LOW | **P2 (highest ROI add)** |
+| D-3 "истёк сегодня" badge | HIGH | LOW | **P2 (highest ROI add)** |
+| D-4 renewal stack timeline | MEDIUM | LOW | **P2** |
+| D-5 TG-bot days-remaining | MEDIUM | LOW | **P2** |
+| D-6 today's-visits per-user log | LOW | LOW | **P3** |
+| D-7 snapshot-price filter | LOW | LOW | **P3** |
+| Active sessions UI + revoke | MEDIUM | LOW | **P1 (locked)** |
+| CR-01/CR-02 hygiene | HIGH (security) | LOW | **P1 (locked)** |
+
+**Priority key:**
+- **P1**: Must have for v1.2 (locked scope + zero-cost forward-compat columns)
+- **P2**: Should have, add if phase budget permits — pick top 3-4 by ROI (recommend D-2, D-3, D-5, D-1)
+- **P3**: Nice to have, defer if pressed for time
 
 ---
 
-## Out-of-Scope Carry-Overs (for REQUIREMENTS.md)
+## Competitor Feature Analysis (RU/CIS market)
 
-These should appear as explicit "Out of Scope" entries in v1.1 REQUIREMENTS.md so they don't sneak in:
+| Feature | FitBase | 1С:Фитнес-клуб | fitness365 | Our v1.2 Approach |
+|---|---|---|---|---|
+| Activation policy (purchase vs first-visit) | Configurable per plan: "Активация с первого посещения" toggle (default OFF in some plans, ON in others) | Configurable per plan: "при первом посещении / в день покупки", with "but no later than N days" auto-activation fallback | Service-snapshot model | **v1.2: purchase-date only, but `activation_policy` column placeholder ships now** |
+| Snapshot of price at sale | Yes — historical price preserved | Yes — `Пакет услуг` snapshots | Yes | **v1.2: yes — `snapshot_price_kopecks`, `snapshot_duration_days`** |
+| Freeze / pause | Yes — first-class feature with date-range tracking | Yes — first-class | Yes | **v1.2: explicitly NO (deferred to v1.3)** |
+| Visit-count plans (10/20/30 sessions) | Yes — first-class | Yes — `Виды услуг` discriminator | Yes | **v1.2: explicitly NO (time-based only)** |
+| Self check-in | Mobile app (FitBase mobile), QR code at gym | Mobile app, QR code, integrations with Sigur/PocketKey/Gantner turnstiles | Mobile app | **v1.2: Telegram bot `/checkin` (no app, no QR, no turnstile)** — differentiator-by-omission |
+| 1/day cap | Yes (configurable per plan: "лимит посещений в день") | Yes (per-plan limit) | Yes | **v1.2: hardcoded 1/day at DB level** |
+| Gym-hours window | Yes (per-plan time-band: "утренний абонемент 06–17") | Yes | Yes | **v1.2: single global window from env** |
+| Photo at turnstile | Yes (admin-screen photo verification) | Yes (admin-screen + turnstile photo cross-check) | Yes | **v1.2: NO (anti-feature for pet project)** |
+| Biometric (fingerprint, palm vein, face) | No (third-party integration) | Yes (Sigur, PocketKey, Gantner integrations) | Limited | **v1.2: NO** |
+| Currently-in-gym dashboard | Yes | Yes | Yes | **v1.2: D-1 cheap-win — read-only counter, no real-time updates** |
+| Expiring-soon Telegram notification | Yes (push to mobile app + Telegram bot) | Yes | Yes | **v1.2: NO push — D-2 filter (pull-mode)** |
+| Cancel with proportional refund | Yes (with billing integration) | Yes | Yes | **v1.2: cancel without refund (no billing module)** |
 
-- Public self-registration (admin-provisioned users only)
-- SMS OTP (Telegram + email cover the channel matrix)
-- Telegram Login Widget (deep-link OTP wins)
-- Email-based password reset (Telegram-bot reset deferred to v1.2)
-- 2FA / TOTP on email-password
-- Forced password rotation, complexity rules beyond min-length, account lockout
-- CAPTCHA
-- Authorization-header bearer tokens / localStorage tokens
-- Stateless-only JWT without revocation
-- Per-request DB lookup of access tokens
-- Hard delete of clients
-- Custom client field schema / admin-defined fields
-- Bulk import of clients
-- Per-client custom pricing
-- Activity timeline on client detail
-- Full-text search (tsvector / Elasticsearch)
-- Saved filters / smart segments
-- Boolean query language
-- CSV export
-- Last-visit filter (depends on visits module — not in v1.1)
-- Casbin / Oso / external policy engine
-- Permission-decorator macros (use `Depends`)
-- Multi-tenancy / RLS / `SET LOCAL`
-- Dynamic role creation
-- Audit-log search/filter UI (table writes ship in v1.1; viewer deferred)
-- Object-level permissions
-- Photo upload for clients
-- Medical clearance structured fields (use `notes` for now)
-- Membership freeze (belongs to memberships module, not clients)
-- Parent-link for minors
-- Webhook-based Telegram bot (long-polling acceptable in dev)
+**Sportzal v1.2's positioning:** **"Single-gym, owner-operated, no turnstile, no biometrics, no payments — but every honest daily-ops scenario covered, with full audit and Telegram-bot self-check-in"**. Trades enterprise features for radical simplicity, suitable for one-gym pet project; differentiates from Russian commercial CRMs by **not** requiring hardware. The locked v1.2 scope correctly identifies this niche.
 
 ---
 
 ## Sources
 
-- [Telegram Bot API — auth flows](https://core.telegram.org/bots/telegram-login) — official; HIGH confidence
-- [OWASP Authentication Cheat Sheet — refresh-token rotation, httpOnly cookies, CSRF double-submit](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) — authoritative; HIGH confidence
-- [NIST SP 800-63B (rev. 2024) — password length over complexity, no forced rotation, no lockout](https://pages.nist.gov/800-63-3/sp800-63b.html) — authoritative; HIGH confidence
-- [FastAPI security tutorial — OAuth2 + JWT + Depends pattern](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/) — official; HIGH confidence
-- [FastAPI RBAC implementation tutorial (Permit.io)](https://www.permit.io/blog/fastapi-rbac-full-implementation-tutorial) — MEDIUM confidence (vendor blog, but pattern is standard)
-- [JWTs — Expiration, Rotation, and Revocation](https://www.caduh.com/blog/jwts-expiration-rotation-revocation) — MEDIUM confidence (corroborates OWASP)
-- [Refresh Token Rotation Best Practices (Serverion)](https://www.serverion.com/uncategorized/refresh-token-rotation-best-practices-for-developers/) — MEDIUM confidence
-- [Postgres `pg_trgm` extension — official docs](https://www.postgresql.org/docs/16/pgtrgm.html) — authoritative; HIGH confidence
-- [Have I Been Pwned — k-anonymity password range API](https://haveibeenpwned.com/API/v3#PwnedPasswords) — authoritative; HIGH confidence
-- Gym CRM field surveys: PushPress, Gymdesk, Zenoti, ClubOS, GymMaster product pages (table-stakes field set verified across vendors) — MEDIUM confidence
-- Existing project artifacts (HIGH confidence — ground truth):
-  - `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md`
-  - `/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/shared/session/can.ts`
-  - `/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/shared/session/registry.ts`
-  - `/Users/andre/Workspace/Development/clubcore/apps/admin-web/CLAUDE.md`
+### Russian gym CRM market (primary references)
+
+- [FitBase: "Шаг 4. Как создать прайс абонементов"](https://help.fitbase.io/article/16064) — plan catalog model
+- [FitBase: "Как запустить клиента в клуб и отметить посещение"](https://help.fitbase.io/article/3811) — check-in UX reference
+- [FitBase: "Обновление CRM 15.08.2023"](https://fitbase.io/blog/update15082023) — "активация с первого посещения" toggle and freeze interaction with future-dated cards
+- [FitBase: возможности](https://fitbase.io/capabilities) and [Mobifitness: CRM](https://mobifitness.ru/crm/) — feature surface area benchmark
+- [1С:Фитнес-клуб — Настройка услуг](https://1eska.ru/projects/publications/1s-fitnes-klub/kak-nastroit-vidy-uslug-v-1s-fitnes-klub/) — service kinds, activation policies, "but no later than N days" fallback
+- [1С:Фитнес-клуб — создание пакета услуг и членства](https://www.fitness1c.ru/knowledge-base/prodazhi/nomenklatura/sozdanie-paketa-uslug/) — snapshot pattern + plan→instance separation
+- [1С:Фитнес-клуб — пробная тренировка](https://www.fitness1c.ru/knowledge-base/prodazhi/nomenklatura/probnaya-trenirovka/) — alternative entry-flow patterns
+- [1С:Фитнес-клуб — главная](https://www.fitness1c.ru/) and [PocketKey integration](https://www.fitness1c.ru/integration-pocketkey) — turnstile/biometric integration landscape
+- [1С:Фитнес-клуб — "Как пресечь воровство и махинации сотрудников"](https://www.fitness1c.ru/blog/kak-presech-vorovstvo-i-mahinatsii/) — RU-club fraud taxonomy + countermeasures
+- [fitness365: "Как пресечь мошенничество и воровство в фитнес клубе"](https://support.fitness365.ru/база-знаний/мошенничество-в-клубе/) — manager vs admin RBAC, "deception revealed on next visit" pattern (HTTPS cert issue prevented WebFetch deep-read; cited from search snippet)
+- [fitness365: абонементная и клубная системы](https://support.fitness365.ru/documentation/руководство-администратора/абонементная-и-клубная-системы/) — visit-cap-per-day plans
+- [impulseCRM: возврат денег за абонемент](https://impulsecrm.ru/news/vozvrat-deneg-za-sportivnyy-abonement) — RU consumer-protection law constraints on cancel/refund (anti-feature AF-5 justification)
+- [impulseCRM: запись клиентов](https://impulsecrm.ru/vozmozhnosti/zapis-klientov) — self-registration widget patterns
+- [Sigur: решение для фитнесов](https://sigur.com/solutions/fitness/) — turnstile + photo + biometric integration patterns (anti-feature AF-9 justification)
+
+### English-market gym CRM (reference, secondary — confirms table-stakes universality, not RU specifics)
+
+- [Gymdesk: attendance tracking](https://gymdesk.com/features/attendance) and [reporting](https://gymdesk.com/features/reporting) — live attendance dashboard pattern (D-1)
+- [PushPress](https://www.pushpress.com/) and [GymMaster](https://www.gymmaster.com/) — feature surface benchmark
+- [Mindbody-style ClubOS](https://www.club-os.com/) — class-based booking model (anti-feature AF-1 justification)
+
+### Russian consumer law / market context
+
+- [Russian fraud schemes in fitness apps (РИА Новости 2026-05-06)](https://ria.ru/20260506/moshenniki-2090727656.html), [Известия 2026-05-06](https://iz.ru/2091859/2026-05-06/v-mvd-rasskazali-o-novoi-skheme-moshennikov-s-utechkoi-dannykh-iz-fitnes-klubov) — current RU threat landscape (data-leak driven, not in-club fraud)
+- [advgazeta: возврат денег за абонемент фитнес-центра](https://www.advgazeta.ru/ag-expert/advices/kak-poluchit-obratno-dengi-pri-vozvrate-abonementa-fitnes-tsentra/) — proportional refund obligation
+- [Сеть клубов Премьер-Фит правила посещения](https://www.premierfit.ru/pravila-poseshcheniya-fitnes-kluba), [DorFit правила](https://dorfit.ru/pravila-posesheniya.html) — typical RU club rules, including 1-2-visits-per-day max
+
+### Internal references
+
+- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — locked v1.2 scope, Out of Scope list, Key Decisions
+- `/Users/andre/Workspace/Development/clubcore/.planning/MILESTONES.md` — v1.1 patterns (module template, audit-log, RBAC byte-parity, OpenAPI drift gate, partial unique index, ARQ skeleton, Telegram OTP worker)
+- `/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/shared/session/can.ts` — RBAC `OWNER_ONLY` matrix; v1.2 will add `{action: 'cancel', resource: 'memberships'}` and possibly `{action: 'edit', resource: 'memberships'}` for plan catalog (re-using existing `templates` resource is also acceptable)
+- `/Users/andre/Workspace/Development/clubcore/apps/admin-web/CLAUDE.md` — frontend conventions (FSD-lite, Zod-shared schemas, RHF, money in kopecks, dates ISO + Europe/Moscow)
 
 ---
-*Feature research for: v1.1 Auth + Clients milestone*
-*Researched: 2026-05-01*
+
+*Feature research for: Sportzal v1.2 — Memberships + Visits (single-gym, RU/CIS market, owner+reception roles, Telegram-bot self-check-in)*
+*Researched: 2026-05-07*
+*Confidence: MEDIUM-HIGH — RU-market feature norms triangulated from multiple primary sources (FitBase, 1С, fitness365, impulseCRM); pet-project anti-fraud heuristics extrapolated rather than primary-sourced (LOW-MEDIUM confidence on anti-fraud "what real clubs actually do day-to-day" but HIGH confidence on "what features exist in the CRM products").*

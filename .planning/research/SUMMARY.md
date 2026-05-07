@@ -1,209 +1,162 @@
-# Project Research Summary — v1.1 Auth + Clients
+# Project Research Summary — v1.2 Memberships + Visits
 
 **Project:** Sportzal — single-gym CRM (РФ/СНГ)
-**Domain:** Two-channel auth (Telegram bot deep-link + email/password) + first business CRUD (Clients) on a FastAPI modular monolith with admin-web HTTP wiring through a typed `packages/api-client`
-**Researched:** 2026-05-01
+**Domain:** Time-based memberships (plan catalog + per-client snapshot instance with active|expired|cancelled lifecycle) + visits (reception manual check-in via admin-web + self check-in via Telegram bot `/checkin`) on the v1.1 modular monolith. First real ARQ scheduled job (`expire_memberships`). admin-web wiring of new domains through the validated `VITE_API_MODE=http` swap-seam.
+**Researched:** 2026-05-07
 **Confidence:** HIGH
 
 ---
 
 ## Executive Summary
 
-The v1.1 milestone adds a complete first business slice on top of the v1.0 skeleton: an authentication system with Telegram bot deep-link OTP as the primary channel and email/password as fallback, server-side RBAC at parity with the existing frontend `can(role, action, resource)` matrix, and a fully-functional `clients` CRUD with soft-delete, paginated list, and ILIKE search. The backend boundary is then exposed to `apps/admin-web` through a thin, typed `packages/api-client` generated from the FastAPI `openapi.json` — leaving all other domains (memberships, visits, billing, etc.) on the existing mock services until their own milestones land.
+v1.2 is a **low-novelty, high-leverage milestone** — every capability is covered by the locked v1.1 stack with no new runtime dependencies. ARQ 0.26 ships native `arq.cron`; ptb-22 `CommandHandler` plugs straight into the existing `build_application` factory; the cross-module `Visits → Memberships` validation is a direct mirror of the validated `register_user_loader` Protocol pattern; audit_log is already centralized in `core/audit.py`; admin-web composition reuses the route-as-orchestrator pattern from `clients.tsx`. **No `.importlinter` contract changes are needed** — every new edge either lives inside a module, or routes through `app/main.py` composition root, or extends the documented D-06 worker exception with parallel D-09 (ARQ→memberships) and D-10 (telegram_bot→visits).
 
-Research converged on a tight, low-novelty stack that reuses what the lockfile already pulls in. Three new Python deps are required (`pyjwt`, `argon2-cffi`, `python-telegram-bot`) and one new JS devDependency (`openapi-typescript`). Several superficially attractive libraries were rejected with prejudice: **passlib** (5+ years stale, broken by bcrypt 5.0), **python-jose** (107 open issues, lagging on `cryptography`), **fastapi-csrf-protect**, **openapi-fetch**, **aiogram** (parallel HTTP stack), **Casbin/Oso** (overkill for a 9-entry static matrix). Several superficially attractive cross-research conflicts were resolved in this synthesis (FEATURES.md mentioned "passlib via argon2-cffi" and "python-jose or pyjwt" — STACK wins: drop passlib entirely, pick PyJWT).
+The risk profile is concentrated in three integrity bands, not architecture: (1) **`await session.commit()` discipline** (Phase 12.1 reprise risk), addressed by a `BusinessService` template + AST commit gate in Phase 15; (2) **snapshot pricing** — Membership row MUST carry `price_kopecks_snapshot`/`duration_days_snapshot`/`plan_name_snapshot` NOT NULL at insert with `ON DELETE RESTRICT` FK to plan, so plan edits never retroactively rewrite history; (3) **1/day enforcement at DB level** — Postgres UNIQUE INDEX on `(client_id, gym_date)` where `gym_date` is `GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED` — app-layer check has a race window. All three are addressable with patterns specified down to file-and-function level.
 
-The dominant risk profile is concentrated in three areas: (1) cookie + refresh-token semantics (SameSite, Secure-in-dev, single-flight rotation, reuse detection, plaintext-in-Redis), (2) the cross-module boundary problem — `clients/router.py` needs `require_permission` but `import-linter` forbids `clients → auth`, resolved by lifting RBAC primitives into `core/permissions.py` and using a registered-loader Protocol for `get_current_user`, and (3) the OpenAPI / codegen pipeline (lifespan-safe export, drift CI check, snake↔camel boundary, Optional vs nullable in TS). All three are addressable with patterns that the research files specify down to file-and-function level.
+Suggested 9 phases (15–23). Strict critical path 15→16→17 then 18 ∥ 19, 20 after 19, 21 after 16+17+19, 22 after 21. Phase 23 (CR-01/CR-02 + active sessions UI) parallel-eligible with anything.
 
 ---
 
 ## Key Findings
 
-### Recommended Stack
+### Stack
 
-The existing `apps/backend/uv.lock` already covers FastAPI 0.115+, SQLAlchemy 2.0 async, Alembic, Pydantic v2, Postgres asyncpg, Redis 5.3.1 (transitively via ARQ 0.28), structlog, httpx — roughly 80% of what v1.1 needs.
+- **Zero new runtime deps.** ARQ 0.26 cron, ptb-22 `CommandHandler` list, plain Postgres enum + UPDATE for lifecycle, stdlib `datetime` + `zoneinfo` cover everything.
+- **Optional dev dep:** `time-machine>=2.16,<3` if cron / gym-hours tests grow brittle. Defer until pain forces it.
+- **Rejected libraries:** APScheduler (use ARQ cron), pg_cron (out of scope, infra), `transitions`/`python-statemachine` (3 states, 2 transitions — 3-line UPDATE wins), `pendulum` (stdlib + zoneinfo sufficient since Russia abolished DST in 2014), anti-fraud libraries (uniqueness constraint, not detection problem).
+- **One placeholder cleanup:** delete `apps/backend/app/workers/scheduler.py` placeholder during Phase 18 — its TODO is fulfilled by `cron_jobs` directly on `WorkerSettings`.
+- **Compose topology gets a 5th service:** `arq-worker` (`uv run arq app.workers.WorkerSettings`) — mirrors precedent of bot worker as separate process.
 
-**New Python dependencies (`apps/backend/pyproject.toml`):**
-- `pyjwt>=2.12.1,<3` — JWT encode/decode (HS256). Picked over python-jose (107-issue backlog, slow cryptography pin updates) and authlib (full OAuth scope creep). FastAPI tutorial migrated off jose to PyJWT in 2024.
-- `argon2-cffi>=25.1.0,<26` — direct password hashing, no `passlib` wrapper. Argon2id is OWASP's 2026 default. **Wrap in `asyncio.to_thread`** because default params (~50ms) shouldn't block the event loop.
-- `python-telegram-bot>=22.7,<23` — bot client. Picked over aiogram because ptb 22 uses **httpx** (already locked); aiogram pulls aiohttp as a parallel HTTP stack inside the same process.
+### Features
 
-**New JS devDependency:** `openapi-typescript@^7.13.0` — types-only codegen. Picked over `openapi-fetch`, `orval`, and `openapi-generator-cli` because the swap-seam contract `UI → TanStack Query hook → services.X → { mock | http } impl` already owns keys/optimistic updates/error mapping.
+- **Locked v1.2 scope is sound.** Every domain item maps cleanly to RU-market table stakes (FitBase, 1С:Фитнес-клуб, fitness365, impulseCRM all have plan catalog + snapshot instance + active/expired/cancelled tri-state + 1/day cap + gym-hours window).
+- **Three "free" column additions strongly recommended** in Phase 17 migration: `paid_at TIMESTAMPTZ NULL` (seeds v1.3 billing), `notes TEXT NULL` (operational reality), `activation_policy VARCHAR DEFAULT 'purchase_date' CHECK (activation_policy = 'purchase_date')` (forward-compat for v1.3 first-visit activation). Zero-cost now, expensive later.
+- **Top cheap-win differentiators (D-1…D-7) — pure-read views over locked tables.** Best ROI: D-3 ("истёк сегодня" red badge in client list), D-2 (filter "expiring within N days"), D-5 (TG-bot reply with days-remaining on success). Pick 3-4 for Phase 22.
+- **Anti-features explicitly rejected:** per-class booking, family memberships, visit-count plans, freeze, proportional refund, expiring-soon notifications, trainer commissions, CSV import, photo upload, websockets-driven "who's in the gym now" (poll instead), multi-gym, audit-log read API. Each has a "when to reconsider" in FEATURES.md so v1.2 planners can defend scope.
+- **Anti-fraud verdict — gym-hours + 1/day is sufficient for honest single-gym pet project.** Telegram-bot binding to `telegram_chat_id` is higher friction than card-swap; reception-collusion vector exists but constrained by mandatory active-membership validation + audit log + (in pet-project context) owner often IS the reception. Real RU clubs use photo+biometrics at turnstile; v1.2 deliberately rejects that hardware tier. Document accepted residual risk in PROJECT.md Key Decisions in Phase 15.
 
-**Reject list:** `passlib`, `python-jose`, `authlib`, `pyrogram`, `aiogram`, `aioredis`, `fastapi-csrf-protect`, `openapi-fetch`, `openapi-generator-cli`, `orval`, **Keycloak/Auth0/OIDC**, **Casbin/Oso/OPA**, **SQLAlchemy-Continuum**.
+### Architecture
 
-**Cross-research conflict resolutions (load-bearing for the planner):**
-- FEATURES.md mentions "`python-jose` or `pyjwt`" and "`passlib[argon2]`". STACK.md is authoritative: **PyJWT, no passlib, argon2-cffi direct.**
-- ARCHITECTURE.md's pyproject diff lists `pyjwt` only — aligned.
-- ARCHITECTURE.md mentions both `aiogram` and `ptb` ambiguously in handler pseudocode. STACK and PITFALLS converge on **`python-telegram-bot`**.
+- **Visits → Memberships dependency** via `ActiveMembership` Protocol callback in `core/dependencies.py` registered from `app/main.py`. Direct mirror of `register_user_loader` (`app/core/dependencies.py:44-61`, `app/main.py:88`). FK at DB level (string ref, no Python import).
+- **ARQ scheduled job placement** in `app/workers/scheduled/expire_memberships.py`, importing `app.modules.memberships.service`. No `workers ⊥ modules` contract exists (verified in `apps/backend/.importlinter`). Documented as **D-09** parallel to D-06.
+- **Telegram bot `/checkin` handler** via `HandlerContext.visits_service: ModuleType` extension (NOT direct import in `handlers.py` — would violate `integrations-not-depend-on-modules`). Anti-fraud lives in `visits.service` so reception manual + bot self check-in share validation. Documented as **D-10** parallel to D-06.
+- **audit_log already centralized.** Pure stateless `audit.emit(...)` in `core/audit.py`; new modules write identically to `clients.service`. Add 10 new locked event names: `membership_plan_*` (3), `membership_*` (3), `visit_*` (4).
+- **admin-web client-detail composition — Pattern α (route IS the page).** `routes/_protected/clients.$clientId.tsx` composes via `Promise.all(ensureQueryData)` in loader; `MembershipsBlock` and `RecentVisitsBlock` exported from their own features and consumed by the route — never `features/clients` importing them. Verify `eslint.config.js` `import/no-restricted-paths` rules in Phase 22 plan.
 
-### Expected Features
+### Pitfalls (BLOCKER ranks)
 
-**Must have (table stakes — locked into v1.1 scope):**
+1. **Service write paths missing `await session.commit()`** (Phase 12.1 reprise) → Phase 15 ships `BusinessService` template + AST gate verifying every `service.py` write path explicitly commits.
+2. **Snapshot pricing not copied** → Phase 17 schema MUST include `price_kopecks_snapshot`/`duration_days_snapshot`/`plan_name_snapshot` NOT NULL at insert; `MembershipPlan` FK uses `ON DELETE RESTRICT` so plans can't be hard-deleted while instances exist.
+3. **Visit `1/day` race window via app-layer check** → Phase 19 migration adds Postgres UNIQUE INDEX on `(client_id, gym_date)` with `gym_date GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED`. Concurrent-request test in Phase 19: 10 parallel → 1×201 + 9×409.
 
-*Auth:*
-- Telegram bot deep-link OTP (`https://t.me/<bot>?start=<token>` → bot DMs 6-digit code → user pastes into `/login` form). Long-polling acceptable in dev; webhook deferred.
-- Email/password fallback with Argon2id, admin-provisioned (no public `/register`), min 12-char policy, rate-limited (5/15min/email).
-- JWT access (15min) + refresh (30d) in **two separate httpOnly cookies**; refresh path-scoped to `/api/v1/auth`.
-- Refresh **rotation with family-id reuse-detection**; on detected reuse → revoke entire family. Server-side session record in Redis (`session:{user_id}:{family_id}`).
-- CSRF double-submit cookie + `X-CSRF-Token` header on mutating endpoints (skip on `/auth/login` and Telegram callback).
-- Idle timeout 7d; absolute timeout = refresh lifetime (30d).
+### Pitfalls (HIGH)
 
-*RBAC:*
-- `Role = 'owner' | 'reception'` enum mirrored in DB.
-- `OWNER_ONLY` matrix at byte-level parity with `apps/admin-web/src/shared/session/can.ts` (9 entries).
-- `require_permission(action, resource)` as a FastAPI **dependency** (not a service-body call).
-- 403 response shape matches frontend's `DomainError { code, message, fields? }`.
-
-*Clients schema:*
-- Branded `id: ClientId` (UUIDv4), ФИО triple, `phone` (E.164, partial unique on alive rows), `birthday?`, `gender?`, `email?`, `notes?`, audit timestamps, `deleted_at?` (soft-delete only), `created_by_user_id` FK.
-- `tags: text[]` with GIN index.
-- `telegram_user_id` (BIGINT nullable UNIQUE) — added now to avoid future migration.
-- `emergency_contact: jsonb`.
-- `pg_trgm` GIN on `lower(last_name)` and `lower(first_name)`.
-
-*Endpoints:*
-- `POST /auth/login`, `POST /auth/telegram/start`, `POST /auth/telegram/verify`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`.
-- `GET/POST/PATCH/DELETE /api/v1/clients`, `GET /api/v1/clients/{id}` with `{items,total,page,pageSize}` pagination, `q=` ILIKE, filters by tag/gender/signup-date/has_telegram, sort by `created_at DESC` (default) or `last_name ASC`.
-
-*Cross-cutting:*
-- `audit_log` table + writes from auth flows + clients mutations. **Read endpoint deferred to v1.2** but the table must ship in v1.1.
-
-**Should have (deferred to v1.2+):** Active-sessions UI, audit log read endpoint, password reset via Telegram, HIBP pwned-password check, webhook-based bot.
-
-**Defer (v2+):** Public self-registration, photo upload, bulk CSV import, last-visit filter, multi-tenancy.
-
-**Anti-features explicitly rejected:** SMS OTP, Telegram Login Widget, email password reset, forced password rotation, password complexity rules, account lockout, CAPTCHA, localStorage tokens, stateless-only JWT, hard delete, custom field schema, full-text search, saved filters, CSV export, policy engine, dynamic role creation, multi-tenancy, RLS.
-
-### Architecture Approach
-
-The architecture is constrained by three `import-linter` contracts already enforced in v1.0: `core ⊥ modules`, `modules independent`, `integrations ⊥ modules`. The central architectural problem of v1.1 is that RBAC naturally cuts across modules. The resolution is **lift RBAC primitives into `core`**.
-
-**Major components:**
-
-1. **`app/core/permissions.py` (NEW)** — `Role`/`Action`/`Resource` StrEnums, `OWNER_ONLY: frozenset` matrix, `can()`. Mirrors `apps/admin-web/src/shared/session/can.ts` byte-for-byte.
-2. **`app/core/security.py` (FILL)** — JWT encode/decode (HS256, 30s leeway), Argon2id `hash_password`/`verify_password`, deep-link/OTP code generators, SHA-256 hashing for refresh tokens.
-3. **`app/core/dependencies.py` (FILL)** — `get_current_user` and `require_permission` as FastAPI dependencies. Uses **registered-loader Protocol pattern**: `core/dependencies.py` defines `class CurrentUser(Protocol)` and `register_user_loader(loader)`; `app/main.py` (composition root, exempt from import-linter) calls `register_user_loader(load_user_by_id)` at startup.
-4. **`app/modules/auth`** — `models.py` (User, RefreshToken, OtpCode), `schemas.py`, `service.py`, `repository.py`, `router.py`. Refresh tokens **hybrid**: full row in Postgres + Redis index `auth:session:{user_id}:{family_id}` for fast revoke.
-5. **`app/modules/clients`** (RENAME from `members` placeholder) — only imports from `core` for `require_permission`; no auth import.
-6. **`app/integrations/telegram/{bot,sender,handlers}.py`** — pure adapter. Cross-module callback (bot → auth) goes through a **Protocol injected at startup**, NOT a direct import.
-7. **`app/workers/telegram_bot.py` (NEW)** — standalone process running `Application.run_polling()`. **NOT an ARQ task**. Added to `docker-compose.yml` as a fourth service.
-8. **`scripts/export_openapi.py` + `apps/backend/openapi.json` (checked in)** — `app.openapi()` dumped via lifespan-safe path; CI runs `git diff --exit-code openapi.json`.
-9. **`packages/api-client/`** — single thin generated package. `src/schema.d.ts` (gitignored) + ~80 LOC hand-rolled `fetcher.ts` (cookie credentials, single-flight refresh, typed `ApiError`).
-10. **`apps/admin-web/src/features/auth/*` + wiring** — calls go through swap-seam (`VITE_API_MODE=http` for `/login` and `/clients/*`; other modules stay on mocks).
-
-**Key decisions:**
-- UUID PKs with Postgres native `gen_random_uuid()` (PG13+, no `pgcrypto`).
-- `Base.metadata` naming convention set BEFORE first migration.
-- **Pagination contract drift fix:** backend currently uses `limit/offset`; flip to `{items, total, page, pageSize}` to match frontend (frontend is locked).
-- **camelCase JSON wire format** via Pydantic `alias_generator=to_camel` + `populate_by_name=True`.
-- **Soft-delete via partial unique index:** `Index("uq_clients_phone_alive", "phone", unique=True, postgresql_where=text("deleted_at IS NULL"))`.
-- **Module rename:** `app/modules/members/` → `app/modules/clients/`.
-
-### Critical Pitfalls
-
-1. **Alembic naming convention not set BEFORE first migration (#11)** — set `MetaData(naming_convention=...)` in `app/core/database.py`. CI gate: autogenerate on clean DB must produce empty migration.
-2. **Refresh-token rotation race causes mass logout (#4)** — fix on **both sides**: server allows ~5s reuse-window returning the same new pair; client (api-client fetcher) implements module-scoped single-flight `Promise<void> | null`.
-3. **Soft-delete partial unique index missing (#13)** — use `postgresql_where=text("deleted_at IS NULL")` from day one.
-4. **Frontend `can()` ↔ backend `OWNER_ONLY` drift (#27)** — daily/PR CI parity test imports both and compares. Plus a route-introspection test asserting `require_permission` is wired on every protected route.
-5. **`require_permission` as a service-body call instead of `Depends` (#29)** — mandate `Depends(require_permission(...))` on the route signature; AST grep / lint to forbid in service bodies.
-
-Honourable mentions: Cookie `Secure=True` silently dropped in dev HTTP (#2), SameSite=Strict breaks Telegram return navigation (#1), plaintext refresh tokens in Redis (#5), Telegram DM blocked silent failure (#10), CSRF surface re-introduced by cookie auth (#3), OTP brute-force without max-attempts (#9), login redirect loop on refresh failure (#30).
+- **End_date calendar math** — days-only model (no `relativedelta` weirdness on Jan 31 + 30 days); end_date computed once at sell time, never recomputed. **Inclusive semantics** (last valid check-in day = `end_date`); ARQ filter uses strict `<`.
+- **ARQ `expire_memberships` not idempotent** → use `UPDATE … WHERE end_date < CURRENT_DATE AND status='active' RETURNING id` in single transaction. ARQ `unique=True` + `keep_cronjob_progress=60` does NOT protect against worker-restart re-runs (verified: ARQ issue #193). Idempotency must be SQL-level.
+- **ILIKE search forgets CR-01 escape pattern** → promote `_escape_like_pattern` from `clients/repository.py` to `core/sql.py`. Future modules import without `modules-independent` violation.
+- **import-linter drift via TYPE_CHECKING/Protocol abuse** — visits never `from app.modules.memberships import ...` even under `TYPE_CHECKING`. The `ActiveMembership` Protocol lives in `core/dependencies.py`, not in memberships.
+- **Bot `/checkin` DM oracle leak** — single generic Russian failure DM. Precise reason audit-only, NEVER include client name / end_date / hours / membership status in DM. Owner copy review before Phase 20 merge.
+- **Bot replay / friend-fraud** — Redis `update_id` dedup with key-prefix discipline alongside `arq:*` and `sz:session:*`. Accept residual risk for v1.2 single-zal scope; lock as Key Decision in Phase 15.
+- **Audit log taxonomy drift** — frozenset of `(action, resource_type)` tuples in `core/audit.py`; `audit.emit` validates at call. Test that walks every new event added in v1.2.
+- **OpenAPI drift on schema add** — `BackendSchemaBase` (camelCase + `populate_by_name=True`) template; ruff `UP007` enforces `X | None` not `Optional[X]` (Pydantic v2 schema differences).
 
 ---
 
-## Implications for Roadmap
+## Cross-Research Conflicts Resolved
 
-The three research docs converged on the same logical order. Merged ordering:
+| Topic | Conflict | Resolution |
+|---|---|---|
+| `paid_at` / `notes` / `activation_policy` columns | FEATURES recommends adding (M-7/M-9/M-8); ARCHITECTURE schema sketch omits | **Add per FEATURES** — zero runtime cost, saves v1.3 migration cost. Phase 17 plan-author includes them. |
+| `end_date` inclusive vs exclusive | ARCHITECTURE Protocol comment: exclusive; FEATURES + PITFALLS: inclusive | **Inclusive wins** — matches client expectation "купил на месяц до 30 числа = тренируюсь 30-го числа". ARQ filter `end_date < CURRENT_DATE AT TIME ZONE 'Europe/Moscow'` (strict `<`). Lock in Phase 15 Key Decisions. |
+| 1/day index mechanism | STACK/FEATURES/ARCHITECTURE: partial unique on date expression; PITFALLS: STORED GENERATED `gym_date` column + UNIQUE on `(client_id, gym_date)` | **PITFALLS approach wins** — generated column prevents app from writing wrong value; Phase 19 migration uses `GENERATED ALWAYS AS (...) STORED`. |
+| ARQ daily tick time | STACK `hour=3, minute=5` UTC; ARCHITECTURE `hour=3, minute=15` (TZ unspecified); PITFALLS "03:05 MSK" | **Defer to Phase 18 plan** — recommend UTC tick `hour=3, minute=5` (06:05 MSK), document MSK conversion in WorkerSettings docstring. Container `TZ=UTC`. |
+| `/checkin` cross-module shape | STACK "decision deferred"; ARCHITECTURE "extend HandlerContext"; PITFALLS aligns | **Aligned — extend `HandlerContext` with `visits_service: ModuleType`**, document as D-10. |
+| State-machine library | STACK rejects (3 states, 2 transitions); PITFALLS adds Postgres CHECK + transition matrix unit test | **Aligned — plain enum + CHECK constraint + service-layer guards + transition test.** No library. |
 
-### Phase 1: Auth Foundations
-**Rationale:** All later work depends on JWT primitives, cookie matrix, RBAC enums, SQLAlchemy mixins, and the cross-module pattern.
-**Delivers:** `core/security.py` (JWT, argon2, code generators); `core/permissions.py` (enums, OWNER_ONLY, `can`); `core/database.py` extended with mixins AND `MetaData(naming_convention=...)`; `core/dependencies.py` (Protocol-based `get_current_user` + `register_user_loader` + `require_permission`); cookie-flag ADR (`Lax`, `Secure` env-driven with prod assertion); CSRF double-submit ADR; cross-module Protocol/loader ADR; pagination contract flip to `{items,total,page,pageSize}`; Pydantic v2 base schema with `alias_generator=to_camel`.
-**Avoids pitfalls:** #1, #2, #5, #11, #12, #19, #25, #32.
-**Research flag:** standard patterns; no deeper research needed.
+---
 
-### Phase 2: User Schema + Email/Password Auth
-**Rationale:** Email/password is simpler than Telegram and doesn't need a separate process; gets JWT + cookies + rotation flowing end-to-end before adding the OTP channel.
-**Delivers:** `auth/models.py` (User, RefreshToken, OtpCode); first business migration `0001_auth.py` with naming convention; `auth/{schemas,service,repository,router}.py` with `/auth/login`, `/auth/refresh` (with family rotation + reuse window), `/auth/logout`, `/auth/logout-all`, `GET /auth/me`; `app/main.py` wires routers + `register_user_loader`; server-side single-flight reuse window; `revoke_all_sessions` on password change; pytest SAVEPOINT-based session fixture; settings-level `cookie_secure` flag with prod assertion; seed script creating one owner user.
-**Avoids pitfalls:** #3 (CSRF), #4 server-side, #6, #16, #18.
-**Research flag:** standard.
+## Build Order — Suggested Phase Sequence
 
-### Phase 3: RBAC Wiring + Tests
-**Rationale:** Before any business endpoint lands, prove `require_permission` is callable as `Depends`, verify 401/403/200 paths, ensure OWNER_ONLY matrix is byte-equal with frontend.
-**Delivers:** Wire `Depends(require_permission(...))` examples; integration tests (401/403/200); **parity test** vs `apps/admin-web/src/shared/session/can.ts`; route-introspection test enumerating `app.routes`; AST/grep lint forbidding `require_permission` in service bodies; documented "list visibility ⇒ detail visibility" rule.
-**Avoids pitfalls:** #19, #27, #28, #29.
-**Research flag:** none — purely mechanical.
+```
+15 → 16 → 17 ┬→ 18
+             └→ 19 → 20 → 21 → 22
 
-### Phase 4: Telegram OTP Channel
-**Rationale:** Highest risk in the milestone (external API, separate process, polling, DM-blocked edge cases). Done after JWT pipeline is proven.
-**Delivers:** `integrations/telegram/{bot,sender,handlers}.py` (ptb 22 client, send adapter, `/start <token>` handler); `workers/telegram_bot.py` standalone polling entry-point; `workers/tasks/notifications.py` ARQ `send_otp` task; `auth/service.py` adds `create_otp_request` + `consume_otp` (6-digit `secrets.randbelow`, SHA-256 hash, max 5 attempts, 5min OTP TTL, 10min deep-link TTL); `POST /auth/otp/request|verify|status`; cross-module callback via Protocol DI; `docker-compose.yml` new `telegram-bot` service with `restart: unless-stopped`; `.env.example` adds Telegram vars; DM-blocked → 409 `bot_not_started` with deep-link in response; per-IP rate limit + per-user attempt counter.
-**Avoids pitfalls:** #7, #8 (sidestepped by bot-deep-link), #9, #10, #20.
-**Research flag:** **NEEDS DEEPER RESEARCH** — ptb 22.x deep-linking exact API, error class hierarchy, polling vs webhook toggle. Pull `python-telegram-bot` via Context7 in Phase 4 planning.
+23 (independent — anywhere)
+```
 
-### Phase 5: Clients Module
-**Rationale:** First business module. Cannot land before auth (every endpoint uses `Depends(require_permission(...))`).
-**Delivers:** `modules/clients/{models,schemas,service,repository,router}.py`; migration `0002_clients.py` enables `pg_trgm`; `clients` table with all table-stakes fields; `tags text[]` GIN; `lower(last_name)`/`lower(first_name)` GIN trgm; **partial unique index** on `phone WHERE deleted_at IS NULL`; `emergency_contact jsonb`; reserved `telegram_user_id`; `audit_log` table + service helper called from auth + clients mutations; `GET /api/v1/clients` (pagination, ILIKE, filters, sorts) with **repository helpers (`list_alive`, `get_alive`)** so soft-delete filter cannot be forgotten; full CRUD with role-appropriate `require_permission`; `DELETE` is soft-delete only; ON DELETE RESTRICT for any future FKs.
-**Avoids pitfalls:** #13, #14, #15, #17 (documented).
-**Research flag:** none.
+| # | Phase | Inputs | Outputs |
+|---|-------|--------|---------|
+| **15** | **Foundations: RBAC parity + audit taxonomy + helper hoisting** | none | `Action.{CREATE, CANCEL, CHECK_IN}`, `Resource.{MEMBERSHIPS, MEMBERSHIP_PLANS, VISITS}`, `OWNER_ONLY` extensions both sides; TEST-06 byte-paritet extended; `BusinessService` template + AST commit gate; `_escape_like_pattern` hoisted to `core/sql.py`; audit taxonomy frozenset; `BackendSchemaBase`; **Key Decisions:** inclusive `end_date`, `gym_date` definition, accepted residual fraud risk. |
+| **16** | **Memberships DB + plans CRUD backend** | 15 | Alembic 0004 (`membership_plans` table); module template; `/api/v1/membership-plans` 4 routes (owner-only); audit events `membership_plan_*`. |
+| **17** | **Membership instances backend (sell + cancel + resolver)** | 16 | Alembic 0005 (`memberships` with snapshots + `paid_at` + `notes` + `activation_policy CHECK`); `service.create_membership` (computes `end_date` once); `service.cancel_membership` (transition guard); `service.resolve_active_membership_by_client` (latest `end_date` then `created_at DESC`); `register_active_membership_resolver` Protocol; `app/main.py` wiring; `/api/v1/memberships` 4 routes; transition matrix tests; Postgres CHECK on status. |
+| **18** | **ARQ scheduled `expire_memberships`** ∥ 19 | 17 | `app/workers/scheduled/expire_memberships.py` (D-09); `WorkerSettings.cron_jobs`; idempotent `UPDATE … RETURNING id`; `on_job_start`/`on_job_end` `job_id` contextvars binding; new docker-compose `arq-worker` service; patched-clock double-run test. Delete `scheduler.py` placeholder. |
+| **19** | **Visits DB + reception check-in backend** ∥ 18 | 17 | Alembic 0006 (`visits` with STORED GENERATED `gym_date` + UNIQUE + channel ENUM + `checked_in_by` FK); module template; shared anti-fraud helpers (gym hours from env + active-membership lookup via core resolver); `/api/v1/visits` 3 routes; concurrent-request test (10 parallel → 1×201 + 9×409). |
+| **20** | **Telegram bot `/checkin`** | 19 | `HandlerContext.visits_service` (D-10); `checkin_handler` with single generic Russian failure DM; `service.create_visit_self_checkin`; Redis `update_id` dedup; `visit_rejected_bot` vs `visit_rejected_reception` audit events. Owner Russian-copy sign-off. |
+| **21** | **OpenAPI drift gate refresh + api-client codegen** | 16, 17, 19 | Regen `apps/backend/openapi.json`; `pnpm --filter @sportzal/api-client codegen`; commit both; CI green. |
+| **22** | **admin-web wiring (memberships + visits)** | 21 | `features/memberships`, `features/visits`; new routes `/_protected/memberships.tsx`, `/_protected/membership-plans.tsx` (owner-only via `beforeLoad`), `/_protected/visits.tsx`; client-detail Pattern α (route IS page; `Promise.all(ensureQueryData)` in loader); reception UX edge cases (expired-today / already-today / multi-phone-match); cheap-wins D-2/D-3/D-5/D-1 per budget. |
+| **23** | **Hygiene + v1.1 carryover** ∥ anywhere | none | Phase 04 CR-01 (Argon2 verify-error → 401), CR-02 (invalid UUID in cookie → 401), active sessions UI + revoke. |
 
-### Phase 6: OpenAPI Pipeline + `packages/api-client`
-**Rationale:** Backend must be stable before codegen lands; codegen must land before admin-web wiring.
-**Delivers:** `scripts/export_openapi.py` (`create_app().openapi()` with `indent=2, sort_keys=True`, lifespan-safe); `apps/backend/openapi.json` checked in; CI drift step; `packages/api-client/` (`openapi-typescript` devDep + `codegen` script; gitignored `schema.d.ts`; `fetcher.ts` ~80 LOC with cookie credentials, retry policy excluding `/auth/*`, single-flight refresh, typed `ApiError`); TS contract test asserting no `snake_case` properties; hand-written `Page<T>` helper; Optional → nullable convention test.
-**Avoids pitfalls:** #4 client-side, #22, #23, #24, #25, #26.
-**Research flag:** **NEEDS DEEPER RESEARCH** — `openapi-typescript` 7.13 CLI flags, FastAPI `app.openapi()` lifespan-safety with Pydantic v2 alias generators. Pull both via Context7.
+### Dependencies and Parallelization
 
-### Phase 7: admin-web Auth + Clients Wiring
-**Rationale:** Last in the chain because it consumes everything else.
-**Delivers:** `shared/api/services/http/{auth,clients}.ts` implementing existing service contracts via `@sportzal/api-client`; `shared/api/contracts/index.ts` Zod for `AuthService`/`ClientsService`; `features/auth/*` (login form with email/password tab + Telegram tab + OTP input + polling); TanStack Router `beforeLoad` redirect-back via search; TanStack Query `retry` excluding 401; single-flight refresh in fetcher; one-shot `/login` redirect with module flag; form 422 → RHF `setError` per field; ESLint rule banning `fetch(` outside api-client + http services + negative-test fixture; `VITE_API_MODE=http` only for `/login` and `/clients/*`; structlog redactor for secrets with snapshot test.
-**Avoids pitfalls:** #21, #22, #30, #31.
-**Research flag:** **LIGHT** — TanStack Query 5.x retry semantics + TanStack Router protected-route idiom via Context7.
+- 15 must finish first — RBAC contract that 16/17/19 all depend on.
+- 18 and 19 are parallelizable after 17 (no shared code beyond the resolver from 17).
+- 20 must wait for 19 (handler imports `visits_service`).
+- 21 cannot start until 16+17+19 are merged — OpenAPI drift gate is byte-stable.
+- 22 cannot start until 21 — admin-web codegen depends on `schema.d.ts` from 21.
+- 23 is fully independent — touches Phase 4 auth code + frontend session UI.
 
-### Phase Ordering Rationale
-- **Foundations before features:** Phase 1 settles cookie matrix, Alembic naming, cross-module pattern, pagination contract — extremely expensive to retrofit.
-- **Email/password before Telegram (Phase 2 → 4):** in-process JWT flow proven without external API noise.
-- **RBAC stub (Phase 3) before any business endpoint:** parity test green before clients routes use `require_permission` for real.
-- **Clients (Phase 5) before frontend wiring (Phase 7):** OpenAPI surface stable before codegen, codegen stable before HTTP services land in admin-web.
-- **OpenAPI pipeline (Phase 6) is its own phase:** export script + drift CI is non-trivial.
-- **Audit log table ships with clients (Phase 5):** retrofitting writes into 6+ endpoints later is exactly the rework FEATURES.md flagged.
+---
 
-### Research Flags
-- **Phase 4 (Telegram OTP):** ptb 22.x deep-linking + error classes + polling/webhook toggle + composition root.
-- **Phase 6 (OpenAPI + api-client):** `openapi-typescript` 7.13 CLI behavior + FastAPI `app.openapi()` lifespan-safety.
-- **Phase 7 (admin-web wiring) — light:** TanStack Query 5 retry + Router redirect-search.
+## Research Flags for Plan-Phase
 
-Phases skipping deep research: Phase 1 (Foundations), Phase 2 (Email/Password), Phase 3 (RBAC Wiring), Phase 5 (Clients).
+**Needs deeper plan-time research:**
+
+- **Phase 18 (first real ARQ cron):** validate `unique=True` on docker restart, `keep_cronjob_progress=60` semantics, `on_startup` cron-resolves assertion, design `job_id` contextvars convention for structlog binding.
+- **Phase 20:** Russian copy review with owner; Redis `update_id` dedup design with key-prefix discipline alongside `arq:*` and `sz:session:*`; accepted-residual-risk Key Decisions entry in PROJECT.md.
+
+**Standard patterns — skip deeper research:**
+
+- Phase 15 — extends three v1.1 patterns (RBAC parity, audit taxonomy, repository helper hoisting).
+- Phases 16/17/19 — full mirror of `clients` module template (validated v1.1).
+- Phase 21 — rerun of v1.1 Phase 9 (OpenAPI drift gate established).
+- Phase 22 — rerun of v1.1 Phases 10/11/13. Only Pitfall 12 (waterfall + stale-while-revalidate) is novel and addressed by the route loader pattern.
+- Phase 23 — micro-fixes.
+
+---
+
+## Open Decisions for Plan-Phase Authors
+
+1. **`Action.CREATE` vs reusing `EDIT`** (Phase 15) — recommend introducing CREATE + CANCEL for clarity.
+2. **Gym hours config location** (Phase 19) — recommend env vars `GYM_HOURS_START` / `GYM_HOURS_END` (Europe/Moscow); tunable per deploy without redeploy.
+3. **`end_date` inclusive semantics** (Phase 15) — lock as PROJECT.md Key Decision; ARQ filter strict `<`.
+4. **`activation_policy` "now-vs-later"** (Phase 17) — ship column NOW with single CHECK value `'purchase_date'`, widen the CHECK in v1.3.
+5. **ARQ cron timezone + slot** (Phase 18) — recommend container `TZ=UTC` + `hour=3, minute=5` (06:05 MSK).
+6. **Multiple-overlapping-active-memberships tiebreak** (Phase 17) — latest `end_date`, then `created_at DESC`. Document explicitly in resolver docstring.
+7. **Russian DM copy lock** (Phase 20) — single generic failure string; owner sign-off before merge.
+8. **Reception UX edge cases** (Phase 22) — pre-fetch today's visit + channel badge; top-5 phone-prefix search results.
 
 ---
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | **HIGH** | Versions verified against PyPI/npm 2026-05-01; rationale grounded in maintenance status, FastAPI tutorial alignment, and existing lockfile. |
-| Features | **HIGH** | OWASP, NIST 800-63B, FastAPI docs; gym-CRM field set verified across 5 vendors; РФ market constraints already locked. |
-| Architecture | **MEDIUM-HIGH** | Codebase facts HIGH; recommended cross-module Protocol/loader pattern is MEDIUM (idiomatic but not unique). |
-| Pitfalls | **HIGH** | 32 pitfalls anchored to specific files/contracts with code-level mitigations and verification tests. |
+| Area | Level | Reason |
+|------|-------|--------|
+| Stack additions (none required) | HIGH | Context7 verification of ARQ 0.26.3 + ptb-22.5; no library introduces incompatibility |
+| Architecture integration | HIGH | Direct repo reads; `register_user_loader` precedent; `.importlinter` contracts inspected |
+| Pitfall coverage | HIGH | Grounded in v1.1 retrospective + Phase 12.1 incident + ARQ issue #193 |
+| Feature scope (RU market) | MEDIUM-HIGH | Triangulated from FitBase, 1С:Фитнес-клуб, fitness365, impulseCRM, Sigur primary docs |
+| Anti-fraud sufficiency | MEDIUM | Argument is structural (TG account-binding > card-swap friction; owner=reception in pet-project) — sound logic but assumption-heavy. Document accepted residual risk explicitly. |
+| Build order + dependencies | HIGH | Falls out of file-level inspection of cross-module edges |
 
-**Overall confidence:** HIGH.
+**Gaps to flag for plan-phase:**
 
-### Gaps to Address
-1. **Cookie strategy in production:** Phase 1 ADR locks dev choice (Lax) and explicitly defers prod choice (same-origin vs split-origin + `SameSite=None; Secure`) to deployment milestone — but writes the CSRF double-submit machinery now so the prod flip is just config.
-2. **mypy stubs for PyJWT:** verify on first `mypy --strict` run in Phase 1; add `types-pyjwt` only if needed.
-3. **redis-py upper bound:** stay at 5.x (ARQ 0.28 caps `<6`); track ARQ issue tracker; bump together when arq lifts cap.
-4. **OpenAPI export DB-independence:** Phase 6 acceptance criterion — script runs successfully without DB and produces deterministic byte-stable output across macOS/Linux.
-5. **Audit log retention policy:** v1.1 ships writes only; long-term retention (152-ФЗ alignment, partition pruning) is out of scope. Add TODO note in `audit_log` migration referencing future milestone.
-6. **Conflicts already resolved (no further action):**
-   - Password lib: drop `passlib`, use `argon2-cffi` directly (FEATURES vs STACK — STACK wins).
-   - JWT lib: PyJWT, not python-jose (FEATURES vs STACK — STACK wins).
-   - Telegram lib: python-telegram-bot, not aiogram (transport coherence with httpx).
-   - Module rename: `members/` → `clients/` (frontend term canonical).
-   - Pagination: flip backend to `{items,total,page,pageSize}` + camelCase.
+- Pattern α vs β admin-web confirmation needs `eslint.config.js` `no-restricted-paths` read in Phase 22 plan.
+- ARQ `keep_cronjob_progress` docker-restart end-to-end validation pending in Phase 18.
+- Russian DM copy needs explicit owner sign-off before Phase 20 merge.
+- Pitfall 9 (residual friend-fraud risk acceptance) must land in PROJECT.md Key Decisions during Phase 15, not buried in comments.
 
 ---
 
-## Detailed Research Files
+## Ready for Requirements
 
-- `.planning/research/STACK.md` — dependency choices, version pins, reject list, integration costs.
-- `.planning/research/FEATURES.md` — table-stakes / differentiator / anti-feature breakdown, prioritization matrix, v1.1 launch checklist, out-of-scope carry-overs.
-- `.planning/research/ARCHITECTURE.md` — file-and-function-level layout, cross-module RBAC pattern with code samples, build order, files-touched summary, open questions.
-- `.planning/research/PITFALLS.md` — 32 pitfalls with phases, prevention code, warning signs, recovery cost; technical-debt patterns; "looks done but isn't" checklist; pitfall-to-phase mapping table.
+All four research files (STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md) on disk. Cross-research conflicts resolved with concrete decisions. Pitfalls mapped to phases. Build order derived from dependency analysis with parallelization noted. Orchestrator can proceed to REQUIREMENTS.md definition + ROADMAP creation.
