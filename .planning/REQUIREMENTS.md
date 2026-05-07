@@ -45,7 +45,7 @@
 ### ARQ Scheduled Job — Membership Expiry (Phase 18)
 
 - [ ] **ARQ-01**: `app/workers/scheduled/__init__.py` (namespace marker) and `app/workers/scheduled/expire_memberships.py` exist; the latter exposes `async def expire_memberships(ctx) -> int`. D-09 docstring documents the worker→module exception.
-- [ ] **ARQ-02**: `expire_memberships(ctx)` is idempotent: single-transaction `UPDATE memberships SET status='expired' WHERE end_date < CURRENT_DATE AND status='active' RETURNING id` (or equivalent ORM flow); returns count of newly-expired rows; emits `audit.emit("membership_expired", actor_user_id=None, ...)` for each row.
+- [x] **ARQ-02**: `expire_memberships(ctx)` is idempotent: single-transaction `UPDATE memberships SET status='expired' WHERE end_date < CURRENT_DATE AND status='active' RETURNING id` (or equivalent ORM flow); returns count of newly-expired rows; emits `audit.emit("membership_expired", actor_user_id=None, ...)` for each row.
 - [ ] **ARQ-03**: `app/workers/__init__.py` defines a real `WorkerSettings` (replacing the placeholder docstring): `redis_settings` from `get_settings().redis_url`, `on_startup`/`on_shutdown` opening/closing the DB lifespan and exposing `sessionmaker` via `ctx`, `functions=[expire_memberships]`, `cron_jobs=[cron(expire_memberships, hour=3, minute=5, unique=True, keep_cronjob_progress=60)]` (06:05 Europe/Moscow with container `TZ=UTC`).
 - [ ] **ARQ-04**: ARQ worker is added to `infra/docker-compose.yml` as a 5th service `arq-worker` (`command: uv run arq app.workers.WorkerSettings`, `restart: unless-stopped`, `depends_on: [postgres, redis, migrate]`, `env_file: ../apps/backend/.env`, `environment: { TZ: UTC }`); placeholder `apps/backend/app/workers/scheduler.py` is deleted.
 - [ ] **ARQ-05**: `on_job_start`/`on_job_end` hooks bind `job_id`/`job_name` to structlog contextvars so cron-job log lines carry the same shape as request log lines (analogous to `request_id` from RequestIdMiddleware).
@@ -200,7 +200,7 @@
 | TESTS-09 | Phase 17 | Pending |
 | TESTS-10 | Phase 17 | Pending |
 | ARQ-01 | Phase 18 | Pending |
-| ARQ-02 | Phase 18 | Pending |
+| ARQ-02 | Phase 18 | Complete |
 | ARQ-03 | Phase 18 | Pending |
 | ARQ-04 | Phase 18 | Pending |
 | ARQ-05 | Phase 18 | Pending |

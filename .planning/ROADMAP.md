@@ -116,7 +116,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   4. `infra/docker-compose.yml` runs a 5th `arq-worker` service (`uv run arq app.workers.WorkerSettings`, `restart: unless-stopped`, depends on postgres+redis+migrate); the placeholder `app/workers/scheduler.py` is deleted.
   5. `on_job_start`/`on_job_end` bind `job_id`/`job_name` into structlog contextvars so cron-job log lines carry the same shape as request log lines (mirror of `RequestIdMiddleware`).
 **Plans**: 6 plans
-  - [ ] 18-01-PLAN.md — Repository `expire_due_rows` + private service `_expire_due_memberships` with SVC001 marker — ARQ-02
+  - [x] 18-01-PLAN.md — Repository `expire_due_rows` + private service `_expire_due_memberships` with SVC001 marker — ARQ-02
   - [ ] 18-02-PLAN.md — `app/workers/scheduled/__init__.py` + `expire_memberships(ctx)` worker entry (transaction owner + summary log) — ARQ-01
   - [ ] 18-03-PLAN.md — Replace `app/workers/__init__.py` with real `WorkerSettings` (cron + on_startup invariant + contextvars hooks); delete `arq_app.py` + `scheduler.py` — ARQ-03, ARQ-04, ARQ-05
   - [ ] 18-04-PLAN.md — Add `arq-worker` service to `apps/backend/docker-compose.yml` + reconcile REQUIREMENTS.md ARQ-04 wording per CD-02 — ARQ-04
@@ -203,7 +203,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 18. ARQ scheduled `expire_memberships` | v1.2 | 0/6 | Planned     | — |
+| 18. ARQ scheduled `expire_memberships` | v1.2 | 1/6 | In Progress|  |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |

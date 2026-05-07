@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 18 context gathered
-last_updated: "2026-05-07T18:25:43.115Z"
-last_activity: 2026-05-07 -- Phase 18 planning complete
+last_updated: "2026-05-07T18:37:39.747Z"
+last_activity: 2026-05-07
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 21
-  completed_plans: 15
-  percent: 71
+  completed_plans: 16
+  percent: 76
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 17 — membership-instances-resolver-backend
+**Current focus:** Phase 18 — arq-scheduled-expire-memberships
 
 ## Current Position
 
-Phase: 17 (membership-instances-resolver-backend) — EXECUTING
-Plan: 1 of 5
+Phase: 18 (arq-scheduled-expire-memberships) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-05-07 -- Phase 18 planning complete
+Last activity: 2026-05-07
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Last activity: 2026-05-07 -- Phase 18 planning complete
 - Trend: —
 
 *Updated after each plan completion.*
+| Phase 18 P01 | 6 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting current work (carried into v1.2 + new):
 - Reception still has `(CREATE, MEMBERSHIPS)` and `(CHECK_IN, VISITS)`; ONLY plan-catalog mutations + membership cancel + plan delete are owner-only (extends v1.1 `OWNER_ONLY` frozenset by 6 entries)
 - Telegram `/checkin` rejection DMs are LOCKED constants (single generic string per branch, no client name / end_date / hours / membership status oracle leak); Russian copy signed off by owner before Phase 20 merge
 - Accepted residual friend-fraud risk for v1.2 single-zal scope — recorded in PROJECT.md Key Decisions in Phase 15
+- [Phase ?]: Phase 18 Plan 01: SVC prefix added to ruff lint.external for first production SVC001 callsite
 
 ### Pending Todos
 
@@ -115,6 +117,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T16:51:13.644Z
+Last session: 2026-05-07T18:37:22.216Z
 Stopped at: Phase 18 context gathered
-Resume file: .planning/phases/18-arq-scheduled-expire-memberships/18-CONTEXT.md
+Resume file: None
