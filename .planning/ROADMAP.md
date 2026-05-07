@@ -115,7 +115,13 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. `WorkerSettings` registers `cron(expire_memberships, hour=3, minute=5, unique=True)` (06:05 Europe/Moscow with container `TZ=UTC`); `on_startup`/`on_shutdown` open and close the DB lifespan and expose `sessionmaker` via `ctx`.
   4. `infra/docker-compose.yml` runs a 5th `arq-worker` service (`uv run arq app.workers.WorkerSettings`, `restart: unless-stopped`, depends on postgres+redis+migrate); the placeholder `app/workers/scheduler.py` is deleted.
   5. `on_job_start`/`on_job_end` bind `job_id`/`job_name` into structlog contextvars so cron-job log lines carry the same shape as request log lines (mirror of `RequestIdMiddleware`).
-**Plans**: TBD
+**Plans**: 6 plans
+  - [ ] 18-01-PLAN.md — Repository `expire_due_rows` + private service `_expire_due_memberships` with SVC001 marker — ARQ-02
+  - [ ] 18-02-PLAN.md — `app/workers/scheduled/__init__.py` + `expire_memberships(ctx)` worker entry (transaction owner + summary log) — ARQ-01
+  - [ ] 18-03-PLAN.md — Replace `app/workers/__init__.py` with real `WorkerSettings` (cron + on_startup invariant + contextvars hooks); delete `arq_app.py` + `scheduler.py` — ARQ-03, ARQ-04, ARQ-05
+  - [ ] 18-04-PLAN.md — Add `arq-worker` service to `apps/backend/docker-compose.yml` + reconcile REQUIREMENTS.md ARQ-04 wording per CD-02 — ARQ-04
+  - [ ] 18-05-PLAN.md — Integration tests `tests/integration/workers/` (ARQ-TEST-01 happy path + ARQ-TEST-02 idempotency) — ARQ-TEST-01, ARQ-TEST-02
+  - [ ] 18-06-PLAN.md — Unit tests `tests/unit/workers/` (WorkerSettings shape + cron-resolution invariant + Pitfall 14 contextvars) — ARQ-03, ARQ-05
 
 ### Phase 19: Visits — DB + reception check-in (backend)
 **Goal**: Reception can check a client into the gym from admin-web, and the system enforces "1 visit per gym-day per client" at the database level (race-proof) plus gym-hours window and active-membership requirement.
@@ -197,7 +203,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
+| 18. ARQ scheduled `expire_memberships` | v1.2 | 0/6 | Planned     | — |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
@@ -205,7 +211,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
 
 ---
-*Roadmap last updated: 2026-05-07 — v1.2 Memberships + Visits planning (phases 15-23)*
+*Roadmap last updated: 2026-05-07 — Phase 18 planned (6 plans, 4 waves)*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 requirements validated*
 *v1.2 Coverage: 63/63 requirements mapped to 9 phases (planning)*
