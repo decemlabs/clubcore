@@ -17,7 +17,7 @@ one tests query directly.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -236,7 +236,7 @@ async def make_membership(
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> Membership:
-        today = start_date or date.today()
+        today = start_date or datetime.now(tz=UTC).date()
         end = end_date or (today + timedelta(days=plan.duration_days - 1))
         membership = Membership(
             client_id=client_id,
