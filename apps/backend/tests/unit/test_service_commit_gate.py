@@ -165,6 +165,8 @@ def _check_function(
 
 
 _CLIENTS_SERVICE = _BACKEND_APP / "modules" / "clients" / "service.py"
+_MEMBERSHIPS_SERVICE = _BACKEND_APP / "modules" / "memberships" / "service.py"
+_INSPECTED_SERVICES: tuple[Path, ...] = (_CLIENTS_SERVICE, _MEMBERSHIPS_SERVICE)
 
 
 def _iter_functions_in_file(
@@ -178,30 +180,32 @@ def _iter_functions_in_file(
 
 
 def test_service_commit_gate_against_app_modules() -> None:
-    """Live gate against `app/modules/clients/service.py` (post-12.1 fix).
+    """Live gate against clients/service.py and memberships/service.py (post-12.1 fix).
 
     Phase 12.1 regression bound — `clients/service.py` shipped with three
     write paths (`create_client`, `update_client`, `soft_delete_client`)
     missing `await session.commit()`. This gate fails if the bug recurs.
 
-    Scope is narrowed to `clients/service.py` per the plan's acceptance
-    criterion. The walker glob (`_SERVICE_GLOB`) and predicate apparatus
+    Phase 16 extends the live scope to include `memberships/service.py` —
+    all three write paths (create_plan, update_plan, soft_delete_plan) are
+    inspected. The walker glob (`_SERVICE_GLOB`) and predicate apparatus
     are exercised by `test_walker_scope_is_modules_service_only` and the
     synthetic-source tests below; widening the live scope is a deliberate
     decision per module (e.g. `auth/service.py:authenticate` and
     `rotate_refresh` need a separate write-path semantics review before
     they can be added to the gate — see deferred-items.md).
     """
-    assert _CLIENTS_SERVICE.is_file(), (
-        f"Expected clients service file at {_CLIENTS_SERVICE} — phase fixture drift?"
-    )
     offenders: list[str] = []
-    for func in _iter_functions_in_file(_CLIENTS_SERVICE):
-        msg = _check_function(_CLIENTS_SERVICE, func)
-        if msg is not None:
-            offenders.append(msg)
+    for service_path in _INSPECTED_SERVICES:
+        assert service_path.is_file(), (
+            f"Expected service file at {service_path} — phase fixture drift?"
+        )
+        for func in _iter_functions_in_file(service_path):
+            msg = _check_function(service_path, func)
+            if msg is not None:
+                offenders.append(msg)
     assert not offenders, (
-        "Service write-path commit-gate (SVC001) failed against clients/service.py.\n"
+        "Service write-path commit-gate (SVC001) failed.\n"
         "Offenders:\n  " + "\n  ".join(offenders)
     )
 
