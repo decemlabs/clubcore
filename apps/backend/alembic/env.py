@@ -24,6 +24,7 @@ from app.core.database import Base
 # Register all ORM models with Base.metadata for autogenerate (TEST-08 / Phase 5 INFRA-03).
 import app.modules.auth.models
 import app.modules.clients.models
+import app.modules.memberships.models
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
@@ -61,6 +62,7 @@ def _include_object(
         in (
             "ix_clients_last_name_trgm",
             "ix_clients_first_name_trgm",
+            "uq_membership_plans_name_alive",
         )
     )
 
