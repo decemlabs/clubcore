@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
-stopped_at: Phase 18 context gathered
-last_updated: "2026-05-07T18:48:22.867Z"
+stopped_at: Plan 18-03 complete — Plan 18-05 next (integration tests)
+last_updated: "2026-05-07T18:58:18.180Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 21
-  completed_plans: 18
-  percent: 86
+  completed_plans: 19
+  percent: 90
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 18 (arq-scheduled-expire-memberships) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-05-07
 
@@ -61,6 +61,7 @@ Last activity: 2026-05-07
 | Phase 18 P01 | 6 min | 2 tasks | 5 files |
 | Phase 18 P04 | 2min | 2 tasks | 2 files |
 | Phase 18 P02 | 1min | 2 tasks | 2 files |
+| Phase 18 P03 | 5min | 2 tasks | 4 files (1 source, 2 docs, 2 deletions) |
 
 ## Accumulated Context
 
@@ -90,6 +91,10 @@ Recent decisions affecting current work (carried into v1.2 + new):
 - [Phase ?]: Phase 18 Plan 04: arq-worker compose service shipped at apps/backend/docker-compose.yml (CD-02 honoured); REQUIREMENTS.md ARQ-04 + ARQ-TEST-01 wording reconciled with Phase 15 inclusive-end_date Key Decision (W-3 closed)
 - [Phase 18]: Plan 18-02: Worker entry owns session.commit (D-01) — async with session_factory() as session block scopes the transaction; commit happens in the worker after _expire_due_memberships returns. Service helper carries SVC001 caller-owns-txn marker.
 - [Phase 18]: Plan 18-02: Summary log shape <job_name>_complete count=N AFTER commit (CD-03) — Single structlog INFO emitted after session.commit() returns successfully — proves the cron tick booted, the connection worked, and the SQL resolved. Locks the convention for all future scheduled jobs (v1.3+ expire_otps_complete, aggregate_visits_daily_complete).
+- [Phase ?]: Phase 18 Plan 18-03 — WorkerSettings cron-resolution invariant in on_startup (CD-04, Pitfall 4 step 6)
+- [Phase ?]: Phase 18 Plan 18-03 — WorkerSettings on_job_start mirrors RequestIdMiddleware shape (Pitfall 14): clear_contextvars() then bind_contextvars(job_id, job_name); on_job_end clears. Locks structlog correlation pattern for all future ARQ scheduled jobs.
+- [Phase ?]: Phase 18 Plan 18-03 Rule 4 deviation — arq>=0.26 floor pin resolved to 0.28.0 which removed cron(keep_cronjob_progress=...). Implementation uses keep_result=60 (closest 0.28 semantic). User to confirm at 18-VERIFICATION whether to (a) update REQUIREMENTS.md ARQ-03 to the 0.28 API or (b) pin arq<0.27. Recommended (a).
+- [Phase ?]: Phase 18 Plan 18-03 — app/workers/arq_app.py + app/workers/scheduler.py DELETED (CD-01 + ARQ-04). Single canonical ARQ entrypoint at app.workers.WorkerSettings; matches docker-compose command from Plan 18-04.
 
 ### Pending Todos
 
@@ -122,6 +127,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:46:59.732Z
-Stopped at: Phase 18 context gathered
+Last session: 2026-05-07T18:58:18.176Z
+Stopped at: Plan 18-03 complete — Plan 18-05 next (integration tests)
 Resume file: None
