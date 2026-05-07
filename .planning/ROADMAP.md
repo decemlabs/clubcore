@@ -45,7 +45,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - [x] **Phase 16: Membership Plans Catalog (backend)** — `membership_plans` table + module + 4 owner-only endpoints + audit events; first piece of v1.2 business surface. (completed 2026-05-07)
 - [x] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events. (completed 2026-05-07)
 - [x] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding. (completed 2026-05-07)
-- [ ] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test.
+- [x] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test. (completed 2026-05-07)
 - [ ] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off.
 - [ ] **Phase 21: OpenAPI drift gate refresh + api-client codegen** — regen byte-stable `openapi.json` + `schema.d.ts`; CI green on both diffs.
 - [ ] **Phase 22: admin-web wiring — memberships + visits + active sessions UI** — new `features/memberships`, `features/visits`; `/memberships`, `/membership-plans`, `/visits` routes; client-detail Pattern α; reception UX edge cases; cheap-win differentiators D-2/D-3/D-5; sessions UI.
@@ -139,7 +139,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 19-02-PLAN.md — core/dependencies.py ClientByTelegram Protocol + setter + consumer + clients.service.resolve_client_by_telegram_user_id + app.main wiring (D-02 third resolver slot) — VIS-04
   - [x] 19-03-PLAN.md — repository.py + service.py (anti-fraud chain + reception path + self-checkin path + 4 audit emits) — VIS-02, VIS-03, VIS-04, VIS-AUDIT-01
   - [x] 19-04-PLAN.md — router.py (3 endpoints) + v1 mount + openapi.json regen [BLOCKING migration apply] — VIS-EP-01..03, VIS-AUDIT-01
-  - [ ] 19-05-PLAN.md — Integration tests (CRUD/RBAC/audit/concurrent VIS-TEST-01/self-checkin/migration) + unit tests (schemas/anti_fraud_helpers/config) — VIS-TEST-01, VIS-EP-01..03, VIS-AUDIT-01, VIS-03..05
+  - [x] 19-05-PLAN.md — Integration tests (CRUD/RBAC/audit/concurrent VIS-TEST-01/self-checkin/migration) + unit tests (schemas/anti_fraud_helpers/config) — VIS-TEST-01, VIS-EP-01..03, VIS-AUDIT-01, VIS-03..05
 
 ### Phase 20: Telegram bot `/checkin` self check-in
 **Goal**: A client can DM the gym bot `/checkin` and get an immediate confirmation (or a generic, oracle-leak-free rejection) — extending the existing long-polling worker without violating `integrations ⊥ modules`.
@@ -209,7 +209,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
-| 19. Visits — DB + reception check-in (backend) | v1.2 | 4/5 | In Progress|  |
+| 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |

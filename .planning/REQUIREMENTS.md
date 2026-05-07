@@ -56,14 +56,14 @@
 
 - [ ] **VIS-01**: Alembic migration `0006_visits.py` creates `visits` table with columns: `id` (UUID PK), `client_id` (UUID NOT NULL FK clients.id ON DELETE RESTRICT), `membership_id` (UUID NOT NULL FK memberships.id ON DELETE RESTRICT), `checked_in_at` (TIMESTAMPTZ NOT NULL DEFAULT now()), `gym_date` (DATE NOT NULL GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED), `channel` (VARCHAR NOT NULL CHECK IN ('reception','telegram_bot')), `checked_in_by` (UUID NULL FK users.id ON DELETE SET NULL — nullable for telegram_bot), `created_at`. UNIQUE INDEX on `(client_id, gym_date)`. Indexes: `(client_id, checked_in_at DESC)` for history queries.
 - [ ] **VIS-02**: `app/modules/visits/{models,schemas,repository,service,router}.py` follow the validated module template; service uses `BusinessService` (INFRA-13).
-- [ ] **VIS-03**: `service.create_visit_reception(session, client_id, actor)` validates: (a) gym hours window via `settings.gym_hours_start` / `settings.gym_hours_end` Europe/Moscow → `OutsideGymHoursError(409)`, (b) calls `core.dependencies.resolve_active_membership(session, client_id)` → `NoActiveMembershipError(409)` if None, (c) inserts Visit row → IntegrityError on `(client_id, gym_date)` UNIQUE → `DuplicateCheckinError(409)`. Sets `channel='reception'`, `checked_in_by=actor.id`.
-- [ ] **VIS-04**: `service.create_visit_self_checkin(session, telegram_user_id, chat_id)` looks up Client via `users.telegram_user_id` ↔ `users.id` ↔ existing client mapping (TBD in Phase 19 plan: how clients are linked to users — likely via `users.client_id` FK or lookup). Same anti-fraud chain as VIS-03 but: `channel='telegram_bot'`, `checked_in_by=NULL`. Specific exception classes for bot path: `NoActiveMembershipError`, `DuplicateCheckinError`, `OutsideGymHoursError`.
-- [ ] **VIS-05**: `apps/backend/.env.example` adds `GYM_HOURS_START=07:00` and `GYM_HOURS_END=23:00` (HH:MM Europe/Moscow); `app/core/config.py` `Settings` parses to `time` objects; missing values fail loud at startup.
-- [ ] **VIS-EP-01**: `GET /api/v1/visits?clientId={uuid}&from={date}&to={date}` lists visits (paginated envelope, default sort `checked_in_at DESC`); reception+owner can VIEW.
-- [ ] **VIS-EP-02**: `GET /api/v1/visits/{id}` returns single visit; reception+owner.
-- [ ] **VIS-EP-03**: `POST /api/v1/visits` (CSRF) reception manual check-in; body `{clientId}`; reception+owner can CHECK_IN; returns 201 with the created Visit. 409 responses include `code` discriminating `no_active_membership` / `duplicate_checkin` / `outside_gym_hours`.
-- [ ] **VIS-AUDIT-01**: `audit.emit("visit_created", ..., channel)` on success; `"visit_rejected_no_membership"` / `"visit_rejected_duplicate"` / `"visit_rejected_outside_hours"` on rejections (with `channel` payload). Bot-path rejections also emitted (actor_user_id=None for telegram_bot).
-- [ ] **VIS-TEST-01**: Concurrent-request test — 10 parallel `POST /api/v1/visits` for the same client → exactly 1×201 + 9×409 `duplicate_checkin` (Postgres UNIQUE INDEX wins the race, not app-layer check).
+- [x] **VIS-03**: `service.create_visit_reception(session, client_id, actor)` validates: (a) gym hours window via `settings.gym_hours_start` / `settings.gym_hours_end` Europe/Moscow → `OutsideGymHoursError(409)`, (b) calls `core.dependencies.resolve_active_membership(session, client_id)` → `NoActiveMembershipError(409)` if None, (c) inserts Visit row → IntegrityError on `(client_id, gym_date)` UNIQUE → `DuplicateCheckinError(409)`. Sets `channel='reception'`, `checked_in_by=actor.id`.
+- [x] **VIS-04**: `service.create_visit_self_checkin(session, telegram_user_id, chat_id)` looks up Client via `users.telegram_user_id` ↔ `users.id` ↔ existing client mapping (TBD in Phase 19 plan: how clients are linked to users — likely via `users.client_id` FK or lookup). Same anti-fraud chain as VIS-03 but: `channel='telegram_bot'`, `checked_in_by=NULL`. Specific exception classes for bot path: `NoActiveMembershipError`, `DuplicateCheckinError`, `OutsideGymHoursError`.
+- [x] **VIS-05**: `apps/backend/.env.example` adds `GYM_HOURS_START=07:00` and `GYM_HOURS_END=23:00` (HH:MM Europe/Moscow); `app/core/config.py` `Settings` parses to `time` objects; missing values fail loud at startup.
+- [x] **VIS-EP-01**: `GET /api/v1/visits?clientId={uuid}&from={date}&to={date}` lists visits (paginated envelope, default sort `checked_in_at DESC`); reception+owner can VIEW.
+- [x] **VIS-EP-02**: `GET /api/v1/visits/{id}` returns single visit; reception+owner.
+- [x] **VIS-EP-03**: `POST /api/v1/visits` (CSRF) reception manual check-in; body `{clientId}`; reception+owner can CHECK_IN; returns 201 with the created Visit. 409 responses include `code` discriminating `no_active_membership` / `duplicate_checkin` / `outside_gym_hours`.
+- [x] **VIS-AUDIT-01**: `audit.emit("visit_created", ..., channel)` on success; `"visit_rejected_no_membership"` / `"visit_rejected_duplicate"` / `"visit_rejected_outside_hours"` on rejections (with `channel` payload). Bot-path rejections also emitted (actor_user_id=None for telegram_bot).
+- [x] **VIS-TEST-01**: Concurrent-request test — 10 parallel `POST /api/v1/visits` for the same client → exactly 1×201 + 9×409 `duplicate_checkin` (Postgres UNIQUE INDEX wins the race, not app-layer check).
 
 ### Telegram Bot — `/checkin` (Phase 20)
 
@@ -208,14 +208,14 @@
 | ARQ-TEST-02 | Phase 18 | Complete |
 | VIS-01 | Phase 19 | Pending |
 | VIS-02 | Phase 19 | Pending |
-| VIS-03 | Phase 19 | Pending |
-| VIS-04 | Phase 19 | Pending |
-| VIS-05 | Phase 19 | Pending |
-| VIS-EP-01 | Phase 19 | Pending |
-| VIS-EP-02 | Phase 19 | Pending |
-| VIS-EP-03 | Phase 19 | Pending |
-| VIS-AUDIT-01 | Phase 19 | Pending |
-| VIS-TEST-01 | Phase 19 | Pending |
+| VIS-03 | Phase 19 | Complete |
+| VIS-04 | Phase 19 | Complete |
+| VIS-05 | Phase 19 | Complete |
+| VIS-EP-01 | Phase 19 | Complete |
+| VIS-EP-02 | Phase 19 | Complete |
+| VIS-EP-03 | Phase 19 | Complete |
+| VIS-AUDIT-01 | Phase 19 | Complete |
+| VIS-TEST-01 | Phase 19 | Complete |
 | AUTH-TG-07 | Phase 20 | Pending |
 | AUTH-TG-08 | Phase 20 | Pending |
 | AUTH-TG-09 | Phase 20 | Pending |
