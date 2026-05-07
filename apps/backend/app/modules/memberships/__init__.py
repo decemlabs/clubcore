@@ -1,1 +1,1 @@
-"""Memberships module placeholder. TODO Phase B+: subscription plans + assignments."""
+"""Memberships module — plan catalog (Phase 16)."""
