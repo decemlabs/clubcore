@@ -43,7 +43,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 
 - [x] **Phase 15: Foundations — RBAC + audit taxonomy + helper hoisting** — extend `Action`/`Resource`/`OWNER_ONLY` (backend ↔ admin-web byte parity), hoist `escape_like_pattern` to `core/sql.py`, lock audit-event taxonomy, ship `BackendSchemaBase` + `BusinessService` template + AST commit gate, log v1.2 Key Decisions. (completed 2026-05-07)
 - [x] **Phase 16: Membership Plans Catalog (backend)** — `membership_plans` table + module + 4 owner-only endpoints + audit events; first piece of v1.2 business surface. (completed 2026-05-07)
-- [ ] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events.
+- [x] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events. (completed 2026-05-07)
 - [ ] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding.
 - [ ] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test.
 - [ ] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off.
@@ -102,7 +102,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 17-02-PLAN.md — core/dependencies.py ActiveMembership Protocol + register_active_membership_resolver slot — MEM-05
   - [x] 17-03-PLAN.md — repository + service (sale, cancel, list, get, resolver, _is_plan_in_use_conflict) + Phase 16 D-15 closure + ROADMAP D-07 wording fix — MEM-02, MEM-03, MEM-04, MEM-AUDIT-01
   - [x] 17-04-PLAN.md — Router (4 endpoints), v1 mount, app/main.py resolver wiring, openapi.json regen [BLOCKING migration apply] — MEM-EP-01..04, MEM-AUDIT-01
-  - [ ] 17-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit/plan_in_use/resolver) + unit tests (TESTS-10 9-cell matrix + schemas) — TESTS-09, TESTS-10, MEM-AUDIT-01
+  - [x] 17-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit/plan_in_use/resolver) + unit tests (TESTS-10 9-cell matrix + schemas) — TESTS-09, TESTS-10, MEM-AUDIT-01
 
 ### Phase 18: ARQ scheduled `expire_memberships`
 **Goal**: Active memberships transition to `expired` automatically when their `end_date` passes — without manual intervention or duplicate audit events on worker restart.
@@ -196,7 +196,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 17. Membership Instances + Resolver (backend) | v1.2 | 4/5 | In Progress|  |
+| 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
