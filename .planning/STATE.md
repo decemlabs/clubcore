@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: phase-complete
-stopped_at: Phase 16 verified — ready for next phase
-last_updated: "2026-05-07T16:55:00.000Z"
+status: verifying
+stopped_at: Phase 17 context gathered
+last_updated: "2026-05-07T14:59:53.354Z"
 last_activity: 2026-05-07 -- Phase 16 verified complete (5/5 plans, 5/5 SC, 395 tests green)
 progress:
   total_phases: 9
@@ -115,6 +115,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T11:38:07.780Z
-Stopped at: Phase 16 context gathered
-Resume file: .planning/phases/16-membership-plans-catalog-backend/16-CONTEXT.md
+Last session: 2026-05-07T14:59:53.350Z
+Stopped at: Phase 17 context gathered
+Resume file: .planning/phases/17-membership-instances-resolver-backend/17-CONTEXT.md
