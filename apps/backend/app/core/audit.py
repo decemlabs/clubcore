@@ -43,10 +43,11 @@ Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts 
   - membership_created                  {membership_id, client_id, plan_id, end_date}
   - membership_cancelled                {membership_id, client_id, reason?}
   - membership_expired                  {membership_id, client_id}                # ARQ daily
-  - visit_created                       {visit_id, client_id, membership_id, channel, gym_date}
+  - visit_created          {client_id, membership_id, channel}  [resource_id=visit.id]
   - visit_rejected_no_membership        {client_id, channel}
-  - visit_rejected_duplicate            {client_id, channel, gym_date}
-  - visit_rejected_outside_hours        {client_id, channel}
+  - visit_rejected_duplicate            {client_id, gym_date, channel}
+  - visit_rejected_outside_hours        {client_id, channel,
+                                         current_local_time, gym_open, gym_close}
 
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).

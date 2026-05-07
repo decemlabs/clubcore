@@ -167,6 +167,66 @@ class MembershipNotFoundError(NotFoundError):
     status_code = 404
 
 
+class NoActiveMembershipError(ConflictError):
+    """Raised by visits service when client has no active membership today (Phase 19 VIS-03).
+
+    Reception path: 409 visible to UI. Bot path: caught by Phase 20 handler and
+    mapped to a generic Russian DM (no oracle leak — Pitfall 8).
+    """
+
+    code = "no_active_membership"
+    status_code = 409
+
+
+class DuplicateCheckinError(ConflictError):
+    """Raised when (client_id, gym_date) UNIQUE INDEX trips (Phase 19 D-08, VIS-TEST-01).
+
+    Service helper _is_duplicate_visit_conflict translates IntegrityError on
+    constraint name uq_visits_client_id_gym_date.
+
+    Constructor convention:
+        raise DuplicateCheckinError(
+            "duplicate_checkin",
+            fields={"client_id": str(client_id), "gym_date": str(gym_date)},
+        )
+    """
+
+    code = "duplicate_checkin"
+    status_code = 409
+
+
+class OutsideGymHoursError(ConflictError):
+    """Raised when wall-clock MSK time is outside [gym_hours_start, gym_hours_end) (Phase 19 D-10).
+
+    Constructor convention:
+        raise OutsideGymHoursError(
+            "outside_gym_hours",
+            fields={"open": gym_hours_start.isoformat(), "close": gym_hours_end.isoformat()},
+        )
+    """
+
+    code = "outside_gym_hours"
+    status_code = 409
+
+
+class VisitNotFoundError(NotFoundError):
+    """Raised by GET /api/v1/visits/{id} on missing row (Phase 19 VIS-EP-02)."""
+
+    code = "visit_not_found"
+    status_code = 404
+
+
+class ClientNotLinkedError(NotFoundError):
+    """Bot-path: telegram_user_id has no matching alive Client row (Phase 19 D-12).
+
+    Phase 20 handler maps this to a generic Russian DM (no oracle leak about
+    whether the account exists — Pitfall 8). NOT raised on the reception path.
+    """
+
+    code = "client_not_linked"
+    status_code = 404
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 

@@ -1,9 +1,10 @@
 """Application settings via pydantic-settings (D-15)."""
 
+from datetime import time
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import PostgresDsn, RedisDsn, SecretStr
+from pydantic import PostgresDsn, RedisDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +44,21 @@ class Settings(BaseSettings):
     otp_deep_link_ttl_seconds: int = 600  # 10 min — AUTH-TG-01
     otp_code_ttl_seconds: int = 300       # 5 min  — AUTH-TG-02
     otp_max_attempts: int = 5             # AUTH-TG-02
+
+    # Phase 19 additions (VIS-05): gym hours window in Europe/Moscow.
+    # Pydantic v2 parses "07:00" env strings → time(7, 0) natively.
+    gym_hours_start: time = time(7, 0)
+    gym_hours_end: time = time(23, 0)
+
+    @model_validator(mode="after")
+    def _gym_hours_range_invariant(self) -> "Settings":
+        # D-11: no midnight-spanning gym hours in v1.2.
+        if self.gym_hours_end <= self.gym_hours_start:
+            raise ValueError(
+                "gym_hours_end must be strictly greater than gym_hours_start "
+                "(midnight-spanning ranges deferred to v1.3+)."
+            )
+        return self
 
 
 @lru_cache
