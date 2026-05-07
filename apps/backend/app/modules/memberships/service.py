@@ -36,7 +36,7 @@ Service does NOT re-check RBAC; the router-layer `require_permission` dependency
 access before service is called.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -487,3 +487,70 @@ async def resolve_active_membership_by_client(
     via `register_active_membership_resolver(resolve_active_membership_by_client)`.
     """
     return await repository.find_active_for_client(session, client_id)
+
+
+# ===========================================================================
+# Phase 18 — Bulk expire orchestrator (D-01 / D-04 / D-05; ARQ-02)
+# ===========================================================================
+
+
+async def _expire_due_memberships(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    today: date | None = None,
+) -> int:
+    """Bulk-flip overdue active memberships to expired + emit per-row audits.
+
+    Phase 18 D-01: this is a private helper consumed ONLY by
+    `app.workers.scheduled.expire_memberships:expire_memberships(ctx)`. The
+    worker is the transaction owner and calls `await session.commit()` after
+    this function returns. The `# noqa: SVC001 caller-owns-txn` marker on the
+    def line is the documented opt-out from the AST commit-gate (Phase 15
+    INFRA-13 / D-04: marker valid only on private `_`-prefixed helpers; public
+    service functions MUST commit themselves). The leading underscore +
+    marker is NOT optional — both are required for the gate to pass.
+
+    Phase 18 D-04: bulk SQL is `UPDATE memberships SET status='expired'
+    WHERE end_date < :today AND status='active' RETURNING id, client_id`,
+    issued via `repository.expire_due_rows`. The status filter is the
+    SQL-level idempotency gate (Pitfall 4 mitigation): a row already flipped
+    on a previous run is skipped because the WHERE clause no longer matches.
+    ARQ `unique=True` is a second line of defence; the SQL is the real gate.
+
+    Phase 18 D-03 / CD-06: this path deliberately does NOT call
+    `_assert_can_expire(membership)` — that helper exists for the Phase 17
+    TESTS-10 9-cell unit matrix and is reserved for hypothetical per-row
+    flows. Calling it here would force a SELECT-FOR-UPDATE pre-flight (N+1)
+    that ROADMAP SC #1 explicitly forbids ("single-transaction UPDATE …
+    RETURNING").
+
+    Phase 18 D-05: `today=None` resolves to
+    `datetime.now(ZoneInfo("Europe/Moscow")).date()`. Tests pass explicit
+    `today` for determinism (the fixture inserts a row with
+    `end_date = today - timedelta(days=1)` to fake "yesterday").
+
+    Audit emit per row uses LITERAL strings ("membership_expired" /
+    "membership") — required by the Phase 15 INFRA-11 AST taxonomy walker.
+    Payload shape `{client_id: str(uuid)}` matches LOCKED_AUDIT_EVENTS line
+    110 (`("membership_expired", "membership")`); `membership_id` is carried
+    in `resource_id` (UUID column), `actor_user_id=None` because the cron is
+    system-driven (research ARCHITECTURE.md `actor_kind = 'system'`).
+
+    Returns the number of newly-expired rows (int) — Phase 18 D-02. The
+    worker writes this into ARQ's result store automatically.
+    """
+    if today is None:
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+
+    rows = await repository.expire_due_rows(session, today)
+
+    for membership_id, client_id in rows:
+        await audit.emit(
+            session,
+            "membership_expired",  # LITERAL (Phase 15 INFRA-11 AST gate)
+            actor_user_id=None,  # system-driven cron — no human actor
+            resource_type="membership",  # LITERAL
+            resource_id=membership_id,
+            client_id=str(client_id),  # JSONB-serialisable
+        )
+
+    return len(rows)

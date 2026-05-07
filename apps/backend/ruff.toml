@@ -19,6 +19,15 @@ ignore = [
     "S101",  # allow assert (used by pytest, lands in Phase 3)
 ]
 
+# External rule-code prefixes — ruff treats `# noqa: SVC001 …` as valid even
+# though SVC is not a native ruff rule. Phase 15 INFRA-13 introduces the
+# `SVC001 caller-owns-txn` opt-out marker consumed by the AST commit-gate at
+# `tests/unit/test_service_commit_gate.py`. The marker MUST appear on the def
+# line of private (`_`-prefixed) service helpers whose caller (e.g. an ARQ
+# worker) owns the transaction (Phase 18 D-01). Registering the prefix here
+# prevents RUF102 ("Invalid rule code in `# noqa`") at every callsite.
+external = ["SVC"]
+
 [lint.per-file-ignores]
 # alembic env.py uses untyped Alembic API; skip security + import-order
 "alembic/env.py" = ["S", "I001"]

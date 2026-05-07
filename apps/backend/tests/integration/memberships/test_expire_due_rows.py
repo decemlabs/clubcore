@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from httpx import AsyncClient
 from sqlalchemy import select

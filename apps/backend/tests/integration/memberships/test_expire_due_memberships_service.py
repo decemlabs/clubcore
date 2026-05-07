@@ -139,37 +139,57 @@ def test_expire_due_memberships_source_carries_svc001_marker_and_no_commit() -> 
     - The function body MUST NOT call session.commit / session.flush
       (worker owns the transaction per D-01).
     - The bulk path MUST NOT call `_assert_can_expire` (D-03).
+
+    Body is inspected via AST (NOT raw text) so docstring mentions of
+    `session.commit` (which legitimately reference the contract) do not
+    false-positive.
     """
+    import ast
     from pathlib import Path
 
     src = Path(service.__file__).read_text(encoding="utf-8")
-    marker = "async def _expire_due_memberships("
-    assert marker in src, "expected private async def _expire_due_memberships in service.py"
+    tree = ast.parse(src, filename=service.__file__)
 
-    # Locate def line and confirm SVC001 marker is on it.
-    lines = src.splitlines()
-    def_line_idx = next(
-        (i for i, line in enumerate(lines) if line.startswith("async def _expire_due_memberships(")),
-        -1,
+    target: ast.AsyncFunctionDef | None = None
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "_expire_due_memberships"
+        ):
+            target = node
+            break
+    assert target is not None, (
+        "expected private async def _expire_due_memberships in service.py"
     )
-    assert def_line_idx >= 0
-    def_line = lines[def_line_idx]
+
+    # Marker MUST be on the same source line as `async def`.
+    lines = src.splitlines()
+    def_line = lines[target.lineno - 1]
     assert "# noqa: SVC001 caller-owns-txn" in def_line, (
         "SVC001 marker must be on the same line as `async def _expire_due_memberships`"
     )
 
-    # Carve the function body (everything until the next top-level def or EOF).
-    body_start = src.index(marker)
-    tail = src[body_start:]
-    next_def = tail.find("\nasync def ", len(marker))
-    body = tail if next_def == -1 else tail[:next_def]
+    # Walk body for forbidden calls.
+    forbidden_attrs = {"commit", "flush"}
+    seen_assert_can_expire = False
+    seen_session_commit_or_flush = False
+    for node in ast.walk(target):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr in forbidden_attrs
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "session"
+        ):
+            seen_session_commit_or_flush = True
+        if isinstance(func, ast.Name) and func.id == "_assert_can_expire":
+            seen_assert_can_expire = True
 
-    assert "session.commit" not in body, (
-        "_expire_due_memberships must NOT call session.commit (D-01)"
+    assert not seen_session_commit_or_flush, (
+        "_expire_due_memberships must NOT call session.commit / session.flush (D-01)"
     )
-    assert "session.flush" not in body, (
-        "_expire_due_memberships must NOT call session.flush (D-01)"
-    )
-    assert "_assert_can_expire" not in body, (
+    assert not seen_assert_can_expire, (
         "_expire_due_memberships must NOT call _assert_can_expire (D-03)"
     )
