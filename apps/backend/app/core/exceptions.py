@@ -117,6 +117,56 @@ class PlanNameExistsError(ConflictError):
     status_code = 409
 
 
+class PlanInactiveError(ConflictError):
+    """Raised on POST /memberships when target plan.active=False (Phase 17 D-02).
+
+    Service-layer defence against UI bypass: the reception sell screen filters
+    via ?active=true (Phase 16 D-08), but a malformed/replayed POST can still
+    reference a deactivated plan.
+    """
+
+    code = "plan_inactive"
+    status_code = 409
+
+
+class PlanInUseError(ConflictError):
+    """Raised on DELETE /membership-plans when FK fk_memberships_plan_id_membership_plans
+    rejects the delete (Phase 17 D-05).
+
+    Discriminated against IntegrityError by service.py:_is_plan_in_use_conflict
+    checking the constraint name. Per D-06: ANY membership row blocks deletion
+    (including cancelled and expired — they keep audit-trail FK references).
+    """
+
+    code = "plan_in_use"
+    status_code = 409
+
+
+class InvalidTransitionError(ConflictError):
+    """Raised on POST /memberships/{id}/cancel for non-active source state (Phase 17 D-12).
+
+    Constructor populates `fields={'from_status': ..., 'to_status': ...}` packed
+    into the response envelope's `fields` key (per AppError.__init__ signature at
+    core/exceptions.py:13-16).
+
+    Usage:
+        raise InvalidTransitionError(
+            "invalid_transition",
+            fields={"from_status": membership.status, "to_status": "cancelled"},
+        )
+    """
+
+    code = "invalid_transition"
+    status_code = 409
+
+
+class MembershipNotFoundError(NotFoundError):
+    """Raised when GET / POST cancel references a non-existent membership id."""
+
+    code = "membership_not_found"
+    status_code = 404
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
