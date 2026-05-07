@@ -4,7 +4,7 @@
 
 ## Naming
 
-- **Python modules**: `snake_case.py` (например, `database.py`, `request_id.py`, `arq_app.py`).
+- **Python modules**: `snake_case.py` (например, `database.py`, `request_id.py`, `expire_memberships.py`).
 - **Classes / Pydantic models / SQLAlchemy models**: `PascalCase` (например, `Settings`, `RequestIdMiddleware`, `WorkerSettings`, `AppError`).
 - **Constants**: `UPPER_SNAKE_CASE` (например, `DATABASE_URL_DEFAULT`).
 - **Functions / variables**: `snake_case` (`get_settings`, `register_middleware`, `db_lifespan`).

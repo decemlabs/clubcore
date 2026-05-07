@@ -30,9 +30,9 @@ Sportzal — пет-проект CRM для одного зала. Backend — s
 
 ### app.workers
 
-ARQ background tasks. `app/workers/arq_app.py` определяет `WorkerSettings` skeleton; `app/workers/tasks/*.py` — placeholder-модули для будущих задач (notifications, reminders, reports).
+ARQ background tasks. `app/workers/__init__.py` определяет `WorkerSettings` (Phase 18 ARQ-03 — канонический путь импорта `app.workers.WorkerSettings`); `app/workers/scheduled/<job>.py` — entry-coroutines для рекуррентных задач (текущее: `expire_memberships`; v1.3+: notifications, reports).
 
-В Phase A — нет реальных задач (пустой `WorkerSettings.functions`). Worker-процесс запускается отдельно (`uv run arq app.workers.arq_app.WorkerSettings`), но в Phase A это no-op.
+С Phase 18 — реальный `cron_jobs=[cron(expire_memberships, hour=3, minute=5, ...)]` (06:05 Europe/Moscow при контейнерном `TZ=UTC`). Worker-процесс запускается отдельно: `uv run arq app.workers.WorkerSettings`. До Phase 18 здесь жили placeholder-файлы `arq_app.py` / `scheduler.py` — удалены в Phase 18 Plan 18-03 (CD-01 + ARQ-04).
 
 ### app.api
 
