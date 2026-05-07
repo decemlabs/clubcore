@@ -523,6 +523,143 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MembershipPlanCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/membership-plans body.",
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "durationDays": {
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Durationdays",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "priceKopecks": {
+            "maximum": 100000000000.0,
+            "minimum": 0.0,
+            "title": "Pricekopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "durationDays",
+          "priceKopecks"
+        ],
+        "title": "MembershipPlanCreateRequest",
+        "type": "object"
+      },
+      "MembershipPlanResponse": {
+        "description": "Outbound representation of a MembershipPlan.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "durationDays": {
+            "title": "Durationdays",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priceKopecks": {
+            "title": "Pricekopecks",
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "durationDays",
+          "priceKopecks",
+          "active",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "MembershipPlanResponse",
+        "type": "object"
+      },
+      "MembershipPlanSort": {
+        "description": "Membership plan list sort modes (D-08, CD-04).",
+        "enum": [
+          "created_at_desc",
+          "name_asc"
+        ],
+        "title": "MembershipPlanSort",
+        "type": "string"
+      },
+      "MembershipPlanUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/membership-plans/{id} body.\n\nD-04: duration_days is intentionally absent — extra='forbid' (inherited\nfrom BackendSchemaBase) raises stock 422 if a payload contains\n`durationDays` (or `duration_days`). The rejected key is named in the\nPydantic error response.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "priceKopecks": {
+            "anyOf": [
+              {
+                "maximum": 100000000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricekopecks"
+          }
+        },
+        "title": "MembershipPlanUpdateRequest",
+        "type": "object"
+      },
       "PaginatedData_ClientResponse_": {
         "properties": {
           "items": {
@@ -552,6 +689,37 @@
           "pageSize"
         ],
         "title": "PaginatedData[ClientResponse]",
+        "type": "object"
+      },
+      "PaginatedData_MembershipPlanResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MembershipPlanResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[MembershipPlanResponse]",
         "type": "object"
       },
       "ResponseEnvelope_ClientResponse_": {
@@ -590,6 +758,18 @@
         "title": "ResponseEnvelope[MeResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_MembershipPlanResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MembershipPlanResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[MembershipPlanResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_NoneType_": {
         "properties": {
           "data": {
@@ -613,6 +793,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[ClientResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_MembershipPlanResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_MembershipPlanResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[MembershipPlanResponse]]",
         "type": "object"
       },
       "ResponseEnvelope_TelegramStartResponse_": {
@@ -1346,6 +1538,259 @@
         "summary": "Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)",
         "tags": [
           "clients"
+        ]
+      }
+    },
+    "/api/v1/membership-plans": {
+      "get": {
+        "description": "List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.",
+        "operationId": "list_plans_api_v1_membership_plans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MembershipPlanSort",
+              "default": "created_at_desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_MembershipPlanResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List alive membership plans (owner-only); paginated; ?active filter",
+        "tags": [
+          "membership-plans"
+        ]
+      },
+      "post": {
+        "description": "Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.",
+        "operationId": "create_plan_api_v1_membership_plans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipPlanCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipPlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)",
+        "tags": [
+          "membership-plans"
+        ]
+      }
+    },
+    "/api/v1/membership-plans/{plan_id}": {
+      "delete": {
+        "description": "Soft-delete an alive membership plan (MEM-PLAN-EP-04).\n\nOwner-only: (DELETE, MEMBERSHIP_PLANS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content.\n\nD-15: Phase 16 ships soft-delete only — no 409 plan_in_use. The memberships table\nFK plan_id ON DELETE RESTRICT and _is_plan_in_use_conflict helper arrive in Phase 17.",
+        "operationId": "soft_delete_plan_api_v1_membership_plans__plan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soft-delete a membership plan (owner-only); frees lower(name) unique slot",
+        "tags": [
+          "membership-plans"
+        ]
+      },
+      "get": {
+        "description": "Read one alive membership plan. 404 for missing or soft-deleted ids.",
+        "operationId": "get_plan_api_v1_membership_plans__plan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipPlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch a single alive membership plan (owner-only)",
+        "tags": [
+          "membership-plans"
+        ]
+      },
+      "patch": {
+        "description": "Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.",
+        "operationId": "update_plan_api_v1_membership_plans__plan_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipPlanUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipPlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)",
+        "tags": [
+          "membership-plans"
         ]
       }
     },
