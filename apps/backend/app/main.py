@@ -21,6 +21,13 @@ Phase 17 additions:
    importlinter scope, so reaching into `app.modules.memberships.service` is allowed
    here and ONLY here. Idempotent re-registration mirrors WR-05 reasoning — tests
    inject stub resolvers via `create_app()`.
+
+Phase 19 additions:
+- register_client_by_telegram_resolver(clients_service.resolve_client_by_telegram_user_id)
+   fills the third loader slot (D-02). Visits self-checkin path looks up Client by
+   telegram_user_id without crossing the modules-independent importlinter contract.
+   Local import of `app.modules.clients.service` is used to keep the import
+   inside `create_app()` body (composition root carve-out, same pattern as Phase 17).
 """
 
 from collections.abc import AsyncIterator
@@ -31,7 +38,11 @@ from fastapi import FastAPI
 from app.api.router import api
 from app.core.config import get_settings
 from app.core.database import db_lifespan
-from app.core.dependencies import register_active_membership_resolver, register_user_loader
+from app.core.dependencies import (
+    register_active_membership_resolver,
+    register_client_by_telegram_resolver,
+    register_user_loader,
+)
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
@@ -65,7 +76,9 @@ def create_app() -> FastAPI:
       7. register_active_membership_resolver(resolve_active_membership_by_client)
          fills the Phase 17 MEM-05 slot — second composition-root carve-out
          (after register_user_loader, Phase 5 D-15).
-      8. include_router(api) mounts /healthz at root + /api/v1/auth/*.
+      8. register_client_by_telegram_resolver(clients_service.resolve_client_by_telegram_user_id)
+         fills the Phase 19 D-02 slot — third composition-root carve-out.
+      9. include_router(api) mounts /healthz at root + /api/v1/auth/*.
     """
     settings = get_settings()
     configure_logging(settings)
@@ -106,6 +119,18 @@ def create_app() -> FastAPI:
     # real resolver here, tests can override via create_app() because the slot is
     # idempotent (mirrors WR-05 reasoning for register_user_loader).
     register_active_membership_resolver(resolve_active_membership_by_client)
+
+    # Phase 19 D-02: third composition-root carve-out — visits self-checkin
+    # path needs to look up Client by telegram_user_id without crossing the
+    # modules-independent contract. Same idempotent slot pattern; tests can
+    # override via create_app().
+    from app.modules.clients import (
+        service as clients_service,
+    )
+
+    register_client_by_telegram_resolver(
+        clients_service.resolve_client_by_telegram_user_id,
+    )
 
     app.include_router(api)
     return app

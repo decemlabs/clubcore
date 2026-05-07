@@ -13,8 +13,12 @@ Module-level async functions (D-18). Each mutation function:
 
 Architectural boundary (D-02 / CLIENTS-09):
   - `from app.modules.clients import repository` — fine.
-  - The runtime module never imports the `Client` ORM. mypy still type-checks
-    via the repository return-type chain.
+  - The mutation path never imports the `Client` ORM directly (uses repository).
+    mypy type-checks via the repository return-type chain.
+  - Phase 19 D-02: `resolve_client_by_telegram_user_id` is the exception — it
+    directly imports `Client` to perform a narrow telegram_user_id query that is
+    used only as a registered resolver (composition root wires it via
+    `register_client_by_telegram_resolver`; visits.service never imports Client).
 
 Audit emit ordering:
   - create_client: insert → flush (may raise IntegrityError) → emit on success.
@@ -37,9 +41,9 @@ Service does NOT re-check RBAC; the router-layer `require_permission` dependency
 (Plan 07) gates access before service is called.
 """
 
-from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,15 +52,13 @@ from app.core.dependencies import CurrentUser
 from app.core.exceptions import ClientNotFoundError, PhoneExistsError
 from app.core.pagination import PaginatedData
 from app.modules.clients import repository
+from app.modules.clients.models import Client
 from app.modules.clients.schemas import (
     ClientCreateRequest,
     ClientListQuery,
     ClientResponse,
     ClientUpdateRequest,
 )
-
-if TYPE_CHECKING:
-    from app.modules.clients.models import Client
 
 
 async def list_clients(
@@ -234,3 +236,28 @@ async def soft_delete_client(
     )
     await session.flush()
     await session.commit()
+
+
+async def resolve_client_by_telegram_user_id(
+    session: AsyncSession,
+    tg_user_id: int,
+) -> Client | None:
+    """Look up alive Client by Telegram user id (Phase 19 D-02).
+
+    Used by Phase 19 visits service via
+    `core.dependencies.resolve_client_by_telegram_user_id` (Protocol slot).
+    Wired in `app.main.create_app()` via
+    `register_client_by_telegram_resolver(...)` — third composition-root
+    carve-out after `register_user_loader` and
+    `register_active_membership_resolver`.
+
+    Returns None when no alive Client matches; the caller (visits service)
+    raises `ClientNotLinkedError` (Phase 19 D-12) — Phase 20's bot handler
+    maps that to a generic Russian DM (no oracle leak — Pitfall 8).
+    """
+    stmt = select(Client).where(
+        Client.telegram_user_id == tg_user_id,
+        Client.deleted_at.is_(None),
+    )
+    result: Client | None = await session.scalar(stmt)
+    return result
