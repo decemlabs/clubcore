@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 18 context gathered
-last_updated: "2026-05-07T18:42:43.379Z"
+last_updated: "2026-05-07T18:48:22.867Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 21
-  completed_plans: 17
-  percent: 81
+  completed_plans: 18
+  percent: 86
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 18 (arq-scheduled-expire-memberships) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-05-07
 
@@ -60,6 +60,7 @@ Last activity: 2026-05-07
 *Updated after each plan completion.*
 | Phase 18 P01 | 6 min | 2 tasks | 5 files |
 | Phase 18 P04 | 2min | 2 tasks | 2 files |
+| Phase 18 P02 | 1min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,8 @@ Recent decisions affecting current work (carried into v1.2 + new):
 - Accepted residual friend-fraud risk for v1.2 single-zal scope — recorded in PROJECT.md Key Decisions in Phase 15
 - [Phase ?]: Phase 18 Plan 01: SVC prefix added to ruff lint.external for first production SVC001 callsite
 - [Phase ?]: Phase 18 Plan 04: arq-worker compose service shipped at apps/backend/docker-compose.yml (CD-02 honoured); REQUIREMENTS.md ARQ-04 + ARQ-TEST-01 wording reconciled with Phase 15 inclusive-end_date Key Decision (W-3 closed)
+- [Phase 18]: Plan 18-02: Worker entry owns session.commit (D-01) — async with session_factory() as session block scopes the transaction; commit happens in the worker after _expire_due_memberships returns. Service helper carries SVC001 caller-owns-txn marker.
+- [Phase 18]: Plan 18-02: Summary log shape <job_name>_complete count=N AFTER commit (CD-03) — Single structlog INFO emitted after session.commit() returns successfully — proves the cron tick booted, the connection worked, and the SQL resolved. Locks the convention for all future scheduled jobs (v1.3+ expire_otps_complete, aggregate_visits_daily_complete).
 
 ### Pending Todos
 
@@ -119,6 +122,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:42:27.601Z
+Last session: 2026-05-07T18:46:59.732Z
 Stopped at: Phase 18 context gathered
 Resume file: None
