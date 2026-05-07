@@ -99,6 +99,24 @@ class InvalidPhoneError(ValidationAppError):
     status_code = 422
 
 
+class PlanNotFoundError(NotFoundError):
+    """Raised when GET/PATCH/DELETE references a non-existent or soft-deleted plan."""
+
+    code = "plan_not_found"
+    status_code = 404
+
+
+class PlanNameExistsError(ConflictError):
+    """Raised on POST/PATCH when name collides with an alive plan (Phase 16 D-02).
+
+    Discriminated against IntegrityError by service.py:_is_plan_name_conflict
+    checking constraint name "uq_membership_plans_name_alive".
+    """
+
+    code = "plan_name_exists"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
