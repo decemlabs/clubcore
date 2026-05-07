@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: ready
-stopped_at: Phase 15 verified
-last_updated: "2026-05-07T11:30:00.000Z"
-last_activity: 2026-05-07 -- Phase 15 complete (verification PASSED WITH FINDINGS)
+status: verifying
+stopped_at: Phase 16 context gathered
+last_updated: "2026-05-07T11:38:07.784Z"
+last_activity: 2026-05-07 -- Phase 15 complete (verification PASSED WITH FINDINGS; one item in deferred-items.md flagged for Phase 16)
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 5
   completed_plans: 5
-  percent: 11
+  percent: 100
 ---
 
 # Project State
@@ -115,6 +115,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T09:58:32.114Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-foundations-rbac-audit-taxonomy-helper-hoisting/15-CONTEXT.md
+Last session: 2026-05-07T11:38:07.780Z
+Stopped at: Phase 16 context gathered
+Resume file: .planning/phases/16-membership-plans-catalog-backend/16-CONTEXT.md
