@@ -1,6 +1,7 @@
 """Integration regression tests for /api/v1/clients?q=... — Phase 14 (CR-01).
 
-Plan 14-01 introduced `_escape_like_pattern` so that SQL LIKE
+Plan 14-01 introduced `escape_like_pattern` (Phase 15: hoisted to
+`app.core.sql`) so that SQL LIKE
 metacharacters (`%`, `_`, `\\`) inside the user-supplied `q` are matched
 as literals instead of as wildcards. Before that fix, a reception user
 could craft a `q` containing `%` and the resulting ILIKE pattern would
@@ -67,7 +68,7 @@ async def test_search_percent_literal_returns_zero_when_no_match(
     to "any row whose lowered name contains the letter `a`" — both
     Adams and Baker would leak (CR-01 PII over-exposure).
 
-    Post-fix (Plan 14-01): the pattern is f"%{_escape_like_pattern(q.lower())}%"
+    Post-fix (Plan 14-01): the pattern is f"%{escape_like_pattern(q.lower())}%"
     so q="%a" becomes `%\\%a%`. The `\\%` is a literal `%`, so the pattern
     now requires the contiguous substring `%a` in the name. Neither
     Adams nor Baker contains `%a` → total == 0.

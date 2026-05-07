@@ -33,6 +33,7 @@ from sqlalchemy import Select, and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedData
+from app.core.sql import escape_like_pattern
 from app.modules.clients.models import Client
 from app.modules.clients.schemas import (
     ClientCreateRequest,
@@ -41,36 +42,6 @@ from app.modules.clients.schemas import (
     ClientUpdateRequest,
     EmergencyContact,
 )
-
-
-def _escape_like_pattern(value: str, *, escape_like: bool = True) -> str:
-    """Escape SQL LIKE/ILIKE metacharacters in user-supplied search input.
-
-    Postgres ILIKE treats ``%`` (any sequence) and ``_`` (any single char) as
-    wildcards, and uses ``\\`` as the default escape character. To make a
-    user query match LITERAL text, we double-escape backslashes first
-    (so we don't re-escape escapes added in the next step), then escape
-    ``%`` and ``_``.
-
-    Order matters: backslash MUST be escaped before ``%`` and ``_``, otherwise
-    the backslashes we add to escape ``%``/``_`` would themselves be doubled.
-
-    CR-01 (Phase 8 -> Phase 14): without this helper, a reception user
-    could ``?q=%`` and dump the full client roster. The DTO normaliser
-    already drops q < 2 chars to None (D-12), but ``%``/``_`` are 1 char
-    AND wildcard -- so a 2-char pattern like ``%a`` still leaks.
-
-    The ``escape_like`` opt-out exists for callers who deliberately want
-    wildcard semantics. No production caller currently sets it False.
-    """
-    if not escape_like:
-        return value
-    # Order: backslash first, then % and _.
-    return (
-        value.replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
 
 
 async def get_alive(session: AsyncSession, client_id: UUID) -> Client | None:
@@ -95,7 +66,7 @@ async def list_alive(
     step. The service layer (Plan 06) immediately re-wraps the result as
     `PaginatedData[ClientResponse]`, so skipping validation here is safe.
 
-    Search input ``query.q`` is routed through ``_escape_like_pattern`` before
+    Search input ``query.q`` is routed through ``escape_like_pattern`` before
     being wrapped in ``%...%`` so SQL ``LIKE`` metacharacters (``%``, ``_``,
     ``\\``) are treated as literals (CR-01 / Phase 14 PII hardening).
     """
@@ -105,7 +76,7 @@ async def list_alive(
     # D-12: q ILIKE on lower(last + ' ' + first + ' ' + coalesce(middle, '')) OR phone ILIKE.
     # Note: ClientListQuery.q is already None when shorter than 2 chars (D-12 normaliser).
     if query.q is not None:
-        escaped_q = _escape_like_pattern(query.q.lower())
+        escaped_q = escape_like_pattern(query.q.lower())
         like_pattern = f"%{escaped_q}%"
         full_name_expr = func.lower(
             Client.last_name
@@ -118,7 +89,7 @@ async def list_alive(
             or_(
                 full_name_expr.ilike(like_pattern),
                 # phone is canonical E.164, ILIKE on raw value is sufficient
-                Client.phone.ilike(f"%{_escape_like_pattern(query.q)}%"),
+                Client.phone.ilike(f"%{escape_like_pattern(query.q)}%"),
             )
         )
 
