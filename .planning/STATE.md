@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 16 context gathered
-last_updated: "2026-05-07T13:24:08.932Z"
-last_activity: 2026-05-07 -- Phase 16 planning complete
+last_updated: "2026-05-07T13:25:53.631Z"
+last_activity: 2026-05-07 -- Phase 16 execution started
 progress:
   total_phases: 9
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 15 complete; ready for Phase 16 (next: Memberships module).
+**Current focus:** Phase 16 — membership-plans-catalog-backend
 
 ## Current Position
 
-Phase: 15 (Foundations — RBAC + audit taxonomy + helper hoisting) — COMPLETE
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-05-07 -- Phase 16 planning complete
+Phase: 16 (membership-plans-catalog-backend) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 16
+Last activity: 2026-05-07 -- Phase 16 execution started
 
 ## Performance Metrics
 
