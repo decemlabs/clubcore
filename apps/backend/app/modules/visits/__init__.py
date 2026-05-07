@@ -1,1 +1,1 @@
-"""Visits module placeholder. TODO Phase B+: check-ins + visit history."""
+"""Visits module — check-in HTTP surface + shared anti-fraud chain (Phase 19)."""
