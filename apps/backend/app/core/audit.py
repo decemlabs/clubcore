@@ -1,31 +1,52 @@
-"""Audit event emission (D-21 / Phase 8 D-03, D-04).
+"""Audit event emission (D-21 / Phase 8 D-03, D-04 / Phase 15 INFRA-11).
 
 Phase 5 — pure structlog passthrough.
 Phase 8 — structlog INFO + co-transactional DB INSERT into `audit_log` (AUDIT-01..03).
+Phase 15 — `LOCKED_AUDIT_EVENTS` frozenset is the runtime source of truth; `emit()`
+raises `AuditEventNotLockedError` for any `(event, resource_type)` pair NOT in the set.
+The static AST walker `tests/unit/test_audit_taxonomy.py` enforces the same invariant
+at CI time (catches typos BEFORE runtime).
 
 The function is `async` and takes the caller's `AsyncSession`. It NEVER calls
 `session.commit()` or `session.flush()` — the caller owns the transaction
 (D-03). The AuditLog row enrolls in whatever transaction `session` is part of
 and commits or rolls back atomically with the caller's mutation.
 
-Locked event names (do NOT invent new ones — Phase 8 contract):
-  - login_success                       {user_id, email?, ip?, channel}
+Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts to
+`LOCKED_AUDIT_EVENTS` frozenset below — that is the runtime source of truth):
+
+  ## v1.1 (Phase 5 / 6 / 7 / 8) — see LOCKED_AUDIT_EVENTS for the canonical pairs
+  - login_success                       {user_id, email?, ip?, channel}     # 'session'
                                         # channel: 'email_password' | 'telegram' (Phase 7 D-14)
-  - login_failed                        {email, reason, ip}
-  - session_revoked                     {user_id, family_id}
-  - session_revoked_all                 {user_id, family_count}
-  - family_reuse_detected               {user_id, family_id, presented_token_hash_prefix}
-  - password_changed_revokes_sessions   {user_id, family_count}
-  - telegram_deep_link_issued           {deep_link_token_hash}                       # Phase 7 D-11
-  - otp_issued                          {user_id, chat_id}                            # Phase 7 D-11
-  - otp_consumed                        {user_id}                                     # Phase 7 D-14
-  - telegram_unknown_start              {username, chat_id, deep_link_token_hash}     # Phase 7 D-04
-  - telegram_dm_blocked                 {chat_id}                                     # Phase 7 D-11
-  - telegram_dm_failed                  {chat_id, error}                              # Phase 7 D-11
-  - telegram_replay_attempt             {deep_link_token_hash}                        # Phase 7 D-20
-  - client_created                      {client_id, full_name, phone}                 # Phase 8 D-04
-  - client_updated                      {client_id, changed_fields}                   # Phase 8 D-04
-  - client_soft_deleted                 {client_id}                                   # Phase 8 D-04
+  - login_failed                        {email, reason, ip}                 # 'login_attempt'
+  - session_revoked                     {user_id, family_id}                # 'session'
+  - session_revoked_all                 {user_id, family_count}             # 'user' (per callsite)
+  - family_reuse_detected               {user_id, family_id, hash_prefix}   # 'session'
+  - password_changed_revokes_sessions   {user_id, family_count}             # 'user'
+  - telegram_deep_link_issued           {deep_link_token_hash}              # 'otp' (Phase 7 D-11)
+  - otp_issued                          {user_id, chat_id}                  # 'otp' (Phase 7 D-11)
+  - otp_consumed                        {user_id}                           # 'otp' (Phase 7 D-14)
+  - telegram_unknown_start              {username, chat_id, hash}           # 'otp' (per callsite)
+  - telegram_dm_blocked                 {chat_id}                           # 'otp' (per callsite)
+  - telegram_dm_failed                  {chat_id, error}                    # 'otp' (per callsite)
+  - telegram_replay_attempt             {deep_link_token_hash}              # 'otp' (Phase 7 D-20)
+  - rbac_forbidden                      {role, action, target_resource, path, ip}  # 'rbac'
+  - csrf_mismatch                       {path, method, ip, has_cookie, has_header} # 'csrf'
+  - client_created                      {client_id, full_name, phone}       # 'client' (Phase 8)
+  - client_updated                      {client_id, changed_fields}         # 'client' (Phase 8)
+  - client_soft_deleted                 {client_id}                         # 'client' (Phase 8)
+
+  ## v1.2 (Phase 15 lock — emitted in Phases 16/17/19/20)
+  - membership_plan_created             {plan_id, name, duration_days, price_kopecks}
+  - membership_plan_updated             {plan_id, changed_fields}
+  - membership_plan_archived            {plan_id}
+  - membership_created                  {membership_id, client_id, plan_id, end_date}
+  - membership_cancelled                {membership_id, client_id, reason?}
+  - membership_expired                  {membership_id, client_id}                # ARQ daily
+  - visit_created                       {visit_id, client_id, membership_id, channel, gym_date}
+  - visit_rejected_no_membership        {client_id, channel}
+  - visit_rejected_duplicate            {client_id, channel, gym_date}
+  - visit_rejected_outside_hours        {client_id, channel}
 
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
@@ -38,6 +59,61 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_models import AuditLog
+
+
+class AuditEventNotLockedError(ValueError):
+    """Raised by audit.emit() when (event, resource_type) ∉ LOCKED_AUDIT_EVENTS.
+
+    Hard fail in dev AND prod (Phase 15 D-09): unknown audit pair = programmer
+    error (stale callsite or unlocked taxonomy). NO graceful degradation, NO
+    DEBUG-only assert. Tests catch this exception explicitly.
+    """
+
+
+LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # v1.1 (Phase 5/6/7/8) — pairs verified against actual callsites in
+        # apps/backend/app/**/*.py (NOT just the docstring; planner action item
+        # per Phase 15 PATTERNS.md). Drift from the original docstring resolved
+        # in favour of the runtime callsite (the actual emitter wins).
+        ("login_success", "session"),
+        ("login_failed", "login_attempt"),
+        ("session_revoked", "session"),
+        # Drift fix: docstring claimed 'session' but auth/service.py:528 emits 'user'.
+        ("session_revoked_all", "user"),
+        ("family_reuse_detected", "session"),
+        ("password_changed_revokes_sessions", "user"),
+        ("telegram_deep_link_issued", "otp"),
+        ("otp_issued", "otp"),
+        ("otp_consumed", "otp"),
+        # Drift fix: docstring claimed 'telegram' but handlers.py:116/160/171 emit 'otp'.
+        ("telegram_unknown_start", "otp"),
+        ("telegram_dm_blocked", "otp"),
+        ("telegram_dm_failed", "otp"),
+        ("telegram_replay_attempt", "otp"),
+        # Phase 6 callsites (NOT in original docstring; lifted in Phase 15).
+        # `rbac_forbidden` was previously emitted with `resource_type=resource.value`
+        # (non-literal) — refactored to literal `'rbac'` in Phase 15 (target resource
+        # moves to payload kwarg `target_resource`) so the AST literal-only gate
+        # passes (Phase 15 D-11).
+        ("rbac_forbidden", "rbac"),
+        ("csrf_mismatch", "csrf"),
+        ("client_created", "client"),
+        ("client_updated", "client"),
+        ("client_soft_deleted", "client"),
+        # v1.2 (Phase 15 lock — emitted in Phases 16/17/19/20)
+        ("membership_plan_created", "membership_plan"),
+        ("membership_plan_updated", "membership_plan"),
+        ("membership_plan_archived", "membership_plan"),
+        ("membership_created", "membership"),
+        ("membership_cancelled", "membership"),
+        ("membership_expired", "membership"),
+        ("visit_created", "visit"),
+        ("visit_rejected_no_membership", "visit"),
+        ("visit_rejected_duplicate", "visit"),
+        ("visit_rejected_outside_hours", "visit"),
+    }
+)
 
 
 async def emit(
@@ -56,25 +132,35 @@ async def emit(
     whatever transaction `session` is enrolled in; it commits or rolls back
     atomically with the caller's mutation.
 
+    Phase 15 INFRA-11: validates `(event, resource_type) ∈ LOCKED_AUDIT_EVENTS`
+    BEFORE structlog/DB writes. Hard fail (D-09): raises
+    `AuditEventNotLockedError` (a `ValueError` subclass) on any non-locked pair.
+
     Args:
         session: AsyncSession in an active transaction.
-        event: Locked event name (Phase 5 D-21, Phase 7 D-04, Phase 8 D-04).
+        event: Locked event name (Phase 5 D-21, Phase 7 D-04, Phase 8 D-04,
+            Phase 15 INFRA-11). MUST be a literal str at every callsite (the
+            AST gate `tests/unit/test_audit_taxonomy.py` enforces this).
         actor_user_id: User performing the action; None for actor-less events
             (login_failed, telegram_unknown_start, telegram_dm_*, etc.) per D-06.
         resource_type: Logical resource category — e.g. 'session', 'client',
-            'otp', 'login_attempt', 'user'. Per D-04 mapping table.
+            'otp', 'login_attempt', 'user', 'rbac', 'csrf', 'membership',
+            'membership_plan', 'visit'. MUST be a literal str at every callsite.
         resource_id: UUID of the resource (D-07). None when the event has no
             UUID identifier (non-UUID identifiers go in payload).
         **payload: Arbitrary JSONB-serialisable kwargs. Per-event shape per D-08.
 
-    Locked event names (UPDATED for Phase 8 — see D-04 mapping table):
-        login_success, login_failed, session_revoked, session_revoked_all,
-        family_reuse_detected, password_changed_revokes_sessions,
-        telegram_deep_link_issued, otp_issued, otp_consumed,
-        telegram_unknown_start, telegram_dm_blocked, telegram_dm_failed,
-        telegram_replay_attempt, client_created, client_updated,
-        client_soft_deleted.
+    Raises:
+        AuditEventNotLockedError: when (event, resource_type) ∉ LOCKED_AUDIT_EVENTS
+            (typo at the callsite or the taxonomy needs extending — fix one or
+            the other; the AST gate also catches this at CI time).
     """
+    if (event, resource_type) not in LOCKED_AUDIT_EVENTS:
+        raise AuditEventNotLockedError(
+            f"audit.emit({event!r}, resource_type={resource_type!r}) "
+            f"is not in LOCKED_AUDIT_EVENTS — extend the frozenset in "
+            f"app.core.audit or fix the typo at the callsite."
+        )
     structlog.get_logger("audit").info(event, **payload)
     session.add(
         AuditLog(

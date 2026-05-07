@@ -129,11 +129,16 @@ def require_permission(
         session: Annotated[AsyncSession, Depends(get_db)],
     ) -> CurrentUser:
         if not can(user.role, action, resource):
+            # Phase 15 INFRA-11 / D-11: `resource_type` MUST be a literal at every
+            # callsite (the AST literal-only gate in tests/unit/test_audit_taxonomy.py
+            # cannot prove staticness if it is `resource.value`). The target
+            # resource moves into the structlog/payload as `target_resource`.
             await audit.emit(
                 session,
                 "rbac_forbidden",
                 actor_user_id=user.id,
-                resource_type=resource.value,
+                resource_type="rbac",
+                target_resource=resource.value,
                 role=user.role.value,
                 action=action.value,
                 path=request.url.path,
