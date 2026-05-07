@@ -1,5 +1,25 @@
 # Milestones
 
+## v1.1 Auth + Clients (Shipped: 2026-05-07)
+
+**Phases completed:** 11 phases (4–14, including 3 gap-closure phases 12/13/14 + inline quick-fix Phase 12.1), 63 plans, 101 tasks
+**Requirements:** 70/70 satisfied
+**Code:** ~4.4K LOC backend Python, ~12.8K LOC TypeScript (admin-web + api-client)
+**Timeline:** 2026-05-02 → 2026-05-07 (5 days, 341 commits, 74 feat)
+**Audit:** passed (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`)
+**Known deferred items at close:** 4 (3 advisory UAT scenarios, 1 quick-task metadata flag — see STATE.md `## Deferred Items`)
+
+**Key accomplishments:**
+
+- **Auth foundations & wire-format contract** — JWT HS256 + Argon2id + CSPRNG token generators + httpOnly cookie pair (`sz_access`/`sz_refresh`) + CSRF dependency; Pydantic `alias_generator=to_camel` + `populate_by_name=True` flips the wire format to camelCase; pagination contract unified to `{items, total, page, pageSize}`; `MetaData(naming_convention=...)` + `UUIDPkMixin`/`TimestampMixin`/`SoftDeleteMixin` set before the first business migration. (Phase 4)
+- **Email/password auth + refresh-rotation family** — `/auth/login|refresh|logout|logout-all|me` end-to-end; refresh tokens stored hashed in Postgres with `family_id`, ~5s reuse-window race tolerance, `family_reuse_detected` audit on replay; Redis-mirrored sessions; SAVEPOINT-based `db_session` fixture for per-test isolation against real Postgres; rate-limit (5/15min → 429). (Phase 5)
+- **Server-side RBAC at FE parity** — `Role`/`Action`/`Resource` StrEnums + 9-entry `OWNER_ONLY` frozenset byte-equal to admin-web `can.ts`; `Depends(require_permission)` on every business route (route-introspection guard enforces it); `verify_csrf` dependency on POST/PATCH/DELETE; three-way parity test (backend ↔ admin-web `can.ts` ↔ `registry.ts`). (Phase 6)
+- **Telegram OTP channel** — separate `python -m app.workers.telegram_bot` ptb-22 long-polling worker (4th docker-compose service, `restart: unless-stopped`); deep-link `/start <token>` flow → 6-digit DM (TTL 5min, max 5 attempts) → `/auth/telegram/verify` upsert by `telegram_chat_id`; 409 `bot_not_started` returns the deep-link URL when DM is blocked. (Phase 7)
+- **Clients module + audit log** — first business CRUD with E.164 phone validation, partial unique index `WHERE deleted_at IS NULL` so soft-deleted phones can be reused, `pg_trgm` GIN-indexed ILIKE search, owner-only soft-delete; `audit_log` table with writes from auth (login/logout/otp/family-reuse) and clients (create/update/soft-delete); Phase 14 hardened the search by escaping `%`/`_`/`\` so reception can't dump the roster via `?q=%`. (Phases 8 + 14)
+- **OpenAPI drift gate + typed api-client + admin-web wiring** — lifespan-safe `export_openapi.py` writes byte-stable `apps/backend/openapi.json`; CI `git diff --exit-code` on backend spec AND on `openapi-typescript`-generated `packages/api-client/src/schema.d.ts`; `fetcher.ts` exposes generic `request<P, M>` with `credentials: 'include'`, automatic `X-CSRF-Token`, single-flight `/auth/refresh` on 401; admin-web `/login` (email/password + Telegram OTP tabs) and `/clients/*` fully wired through `VITE_API_MODE=http` swap-seam, all other domains stay on mocks (no regression). (Phases 9, 10, 11, 13)
+
+---
+
 ## v1.0 Phase A: Skeleton (Shipped: 2026-05-01)
 
 **Phases completed:** 3 phases, 17 plans, 36 tasks

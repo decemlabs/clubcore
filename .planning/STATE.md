@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
-status: ready_to_plan
-stopped_at: Phase 14 complete (clients-search-pii-hardening — 5/5 SCs verified, CR-01 closed)
-last_updated: "2026-05-07T08:10:19Z"
-last_activity: 2026-05-07 -- Phase 14 execution complete
+status: completed
+stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
+last_updated: "2026-05-07T08:28:51.709Z"
+last_activity: 2026-05-07
 progress:
   total_phases: 12
   completed_phases: 11
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 Phase: 14 (clients-search-pii-hardening) — COMPLETE
 Plan: 3 of 3
 Status: Phase 14 complete; v1.1 ready for milestone audit
-Last activity: 2026-05-07 -- Phase 14 execution complete
+Last activity: 2026-05-07
 
 ## Performance Metrics
 
@@ -120,11 +120,14 @@ None yet (roadmap just created).
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and deferred at v1.1 milestone close on 2026-05-07:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none — Phase A is the first milestone; v1.1 starts with empty deferred queue)* | | | |
+| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | 2026-05-07 (v1.1 close) |
+| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | 2026-05-07 (v1.1 close) |
+| uat_gap | Phase 11 11-HUMAN-UAT.md (0 pending scenarios — flagged by audit-open metadata only; resolved in body) | resolved | 2026-05-07 (v1.1 close) |
+| quick_task | 260501-ndi-fix-pyproject-toml-migrate-dev-deps-from (status metadata missing; commit 71f28de shipped 2026-05-01) | missing-meta | 2026-05-07 (v1.1 close) |
 
 ## Session Continuity
 

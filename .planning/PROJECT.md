@@ -4,10 +4,12 @@
 
 Sportzal — CRM для тренажёрного зала. Пет-проект на один зал: управление клиентами, абонементами, посещениями, расписанием, бронированиями, тренерами, биллингом и уведомлениями. Под рынок РФ/СНГ.
 
-**Текущее состояние (после v1.0 — Phase A):**
-- **Frontend** — admin-панель на React 19 (Vite + TanStack Router) с моками; перенесена в `apps/admin-web/` без изменения внутренней структуры.
-- **Backend** — модульный монолит на FastAPI в `apps/backend/app/`; реальный endpoint только `GET /healthz`. Архитектура (`core` / `modules` / `integrations` / `workers` / `api`) физически выложена и закреплена `import-linter`. Бизнес-логики и бизнес-таблиц нет.
-- **Dev infrastructure** — `docker compose` поднимает backend + Postgres 16 + Redis 7 + miграции; pytest + httpx ASGITransport покрывает /healthz; ruff + mypy strict + import-linter — все зелёные.
+**Текущее состояние (после v1.1 — Auth + Clients):**
+- **Frontend** — admin-панель на React 19 (Vite + TanStack Router) в `apps/admin-web/`. Routes `/login` (двухтабовый: email/password + Telegram OTP) и `/clients/*` (full CRUD + поиск/фильтры/сортировка) идут через `VITE_API_MODE=http` swap-seam → `@sportzal/api-client` → реальный backend. Остальные домены (memberships, billing, etc.) продолжают идти через моки. ~12.8K LOC TS.
+- **Backend** — модульный монолит на FastAPI в `apps/backend/app/` (~4.4K LOC Python). Реальные endpoints: `/healthz` + полный `/api/v1/auth/{login,refresh,logout,logout-all,me,telegram/{start,status,verify}}` + `/api/v1/clients` (list/get/create/patch/delete). RBAC байт-паритетен с frontend `can.ts` через `Depends(require_permission)` + introspection guard. Архитектурные контракты (`core ⊥ modules`, `modules independent`, `integrations ⊥ modules`) держатся `import-linter`-ом.
+- **Auth** — двухканальный: email/password (Argon2id, 12-char min, NIST 800-63B) + Telegram OTP (отдельный `python -m app.workers.telegram_bot` long-polling worker, deep-link → DM 6-digit code). JWT HS256 access + refresh-rotation family с reuse-window race tolerance в Redis-mirrored sessions. CSRF на каждом mutating endpoint.
+- **Persistence** — Postgres 16 (тablitsy: `users`, `refresh_tokens`, `otp_codes`, `clients`, `audit_log`); Alembic naming convention + `MetaData(...)` зафиксированы перед первой бизнес-миграцией; `pg_trgm` GIN-индексы на `lower(last_name)`/`lower(first_name)`; partial unique index на `clients.phone WHERE deleted_at IS NULL`.
+- **Dev infrastructure** — `docker compose up` поднимает backend + Postgres 16 + Redis 7 + Telegram bot worker + одноразовый migrate. CI workflow `.github/workflows/ci.yml` гонит backend + frontend gates параллельно с двойным drift-gate (`apps/backend/openapi.json` byte-stable + `packages/api-client/src/schema.d.ts` regenerated). pytest + httpx ASGITransport + SAVEPOINT-based per-test isolation против реального Postgres. ruff + mypy strict + import-linter — все зелёные.
 
 ## Core Value
 
@@ -49,29 +51,27 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 - ✓ Утилитарные скрипты: `scripts/seed_demo_data.py` (Phase A placeholder), `scripts/backup_db.sh` (pg_dump через docker compose exec) — v1.0
 - ✓ `.env.example`, `pyproject.toml`, `ruff.toml`, `.importlinter`, `alembic.ini` — v1.0
 
-### Active (v1.1 — Auth + Clients)
+<!-- Phase B v1.1 (validated 2026-05-07): -->
 
-См. подробный список в `.planning/REQUIREMENTS.md` (REQ-IDs `AUTH-*`, `RBAC-*`, `CLIENTS-*`, `API-*`, `FE-*`).
+- ✓ Auth foundations: JWT HS256 + Argon2id + httpOnly cookie pair (`sz_access`/`sz_refresh`) + CSRF cookie + camelCase wire format + pagination contract `{items, total, page, pageSize}` + Alembic naming convention + `UUIDPkMixin`/`TimestampMixin`/`SoftDeleteMixin` — v1.1 (Phase 4)
+- ✓ Email/password auth: `/auth/login|refresh|logout|logout-all|me`; refresh-rotation family с reuse-window race tolerance; Redis-mirrored sessions; rate-limit 5/15min → 429; SAVEPOINT-based per-test isolation против реального Postgres — v1.1 (Phase 5)
+- ✓ Server-side RBAC: `Role`/`Action`/`Resource` StrEnums + 9-entry `OWNER_ONLY` byte-paritet с admin-web `can.ts`; `Depends(require_permission)` на каждом business-route + route-introspection guard; CSRF dependency на POST/PATCH/DELETE; three-way parity test — v1.1 (Phase 6)
+- ✓ Telegram OTP channel: отдельный `python -m app.workers.telegram_bot` ptb-22 long-polling worker (4-й docker-compose service); deep-link `/start <token>` → 6-digit DM (TTL 5min, max 5 attempts); 409 `bot_not_started` с deep-link URL — v1.1 (Phase 7)
+- ✓ Clients CRUD + audit log: full CRUD с E.164 phone validation, partial unique index на `phone WHERE deleted_at IS NULL`, `pg_trgm` GIN-indexed ILIKE search, owner-only soft-delete, LIKE-escape `%`/`_`/`\` (CR-01 PII hardening); `audit_log` writes из auth + clients — v1.1 (Phases 8 + 14)
+- ✓ OpenAPI drift gate + типизированный api-client: lifespan-safe `export_openapi.py`, byte-stable `openapi.json`, CI `git diff --exit-code` на backend spec И на сгенерированный `schema.d.ts`; `fetcher.ts` с single-flight 401→refresh→retry — v1.1 (Phase 9)
+- ✓ admin-web wiring: `/login` (email/password + Telegram OTP tabs) + `/clients/*` (URL-driven search/pagination, ReUI DataGrid, optimistic mutations с rollback, RHF+Zod) полностью на `VITE_API_MODE=http`; остальные домены остаются на mocks без регрессий; ESLint ban на raw `fetch(` — v1.1 (Phases 10 + 11 + 13)
 
-Кратко:
+### Active (v1.2 — TBD)
 
-- **Auth (двухканальный):** Telegram bot deep-link + одноразовый код (primary) + email/password fallback; JWT access (~15min) + refresh (~30d) в httpOnly Secure cookie с rotation; sessions tracking в Redis для revoke.
-- **RBAC server-side:** паритет с `apps/admin-web/src/shared/session/can.ts`; FastAPI dependency `require_permission(action, resource)` на каждом business-endpoint; reception lockouts по `OWNER_ONLY`.
-- **Clients CRUD + поиск/фильтры:** Postgres-таблица `clients` с soft-delete; первая бизнес-миграция Alembic; `POST/GET/PATCH/DELETE /api/v1/clients`; server-side pagination (`{items,total,page,pageSize}`); ILIKE-поиск по ФИО/phone.
-- **Frontend wiring:** admin-web routes `/login` + `/clients/*` идут через `VITE_API_MODE=http` swap-seam → `packages/api-client`; остальные домены остаются на mocks до v1.2+.
-- **`packages/api-client` (типизированный):** FastAPI пишет `openapi.json` → `openapi-typescript` генерит TS-типы; тонкий fetch wrapper с cookie credentials и typed `ApiError`; CI check `git diff --exit-code` против drift.
+См. `.planning/REQUIREMENTS.md` (создаётся через `/gsd-new-milestone` при старте следующего цикла).
 
-## Current Milestone: v1.1 Auth + Clients
+Кандидаты на v1.2 (из v1.1 deferred queue в архивированном `milestones/v1.1-REQUIREMENTS.md`):
 
-**Goal:** Поднять первый бизнес-слой — двухканальная аутентификация (Telegram + email/password) с серверным RBAC и полный Clients CRUD с поиском, доведённый до admin-web через типизированный HTTP-клиент.
-
-**Target features:**
-
-- Auth — двухканальный (Telegram bot deep-link primary + email/password fallback) + JWT access/refresh в httpOnly cookie + Redis sessions
-- RBAC server-side — паритет с frontend `can(role, action, resource)` через FastAPI dependency
-- Clients CRUD — полный CRUD + server-side pagination + ILIKE-поиск + soft-delete; первая бизнес-миграция Alembic
-- Frontend wiring — `apps/admin-web` routes auth/clients через real HTTP swap-seam (`VITE_API_MODE=http`); остальные модули продолжают идти через mocks
-- `packages/api-client` — типизированный клиент (openapi-typescript codegen + CI drift check) для auth + clients endpoints
+- **Auth UX:** active-sessions UI (list devices, revoke individual), password reset через Telegram bot DM, HaveIBeenPwned check, webhook-based bot mode для prod
+- **Audit:** `GET /api/v1/audit-log` (owner-only) + read UI
+- **Clients:** photo upload, bulk CSV import, "last visit" filter (depends on visits module), tags taxonomy CRUD
+- **v1.1 hygiene queue:** Phase 04 CR-01/CR-02 (Argon2/UUID error mapping → 401 not 500), Phase 06 audit `user_id` plumbing, Phase 03 advisories (env parser, db_session rollback semantics, postgres LAN exposure, backup_db.sh staging)
+- **Next business slice:** memberships / visits / schedule / bookings — TBD по приоритету
 
 ### Out of Scope
 
@@ -87,16 +87,18 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 - **Регион:** РФ/СНГ. Внешние сервисы выбираются под этот рынок.
   - Платежи: только ЮKassa. Stripe запрещён.
   - Уведомления / авторизация: Telegram как основной канал.
-- **Команда:** один backend-разработчик + AI-агенты. Frontend знает слабее, поэтому admin-панель уже скаффолдена и трогать её внутренности нельзя без явного решения.
+- **Команда:** один backend-разработчик + AI-агенты. Frontend знает слабее — admin-панель уже скаффолдена и трогать её внутренности нельзя без явного решения.
 - **Backend пакет:** имя Python-пакета — **`app`** (не `sportzal`, не `src/sportzal`). Корень в `apps/backend/app/`.
 - **Архитектурный стиль:** modular monolith с физическим разделением `core` / `modules` / `integrations` / `workers` / `api`. НЕ Clean Architecture. НЕ микросервисы.
 - **Архитектурные инварианты (контролируются `import-linter`):**
   - `core` ничего не знает про `modules`
   - `modules` не импортируют друг друга напрямую
-  - `integrations` не импортируют `modules`
-- **Структура одного бизнес-модуля (когда появятся файлы в Phase B+):** `router.py`, `service.py`, `models.py`, `schemas.py`. По мере роста — `repository.py`, `permissions.py`, `constants.py`.
+  - `integrations` не импортируют `modules` (исключение D-06 для `workers/telegram_bot.py` → `modules.auth.telegram_service` задокументировано в docstring)
+- **Структура одного бизнес-модуля:** `router.py`, `service.py`, `models.py`, `schemas.py` + по мере роста `repository.py`, `permissions.py`, `constants.py`. Validated на `clients` модуле в Phase 8.
+- **Cross-module callbacks:** Protocol-based registration в `app/main.py` composition root (`register_user_loader`, `HandlerContext`) — preserves `modules-independent` контракт.
 - **Будущая трансформация в multi-tenant SaaS** возможна, но НЕ должна влиять на решения сейчас.
-- **Текущий codebase (после v1.0):** ~46 Python source файлов в `apps/backend/app/`; 3 теста (test_healthz × 2, test_security_module_importable); 5 doc-файлов; docker-compose с тремя сервисами + одноразовым migrate.
+- **Текущий codebase (после v1.1):** ~52 Python source файлов в `apps/backend/app/` (~4.4K LOC); комплексный test suite (unit + integration с pytest-asyncio + httpx ASGITransport + SAVEPOINT-based per-test isolation); admin-web ~12.8K LOC TS; 4 docker-compose services (`web`, `migrate`, `postgres`, `redis`, `telegram-bot`).
+- **CI:** `.github/workflows/ci.yml` гонит backend (`uv run ruff check`, `uv run mypy --strict`, `uv run pytest`, `uv run python apps/backend/scripts/export_openapi.py && git diff --exit-code apps/backend/openapi.json`) + frontend (`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm --filter @sportzal/api-client codegen && git diff --exit-code`) gates параллельно.
 
 ## Constraints
 
@@ -118,10 +120,22 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 | Без multi-tenancy в Phase A | Пет-проект на 1 зал; multi-tenant добавим, только когда появится второй покупатель | ✓ Good — v1.0 |
 | Без auth в Phase A | Каркас должен быть устойчив без auth; auth — отдельная фаза с собственным дизайном (вероятно через Telegram) | ✓ Good — v1.0; следующий milestone разморозит |
 | `import-linter` с Phase A, не позже | Архитектурные границы дешевле закрепить машинно сразу | ✓ Good — v1.0 (3 контракта KEPT, синтетические нарушения BROKEN с non-zero exit) |
-| Pinned РФ-стек (ЮKassa, Telegram, Postgres self-host) | Региональные ограничения известны | — Pending (применится в business-фазах) |
+| Pinned РФ-стек (ЮKassa, Telegram, Postgres self-host) | Региональные ограничения известны | ✓ Good — v1.1 (Telegram bot validated; ЮKassa остаётся для billing-милстоуна) |
 | Compose `environment:` precedence over `env_file: .env` (CR-01 fix) | Сохраняет `.env.example` как Variant 1 single source of truth без форка `.env.compose` / `.env.local` | ✓ Good — v1.0 (03-06) |
 | REVERSED middleware add order: TimingMiddleware first, RequestIdMiddleware second | RequestId должен запускаться первым на incoming, чтобы timing log нёс request_id | ✓ Good — v1.0 (Phase 02 P06) |
 | PEP 735 `[dependency-groups].dev` over deprecated `[tool.uv].dev-dependencies` | uv 0.5+ ругается deprecation warning; PEP 735 — стандарт | ✓ Good — v1.0 (quick 260501-ndi) |
+| RBAC primitives живут в `core` (не `modules/auth`) | `core ⊥ modules` контракт остаётся, и любой модуль может импортировать `require_permission` без cross-module-нарушения | ✓ Good — v1.1 (Phase 4) |
+| Cross-module callbacks через Protocol + регистрацию в `app/main.py` (composition root) | Сохраняет `modules-independent` контракт — `auth` не импортирует `clients`, telegram-handlers не импортируют `auth.service` напрямую | ✓ Good — v1.1 (Phase 4-7) |
+| Telegram bot — отдельный процесс (`python -m app.workers.telegram_bot`), НЕ ARQ task | Long-polling — wrong fit для ARQ; ARQ остаётся для fire-and-forget jobs (e.g. send-OTP retry) | ✓ Good — v1.1 (Phase 7) |
+| Backend wire format = camelCase via Pydantic `alias_generator=to_camel` + `populate_by_name=True` | Frontend остаётся single source of truth для контракта; Python identifiers внутри backend остаются snake_case | ✓ Good — v1.1 (Phase 4) |
+| Pagination envelope `{items, total, page, pageSize}` | Match frozen frontend pagination expectations; никогда bare arrays | ✓ Good — v1.1 (Phase 4) |
+| Refresh-rotation family с reuse-window race tolerance (~5s) | Mitigates parallel-request race; reuse выходит за окно → revoke entire family + audit | ✓ Good — v1.1 (Phase 5) |
+| `clients.list_alive` LIKE-escape `%`/`_`/`\\` (CR-01 closure) | Reception user не может `?q=%` → dump всего roster (PII over-exposure) | ✓ Good — v1.1 (Phase 14) |
+| OpenAPI drift gate: byte-stable `openapi.json` + committed `schema.d.ts` + CI `git diff --exit-code` на оба | FE↔BE drift невозможен без явного "I really meant it" commit | ✓ Good — v1.1 (Phase 9) |
+| `VITE_API_MODE=http` swap-seam scoped to `/login` + `/clients/*` only | Phased rollout: остальные домены остаются на mocks до подтверждения паттерна; nodal regression risk = 0 | ✓ Good — v1.1 (Phase 10) |
+| Soft-delete partial unique index `WHERE deleted_at IS NULL` | Phone reuse после soft-delete без data-loss; hard-delete никогда не exposed | ✓ Good — v1.1 (Phase 8) |
+| 12-char min password, no complexity, no rotation, no lockout (NIST 800-63B 2024) | Counter-productive по NIST guidance; rate-limit вместо lockout (DoS amplifier) | ✓ Good — v1.1 (Phase 5) |
+| `clients/service.py` write paths должны явно `await session.commit()` | `get_db` auto-rolls-back at request exit (database.py:145); audit logs уже зеркалят в structlog но БД-rows не коммитились | ✓ Good — v1.1 (Phase 12.1, quick-task 260504-fst) |
 
 ## Evolution
 
@@ -141,4 +155,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-01 — v1.1 (Auth + Clients) milestone started*
+*Last updated: 2026-05-07 — v1.1 (Auth + Clients) milestone shipped*
