@@ -119,6 +119,78 @@ async def resolve_active_membership(
     return await _active_membership_resolver(session, client_id)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 19 D-02 — ClientByTelegram resolver slot.
+#
+# Third composition-root carve-out after `register_user_loader` (Phase 5 D-15)
+# and `register_active_membership_resolver` (Phase 17 D-18). Phase 19's visits
+# service self-checkin path needs to look up Client by `telegram_user_id`, but
+# the importlinter `modules-independent` contract forbids
+# `app.modules.visits → app.modules.clients`. The Protocol-callback pattern is
+# the validated escape: visits.service depends only on `core.dependencies`,
+# which is allowed.
+#
+# Production wiring lives in `app.main.create_app()` —
+# `register_client_by_telegram_resolver(clients.service.resolve_client_by_telegram_user_id)`.
+# Tests can override the slot via `create_app(...)` to inject a stub resolver
+# (idempotent: re-registering replaces the slot).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ClientByTelegram(Protocol):
+    """Structural type for the alive-Client lookup result (Phase 19 D-02).
+
+    Phase 19 visits service consumes ONLY `id` (passes `client.id` to the
+    private anti-fraud chain). Adding more attributes here is a deliberate
+    expansion of the cross-module surface — keep this Protocol narrow.
+    """
+
+    id: UUID
+
+
+ClientByTelegramResolver = Callable[
+    [AsyncSession, int], Awaitable[ClientByTelegram | None]
+]
+"""Async callable: (session, telegram_user_id) -> ClientByTelegram | None.
+
+Returns None when no alive Client matches the given Telegram user id (the
+canonical case Phase 19 visits service treats as 'unknown caller', raising
+`ClientNotLinkedError`). Phase 20's bot handler will catch the typed
+exception and reply with a generic Russian DM (no oracle leak — Pitfall 8).
+"""
+
+_client_by_telegram_resolver: ClientByTelegramResolver | None = None
+
+
+def register_client_by_telegram_resolver(
+    resolver: ClientByTelegramResolver,
+) -> None:
+    """Composition-root setter — called once by `app.main.create_app` in Phase 19.
+
+    Third loader slot after `register_user_loader` (Phase 5 D-15) and
+    `register_active_membership_resolver` (Phase 17 D-18). Idempotent:
+    re-registering replaces the slot, useful for tests injecting a stub
+    resolver via `create_app()`. Phase 19 wires
+    `app.modules.clients.service.resolve_client_by_telegram_user_id`.
+    """
+    global _client_by_telegram_resolver
+    _client_by_telegram_resolver = resolver
+
+
+async def resolve_client_by_telegram_user_id(
+    session: AsyncSession, telegram_user_id: int
+) -> ClientByTelegram | None:
+    """Consumer entry point — used by `app.modules.visits.service` in Phase 19.
+
+    Returns None when the slot is unset (production code always registers in
+    `create_app()`; tests can register a stub or rely on the default-None
+    behaviour, e.g. unit tests that don't go through the bot path at all).
+    """
+    if _client_by_telegram_resolver is None:
+        return None
+    return await _client_by_telegram_resolver(session, telegram_user_id)
+
+
 async def get_current_user(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
