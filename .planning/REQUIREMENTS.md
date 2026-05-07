@@ -49,8 +49,8 @@
 - [x] **ARQ-03**: `app/workers/__init__.py` defines a real `WorkerSettings` (replacing the placeholder docstring): `redis_settings` from `get_settings().redis_url`, `on_startup`/`on_shutdown` opening/closing the DB lifespan and exposing `sessionmaker` via `ctx`, `functions=[expire_memberships]`, `cron_jobs=[cron(expire_memberships, hour=3, minute=5, unique=True, keep_cronjob_progress=60)]` (06:05 Europe/Moscow with container `TZ=UTC`).
 - [x] **ARQ-04**: ARQ worker is added to `apps/backend/docker-compose.yml` (per Phase 18 CD-02 — the canonical compose file lives at `apps/backend/`, not `infra/`; relocation deferred to a future infra-consolidation phase) as a 5th service `arq-worker` (`command: uv run arq app.workers.WorkerSettings`, `restart: unless-stopped`, `depends_on: [migrate (service_completed_successfully), redis (service_started)]`, `env_file: .env`, `environment: { TZ: UTC, DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal, REDIS_URL: redis://redis:6379/0 }`); placeholder `apps/backend/app/workers/scheduler.py` is deleted.
 - [x] **ARQ-05**: `on_job_start`/`on_job_end` hooks bind `job_id`/`job_name` to structlog contextvars so cron-job log lines carry the same shape as request log lines (analogous to `request_id` from RequestIdMiddleware).
-- [ ] **ARQ-TEST-01**: Unit test calls `expire_memberships(ctx)` directly (no real ARQ runtime needed) with a fixture creating 3 memberships (1 expiring today, 1 expiring yesterday, 1 future); expects exactly 1 newly-expired row (yesterday's, end_date < today) and exactly 1 `membership_expired` audit event; today's row (end_date == today) stays `active` until tomorrow's tick (inclusive end_date per Phase 15 Key Decisions).
-- [ ] **ARQ-TEST-02**: Idempotency test runs `expire_memberships(ctx)` twice with the same data; second call returns 0 (no double-expire), no duplicate audit events.
+- [x] **ARQ-TEST-01**: Unit test calls `expire_memberships(ctx)` directly (no real ARQ runtime needed) with a fixture creating 3 memberships (1 expiring today, 1 expiring yesterday, 1 future); expects exactly 1 newly-expired row (yesterday's, end_date < today) and exactly 1 `membership_expired` audit event; today's row (end_date == today) stays `active` until tomorrow's tick (inclusive end_date per Phase 15 Key Decisions).
+- [x] **ARQ-TEST-02**: Idempotency test runs `expire_memberships(ctx)` twice with the same data; second call returns 0 (no double-expire), no duplicate audit events.
 
 ### Visits (Phase 19)
 
@@ -204,8 +204,8 @@
 | ARQ-03 | Phase 18 | Complete |
 | ARQ-04 | Phase 18 | Complete |
 | ARQ-05 | Phase 18 | Complete |
-| ARQ-TEST-01 | Phase 18 | Pending |
-| ARQ-TEST-02 | Phase 18 | Pending |
+| ARQ-TEST-01 | Phase 18 | Complete |
+| ARQ-TEST-02 | Phase 18 | Complete |
 | VIS-01 | Phase 19 | Pending |
 | VIS-02 | Phase 19 | Pending |
 | VIS-03 | Phase 19 | Pending |

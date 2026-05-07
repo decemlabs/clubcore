@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Plan 18-03 complete — Plan 18-05 next (integration tests)
-last_updated: "2026-05-07T18:58:18.180Z"
+last_updated: "2026-05-07T19:08:50.558Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 21
-  completed_plans: 19
-  percent: 90
+  completed_plans: 20
+  percent: 95
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 18 (arq-scheduled-expire-memberships) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-05-07
 
@@ -62,6 +62,7 @@ Last activity: 2026-05-07
 | Phase 18 P04 | 2min | 2 tasks | 2 files |
 | Phase 18 P02 | 1min | 2 tasks | 2 files |
 | Phase 18 P03 | 5min | 2 tasks | 4 files (1 source, 2 docs, 2 deletions) |
+| Phase 18-arq-scheduled-expire-memberships P05 | 5min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ Recent decisions affecting current work (carried into v1.2 + new):
 - [Phase ?]: Phase 18 Plan 18-03 — WorkerSettings on_job_start mirrors RequestIdMiddleware shape (Pitfall 14): clear_contextvars() then bind_contextvars(job_id, job_name); on_job_end clears. Locks structlog correlation pattern for all future ARQ scheduled jobs.
 - [Phase ?]: Phase 18 Plan 18-03 Rule 4 deviation — arq>=0.26 floor pin resolved to 0.28.0 which removed cron(keep_cronjob_progress=...). Implementation uses keep_result=60 (closest 0.28 semantic). User to confirm at 18-VERIFICATION whether to (a) update REQUIREMENTS.md ARQ-03 to the 0.28 API or (b) pin arq<0.27. Recommended (a).
 - [Phase ?]: Phase 18 Plan 18-03 — app/workers/arq_app.py + app/workers/scheduler.py DELETED (CD-01 + ARQ-04). Single canonical ARQ entrypoint at app.workers.WorkerSettings; matches docker-compose command from Plan 18-04.
+- [Phase ?]: Phase 18 W-2 SAVEPOINT auto-restart resolved via Branch A — outer db_session fixture's join_transaction_mode='create_savepoint' suffices (Plan 18-05)
+- [Phase ?]: Phase 18 W-3 (Plan 18-05): structlog cached-logger invalidation autouse fixture required for any test scope mixing module-level loggers with capture_logs and per-test create_app() reconfigure
 
 ### Pending Todos
 
@@ -127,6 +130,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:58:18.176Z
+Last session: 2026-05-07T19:08:10.544Z
 Stopped at: Plan 18-03 complete — Plan 18-05 next (integration tests)
 Resume file: None
