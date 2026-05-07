@@ -5,12 +5,15 @@ status: passed
 score: 4/4 roadmap success criteria verified; 13/13 requirement IDs satisfied; 2/2 human-decision items dispositioned 2026-05-04
 overrides_applied: 0
 re_verification: true
-human_verification: []  # resolved 2026-05-04 — see "CR-01 / CR-02 Dispositions" section below
+human_verification: []  # CR-02 accepted 2026-05-04; CR-01 resolved in Phase 14 (.planning/phases/14-clients-search-pii-hardening/)
 deferred:
   - finding: "CR-01 — ILIKE wildcard escape on clients.list_alive(q=...)"
     addressed_in: "Phase 14 (Clients Search PII Hardening)"
     roadmap_reference: ".planning/ROADMAP.md Phase 14 (lines 218-228) — explicit gap_closure for CR-01 with regression-test SCs"
     rationale: "Goal text 'ILIKE on ФИО + phone (pg_trgm GIN)' is technically met today; PII-leak hardening is a security-class follow-up scoped as a standalone phase. Phase 14 owns closure with concrete SCs (escape %/_/\\, regression test ?q=%25 returns zero rows)."
+    status: resolved
+    resolved_in: ".planning/phases/14-clients-search-pii-hardening/"
+    resolution_note: "Resolved by `_escape_like_pattern` helper (Plan 14-01) + 11 regression tests across `tests/unit/clients/test_repository_escape.py` (6) and `tests/integration/clients/test_search.py` (5)."
 accepted:
   - finding: "CR-02 — eager `await session.rollback()` inside service.create_client / service.update_client after IntegrityError"
     rationale: "On the IntegrityError path the only mutation pending in the UoW is the failing INSERT/UPDATE itself (audit emit happens AFTER successful flush in client_created and is not yet staged). Rolling back at this point removes only the conflict-rejected mutation; no audit context is lost. Full 239-test suite passes including test_create_duplicate_phone_alive_returns_409_phone_exists. Future call patterns that stage multiple mutations in one request would need to re-evaluate this — flagged as future-architectural-concern, not Phase 8 acceptance gate."
@@ -114,7 +117,7 @@ re_verified_notes:
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| repository.py | 73-86 | User input interpolated into ILIKE pattern without LIKE-escape (CR-01) | Warning | Privacy/perf concern; does not block goal. **DEFERRED to Phase 14 (Clients Search PII Hardening) per Phase 12 SC #4 disposition (2026-05-04). See "CR-01 / CR-02 Dispositions" section below.** |
+| repository.py | 73-86 | User input interpolated into ILIKE pattern without LIKE-escape (CR-01) | Resolved | Resolved in Phase 14 (Clients Search PII Hardening) — `_escape_like_pattern` helper added in `apps/backend/app/modules/clients/repository.py`; both ILIKE branches now escape `%`, `_`, `\` before wrapping. Regression coverage in `apps/backend/tests/integration/clients/test_search.py` (5 tests) + unit coverage in `apps/backend/tests/unit/clients/test_repository_escape.py` (6 tests). Back-reference: `.planning/phases/14-clients-search-pii-hardening/`. |
 | service.py | 117-122, 167-172 | Eager `await session.rollback()` inside service after IntegrityError (CR-02) | Warning | Architectural correctness concern; tests pass because no other mutation pending in same UoW. **ACCEPTED per Phase 12 SC #4 disposition (2026-05-04) — current call patterns are safe; flagged for future re-evaluation if multi-mutation UoWs introduced. See "CR-01 / CR-02 Dispositions" section below.** |
 | service.py | 95-100 | `_is_phone_conflict` falls back to substring match `"uq_clients_phone_alive" in str(exc.orig)` (WR-05) | Info | Locale-fragile; mitigated by primary `constraint_name` attribute path. |
 | repository.py | 178-184 | Dead `isinstance(value, EmergencyContact)` branch (WR-06) | Info | Code-cleanliness only. |
@@ -127,7 +130,7 @@ None of the findings are BLOCKER-level for the phase goal. CR-01/CR-02 are flagg
 
 **Resolved 2026-05-04** — see "CR-01 / CR-02 Dispositions" section below.
 
-1. **CR-01 (ILIKE wildcard escape)** — DEFERRED to Phase 14 per ROADMAP. Phase 14 owns closure with explicit regression-test SCs.
+1. **CR-01 (ILIKE wildcard escape)** — RESOLVED in Phase 14 (`.planning/phases/14-clients-search-pii-hardening/`). Phase 14 closed CR-01 with the `_escape_like_pattern` helper and regression-test SCs.
 2. **CR-02 (`session.rollback()` boundary)** — ACCEPTED with documented rationale. No scheduled follow-up; flagged for re-evaluation if multi-mutation UoWs introduced.
 
 Both dispositions are recorded in frontmatter `deferred:` and `accepted:` blocks for machine-readable consumption by `/gsd-audit-milestone v1.1`.
@@ -140,18 +143,24 @@ No goal-blocking gaps. All 4 roadmap success criteria are observably satisfied i
 
 The original `08-VERIFICATION.md` (2026-05-03) flagged two findings for human accept-or-fix decision: CR-01 (ILIKE wildcard escape) and CR-02 (eager `session.rollback()` inside service). Phase 12 SC #4 closes those decisions explicitly so `/gsd-audit-milestone v1.1` can flip from `human_needed` to `passed`.
 
-### CR-01 — ILIKE wildcard escape (DEFERRED to Phase 14)
+### CR-01 — ILIKE wildcard escape (RESOLVED in Phase 14)
 
-**Finding:** `apps/backend/app/modules/clients/repository.py:73-86` — `list_alive(q=...)` interpolates user-supplied `q` directly into an ILIKE pattern as `%{q}%` without escaping the SQL `LIKE` metacharacters `%`, `_`, `\`. A reception user with `(VIEW, CLIENTS)` permission could submit `?q=%` and the ILIKE would match every row (PII over-exposure).
+**Finding (historical):** `apps/backend/app/modules/clients/repository.py:73-86` — `list_alive(q=...)` interpolated user-supplied `q` directly into an ILIKE pattern as `%{q}%` without escaping the SQL `LIKE` metacharacters `%`, `_`, `\`. A reception user with `(VIEW, CLIENTS)` permission could submit `?q=%` and the ILIKE would match every row (PII over-exposure).
 
-**Disposition:** **DEFERRED to Phase 14 (Clients Search PII Hardening)** — already on roadmap.
+**Disposition:** **RESOLVED in Phase 14 (Clients Search PII Hardening).**
 
-**Rationale:**
-- Phase 8 goal text reads "ILIKE on ФИО + phone (pg_trgm GIN)" — observably met (substring matches work; `test_list_q_filter_matches_last_name_or_phone` passes).
-- The PII over-exposure is a security-class concern requiring (i) `_escape_like` helper, (ii) `escape="\\"` clause on the `like()` call, (iii) regression test that `?q=%25` returns zero rows when no client name literally contains `%`. That is real code work with its own SCs.
-- Phase 14 exists in ROADMAP (lines 218-228) explicitly to close CR-01 — see Phase 14 SC #1 ("escape `%`, `_`, and `\` in user-supplied `q`"), SC #2 (regression test on `?q=%25`), SC #3 (regression on `?q=_test_`), SC #4 (no regression on plain alphanumeric search), SC #5 ("`08-VERIFICATION.md` CR-01 entry is updated to status `resolved` with a back-reference to this phase's commits").
+**Resolution summary:**
+- Plan 14-01 added module-private `_escape_like_pattern(value: str, *, escape_like: bool = True) -> str` in `apps/backend/app/modules/clients/repository.py`. The helper escapes `\` first, then `%`, then `_` (order matters — backslash must be escaped before the new escapes for `%`/`_` are added, otherwise we'd double-escape). Both ILIKE callsites in `list_alive` (the FIO branch on `query.q.lower()` and the phone branch on raw `query.q`) now route the value through the helper before wrapping with `%...%`. Postgres ILIKE uses `\` as the default escape character, so no `ESCAPE` clause is needed.
+- Plan 14-01 also added direct unit coverage in `apps/backend/tests/unit/clients/test_repository_escape.py` (6 tests) — including `test_mixed_metacharacters_apply_in_correct_order` which locks the escape order against future refactors.
+- Plan 14-02 added end-to-end regression coverage in `apps/backend/tests/integration/clients/test_search.py` (5 tests):
+    * `test_search_percent_literal_returns_zero_when_no_match` — `?q=%` no longer dumps the full roster (the original CR-01 exploit).
+    * `test_search_percent_literal_matches_only_when_present` — `?q=%` still finds clients whose names contain a literal `%` (positive path).
+    * `test_search_underscore_is_literal_not_wildcard` — `?q=_test_` matches `_test_` but NOT `atestz` (the underscore wildcard semantics are gone).
+    * `test_search_backslash_is_literal` — `?q=A\B` matches `A\B` literally (backslash escape doesn't swallow itself).
+    * `test_search_plain_alphanumeric_still_matches` — `?q=Иванов` still substring-matches the Ivanov family (regression guard for SC #4).
+- Plan 14-03 (this edit) records the disposition.
 
-**Tracking:** Phase 14 commits will back-reference this disposition; Phase 14's own verification will rewrite the CR-01 row in this file from `Warning` to `Resolved`.
+**Tracking:** Closed by phase `.planning/phases/14-clients-search-pii-hardening/`. Per project conventions, no commit SHAs are pinned here — the phase directory is the canonical link, and `git log -- .planning/phases/14-clients-search-pii-hardening/` resolves the commit timeline on demand.
 
 ### CR-02 — Eager `session.rollback()` inside service (ACCEPTED)
 
