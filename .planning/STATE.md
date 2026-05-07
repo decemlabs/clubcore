@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: executing
+status: verifying
 stopped_at: Plan 18-03 complete — Plan 18-05 next (integration tests)
-last_updated: "2026-05-07T19:08:50.558Z"
+last_updated: "2026-05-07T19:17:31.459Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 9
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 21
-  completed_plans: 20
-  percent: 95
+  completed_plans: 21
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 Phase: 18 (arq-scheduled-expire-memberships) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-07
 
 ## Performance Metrics
@@ -63,6 +63,7 @@ Last activity: 2026-05-07
 | Phase 18 P02 | 1min | 2 tasks | 2 files |
 | Phase 18 P03 | 5min | 2 tasks | 4 files (1 source, 2 docs, 2 deletions) |
 | Phase 18-arq-scheduled-expire-memberships P05 | 5min | 3 tasks | 4 files |
+| Phase 18 P06 | 5min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,8 @@ Recent decisions affecting current work (carried into v1.2 + new):
 - [Phase ?]: Phase 18 Plan 18-03 — app/workers/arq_app.py + app/workers/scheduler.py DELETED (CD-01 + ARQ-04). Single canonical ARQ entrypoint at app.workers.WorkerSettings; matches docker-compose command from Plan 18-04.
 - [Phase ?]: Phase 18 W-2 SAVEPOINT auto-restart resolved via Branch A — outer db_session fixture's join_transaction_mode='create_savepoint' suffices (Plan 18-05)
 - [Phase ?]: Phase 18 W-3 (Plan 18-05): structlog cached-logger invalidation autouse fixture required for any test scope mixing module-level loggers with capture_logs and per-test create_app() reconfigure
+- [Phase ?]: Phase 18-06: W-1 probe locked Form B (bare ints) — ARQ 0.28 cron stores hour/minute as int, not set
+- [Phase ?]: Phase 18-06: Rule 1 fix — unit tests assert on cron_jobs[0].coroutine.__name__ + .keep_result_s instead of .name + .keep_cronjob_progress (ARQ 0.28 attribute reality)
 
 ### Pending Todos
 
@@ -130,6 +133,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-07T19:08:10.544Z
+Last session: 2026-05-07T19:17:11.867Z
 Stopped at: Plan 18-03 complete — Plan 18-05 next (integration tests)
 Resume file: None

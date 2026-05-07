@@ -44,7 +44,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - [x] **Phase 15: Foundations — RBAC + audit taxonomy + helper hoisting** — extend `Action`/`Resource`/`OWNER_ONLY` (backend ↔ admin-web byte parity), hoist `escape_like_pattern` to `core/sql.py`, lock audit-event taxonomy, ship `BackendSchemaBase` + `BusinessService` template + AST commit gate, log v1.2 Key Decisions. (completed 2026-05-07)
 - [x] **Phase 16: Membership Plans Catalog (backend)** — `membership_plans` table + module + 4 owner-only endpoints + audit events; first piece of v1.2 business surface. (completed 2026-05-07)
 - [x] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events. (completed 2026-05-07)
-- [ ] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding.
+- [x] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding. (completed 2026-05-07)
 - [ ] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test.
 - [ ] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off.
 - [ ] **Phase 21: OpenAPI drift gate refresh + api-client codegen** — regen byte-stable `openapi.json` + `schema.d.ts`; CI green on both diffs.
@@ -121,7 +121,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 18-03-PLAN.md — Replace `app/workers/__init__.py` with real `WorkerSettings` (cron + on_startup invariant + contextvars hooks); delete `arq_app.py` + `scheduler.py` — ARQ-03, ARQ-04, ARQ-05
   - [x] 18-04-PLAN.md — Add `arq-worker` service to `apps/backend/docker-compose.yml` + reconcile REQUIREMENTS.md ARQ-04 wording per CD-02 — ARQ-04
   - [x] 18-05-PLAN.md — Integration tests `tests/integration/workers/` (ARQ-TEST-01 happy path + ARQ-TEST-02 idempotency) — ARQ-TEST-01, ARQ-TEST-02
-  - [ ] 18-06-PLAN.md — Unit tests `tests/unit/workers/` (WorkerSettings shape + cron-resolution invariant + Pitfall 14 contextvars) — ARQ-03, ARQ-05
+  - [x] 18-06-PLAN.md — Unit tests `tests/unit/workers/` (WorkerSettings shape + cron-resolution invariant + Pitfall 14 contextvars) — ARQ-03, ARQ-05
 
 ### Phase 19: Visits — DB + reception check-in (backend)
 **Goal**: Reception can check a client into the gym from admin-web, and the system enforces "1 visit per gym-day per client" at the database level (race-proof) plus gym-hours window and active-membership requirement.
@@ -203,7 +203,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 18. ARQ scheduled `expire_memberships` | v1.2 | 5/6 | In Progress|  |
+| 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
