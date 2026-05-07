@@ -97,7 +97,12 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. `core.dependencies.resolve_active_membership(session, client_id)` returns the SINGLE active membership (status='active' AND end_date >= today Europe/Moscow), tiebreaking on latest `end_date` then `created_at DESC`; the resolver is registered from `app/main.py` via `register_active_membership_resolver` without `modules-independent` violation.
   4. Reception+owner can list/get memberships filtered by `clientId`/`status` via `GET /api/v1/memberships` and `GET /api/v1/memberships/{id}` with paginated envelope.
   5. `audit.emit("membership_created" | "membership_cancelled")` fires on the corresponding business action; the `audit.emit` meta-test (TESTS-09) confirms every callsite uses a pair in `LOCKED_AUDIT_EVENTS`.
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 17-01-PLAN.md — Migration 0005_memberships + Membership ORM + schemas + 4 new exceptions — MEM-01, MEM-EP-01..04
+  - [ ] 17-02-PLAN.md — core/dependencies.py ActiveMembership Protocol + register_active_membership_resolver slot — MEM-05
+  - [ ] 17-03-PLAN.md — repository + service (sale, cancel, list, get, resolver, _is_plan_in_use_conflict) + Phase 16 D-15 closure + ROADMAP D-07 wording fix — MEM-02, MEM-03, MEM-04, MEM-AUDIT-01
+  - [ ] 17-04-PLAN.md — Router (4 endpoints), v1 mount, app/main.py resolver wiring, openapi.json regen [BLOCKING migration apply] — MEM-EP-01..04, MEM-AUDIT-01
+  - [ ] 17-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit/plan_in_use/resolver) + unit tests (TESTS-10 9-cell matrix + schemas) — TESTS-09, TESTS-10, MEM-AUDIT-01
 
 ### Phase 18: ARQ scheduled `expire_memberships`
 **Goal**: Active memberships transition to `expired` automatically when their `end_date` passes — without manual intervention or duplicate audit events on worker restart.
@@ -191,7 +196,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 17. Membership Instances + Resolver (backend) | v1.2 | 0/TBD | Not started | — |
+| 17. Membership Instances + Resolver (backend) | v1.2 | 0/5 | Planned | — |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
