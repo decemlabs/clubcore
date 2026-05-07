@@ -7,7 +7,7 @@ be escaped first so we don't double-escape escapes we add for `%` / `_`.
 
 from __future__ import annotations
 
-from app.modules.clients.repository import _escape_like_pattern
+from app.core.sql import escape_like_pattern as _escape_like_pattern
 
 
 def test_plain_alphanumeric_is_unchanged() -> None:
