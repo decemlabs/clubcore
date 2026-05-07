@@ -16,6 +16,7 @@ Phase 4 ships only the factory.
 
 import secrets
 from collections.abc import Awaitable, Callable
+from datetime import date
 from typing import Annotated, Protocol
 from uuid import UUID
 
@@ -59,6 +60,63 @@ def register_user_loader(loader: UserLoader) -> None:
     """
     global _user_loader
     _user_loader = loader
+
+
+class ActiveMembership(Protocol):
+    """Structural type for the active-membership row (MEM-05).
+
+    Per D-18: only the 4 attributes consumed by Phase 19 visits service.
+    Snapshot fields, plan_id, dates other than end_date, audit timestamps are
+    NOT in the Protocol (visits doesn't need them). The SA `Membership` ORM
+    structurally satisfies this Protocol because all 4 attributes are mapped
+    — no DTO conversion at the resolver boundary.
+    """
+
+    id: UUID
+    client_id: UUID
+    end_date: date
+    status: str
+
+
+ActiveMembershipResolver = Callable[[AsyncSession, UUID], Awaitable[ActiveMembership | None]]
+"""Async callable: (session, client_id) -> ActiveMembership | None.
+
+Returns None when the client has no active membership (the canonical case the
+visits service treats as 'no membership'). Tiebreak when multiple active rows
+exist is the implementation's responsibility (MEM-04 locks: latest end_date,
+then created_at DESC).
+"""
+
+_active_membership_resolver: ActiveMembershipResolver | None = None
+
+
+def register_active_membership_resolver(resolver: ActiveMembershipResolver) -> None:
+    """Composition-root setter — called once by `app.main.create_app` in Phase 17.
+
+    Second loader slot after `register_user_loader` (Phase 5 D-15). Idempotent:
+    re-registering replaces the slot, useful for tests that inject a stub
+    resolver via `create_app()`. Phase 17 wires
+    `app.modules.memberships.service.resolve_active_membership_by_client`.
+    """
+    global _active_membership_resolver
+    _active_membership_resolver = resolver
+
+
+async def resolve_active_membership(
+    session: AsyncSession, client_id: UUID
+) -> ActiveMembership | None:
+    """Consumer entry point — used by `app.modules.visits.service` in Phase 19.
+
+    Per CONTEXT.md `<code_context>` line 224: returns None when the slot is
+    unset (production code always registers in `create_app()`; tests can
+    register a stub or rely on the default-None behaviour). Differs from
+    `_user_loader` defensive raise because the visits service cannot
+    distinguish 'no resolver registered' from 'no active membership' — and
+    that's the correct semantic for the consumer.
+    """
+    if _active_membership_resolver is None:
+        return None
+    return await _active_membership_resolver(session, client_id)
 
 
 async def get_current_user(
