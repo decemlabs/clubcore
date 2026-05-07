@@ -41,7 +41,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 
 ### 🚧 v1.2 Memberships + Visits (Phases 15-23)
 
-- [ ] **Phase 15: Foundations — RBAC + audit taxonomy + helper hoisting** — extend `Action`/`Resource`/`OWNER_ONLY` (backend ↔ admin-web byte parity), hoist `escape_like_pattern` to `core/sql.py`, lock audit-event taxonomy, ship `BackendSchemaBase` + `BusinessService` template + AST commit gate, log v1.2 Key Decisions.
+- [x] **Phase 15: Foundations — RBAC + audit taxonomy + helper hoisting** — extend `Action`/`Resource`/`OWNER_ONLY` (backend ↔ admin-web byte parity), hoist `escape_like_pattern` to `core/sql.py`, lock audit-event taxonomy, ship `BackendSchemaBase` + `BusinessService` template + AST commit gate, log v1.2 Key Decisions. (completed 2026-05-07)
 - [ ] **Phase 16: Membership Plans Catalog (backend)** — `membership_plans` table + module + 4 owner-only endpoints + audit events; first piece of v1.2 business surface.
 - [ ] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events.
 - [ ] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding.
@@ -68,7 +68,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 15-02-PLAN.md — Hoist escape_like_pattern to app/core/sql.py + relocate regression suite — INFRA-10, TESTS-11
   - [x] 15-03-PLAN.md — LOCKED_AUDIT_EVENTS frozenset + AuditEventNotLockedError + AST taxonomy walker — INFRA-11
   - [x] 15-04-PLAN.md — RequestContract → BackendSchemaBase rename + core/services.py docstring template + AST commit gate — INFRA-12, INFRA-13
-  - [ ] 15-05-PLAN.md — PROJECT.md Key Decisions (3 v1.2 entries) + REQUIREMENTS.md INFRA-12 wording fix — INFRA-14
+  - [x] 15-05-PLAN.md — PROJECT.md Key Decisions (3 v1.2 entries) + REQUIREMENTS.md INFRA-12 wording fix — INFRA-14
 
 ### Phase 16: Membership Plans Catalog (backend)
 **Goal**: Owner can manage the gym's plan catalog (the SKUs reception will sell in Phase 17).
@@ -184,7 +184,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 12.1. Clients Service Commit Fix (inline quick-fix) | v1.1 | — | Complete | 2026-05-04 |
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 4/4 | Complete | 2026-05-05 |
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
-| 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 4/5 | In Progress|  |
+| 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 0/TBD | Not started | — |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 0/TBD | Not started | — |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
