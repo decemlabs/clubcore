@@ -67,7 +67,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 15-01-PLAN.md — RBAC three-way parity extension (backend permissions.py + admin-web registry.ts + can.ts + test_rbac_parity.py) — INFRA-08, INFRA-09, TESTS-08
   - [x] 15-02-PLAN.md — Hoist escape_like_pattern to app/core/sql.py + relocate regression suite — INFRA-10, TESTS-11
   - [x] 15-03-PLAN.md — LOCKED_AUDIT_EVENTS frozenset + AuditEventNotLockedError + AST taxonomy walker — INFRA-11
-  - [ ] 15-04-PLAN.md — RequestContract → BackendSchemaBase rename + core/services.py docstring template + AST commit gate — INFRA-12, INFRA-13
+  - [x] 15-04-PLAN.md — RequestContract → BackendSchemaBase rename + core/services.py docstring template + AST commit gate — INFRA-12, INFRA-13
   - [ ] 15-05-PLAN.md — PROJECT.md Key Decisions (3 v1.2 entries) + REQUIREMENTS.md INFRA-12 wording fix — INFRA-14
 
 ### Phase 16: Membership Plans Catalog (backend)
@@ -184,7 +184,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 12.1. Clients Service Commit Fix (inline quick-fix) | v1.1 | — | Complete | 2026-05-04 |
 | 13. v1.1 Minor Drift & Hygiene Cleanup | v1.1 | 4/4 | Complete | 2026-05-05 |
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
-| 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 3/5 | In Progress|  |
+| 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 4/5 | In Progress|  |
 | 16. Membership Plans Catalog (backend) | v1.2 | 0/TBD | Not started | — |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 0/TBD | Not started | — |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
