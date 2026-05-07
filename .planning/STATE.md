@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 19 context gathered
-last_updated: "2026-05-07T20:20:16.603Z"
-last_activity: 2026-05-07 -- Phase 19 planning complete
+last_updated: "2026-05-07T20:24:32.415Z"
+last_activity: 2026-05-07 -- Phase 19 execution started
 progress:
   total_phases: 9
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 18 — arq-scheduled-expire-memberships
+**Current focus:** Phase 19 — Visits — DB + reception check-in (backend)
 
 ## Current Position
 
-Phase: 18 (arq-scheduled-expire-memberships) — EXECUTING
-Plan: 6 of 6
-Status: Ready to execute
-Last activity: 2026-05-07 -- Phase 19 planning complete
+Phase: 19 (Visits — DB + reception check-in (backend)) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 19
+Last activity: 2026-05-07 -- Phase 19 execution started
 
 ## Performance Metrics
 
