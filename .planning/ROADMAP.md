@@ -78,7 +78,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   1. Owner can list plans via `GET /api/v1/membership-plans` with paginated `{items,total,page,pageSize}` envelope and an optional `?active=true` filter; reception receives 403.
   2. Owner can create a plan via `POST /api/v1/membership-plans` with `{name, durationDays, priceKopecks, active?}`; partial-unique `lower(name) WHERE deleted_at IS NULL` rejects duplicates.
   3. Owner can update plan name/price/active via `PATCH /api/v1/membership-plans/{id}`; `duration_days` is rejected as immutable to preserve sold-instance snapshot semantics.
-  4. Owner can soft-delete a plan via `DELETE /api/v1/membership-plans/{id}`; deletion returns 409 `plan_in_use` when any non-cancelled `Membership` references it (FK `ON DELETE RESTRICT`).
+  4. Owner can soft-delete a plan via `DELETE /api/v1/membership-plans/{id}`; deletion returns 409 `plan_in_use` when any `Membership` references it (cancelled and expired included) (FK `ON DELETE RESTRICT`).
   5. Every successful plan create/update/archive writes a locked audit event (`membership_plan_created` / `_updated` / `_archived`) with the actor and changed fields.
 **Plans**: 5 plans
   - [x] 16-01-PLAN.md — Migration 0004_membership_plans + MembershipPlan ORM + alembic env.py extension — MEM-PLAN-01, MEM-PLAN-02
