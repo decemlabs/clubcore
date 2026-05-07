@@ -25,6 +25,7 @@ from app.core.database import Base
 import app.modules.auth.models
 import app.modules.clients.models
 import app.modules.memberships.models
+import app.modules.visits.models
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
