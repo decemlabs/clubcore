@@ -101,7 +101,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 17-01-PLAN.md — Migration 0005_memberships + Membership ORM + schemas + 4 new exceptions — MEM-01, MEM-EP-01..04
   - [x] 17-02-PLAN.md — core/dependencies.py ActiveMembership Protocol + register_active_membership_resolver slot — MEM-05
   - [x] 17-03-PLAN.md — repository + service (sale, cancel, list, get, resolver, _is_plan_in_use_conflict) + Phase 16 D-15 closure + ROADMAP D-07 wording fix — MEM-02, MEM-03, MEM-04, MEM-AUDIT-01
-  - [ ] 17-04-PLAN.md — Router (4 endpoints), v1 mount, app/main.py resolver wiring, openapi.json regen [BLOCKING migration apply] — MEM-EP-01..04, MEM-AUDIT-01
+  - [x] 17-04-PLAN.md — Router (4 endpoints), v1 mount, app/main.py resolver wiring, openapi.json regen [BLOCKING migration apply] — MEM-EP-01..04, MEM-AUDIT-01
   - [ ] 17-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit/plan_in_use/resolver) + unit tests (TESTS-10 9-cell matrix + schemas) — TESTS-09, TESTS-10, MEM-AUDIT-01
 
 ### Phase 18: ARQ scheduled `expire_memberships`
@@ -196,7 +196,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 14. Clients Search PII Hardening | v1.1 | 3/3 | Complete | 2026-05-07 |
 | 15. Foundations — RBAC + audit taxonomy + helper hoisting | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 17. Membership Instances + Resolver (backend) | v1.2 | 3/5 | In Progress|  |
+| 17. Membership Instances + Resolver (backend) | v1.2 | 4/5 | In Progress|  |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 0/TBD | Not started | — |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
