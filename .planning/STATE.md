@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-05-07T15:34:14.665Z"
-last_activity: 2026-05-07 -- Phase 17 planning complete
+last_updated: "2026-05-07T15:35:30.854Z"
+last_activity: 2026-05-07 -- Phase 17 execution started
 progress:
   total_phases: 9
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 16 — membership-plans-catalog-backend
+**Current focus:** Phase 17 — membership-instances-resolver-backend
 
 ## Current Position
 
-Phase: 16 (membership-plans-catalog-backend) — COMPLETE ✓
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-05-07 -- Phase 17 planning complete
+Phase: 17 (membership-instances-resolver-backend) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 17
+Last activity: 2026-05-07 -- Phase 17 execution started
 
 ## Performance Metrics
 
