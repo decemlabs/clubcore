@@ -13,6 +13,14 @@ Phase 5 additions:
    scopes source_modules = app.core, not app.
 - Prod startup assertion: cookie_secure MUST be True when environment=='prod'
    (Phase 4 D-25 — fail-fast at startup, not at first login).
+
+Phase 17 additions:
+- register_active_membership_resolver(resolve_active_membership_by_client) fills
+   the second loader slot (MEM-05). Same composition-root carve-out as the Phase 5
+   user-loader: app.main is intentionally outside the core-not-depend-on-modules
+   importlinter scope, so reaching into `app.modules.memberships.service` is allowed
+   here and ONLY here. Idempotent re-registration mirrors WR-05 reasoning — tests
+   inject stub resolvers via `create_app()`.
 """
 
 from collections.abc import AsyncIterator
@@ -23,12 +31,13 @@ from fastapi import FastAPI
 from app.api.router import api
 from app.core.config import get_settings
 from app.core.database import db_lifespan
-from app.core.dependencies import register_user_loader
+from app.core.dependencies import register_active_membership_resolver, register_user_loader
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
 from app.core.redis import redis_lifespan
 from app.modules.auth.service import load_user_by_id
+from app.modules.memberships.service import resolve_active_membership_by_client
 
 
 @asynccontextmanager
@@ -53,7 +62,10 @@ def create_app() -> FastAPI:
       4. register_middleware adds Timing then RequestId (REVERSED add order).
       5. register_exception_handlers attaches AppError → JSONResponse handler.
       6. register_user_loader(load_user_by_id) fills the Phase 4 D-24 slot.
-      7. include_router(api) mounts /healthz at root + /api/v1/auth/*.
+      7. register_active_membership_resolver(resolve_active_membership_by_client)
+         fills the Phase 17 MEM-05 slot — second composition-root carve-out
+         (after register_user_loader, Phase 5 D-15).
+      8. include_router(api) mounts /healthz at root + /api/v1/auth/*.
     """
     settings = get_settings()
     configure_logging(settings)
@@ -86,6 +98,14 @@ def create_app() -> FastAPI:
     # is therefore safe; the export script never enters lifespan and tests
     # use the slot to swap in fakes deterministically.
     register_user_loader(load_user_by_id)
+
+    # Phase 17 MEM-05: second composition-root carve-out (after register_user_loader,
+    # Phase 5 D-15). Same architectural exception — app.main is NOT in the
+    # core-not-depend-on-modules importlinter scope. The visits service (Phase 19)
+    # will call resolve_active_membership() through the slot; production wires the
+    # real resolver here, tests can override via create_app() because the slot is
+    # idempotent (mirrors WR-05 reasoning for register_user_loader).
+    register_active_membership_resolver(resolve_active_membership_by_client)
 
     app.include_router(api)
     return app
