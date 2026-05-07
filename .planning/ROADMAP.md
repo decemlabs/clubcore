@@ -134,7 +134,12 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. `service.create_visit_self_checkin(session, telegram_user_id, chat_id)` runs the same anti-fraud chain but sets `channel='telegram_bot'`, `checked_in_by=NULL`, and raises module-specific exception classes (`NoActiveMembershipError` / `DuplicateCheckinError` / `OutsideGymHoursError`) the bot handler can map to DM strings (Phase 20 consumer).
   4. Reception+owner can list/get visits via `GET /api/v1/visits?clientId&from&to` and `GET /api/v1/visits/{id}` (paginated, default sort `checked_in_at DESC`).
   5. Every successful or rejected check-in writes the locked audit event (`visit_created` | `visit_rejected_no_membership` | `visit_rejected_duplicate` | `visit_rejected_outside_hours`) with `channel` payload; bot-path rejections are emitted with `actor_user_id=None`.
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 19-01-PLAN.md — Migration 0006_visits + Visit ORM + schemas (BackendSchemaBase) + 5 new exceptions + GYM_HOURS env + Settings model_validator + audit.py:46-49 docstring reconciliation — VIS-01, VIS-02, VIS-05, VIS-AUDIT-01
+  - [ ] 19-02-PLAN.md — core/dependencies.py ClientByTelegram Protocol + setter + consumer + clients.service.resolve_client_by_telegram_user_id + app.main wiring (D-02 third resolver slot) — VIS-04
+  - [ ] 19-03-PLAN.md — repository.py + service.py (anti-fraud chain + reception path + self-checkin path + 4 audit emits) — VIS-02, VIS-03, VIS-04, VIS-AUDIT-01
+  - [ ] 19-04-PLAN.md — router.py (3 endpoints) + v1 mount + openapi.json regen [BLOCKING migration apply] — VIS-EP-01..03, VIS-AUDIT-01
+  - [ ] 19-05-PLAN.md — Integration tests (CRUD/RBAC/audit/concurrent VIS-TEST-01/self-checkin/migration) + unit tests (schemas/anti_fraud_helpers/config) — VIS-TEST-01, VIS-EP-01..03, VIS-AUDIT-01, VIS-03..05
 
 ### Phase 20: Telegram bot `/checkin` self check-in
 **Goal**: A client can DM the gym bot `/checkin` and get an immediate confirmation (or a generic, oracle-leak-free rejection) — extending the existing long-polling worker without violating `integrations ⊥ modules`.
@@ -204,7 +209,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 16. Membership Plans Catalog (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
-| 19. Visits — DB + reception check-in (backend) | v1.2 | 0/TBD | Not started | — |
+| 19. Visits — DB + reception check-in (backend) | v1.2 | 0/5 | Not started | — |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
