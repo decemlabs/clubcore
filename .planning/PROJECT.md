@@ -15,6 +15,25 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
+## Current Milestone: v1.2 Memberships + Visits
+
+**Goal:** Превратить CRM из «реестра клиентов» в операционный инструмент зала: продажа абонемента → ежедневная отметка посещений (двухканально: reception manual + клиент сам через Telegram bot).
+
+**Target features:**
+
+- **Memberships module** (`apps/backend/app/modules/memberships/`) — `MembershipPlan` (owner-only каталог: name, duration_days 30/90/180/365, price_kopecks, active flag) + `Membership` instance (client_id, plan_id, snapshot цены/длительности на момент покупки, start_date, end_date, status `active|expired|cancelled`, cancelled_at). ARQ daily scheduled job `expire_memberships`. Owner-only manual cancel. Audit log writes.
+- **Visits module** (`apps/backend/app/modules/visits/`) — `Visit` (client_id, membership_id, checked_in_at, channel `reception|telegram_bot`, checked_in_by). Reception manual check-in через admin-web (поиск → кнопка). Self check-in через Telegram bot `/checkin` команду (расширение существующего ptb-22 worker), бот отвечает «✅ Отмечено». Anti-fraud: env-config окно часов работы зала + max 1 check-in/день/клиент → 409 conflict. Audit log writes.
+- **admin-web wiring (`VITE_API_MODE=http`)** — новые роуты `/memberships/*` (каталог планов owner-only + список) + `/visits/*` (check-in page + history). Client-detail page enhancements: блоки «Memberships» (история + Add) и «Последние посещения». Active sessions UI + revoke на странице профиля.
+- **v1.1 hygiene queue (минимум):** Phase 04 CR-01/CR-02 — Argon2 verify-error и невалидный UUID в cookie → 401, не 500.
+
+**Key context:**
+
+- **Billing откладываем в v1.3** — продажа в v1.2 = manual (owner создаёт Membership с `paid_at` без ЮKassa).
+- **Без freeze, без visit-count plans, без expiring-soon notifications** — простые time-based абонементы; единственный Telegram-DM в v1.2 — это check-in confirm.
+- **Pattern из v1.1 переиспользуется:** module template (`router/service/repository/schemas`), soft-delete + partial unique (если применимо), audit log, OpenAPI drift gate end-to-end, RBAC parity test, three-way contract enforcement.
+- **ARQ — первый реальный scheduled job** (до этого только skeleton): `expire_memberships` daily.
+- **Telegram bot — первая нетривиальная команда после `/start`** (`/checkin` с anti-fraud + DM-ответами); расширяет существующий long-polling worker, не отдельный процесс.
+
 ## Requirements
 
 ### Validated
@@ -61,17 +80,24 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 - ✓ OpenAPI drift gate + типизированный api-client: lifespan-safe `export_openapi.py`, byte-stable `openapi.json`, CI `git diff --exit-code` на backend spec И на сгенерированный `schema.d.ts`; `fetcher.ts` с single-flight 401→refresh→retry — v1.1 (Phase 9)
 - ✓ admin-web wiring: `/login` (email/password + Telegram OTP tabs) + `/clients/*` (URL-driven search/pagination, ReUI DataGrid, optimistic mutations с rollback, RHF+Zod) полностью на `VITE_API_MODE=http`; остальные домены остаются на mocks без регрессий; ESLint ban на raw `fetch(` — v1.1 (Phases 10 + 11 + 13)
 
-### Active (v1.2 — TBD)
+### Active (v1.2 — Memberships + Visits)
 
-См. `.planning/REQUIREMENTS.md` (создаётся через `/gsd-new-milestone` при старте следующего цикла).
+См. `.planning/REQUIREMENTS.md` для полного списка с REQ-ID. Высокоуровневые категории:
 
-Кандидаты на v1.2 (из v1.1 deferred queue в архивированном `milestones/v1.1-REQUIREMENTS.md`):
+- **Memberships:** `MembershipPlan` каталог (owner-only CRUD), `Membership` per-client (snapshot цены/длительности), lifecycle `active → expired` (ARQ daily) + manual cancel (owner-only), audit
+- **Visits:** Reception manual check-in + self check-in через Telegram bot `/checkin`, валидация active membership + anti-fraud (gym-hours window + 1/день/клиент), audit
+- **admin-web wiring:** `/memberships/*` + `/visits/*` через `VITE_API_MODE=http`; enhancements на client-detail (Memberships + Visits history); Active sessions UI + revoke
+- **v1.1 hygiene минимум:** Phase 04 CR-01/CR-02 — Argon2/UUID error mapping → 401
 
-- **Auth UX:** active-sessions UI (list devices, revoke individual), password reset через Telegram bot DM, HaveIBeenPwned check, webhook-based bot mode для prod
+**Перенесено в v1.3+ (deferred from v1.1):**
+
+- **Billing:** ЮKassa intake/webhooks/чеки 54-ФЗ/refunds (вся платёжная интеграция)
+- **Auth UX:** password reset через Telegram bot DM, HaveIBeenPwned check, webhook-based bot mode для prod
 - **Audit:** `GET /api/v1/audit-log` (owner-only) + read UI
-- **Clients:** photo upload, bulk CSV import, "last visit" filter (depends on visits module), tags taxonomy CRUD
-- **v1.1 hygiene queue:** Phase 04 CR-01/CR-02 (Argon2/UUID error mapping → 401 not 500), Phase 06 audit `user_id` plumbing, Phase 03 advisories (env parser, db_session rollback semantics, postgres LAN exposure, backup_db.sh staging)
-- **Next business slice:** memberships / visits / schedule / bookings — TBD по приоритету
+- **Clients:** photo upload, bulk CSV import, tags taxonomy CRUD
+- **v1.1 hygiene остатки:** Phase 06 audit `user_id` plumbing, Phase 03 advisories (env parser, db_session rollback semantics, postgres LAN exposure, backup_db.sh staging)
+- **Memberships extras:** freeze, visit-count plans, expiring-soon notifications, hybrid plans
+- **Next business slice:** trainers / schedule / bookings — TBD по приоритету
 
 ### Out of Scope
 
@@ -155,4 +181,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-07 — v1.1 (Auth + Clients) milestone shipped*
+*Last updated: 2026-05-07 — v1.2 (Memberships + Visits) milestone started*

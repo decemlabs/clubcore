@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Auth + Clients
-status: completed
-stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
-last_updated: "2026-05-07T08:28:51.709Z"
+milestone: v1.2
+milestone_name: Memberships + Visits
+status: planning
+last_updated: "2026-05-07T08:56:30.488Z"
 last_activity: 2026-05-07
 progress:
-  total_phases: 12
-  completed_phases: 11
-  total_plans: 63
-  completed_plans: 63
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 
 ## Current Position
 
-Phase: 14 (clients-search-pii-hardening) — COMPLETE
-Plan: 3 of 3
-Status: Phase 14 complete; v1.1 ready for milestone audit
-Last activity: 2026-05-07
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-07 — Milestone v1.2 started
 
 ## Performance Metrics
 
