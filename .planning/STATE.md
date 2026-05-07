@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auth + Clients
-status: executing
-stopped_at: Completed 10-08-PLAN.md (UAT-08 gap closure — Phase 10 complete)
-last_updated: "2026-05-05T11:28:30.395Z"
-last_activity: 2026-05-05 -- Phase 14 execution started
+status: ready_to_plan
+stopped_at: Phase 14 complete (clients-search-pii-hardening — 5/5 SCs verified, CR-01 closed)
+last_updated: "2026-05-07T08:10:19Z"
+last_activity: 2026-05-07 -- Phase 14 execution complete
 progress:
   total_phases: 12
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 63
-  completed_plans: 60
-  percent: 95
+  completed_plans: 63
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 14 — clients-search-pii-hardening
+**Current focus:** v1.1 milestone closure — Phase 14 complete; ready for milestone audit/archive
 
 ## Current Position
 
-Phase: 14 (clients-search-pii-hardening) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 14
-Last activity: 2026-05-05 -- Phase 14 execution started
+Phase: 14 (clients-search-pii-hardening) — COMPLETE
+Plan: 3 of 3
+Status: Phase 14 complete; v1.1 ready for milestone audit
+Last activity: 2026-05-07 -- Phase 14 execution complete
 
 ## Performance Metrics
 
