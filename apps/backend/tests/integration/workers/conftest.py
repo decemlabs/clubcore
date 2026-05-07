@@ -49,6 +49,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,6 +58,34 @@ from app.core.security import hash_password
 from app.modules.auth.models import User
 from app.modules.clients.models import Client
 from app.modules.memberships.models import Membership, MembershipPlan
+
+
+@pytest.fixture(autouse=True)
+def _reset_worker_logger_cache() -> None:
+    """Invalidate the module-level structlog logger cache in `expire_memberships`.
+
+    Phase 18 W-3 — `app.core.logging.configure_logging` runs `structlog.configure(
+    processors=[...], cache_logger_on_first_use=True)` from `create_app()`, which
+    is fired by the `app` fixture (tests/conftest.py:app). Each test gets a
+    fresh `processors=[...]` list, but the module-level
+    `_log = structlog.get_logger('workers.scheduled.expire_memberships')` in
+    `app/workers/scheduled/expire_memberships.py` caches its
+    BoundLogger (with the FIRST test's processor list ref) on first call.
+    When `structlog.testing.capture_logs()` mutates the CURRENT config's
+    processor list, the cached logger still points at the previous list,
+    so capture_logs misses the call.
+
+    Fix: delete the cached `bind` attribute on the module-level proxy
+    before each test. The proxy's BoundLoggerLazyProxy.__getattr__ then
+    re-resolves processors from the current `_CONFIG.default_processors`
+    on the next call — which is the list `capture_logs` mutates.
+    """
+    from app.workers.scheduled import expire_memberships as worker_mod
+
+    # `bind` is the cached attribute set by BoundLoggerLazyProxy's first call
+    # under `cache_logger_on_first_use=True`. Removing it forces re-resolution.
+    if "bind" in worker_mod._log.__dict__:
+        del worker_mod._log.__dict__["bind"]
 
 
 @pytest_asyncio.fixture
