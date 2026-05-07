@@ -1,26 +1,43 @@
-"""Unit tests for app.modules.memberships.schemas Pydantic DTOs (Phase 16 Plan 16-05).
+"""Unit tests for app.modules.memberships.schemas Pydantic DTOs (Phase 16 + Phase 17).
 
 Pure Pydantic tests — no DB, no FastAPI, no fixtures beyond stdlib + pytest.
-Covers every D-XX decision from 16-CONTEXT.md:
+
+Phase 16 — covers every D-XX decision from 16-CONTEXT.md:
 - D-01: trim-only name normalization (preserves casing)
 - D-04: PATCH does NOT declare duration_days -> stock 422 from extra='forbid'
 - D-05: explicit null in PATCH body is rejected with a clear message
 - D-06: Pydantic bounds on duration_days, price_kopecks, name
 - Wire camelCase <-> Python snake_case alias_generator pair-test
 - Default list query shape (MembershipPlanSort default, pagination defaults)
+
+Phase 17 — covers MembershipCreateRequest + MembershipCancelRequest (D-03/D-10/D-11):
+- paid_at ISO timestamp accept + omitted-is-None default
+- notes max_length=1000 (T-17-02 mitigation)
+- extra='forbid' on Create (server-computed startDate must NOT be in body)
+- explicit-null guard on Cancel reason (D-11 mirror of Phase 16 D-05)
+- reason max_length=500 (T-17-01 mitigation, half the notes ceiling)
+- camelCase aliasing on paidAt + clientId
+- MembershipResponse camelCase wire on all snapshot fields (D-10)
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from app.modules.memberships.schemas import (
+    MembershipCancelRequest,
+    MembershipCreateRequest,
     MembershipPlanCreateRequest,
     MembershipPlanListQuery,
     MembershipPlanResponse,
     MembershipPlanSort,
     MembershipPlanUpdateRequest,
+    MembershipResponse,
+    MembershipStatus,
 )
 
 # --- D-01: trim leading/trailing whitespace ---
@@ -238,3 +255,220 @@ def test_response_schema_is_importable() -> None:
     assert MembershipPlanResponse is not None
     assert MembershipPlanSort.NAME_ASC == "name_asc"
     assert MembershipPlanSort.CREATED_AT_DESC == "created_at_desc"
+
+
+# ===========================================================================
+# Phase 17 — MembershipCreateRequest + MembershipCancelRequest tests
+# ===========================================================================
+
+
+# --- D-03: paid_at semantics ----------------------------------------------
+
+
+def test_create_accepts_paid_at_iso() -> None:
+    """D-03: explicit ISO paidAt parses to a datetime."""
+    m = MembershipCreateRequest.model_validate(
+        {
+            "clientId": str(uuid4()),
+            "planId": str(uuid4()),
+            "paidAt": "2026-05-01T10:00:00Z",
+        }
+    )
+    assert m.paid_at is not None
+    assert isinstance(m.paid_at, datetime)
+    assert m.paid_at == datetime(2026, 5, 1, 10, 0, 0, tzinfo=UTC)
+
+
+def test_create_paid_at_omitted_is_none() -> None:
+    """D-03: omitting paidAt yields None."""
+    m = MembershipCreateRequest.model_validate(
+        {"clientId": str(uuid4()), "planId": str(uuid4())}
+    )
+    assert m.paid_at is None
+
+
+# --- D-03: notes max_length ------------------------------------------------
+
+
+def test_create_rejects_notes_over_1000_chars() -> None:
+    """D-03 / T-17-02: notes longer than 1000 chars fails max_length=1000."""
+    with pytest.raises(ValidationError):
+        MembershipCreateRequest.model_validate(
+            {
+                "clientId": str(uuid4()),
+                "planId": str(uuid4()),
+                "notes": "x" * 1001,
+            }
+        )
+
+
+def test_create_accepts_notes_at_1000_chars() -> None:
+    """Boundary: exactly 1000 chars is accepted."""
+    m = MembershipCreateRequest.model_validate(
+        {
+            "clientId": str(uuid4()),
+            "planId": str(uuid4()),
+            "notes": "x" * 1000,
+        }
+    )
+    assert m.notes is not None
+    assert len(m.notes) == 1000
+
+
+# --- extra='forbid' on Create ----------------------------------------------
+
+
+def test_create_rejects_extra_field() -> None:
+    """extra='forbid' (BackendSchemaBase): server-computed startDate rejected with 422."""
+    with pytest.raises(ValidationError):
+        MembershipCreateRequest.model_validate(
+            {
+                "clientId": str(uuid4()),
+                "planId": str(uuid4()),
+                "startDate": "2026-01-01",  # server-computed; must not be in body
+            }
+        )
+
+
+def test_create_rejects_arbitrary_extra_field() -> None:
+    """extra='forbid' rejects any unknown field."""
+    with pytest.raises(ValidationError):
+        MembershipCreateRequest.model_validate(
+            {
+                "clientId": str(uuid4()),
+                "planId": str(uuid4()),
+                "foo": "bar",
+            }
+        )
+
+
+# --- D-11: explicit-null guard on Cancel reason ----------------------------
+
+
+def test_cancel_rejects_explicit_null_reason() -> None:
+    """D-11 (mirror of Phase 16 D-05): explicit null reason raises ValidationError.
+
+    Error message must match the locked guard string verbatim.
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        MembershipCancelRequest.model_validate({"reason": None})
+    assert "Explicit null" in str(exc_info.value)
+    # Locked message shape — must name the rejected key
+    assert "reason" in str(exc_info.value)
+
+
+def test_cancel_rejects_reason_over_500_chars() -> None:
+    """D-11 / T-17-01: reason longer than 500 chars fails max_length=500."""
+    with pytest.raises(ValidationError):
+        MembershipCancelRequest.model_validate({"reason": "x" * 501})
+
+
+def test_cancel_accepts_reason_at_500_chars() -> None:
+    """Boundary: exactly 500 chars is accepted."""
+    m = MembershipCancelRequest.model_validate({"reason": "x" * 500})
+    assert m.reason is not None
+    assert len(m.reason) == 500
+
+
+def test_cancel_accepts_empty_body() -> None:
+    """D-11: empty body is valid; reason defaults to None."""
+    m = MembershipCancelRequest.model_validate({})
+    assert m.reason is None
+
+
+def test_cancel_no_args_is_valid() -> None:
+    """Constructing without kwargs yields reason=None (default field)."""
+    m = MembershipCancelRequest()
+    assert m.reason is None
+
+
+# --- camelCase aliasing on Create -------------------------------------------
+
+
+def test_create_camel_case_aliasing_paid_at() -> None:
+    """Wire alias: paidAt -> paid_at; round-trip via model_dump(by_alias=True)."""
+    m = MembershipCreateRequest.model_validate(
+        {
+            "clientId": str(uuid4()),
+            "planId": str(uuid4()),
+            "paidAt": "2026-05-01T10:00:00Z",
+        }
+    )
+    dumped = m.model_dump(by_alias=True)
+    assert "paidAt" in dumped
+
+
+def test_create_camel_case_aliasing_client_id() -> None:
+    """Wire alias: clientId -> client_id (validated population)."""
+    cid = str(uuid4())
+    pid = str(uuid4())
+    m = MembershipCreateRequest.model_validate(
+        {"clientId": cid, "planId": pid}
+    )
+    assert str(m.client_id) == cid
+    assert str(m.plan_id) == pid
+
+
+# --- MembershipResponse camelCase wire (D-10) -------------------------------
+
+
+def test_response_serialises_plan_name_snapshot_camelcase() -> None:
+    """D-10: snapshot fields serialise to camelCase in the wire payload."""
+    today = datetime.now(tz=UTC).date()
+    response = MembershipResponse(
+        id=uuid4(),
+        client_id=uuid4(),
+        plan_id=uuid4(),
+        plan_name_snapshot="Базовый",
+        duration_days_snapshot=30,
+        price_kopecks_snapshot=250000,
+        start_date=today,
+        end_date=today + timedelta(days=29),
+        status=MembershipStatus.ACTIVE,
+        cancelled_at=None,
+        cancel_reason=None,
+        paid_at=None,
+        notes=None,
+        created_at=datetime.now(tz=UTC),
+        updated_at=datetime.now(tz=UTC),
+    )
+    dumped = response.model_dump(by_alias=True)
+    # D-10 snapshot fields in camelCase
+    assert "planNameSnapshot" in dumped
+    assert "durationDaysSnapshot" in dumped
+    assert "priceKopecksSnapshot" in dumped
+    assert dumped["planNameSnapshot"] == "Базовый"
+    assert dumped["durationDaysSnapshot"] == 30
+    assert dumped["priceKopecksSnapshot"] == 250000
+    # Lifecycle fields in camelCase
+    assert "startDate" in dumped
+    assert "endDate" in dumped
+    assert "cancelledAt" in dumped
+    assert "cancelReason" in dumped
+    assert "paidAt" in dumped
+    assert "createdAt" in dumped
+    assert "updatedAt" in dumped
+
+
+def test_response_status_serialises_as_string_value() -> None:
+    """MembershipStatus enum serialises as its string value, not the Python member."""
+    today = datetime.now(tz=UTC).date()
+    response = MembershipResponse(
+        id=uuid4(),
+        client_id=uuid4(),
+        plan_id=uuid4(),
+        plan_name_snapshot="Test",
+        duration_days_snapshot=30,
+        price_kopecks_snapshot=100,
+        start_date=today,
+        end_date=today,
+        status=MembershipStatus.CANCELLED,
+        cancelled_at=datetime.now(tz=UTC),
+        cancel_reason="test",
+        paid_at=None,
+        notes=None,
+        created_at=datetime.now(tz=UTC),
+        updated_at=datetime.now(tz=UTC),
+    )
+    dumped = response.model_dump(by_alias=True)
+    assert dumped["status"] == "cancelled"
