@@ -959,6 +959,37 @@
         "title": "PaginatedData[MembershipResponse]",
         "type": "object"
       },
+      "PaginatedData_VisitResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VisitResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[VisitResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientResponse_": {
         "properties": {
           "data": {
@@ -1068,6 +1099,18 @@
         "title": "ResponseEnvelope[PaginatedData[MembershipResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_VisitResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_VisitResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[VisitResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_TelegramStartResponse_": {
         "properties": {
           "data": {
@@ -1090,6 +1133,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[TelegramStatusResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_VisitResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VisitResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[VisitResponse]",
         "type": "object"
       },
       "Role": {
@@ -1218,6 +1273,86 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VisitCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/visits body (Phase 19 D-01).\n\nOnly clientId is accepted; every other field is server-derived (see module\ndocstring). The inherited extra='forbid' rejects payload tampering.",
+        "properties": {
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId"
+        ],
+        "title": "VisitCreateRequest",
+        "type": "object"
+      },
+      "VisitResponse": {
+        "additionalProperties": false,
+        "description": "GET / POST response shape (Phase 19 VIS-EP-01..03).\n\nfrom_attributes=True allows model_validate(visit_orm) directly.\nextra='ignore' (via ContractModel base) is overridden here because\nwe merge BackendSchemaBase.model_config with from_attributes.",
+        "properties": {
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "checkedInAt": {
+            "format": "date-time",
+            "title": "Checkedinat",
+            "type": "string"
+          },
+          "checkedInBy": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkedinby"
+          },
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "gymDate": {
+            "format": "date",
+            "title": "Gymdate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "membershipId": {
+            "format": "uuid",
+            "title": "Membershipid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "membershipId",
+          "checkedInAt",
+          "gymDate",
+          "channel",
+          "checkedInBy",
+          "createdAt"
+        ],
+        "title": "VisitResponse",
         "type": "object"
       }
     }
@@ -2289,6 +2424,198 @@
         "summary": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
         "tags": [
           "memberships"
+        ]
+      }
+    },
+    "/api/v1/visits": {
+      "get": {
+        "description": "List visits, paginated (VIS-EP-01). VIEW permission required.",
+        "operationId": "list_visits_api_v1_visits_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "clientId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Clientid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From "
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_VisitResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List visits filtered by clientId/from/to with pagination",
+        "tags": [
+          "visits"
+        ]
+      },
+      "post": {
+        "description": "Reception manual check-in (VIS-EP-03). CHECK_IN permission + CSRF required.\n\nSealed body — only `clientId` accepted (D-01). Every other field is\nserver-derived: membershipId resolved via resolve_active_membership;\ncheckedInAt defaults to DB now(); gymDate is the STORED GENERATED column;\nchannel is 'reception'; checkedInBy is actor.id.\n\nRBAC-04: `actor` (require_permission) parameter is declared BEFORE\n`_csrf` (verify_csrf) so unauthenticated callers see 401, not CSRF\nerrors. (CHECK_IN, VISITS) is NOT in OWNER_ONLY — reception receives\n201 on success.",
+        "operationId": "create_visit_api_v1_visits_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_VisitResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{visit_id}": {
+      "get": {
+        "description": "Read one visit (VIS-EP-02). 404 `visit_not_found` for missing ids.",
+        "operationId": "get_visit_api_v1_visits__visit_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "visit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Visit Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_VisitResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a single visit by id (404 visit_not_found)",
+        "tags": [
+          "visits"
         ]
       }
     },
