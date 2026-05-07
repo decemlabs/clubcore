@@ -24,11 +24,12 @@ the import-time schema build (mirrors clients/repository.py:18-23).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, and_, func, select, true
+from sqlalchemy import Row, Select, and_, func, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedData
@@ -302,3 +303,47 @@ async def find_active_for_client(
     )
     result: Membership | None = await session.scalar(stmt)
     return result
+
+
+# ===========================================================================
+# Phase 18 — Bulk-expire helper (ARQ-02 / D-01 / D-04 / D-05)
+# ===========================================================================
+
+
+async def expire_due_rows(
+    session: AsyncSession, today: date
+) -> Sequence[Row[tuple[UUID, UUID]]]:
+    """Bulk-flip overdue active memberships to expired (Phase 18 D-01 / D-04 / ARQ-02).
+
+    Single-statement `UPDATE memberships SET status='expired' WHERE end_date < :today
+    AND status='active' RETURNING id, client_id`. Caller (worker entry via
+    `_expire_due_memberships` in service.py) owns flush + commit; this helper
+    issues no flush, no commit (mirrors clients D-03 / Phase 16 D-14 — Phase 18
+    D-01 inverts the commit ownership: worker is transaction owner, not service).
+
+    Status filter is the SQL-level idempotency gate (Pitfall 4): a row already
+    flipped to 'expired' on a previous run is skipped because it no longer
+    matches `status='active'`. ARQ `unique=True` is a necessary-not-sufficient
+    second line of defence; the SQL is the real gate.
+
+    Inclusive `end_date` semantics (Phase 15 PROJECT.md Key Decisions): the
+    strict `<` comparison means a membership ending today stays 'active' until
+    tomorrow morning's tick.
+
+    `today` is a `date` (not `CURRENT_DATE`) so the comparison is TZ-unambiguous
+    even though the worker container runs `TZ=UTC` (Phase 18 D-05). Production
+    callers pass `today=datetime.now(ZoneInfo("Europe/Moscow")).date()`; tests
+    pass an explicit `today` for determinism.
+
+    Returns the result of `.all()` on the RETURNING result — a Sequence of
+    Row[(membership_id, client_id)] tuples. Caller iterates emitting per-row
+    audit events.
+    """
+    stmt = (
+        update(Membership)
+        .where(Membership.end_date < today, Membership.status == "active")
+        .values(status="expired")
+        .returning(Membership.id, Membership.client_id)
+    )
+    result = await session.execute(stmt)
+    return result.all()
