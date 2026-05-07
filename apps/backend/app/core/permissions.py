@@ -23,6 +23,8 @@ class Action(StrEnum):
     EDIT = "edit"
     DELETE = "delete"
     REFUND = "refund"
+    CANCEL = "cancel"      # Phase 15 INFRA-08 — memberships cancel
+    CHECK_IN = "check_in"  # Phase 15 INFRA-08 — visits check-in (value uses underscore)
 
 
 class Resource(StrEnum):
@@ -37,9 +39,12 @@ class Resource(StrEnum):
     TEMPLATES = "templates"
     SETTINGS = "settings"
     OWNER_AREA = "owner-area"  # member-name uses underscore; value contains hyphen
+    MEMBERSHIPS = "memberships"            # Phase 15 INFRA-08
+    MEMBERSHIP_PLANS = "membership-plans"  # Phase 15 INFRA-08 — kebab on wire (mirrors OWNER_AREA)
+    VISITS = "visits"                      # Phase 15 INFRA-08
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts:12-22 (9 entries).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts:12-22 (15 entries).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset({
     (Action.VIEW, Resource.FINANCE),
@@ -51,6 +56,14 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset({
     (Action.EDIT, Resource.TEMPLATES),
     (Action.DELETE, Resource.CLIENTS),
     (Action.REFUND, Resource.FINANCE),
+    # Phase 15 INFRA-08 — v1.2 owner-only pairs (memberships + membership-plans).
+    # Reception RETAINS (CREATE, MEMBERSHIPS) and (CHECK_IN, VISITS) — NOT listed here.
+    (Action.VIEW, Resource.MEMBERSHIP_PLANS),
+    (Action.EDIT, Resource.MEMBERSHIP_PLANS),
+    (Action.CREATE, Resource.MEMBERSHIP_PLANS),
+    (Action.DELETE, Resource.MEMBERSHIP_PLANS),
+    (Action.CANCEL, Resource.MEMBERSHIPS),
+    (Action.DELETE, Resource.MEMBERSHIPS),
 })
 
 

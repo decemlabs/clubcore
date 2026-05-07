@@ -10,8 +10,18 @@ export type Resource =
   | 'templates'
   | 'settings'
   | 'owner-area'
+  | 'memberships' // NEW Phase 15 INFRA-09
+  | 'membership-plans' // NEW Phase 15 INFRA-09 — kebab-case mirror of Resource.MEMBERSHIP_PLANS.value
+  | 'visits' // NEW Phase 15 INFRA-09
 
-export type Action = 'view' | 'create' | 'edit' | 'delete' | 'refund'
+export type Action =
+  | 'view'
+  | 'create'
+  | 'edit'
+  | 'delete'
+  | 'refund'
+  | 'cancel' // NEW Phase 15 INFRA-09 — mirrors backend Action.CANCEL.value
+  | 'check_in' // NEW Phase 15 INFRA-09 — underscore mirrors Action.CHECK_IN.value
 
 export interface RouteEntry {
   path: string
