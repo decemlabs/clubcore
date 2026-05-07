@@ -1,6 +1,26 @@
-"""Membership Plans router — /membership-plans CRUD with RBAC + CSRF gates (Phase 16 — Plan 16-04).
+"""Memberships module routers — /membership-plans + /memberships HTTP surface.
 
-Endpoint surface (5 routes):
+Phase 16 (Plan 16-04) — `router` (mounted as `plans_router`) — /membership-plans CRUD.
+Phase 17 (Plan 17-04) — `memberships_router` — /memberships sale + cancel + list/get.
+
+The two APIRouter instances coexist in this module per CD-02 (router-split strategy):
+the existing `router` keeps its export name so `app.api.v1.router` still imports it as
+`plans_router`; the new `memberships_router` is mounted at `/memberships` alongside.
+
+Phase 17 endpoint surface (4 routes — all on `memberships_router`):
+  - GET    /api/v1/memberships                     — list, paginated (MEM-EP-01)
+  - GET    /api/v1/memberships/{id}                — read single (MEM-EP-02)
+  - POST   /api/v1/memberships                     — sell, 201 (MEM-EP-03)
+  - POST   /api/v1/memberships/{id}/cancel         — cancel, 200 (MEM-EP-04)
+
+Phase 17 permission mapping (CONTEXT.md `<domain>` line 19):
+  - GET (list + read-one) → require_permission(VIEW, MEMBERSHIPS)   — reception+owner
+  - POST (sell)           → require_permission(CREATE, MEMBERSHIPS) + verify_csrf
+                            (NOT in OWNER_ONLY — reception+owner)
+  - POST (cancel)         → require_permission(CANCEL, MEMBERSHIPS) + verify_csrf
+                            (IN OWNER_ONLY — owner-only; reception → 403)
+
+Phase 16 endpoint surface (5 routes — all on `router`):
   - GET    /api/v1/membership-plans           — list alive plans (MEM-PLAN-EP-01)
   - GET    /api/v1/membership-plans/{id}      — read single alive plan
   - POST   /api/v1/membership-plans           — create plan (MEM-PLAN-EP-02)
@@ -50,10 +70,14 @@ from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.memberships import service
 from app.modules.memberships.schemas import (
+    MembershipCancelRequest,
+    MembershipCreateRequest,
+    MembershipListQuery,
     MembershipPlanCreateRequest,
     MembershipPlanListQuery,
     MembershipPlanResponse,
     MembershipPlanUpdateRequest,
+    MembershipResponse,
 )
 
 router = APIRouter()
@@ -159,3 +183,123 @@ async def soft_delete_plan(
     """
     await service.soft_delete_plan(session, actor, plan_id)
     return None
+
+
+# ===========================================================================
+# Phase 17 — Membership instance HTTP surface (MEM-EP-01..04)
+# ===========================================================================
+#
+# Second APIRouter per CD-02 (router-split strategy). Mounted at `/memberships`
+# in `app/api/v1/router.py`, separately from `plans_router` at `/membership-plans`.
+# Both routers coexist in this module file because they share the same domain
+# module (Phase 16 plans + Phase 17 instances).
+#
+# RBAC mapping (CONTEXT.md `<domain>` line 19):
+#   - GET  list/get → require_permission(VIEW, MEMBERSHIPS)        — reception+owner
+#   - POST sell     → require_permission(CREATE, MEMBERSHIPS) + verify_csrf
+#   - POST cancel   → require_permission(CANCEL, MEMBERSHIPS) + verify_csrf
+#                     ((CANCEL, MEMBERSHIPS) in OWNER_ONLY — reception → 403)
+#
+# RBAC-04 ordering invariant: in every mutation endpoint signature,
+# `Depends(require_permission(...))` appears BEFORE `Depends(verify_csrf)`.
+# `tests/integration/test_route_introspection.py` enforces this statically.
+
+memberships_router = APIRouter()
+
+
+@memberships_router.get(
+    "",
+    response_model=ResponseEnvelope[PaginatedData[MembershipResponse]],
+    summary="List memberships filtered by clientId/status with pagination",
+)
+async def list_memberships(
+    query: Annotated[MembershipListQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.VIEW, Resource.MEMBERSHIPS)),
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PaginatedData[MembershipResponse]]:
+    """List memberships, paginated (MEM-EP-01).
+
+    Query parameters (Phase 17 D-09):
+      - clientId — optional UUID filter; omit for global feed (owner)
+      - status   — optional single-value enum (active|expired|cancelled); omit for all
+      - sort     — created_at_desc (default) | end_date_desc | start_date_desc
+      - page / pageSize — PageQuery contract (default 1 / 20, max 100)
+    """
+    page = await service.list_memberships(session, query)
+    return envelope(page)
+
+
+@memberships_router.get(
+    "/{membership_id}",
+    response_model=ResponseEnvelope[MembershipResponse],
+    summary="Get a membership by id (404 membership_not_found)",
+)
+async def get_membership(
+    membership_id: UUID,
+    _actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.VIEW, Resource.MEMBERSHIPS)),
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Read one membership (MEM-EP-02). 404 `membership_not_found` for missing ids."""
+    membership = await service.get_membership(session, membership_id)
+    return envelope(membership)
+
+
+@memberships_router.post(
+    "",
+    response_model=ResponseEnvelope[MembershipResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive)",
+)
+async def create_membership(
+    payload: MembershipCreateRequest,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Sell a membership (MEM-EP-03). CREATE permission + CSRF required.
+
+    (CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.
+    Service layer validates plan presence (404 plan_not_found) and active flag
+    (409 plan_inactive) and computes start_date/end_date server-side (D-04).
+    """
+    membership = await service.create_membership(session, actor, payload)
+    return envelope(membership)
+
+
+@memberships_router.post(
+    "/{membership_id}/cancel",
+    response_model=ResponseEnvelope[MembershipResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
+)
+async def cancel_membership(
+    membership_id: UUID,
+    payload: MembershipCancelRequest,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CANCEL, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.
+
+    (CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on
+    the mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —
+    the body carries the post-transition row including `cancelled_at`).
+
+    State machine (Phase 17 D-12): only `active → cancelled` is allowed; `expired`
+    and `cancelled` source states raise 409 `invalid_transition` with payload
+    `{from_status, to_status}`.
+    """
+    membership = await service.cancel_membership(session, actor, membership_id, payload)
+    return envelope(membership)
