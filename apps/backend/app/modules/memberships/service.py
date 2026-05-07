@@ -41,6 +41,7 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -259,23 +260,39 @@ async def soft_delete_plan(
 
     Owner-only enforcement happens at the router via `require_permission`.
     D-13: audit payload is empty (plan_id is carried in resource_id; no extra fields).
-    D-14: emit BEFORE flush — soft-delete only flips deleted_at, BUT the flush
-    fires `fk_memberships_plan_id_membership_plans` if any Membership row still
-    references this plan (Phase 17 D-05 / D-06: cancelled & expired rows ALSO
-    block per the "audit-trail keeps the FK" rule). On FK reject, rollback unwinds
-    BOTH the soft-delete AND the audit row co-transactionally (Phase 16 D-14).
     D-17: distinct event `membership_plan_archived` (vs PATCH active=false which emits
     `membership_plan_updated`) — two forensically separate archive paths.
+
+    Phase 17 D-05 / D-06: ANY Membership row (active, expired, cancelled) blocks
+    soft-delete with 409 plan_in_use. We perform an EXPLICIT pre-flight count
+    BEFORE issuing the UPDATE. The DB-level FK
+    `fk_memberships_plan_id_membership_plans ON DELETE RESTRICT` only fires on
+    a true `DELETE FROM membership_plans` statement — it does NOT fire for an
+    `UPDATE membership_plans SET deleted_at = now()`. The pre-flight check is
+    the correctness gate. The IntegrityError translation below remains as a
+    defence-in-depth canary against a future hard-delete refactor (T-CONSTRAINT-DRIFT).
     """
     plan = await repository.get_alive(session, plan_id)
     if plan is None:
         raise PlanNotFoundError("plan_not_found")
 
+    # D-05 / D-06 pre-flight: any referencing membership row blocks soft-delete.
+    # Status is irrelevant — cancelled and expired rows keep their FK pointer
+    # for audit-trail integrity (D-06).
+    in_use_count = await session.scalar(
+        select(func.count())
+        .select_from(Membership)
+        .where(Membership.plan_id == plan.id)
+    )
+    if in_use_count and in_use_count > 0:
+        raise PlanInUseError("plan_in_use")
+
     await repository.soft_delete_plan(session, plan)
 
     # D-13: NO extra payload — resource_id pins the plan; no name capture needed.
-    # Emitted BEFORE flush so the audit row is enrolled in the same UoW; if the
-    # flush below raises FK IntegrityError, the rollback masks it co-transactionally.
+    # Emitted BEFORE flush so the audit row is enrolled in the same UoW; if a
+    # future hard-delete refactor causes flush to raise FK IntegrityError, the
+    # rollback masks both the mutation and the audit row co-transactionally.
     await audit.emit(
         session,
         "membership_plan_archived",
@@ -286,10 +303,12 @@ async def soft_delete_plan(
     try:
         await session.flush()
     except IntegrityError as exc:
-        # Rolls back BOTH the soft-delete AND the audit row (Phase 16 D-14).
+        # Defence-in-depth: rolls back BOTH the soft-delete AND the audit row
+        # (Phase 16 D-14). With the pre-flight check above, this branch
+        # should never execute under the current soft-delete model — but it
+        # remains as a canary if the implementation switches to hard-delete.
         await session.rollback()
         if _is_plan_in_use_conflict(exc):
-            # Phase 17 D-05 / D-06: ANY membership (active/expired/cancelled) blocks.
             raise PlanInUseError("plan_in_use") from exc
         raise
     await session.commit()
