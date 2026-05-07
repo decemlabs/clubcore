@@ -80,7 +80,12 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. Owner can update plan name/price/active via `PATCH /api/v1/membership-plans/{id}`; `duration_days` is rejected as immutable to preserve sold-instance snapshot semantics.
   4. Owner can soft-delete a plan via `DELETE /api/v1/membership-plans/{id}`; deletion returns 409 `plan_in_use` when any non-cancelled `Membership` references it (FK `ON DELETE RESTRICT`).
   5. Every successful plan create/update/archive writes a locked audit event (`membership_plan_created` / `_updated` / `_archived`) with the actor and changed fields.
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 16-01-PLAN.md — Migration 0004_membership_plans + MembershipPlan ORM + alembic env.py extension — MEM-PLAN-01, MEM-PLAN-02
+  - [ ] 16-02-PLAN.md — schemas.py (Create/Update/Response/ListQuery/Sort) + PlanNameExistsError + PlanNotFoundError — MEM-PLAN-02, MEM-PLAN-EP-01..03
+  - [ ] 16-03-PLAN.md — repository.py + service.py + AST commit gate extension — MEM-PLAN-02, MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
+  - [ ] 16-04-PLAN.md — router.py with 5 endpoints + v1 wiring + openapi.json regen — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
+  - [ ] 16-05-PLAN.md — Integration tests (CRUD/list/RBAC/audit) + unit schemas test — MEM-PLAN-EP-01..04, MEM-PLAN-AUDIT-01
 
 ### Phase 17: Membership Instances + Resolver (backend)
 **Goal**: Reception can sell a membership to a client and the system can answer the single question "does this client have an active membership today?" — the foundation Visits will validate against.
