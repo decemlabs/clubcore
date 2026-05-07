@@ -523,6 +523,82 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MembershipCancelRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/memberships/{id}/cancel body (Phase 17 D-11).\n\nReason is optional (matches MEM-AUDIT-01 — `reason?` in audit payload).\nMax length 500 — half the notes ceiling: a cancellation reason is a short\noperator note, not a free-form essay (T-17-01 mitigation).\n\nExplicit-null guard ported VERBATIM from Phase 16 D-05 (T-PYDANTIC-NULL).",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "MembershipCancelRequest",
+        "type": "object"
+      },
+      "MembershipCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/memberships body (Phase 17 D-03).\n\nstart_date / end_date / status / activation_policy are server-computed\n(D-04) and intentionally absent — the inherited extra='forbid' will reject\nany payload that includes them.",
+        "properties": {
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "paidAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paidat"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "planId"
+        ],
+        "title": "MembershipCreateRequest",
+        "type": "object"
+      },
+      "MembershipListSort": {
+        "description": "Membership list sort modes (Phase 17 D-09).",
+        "enum": [
+          "created_at_desc",
+          "end_date_desc",
+          "start_date_desc"
+        ],
+        "title": "MembershipListSort",
+        "type": "string"
+      },
       "MembershipPlanCreateRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/membership-plans body.",
@@ -660,6 +736,136 @@
         "title": "MembershipPlanUpdateRequest",
         "type": "object"
       },
+      "MembershipResponse": {
+        "description": "Outbound representation of a Membership (Phase 17 D-10).\n\nExposes ALL snapshot fields so the frontend (Phase 22) can render\nhistorical sales correctly even after the source plan is edited or\ndeleted.",
+        "properties": {
+          "cancelReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelreason"
+          },
+          "cancelledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelledat"
+          },
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "durationDaysSnapshot": {
+            "title": "Durationdayssnapshot",
+            "type": "integer"
+          },
+          "endDate": {
+            "format": "date",
+            "title": "Enddate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "paidAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paidat"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          },
+          "planNameSnapshot": {
+            "title": "Plannamesnapshot",
+            "type": "string"
+          },
+          "priceKopecksSnapshot": {
+            "title": "Pricekopeckssnapshot",
+            "type": "integer"
+          },
+          "startDate": {
+            "format": "date",
+            "title": "Startdate",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MembershipStatus"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "planId",
+          "planNameSnapshot",
+          "durationDaysSnapshot",
+          "priceKopecksSnapshot",
+          "startDate",
+          "endDate",
+          "status",
+          "cancelledAt",
+          "cancelReason",
+          "paidAt",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "MembershipResponse",
+        "type": "object"
+      },
+      "MembershipStatus": {
+        "description": "Membership lifecycle status (CONTEXT.md domain line 12).",
+        "enum": [
+          "active",
+          "expired",
+          "cancelled"
+        ],
+        "title": "MembershipStatus",
+        "type": "string"
+      },
       "PaginatedData_ClientResponse_": {
         "properties": {
           "items": {
@@ -722,6 +928,37 @@
         "title": "PaginatedData[MembershipPlanResponse]",
         "type": "object"
       },
+      "PaginatedData_MembershipResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MembershipResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[MembershipResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientResponse_": {
         "properties": {
           "data": {
@@ -770,6 +1007,18 @@
         "title": "ResponseEnvelope[MembershipPlanResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_MembershipResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MembershipResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[MembershipResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_NoneType_": {
         "properties": {
           "data": {
@@ -805,6 +1054,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[MembershipPlanResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_MembershipResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_MembershipResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[MembershipResponse]]",
         "type": "object"
       },
       "ResponseEnvelope_TelegramStartResponse_": {
@@ -1791,6 +2052,243 @@
         "summary": "Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)",
         "tags": [
           "membership-plans"
+        ]
+      }
+    },
+    "/api/v1/memberships": {
+      "get": {
+        "description": "List memberships, paginated (MEM-EP-01).\n\nQuery parameters (Phase 17 D-09):\n  - clientId — optional UUID filter; omit for global feed (owner)\n  - status   — optional single-value enum (active|expired|cancelled); omit for all\n  - sort     — created_at_desc (default) | end_date_desc | start_date_desc\n  - page / pageSize — PageQuery contract (default 1 / 20, max 100)",
+        "operationId": "list_memberships_api_v1_memberships_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "clientId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Clientid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MembershipStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MembershipListSort",
+              "default": "created_at_desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_MembershipResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List memberships filtered by clientId/status with pagination",
+        "tags": [
+          "memberships"
+        ]
+      },
+      "post": {
+        "description": "Sell a membership (MEM-EP-03). CREATE permission + CSRF required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).",
+        "operationId": "create_membership_api_v1_memberships_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive)",
+        "tags": [
+          "memberships"
+        ]
+      }
+    },
+    "/api/v1/memberships/{membership_id}": {
+      "get": {
+        "description": "Read one membership (MEM-EP-02). 404 `membership_not_found` for missing ids.",
+        "operationId": "get_membership_api_v1_memberships__membership_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a membership by id (404 membership_not_found)",
+        "tags": [
+          "memberships"
+        ]
+      }
+    },
+    "/api/v1/memberships/{membership_id}/cancel": {
+      "post": {
+        "description": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12): only `active → cancelled` is allowed; `expired`\nand `cancelled` source states raise 409 `invalid_transition` with payload\n`{from_status, to_status}`.",
+        "operationId": "cancel_membership_api_v1_memberships__membership_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
+        "tags": [
+          "memberships"
         ]
       }
     },
