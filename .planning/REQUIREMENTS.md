@@ -167,8 +167,72 @@
 
 ## Traceability
 
-*Filled by gsd-roadmapper during ROADMAP creation.*
+*Filled by gsd-roadmapper during ROADMAP creation on 2026-05-07. 63/63 v1.2 requirements mapped to 9 phases (15-23).*
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| (TBD)  | (TBD) | Pending |
+| INFRA-08 | Phase 15 | Pending |
+| INFRA-09 | Phase 15 | Pending |
+| INFRA-10 | Phase 15 | Pending |
+| INFRA-11 | Phase 15 | Pending |
+| INFRA-12 | Phase 15 | Pending |
+| INFRA-13 | Phase 15 | Pending |
+| INFRA-14 | Phase 15 | Pending |
+| TESTS-08 | Phase 15 | Pending |
+| TESTS-11 | Phase 15 | Pending |
+| MEM-PLAN-01 | Phase 16 | Pending |
+| MEM-PLAN-02 | Phase 16 | Pending |
+| MEM-PLAN-EP-01 | Phase 16 | Pending |
+| MEM-PLAN-EP-02 | Phase 16 | Pending |
+| MEM-PLAN-EP-03 | Phase 16 | Pending |
+| MEM-PLAN-EP-04 | Phase 16 | Pending |
+| MEM-PLAN-AUDIT-01 | Phase 16 | Pending |
+| MEM-01 | Phase 17 | Pending |
+| MEM-02 | Phase 17 | Pending |
+| MEM-03 | Phase 17 | Pending |
+| MEM-04 | Phase 17 | Pending |
+| MEM-05 | Phase 17 | Pending |
+| MEM-EP-01 | Phase 17 | Pending |
+| MEM-EP-02 | Phase 17 | Pending |
+| MEM-EP-03 | Phase 17 | Pending |
+| MEM-EP-04 | Phase 17 | Pending |
+| MEM-AUDIT-01 | Phase 17 | Pending |
+| TESTS-09 | Phase 17 | Pending |
+| TESTS-10 | Phase 17 | Pending |
+| ARQ-01 | Phase 18 | Pending |
+| ARQ-02 | Phase 18 | Pending |
+| ARQ-03 | Phase 18 | Pending |
+| ARQ-04 | Phase 18 | Pending |
+| ARQ-05 | Phase 18 | Pending |
+| ARQ-TEST-01 | Phase 18 | Pending |
+| ARQ-TEST-02 | Phase 18 | Pending |
+| VIS-01 | Phase 19 | Pending |
+| VIS-02 | Phase 19 | Pending |
+| VIS-03 | Phase 19 | Pending |
+| VIS-04 | Phase 19 | Pending |
+| VIS-05 | Phase 19 | Pending |
+| VIS-EP-01 | Phase 19 | Pending |
+| VIS-EP-02 | Phase 19 | Pending |
+| VIS-EP-03 | Phase 19 | Pending |
+| VIS-AUDIT-01 | Phase 19 | Pending |
+| VIS-TEST-01 | Phase 19 | Pending |
+| AUTH-TG-07 | Phase 20 | Pending |
+| AUTH-TG-08 | Phase 20 | Pending |
+| AUTH-TG-09 | Phase 20 | Pending |
+| AUTH-TG-10 | Phase 20 | Pending |
+| AUTH-TG-11 | Phase 20 | Pending |
+| API-04 | Phase 21 | Pending |
+| API-05 | Phase 21 | Pending |
+| FE-04 | Phase 22 | Pending |
+| FE-05 | Phase 22 | Pending |
+| FE-06 | Phase 22 | Pending |
+| FE-07 | Phase 22 | Pending |
+| FE-08 | Phase 22 | Pending |
+| FE-09 | Phase 22 | Pending |
+| FE-10 | Phase 22 | Pending |
+| FE-11 | Phase 22 | Pending |
+| HYG-01 | Phase 23 | Pending |
+| HYG-02 | Phase 23 | Pending |
+| HYG-03 | Phase 23 | Pending |
+
+**Coverage:** 63/63 v1.2 requirements mapped. No orphans, no duplicates.
