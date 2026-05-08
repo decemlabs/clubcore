@@ -162,16 +162,34 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 11 v1.2 + 1 v1.2 Phase 23 = 30 locked pairs.
+    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 = 36 locked pairs.
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:
     `(rbac_forbidden, 'rbac')` and `(csrf_mismatch, 'csrf')` (both Phase 6).
     Phase 20 added `(telegram_unknown_checkin, 'visit')` (D-20-10).
     Phase 23 added `('session_revoked', 'auth_session')` (D-23-10 per-family revoke endpoint).
-    See 15-03-SUMMARY.md "Deviations" for details.
+    Phase 24 (INFRA-15, D-24-18) added 6 v1.3 pairs pre-registered for Phases 25/26/27:
+    `membership_frozen`, `membership_unfrozen`, `membership_renewed`,
+    `expiring_notification_sent_{7d,3d,1d}`. See 15-03-SUMMARY.md / 24-01-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 30, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 30 (18 v1.1 + 12 v1.2), "
+    assert len(LOCKED_AUDIT_EVENTS) == 36, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 36 (18 v1.1 + 12 v1.2 + 6 v1.3), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
+
+
+def test_locked_audit_events_includes_v13_pairs() -> None:
+    """INFRA-15 (Phase 24): the 6 v1.3 pairs are pre-registered for downstream phases."""
+    expected = [
+        ("membership_frozen", "membership"),
+        ("membership_unfrozen", "membership"),
+        ("membership_renewed", "membership"),
+        ("expiring_notification_sent_7d", "membership"),
+        ("expiring_notification_sent_3d", "membership"),
+        ("expiring_notification_sent_1d", "membership"),
+    ]
+    for pair in expected:
+        assert pair in LOCKED_AUDIT_EVENTS, (
+            f"Phase 24 INFRA-15: required pair {pair} missing from LOCKED_AUDIT_EVENTS"
+        )
