@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 21 context gathered
-last_updated: "2026-05-08T08:22:17.542Z"
-last_activity: 2026-05-08 -- Phase 21 planning complete
+last_updated: "2026-05-08T08:22:57.223Z"
+last_activity: 2026-05-08 -- Phase 21 execution started
 progress:
   total_phases: 9
   completed_phases: 6
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 20 — telegram-bot-checkin-self-check-in
+**Current focus:** Phase 21 — openapi-drift-gate-refresh-api-client-codegen
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-08 -- Phase 21 planning complete
+Phase: 21 (openapi-drift-gate-refresh-api-client-codegen) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 21
+Last activity: 2026-05-08 -- Phase 21 execution started
 
 ## Performance Metrics
 

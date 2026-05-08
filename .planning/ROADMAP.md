@@ -47,7 +47,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - [x] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding. (completed 2026-05-07)
 - [x] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test. (completed 2026-05-07)
 - [x] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off. (completed 2026-05-08)
-- [ ] **Phase 21: OpenAPI drift gate refresh + api-client codegen** — regen byte-stable `openapi.json` + `schema.d.ts`; CI green on both diffs.
+- [x] **Phase 21: OpenAPI drift gate refresh + api-client codegen** — regen byte-stable `openapi.json` + `schema.d.ts`; CI green on both diffs. (completed 2026-05-08)
 - [ ] **Phase 22: admin-web wiring — memberships + visits + active sessions UI** — new `features/memberships`, `features/visits`; `/memberships`, `/membership-plans`, `/visits` routes; client-detail Pattern α; reception UX edge cases; cheap-win differentiators D-2/D-3/D-5; sessions UI.
 - [ ] **Phase 23: Hygiene + active sessions backend (parallel-eligible)** — Phase 04 CR-01 (Argon2 verify-error → 401) + CR-02 (invalid UUID in cookie → 401); ship `GET /auth/sessions` + per-family revoke endpoints if not present.
 
@@ -165,7 +165,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   2. `pnpm --filter @sportzal/api-client codegen` regenerates `packages/api-client/src/schema.d.ts` to match the new spec; CI `git diff --exit-code packages/api-client/src/schema.d.ts` passes.
   3. The committed `schema.d.ts` exposes typed `paths['/membership-plans']`, `paths['/memberships']`, `paths['/visits']` (+ sessions when applicable) consumable from `apps/admin-web/src/shared/api`.
 **Plans**: 1 plan
-  - [ ] 21-01-PLAN.md — Regenerate openapi.json (verify byte-stable) + schema.d.ts (v1.2 surface) + add schema.contract.test.ts forward-guard + record D-21 + flip API-04/API-05 — API-04, API-05
+  - [x] 21-01-PLAN.md — Regenerate openapi.json (verify byte-stable) + schema.d.ts (v1.2 surface) + add schema.contract.test.ts forward-guard + record D-21 + flip API-04/API-05 — API-04, API-05
 
 ### Phase 22: admin-web wiring — memberships + visits + active sessions UI
 **Goal**: An owner/reception user can do the full v1.2 flow end-to-end in admin-web on `VITE_API_MODE=http` — manage plans, sell memberships, check clients in, and review history — without regressing any v1.1 mock-backed domain.
@@ -215,7 +215,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete    | 2026-05-08 |
-| 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
+| 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 1/1 | Complete   | 2026-05-08 |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
 | 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
 
