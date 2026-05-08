@@ -84,6 +84,9 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("login_success", "session"),
         ("login_failed", "login_attempt"),
         ("session_revoked", "session"),
+        # Phase 23 D-23-10: per-family revoke endpoint uses 'auth_session' resource_type.
+        # Distinct from ("session_revoked", "session") used by /logout flow.
+        ("session_revoked", "auth_session"),
         # Drift fix: docstring claimed 'session' but auth/service.py:528 emits 'user'.
         ("session_revoked_all", "user"),
         ("family_reuse_detected", "session"),

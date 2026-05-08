@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.database import get_db
-from app.core.exceptions import CsrfMismatch, ForbiddenError, InvalidAccessToken
+from app.core.exceptions import CsrfMismatch, ForbiddenError, InvalidAccessToken, InvalidSession
 from app.core.permissions import Action, Resource, Role, can
 from app.core.security import decode_access_token
 
@@ -218,7 +218,11 @@ async def get_current_user(
         # as a 401 instead of a 500 — same shape the client already handles.
         raise InvalidAccessToken("user_loader_not_registered")
 
-    user = await _user_loader(session, UUID(claims.sub))
+    try:
+        uid = UUID(claims.sub)
+    except ValueError as e:
+        raise InvalidSession("invalid_session") from e
+    user = await _user_loader(session, uid)
     if user is None:
         raise InvalidAccessToken("user_not_found")
     return user
