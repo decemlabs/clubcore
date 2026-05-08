@@ -143,7 +143,7 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('active', 'expired', 'cancelled')",
+            "status IN ('active', 'expired', 'cancelled', 'frozen')",
             # NAMING_CONVENTION expands to ck_memberships_status
             name="status",
         ),

@@ -57,6 +57,7 @@ from app.core.exceptions import (
 )
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
+from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
 from app.modules.memberships.models import Membership
 from app.modules.memberships.schemas import (
     MembershipCancelRequest,
@@ -101,32 +102,39 @@ def _is_plan_in_use_conflict(exc: IntegrityError) -> bool:
     return "fk_memberships_plan_id_membership_plans" in str(exc.orig)
 
 
+def _assert_can_transition(membership: Membership, *, target: str) -> None:
+    """Central state-machine guard (INFRA-16, D-24-04).
+
+    Consults `MEMBERSHIP_STATUS_TRANSITIONS` to decide whether `membership.status
+    → target` is allowed; raises `InvalidTransitionError` (409 invalid_transition)
+    with discriminating `from_status` / `to_status` payload otherwise.
+
+    The two existing per-action helpers (`_assert_can_cancel`, `_assert_can_expire`)
+    delegate to this function — they remain importable so the unit-test matrix
+    in `tests/unit/memberships/test_state_machine.py` keeps its 9-cell shape.
+    """
+    allowed = MEMBERSHIP_STATUS_TRANSITIONS.get(membership.status, frozenset())
+    if target not in allowed:
+        raise InvalidTransitionError(
+            "invalid_transition",
+            fields={"from_status": membership.status, "to_status": target},
+        )
+
+
 def _assert_can_cancel(membership: Membership) -> None:
     """Phase 17 D-12 + D-15: only status='active' may transition to 'cancelled'.
 
-    Raised BEFORE any mutation so 409 path leaves zero side effects (D-15
-    invariant). Per D-13, end_date being past is irrelevant — Phase 18 ARQ
-    has not yet flipped status, so the status field is the gate.
+    Phase 24 INFRA-16 D-24-05: thin wrapper over `_assert_can_transition`.
     """
-    if membership.status != "active":
-        raise InvalidTransitionError(
-            "invalid_transition",
-            fields={"from_status": membership.status, "to_status": "cancelled"},
-        )
+    _assert_can_transition(membership, target="cancelled")
 
 
 def _assert_can_expire(membership: Membership) -> None:
     """Phase 17 D-19: only status='active' may transition to 'expired'.
 
-    Used by the Phase 18 ARQ scheduled-task path (membership_expired audit
-    event). Same shape as `_assert_can_cancel` — guard before mutation, raise
-    on non-active source state.
+    Phase 24 INFRA-16 D-24-05: thin wrapper over `_assert_can_transition`.
     """
-    if membership.status != "active":
-        raise InvalidTransitionError(
-            "invalid_transition",
-            fields={"from_status": membership.status, "to_status": "expired"},
-        )
+    _assert_can_transition(membership, target="expired")
 
 
 async def list_plans(

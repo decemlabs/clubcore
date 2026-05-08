@@ -89,3 +89,48 @@ def test_state_machine_matrix(from_status: str, action: str, expect: str) -> Non
         "from_status": from_status,
         "to_status": expected_to,
     }
+
+
+def test_central_helper_matches_per_helper_guards() -> None:
+    """D-24-05: central `_assert_can_transition` agrees with the thin per-action wrappers."""
+    from app.modules.memberships.service import _assert_can_transition
+
+    # Allowed in Phase 24:
+    _assert_can_transition(_stub_membership(status="active"), target="cancelled")
+    _assert_can_transition(_stub_membership(status="active"), target="expired")
+
+    # Disallowed (terminal sources):
+    for src in ("expired", "cancelled"):
+        for tgt in ("cancelled", "expired"):
+            with pytest.raises(InvalidTransitionError):
+                _assert_can_transition(_stub_membership(status=src), target=tgt)
+
+
+def test_membership_status_transitions_constant_is_immutable() -> None:
+    """D-24-03: MEMBERSHIP_STATUS_TRANSITIONS is a MappingProxyType (read-only)."""
+    from types import MappingProxyType
+
+    from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
+
+    assert isinstance(MEMBERSHIP_STATUS_TRANSITIONS, MappingProxyType)
+    with pytest.raises(TypeError):
+        MEMBERSHIP_STATUS_TRANSITIONS["active"] = frozenset()  # type: ignore[index]
+
+
+def test_membership_status_transitions_phase24_contents() -> None:
+    """D-24-03: Phase 24 contents.
+
+    `frozen` key present with empty target set (Phase 25 will populate).
+    """
+    from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
+
+    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset({"expired", "cancelled"})
+    assert MEMBERSHIP_STATUS_TRANSITIONS["expired"] == frozenset()
+    assert MEMBERSHIP_STATUS_TRANSITIONS["cancelled"] == frozenset()
+    assert MEMBERSHIP_STATUS_TRANSITIONS["frozen"] == frozenset()
+    assert set(MEMBERSHIP_STATUS_TRANSITIONS.keys()) == {
+        "active",
+        "expired",
+        "cancelled",
+        "frozen",
+    }
