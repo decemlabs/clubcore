@@ -172,7 +172,6 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
               type="checkbox"
               className="h-4 w-4 rounded border"
               {...form.register('active')}
-              defaultChecked={plan?.active ?? true}
             />
             <Label htmlFor="active" className="cursor-pointer">
               {t('membershipPlans.form.active')}
