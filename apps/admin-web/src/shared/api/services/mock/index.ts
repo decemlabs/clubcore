@@ -9,5 +9,6 @@
  */
 import { auth } from './auth'
 import { clients } from './clients'
+import { memberships } from './memberships'
 
-export const services = { auth, clients } as const
+export const services = { auth, clients, memberships } as const // visits added in 22-03

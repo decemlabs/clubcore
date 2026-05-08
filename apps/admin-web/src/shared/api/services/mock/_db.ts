@@ -1,11 +1,16 @@
 import { faker } from '@faker-js/faker'
 import type { Client, ClientId } from '@/entities/client'
+import type { Membership, MembershipId, MembershipPlan, MembershipPlanId, MembershipStatus } from '@/entities/membership'
 
 const STORAGE_KEY = 'sportzal:mock:v1'
 const SEED_COUNT = 30
+const PLAN_COUNT = 8
+const MEMBERSHIP_COUNT = 40
 
 export interface DB {
   clients: Client[]
+  memberships: Membership[]
+  plans: MembershipPlan[]
 }
 
 function generateClient(): Client {
@@ -31,10 +36,71 @@ function generateClient(): Client {
   }
 }
 
+const DURATION_OPTIONS = [30, 90, 180, 365] as const
+
+function generatePlan(): MembershipPlan {
+  const durationDays = faker.helpers.arrayElement(DURATION_OPTIONS)
+  const priceKopecks = faker.number.int({ min: 200_000, max: 2_500_000 })
+  return {
+    id: faker.string.uuid() as MembershipPlanId,
+    name: `${faker.word.adjective()} ${durationDays}-дневный абонемент`,
+    durationDays,
+    priceKopecks,
+    active: faker.datatype.boolean({ probability: 0.85 }),
+    createdAt: faker.date.recent({ days: 365 }).toISOString(),
+    updatedAt: faker.date.recent({ days: 30 }).toISOString(),
+  }
+}
+
+function generateMembership(clients: Client[], plans: MembershipPlan[]): Membership {
+  const client = faker.helpers.arrayElement(clients)
+  const plan = faker.helpers.arrayElement(plans)
+  const startDate = faker.date.recent({ days: 400 })
+  const endDate = new Date(startDate)
+  endDate.setDate(endDate.getDate() + plan.durationDays - 1) // INCLUSIVE
+  const today = new Date()
+  let status: MembershipStatus
+  if (endDate < today) {
+    status = faker.helpers.weightedArrayElement([
+      { value: 'expired' as const, weight: 7 },
+      { value: 'cancelled' as const, weight: 3 },
+    ])
+  } else {
+    status = 'active'
+  }
+  const cancelledAt =
+    status === 'cancelled'
+      ? faker.date.between({ from: startDate, to: today }).toISOString()
+      : null
+  const cancelReason =
+    status === 'cancelled' ? faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.6 }) ?? null : null
+  return {
+    id: faker.string.uuid() as MembershipId,
+    clientId: client.id,
+    planId: plan.id as MembershipPlanId,
+    planNameSnapshot: plan.name,
+    durationDaysSnapshot: plan.durationDays,
+    priceKopecksSnapshot: plan.priceKopecks,
+    startDate: startDate.toISOString().slice(0, 10),
+    endDate: endDate.toISOString().slice(0, 10),
+    status,
+    paidAt: faker.helpers.maybe(() => startDate.toISOString(), { probability: 0.8 }) ?? null,
+    notes: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.3 }) ?? null,
+    cancelledAt,
+    cancelReason,
+    createdAt: startDate.toISOString(),
+    updatedAt: faker.date.recent({ days: 14 }).toISOString(),
+  }
+}
+
 function seed(): DB {
   faker.seed(42)
   const clients: Client[] = Array.from({ length: SEED_COUNT }, generateClient)
-  const db: DB = { clients }
+  const plans: MembershipPlan[] = Array.from({ length: PLAN_COUNT }, generatePlan)
+  const memberships: Membership[] = Array.from({ length: MEMBERSHIP_COUNT }, () =>
+    generateMembership(clients, plans),
+  )
+  const db: DB = { clients, memberships, plans }
   saveDB(db)
   return db
 }
@@ -43,9 +109,25 @@ export function loadDB(): DB {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return seed()
-    const parsed = JSON.parse(raw) as DB
+    const parsed = JSON.parse(raw) as Partial<DB>
     if (!parsed || !Array.isArray(parsed.clients)) return seed()
-    return parsed
+    // Additive migration: if memberships/plans are missing from stored data, seed them
+    if (!Array.isArray(parsed.memberships) || !Array.isArray(parsed.plans)) {
+      faker.seed(42)
+      const clients = Array.from({ length: SEED_COUNT }, generateClient)
+      const plans = Array.from({ length: PLAN_COUNT }, generatePlan)
+      const memberships = Array.from({ length: MEMBERSHIP_COUNT }, () =>
+        generateMembership(clients, plans),
+      )
+      const full: DB = {
+        clients: parsed.clients,
+        memberships: parsed.memberships ?? memberships,
+        plans: parsed.plans ?? plans,
+      }
+      saveDB(full)
+      return full
+    }
+    return parsed as DB
   } catch {
     return seed()
   }

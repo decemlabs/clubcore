@@ -21,3 +21,11 @@ export type {
 } from './clients'
 export { emailLoginSchema, telegramOtpSchema } from './authSchema'
 export type { EmailLoginFormInput, TelegramOtpFormInput } from './authSchema'
+export type {
+  MembershipsService,
+  MembershipsListQuery,
+  MembershipPlansListQuery,
+  MembershipCreateInput,
+  MembershipPlanCreateInput,
+  MembershipPlanUpdateInput,
+} from './memberships'
