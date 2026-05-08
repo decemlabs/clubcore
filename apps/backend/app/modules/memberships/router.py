@@ -13,6 +13,10 @@ Phase 17 endpoint surface (4 routes — all on `memberships_router`):
   - POST   /api/v1/memberships                     — sell, 201 (MEM-EP-03)
   - POST   /api/v1/memberships/{id}/cancel         — cancel, 200 (MEM-EP-04)
 
+Phase 25 endpoint surface (2 new routes — both on `memberships_router`):
+  - POST   /api/v1/memberships/{id}/freeze         — freeze, 200 (MEM-FRZ-EP-01)
+  - POST   /api/v1/memberships/{id}/unfreeze       — unfreeze, 200 (MEM-FRZ-EP-02)
+
 Phase 17 permission mapping (CONTEXT.md `<domain>` line 19):
   - GET (list + read-one) → require_permission(VIEW, MEMBERSHIPS)   — reception+owner
   - POST (sell)           → require_permission(CREATE, MEMBERSHIPS) + verify_csrf
@@ -303,9 +307,81 @@ async def cancel_membership(
     the mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —
     the body carries the post-transition row including `cancelled_at`).
 
-    State machine (Phase 17 D-12): only `active → cancelled` is allowed; `expired`
-    and `cancelled` source states raise 409 `invalid_transition` with payload
-    `{from_status, to_status}`.
+    State machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and
+    `frozen → cancelled` are both allowed; `expired` and `cancelled` source
+    states raise 409 `invalid_transition` with payload `{from_status, to_status}`.
+
+    Phase 25 D-25-20: also accepts frozen source. When called on a frozen
+    membership, the open freeze period is closed without end_date extension
+    (cancellation supersedes freeze) and audit emits `membership_unfrozen`
+    (days_added=0) before `membership_cancelled` in the same UoW. Owner-only
+    via existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.
     """
     membership = await service.cancel_membership(session, actor, membership_id, payload)
+    return envelope(membership)
+
+
+@memberships_router.post(
+    "/{membership_id}/freeze",
+    response_model=ResponseEnvelope[MembershipResponse],
+    status_code=status.HTTP_200_OK,
+    summary=(
+        "Freeze membership (reception+owner; "
+        "409 freeze_limit_exceeded / already_frozen / invalid_transition)"
+    ),
+)
+async def freeze_membership(
+    membership_id: UUID,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.
+
+    Transitions active -> frozen and opens a freeze period. Returns the
+    updated MembershipResponse including freezeDaysUsed/Remaining and
+    currentFreezePeriod populated.
+
+    Errors:
+      - 404 membership_not_found
+      - 409 invalid_transition (source not active)
+      - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)
+      - 409 already_frozen (concurrent INSERT race)
+    """
+    membership = await service.freeze_membership(  # type: ignore[attr-defined]  # Wave 4: service.freeze_membership defined in Plan 03
+        session, actor, membership_id
+    )
+    return envelope(membership)
+
+
+@memberships_router.post(
+    "/{membership_id}/unfreeze",
+    response_model=ResponseEnvelope[MembershipResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Unfreeze membership (reception+owner; 409 invalid_transition)",
+)
+async def unfreeze_membership(
+    membership_id: UUID,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.
+
+    Closes the open freeze period, extends end_date by ceil(delta_seconds /
+    86400) (minimum 1 day), and transitions frozen -> active.
+
+    Errors:
+      - 404 membership_not_found
+      - 409 invalid_transition (source not frozen)
+    """
+    membership = await service.unfreeze_membership(  # type: ignore[attr-defined]  # Wave 4: service.unfreeze_membership defined in Plan 03
+        session, actor, membership_id
+    )
     return envelope(membership)
