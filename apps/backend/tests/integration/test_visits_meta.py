@@ -17,10 +17,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.database import get_db
 from app.core.permissions import Role
-from app.core.redis import get_redis
 from app.core.security import hash_password
 from app.modules.auth.models import User
-
 
 OWNER_EMAIL = "meta-owner@example.com"
 OWNER_PASSWORD = "hunter22hunter22"  # noqa: S105 -- test password literal (>=12 chars)
@@ -196,8 +194,12 @@ async def test_visits_meta_cache_control_header(
 
         assert r.status_code == 200, r.text
         cache_header = r.headers.get("cache-control", "")
-        assert "public" in cache_header, f"Expected 'public' in Cache-Control, got: {cache_header!r}"
-        assert "max-age=300" in cache_header, f"Expected 'max-age=300' in Cache-Control, got: {cache_header!r}"
+        assert "public" in cache_header, (
+            f"Expected 'public' in Cache-Control, got: {cache_header!r}"
+        )
+        assert "max-age=300" in cache_header, (
+            f"Expected 'max-age=300' in Cache-Control, got: {cache_header!r}"
+        )
     finally:
         app.dependency_overrides.clear()
 
