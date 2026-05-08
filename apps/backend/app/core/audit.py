@@ -53,6 +53,20 @@ Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts 
   - telegram_unknown_checkin            {chat_id, telegram_user_id_hash}
                                         # 'visit' (Phase 20 D-20-10)
 
+  ## v1.3 (Phase 24 lock — emitted in Phases 25/26/27 per INFRA-15 / D-24-18)
+  - membership_frozen                   {membership_id, client_id, freeze_days}
+                                        # 'membership' (Phase 25 — freeze clock)
+  - membership_unfrozen                 {membership_id, client_id, resumed_at}
+                                        # 'membership' (Phase 25 — resume frozen)
+  - membership_renewed                  {membership_id, client_id, plan_id, new_end_date}
+                                        # 'membership' (Phase 26 — before/after expiry)
+  - expiring_notification_sent_7d       {membership_id, client_id, channel}
+                                        # 'membership' (Phase 27 — 7-day reminder, ARQ)
+  - expiring_notification_sent_3d       {membership_id, client_id, channel}
+                                        # 'membership' (Phase 27 — 3-day reminder, ARQ)
+  - expiring_notification_sent_1d       {membership_id, client_id, channel}
+                                        # 'membership' (Phase 27 — 1-day reminder, ARQ)
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -122,6 +136,13 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("visit_rejected_outside_hours", "visit"),
         # Phase 20 — bot self check-in: stranger /checkin lands here (D-20-10).
         ("telegram_unknown_checkin", "visit"),
+        # v1.3 (Phase 24 lock — emitted in Phases 25/26/27)
+        ("membership_frozen", "membership"),
+        ("membership_unfrozen", "membership"),
+        ("membership_renewed", "membership"),
+        ("expiring_notification_sent_7d", "membership"),
+        ("expiring_notification_sent_3d", "membership"),
+        ("expiring_notification_sent_1d", "membership"),
     }
 )
 
