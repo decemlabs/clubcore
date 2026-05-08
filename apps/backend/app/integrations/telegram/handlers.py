@@ -22,6 +22,7 @@ from types import ModuleType
 from typing import Any, NamedTuple
 
 import structlog
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.audit import emit as audit_emit
@@ -39,11 +40,17 @@ class HandlerContext(NamedTuple):
     telegram_service  : the app.modules.auth.telegram_service module
                         (workers->modules.auth, D-06).
     sender            : the app.integrations.telegram.sender module.
+    visits_service    : the app.modules.visits.service module
+                        (workers->modules.visits, D-10 — Phase 20).
+    redis             : redis.asyncio.Redis client for /checkin update_id dedup
+                        (Phase 20 D-20-2; keyspace `sz:bot:update:*`).
     """
 
     session_factory: async_sessionmaker[AsyncSession]
     telegram_service: ModuleType
     sender: ModuleType
+    visits_service: ModuleType
+    redis: Redis
 
 
 # Russian copy -- locked per specifics line 253. Single-language by design.
@@ -52,6 +59,12 @@ _DM_STRANGER = (
     "Обратитесь к администратору."
 )
 _DM_REPLAY = "Этот код уже использован, запросите новый."
+
+# Phase 20 — locked Russian DM copy per AUTH-TG-11. Owner-signed-off (gated in 20-03).
+_DM_CHECKIN_OK = "✅ Отмечено"
+_DM_NO_MEMBERSHIP = "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
+_DM_DUPLICATE = "Вы уже отмечались сегодня."
+_DM_OUTSIDE_HOURS = "Зал сейчас закрыт. Часы работы: {hours}."
 
 
 def _parse_start_token(message_text: str | None) -> str | None:
@@ -72,6 +85,33 @@ def _hash_token_for_log(raw_token: str) -> str:
     `ctx.telegram_service` private helpers (preserves integrations perp modules).
     """
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def _hash_telegram_user_id(tg_user_id: int) -> str:
+    """sha256(str(tg_user_id)) hex -- non-secret correlator for audit + structlog.
+
+    Used by the `telegram_unknown_checkin` audit emit (D-20-10) so the
+    audit_log table never stores the raw Telegram identifier (PII minimization).
+    """
+    return hashlib.sha256(str(tg_user_id).encode("utf-8")).hexdigest()
+
+
+def _format_gym_hours(exc: Exception) -> str:
+    """Format OutsideGymHoursError.fields as 'HH:MM-HH:MM' joined by U+2013 EN DASH.
+
+    Strips trailing ':SS' from time.isoformat() output ('07:00:00' -> '07:00').
+    Defensive: raises RuntimeError if exc.fields is missing 'open'/'close'
+    (Phase 19 service.py:99-100, 142 contract -- load-bearing for D-20-8).
+    """
+    fields = getattr(exc, "fields", None) or {}
+    try:
+        open_t = fields["open"][:5]
+        close_t = fields["close"][:5]
+    except (KeyError, TypeError) as e:
+        raise RuntimeError(
+            "OutsideGymHoursError fields contract broken — Phase 19 regression"
+        ) from e
+    return f"{open_t}–{close_t}"  # noqa: RUF001 — U+2013 EN DASH per D-20-8
 
 
 async def start_handler(
