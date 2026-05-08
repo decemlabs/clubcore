@@ -4,6 +4,7 @@ import { useReactTable, getCoreRowModel, type ColumnDef } from '@tanstack/react-
 import { Route as MembershipsRoute } from '@/routes/_protected/memberships'
 import { Button } from '@/shared/ui/button'
 import { Badge } from '@/shared/ui/badge'
+import { Alert, AlertDescription } from '@/shared/ui/alert'
 import {
   DataGrid,
   DataGridContainer,
@@ -140,6 +141,16 @@ export function MembershipsListPage() {
           {t('memberships.filter.expiring')}
         </Button>
       </div>
+
+      {/* WR-16: explicit notice while expiring=true so the operator
+          understands why pagination is hidden and what subset is shown. */}
+      {search.expiring && (
+        <Alert>
+          <AlertDescription>
+            {t('memberships.filterNotice.expiringSubsetOfPage')}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {query.isError && (
         <div className="space-y-3 rounded-md border p-6 text-center">
