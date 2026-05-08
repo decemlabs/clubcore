@@ -11,6 +11,7 @@ import {
 } from '@/shared/ui/data-grid'
 import { Button } from '@/shared/ui/button'
 import { RoleGate } from '@/shared/session/RoleGate'
+import { t } from '@/shared/i18n'
 import { ClientsTableSkeleton } from './ClientsTableSkeleton'
 import { Route as ClientsRoute } from '@/routes/_protected/clients'
 import type { Client, Pagination as PaginationT } from '@/entities/client'
@@ -30,12 +31,14 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
   const data = query.data
 
   // Always call useReactTable unconditionally (React Hooks rules)
+  const editLabel = t('clients.actions.edit')
+  const deleteLabel = t('clients.actions.delete')
   const columns: ColumnDef<Client>[] = [
-    { accessorKey: 'fullName', header: 'ФИО' },
-    { accessorKey: 'phone', header: 'Телефон' },
+    { accessorKey: 'fullName', header: t('clients.columns.fullName') },
+    { accessorKey: 'phone', header: t('clients.columns.phone') },
     {
       accessorKey: 'email',
-      header: 'Email',
+      header: t('clients.columns.email'),
       cell: ({ row }) => (
         <span className="text-muted-foreground max-w-[16ch] truncate">
           {row.original.email ?? '—'}
@@ -44,7 +47,7 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
     },
     {
       accessorKey: 'createdAt',
-      header: 'Дата регистрации',
+      header: t('clients.columns.createdAt'),
       cell: ({ row }) => format(parseISO(row.original.createdAt), 'dd.MM.yyyy', { locale: ru }),
     },
     {
@@ -58,8 +61,8 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
               variant="ghost"
               size="icon"
               className="h-9 w-9"
-              aria-label="Редактировать клиента"
-              title="Редактировать клиента"
+              aria-label={editLabel}
+              title={editLabel}
               onClick={(e) => { e.stopPropagation(); onEdit(client) }}
             >
               <Pencil className="size-4" />
@@ -69,8 +72,8 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
                 variant="ghost"
                 size="icon"
                 className="text-destructive h-9 w-9"
-                aria-label="Удалить клиента"
-                title="Удалить клиента"
+                aria-label={deleteLabel}
+                title={deleteLabel}
                 onClick={(e) => { e.stopPropagation(); onDelete(client) }}
               >
                 <Trash2 className="size-4" />
@@ -113,9 +116,9 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
   if (query.isError) {
     return (
       <div className="space-y-3 rounded-md border p-6 text-center">
-        <h2 className="text-lg font-semibold">Не удалось загрузить клиентов</h2>
-        <p className="text-muted-foreground text-sm">Проверьте соединение или обновите страницу.</p>
-        <Button onClick={onRetry}>Повторить загрузку</Button>
+        <h2 className="text-lg font-semibold">{t('clients.errorState.heading')}</h2>
+        <p className="text-muted-foreground text-sm">{t('clients.errorState.body')}</p>
+        <Button onClick={onRetry}>{t('clients.errorState.retry')}</Button>
       </div>
     )
   }
@@ -129,21 +132,17 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
   if (data.total === 0 && !search.q) {
     return (
       <div className="space-y-3 rounded-md border p-6 text-center">
-        <h2 className="text-lg font-semibold">Клиентов пока нет</h2>
-        <p className="text-muted-foreground text-sm">
-          Добавьте первого клиента, нажав «Новый клиент».
-        </p>
-        <Button onClick={onCreateFromEmpty}>Новый клиент</Button>
+        <h2 className="text-lg font-semibold">{t('clients.empty.heading')}</h2>
+        <p className="text-muted-foreground text-sm">{t('clients.empty.body')}</p>
+        <Button onClick={onCreateFromEmpty}>{t('clients.actions.create')}</Button>
       </div>
     )
   }
   if (data.items.length === 0) {
     return (
       <div className="space-y-2 rounded-md border p-6 text-center">
-        <h2 className="text-lg font-semibold">Ничего не найдено</h2>
-        <p className="text-muted-foreground text-sm">
-          Попробуйте изменить запрос или очистить фильтры.
-        </p>
+        <h2 className="text-lg font-semibold">{t('clients.noResults.heading')}</h2>
+        <p className="text-muted-foreground text-sm">{t('clients.noResults.body')}</p>
       </div>
     )
   }

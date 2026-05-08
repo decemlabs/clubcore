@@ -89,6 +89,12 @@ export const ru = {
       edit: 'Редактировать клиента',
       delete: 'Удалить клиента',
     },
+    columns: {
+      fullName: 'ФИО',
+      phone: 'Телефон',
+      email: 'Email',
+      createdAt: 'Дата регистрации',
+    },
     form: {
       createHeading: 'Добавить клиента',
       editHeading: 'Редактировать клиента',
