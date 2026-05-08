@@ -42,6 +42,7 @@ class Resource(StrEnum):
     MEMBERSHIPS = "memberships"            # Phase 15 INFRA-08
     MEMBERSHIP_PLANS = "membership-plans"  # Phase 15 INFRA-08 — kebab on wire (mirrors OWNER_AREA)
     VISITS = "visits"                      # Phase 15 INFRA-08
+    PROFILE = "profile"                    # Phase 22 FE-09 — both-roles own-account surface (NOT in OWNER_ONLY)
 
 
 # Verbatim mirror of apps/admin-web/src/shared/session/can.ts:12-22 (15 entries).
