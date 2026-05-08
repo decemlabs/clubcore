@@ -1,4 +1,20 @@
+import { z } from 'zod'
 import type { Role } from '@/shared/session/types'
+
+/**
+ * WR-11: runtime schema mirroring the MeResponse contract. Used by the http
+ * auth service to validate {user: ...} envelope unwraps from /login and
+ * /telegram/verify so a backend rename or dropped field surfaces as a clean
+ * ApiError-style failure instead of silently flowing into the FE as a
+ * half-built object.
+ */
+export const meResponseSchema = z.object({
+  id: z.string(),
+  role: z.union([z.literal('owner'), z.literal('reception')]),
+  fullName: z.string(),
+  email: z.string().optional(),
+  hasTelegram: z.boolean().optional(),
+})
 
 export interface MeResponse {
   id: string

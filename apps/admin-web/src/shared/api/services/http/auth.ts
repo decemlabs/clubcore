@@ -9,14 +9,15 @@
  * - Phase 4 D-07: every 2xx is `{data: T}`. Unwrap via _envelope.ts.
  */
 import { request } from '@sportzal/api-client'
-import type {
-  AuthService,
-  MeResponse,
-  EmailLoginInput,
-  SessionFamily,
-  TelegramStartResponse,
-  TelegramStatusResponse,
-  TelegramVerifyInput,
+import {
+  meResponseSchema,
+  type AuthService,
+  type MeResponse,
+  type EmailLoginInput,
+  type SessionFamily,
+  type TelegramStartResponse,
+  type TelegramStatusResponse,
+  type TelegramVerifyInput,
 } from '@/shared/api/contracts/auth'
 import { unwrap } from './_envelope'
 
@@ -35,9 +36,10 @@ export const auth: AuthService = {
     const raw = await request('post', '/api/v1/auth/login', { body: input })
     // Phase 5: login response wraps user in {data: {user: {...}}}.
     // Unwrap outer envelope to get {user: {...}}, then extract .user.
-    const envelope = unwrap<{ user: MeResponse }>(raw)
-    // The LoginResponse shape has {user: UserPublic} -- map to MeResponse shape.
-    return envelope.user as MeResponse
+    const envelope = unwrap<{ user: unknown }>(raw)
+    // WR-11: validate at the boundary instead of casting; a backend rename
+    // or dropped field would otherwise pass a half-built object to the FE.
+    return meResponseSchema.parse(envelope.user)
   },
   async logout() {
     await request('post', '/api/v1/auth/logout')
@@ -56,8 +58,9 @@ export const auth: AuthService = {
   async telegramVerify(input: TelegramVerifyInput) {
     const raw = await request('post', '/api/v1/auth/telegram/verify', { body: input })
     // Phase 7: verify response wraps user in {data: {user: {...}}} same as login.
-    const envelope = unwrap<{ user: MeResponse }>(raw)
-    return envelope.user as MeResponse
+    const envelope = unwrap<{ user: unknown }>(raw)
+    // WR-11: validate at the boundary (see login for rationale).
+    return meResponseSchema.parse(envelope.user)
   },
   async sessions() {
     // FE-09 / HYG-03: backend returns ResponseEnvelope[PaginatedData[ActiveSessionItem]].
