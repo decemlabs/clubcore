@@ -182,7 +182,10 @@ export function MembershipsListPage() {
           <DataGridContainer>
             <DataGridTable />
           </DataGridContainer>
-          <DataGridPagination sizes={[20, 50, 100]} />
+          {/* BLK-06: pagination is meaningless while expiring=true — both http
+              and mock impls return a single unpaginated page in that branch
+              because the backend has no ?expiring=true filter yet. */}
+          {!search.expiring && <DataGridPagination sizes={[20, 50, 100]} />}
         </DataGrid>
       )}
 

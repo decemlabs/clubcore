@@ -36,14 +36,19 @@ export const memberships: MembershipsService = {
     }
     // WR-07: apply expiring filter symmetrically with http adapter so the
     // toggle on MembershipsListPage isn't a silent no-op in mock mode.
+    // BLK-06: when expiring=true, return ALL filtered items in a single page
+    // (no slicing) so the contract matches the http adapter, which cannot
+    // honestly paginate without backend ?expiring=true support. UI hides the
+    // pagination footer in this branch.
     if (query.expiring) {
       const todayStr = todayMSK()
       const cutoff = new Date(todayStr)
       cutoff.setUTCDate(cutoff.getUTCDate() + EXPIRING_DAYS)
       const cutoffStr = cutoff.toISOString().slice(0, 10)
-      all = all.filter(
+      const items = all.filter(
         (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,
       )
+      return { items, total: items.length, page: 1, pageSize: Math.max(1, items.length) }
     }
     const total = all.length
     const start = (query.page - 1) * query.pageSize

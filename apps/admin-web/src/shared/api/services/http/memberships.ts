@@ -56,10 +56,15 @@ export const memberships: MembershipsService = {
     // useMembershipStatusForClient) all use MSK; do not drift to runtime TZ
     // (WR-03).
     //
-    // Caveat: pagination is meaningless while expiring=true — page can return
-    // mostly-non-expiring items, leaving total > items.length. Tracking issue
-    // for backend filter; UI should disable pagination on this toggle or hide
-    // the toggle until backend support lands (WR-07).
+    // BLK-06: pagination is meaningless while expiring=true — the backend page
+    // contains both expiring and non-expiring rows, and `raw.total` counts ALL
+    // memberships, not the filtered subset. To keep the contract uniform with
+    // the mock impl and avoid misleading the operator (page 2 of "200 results"
+    // returning 0 visible items), we collapse the response to a single
+    // unpaginated page of whatever filtered items happen to be on THIS backend
+    // page. The UI MUST hide the pagination footer when expiring=true
+    // (MembershipsListPage does so). Tracking issue: add backend
+    // ?expiring=true&within=7 so this branch can paginate honestly.
     if (query.expiring) {
       const todayStr = todayMSK()
       // YYYY-MM-DD parses as UTC midnight — UTC arithmetic is DST-safe.
@@ -69,6 +74,8 @@ export const memberships: MembershipsService = {
       items = items.filter(
         (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,
       )
+      // pageSize must be >= 1 — UI's Math.ceil(total/pageSize) would NaN otherwise.
+      return { items, total: items.length, page: 1, pageSize: Math.max(1, items.length) }
     }
     return { ...raw, items }
   },
