@@ -91,7 +91,6 @@ export const memberships: MembershipsService = {
     // gym member's missing history is at least visible in the dev console
     // until proper pagination ships.
     if (raw.total > raw.items.length) {
-      // eslint-disable-next-line no-console
       console.warn(
         `[memberships.byClient] truncated: client=${clientId} total=${raw.total} returned=${raw.items.length} (pageSize=100). Add pagination to MembershipsBlock.`,
       )

@@ -25,7 +25,6 @@ const KNOWN_CHANNELS = new Set<VisitChannel>(['reception', 'telegram_bot'])
 
 function narrowChannel(c: string): VisitChannel {
   if (KNOWN_CHANNELS.has(c as VisitChannel)) return c as VisitChannel
-  // eslint-disable-next-line no-console
   console.warn(
     `[responseToVisit] unknown channel="${c}" — backend returned a value the FE union does not know about. Defaulting to 'reception'.`,
   )
