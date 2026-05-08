@@ -10,6 +10,15 @@ SRC_FIXTURE="src/__fixtures/features/illegal-cross-feature-import.ts"
 TMP_DIR="src/features/clients/__test__"
 TMP_FILE="$TMP_DIR/illegal-pattern-alpha.ts"
 
+# WR-10: clean up on Ctrl-C / SIGTERM as well as normal exit. Without this, an
+# interrupted run leaves the fixture in src/features/clients/__test__ where it
+# triggers the Pattern α rule on every subsequent ESLint run.
+cleanup() {
+  rm -f "$TMP_FILE"
+  rmdir "$TMP_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 mkdir -p "$TMP_DIR"
 cp "$SRC_FIXTURE" "$TMP_FILE"
 
@@ -18,9 +27,6 @@ set +e
 OUTPUT=$(pnpm exec eslint "$TMP_FILE" 2>&1)
 STATUS=$?
 set -e
-
-rm -f "$TMP_FILE"
-rmdir "$TMP_DIR" 2>/dev/null || true
 
 if [ "$STATUS" -eq 0 ]; then
   echo "FAIL: ESLint did not error on Pattern α fixture (status=0)" >&2
