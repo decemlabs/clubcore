@@ -13,7 +13,7 @@ REQ-IDs continue v1.2 conventions (`MEM-*`, `MEM-EP-*`, `MEM-AUDIT-*`, `ARQ-*`, 
 ### Foundations & Tech-Debt (INFRA / DEBT)
 
 - [ ] **INFRA-15**: `app/core/audit.py` `LOCKED_AUDIT_EVENTS` extended with 6 new pairs: `membership_frozen`, `membership_unfrozen`, `membership_renewed`, `expiring_notification_sent_7d`, `expiring_notification_sent_3d`, `expiring_notification_sent_1d` (all with `resource_type='membership'`). AST literal-string gate stays in place.
-- [ ] **INFRA-16**: `Membership.status` CHECK constraint extended with `'frozen'`; allowed transitions documented in a `MEMBERSHIP_STATUS_TRANSITIONS` constant in `app/modules/memberships/constants.py`; invalid transitions return 409 `invalid_transition` with discriminating payload.
+- [x] **INFRA-16**: `Membership.status` CHECK constraint extended with `'frozen'`; allowed transitions documented in a `MEMBERSHIP_STATUS_TRANSITIONS` constant in `app/modules/memberships/constants.py`; invalid transitions return 409 `invalid_transition` with discriminating payload.
 - [ ] **DEBT-01** (MEM-04 D-13 from v1.2): `resolve_active_membership_by_client` adds `end_date >= today (Europe/Moscow)` defence-in-depth filter so a missed ARQ tick cannot allow check-ins on expired memberships; integration test verifies resolver returns `None` when an expired row left as `status='active'` would otherwise pass.
 - [ ] **DEBT-02** (WR-07 from v1.2): backend `GET /api/v1/memberships?expiring=true&within=N` query params (N defaults to 7, must be 1..30); admin-web `expiringWithinDaysFilter` switches from mock-only to http+mock parity; mock service implements identical filter for symmetric behaviour.
 - [ ] **DEBT-03** (SVC001 walker scope from v1.2 Phase 15): the `BusinessService` AST commit-gate (INFRA-13) extended to `app/modules/auth/service.py`; `authenticate` and `classify_verify_error` paths must explicitly `await session.commit()` for audit-row writes (or carry `# noqa: SVC001 caller-owns-txn` with rationale); CI gate fails on regression.
@@ -99,7 +99,7 @@ REQ-IDs continue v1.2 conventions (`MEM-*`, `MEM-EP-*`, `MEM-AUDIT-*`, `ARQ-*`, 
 | REQ-ID | Phase | Status |
 |---|---|---|
 | INFRA-15 | Phase 24 | Pending |
-| INFRA-16 | Phase 24 | Pending |
+| INFRA-16 | Phase 24 | Complete |
 | DEBT-01 | Phase 24 | Pending |
 | DEBT-02 | Phase 24 | Pending |
 | DEBT-03 | Phase 24 | Pending |

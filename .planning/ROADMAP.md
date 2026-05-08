@@ -76,9 +76,9 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. `resolve_active_membership_by_client` фильтрует `end_date >= today (Europe/Moscow)` — пропущенный ARQ tick не позволяет check-in на просроченном membership; integration test это подтверждает.
   4. `GET /api/v1/memberships?expiring=true&within=N` (1..30, default 7) возвращает только active memberships, истекающие в окне; mock service реализует identical filter (mock/http parity).
   5. `BusinessService` SVC001 AST walker применяется к `app/modules/auth/service.py`; `authenticate` + `classify_verify_error` либо явно `await session.commit()`, либо несут `# noqa: SVC001 caller-owns-txn` с обоснованием; CI gate ловит регрессии.
-**Plans:** 5 plans
-  - [ ] 24-01-PLAN.md — Extend LOCKED_AUDIT_EVENTS with 6 v1.3 pairs (INFRA-15)
-  - [ ] 24-02-PLAN.md — Migration 0007_status_taxonomy + MEMBERSHIP_STATUS_TRANSITIONS + central transition guard (INFRA-16)
+**Plans:** 2/5 plans executed
+  - [x] 24-01-PLAN.md — Extend LOCKED_AUDIT_EVENTS with 6 v1.3 pairs (INFRA-15)
+  - [x] 24-02-PLAN.md — Migration 0007_status_taxonomy + MEMBERSHIP_STATUS_TRANSITIONS + central transition guard (INFRA-16)
   - [ ] 24-03-PLAN.md — Resolver end_date >= today filter (DEBT-01)
   - [ ] 24-04-PLAN.md — ?expiring=true&within=N backend + mock/http parity (DEBT-02)
   - [ ] 24-05-PLAN.md — SVC001 walker → auth/service.py + commit-on-write fix (DEBT-03)

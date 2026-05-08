@@ -4,14 +4,14 @@ milestone: v1.3
 milestone_name: Memberships Extras + Tech-Debt
 status: executing
 stopped_at: Phase 24 context gathered (--auto)
-last_updated: "2026-05-08T18:07:04.394Z"
-last_activity: 2026-05-08 -- Phase 24 planning complete
+last_updated: "2026-05-08T18:21:54.840Z"
+last_activity: 2026-05-08
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-08)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v1.3 roadmap drafted (6 phases, 24–29). Next: `/gsd-plan-phase 24`.
+**Current focus:** Phase 24 — Foundations & Tech-Debt Bedrock
 
 ## Current Position
 
-Phase: Phase 24 — Foundations & Tech-Debt Bedrock (not started)
-Plan: —
+Phase: 24 (Foundations & Tech-Debt Bedrock) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-05-08 -- Phase 24 planning complete
+Last activity: 2026-05-08
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Last activity: 2026-05-08 -- Phase 24 planning complete
 - Trend: —
 
 *Updated after each plan completion.*
+| Phase 24 P02 | 10min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting v1.3:
   - Telegram bot — отдельный процесс long-polling worker, НЕ ARQ task
   - Backend wire format = camelCase via `BackendSchemaBase`
   - Pagination envelope `{items, total, page, pageSize}`
+- [Phase ?]: INFRA-16 Phase 24: status taxonomy locked — central _assert_can_transition guard + MEMBERSHIP_STATUS_TRANSITIONS read-only constant; Postgres CHECK admits 'frozen' as of migration 0007_status_taxonomy
 
 ### Pending Todos
 
@@ -120,6 +122,6 @@ Items carried into v1.3 from v1.1/v1.2 close:
 
 ## Session Continuity
 
-Last session: 2026-05-08T17:29:09.471Z
+Last session: 2026-05-08T18:21:01.912Z
 Stopped at: Phase 24 context gathered (--auto)
 Resume: Next step is `/gsd-plan-phase 24` to break Phase 24 (Foundations & Tech-Debt Bedrock) into plans.
