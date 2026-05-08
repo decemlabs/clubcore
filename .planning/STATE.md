@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 20 context gathered
-last_updated: "2026-05-08T07:23:02.538Z"
-last_activity: 2026-05-08 -- Phase 20 planning complete
+last_updated: "2026-05-08T07:24:19.587Z"
+last_activity: 2026-05-08 -- Phase 20 execution started
 progress:
   total_phases: 9
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 19 — Visits — DB + reception check-in (backend)
+**Current focus:** Phase 20 — telegram-bot-checkin-self-check-in
 
 ## Current Position
 
-Phase: 19 (Visits — DB + reception check-in (backend)) — EXECUTING
-Plan: 2 of 5
-Status: Ready to execute
-Last activity: 2026-05-08 -- Phase 20 planning complete
+Phase: 20 (telegram-bot-checkin-self-check-in) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 20
+Last activity: 2026-05-08 -- Phase 20 execution started
 
 ## Performance Metrics
 
