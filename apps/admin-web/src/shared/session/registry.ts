@@ -45,7 +45,7 @@ export interface RouteEntry {
 
 export const routeRegistry: readonly RouteEntry[] = [
   { path: '/', resource: 'dashboard', label: 'Главная', icon: 'LayoutDashboard', navKey: 'home' },
-  // NOTE: /visits entry added in 22-03 (position 2)
+  { path: '/visits', resource: 'visits', label: 'Отметки', icon: 'LogIn', navKey: 'visits' }, // NEW Phase 22 D-22-4 (position 2 — reception-first)
   { path: '/clients', resource: 'clients', label: 'Клиенты', icon: 'Users', navKey: 'clients' },
   {
     path: '/memberships',
