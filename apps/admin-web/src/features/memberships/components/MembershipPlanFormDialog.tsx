@@ -14,6 +14,7 @@ import { Label } from '@/shared/ui/label'
 import { Input } from '@/shared/ui/input'
 import { Alert, AlertDescription } from '@/shared/ui/alert'
 import { t } from '@/shared/i18n'
+import { isDomainError } from '@/shared/api/errors'
 import { membershipPlanFormSchema, type MembershipPlanFormInput } from '../model/schema'
 import { useCreatePlan, useUpdatePlan } from '../api/hooks'
 import type { MembershipPlan, MembershipPlanId } from '@/entities/membership'
@@ -78,8 +79,12 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
             toast.success(t('membershipPlans.toast.updated'))
             handleClose()
           },
-          onError: () => {
-            toast.error(t('common.errors.saveTariff'))
+          onError: (err) => {
+            toast.error(
+              isDomainError(err) && err.code === 'mock_not_implemented'
+                ? t('common.errors.demoMode')
+                : t('common.errors.saveTariff'),
+            )
           },
         },
       )
@@ -96,13 +101,25 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
             toast.success(t('membershipPlans.toast.created'))
             handleClose()
           },
-          onError: () => {
-            toast.error(t('common.errors.createTariff'))
+          onError: (err) => {
+            toast.error(
+              isDomainError(err) && err.code === 'mock_not_implemented'
+                ? t('common.errors.demoMode')
+                : t('common.errors.createTariff'),
+            )
           },
         },
       )
     }
   })
+
+  const mutationError = isEdit ? updatePlan.error : createPlan.error
+  const inlineErrorText =
+    isDomainError(mutationError) && mutationError.code === 'mock_not_implemented'
+      ? t('common.errors.demoMode')
+      : isEdit
+        ? t('common.errors.saveTariff')
+        : t('common.errors.createTariff')
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
@@ -180,9 +197,7 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
 
           {(createPlan.isError || updatePlan.isError) && (
             <Alert variant="destructive">
-              <AlertDescription>
-                {isEdit ? t('common.errors.saveTariff') : t('common.errors.createTariff')}
-              </AlertDescription>
+              <AlertDescription>{inlineErrorText}</AlertDescription>
             </Alert>
           )}
 

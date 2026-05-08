@@ -45,6 +45,7 @@ export const ru = {
       saveTariff: 'Ошибка при сохранении тарифа.',
       createTariff: 'Ошибка при создании тарифа.',
       deleteTariff: 'Ошибка при удалении тарифа.',
+      demoMode: 'Изменения недоступны в демо-режиме. Используйте VITE_API_MODE=http.',
     },
   },
   auth: {

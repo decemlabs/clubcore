@@ -24,6 +24,7 @@ import {
 } from '@/shared/ui/data-grid'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { t } from '@/shared/i18n'
+import { isDomainError } from '@/shared/api/errors'
 import { formatMoney } from '@/shared/lib/money'
 import { useMembershipPlans, useDeletePlan } from '../api/hooks'
 import { MembershipPlanFormDialog } from './MembershipPlanFormDialog'
@@ -129,8 +130,12 @@ export function MembershipPlansPage() {
         toast.success(t('membershipPlans.toast.deleted'))
         setDeleteId(null)
       },
-      onError: () => {
-        toast.error(t('common.errors.deleteTariff'))
+      onError: (err) => {
+        toast.error(
+          isDomainError(err) && err.code === 'mock_not_implemented'
+            ? t('common.errors.demoMode')
+            : t('common.errors.deleteTariff'),
+        )
         setDeleteId(null)
       },
     })

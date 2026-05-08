@@ -40,6 +40,9 @@ export function CancelMembershipDialog({ open, onClose, membershipId }: Props) {
           const code = isDomainError(err) ? err.code : undefined
           if (code === 'invalid_transition') {
             setInlineError(t('memberships.errors.invalidTransition'))
+          } else if (code === 'mock_not_implemented') {
+            toast.error(t('common.errors.demoMode'))
+            onClose()
           } else {
             const fallback = t('common.errors.network')
             toast.error(

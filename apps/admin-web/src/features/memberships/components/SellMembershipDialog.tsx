@@ -62,6 +62,10 @@ function SellMembershipForm({ clientId, onSuccess, onCancel }: SellFormProps) {
       }
       return
     }
+    if (isDomainError(err) && err.code === 'mock_not_implemented') {
+      setRootError(t('common.errors.demoMode'))
+      return
+    }
     setRootError(t('common.errors.network'))
   }
 
