@@ -26,11 +26,22 @@ export function useMembershipsList(query: MembershipsListQuery) {
   })
 }
 
-export function useMembershipPlans(opts?: { active?: boolean }) {
+export function useMembershipPlans(opts?: {
+  active?: boolean
+  page?: number
+  pageSize?: number
+}) {
   const active = opts?.active // undefined OR boolean — undefined means "all plans"
+  const page = opts?.page
+  const pageSize = opts?.pageSize
   return useQuery({
-    queryKey: membershipsKeys.plansList(active),
-    queryFn: () => services.memberships.listPlans(active === undefined ? {} : { active }),
+    queryKey: membershipsKeys.plansList(active, page, pageSize),
+    queryFn: () =>
+      services.memberships.listPlans({
+        ...(active === undefined ? {} : { active }),
+        ...(page === undefined ? {} : { page }),
+        ...(pageSize === undefined ? {} : { pageSize }),
+      }),
     staleTime: 30_000,
   })
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useReactTable, getCoreRowModel, type ColumnDef } from '@tanstack/react-table'
 import { Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Route as MembershipPlansRoute } from '@/routes/_protected/membership-plans'
 import { Button } from '@/shared/ui/button'
 import { Badge } from '@/shared/ui/badge'
 import {
@@ -33,11 +35,13 @@ function ActiveBadge({ active }: { active: boolean }) {
 }
 
 export function MembershipPlansPage() {
+  const search = MembershipPlansRoute.useSearch()
+  const navigate = useNavigate({ from: MembershipPlansRoute.fullPath })
   const [formOpen, setFormOpen] = useState(false)
   const [editPlan, setEditPlan] = useState<MembershipPlan | undefined>(undefined)
   const [deleteId, setDeleteId] = useState<MembershipPlanId | null>(null)
 
-  const query = useMembershipPlans()
+  const query = useMembershipPlans({ page: search.page, pageSize: search.pageSize })
   const deletePlan = useDeletePlan()
 
   const data = query.data
@@ -99,8 +103,22 @@ export function MembershipPlansPage() {
     state: {
       pagination: {
         pageIndex: data ? data.page - 1 : 0,
-        pageSize: data?.pageSize ?? 20,
+        pageSize: data?.pageSize ?? search.pageSize,
       },
+    },
+    onPaginationChange: (updater) => {
+      if (!data) return
+      const next =
+        typeof updater === 'function'
+          ? updater({ pageIndex: data.page - 1, pageSize: data.pageSize })
+          : updater
+      void navigate({
+        search: (prev) => ({
+          ...prev,
+          page: next.pageIndex + 1,
+          pageSize: next.pageSize,
+        }),
+      })
     },
   })
 
