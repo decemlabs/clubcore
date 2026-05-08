@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { useQueries } from '@tanstack/react-query'
 import { useReactTable, getCoreRowModel, type ColumnDef } from '@tanstack/react-table'
 import { Route as MembershipsRoute } from '@/routes/_protected/memberships'
+import { services } from '@/shared/api/services'
+import type { ClientId } from '@/entities/client'
 import { Button } from '@/shared/ui/button'
 import { Badge } from '@/shared/ui/badge'
 import { Alert, AlertDescription } from '@/shared/ui/alert'
@@ -40,15 +43,46 @@ export function MembershipsListPage() {
 
   const data = query.data
 
+  // WR-19: fetch client names for the visible page so the operator can identify
+  // membership owners. Backend MembershipResponse has no clientName snapshot;
+  // until it does, we issue parallel useQueries against services.clients.get
+  // for each unique clientId on this page. Cache key matches features/clients
+  // clientsKeys.detail() shape so a future visit to /clients/$id shares cache.
+  // services container access (not features/clients import) respects the
+  // "features must not import other features" rule.
+  const uniqueClientIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const m of data?.items ?? []) ids.add(m.clientId)
+    return Array.from(ids)
+  }, [data?.items])
+  const clientQueries = useQueries({
+    queries: uniqueClientIds.map((id) => ({
+      queryKey: ['clients', 'detail', id] as const,
+      queryFn: () => services.clients.get(id as ClientId),
+      staleTime: 30_000,
+    })),
+  })
+  const clientNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    uniqueClientIds.forEach((id, i) => {
+      const c = clientQueries[i]?.data
+      if (c) map.set(id, c.fullName)
+    })
+    return map
+  }, [uniqueClientIds, clientQueries])
+
   const columns: ColumnDef<Membership>[] = [
     {
       accessorKey: 'clientId',
       header: t('memberships.columns.client'),
-      cell: ({ row }) => (
-        <span className="text-muted-foreground font-mono text-xs">
-          {row.original.clientId.slice(0, 8)}…
-        </span>
-      ),
+      cell: ({ row }) => {
+        const id = row.original.clientId
+        const name = clientNameById.get(id)
+        if (name) return <span className="text-sm">{name}</span>
+        return (
+          <span className="text-muted-foreground font-mono text-xs">{id.slice(0, 8)}…</span>
+        )
+      },
     },
     { accessorKey: 'planNameSnapshot', header: t('memberships.columns.plan') },
     {
