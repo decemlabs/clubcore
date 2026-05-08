@@ -16,7 +16,7 @@ export const Route = createFileRoute('/_protected/membership-plans')({
   },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData({
-      queryKey: [...membershipsKeys.plans, { active: undefined }],
+      queryKey: membershipsKeys.plansList(undefined),
       queryFn: () => services.memberships.listPlans({}),
     }),
   component: MembershipPlansPage,

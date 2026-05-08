@@ -26,10 +26,11 @@ export function useMembershipsList(query: MembershipsListQuery) {
   })
 }
 
-export function useMembershipPlans({ active = true }: { active?: boolean } = {}) {
+export function useMembershipPlans(opts?: { active?: boolean }) {
+  const active = opts?.active // undefined OR boolean — undefined means "all plans"
   return useQuery({
-    queryKey: [...membershipsKeys.plans, { active }],
-    queryFn: () => services.memberships.listPlans({ active }),
+    queryKey: membershipsKeys.plansList(active),
+    queryFn: () => services.memberships.listPlans(active === undefined ? {} : { active }),
     staleTime: 30_000,
   })
 }

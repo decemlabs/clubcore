@@ -96,8 +96,9 @@ describe('features/memberships/api/hooks', () => {
     expect(result.current.data).toEqual(mockResult)
   })
 
-  // Test 2: useMembershipPlans calls listPlans with active:true by default
-  it('useMembershipPlans calls services.memberships.listPlans({active:true}) by default', async () => {
+  // Test 2: useMembershipPlans defaults to "all plans" (active + archived)
+  // — i.e. it must NOT silently filter out archived plans (BLK-02).
+  it('useMembershipPlans calls services.memberships.listPlans({}) by default', async () => {
     const qc = makeQueryClient()
     const mockResult: Pagination<MembershipPlan> = {
       items: [mockPlan],
@@ -110,8 +111,26 @@ describe('features/memberships/api/hooks', () => {
     const { result } = renderHook(() => useMembershipPlans(), { wrapper: wrapper(qc) })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(services.memberships.listPlans).toHaveBeenCalledWith({ active: true })
+    expect(services.memberships.listPlans).toHaveBeenCalledWith({})
     expect(result.current.data?.items).toHaveLength(1)
+  })
+
+  it('useMembershipPlans({ active: true }) forwards the filter', async () => {
+    const qc = makeQueryClient()
+    const mockResult: Pagination<MembershipPlan> = {
+      items: [mockPlan],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    }
+    vi.mocked(services.memberships.listPlans).mockResolvedValue(mockResult)
+
+    const { result } = renderHook(() => useMembershipPlans({ active: true }), {
+      wrapper: wrapper(qc),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(services.memberships.listPlans).toHaveBeenCalledWith({ active: true })
   })
 
   // Test 3: useCreateMembership mutation invalidates on settle

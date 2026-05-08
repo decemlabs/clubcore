@@ -37,7 +37,7 @@ export function MembershipPlansPage() {
   const [editPlan, setEditPlan] = useState<MembershipPlan | undefined>(undefined)
   const [deleteId, setDeleteId] = useState<MembershipPlanId | null>(null)
 
-  const query = useMembershipPlans({ active: undefined as unknown as boolean })
+  const query = useMembershipPlans()
   const deletePlan = useDeletePlan()
 
   const data = query.data
