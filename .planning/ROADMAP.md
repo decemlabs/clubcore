@@ -48,7 +48,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - [x] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test. (completed 2026-05-07)
 - [x] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off. (completed 2026-05-08)
 - [x] **Phase 21: OpenAPI drift gate refresh + api-client codegen** — regen byte-stable `openapi.json` + `schema.d.ts`; CI green on both diffs. (completed 2026-05-08)
-- [ ] **Phase 22: admin-web wiring — memberships + visits + active sessions UI** — new `features/memberships`, `features/visits`; `/memberships`, `/membership-plans`, `/visits` routes; client-detail Pattern α; reception UX edge cases; cheap-win differentiators D-2/D-3/D-5; sessions UI.
+- [x] **Phase 22: admin-web wiring — memberships + visits + active sessions UI** — new `features/memberships`, `features/visits`; `/memberships`, `/membership-plans`, `/visits` routes; client-detail Pattern α; reception UX edge cases; cheap-win differentiators D-2/D-3/D-5; sessions UI. (completed 2026-05-08)
 - [x] **Phase 23: Hygiene + active sessions backend (parallel-eligible)** — Phase 04 CR-01 (Argon2 verify-error → 401) + CR-02 (invalid UUID in cookie → 401); ship `GET /auth/sessions` + per-family revoke endpoints if not present. (completed 2026-05-08)
 
 ## Phase Details
@@ -222,7 +222,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete    | 2026-05-08 |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 1/1 | Complete    | 2026-05-08 |
-| 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 4/5 | In Progress|  |
+| 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 5/5 | Complete   | 2026-05-08 |
 | 23. Hygiene + active sessions backend | v1.2 | 1/1 | Complete    | 2026-05-08 |
 
 ---
