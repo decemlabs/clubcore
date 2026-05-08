@@ -30,12 +30,12 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Row, Select, and_, func, select, true, update
+from sqlalchemy import Integer, Row, Select, Subquery, and_, func, select, text, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationAppError
 from app.core.pagination import PaginatedData
-from app.modules.memberships.models import Membership, MembershipPlan
+from app.modules.memberships.models import Membership, MembershipFreezePeriod, MembershipPlan
 from app.modules.memberships.schemas import (
     MembershipCreateRequest,
     MembershipListQuery,
@@ -394,3 +394,123 @@ async def expire_due_rows(
     )
     result = await session.execute(stmt)
     return result.all()
+
+
+# ===========================================================================
+# Phase 25 — MembershipFreezePeriod helpers (D-25-16, D-25-18)
+# ===========================================================================
+
+
+async def insert_freeze_period(
+    session: AsyncSession,
+    *,
+    membership_id: UUID,
+    started_by: UUID,
+    started_at: datetime,
+) -> MembershipFreezePeriod:
+    """Insert an open freeze period (Phase 25 D-25-16).
+
+    Caller (service) owns flush + commit and handles IntegrityError on the
+    partial unique index ``uq_membership_freeze_periods_active_per_membership``
+    (raised via ``_is_already_frozen_conflict`` discriminator in Plan 25-03).
+    """
+    period = MembershipFreezePeriod(
+        membership_id=membership_id,
+        started_by=started_by,
+        started_at=started_at,
+        # ended_at intentionally omitted — NULL while period is open.
+    )
+    session.add(period)
+    return period
+
+
+async def get_open_freeze_period(
+    session: AsyncSession, membership_id: UUID
+) -> MembershipFreezePeriod | None:
+    """Return the open freeze period for ``membership_id``, or None (D-25-16).
+
+    Defence-in-depth: if status='frozen' but no open period exists, that is a
+    DB-level invariant violation (manual SQL surgery, bug). Caller raises.
+    """
+    stmt = (
+        select(MembershipFreezePeriod)
+        .where(
+            MembershipFreezePeriod.membership_id == membership_id,
+            MembershipFreezePeriod.ended_at.is_(None),
+        )
+        .limit(1)
+    )
+    result: MembershipFreezePeriod | None = await session.scalar(stmt)
+    return result
+
+
+async def get_freeze_period_by_id(
+    session: AsyncSession, period_id: UUID
+) -> MembershipFreezePeriod | None:
+    """Return a freeze period by id, or None. Used by tests / debug paths (D-25-16)."""
+    return await session.get(MembershipFreezePeriod, period_id)
+
+
+async def compute_freeze_days_used(
+    session: AsyncSession,
+    membership_id: UUID,
+    *,
+    today_msk: date,
+) -> int:
+    """Sum of completed-period days + ongoing days if frozen (MEM-FRZ-EP-03 / D-25-16).
+
+    Single SQL aggregate — O(1) extra query per row (avoids N+1 in list view).
+    ``CEIL((COALESCE(ended_at, now()) - started_at) seconds / 86400)`` matches
+    the "half-day rounds up" semantic byte-stable between Python (``math.ceil``)
+    and SQL.
+
+    Note on Europe/Moscow: seconds-based ceil is timezone-agnostic (UTC seconds
+    = MSK seconds, fixed UTC+3 offset, no DST since 2014). The ``today_msk``
+    parameter is reserved for a future calendar-day refactor; currently unused
+    at the SQL level. Do NOT remove it — it's part of the D-25-16 contract.
+    """
+    del today_msk  # currently unused; kept in signature per D-25-16 contract.
+    stmt = text(
+        "SELECT COALESCE(SUM("
+        "  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)"
+        "), 0)::int "
+        "FROM membership_freeze_periods "
+        "WHERE membership_id = :membership_id"
+    )
+    result = await session.scalar(stmt, {"membership_id": membership_id})
+    return int(result or 0)
+
+
+# Reserved for future list-view LEFT JOIN optimisation; current service path
+# (Plan 25-03) uses compute_freeze_days_used per row.
+def _freeze_days_used_subquery() -> Subquery:
+    """Reusable scalar subquery for the list view's freeze_days_used column (D-25-18).
+
+    Emitted as a LEFT JOIN against ``memberships`` so the list view stays
+    single-query (no N+1 per-row aggregate). Used by ``list_memberships``
+    when wired in a future plan.
+    """
+    return (
+        select(
+            MembershipFreezePeriod.membership_id.label("membership_id"),
+            func.coalesce(
+                func.sum(
+                    func.ceil(
+                        func.extract(
+                            "epoch",
+                            func.coalesce(
+                                MembershipFreezePeriod.ended_at, func.now()
+                            )
+                            - MembershipFreezePeriod.started_at,
+                        )
+                        / 86400
+                    )
+                ),
+                0,
+            )
+            .cast(Integer)
+            .label("days_used"),
+        )
+        .group_by(MembershipFreezePeriod.membership_id)
+        .subquery()
+    )

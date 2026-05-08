@@ -32,6 +32,7 @@ from app.core.permissions import Role
 from app.core.redis import get_redis
 from app.core.security import hash_password
 from app.modules.auth.models import User
+from app.modules.clients.models import Client
 from app.modules.memberships.models import Membership, MembershipPlan
 
 OWNER_EMAIL = "plans-owner@example.com"
@@ -199,12 +200,14 @@ async def make_plan(
         name: str = "Базовый",
         duration_days: int = 30,
         price_kopecks: int = 250000,
+        freeze_days_limit: int = 14,
         active: bool = True,
     ) -> MembershipPlan:
         plan = MembershipPlan(
             name=name,
             duration_days=duration_days,
             price_kopecks=price_kopecks,
+            freeze_days_limit=freeze_days_limit,
             active=active,
         )
         db_session.add(plan)
@@ -244,6 +247,7 @@ async def make_membership(
             plan_name_snapshot=plan.name,
             duration_days_snapshot=plan.duration_days,
             price_kopecks_snapshot=plan.price_kopecks,
+            freeze_days_limit_snapshot=plan.freeze_days_limit,
             start_date=today,
             end_date=end,
             status=status,
@@ -252,5 +256,81 @@ async def make_membership(
         await db_session.commit()
         await db_session.refresh(membership)
         return membership
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_user(
+    db_session: AsyncSession,
+) -> Callable[..., Awaitable[User]]:
+    """Insert a User row directly via the SAVEPOINT-mode session (Phase 25 helper).
+
+    Used by freeze-helper integration tests that need an actor for the
+    started_by / ended_by FK on MembershipFreezePeriod without going through
+    the auth/login flow.
+    """
+
+    _counter = {"i": 0}
+
+    async def _make(
+        *,
+        role: str = "reception",
+        email: str | None = None,
+        password: str = "hunter22hunter22",  # noqa: S107 -- test password literal
+        full_name: str = "Freeze Test User",
+    ) -> User:
+        _counter["i"] += 1
+        resolved_email = email or f"freeze-test-{_counter['i']}@example.com"
+        user = User(
+            email=resolved_email,
+            password_hash=await hash_password(password),
+            role=Role(role),
+            full_name=full_name,
+        )
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+        return user
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_client(
+    db_session: AsyncSession,
+    make_user: Callable[..., Awaitable[User]],
+) -> Callable[..., Awaitable[Client]]:
+    """Insert a Client row directly via the SAVEPOINT-mode session (Phase 25 helper).
+
+    Auto-seeds an owner User as `created_by_user_id` if one is not provided.
+    Used by freeze-helper integration tests that need a real client_id for
+    the FK on Membership without going through the auth/clients HTTP flow.
+    """
+
+    _counter = {"i": 0}
+
+    async def _make(
+        *,
+        last_name: str = "Иванов",
+        first_name: str = "Иван",
+        phone: str | None = None,
+        created_by_user_id: UUID | None = None,
+    ) -> Client:
+        _counter["i"] += 1
+        resolved_phone = phone or f"+799912340{_counter['i']:02d}"
+        if created_by_user_id is None:
+            owner = await make_user(role="owner")
+            created_by_user_id = owner.id
+        client = Client(
+            last_name=last_name,
+            first_name=first_name,
+            phone=resolved_phone,
+            created_by_user_id=created_by_user_id,
+        )
+        db_session.add(client)
+        await db_session.commit()
+        await db_session.refresh(client)
+        return client
 
     return _make
