@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut } from 'lucide-react'
+import { LogOut, User } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import {
@@ -47,6 +47,15 @@ export function ProfileMenu() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            void navigate({ to: '/profile' })
+          }}
+        >
+          <User className="mr-2 size-4" />
+          {t('profile.menuLink')}
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault()

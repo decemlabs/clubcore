@@ -271,6 +271,36 @@ export const ru = {
       telegram: 'Telegram',
     },
   },
+  profile: {
+    heading: 'Профиль',
+    menuLink: 'Профиль',
+  },
+  sessions: {
+    heading: 'Активные сессии',
+    revoke: 'Отозвать',
+    current: 'Текущая',
+    logoutAll: 'Выйти со всех устройств',
+    logoutAllConfirm: {
+      title: 'Выйти со всех устройств?',
+      body: 'Все активные сессии будут завершены. Вам потребуется войти снова.',
+      action: 'Выйти',
+      cancel: 'Отмена',
+    },
+    empty: 'Активных сессий не найдено.',
+    error: 'Не удалось загрузить сессии',
+    channel: {
+      email: 'Email',
+      telegram: 'Telegram',
+      unknown: 'Неизвестно',
+    },
+    toast: {
+      revoked: 'Сессия отозвана',
+      loggedOutAll: 'Выполнен выход со всех устройств',
+    },
+    errors: {
+      mockNotImplemented: 'Управление сессиями недоступно в демо-режиме. Используйте VITE_API_MODE=http.',
+    },
+  },
 } as const
 
 type Dict = typeof ru

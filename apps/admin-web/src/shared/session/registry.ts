@@ -13,6 +13,7 @@ export type Resource =
   | 'memberships' // NEW Phase 15 INFRA-09
   | 'membership-plans' // NEW Phase 15 INFRA-09 — kebab-case mirror of Resource.MEMBERSHIP_PLANS.value
   | 'visits' // NEW Phase 15 INFRA-09
+  | 'profile' // NEW Phase 22 FE-09 — own-account surface; both roles allowed (NOT in OWNER_ONLY)
 
 export type Action =
   | 'view'

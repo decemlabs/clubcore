@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: milestone_complete
+status: executing
 stopped_at: Phase 23 context gathered
-last_updated: "2026-05-08T13:25:15.526Z"
-last_activity: 2026-05-08 -- Phase 23 execution started
+last_updated: "2026-05-08T14:02:58.341Z"
+last_activity: 2026-05-08 -- Phase 22 execution started
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 36
-  completed_plans: 34
-  percent: 89
+  completed_plans: 35
+  percent: 97
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 23 — hygiene-active-sessions-backend-parallel-eligible
+**Current focus:** Phase 22 — admin-web-wiring-memberships-visits-active-sessions-ui
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-08
+Phase: 22 (admin-web-wiring-memberships-visits-active-sessions-ui) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 22
+Last activity: 2026-05-08 -- Phase 22 execution started
 
 ## Performance Metrics
 

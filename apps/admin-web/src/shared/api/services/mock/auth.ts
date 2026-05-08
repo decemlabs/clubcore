@@ -61,6 +61,30 @@ export const auth: AuthService = {
     // No state to clear in mock — RoleSwitcher controls Zustand role independently.
   },
 
+  async logoutAll() {
+    await delay()
+    // No state to clear in mock — RoleSwitcher controls Zustand role independently.
+  },
+
+  async sessions() {
+    await delay()
+    // D-22-2: FE-09 is http-only. The mock does not implement sessions —
+    // the real value is auditing real refresh-rotation families, not a pretty list.
+    throw new DomainError(
+      'mock_not_implemented',
+      'Mock does not implement sessions — use VITE_API_MODE=http',
+    )
+  },
+
+  async revokeSession(familyId: string) {
+    await delay()
+    void familyId
+    throw new DomainError(
+      'mock_not_implemented',
+      'Mock does not implement sessions — use VITE_API_MODE=http',
+    )
+  },
+
   async telegramStart() {
     await delay()
     const token = faker.string.uuid()
