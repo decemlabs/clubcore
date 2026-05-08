@@ -61,6 +61,59 @@
 
 ---
 
+## Milestone: v1.2 — Memberships + Visits
+
+**Shipped:** 2026-05-08
+**Phases:** 9 (15–23) | **Plans:** 36 | **Tasks:** 60
+**Requirements:** 63/63 satisfied (2 accepted-at-planning deviations carried forward)
+**Code:** ~8.1K LOC backend Python, ~16.8K LOC TS (admin-web + api-client)
+**Timeline:** 2026-05-07 → 2026-05-08 (rapid follow-on after v1.1 close), 166 commits (37 feat), 404 files changed (+39,142 / −1,173)
+**Audit:** passed — re-audited 2026-05-08T16:30 after closing the two procedural gaps (Phase 22 stale verification + Phase 18 ARQ-03 prose decision)
+
+### What Was Built
+
+- **RBAC + audit + service-write commit gate (Phase 15)** — `OWNER_ONLY` extended 6 entries; `LOCKED_AUDIT_EVENTS` 28-entry frozenset with `audit.emit` literal-string AST gate; `BackendSchemaBase` (Pydantic 2.11 canonical pair); SVC001 commit-gate AST walker.
+- **Memberships catalog + instances + resolver (Phases 16–17)** — `membership_plans` partial-unique table; `memberships` with mandatory snapshot pricing + ON DELETE RESTRICT FK; **inclusive `end_date`**; `resolve_active_membership_by_client` Protocol slot in `core/dependencies.py`.
+- **ARQ scheduled `expire_memberships` (Phase 18)** — first real ARQ cron (06:05 Europe/Moscow daily); idempotent SQL `UPDATE ... RETURNING`; structlog `job_id`/`job_name` contextvars (Pitfall 14); 5th `arq-worker` compose service.
+- **Visits — DB-level race-proof 1/day (Phases 19–20)** — `gym_date GENERATED STORED` + `UNIQUE (client_id, gym_date)` (Postgres wins, not app-layer); reception + Telegram bot `/checkin` with 4 owner-locked Russian DM strings (no oracle leak); Redis dedup at `sz:bot:update:{id}`.
+- **OpenAPI drift gate refresh + admin-web wiring (Phases 21–22)** — byte-stable openapi.json + regenerated schema.d.ts; admin-web ships `/membership-plans`, `/memberships`, `/visits`, `/clients/$clientId` Pattern α, `/profile` SessionsList; cheap-win differentiators D-2/D-3/D-5.
+- **Auth hygiene + active sessions backend (Phase 23)** — HYG-01/02 fix 500 → 401 on Argon2 verify-error and tampered cookie; HYG-03 ships `/auth/sessions` + per-family revoke.
+
+### What Worked
+
+1. **Two independent cross-module Protocol slots in one milestone landed cleanly** (`ActiveMembershipResolver` for memberships → visits, `HandlerContext.visits_service` for telegram bot → visits). The v1.1 pattern (`register_user_loader` for auth → clients) generalized perfectly without modifying `import-linter` contracts. This is now a confirmed durable pattern, not a v1.1 one-off.
+2. **DB-level enforcement over app-level enforcement.** `gym_date GENERATED STORED` + `UNIQUE (client_id, gym_date)` made VIS-TEST-01 (10 parallel POSTs → 1×201 + 9×409) pass first try. The decision to materialize the conversion as a Postgres column rather than computing it in Python eliminated an entire class of TZ/DST bugs and concurrency races at design time.
+3. **Locked Russian DM strings as code constants, signed off before merge.** The "no oracle leak" rule (same DM for stranger as for expired-member) was preserved by treating copy as a code-review concern, not an i18n key concern. This wouldn't have worked if the strings lived in a separate ru.ts dictionary that operators could "improve" later.
+4. **Inline UAT issue fixing.** Phase 22's UAT found one issue (mock `mock_not_implemented` errors not localized in demo mode) and fixed it inline (commit 4452c28) instead of opening a gap-closure phase. The 10-pass-1-issue UAT closed in a single session.
+
+### What Was Inefficient
+
+1. **Phase 22 verification doc went stale after BLK-* fixes.** The 4 BLK findings (BLK-01..04) were fixed post-verification in commits 18f0977/186f836/704b6e9/00e4bf8 + 0399340 + 0a54fe6, but `22-VERIFICATION.md` was not regenerated. This propagated to the v1.2 milestone audit as `gaps_found` even though the underlying code was clean. Re-verifying mid-stream (or running `/gsd-verify-work` again after `/gsd-code-review-fix`) would have avoided the 30-minute pre-flight refresh during milestone close.
+2. **ARQ-03 prose vs code drift caught by milestone audit, not by Phase 18 SUMMARY review.** The ARQ 0.28 rename (`keep_cronjob_progress` → `keep_result`) was visible in 18-03 deviation notes, but REQUIREMENTS.md prose was never updated. A small edit-prose-when-deviation-is-accepted habit would close this.
+3. **REQUIREMENTS.md traceability table drifted from Pending → Complete by 28 rows.** Phase verifications passed, but the central table wasn't kept in sync. The CLI handles archival but not row-by-row status flips. Future improvement: have `gsd-sdk query verify` write back to the traceability row on phase completion.
+
+### Patterns Established
+
+- **Protocol-based cross-module callback registered from `app/main.py` composition root** — now confirmed across three slots (auth→clients, memberships→visits, telegram→visits). Use this whenever a module needs to call into another without violating `modules-independent`.
+- **DB-level `GENERATED ... STORED` columns + composite UNIQUE for race-proof business rules** — reproducible across future cases (e.g. v1.3 booking conflicts, v1.3 freeze-day counters).
+- **Locked code-constant copy for security-sensitive UI text** (anti-oracle Russian DMs) — keep this technique for v1.3+ messages where the failure mode is "operator improves the wording and accidentally leaks information".
+- **`/gsd-code-review-fix` → forgotten `/gsd-verify-work` re-run.** Add to local checklist: after auto-fix lands, always re-run `/gsd-verify-work` before milestone audit, or accept that the milestone close will refresh it.
+
+### Key Lessons
+
+1. **Verification staleness is a real cost at milestone close.** v1.1 didn't hit this because phases were closed sequentially with verification immediately after; v1.2 had parallel-eligible Phase 23 + Phase 22 fix loops post-verification. Either re-verify at close or skip ahead and accept the gaps_found audit as procedural.
+2. **Owner sign-off on locked copy is a hard gate, not a nice-to-have.** D-22-11 / AUTH-TG-11 owner sign-off on Russian DM strings was the only manual checkpoint that mattered for the security model. Don't merge bot DM strings without it.
+3. **Tech-debt acknowledged at planning ≠ tech-debt that disappears.** D-13 (resolver fail-safe) and D-15 (FK 409 deferred to next phase) were both correctly accepted-at-planning. They survive in PROJECT.md as v1.3 carry-forward items because GSD doesn't auto-promote planning deviations into v.next backlog. Add them to v1.3 backlog manually.
+4. **The v1.2 "rapid follow-on" pattern (5 days → 1 day per follow-on milestone) only works because v1.1 paid the foundations cost.** Don't expect v1.3 Billing to be 1 day; ЮKassa + 54-ФЗ chequing is its own foundations effort.
+
+### Cost Observations
+
+- Phase 18 was the densest at 6 plans (5 implementation + 1 unit-test backfill); the 11-test unit suite (`tests/unit/workers/`) plus VIS-TEST-01 + ARQ-TEST-01/02 integration tests gave ARQ + Visits combined the highest defect density caught early.
+- Phase 22 was the largest by file-touch count (5 plans, 34 files in plan 02 alone, 25 files in plan 03) — and predictably the one where review-fix loops landed (REVIEW-FIX rounds 1 + 2, plus inline UAT fix).
+- v1.2 close pre-flight added one unplanned cycle: re-verify Phase 22 (commit 7e57d70) + reconcile ARQ-03 + sweep REQUIREMENTS.md (commit cdee261). About 30 minutes of doc-only work that could have been avoided with mid-milestone discipline.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -69,6 +122,7 @@
 |-----------|--------|-------|------------|
 | v1.0 Phase A | 3 | 17 | Skeleton-only; `import-linter` and quality tooling shipped before any business code |
 | v1.1 Auth + Clients | 11 (incl. 3 gap-closure) | 63 | Gap-closure phases (12/13/14) introduced; OpenAPI drift gate; Protocol-based cross-module callbacks; SAVEPOINT test isolation |
+| v1.2 Memberships + Visits | 9 | 36 | DB-level race-proof constraints (`GENERATED STORED` + composite UNIQUE); first real ARQ scheduled cron; second + third Protocol-based cross-module slots; locked code-constant copy for security-sensitive bot DMs; inline UAT issue fixing |
 
 ### Cumulative Quality
 
@@ -76,6 +130,7 @@
 |-----------|-------------|--------|---------------|-------|
 | v1.0 | ~46 files | unchanged | 47/47 | 3 |
 | v1.1 | ~52 files (~4.4K LOC) | ~12.8K LOC | 70/70 | 132 unit + integration suites for auth/RBAC/clients/persistence/search |
+| v1.2 | ~8.1K LOC backend | ~16.8K LOC | 63/63 (2 accepted-deviations) | 569+ backend (incl. VIS-TEST-01 concurrent race + ARQ-TEST-01/02 cron correctness/idempotency) + 184+ admin-web |
 
 ### Top Lessons (Verified Across Milestones)
 

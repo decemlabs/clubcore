@@ -2,33 +2,32 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: executing
-stopped_at: Phase 23 context gathered
-last_updated: "2026-05-08T14:02:58.341Z"
-last_activity: 2026-05-08 -- Phase 22 execution started
+status: shipped
+stopped_at: v1.2 milestone closed 2026-05-08
+last_updated: "2026-05-08T16:45:00Z"
+last_activity: 2026-05-08 -- v1.2 (Memberships + Visits) milestone shipped (9 phases, 36 plans, 63/63 requirements satisfied)
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 36
-  completed_plans: 35
-  percent: 97
+  completed_plans: 36
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-07)
+See: .planning/PROJECT.md (updated 2026-05-08)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 22 — admin-web-wiring-memberships-visits-active-sessions-ui
+**Current focus:** Planning v1.3 — run `/gsd-new-milestone` to scope.
 
 ## Current Position
 
-Phase: 22 (admin-web-wiring-memberships-visits-active-sessions-ui) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 22
-Last activity: 2026-05-08 -- Phase 22 execution started
+Milestone: v1.2 Memberships + Visits — SHIPPED 2026-05-08
+Next: v1.3 (TBD — see PROJECT.md "Current Milestone" for likely candidates)
+Last activity: 2026-05-08 -- v1.2 milestone close (audit re-passed, archives written, ROADMAP collapsed, PROJECT.md evolved)
 
 ## Performance Metrics
 
