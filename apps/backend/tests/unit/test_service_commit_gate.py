@@ -166,7 +166,12 @@ def _check_function(
 
 _CLIENTS_SERVICE = _BACKEND_APP / "modules" / "clients" / "service.py"
 _MEMBERSHIPS_SERVICE = _BACKEND_APP / "modules" / "memberships" / "service.py"
-_INSPECTED_SERVICES: tuple[Path, ...] = (_CLIENTS_SERVICE, _MEMBERSHIPS_SERVICE)
+_AUTH_SERVICE = _BACKEND_APP / "modules" / "auth" / "service.py"
+_INSPECTED_SERVICES: tuple[Path, ...] = (
+    _CLIENTS_SERVICE,
+    _MEMBERSHIPS_SERVICE,
+    _AUTH_SERVICE,
+)
 
 
 def _iter_functions_in_file(
@@ -180,20 +185,28 @@ def _iter_functions_in_file(
 
 
 def test_service_commit_gate_against_app_modules() -> None:
-    """Live gate against clients/service.py and memberships/service.py (post-12.1 fix).
+    """Live gate against clients, memberships, and auth service modules (post-12.1 fix).
 
     Phase 12.1 regression bound — `clients/service.py` shipped with three
     write paths (`create_client`, `update_client`, `soft_delete_client`)
     missing `await session.commit()`. This gate fails if the bug recurs.
 
-    Phase 16 extends the live scope to include `memberships/service.py` —
+    Phase 16 extended the live scope to include `memberships/service.py` —
     all three write paths (create_plan, update_plan, soft_delete_plan) are
-    inspected. The walker glob (`_SERVICE_GLOB`) and predicate apparatus
-    are exercised by `test_walker_scope_is_modules_service_only` and the
-    synthetic-source tests below; widening the live scope is a deliberate
-    decision per module (e.g. `auth/service.py:authenticate` and
-    `rotate_refresh` need a separate write-path semantics review before
-    they can be added to the gate — see deferred-items.md).
+    inspected.
+
+    Phase 24 DEBT-03 closes the v1.2 Phase 15 deferral by adding
+    `auth/service.py` to the live scope; `authenticate` now commits
+    explicitly on every `audit.emit("login_failed"/"login_success")`
+    branch and the inventory of all other public auth write paths
+    (`issue_tokens`, `rotate_refresh`, `revoke_session`,
+    `revoke_all_sessions`, `revoke_sessions_on_password_change`,
+    `revoke_family`) is recorded in
+    `.planning/phases/24-foundations-tech-debt-bedrock/24-05-SUMMARY.md`.
+
+    The walker glob (`_SERVICE_GLOB`) and predicate apparatus are
+    exercised by `test_walker_scope_is_modules_service_only` and the
+    synthetic-source tests below.
     """
     offenders: list[str] = []
     for service_path in _INSPECTED_SERVICES:

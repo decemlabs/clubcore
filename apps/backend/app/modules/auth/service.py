@@ -159,6 +159,9 @@ async def authenticate(
             reason="invalid_credentials",
             ip=ip,
         )
+        # Phase 24 DEBT-03 / SVC001: persist the login_failed audit row before
+        # the get_db rollback would otherwise drop it (mirrors Phase 12.1 fix).
+        await session.commit()
         raise
 
     if user is None:
@@ -174,6 +177,8 @@ async def authenticate(
             reason="invalid_credentials",
             ip=ip,
         )
+        # Phase 24 DEBT-03 / SVC001: persist failure audit row before raising.
+        await session.commit()
         raise InvalidPassword("invalid_credentials")
 
     await audit.emit(
@@ -186,6 +191,8 @@ async def authenticate(
         ip=ip,
         channel="email_password",
     )
+    # Phase 24 DEBT-03 / SVC001: persist the login_success audit row co-transactionally.
+    await session.commit()
     return user
 
 
@@ -352,119 +359,128 @@ async def rotate_refresh(
     now = datetime.now(tz=UTC)
     window = timedelta(seconds=settings.refresh_reuse_window_seconds)
 
-    # Begin transaction so SELECT ... FOR UPDATE holds the row-lock through mint.
-    async with session.begin():
-        row = await session.scalar(
-            select(RefreshToken)
-            .where(RefreshToken.token_hash == presented_hash)
-            .with_for_update()
+    # Phase 24 DEBT-03 / SVC001: rely on AsyncSession autobegin (triggered by the
+    # SELECT ... FOR UPDATE below) and explicit `await session.commit()` at the
+    # end of each mutating branch — same pattern as `revoke_session` (see lines
+    # 497-503). Replaces the previous `async with session.begin():` block; the
+    # walker requires a literal `session.commit()` token in every public write
+    # path, which the context-manager auto-commit shape did not provide.
+    row = await session.scalar(
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == presented_hash)
+        .with_for_update()
+    )
+
+    if row is None:
+        raise InvalidAccessToken("refresh_not_found")
+
+    # ---- Branch (A): ACTIVE — rotate ------------------------------------
+    if (
+        row.revoked_at is None
+        and row.replaced_by_id is None
+        and row.expires_at > now
+    ):
+        user_loaded = await session.get(User, row.user_id)
+        if user_loaded is None:
+            raise InvalidAccessToken("user_not_found")
+
+        raw_refresh, refresh_hash = generate_refresh_token()
+        access = encode_access_token(user_loaded.id, user_loaded.role, now=now)
+        csrf = generate_csrf_token()
+
+        new_row = RefreshToken(
+            user_id=row.user_id,
+            family_id=row.family_id,
+            token_hash=refresh_hash,
+            expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
+        )
+        session.add(new_row)
+        await session.flush()
+        row.replaced_by_id = new_row.id
+        row.replaced_at = now
+        # Phase 24 DEBT-03 / SVC001: commit the rotation atomically before
+        # touching Redis; DB is the source of truth (D-11).
+        await session.commit()
+
+        # Race-window cache — NX so a concurrent caller cannot overwrite the pair.
+        await redis.set(
+            f"auth:rotate:{presented_hash}",
+            json.dumps(
+                {
+                    "access_token": access,
+                    "refresh_token": raw_refresh,
+                    "csrf_token": csrf,
+                }
+            ),
+            ex=settings.refresh_reuse_window_seconds,
+            nx=True,
         )
 
-        if row is None:
-            raise InvalidAccessToken("refresh_not_found")
+        # CD-01 (Phase 23): preserve user_agent + channel from prior session JSON.
+        # If Redis miss (e.g. TTL expired between rotate calls), fall back to
+        # None / 'email_password' so pre-Phase-23 sessions degrade gracefully.
+        prior_ua: str | None = None
+        prior_channel: str = "email_password"
+        prior_raw = await redis.get(f"auth:session:{row.user_id}:{row.family_id}")
+        if prior_raw is not None:
+            try:
+                prior = json.loads(prior_raw)
+                prior_ua = prior.get("user_agent")
+                prior_channel = prior.get("channel", "email_password")
+            except (json.JSONDecodeError, AttributeError):
+                pass
 
-        # ---- Branch (A): ACTIVE — rotate ------------------------------------
-        if (
-            row.revoked_at is None
-            and row.replaced_by_id is None
-            and row.expires_at > now
-        ):
-            user_loaded = await session.get(User, row.user_id)
-            if user_loaded is None:
-                raise InvalidAccessToken("user_not_found")
-
-            raw_refresh, refresh_hash = generate_refresh_token()
-            access = encode_access_token(user_loaded.id, user_loaded.role, now=now)
-            csrf = generate_csrf_token()
-
-            new_row = RefreshToken(
-                user_id=row.user_id,
-                family_id=row.family_id,
-                token_hash=refresh_hash,
-                expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
-            )
-            session.add(new_row)
-            await session.flush()
-            row.replaced_by_id = new_row.id
-            row.replaced_at = now
-
-            # Race-window cache — NX so a concurrent caller cannot overwrite the pair.
-            await redis.set(
-                f"auth:rotate:{presented_hash}",
-                json.dumps(
-                    {
-                        "access_token": access,
-                        "refresh_token": raw_refresh,
-                        "csrf_token": csrf,
-                    }
-                ),
-                ex=settings.refresh_reuse_window_seconds,
-                nx=True,
-            )
-
-            # CD-01 (Phase 23): preserve user_agent + channel from prior session JSON.
-            # If Redis miss (e.g. TTL expired between rotate calls), fall back to
-            # None / 'email_password' so pre-Phase-23 sessions degrade gracefully.
-            prior_ua: str | None = None
-            prior_channel: str = "email_password"
-            prior_raw = await redis.get(f"auth:session:{row.user_id}:{row.family_id}")
-            if prior_raw is not None:
-                try:
-                    prior = json.loads(prior_raw)
-                    prior_ua = prior.get("user_agent")
-                    prior_channel = prior.get("channel", "email_password")
-                except (json.JSONDecodeError, AttributeError):
-                    pass
-
-            await _write_session_keys(
-                redis,
-                user_id=row.user_id,
-                family_id=row.family_id,
-                refresh_hash=refresh_hash,
-                ttl=settings.refresh_token_ttl_seconds,
-                now=now,
-                user_agent=prior_ua,
-                channel=prior_channel,
-            )
-            return access, raw_refresh, csrf
-
-        # ---- Branch (B): REPLACED-WITHIN-WINDOW — same-pair return -----------
-        if (
-            row.replaced_by_id is not None
-            and row.replaced_at is not None
-            and row.replaced_at > now - window
-        ):
-            cached = await redis.get(f"auth:rotate:{presented_hash}")
-            if cached is not None:
-                payload = json.loads(cached)
-                return (
-                    payload["access_token"],
-                    payload["refresh_token"],
-                    payload["csrf_token"],
-                )
-            # Cache miss: window expired between caller and us. Fall through to (C).
-
-        # ---- Branch (C): REUSE/REVOKED — family revocation -------------------
-        await session.execute(
-            update(RefreshToken)
-            .where(
-                RefreshToken.user_id == row.user_id,
-                RefreshToken.family_id == row.family_id,
-                RefreshToken.revoked_at.is_(None),
-            )
-            .values(revoked_at=now)
+        await _write_session_keys(
+            redis,
+            user_id=row.user_id,
+            family_id=row.family_id,
+            refresh_hash=refresh_hash,
+            ttl=settings.refresh_token_ttl_seconds,
+            now=now,
+            user_agent=prior_ua,
+            channel=prior_channel,
         )
-        # Pitfall 2: emit BEFORE the `async with session.begin()` block exits
-        # (which auto-commits). Co-transactional audit row enrolls in the same
-        # transaction as the family revocation UPDATE.
-        await audit.emit(
-            session,
-            "family_reuse_detected",
-            actor_user_id=row.user_id,
-            resource_type="session",
-            resource_id=row.family_id,
-            presented_token_hash_prefix=presented_hash[:8],
+        return access, raw_refresh, csrf
+
+    # ---- Branch (B): REPLACED-WITHIN-WINDOW — same-pair return -----------
+    if (
+        row.replaced_by_id is not None
+        and row.replaced_at is not None
+        and row.replaced_at > now - window
+    ):
+        cached = await redis.get(f"auth:rotate:{presented_hash}")
+        if cached is not None:
+            payload = json.loads(cached)
+            return (
+                payload["access_token"],
+                payload["refresh_token"],
+                payload["csrf_token"],
+            )
+        # Cache miss: window expired between caller and us. Fall through to (C).
+
+    # ---- Branch (C): REUSE/REVOKED — family revocation -------------------
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == row.user_id,
+            RefreshToken.family_id == row.family_id,
+            RefreshToken.revoked_at.is_(None),
         )
+        .values(revoked_at=now)
+    )
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
+    # the family revocation UPDATE (same shape as revoke_session / revoke_family).
+    await audit.emit(
+        session,
+        "family_reuse_detected",
+        actor_user_id=row.user_id,
+        resource_type="session",
+        resource_id=row.family_id,
+        presented_token_hash_prefix=presented_hash[:8],
+    )
+    # Phase 24 DEBT-03 / SVC001: explicit commit replaces the previous
+    # context-manager auto-commit on `async with session.begin():` exit.
+    await session.commit()
 
     # Outside the DB tx: clean Redis (best-effort; DB already holds truth).
     # `srem` is typed as `Awaitable[int] | int` (redis-py shares stubs across
