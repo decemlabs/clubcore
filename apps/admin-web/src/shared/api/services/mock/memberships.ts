@@ -8,8 +8,12 @@ import { DomainError } from '@/shared/api/errors'
 import { can } from '@/shared/session/can'
 import { useSessionStore } from '@/shared/session/store'
 import type { Action, Resource } from '@/shared/session/registry'
+import { todayMSK } from '@/shared/i18n/date'
 import { loadDB } from './_db'
 import { delay } from './_latency'
+
+// D-22-10 mirror: keep mock filter window in sync with the http adapter.
+const EXPIRING_DAYS = 7
 
 function role() {
   return useSessionStore.getState().role
@@ -26,7 +30,21 @@ export const memberships: MembershipsService = {
     await delay()
     ensure('view', 'memberships')
     const db = loadDB()
-    const all = db.memberships
+    let all = db.memberships
+    if (query.clientId) {
+      all = all.filter((m) => m.clientId === query.clientId)
+    }
+    // WR-07: apply expiring filter symmetrically with http adapter so the
+    // toggle on MembershipsListPage isn't a silent no-op in mock mode.
+    if (query.expiring) {
+      const todayStr = todayMSK()
+      const cutoff = new Date(todayStr)
+      cutoff.setUTCDate(cutoff.getUTCDate() + EXPIRING_DAYS)
+      const cutoffStr = cutoff.toISOString().slice(0, 10)
+      all = all.filter(
+        (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,
+      )
+    }
     const total = all.length
     const start = (query.page - 1) * query.pageSize
     const items = all.slice(start, start + query.pageSize)
@@ -38,7 +56,14 @@ export const memberships: MembershipsService = {
     ensure('view', 'memberships')
     const db = loadDB()
     const filtered = db.memberships.filter((m) => m.clientId === clientId)
-    return { items: filtered, total: filtered.length, page: 1, pageSize: filtered.length }
+    // pageSize is a request constant — never 0 (would make consumers' Math.ceil
+    // divide by zero). Use Math.max(1, filtered.length) as a sane shape.
+    return {
+      items: filtered,
+      total: filtered.length,
+      page: 1,
+      pageSize: Math.max(1, filtered.length),
+    }
   },
 
   async get(id: MembershipId): Promise<Membership> {

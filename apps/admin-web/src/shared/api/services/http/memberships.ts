@@ -8,6 +8,7 @@ import type {
   MembershipPlanUpdateInput,
 } from '@/shared/api/contracts/memberships'
 import type { MembershipId, MembershipPlanId } from '@/entities/membership'
+import { todayMSK } from '@/shared/i18n/date'
 import { unwrap } from './_envelope'
 import {
   responseToMembership,
@@ -49,13 +50,22 @@ export const memberships: MembershipsService = {
       await request('get', '/api/v1/memberships', { query: q }),
     )
     let items = raw.items.map(responseToMembership)
-    // D-22-10: client-side expiring filter (backend has no expiringWithinDays param)
+    // D-22-10: client-side expiring filter applied AFTER pagination because the
+    // backend has no expiringWithinDays param yet. Pinned to Europe/Moscow via
+    // todayMSK() — adjacent code (CheckInPage, RecentVisitsBlock,
+    // useMembershipStatusForClient) all use MSK; do not drift to runtime TZ
+    // (WR-03).
+    //
+    // Caveat: pagination is meaningless while expiring=true — page can return
+    // mostly-non-expiring items, leaving total > items.length. Tracking issue
+    // for backend filter; UI should disable pagination on this toggle or hide
+    // the toggle until backend support lands (WR-07).
     if (query.expiring) {
-      const today = new Date()
-      const cutoff = new Date()
-      cutoff.setDate(today.getDate() + EXPIRING_DAYS)
+      const todayStr = todayMSK()
+      // YYYY-MM-DD parses as UTC midnight — UTC arithmetic is DST-safe.
+      const cutoff = new Date(todayStr)
+      cutoff.setUTCDate(cutoff.getUTCDate() + EXPIRING_DAYS)
       const cutoffStr = cutoff.toISOString().slice(0, 10)
-      const todayStr = today.toISOString().slice(0, 10)
       items = items.filter(
         (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,
       )
@@ -64,6 +74,9 @@ export const memberships: MembershipsService = {
   },
 
   async byClient(clientId: string) {
+    // WR-06: pageSize is hardcoded to 100 — for long-lived members, history
+    // beyond the first 100 rows is silently truncated. Tracking issue: add
+    // pagination UI to MembershipsBlock or backend sort + cursor support.
     const raw = unwrap<PaginatedMembershipResponse>(
       await request('get', '/api/v1/memberships', { query: { clientId, page: 1, pageSize: 100 } }),
     )
