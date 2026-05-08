@@ -1,6 +1,6 @@
 ---
 phase: 22-admin-web-wiring-memberships-visits-active-sessions-ui
-reviewed: 2026-05-08T14:23:00Z
+reviewed: 2026-05-08T00:00:00Z
 depth: standard
 files_reviewed: 83
 files_reviewed_list:
@@ -82,281 +82,264 @@ files_reviewed_list:
   - apps/backend/app/modules/visits/router.py
   - apps/backend/app/modules/visits/schemas.py
   - apps/backend/app/modules/visits/service.py
+  - apps/backend/openapi.json
   - apps/backend/tests/integration/telegram_bot/test_checkin_dm_days_remaining.py
   - apps/backend/tests/integration/telegram_bot/test_checkin_handler.py
   - apps/backend/tests/integration/test_visits_meta.py
   - packages/api-client/src/schema.contract.test.ts
   - packages/api-client/src/schema.d.ts
 findings:
-  blocker: 4
-  warning: 11
-  info: 7
-  total: 22
+  blocker: 2
+  warning: 8
+  info: 5
+  total: 15
 status: issues_found
 ---
 
-# Phase 22: Code Review Report
+# Phase 22: Code Review Report (Round 2)
 
-**Reviewed:** 2026-05-08T14:23:00Z
+**Reviewed:** 2026-05-08
 **Depth:** standard
 **Files Reviewed:** 83
 **Status:** issues_found
 
 ## Summary
 
-Phase 22 wires the admin-web frontend to the FastAPI backend through the typed `@sportzal/api-client` schema, and adds the `/profile` route consuming the active-sessions endpoints. The HTTP transport layer, contracts, mock services, and Phase 23 D-22-11 days-remaining DM logic are well-architected. Tests are thorough and the architecture rules (Pattern α, swap seam, role gates) are respected at module boundaries.
+Round 2 review of Phase 22 after the round-1 fixes (BLK-01..04 and WR-01/03/04/05/07/08/09/10/11). The fixes landed cleanly: `/visits` has its `beforeLoad` guard, the plan-list cache key is unified through `membershipsKeys.plansList(active)`, the "expires today" badge uses the right key, the price form keeps sub-rouble precision via `Math.round(roubles*100)`, the bot DM splits the `==0`/`>0`/`<0` cases, the Pattern α fixture now has an EXIT/INT/TERM trap, the auth envelope is Zod-validated, etc.
 
-However, the review found **4 BLOCKER findings** that affect data correctness, RBAC coverage, and feature behavior, plus **11 WARNINGS** primarily around i18n discipline (16+ hardcoded Russian strings violating the `t()`-only rule in CLAUDE.md), and **7 INFO** items.
+Round 2 surfaces **2 BLOCKER findings** that the round-1 review missed, **8 WARNING items** (most are residue from round-1 — hardcoded strings that escaped the WR-01 sweep, mock/HTTP semantic divergence flagged but not fully closed in WR-03/07, an architecture rule-of-thumb violation in `useReactTable`), and **5 INFO** items.
 
-The most serious issues are:
-- **`/visits` route lacks the `beforeLoad` RBAC guard** every other phase-22 route has (BLOCKER 1).
-- **Membership-plans page loader prefetches a different cache key than the hook reads**, so the loader is wasted and the page does an extra round-trip with different filter semantics (BLOCKER 2).
-- **`MembershipsBlock` uses the wrong i18n key (`expirestoday` "истёк сегодня" / "expired today") in a code path that fires when status is still `active`** — the badge tells the operator the membership has already expired when in fact it expires later today (BLOCKER 3).
-- **Plan-edit form lossily round-trips `priceKopecks` through whole-roubles**, silently truncating sub-rouble precision on every edit (BLOCKER 4).
+The two new BLOCKERs:
+
+- **MembershipPlansPage pagination is non-functional**: `useReactTable` is configured with `manualPagination: true` but no `onPaginationChange` handler, AND `useMembershipPlans()` accepts no pagination params and never propagates page/pageSize to the service. The pagination footer renders, but clicking "next page" does nothing and any plan beyond the first 20 is unreachable. (BLK-05.)
+- **HTTP `memberships.list` and mock `memberships.list` disagree on what `total` means when `expiring=true`**: HTTP keeps the unfiltered backend `total`, mock returns the filtered count. This is a hard divergence — every test exercising the filter against the mock validates a contract the HTTP path violates. The `MembershipsListPage` pagination UI is therefore broken in HTTP mode (page 2 may show 0 items while `total` says "20 results"); the round-1 WR-03/WR-07 fix mentions this caveat in a comment but never fixes the page-level UX. (BLK-06.)
 
 ## Blocker Issues
 
-### BLK-01: `/visits` route is missing the `beforeLoad` role guard
+### BLK-05: `MembershipPlansPage` pagination is wired up visually but not functionally
 
-**File:** `apps/admin-web/src/routes/_protected/visits.tsx:6-13`
-**Issue:** Every other Phase 22 protected route (`memberships`, `membership-plans`, `clients.$clientId`, `profile`) defines a `beforeLoad` that calls `can(role, 'view', resource)` and throws `redirect(...)` on deny. `visits.tsx` has no `beforeLoad` at all. Today reception+owner are both allowed, so the omission is not exploitable, but the moment a future requirement narrows `(view, visits)` (e.g. to a sub-role, or to a permission-checked staff scope) the guard rule is silently bypassed and unauthorised users land on the check-in surface. This is exactly the regression the architecture rule "every protected route declares its `beforeLoad`" exists to prevent (CLAUDE.md Architecture Rule 4 / `routeRegistry` invariant).
-**Fix:**
+**File:** `apps/admin-web/src/features/memberships/components/MembershipPlansPage.tsx:40, 93-105, 177` + `apps/admin-web/src/features/memberships/api/hooks.ts:29-36`
+
+**Issue:** Three layers conspire to break pagination on `/membership-plans`:
+
+1. `useMembershipPlans()` (line 40) is called with no arguments. The hook signature accepts `opts?: { active?: boolean }` only — there is no way to pass `page` / `pageSize`. The hook always calls `services.memberships.listPlans(active === undefined ? {} : { active })`, so the service receives no page/pageSize and applies the defaults (HTTP: `page=1`, `pageSize=20`; mock: `page=1`, `pageSize=50`).
+2. `useReactTable` (line 93-105) is configured with `manualPagination: true`, `pageCount: Math.ceil(data.total / data.pageSize)`, and `state.pagination = { pageIndex: data.page - 1, pageSize: data.pageSize ?? 20 }`. Crucially there is **no `onPaginationChange` handler** — compare with `MembershipsListPage.tsx:111-124` which routes pagination through TanStack Router's `validateSearch`.
+3. `<DataGridPagination sizes={[20, 50, 100]} />` (line 177) renders the next/prev/size controls, so the operator sees a working UI.
+
+Result: the operator clicks "next page" → no state change → the same first page renders. Any plan past the first 20 (or 50 in mock) is unreachable. Worse, the empty-state branch (`data.total === 0`) silences the issue when the page is not 1: clicking forward to a non-existent page would show whatever stale data remains.
+
+The same code path also lacks any way to pass `active` through, so the toggle "show archived only" doesn't exist either.
+
+**Fix:** Decide what UX the page wants. Minimal patch to make pagination work, modeled on `MembershipsListPage`:
+
 ```ts
-export const Route = createFileRoute('/_protected/visits')({
-  beforeLoad: ({ context, location }) => {
-    const { role } = context.getSession()
-    if (!can(role, 'view', 'visits')) {
-      throw redirect({
-        to: '/',
-        search: { forbidden: location.pathname + (location.searchStr ?? '') },
-      })
-    }
-  },
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData({
-      queryKey: visitsKeys.gymMeta,
-      queryFn: () => services.visits.gymMeta(),
-    }),
-  component: CheckInPage,
-})
-```
-
-### BLK-02: `MembershipPlansPage` loader prefetches a key the hook never reads
-
-**File:** `apps/admin-web/src/routes/_protected/membership-plans.tsx:17-22` + `apps/admin-web/src/features/memberships/components/MembershipPlansPage.tsx:40` + `apps/admin-web/src/features/memberships/api/hooks.ts:29-35`
-**Issue:** Three layers disagree:
-- Loader caches `[...membershipsKeys.plans, { active: undefined }]` calling `services.memberships.listPlans({})`.
-- Page calls `useMembershipPlans({ active: undefined as unknown as boolean })`.
-- Hook signature is `useMembershipPlans({ active = true } = {})`. The destructuring **default** kicks in when the property is `undefined`, so `active` becomes `true`. The hook then uses queryKey `[...plans, { active: true }]` and calls `listPlans({ active: true })`.
-
-Result: the loader prefetch is a cache miss (different key), and the hook fetches **only active** plans — but the page renders an `ActiveBadge active={p.active}` column with both "Активен" and "Архивирован" variants, i.e. it expects archived plans too. Operators will never see archived plans on this screen, and every navigation to `/membership-plans` does a wasted prefetch + a real fetch with the wrong filter. The `as unknown as boolean` cast is the visible smell of the type system telling the truth about a real bug.
-**Fix:** Decide what the page is for and align all three sites. To show all plans (active + archived):
-```ts
-// hooks.ts — accept undefined explicitly
-export function useMembershipPlans(opts?: { active?: boolean }) {
-  const active = opts?.active // undefined OR boolean
+// 1) hooks.ts — accept page/pageSize
+export function useMembershipPlans(opts?: { active?: boolean; page?: number; pageSize?: number }) {
+  const { active, page = 1, pageSize = 20 } = opts ?? {}
   return useQuery({
-    queryKey: [...membershipsKeys.plans, { active }],
-    queryFn: () => services.memberships.listPlans(active === undefined ? {} : { active }),
+    queryKey: [...membershipsKeys.plansList(active), { page, pageSize }] as const,
+    queryFn: () => services.memberships.listPlans({ ...(active === undefined ? {} : { active }), page, pageSize }),
     staleTime: 30_000,
   })
 }
 
-// MembershipPlansPage.tsx — drop the cast
-const query = useMembershipPlans()
-```
-And in the loader call `services.memberships.listPlans({})` with the matching `{ active: undefined }` key — keep them in sync via a single keys helper, e.g. `membershipsKeys.plansList(active)`.
+// 2) routes/_protected/membership-plans.tsx — promote to validateSearch + loaderDeps
+const searchSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(10).max(100).default(20),
+})
+// loaderDeps + ensureQueryData with the same key
 
-### BLK-03: Wrong i18n key on the "expires today" badge — says "expired today" instead
-
-**File:** `apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx:85-89` and `apps/admin-web/src/shared/i18n/ru.ts:141-144`
-**Issue:** The dictionary defines two near-identical keys:
-```ts
-badge: {
-  expirestoday: 'истёк сегодня',          // "already expired today"
-  expiresToday: 'Абонемент истекает сегодня', // "expires today"
-}
+// 3) MembershipPlansPage — read search, drive useReactTable.onPaginationChange via navigate({ search: ... })
 ```
-`MembershipsBlock` uses `t('memberships.badge.expirestoday')` (the lowercase variant) in a branch guarded by `m.status === 'active' && m.endDate === todayMSK()`. With INCLUSIVE `endDate` semantics (Phase 15 Key Decision documented in `_membershipsAdapter.ts:42` and confirmed in the bot DM logic), the membership is still **valid today** when `endDate === today` — so the operator-facing label must say "expires today", not "already expired today". The `CheckInPage` correctly uses `expiresToday` ("Абонемент истекает сегодня") for the same predicate. The unit test `MembershipsBlock.test.tsx:67` actively asserts the WRONG string ("истёк сегодня"), so this regression has been frozen in.
-**Fix:**
-```tsx
-// MembershipsBlock.tsx:87
-<Badge variant="destructive" className="ml-2 text-xs">
-  {t('memberships.badge.expiresToday')}
-</Badge>
-```
-Also delete the `expirestoday` key from `ru.ts` (no other consumer) and update `MembershipsBlock.test.tsx` to assert `'Абонемент истекает сегодня'`. While here, decide whether the `destructive` variant is right for "expires today, but still valid" — `outline`/`secondary` matches the CheckInPage choice better.
 
-### BLK-04: `MembershipPlanFormDialog` lossily round-trips `priceKopecks` through whole roubles
+Until the loader matches the hook key, every navigation to `/membership-plans` will also do a wasted prefetch + a real fetch.
 
-**File:** `apps/admin-web/src/features/memberships/components/MembershipPlanFormDialog.tsx:38, 48, 60`
-**Issue:** On open in edit mode the form initialises `priceRoubles = Math.round(plan.priceKopecks / 100)` (lines 38, 48). On submit it ships back `priceKopecks = values.priceRoubles * 100` (line 60). Any existing plan whose `priceKopecks` is not a multiple of 100 (e.g. 250050 → 2500.50 ₽) is silently snapped to the nearest 100 kopecks on the next save — a real money-correctness bug per the CLAUDE.md money convention ("Money: integer minor units (kopecks)"). The Zod schema (`membershipPlanFormSchema.priceRoubles: z.number().int()`) enforces the rouble integer on input, but does not protect existing data on edit. The same conversion does not exist for `MembershipPlanCreateInput.priceKopecks` — that path is fine.
-**Fix:** Either (a) keep the form in kopecks (display roubles via `formatMoney`, edit kopecks directly) or (b) initialise `priceRoubles` from the kopecks value and *block submit* if the loaded plan has sub-rouble precision. Minimal patch:
-```tsx
-defaultValues: {
-  priceRoubles: plan ? plan.priceKopecks / 100 : 0,
-  // ...
-},
-// schema allows fractional roubles to round-trip
-priceRoubles: z.number().min(0),
-// submit rounds explicitly so kopecks <= 99 are preserved
-const priceKopecks = Math.round(values.priceRoubles * 100)
-```
-Best fix is (a) — keep the wire format and FE state in kopecks, format roubles only in the display layer.
+### BLK-06: HTTP and mock `memberships.list` semantically diverge on `total` when `expiring=true`
+
+**File:** `apps/admin-web/src/shared/api/services/http/memberships.ts:43-74` + `apps/admin-web/src/shared/api/services/mock/memberships.ts:29-52` + `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:99-141`
+
+**Issue:** The two implementations of the same `MembershipsService.list` contract return contradictory `total` values when `query.expiring === true`:
+
+- **Mock** (mock/memberships.ts:33-51): filters `db.memberships` first, then computes `total = all.length`, then paginates the filtered slice. `total` is the count of actually-matching memberships. Pagination is consistent: `Math.ceil(total/pageSize)` pages each containing matching items.
+- **HTTP** (http/memberships.ts:49-73): fetches a page from the backend, **then** filters the page client-side, **then** spreads `...raw` (which keeps the backend's unfiltered `total`) and returns the filtered `items`. `total` is the count of all memberships in the system, not the count of expiring ones.
+
+The HTTP comment (lines 59-62) acknowledges this: "pagination is meaningless while expiring=true … UI should disable pagination on this toggle or hide the toggle until backend support lands". But the UI **does not** disable pagination on the toggle. `MembershipsListPage` (line 99-125) configures `useReactTable` with `manualPagination: true`, `pageCount: Math.ceil(data.total / data.pageSize)`, and `onPaginationChange` that updates router search. With HTTP `expiring=true`:
+
+- `data.total` = count of all memberships (e.g. 200)
+- `data.items.length` = filtered count for THIS page only (e.g. 0–20)
+- `pageCount` = ceil(200 / 20) = 10 pages
+- Operator clicks "page 2" → backend returns 20 NEW unfiltered rows → client filters → likely 0 expiring items → operator sees an empty page with the footer still saying "200 results, page 2/10".
+
+Two consequences:
+
+1. Real production UX bug in HTTP mode (the toggle is shipped, the toggle button is wired, the result is broken pagination operators will hit on day one).
+2. Tests that exercise `expiring=true` against the mock cannot detect the HTTP misbehavior — `mock/memberships.read.test.ts` would assert `total === filtered.length`, which the HTTP impl violates. A future bug where someone "fixes" the mock to match the HTTP behavior would silently regress the contract.
+
+This is a **contract violation**, not a TODO.
+
+**Fix:** Pick one and enforce it:
+
+(a) Fastest: hide the toggle behind `import.meta.env.VITE_API_MODE === 'mock'` until the backend supports `?expiring=true&within=7`. Add a follow-up issue for the backend filter.
+
+(b) Make HTTP match mock by paging client-side after fetching ALL active memberships (bounded by some limit) — only safe for small datasets.
+
+(c) Best: add the backend query parameter and change both impls to push the filter to the server. Keep the contract uniform.
+
+In any case, the `MembershipsListPage` pagination footer must not lie. If the toggle stays without backend support, set `pageCount={1}` and don't render `<DataGridPagination>` while `search.expiring === true`.
 
 ## Warnings
 
-### WR-01: Hardcoded Russian strings throughout new components — violates the `t()`-only convention
+### WR-12: Hardcoded Russian fallback in `CheckInPage` bypasses the `t()` dictionary
 
-**Files:**
-- `apps/admin-web/src/features/auth/components/SessionsList.tsx:30`
-- `apps/admin-web/src/features/auth/components/LogoutAllDialog.tsx:41`
-- `apps/admin-web/src/features/memberships/components/CancelMembershipDialog.tsx:44`
-- `apps/admin-web/src/features/memberships/components/SellMembershipDialog.tsx:65, 156`
-- `apps/admin-web/src/features/memberships/components/MembershipPlanFormDialog.tsx:78, 96, 113, 179`
-- `apps/admin-web/src/features/memberships/components/MembershipPlansPage.tsx:115`
-- `apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx:73-75`
-- `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:45, 52, 55, 67, 72, 148`
-- `apps/admin-web/src/features/visits/components/RecentVisitsBlock.tsx:49, 63-65`
+**File:** `apps/admin-web/src/features/visits/components/CheckInPage.tsx:87`
 
-**Issue:** CLAUDE.md mandates: "Single `src/shared/i18n/ru.ts` dictionary. No runtime locale switching." All operator-facing strings must come from `t()`. Phase 22 introduces ~16 inlined Russian literals (table headers "Тариф", "Период", "Статус", "Цена", "Клиент", "Дата", "Время", "Канал"; toast/error texts "Ошибка соединения.", "Ошибка при сохранении тарифа.", "Ошибка при удалении тарифа.", "Не удалось загрузить посещения", "Повторить загрузку"; sr-only descriptions "Редактирование тарифа", "Создание нового тарифа", "Форма продажи абонемента клиенту"). These bypass the central dictionary, harming consistency and any future glossary/proofreading pass.
-**Fix:** Add the missing keys (e.g. `memberships.columns.{client,plan,period,price,status}`, `memberships.error.retry`, `common.errors.{network,saveTariff,deleteTariff}`, `visits.recentBlock.error`, `visits.columns.{date,time,channel}`, `memberships.dialog.{editDescription,createDescription,sellDescription}`) to `src/shared/i18n/ru.ts` and replace every literal with `t(…)`. Consider adding an ESLint rule that bans Cyrillic literals in `*.tsx` outside `i18n/ru.ts`.
+**Issue:** The non-`DomainError` branch sets `setServerError('Ошибка соединения.')` directly. CLAUDE.md mandates `t()` for every user-facing string and the dictionary already has `common.errors.network = 'Ошибка соединения.'`. The previous WR-01 sweep missed this site (the fix touched many components but not this one).
 
-### WR-02: `as unknown as boolean` lies to the type system
+**Fix:**
 
-**File:** `apps/admin-web/src/features/memberships/components/MembershipPlansPage.tsx:40`
-**Issue:** `useMembershipPlans({ active: undefined as unknown as boolean })` is the root cause of BLK-02. The double cast hides the fact that the call site is sending an invalid value to a parameter typed `boolean`. CLAUDE.md mandates strict TS — type lies of this form should never ship.
-**Fix:** Once BLK-02 is fixed (`active?: boolean | undefined` is honest), the cast disappears. If the contract truly is "send `undefined` to mean both", encode that in the type, not in a cast.
+```tsx
+} else {
+  setServerError(t('common.errors.network'))
+}
+```
 
-### WR-03: HTTP `memberships.list` "expiring" filter is applied client-side AFTER pagination
+### WR-13: `ClientProfileCard` aria-label/title hardcoded — same i18n discipline violation
 
-**File:** `apps/admin-web/src/shared/api/services/http/memberships.ts:42-64`
-**Issue:** The `expiring` flag filters items already returned by the backend page, then preserves the original `total` and pageSize. Two problems: (1) the page can return mostly-non-expiring items, leaving the user with an empty list while `total` still says "20 results"; (2) DST/TZ correctness — `today` and `cutoff` use the runtime local TZ via `Date()` and `setDate`, but membership `endDate` is MSK-pinned (`todayMSK()` is the canonical helper). Adjacent code (`CheckInPage`, `RecentVisitsBlock`, `useMembershipStatusForClient`) all pin to MSK; this site silently drifts.
-**Fix:** Either push the filter into the backend (negotiate a `?expiring=true&within=7` query) or, at minimum, use the MSK helper:
-```ts
-import { todayMSK } from '@/shared/i18n/date'
+**File:** `apps/admin-web/src/features/clients/components/ClientProfileCard.tsx:36-37`
+
+**Issue:** `aria-label="Редактировать клиента"` and `title="Редактировать клиента"` are inlined Russian literals. The matching key already exists at `clients.actions.edit = 'Редактировать клиента'`. WR-01 corrected the same anti-pattern in `ClientsTable.tsx` but missed this newly-created Phase 22 file (the round-1 review listed it under WR-01 but the fix commit did not visit it).
+
+**Fix:**
+
+```tsx
+const editLabel = t('clients.actions.edit')
 // ...
-const todayStr = todayMSK()
-const cutoff = new Date(todayStr) // YYYY-MM-DD parses as UTC midnight
-cutoff.setUTCDate(cutoff.getUTCDate() + EXPIRING_DAYS)
-const cutoffStr = cutoff.toISOString().slice(0, 10)
+<Button
+  ...
+  aria-label={editLabel}
+  title={editLabel}
+  onClick={() => setEditOpen(true)}
+>
 ```
-Document that pagination is meaningless while `expiring=true` (or disable it).
 
-### WR-04: `LogoutAllDialog` and `SessionsList` swallow non-DomainError into a generic Russian literal
+### WR-14: `ClientsTable` table headers and empty/error UI still bypass `t()`
 
-**File:** `apps/admin-web/src/features/auth/components/LogoutAllDialog.tsx:41` + `apps/admin-web/src/features/auth/components/SessionsList.tsx:30`
-**Issue:** When the error is not a `DomainError` (e.g. transport failure, 5xx), the user sees "Ошибка соединения." — but the real `ApiError` thrown by `@sportzal/api-client` may carry a richer `code`/`message` that the auth-feature dictionary already covers (`auth.errors.network`). The literal ignores it and is also untranslatable.
-**Fix:** Use `t('auth.errors.network')` (already in dictionary) and pass through `ApiError.message` when present:
+**File:** `apps/admin-web/src/features/clients/components/ClientsTable.tsx:34, 35, 38, 47, 61, 62, 72, 73, 116-118, 132-134, 142-145`
+
+**Issue:** This file pre-dates Phase 22 but was modified by Phase 22 (D-22-5 row-click). The pre-existing inlined strings (`'ФИО'`, `'Телефон'`, `'Email'`, `'Дата регистрации'`, `'Не удалось загрузить клиентов'`, `'Клиентов пока нет'`, `'Ничего не найдено'`, etc.) violate the i18n discipline rule — the matching `clients.errorState`, `clients.empty`, `clients.noResults` keys exist in `ru.ts`. CLAUDE.md does not grandfather pre-existing files, and the Phase 22 modification is a natural opportunity to clear technical debt that affects every operator-facing screen.
+
+**Fix:** Replace each literal with the matching `t('clients.…')` key. Add column header keys (e.g. `clients.columns.fullName`, `clients.columns.phone`, `clients.columns.email`, `clients.columns.createdAt`).
+
+### WR-15: `useMembershipStatusForClient` and `useMembershipsByClient` issue parallel duplicate fetches
+
+**File:** `apps/admin-web/src/features/visits/api/hooks.ts:40-52` + `apps/admin-web/src/features/memberships/api/hooks.ts:12-19`
+
+**Issue:** Both hooks call `services.memberships.byClient(clientId)` but with different cache keys (`['visits', 'membershipStatusForClient', clientId]` vs `['memberships', 'byClient', clientId]`). On any render where both are active for the same client (the architecture rule "features cannot import each other" forced this duplication), the same network request fires twice, returning the same data.
+
+For Phase 22 the two are in disjoint route trees (`/visits` uses the visits hook; `/clients/$clientId` uses the memberships hook). But the moment a future feature wants both pieces of state in one render, the design will leak. The architectural rule is sound; the seam to share data is missing.
+
+**Fix:** Promote the data fetcher to a shared hook in `shared/api/hooks/` (or factor a "current active membership" derivation onto a single key shared between features). Minimal change: pick ONE of the keys (e.g. `membershipsKeys.byClient`) and have both feature-local hooks call into it via `qc.fetchQuery` with the same key + queryFn so dedup kicks in. The wrapping `useMembershipStatusForClient` only needs to compute the derived state (`activeMembership`, `expiringToday`).
+
+### WR-16: `MembershipsListPage` does not protect against the `expiring=true` total inflation (BLK-06 sibling)
+
+**File:** `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:99-141`
+
+**Issue:** Even setting BLK-06 aside, the page never communicates to the operator that the toggle filters a subset of the page and the result count may differ from the visible row count. The button is just a toggle. There is no banner ("Показано X из Y абонементов на этой странице"), no disabled-pagination affordance, no warning tooltip. Until BLK-06 is fixed at the data layer, the page should at least not mislead the operator.
+
+**Fix:** When `search.expiring === true`, display a small `<Alert variant="default">` above the grid:
+
+```tsx
+{search.expiring && (
+  <Alert>
+    <AlertDescription>{t('memberships.filterNotice.expiringSubsetOfPage')}</AlertDescription>
+  </Alert>
+)}
+```
+
+And add the i18n key. (Or fix BLK-06.)
+
+### WR-17: `useMembershipsByClient` still hardcodes pageSize=100 with silent truncation (residual from WR-06)
+
+**File:** `apps/admin-web/src/shared/api/services/http/memberships.ts:76-84`
+
+**Issue:** WR-06 was acknowledged in a comment ("WR-06: pageSize is hardcoded to 100 — for long-lived members, history beyond the first 100 rows is silently truncated. Tracking issue …") but no tracking issue was filed (no follow-up commit, no `// TODO Phase N:` marker that ties to a roadmap entry). The "tracking issue" comment is the only artifact, and the mock implementation (`mock/memberships.ts:byClient`) returns ALL items regardless, so tests cannot detect the truncation.
+
+**Fix:** Either file the follow-up issue and link it (`// TODO #ISSUE-NN: pagination UI on MembershipsBlock`), or implement pagination in `MembershipsBlock`. At minimum, log a `console.warn` when `total > items.length` so a long-lived gym member's truncation isn't completely silent in production.
+
+### WR-18: `_visitsAdapter.ts` casts `r.channel as VisitChannel` without runtime narrowing (residual from IN-07)
+
+**File:** `apps/admin-web/src/shared/api/services/http/_visitsAdapter.ts:32`
+
+**Issue:** Backend `VisitResponse.channel: str` is a free-form string (`apps/backend/app/modules/visits/schemas.py:57`), constrained only by the DB CHECK constraint to `'reception' | 'telegram_bot'`. The adapter casts to the FE `VisitChannel` union with no runtime guard. If the backend ever adds a third channel (NFC turnstile is hinted in `service.py:14-15`), components rendering `channel === 'telegram_bot' ? ... : 'reception'` (e.g. `RecentVisitsBlock.tsx:78-80`, `ChannelBadge` in `SessionsList.tsx:14-19` for the same enum shape) will silently mis-classify the new value as "reception".
+
+**Fix:**
+
 ```ts
-const fallback = t('auth.errors.network')
-toast.error(isDomainError(err) ? err.message : err instanceof ApiError ? err.message : fallback)
+const KNOWN_CHANNELS = new Set<VisitChannel>(['reception', 'telegram_bot'])
+function narrowChannel(c: string): VisitChannel {
+  return KNOWN_CHANNELS.has(c as VisitChannel) ? (c as VisitChannel) : 'reception' // safe default + log
+}
+// in responseToVisit:
+channel: narrowChannel(r.channel),
 ```
 
-### WR-05: `MembershipPlanFormDialog` mixes `register('active')` with `defaultChecked`
+(Or expand the union and add an `assertNever` fallthrough at every consumer site.)
 
-**File:** `apps/admin-web/src/features/memberships/components/MembershipPlanFormDialog.tsx:163-170`
-**Issue:** `react-hook-form`'s `register` already controls the checkbox's checked state via `defaultValues`/`reset`. Adding `defaultChecked={plan?.active ?? true}` sets the underlying DOM defaultChecked attribute too. When the dialog re-opens with a different `plan`, the `useEffect` `form.reset(...)` correctly updates the form state, but the DOM defaultChecked attribute is stale (it only applies on initial mount, not subsequent renders). For a single uncontrolled checkbox the practical impact is small, but the mix is a source of bug-of-the-week — the convention is "register OR defaultChecked, not both".
-**Fix:** Drop `defaultChecked` — `defaultValues.active` + `form.reset({ active: plan?.active ?? true })` already drives the input correctly.
+### WR-19: `MembershipsListPage` clientId column shows hex slice instead of client name
 
-### WR-06: `useMembershipsByClient` returns up to 100 memberships in a single non-paginated call
+**File:** `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:43-51`
 
-**File:** `apps/admin-web/src/shared/api/services/http/memberships.ts:66-71`
-**Issue:** `byClient` hardcodes `pageSize: 100` to fetch "all" memberships for a client. For a long-lived gym member the cap is silently truncating history with no UI signal. The mock `byClient` returns ALL items regardless of pagination, so the FE/backend behaviours diverge — the mock test cannot exercise the truncation.
-**Fix:** Either (a) add pagination UI to `MembershipsBlock`, or (b) document the cap in code + add a follow-up issue. Backend should also expose a sort order so the most recent N are returned.
+**Issue:** Column "Клиент" renders `row.original.clientId.slice(0, 8) + '…'`. Operators have no way to identify the membership owner from this surface. The route loader fetches `memberships.list` only — no clients prefetch. Clicking the row does nothing (no `onRowClick` handler is wired, unlike `ClientsTable`'s D-22-5 navigation). The screen is operationally near-useless: it answers "are there any active memberships?" but never "whose are they?".
 
-### WR-07: `MembershipsListPage` `expiring` filter is wired to a boolean toggle but ignored by the backend (D-22-10)
-
-**File:** `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:131-141` + `apps/admin-web/src/shared/api/services/http/memberships.ts:53-62`
-**Issue:** The toggle flips a search-param that the http adapter applies in-memory after pagination (see WR-03). On the mock service path, `memberships.list` ignores the `expiring` flag entirely (mock/memberships.ts:25-34 — no filter), so the filter is silently a no-op in dev mode. Operators training in mock mode will see a working button that does nothing.
-**Fix:** Either implement the filter symmetrically in the mock service or hide the toggle in mock mode (`API_MODE === 'mock'`). Document the limitation in a UI tooltip if the backend filter is deferred.
-
-### WR-08: Backend `_DM_CHECKIN_OK_LAST_DAY` is reachable only when `days_remaining == 0`, but the guard accepts `<= 0`
-
-**File:** `apps/backend/app/integrations/telegram/handlers.py:330-333`
-**Issue:** `if days_remaining <= 0` covers the negative case which "shouldn't" happen (the anti-fraud chain would have rejected with `no_active_membership`). If a future bug ever lets a past-end membership resolve as active, the bot will tell the user "today is the last day" — incorrect for a membership that ended yesterday. Better to make the impossible case observable rather than silently mis-message.
-**Fix:**
-```python
-if days_remaining == 0:
-    dm_text = _DM_CHECKIN_OK_LAST_DAY
-elif days_remaining > 0:
-    dm_text = _DM_CHECKIN_OK_WITH_DAYS.format(days_remaining=days_remaining)
-else:
-    logger.error(
-        "checkin_negative_days_remaining",
-        membership_end_date=str(membership_end_date),
-        chat_id=chat_id,
-    )
-    dm_text = _DM_CHECKIN_OK_LAST_DAY  # safe fallback, but log so we can find the bug
-```
-
-### WR-09: `_db.ts` "additive migration" branch regenerates with mismatched referential integrity
-
-**File:** `apps/admin-web/src/shared/api/services/mock/_db.ts:151-188`
-**Issue:** When `parsed.memberships` is missing but `parsed.clients` is present, the code calls `faker.seed(42)` and regenerates `clients`, `plans`, `memberships`, `visits` — but then keeps the **stored** `parsed.clients` while using the **freshly generated** `memberships` (which reference fresh client IDs). Result: the membership rows reference client UUIDs that no longer exist in `parsed.clients`, breaking joins in the byClient/recent-visits views. Same issue in the visits-only branch (lines 172-188).
-**Fix:** Either (a) when migrating, regenerate from the stored `parsed.clients` (i.e. only generate plans/memberships/visits from those clients), or (b) blow the whole DB away and seed fresh. (b) is simpler; it's a mock dev-mode store.
-
-### WR-10: `verify-pattern-alpha.sh` leaves the temp file behind on Ctrl-C / SIGINT
-
-**File:** `apps/admin-web/scripts/verify-pattern-alpha.sh:13-22`
-**Issue:** `set -e` aborts the script on the first ESLint failure if the user runs it interactively, but the cleanup `rm -f "$TMP_FILE"` is not in a `trap`. A killed run leaves `src/features/clients/__test__/illegal-pattern-alpha.ts` in the tree — which then triggers the rule on every subsequent ESLint run.
-**Fix:**
-```bash
-trap 'rm -f "$TMP_FILE"; rmdir "$TMP_DIR" 2>/dev/null || true' EXIT INT TERM
-```
-
-### WR-11: HTTP `auth.login`/`auth.telegramVerify` cast `envelope.user as MeResponse` instead of validating
-
-**File:** `apps/admin-web/src/shared/api/services/http/auth.ts:40, 60`
-**Issue:** Both endpoints unwrap `{user: UserPublic}` and cast `.user` to `MeResponse`. If the backend ever drops `hasTelegram` or renames a field, this cast happily passes a half-built object to the rest of the FE. The mock equivalent (`mock/auth.ts:currentMe`) constructs a `MeResponse` literally, so the two paths diverge in safety.
-**Fix:** Define a Zod schema for `MeResponse` (already informally described by the contract) and `parse()` the unwrapped value. Or rely on the generated `components['schemas']['UserPublic']` + a small adapter that forces required fields.
+**Fix:** Either (a) the backend `MembershipResponse` adds a `clientName` snapshot field, or (b) the route loader batch-prefetches `services.clients.list({ id__in: [...uniqueClientIds] })` and the page joins by id. (b) is FE-only; (a) is faster server-side.
 
 ## Info
 
-### IN-01: `services.visits.gymMeta` mock skips RBAC `ensure(...)`
+### IN-08: `useLogoutAll`'s `qc.clear()` runs before the navigation in `LogoutAllDialog`
+
+**File:** `apps/admin-web/src/features/auth/api/sessionsHooks.ts:30-39` + `apps/admin-web/src/features/auth/components/LogoutAllDialog.tsx:33-52`
+
+**Issue:** Both the hook and the dialog register `onSuccess` callbacks. React Query runs the hook-level callback first (`qc.clear()`), then the per-mutation callback (toast + navigate). If any `useQuery` hook is mounted at the time `qc.clear()` fires, it will refetch in the gap before navigate, producing wasted requests against an authenticated cache that was just cleared.
+
+In practice, the `/profile` page only renders `SessionsList`, whose query was just invalidated, so the wasted refetch is just one. Minor.
+
+**Fix:** Move `qc.clear()` to AFTER `navigate({ to: '/login' })` — or rely on the `/login` route's expected unmount of authenticated queries.
+
+### IN-09: Mock `auth.logoutAll` resolves silently in mock mode but UI behaves as if it succeeded
+
+**File:** `apps/admin-web/src/shared/api/services/mock/auth.ts:64-67`
+
+**Issue:** In mock mode `auth.logoutAll()` is a no-op (resolves successfully without clearing anything). `LogoutAllDialog` then calls `qc.clear()` and navigates to `/login`, but the Zustand role store is unaffected — the user "logs out" in UI but the role persists. They can navigate back into protected routes immediately. This deviates from the real HTTP behavior the dialog is designed to mirror.
+
+**Fix:** Either also throw `mock_not_implemented` from `auth.logoutAll()` (parity with `auth.sessions()` / `auth.revokeSession()`) or genuinely clear the session store in mock mode. The first option is simpler and makes the limitation explicit.
+
+### IN-10: `MembershipsListPage` row has no click handler — inconsistent with `ClientsTable` D-22-5
+
+**File:** `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:99-105`
+
+**Issue:** Phase 22 D-22-5 added row-click navigation to `ClientsTable` (clicking a row routes to `/clients/$clientId`). The matching surface for memberships — clicking a membership row — does nothing. Operators have to scan the right-edge "Отменить" button to interact. Given WR-19 (clientId shown as hex slice), the row is effectively dead UI.
+
+**Fix:** Either skip the column entirely until the backend supports name lookup, or wire `onRowClick` to navigate to `/clients/$clientId` of the membership's owner.
+
+### IN-11: `Pagination` is re-exported from both `entities/membership` and `shared/api/contracts/visits` (residual from IN-06)
+
+**File:** `apps/admin-web/src/shared/api/contracts/visits.ts:2, 25` + `apps/admin-web/src/entities/membership/types.ts:36-41`
+
+**Issue:** Visits contracts import `Pagination<T>` from `entities/membership` and re-export it. Same generic type lives in two places. Three exports of the same generic risks drift if any of them ever specialises.
+
+**Fix:** Move `Pagination<T>` to a dedicated module (`shared/api/contracts/_pagination.ts` or `shared/types/pagination.ts`) and import from there everywhere — entities, contracts, hooks.
+
+### IN-12: `services.visits.gymMeta` mock skips RBAC `ensure(...)` (residual from IN-01)
 
 **File:** `apps/admin-web/src/shared/api/services/mock/visits.ts:65-69`
-**Issue:** The comment says "no RBAC ensure needed — endpoint is reception+owner viewable; current FE roles satisfy". Mock services SHOULD enforce role access (CLAUDE.md "Mock services enforce role access"). Even when the answer is "all current roles pass", calling `ensure('view', 'visits')` documents the policy and protects against silent regressions when a new role is added.
-**Fix:** Add `ensure('view', 'visits')` for parity with `list`/`recentByClient`/`get`.
 
-### IN-02: `useCancelMembership` optimistic snapshot is rebuilt as `Pagination<Membership>` but `byClient` keys aren't included
+**Issue:** Comment: "No RBAC ensure needed — endpoint is reception+owner viewable; current FE roles satisfy". Mock services SHOULD enforce role access (CLAUDE.md "Mock services enforce role access"). Even when the answer is "all current roles pass", calling `ensure('view', 'visits')` documents the policy and protects against silent regressions when a new role is added. Adjacent methods (`list`, `recentByClient`, `get`) all call `ensure(...)`.
 
-**File:** `apps/admin-web/src/features/memberships/api/hooks.ts:64-87`
-**Issue:** Optimistic update mutates entries under `membershipsKeys.lists()` only. A `MembershipsBlock` rendering the same membership via `byClient` will not flip to "cancelled" until invalidation completes (no optimistic UI on the client-detail screen). Minor UX gap, not a correctness issue.
-**Fix:** Extend the snapshot loop to also patch `membershipsKeys.byClient(...)` entries, or accept the small async lag.
-
-### IN-03: `mock/_db.ts` regenerates a faker-seeded DB on every `loadDB()` call when local storage is empty
-
-**File:** `apps/admin-web/src/shared/api/services/mock/_db.ts:145-193`
-**Issue:** `loadDB()` with no stored value calls `seed()` which regenerates 30 + 8 + 40 + 150 entities. Multiple cold reads in the same tick (e.g. parallel `Promise.all([list, byClient, recent])` from a route loader) can each call `loadDB()`, each regenerate, each `saveDB`. Not a correctness bug — `faker.seed(42)` makes them deterministic — but it duplicates work.
-**Fix:** Memoise the in-memory DB at module scope and treat `loadDB()` as a getter; only call `saveDB` from explicit mutations.
-
-### IN-04: `MembershipsListPage` clientId column uses `clientId.slice(0, 8)` instead of resolving the name
-
-**File:** `apps/admin-web/src/features/memberships/components/MembershipsListPage.tsx:46-50`
-**Issue:** The list shows the first 8 hex chars of a UUID instead of the client's name. Operators have no way to identify the membership owner from this surface. The route loader fetches `memberships.list` only — no clients prefetch.
-**Fix:** Either (a) add a `clientName` field to `MembershipResponse` server-side, or (b) batch-prefetch clients by id in the loader and join in the page. Tracking issue.
-
-### IN-05: Schema types pass `pageSize: filtered.length` (which can be `0`) for the mock byClient response
-
-**File:** `apps/admin-web/src/shared/api/services/mock/memberships.ts:36-42`
-**Issue:** When a client has no memberships, `pageSize: 0` is returned — semantically odd (page size is a request constant, not a result count). Consumers handle it because the items are empty, but `Math.ceil(total / pageSize)` would `Infinity` for any consumer that tries to paginate.
-**Fix:** Default to `Math.max(1, filtered.length)` or to a sensible page size constant (20).
-
-### IN-06: `Pagination` is re-exported from both `entities/membership` and `shared/api/contracts/visits`
-
-**File:** `apps/admin-web/src/shared/api/contracts/visits.ts:2, 25`
-**Issue:** Visits contracts import `Pagination` from `entities/membership` and re-export it. The type is generic and belongs to `shared/api/contracts/clients.ts` originally. Three exports of the same generic risks drift if any of them ever specialises.
-**Fix:** Move `Pagination<T>` to `shared/api/contracts/_pagination.ts` and import from there everywhere.
-
-### IN-07: `_visitsAdapter.ts` casts `r.channel as VisitChannel` without narrowing
-
-**File:** `apps/admin-web/src/shared/api/services/http/_visitsAdapter.ts:32`
-**Issue:** Backend `VisitResponse.channel: str` is unrestricted; FE narrows to `'reception' | 'telegram_bot'` via cast. If a third channel ever lands (NFC turnstile is hinted in the service docstring), components matching on the union will silently drop the unknown value.
-**Fix:** Add a runtime guard: `const channel = (r.channel === 'telegram_bot' ? 'telegram_bot' : 'reception') as VisitChannel` (or expand the union when the third value lands and add an `assertNever` fallthrough).
+**Fix:** Add `ensure('view', 'visits')` for parity.
 
 ---
 
-_Reviewed: 2026-05-08T14:23:00Z_
+_Reviewed: 2026-05-08_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
