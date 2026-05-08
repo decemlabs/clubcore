@@ -41,6 +41,9 @@ type _BodyIsRealised = AssertNonNever<_MembershipsPostBody>
 type _VisitsListOk = paths['/api/v1/visits']['get']['responses']['200']
 type _VisitsListOkRealised = AssertNonNever<_VisitsListOk>
 
+// Phase 22 D-22-1: gym hours metadata endpoint (Wave 1 — downstream FE plans depend on this).
+type _VisitsMetaGet = AssertNonNever<paths['/api/v1/visits/_meta']['get']>
+
 // Static checks: each must resolve to true at compile time.
 const _checks: [
   _PlansListGet,
@@ -52,7 +55,8 @@ const _checks: [
   _VisitsListPost,
   _BodyIsRealised,
   _VisitsListOkRealised,
-] = [true, true, true, true, true, true, true, true, true]
+  _VisitsMetaGet,
+] = [true, true, true, true, true, true, true, true, true, true]
 
 // --- Phase 21 D-21-2: sessions conditional probe -----------------------
 // Sessions paths land in Phase 23. The conditional probe stays green
@@ -68,7 +72,7 @@ describe('schema.contract', () => {
     // The real assertions are above (compile-time). This block exists so
     // vitest counts the file. We touch the type-checks at runtime to
     // keep noUnusedLocals happy.
-    expect(_checks).toHaveLength(9)
+    expect(_checks).toHaveLength(10)
     expect(_sessionsCheck).toBe(true)
   })
 })

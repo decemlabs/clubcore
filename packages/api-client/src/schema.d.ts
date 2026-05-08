@@ -419,6 +419,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visits/_meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)
+         * @description Return gym hours window. Reception + owner. No DB access.
+         *
+         *     Cache-Control: public, max-age=300 — value travels with route (D-22-1).
+         *     Reads Settings.gym_hours_start / gym_hours_end (lru_cache) and serialises
+         *     via .isoformat()[:5] → HH:MM strings.
+         */
+        get: operations["get_visits_meta_api_v1_visits__meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/visits/{visit_id}": {
         parameters: {
             query?: never;
@@ -915,6 +939,10 @@ export interface components {
         ResponseEnvelope_VisitResponse_: {
             data: components["schemas"]["VisitResponse"];
         };
+        /** ResponseEnvelope[VisitsMetaResponse] */
+        ResponseEnvelope_VisitsMetaResponse_: {
+            data: components["schemas"]["VisitsMetaResponse"];
+        };
         /**
          * Role
          * @enum {string}
@@ -1038,6 +1066,19 @@ export interface components {
              * Format: uuid
              */
             membershipId: string;
+        };
+        /**
+         * VisitsMetaResponse
+         * @description GET /api/v1/visits/_meta response (Phase 22 D-22-1).
+         *
+         *     Returns gym hours window as HH:MM strings. Serialises from Settings
+         *     (lru_cache) — no DB access. Cache-Control: public, max-age=300.
+         */
+        VisitsMetaResponse: {
+            /** Gymhoursend */
+            gymHoursEnd: string;
+            /** Gymhoursstart */
+            gymHoursStart: string;
         };
     };
     responses: never;
@@ -1772,6 +1813,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_visits_meta_api_v1_visits__meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_VisitsMetaResponse_"];
                 };
             };
         };

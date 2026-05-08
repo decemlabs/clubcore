@@ -1147,6 +1147,18 @@
         "title": "ResponseEnvelope[VisitResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_VisitsMetaResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VisitsMetaResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[VisitsMetaResponse]",
+        "type": "object"
+      },
       "Role": {
         "enum": [
           "owner",
@@ -1353,6 +1365,26 @@
           "createdAt"
         ],
         "title": "VisitResponse",
+        "type": "object"
+      },
+      "VisitsMetaResponse": {
+        "additionalProperties": false,
+        "description": "GET /api/v1/visits/_meta response (Phase 22 D-22-1).\n\nReturns gym hours window as HH:MM strings. Serialises from Settings\n(lru_cache) — no DB access. Cache-Control: public, max-age=300.",
+        "properties": {
+          "gymHoursEnd": {
+            "title": "Gymhoursend",
+            "type": "string"
+          },
+          "gymHoursStart": {
+            "title": "Gymhoursstart",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gymHoursStart",
+          "gymHoursEnd"
+        ],
+        "title": "VisitsMetaResponse",
         "type": "object"
       }
     }
@@ -2570,6 +2602,28 @@
           }
         },
         "summary": "Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/_meta": {
+      "get": {
+        "description": "Return gym hours window. Reception + owner. No DB access.\n\nCache-Control: public, max-age=300 — value travels with route (D-22-1).\nReads Settings.gym_hours_start / gym_hours_end (lru_cache) and serialises\nvia .isoformat()[:5] → HH:MM strings.",
+        "operationId": "get_visits_meta_api_v1_visits__meta_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_VisitsMetaResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)",
         "tags": [
           "visits"
         ]
