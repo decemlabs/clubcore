@@ -1,10 +1,16 @@
-"""Visits HTTP router (Phase 19 VIS-EP-01..03).
+"""Visits HTTP router (Phase 19 VIS-EP-01..03; Phase 22 D-22-1).
 
-Three endpoints under /api/v1/visits (mounted in app/api/v1/router.py):
+Four endpoints under /api/v1/visits (mounted in app/api/v1/router.py):
   - GET    /                   list visits (reception+owner; (VIEW, VISITS))
+  - GET    /_meta              gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)
+                               (VIEW, VISITS); no DB access; Cache-Control: public, max-age=300
   - GET    /{id}               get one visit (reception+owner; (VIEW, VISITS))
   - POST   /                   reception manual check-in (reception+owner;
                                (CHECK_IN, VISITS); CSRF required)
+
+Route registration order: /_meta MUST be registered BEFORE /{visit_id} to
+prevent FastAPI's path resolver from routing "_meta" into the UUID parameter
+(D-22-1 invariant enforced by tests/integration/test_visits_meta.py).
 
 RBAC-04 ordering (clients/router.py + memberships/router.py precedent): in
 every mutation endpoint, `Depends(require_permission(...))` is declared BEFORE
@@ -18,9 +24,10 @@ invariant statically.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
 from app.core.pagination import PaginatedData
@@ -31,6 +38,7 @@ from app.modules.visits.schemas import (
     VisitCreateRequest,
     VisitListQuery,
     VisitResponse,
+    VisitsMetaResponse,
 )
 
 router = APIRouter()
@@ -52,6 +60,33 @@ async def list_visits(
     """List visits, paginated (VIS-EP-01). VIEW permission required."""
     page = await service.list_visits(session, query)
     return envelope(page)
+
+
+@router.get(
+    "/_meta",
+    response_model=ResponseEnvelope[VisitsMetaResponse],
+    summary="Gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)",
+)
+async def get_visits_meta(
+    response: Response,
+    _actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.VIEW, Resource.VISITS)),
+    ],
+) -> ResponseEnvelope[VisitsMetaResponse]:
+    """Return gym hours window. Reception + owner. No DB access.
+
+    Cache-Control: public, max-age=300 — value travels with route (D-22-1).
+    Reads Settings.gym_hours_start / gym_hours_end (lru_cache) and serialises
+    via .isoformat()[:5] → HH:MM strings.
+    """
+    settings = get_settings()
+    response.headers["Cache-Control"] = "public, max-age=300"
+    meta = VisitsMetaResponse(
+        gym_hours_start=settings.gym_hours_start.isoformat()[:5],
+        gym_hours_end=settings.gym_hours_end.isoformat()[:5],
+    )
+    return envelope(meta)
 
 
 @router.get(

@@ -59,6 +59,17 @@ class VisitResponse(BackendSchemaBase):
     created_at: datetime
 
 
+class VisitsMetaResponse(BackendSchemaBase):
+    """GET /api/v1/visits/_meta response (Phase 22 D-22-1).
+
+    Returns gym hours window as HH:MM strings. Serialises from Settings
+    (lru_cache) — no DB access. Cache-Control: public, max-age=300.
+    """
+
+    gym_hours_start: str  # HH:MM, e.g. "07:00"
+    gym_hours_end: str  # HH:MM, e.g. "23:00"
+
+
 class VisitListQuery(PageQuery):
     """GET /api/v1/visits query parameters (Phase 19 D-09).
 
