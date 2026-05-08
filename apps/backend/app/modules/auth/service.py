@@ -19,9 +19,10 @@ import hashlib
 import json
 from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
+import structlog
 from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import audit
 from app.core.config import get_settings
 from app.core.exceptions import InvalidAccessToken, InvalidPassword
+from app.core.pagination import PaginatedData
 from app.core.security import (
     encode_access_token,
     generate_csrf_token,
@@ -38,6 +40,9 @@ from app.core.security import (
 )
 from app.modules.auth.models import RefreshToken, User
 from app.modules.auth.rate_limit import bump_login_rate, check_login_rate
+from app.modules.auth.schemas import ActiveSessionItem
+
+_log = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Sentinel hash for timing-equivalent user-not-found path (Phase 4 D-28, AUTH-EP-02).
@@ -63,6 +68,23 @@ async def _get_sentinel_hash() -> str:
 
 def _sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _classify_verify_error(exc: InvalidPassword) -> str:
+    """Map the argon2-cffi cause to an ops-triage reason string (HYG-01 D-23-13).
+
+    Inspects exc.__cause__ (chained by verify_password with `raise ... from exc`).
+    Returns: 'verify_mismatch' | 'invalid_hash' | 'other'.
+    NEVER called with the raw cause itself — keeps the call site clean.
+    """
+    from argon2.exceptions import InvalidHashError, VerifyMismatchError
+
+    cause = exc.__cause__
+    if isinstance(cause, VerifyMismatchError):
+        return "verify_mismatch"
+    if isinstance(cause, InvalidHashError):
+        return "invalid_hash"
+    return "other"
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +135,20 @@ async def authenticate(
 
     try:
         await verify_password(password, target_hash)
-    except InvalidPassword:
+    except InvalidPassword as exc:
+        # HYG-01 D-23-13: TWO emits per failed verify path.
+        # (1) Structlog WARNING (operator side) — carries the verify-error reason for
+        #     ops triage (distinguishes wrong-password from corrupted-hash).
+        #     D-23-14: NEVER carries raw password, hash bytes, user_id, or telegram_chat_id.
+        _log.warning(
+            "login_verify_error",
+            reason=_classify_verify_error(exc),
+            email_lower=email_lower,
+            ip=ip,
+        )
+        # (2) Audit DB row (compliance side) — stays generic with reason='invalid_credentials'
+        #     to preserve Phase 5 AUTH-EP-02 timing/info equivalence. Compliance reviewers
+        #     cannot distinguish wrong-password from non-existent-email from corrupted-hash.
         await bump_login_rate(redis, email_lower)
         await audit.emit(
             session,
@@ -163,6 +198,9 @@ async def issue_tokens(
     session: AsyncSession,
     redis: Redis,
     user: User,
+    *,
+    user_agent: str | None = None,
+    channel: str = "email_password",
 ) -> tuple[str, str, str]:
     """Mint a fresh (access, refresh, csrf) tuple and persist DB+Redis state.
 
@@ -173,6 +211,8 @@ async def issue_tokens(
         - INSERT new row into refresh_tokens with new family_id.
         - SET auth:session:{user_id}:{family_id} with EX=refresh_token_ttl_seconds.
         - SADD auth:user_sessions:{user_id} family_id; EXPIRE same TTL.
+
+    CD-01 (Phase 23): user_agent + channel written to Redis session JSON.
     """
     settings = get_settings()
     now = datetime.now(tz=UTC)
@@ -198,6 +238,8 @@ async def issue_tokens(
         refresh_hash=refresh_hash,
         ttl=settings.refresh_token_ttl_seconds,
         now=now,
+        user_agent=user_agent,
+        channel=channel,
     )
 
     return access, raw_refresh, csrf
@@ -211,13 +253,22 @@ async def _write_session_keys(
     refresh_hash: str,
     ttl: int,
     now: datetime,
+    user_agent: str | None = None,
+    channel: str = "email_password",
 ) -> None:
-    """Write D-09 session JSON + D-10 user_sessions SET membership."""
+    """Write D-09 session JSON + D-10 user_sessions SET membership.
+
+    CD-01 (Phase 23): extends session JSON with user_agent + channel.
+    Pre-Phase-23 sessions will not have these fields; callers that read the
+    JSON fall back to None / 'email_password' respectively.
+    """
     session_value = json.dumps(
         {
             "family_id": str(family_id),
             "last_seen_at": now.isoformat(),
             "refresh_token_hash": refresh_hash,
+            "user_agent": user_agent,
+            "channel": channel,
         }
     )
     pipe = redis.pipeline()
@@ -351,6 +402,20 @@ async def rotate_refresh(
                 nx=True,
             )
 
+            # CD-01 (Phase 23): preserve user_agent + channel from prior session JSON.
+            # If Redis miss (e.g. TTL expired between rotate calls), fall back to
+            # None / 'email_password' so pre-Phase-23 sessions degrade gracefully.
+            prior_ua: str | None = None
+            prior_channel: str = "email_password"
+            prior_raw = await redis.get(f"auth:session:{row.user_id}:{row.family_id}")
+            if prior_raw is not None:
+                try:
+                    prior = json.loads(prior_raw)
+                    prior_ua = prior.get("user_agent")
+                    prior_channel = prior.get("channel", "email_password")
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
             await _write_session_keys(
                 redis,
                 user_id=row.user_id,
@@ -358,6 +423,8 @@ async def rotate_refresh(
                 refresh_hash=refresh_hash,
                 ttl=settings.refresh_token_ttl_seconds,
                 now=now,
+                user_agent=prior_ua,
+                channel=prior_channel,
             )
             return access, raw_refresh, csrf
 
@@ -536,3 +603,173 @@ async def revoke_all_sessions(
     await session.commit()
 
     return family_count
+
+
+# ---------------------------------------------------------------------------
+# list_user_sessions — GET /auth/sessions (Phase 23 HYG-03, D-23-1..D-23-4)
+# ---------------------------------------------------------------------------
+
+
+async def list_user_sessions(
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    user_id: UUID,
+    page: int,
+    page_size: int,
+    presented_refresh_token: str | None,
+) -> PaginatedData[ActiveSessionItem]:
+    """Return the user's active session families as a paginated envelope (D-23-1..D-23-4).
+
+    Sort: is_current=True first, then last_used_at DESC.
+    is_current resolved by sha256(presented_refresh_token) → RefreshToken.token_hash lookup.
+    Metadata (user_agent, channel) read from Redis; falls back to None/'email_password'
+    on cache miss (CD-01 trade-off for pre-Phase-23 sessions).
+
+    Caller-owns-txn: no session.commit() — read-only path.
+    """
+    now = datetime.now(tz=UTC)
+
+    # Resolve is_current: sha256(sz_refresh) → token_hash → family_id (D-23-3).
+    current_family_id: UUID | None = None
+    if presented_refresh_token is not None:
+        presented_hash = _sha256_hex(presented_refresh_token)
+        current_row = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
+        )
+        if current_row is not None:
+            current_family_id = current_row.family_id
+
+    # Fetch all alive rows for this user (revoked_at IS NULL AND expires_at > now).
+    all_rows = (
+        await session.scalars(
+            select(RefreshToken).where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+                RefreshToken.expires_at > now,
+            )
+        )
+    ).all()
+
+    # Aggregate by family_id: earliest created_at per family.
+    family_map: dict[UUID, datetime] = {}
+    for row in all_rows:
+        fid = row.family_id
+        if fid not in family_map or row.created_at < family_map[fid]:
+            family_map[fid] = row.created_at
+
+    # Build items with Redis metadata.
+    items: list[ActiveSessionItem] = []
+    for fid, created_at in family_map.items():
+        raw = await redis.get(f"auth:session:{user_id}:{fid}")
+        last_used_at = created_at  # fallback when Redis miss (CD-01)
+        ua: str | None = None
+        channel: str = "email_password"
+        if raw is not None:
+            try:
+                data = json.loads(raw)
+                last_seen_str = data.get("last_seen_at")
+                if last_seen_str:
+                    last_used_at = datetime.fromisoformat(last_seen_str)
+                ua = data.get("user_agent")
+                channel = data.get("channel") or "email_password"
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        items.append(
+            ActiveSessionItem(
+                family_id=fid,
+                created_at=created_at,
+                last_used_at=last_used_at,
+                user_agent=ua,
+                channel=channel,
+                is_current=(fid == current_family_id),
+            )
+        )
+
+    # Sort: is_current=True first, then last_used_at DESC (D-23-2).
+    items.sort(key=lambda it: (not it.is_current, -it.last_used_at.timestamp()))
+
+    total = len(items)
+    offset = (page - 1) * page_size
+    page_items = items[offset : offset + page_size]
+
+    return PaginatedData[ActiveSessionItem](
+        items=page_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# revoke_family — POST /auth/sessions/{family_id}/revoke (Phase 23 HYG-03, D-23-5..D-23-10)
+# ---------------------------------------------------------------------------
+
+
+async def revoke_family(
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    user_id: UUID,
+    family_id: UUID,
+) -> Literal["revoked", "noop", "not_found"]:
+    """Revoke a single session family by family_id (D-23-5..D-23-10).
+
+    Returns:
+      'revoked'    — family existed and was alive; revoked + audit emitted.
+      'noop'       — family existed but all rows already revoked (idempotent D-23-7).
+      'not_found'  — family does not exist OR belongs to another user (404-collapse D-23-6).
+
+    Self-commit: issues session.commit() so the audit row and UPDATE commit atomically,
+    same pattern as revoke_session (Pitfall 2).
+    """
+    now = datetime.now(tz=UTC)
+
+    # Fetch all rows for this family+user (cross-user safety — D-23-6).
+    rows = (
+        await session.scalars(
+            select(RefreshToken).where(
+                RefreshToken.family_id == family_id,
+                RefreshToken.user_id == user_id,
+            )
+        )
+    ).all()
+
+    if not rows:
+        # 404-collapse: covers both "family does not exist" AND "belongs to another user".
+        return "not_found"
+
+    # Check if all rows are already revoked.
+    alive_rows = [r for r in rows if r.revoked_at is None]
+    if not alive_rows:
+        # Idempotent noop — all rows already revoked (D-23-7). No audit emit.
+        return "noop"
+
+    # Revoke all alive rows in this family.
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.family_id == family_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with the UPDATE.
+    await audit.emit(
+        session,
+        "session_revoked",
+        actor_user_id=user_id,
+        resource_type="auth_session",
+        resource_id=family_id,
+    )
+    await session.commit()
+
+    # Outside the tx: clean Redis (DB is authoritative; Redis follows).
+    pipe = redis.pipeline()
+    pipe.delete(f"auth:session:{user_id}:{family_id}")
+    pipe.srem(f"auth:user_sessions:{user_id}", str(family_id))
+    await pipe.execute()
+
+    return "revoked"

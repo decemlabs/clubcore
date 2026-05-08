@@ -67,6 +67,16 @@ type _SessionsProbe = _HasSessions extends true
   : true
 const _sessionsCheck: _SessionsProbe = true
 
+// --- Phase 23 CD-05: sessions positive assertions (Phase 23 merged) ----
+// Both /sessions GET and /sessions/{family_id}/revoke POST must be present.
+// These assertions fail the TypeScript build if codegen does not emit the paths.
+type _GetSessions = AssertNonNever<paths['/api/v1/auth/sessions']['get']>
+type _PostRevokeSession = AssertNonNever<
+  paths['/api/v1/auth/sessions/{family_id}/revoke']['post']
+>
+const _sessionsGetCheck: _GetSessions = true
+const _sessionsRevokeCheck: _PostRevokeSession = true
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -74,5 +84,7 @@ describe('schema.contract', () => {
     // keep noUnusedLocals happy.
     expect(_checks).toHaveLength(10)
     expect(_sessionsCheck).toBe(true)
+    expect(_sessionsGetCheck).toBe(true)
+    expect(_sessionsRevokeCheck).toBe(true)
   })
 })

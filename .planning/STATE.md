@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 23 context gathered
-last_updated: "2026-05-08T13:08:05.333Z"
-last_activity: 2026-05-08
+last_updated: "2026-05-08T13:25:15.526Z"
+last_activity: 2026-05-08 -- Phase 23 execution started
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 35
+  total_plans: 36
   completed_plans: 34
-  percent: 97
+  percent: 94
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 22 — admin-web-wiring-memberships-visits-active-sessions-ui
+**Current focus:** Phase 23 — hygiene-active-sessions-backend-parallel-eligible
 
 ## Current Position
 
-Phase: 22 (admin-web-wiring-memberships-visits-active-sessions-ui) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-05-08
+Phase: 23 (hygiene-active-sessions-backend-parallel-eligible) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 23
+Last activity: 2026-05-08 -- Phase 23 execution started
 
 ## Performance Metrics
 

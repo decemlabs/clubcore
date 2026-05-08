@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "ActiveSessionItem": {
+        "description": "Single active session family row in the /sessions list response (D-23-4).\n\ncamelCase serialization is automatic via alias_generator=to_camel on ContractModel.\nWire names: familyId, createdAt, lastUsedAt, userAgent, channel, isCurrent.",
+        "properties": {
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "familyId": {
+            "format": "uuid",
+            "title": "Familyid",
+            "type": "string"
+          },
+          "isCurrent": {
+            "title": "Iscurrent",
+            "type": "boolean"
+          },
+          "lastUsedAt": {
+            "format": "date-time",
+            "title": "Lastusedat",
+            "type": "string"
+          },
+          "userAgent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Useragent"
+          }
+        },
+        "required": [
+          "familyId",
+          "createdAt",
+          "lastUsedAt",
+          "userAgent",
+          "channel",
+          "isCurrent"
+        ],
+        "title": "ActiveSessionItem",
+        "type": "object"
+      },
       "ClientCreateRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/clients body. Required: lastName, firstName, phone.",
@@ -866,6 +915,37 @@
         "title": "MembershipStatus",
         "type": "string"
       },
+      "PaginatedData_ActiveSessionItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveSessionItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ActiveSessionItem]",
+        "type": "object"
+      },
       "PaginatedData_ClientResponse_": {
         "properties": {
           "items": {
@@ -1061,6 +1141,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[NoneType]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ActiveSessionItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ActiveSessionItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ActiveSessionItem]]",
         "type": "object"
       },
       "ResponseEnvelope_PaginatedData_ClientResponse__": {
@@ -1520,6 +1612,107 @@
           }
         },
         "summary": "Refresh",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "get": {
+        "description": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(sz_refresh)\ntoken_hash lookup (D-23-3).",
+        "operationId": "list_sessions_api_v1_auth_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ActiveSessionItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List the current user's active session families",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sessions/{family_id}/revoke": {
+      "post": {
+        "description": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's sz_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
+        "operationId": "revoke_session_family_api_v1_auth_sessions__family_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "family_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Family Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke a single session family (idempotent)",
         "tags": [
           "auth"
         ]

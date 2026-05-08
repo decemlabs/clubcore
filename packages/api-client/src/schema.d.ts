@@ -117,6 +117,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's active session families
+         * @description Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).
+         *
+         *     GET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user
+         *     manages their own sessions. is_current resolved server-side via sha256(sz_refresh)
+         *     token_hash lookup (D-23-3).
+         */
+        get: operations["list_sessions_api_v1_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions/{family_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a single session family (idempotent)
+         * @description Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).
+         *
+         *     - 404-collapse on unknown family OR family belonging to another user (D-23-6).
+         *     - Idempotent: already-revoked family returns 200 (D-23-7).
+         *     - Self-revoke: if the revoked family matches THIS request's sz_refresh family,
+         *       clear the cookie matrix identical to /logout (D-23-8).
+         *     - Audit: session_revoked with resource_type='auth_session' (D-23-10).
+         */
+        post: operations["revoke_session_family_api_v1_auth_sessions__family_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/telegram/start": {
         parameters: {
             query?: never;
@@ -488,6 +538,36 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActiveSessionItem
+         * @description Single active session family row in the /sessions list response (D-23-4).
+         *
+         *     camelCase serialization is automatic via alias_generator=to_camel on ContractModel.
+         *     Wire names: familyId, createdAt, lastUsedAt, userAgent, channel, isCurrent.
+         */
+        ActiveSessionItem: {
+            /** Channel */
+            channel: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Familyid
+             * Format: uuid
+             */
+            familyId: string;
+            /** Iscurrent */
+            isCurrent: boolean;
+            /**
+             * Lastusedat
+             * Format: date-time
+             */
+            lastUsedAt: string;
+            /** Useragent */
+            userAgent: string | null;
+        };
+        /**
          * ClientCreateRequest
          * @description POST /api/v1/clients body. Required: lastName, firstName, phone.
          */
@@ -842,6 +922,17 @@ export interface components {
          * @enum {string}
          */
         MembershipStatus: "active" | "expired" | "cancelled";
+        /** PaginatedData[ActiveSessionItem] */
+        PaginatedData_ActiveSessionItem_: {
+            /** Items */
+            items: components["schemas"]["ActiveSessionItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[ClientResponse] */
         PaginatedData_ClientResponse_: {
             /** Items */
@@ -910,6 +1001,10 @@ export interface components {
         ResponseEnvelope_NoneType_: {
             /** Data */
             data: null;
+        };
+        /** ResponseEnvelope[PaginatedData[ActiveSessionItem]] */
+        ResponseEnvelope_PaginatedData_ActiveSessionItem__: {
+            data: components["schemas"]["PaginatedData_ActiveSessionItem_"];
         };
         /** ResponseEnvelope[PaginatedData[ClientResponse]] */
         ResponseEnvelope_PaginatedData_ClientResponse__: {
@@ -1198,6 +1293,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_auth_sessions_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ActiveSessionItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_session_family_api_v1_auth_sessions__family_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                family_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

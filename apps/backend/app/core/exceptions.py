@@ -71,6 +71,19 @@ class InvalidPassword(AppError):  # noqa: N818
     status_code = 401
 
 
+class InvalidSession(AppError):  # noqa: N818
+    """UUID parse failure on sz_access sub claim (Phase 23 D-23-11/D-23-12).
+
+    Wrap site: app.core.dependencies.get_current_user (UUID(claims.sub)).
+    Distinct from InvalidAccessToken so FE branches:
+      - code='invalid_token' → token expired, auto-refresh UX
+      - code='invalid_session' → cookie tampered, force re-login UX
+    """
+
+    code = "invalid_session"
+    status_code = 401
+
+
 class RateLimited(AppError):  # noqa: N818
     """Per-actor throttle exhausted (Phase 5 AUTH-EP-03 — 5 failed logins / 15 min)."""
 
