@@ -480,8 +480,10 @@ async def get_membership(
 async def resolve_active_membership_by_client(
     session: AsyncSession,
     client_id: UUID,
+    *,
+    today: date | None = None,
 ) -> Membership | None:
-    """Return the canonical active membership for `client_id`, or None (MEM-04, CD-06).
+    """Return the canonical active membership for `client_id`, or None (MEM-04, CD-06, DEBT-01).
 
     Implements MEM-04 tiebreak via `repository.find_active_for_client`:
     ORDER BY end_date DESC, created_at DESC LIMIT 1 (D-17 — silent, no warning,
@@ -493,8 +495,17 @@ async def resolve_active_membership_by_client(
 
     Public per CD-06 — Phase 17-04 wires this into the resolver registration
     via `register_active_membership_resolver(resolve_active_membership_by_client)`.
+
+    Phase 24 DEBT-01: applies `end_date >= today (Europe/Moscow)` defence-in-depth
+    filter via the repository. `today=None` resolves to today in Europe/Moscow
+    (mirrors `_expire_due_memberships` injection pattern); tests pass an explicit
+    `today` for determinism. Closes the v1.2 MEM-04 D-13 known gap where a missed
+    ARQ `expire_memberships` tick could leave a stale `status='active'` row
+    passable for visits / Telegram check-in.
     """
-    return await repository.find_active_for_client(session, client_id)
+    if today is None:
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    return await repository.find_active_for_client(session, client_id, today=today)
 
 
 # ===========================================================================

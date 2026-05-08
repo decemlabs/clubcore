@@ -281,23 +281,37 @@ async def update_membership_status(
 
 
 async def find_active_for_client(
-    session: AsyncSession, client_id: UUID
+    session: AsyncSession,
+    client_id: UUID,
+    *,
+    today: date,
 ) -> Membership | None:
-    """Return the canonical active membership for `client_id`, or None (MEM-04).
+    """Return the canonical active membership for `client_id`, or None (MEM-04, DEBT-01).
 
     Tiebreak: ORDER BY end_date DESC, created_at DESC LIMIT 1 (D-17 — silent,
     no structlog warning, no audit event). The composite index
     `ix_memberships_client_id_status_end_date` on
-    `(client_id, status, end_date DESC)` covers this query.
+    `(client_id, status, end_date DESC)` covers this query (rightmost column
+    is range-scan friendly for the new `end_date >= today` predicate).
 
-    Date filter is intentionally NOT applied here: per D-13, status field is
-    the gate, not end_date. Phase 18 ARQ flips status -> 'expired' on its own
-    cadence; until then a row whose end_date has passed but whose status is
-    still 'active' is the canonical row.
+    Date filter (DEBT-01, Phase 24): we apply `end_date >= today` here as a
+    defence-in-depth backstop. Phase 18's ARQ `expire_memberships` cron is
+    the primary `active → expired` flipper, but a missed tick (worker crash,
+    deploy window) would otherwise leave a stale `status='active'` row
+    passable for visits / Telegram check-in. The resolver is the ultimate
+    gate, so it filters by date as well.
+
+    `today` is a required keyword-only argument; callers MUST resolve their
+    Europe/Moscow `date` before calling (the service-layer wrapper
+    `service.resolve_active_membership_by_client` does this).
     """
     stmt = (
         select(Membership)
-        .where(Membership.client_id == client_id, Membership.status == "active")
+        .where(
+            Membership.client_id == client_id,
+            Membership.status == "active",
+            Membership.end_date >= today,
+        )
         .order_by(Membership.end_date.desc(), Membership.created_at.desc())
         .limit(1)
     )
