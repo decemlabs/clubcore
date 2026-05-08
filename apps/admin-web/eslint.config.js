@@ -64,6 +64,13 @@ export default tseslint.config(
               message:
                 'Go through services container or a TanStack Query hook (do not import mock/http impls directly).',
             },
+            {
+              // Phase 22 D-22-12 — Pattern α: composition lives at the route layer only.
+              target: ['./src/features/clients/**'],
+              from: ['./src/features/memberships/**', './src/features/visits/**'],
+              message:
+                'Pattern α: features/clients must not import features/memberships or features/visits. Compose at the route level (clients.$clientId.tsx).',
+            },
           ],
         },
       ],
