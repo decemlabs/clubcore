@@ -15,6 +15,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,6 +115,41 @@ async def test_resolver_returns_none_for_expired_only_client(
 
     got = await resolve_active_membership_by_client(db_session, client_uuid)
     assert got is None
+
+
+async def test_resolver_filters_expired_active_row(
+    authed_client_owner: AsyncClient,
+    db_session: AsyncSession,
+    make_plan: Any,
+    make_membership: Any,
+) -> None:
+    """DEBT-01 (Phase 24): missed ARQ tick — status='active' but end_date < today
+    (Europe/Moscow) → resolver returns None.
+
+    Defence-in-depth: Phase 18 ARQ `expire_memberships` is the primary
+    `active → expired` flipper, but a missed tick (worker crash, deploy window)
+    used to leave a stale `status='active'` row passable. The resolver is the
+    ULTIMATE gate for visits + Telegram check-in, so it filters by date as well.
+    """
+    today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    plan = await make_plan(name="Stale Active")
+    client = await _create_client(authed_client_owner, phone="+79991232100")
+    client_uuid = UUID(client["id"])
+
+    # Insert a row that the ARQ cron should have flipped to 'expired' but didn't yet.
+    await make_membership(
+        client_id=client_uuid,
+        plan=plan,
+        status="active",
+        start_date=today - timedelta(days=30),
+        end_date=today - timedelta(days=1),
+    )
+
+    got = await resolve_active_membership_by_client(db_session, client_uuid, today=today)
+    assert got is None, (
+        "DEBT-01: resolver MUST filter `end_date < today` rows even when status='active' "
+        "(missed ARQ tick defence-in-depth)."
+    )
 
 
 # --- D-17 / MEM-04 tiebreak ------------------------------------------------
