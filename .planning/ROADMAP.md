@@ -193,7 +193,8 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   1. `POST /auth/login` with a tampered/corrupted Argon2 hash returns 401 `invalid_credentials` (not 500); the rate-limit (5/15min) still applies and structlog logs the verify-error reason at WARNING level.
   2. A request carrying an invalid-UUID `sz_access` or `sz_refresh` cookie (e.g. tampered) returns 401 `invalid_session` (not 500); the auth dependency catches the parse error explicitly.
   3. `GET /api/v1/auth/sessions` returns the user's active session families with `{family_id, created_at, last_used_at, user_agent?, channel}`, and `POST /api/v1/auth/sessions/{family_id}/revoke` (CSRF) revokes a single family without affecting others; `POST /api/v1/auth/logout-all` retains its existing behavior.
-**Plans**: TBD
+**Plans**: 1 plan
+  - [ ] 23-01-PLAN.md — Hygiene primitives (HYG-01 Argon2 WARNING + HYG-02 InvalidSession wrap) + sessions endpoints (HYG-03 list + per-family revoke + audit taxonomy delta) + drift-gate refresh — HYG-01, HYG-02, HYG-03
 
 ## Progress
 
@@ -222,7 +223,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete    | 2026-05-08 |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 1/1 | Complete    | 2026-05-08 |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 4/5 | In Progress|  |
-| 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
+| 23. Hygiene + active sessions backend | v1.2 | 0/1 | Not started | — |
 
 ---
 *Roadmap last updated: 2026-05-07 — Phase 18 planned (6 plans, 4 waves)*
