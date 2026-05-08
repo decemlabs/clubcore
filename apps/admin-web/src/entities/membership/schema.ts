@@ -25,7 +25,10 @@ export type MembershipsListQueryInput = z.infer<typeof membershipsListQuerySchem
 
 export const membershipPlanFormSchema = z.object({
   name: z.string().min(1, 'Введите название').max(120),
-  priceRoubles: z.number().int().min(0), // UI in roubles, converts to kopecks at submit
+  // UI in roubles, converts to kopecks at submit. Fractional roubles are
+  // allowed so existing plans whose priceKopecks is not a multiple of 100
+  // (e.g. 2500.50 ₽) round-trip without lossy snapping (BLK-04).
+  priceRoubles: z.number().min(0),
   durationDays: z.number().int().positive(),
   active: z.boolean().default(true),
 })

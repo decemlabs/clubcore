@@ -35,7 +35,8 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
     resolver: zodResolver(membershipPlanFormSchema),
     defaultValues: {
       name: plan?.name ?? '',
-      priceRoubles: plan ? Math.round(plan.priceKopecks / 100) : 0,
+      // Lossless: kopecks → roubles preserves sub-rouble precision (BLK-04).
+      priceRoubles: plan ? plan.priceKopecks / 100 : 0,
       durationDays: plan?.durationDays ?? 30,
       active: plan?.active ?? true,
     },
@@ -45,7 +46,7 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
   useEffect(() => {
     form.reset({
       name: plan?.name ?? '',
-      priceRoubles: plan ? Math.round(plan.priceKopecks / 100) : 0,
+      priceRoubles: plan ? plan.priceKopecks / 100 : 0,
       durationDays: plan?.durationDays ?? 30,
       active: plan?.active ?? true,
     })
@@ -57,7 +58,10 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
   }
 
   const onSubmit = form.handleSubmit((values) => {
-    const priceKopecks = values.priceRoubles * 100
+    // Round explicitly so an existing fractional rouble value (e.g. 2500.50)
+    // round-trips back to the original kopecks (BLK-04). FE allows decimals
+    // in the input; backend money is integer minor units.
+    const priceKopecks = Math.round(values.priceRoubles * 100)
 
     if (isEdit && plan) {
       updatePlan.mutate(
@@ -150,7 +154,7 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
               id="priceRoubles"
               type="number"
               min={0}
-              step={1}
+              step={0.01}
               {...form.register('priceRoubles', { valueAsNumber: true })}
             />
             {form.formState.errors.priceRoubles && (
