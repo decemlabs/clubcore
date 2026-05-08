@@ -11,42 +11,42 @@
 
 ### Foundations (Phase 15)
 
-- [ ] **INFRA-08**: `app/core/permissions.py` adds `Action.{CREATE, CANCEL, CHECK_IN}` and `Resource.{MEMBERSHIPS, MEMBERSHIP_PLANS, VISITS}` StrEnum entries; `OWNER_ONLY` frozenset extended with `(VIEW|EDIT|CREATE|DELETE, MEMBERSHIP_PLANS)` + `(CANCEL|DELETE, MEMBERSHIPS)`. Reception RETAINS `(CREATE, MEMBERSHIPS)` and `(CHECK_IN, VISITS)`.
-- [ ] **INFRA-09**: `apps/admin-web/src/shared/session/registry.ts` and `can.ts` mirror the new resources/actions/OWNER_ONLY entries byte-paritetic with backend; TEST-06 three-way parity test (backend ↔ admin-web `can.ts` ↔ `registry.ts`) extended to cover the new pairs.
-- [ ] **INFRA-10**: `app/core/sql.py` exposes `escape_like_pattern(value: str) -> str` (escapes `%`, `_`, `\`); migrated from `app/modules/clients/repository.py`; clients repository imports from `core/sql.py` (no behavior change, regression-tested).
-- [ ] **INFRA-11**: `app/core/audit.py` defines `LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]]` (event_name, resource_type) tuples; `audit.emit()` validates the pair at call and raises if not in the set; locked list extended with the 10 new v1.2 events (`membership_plan_*` ×3, `membership_*` ×3 incl. `membership_expired`, `visit_*` ×4 incl. `visit_rejected_*`).
-- [ ] **INFRA-12**: `app/core/schemas.py` exposes `BackendSchemaBase(BaseModel)` with `alias_generator=to_camel`, `validate_by_name=True`, `validate_by_alias=True`, `extra='forbid'` (Pydantic 2.11+ canonical pair, replacing the deprecated `populate_by_name=True`); v1.2 schemas (memberships, visits) inherit from it; ruff `UP007` enforced repo-wide (`X | None` not `Optional[X]`).
-- [ ] **INFRA-13**: `app/core/services.py` exposes `BusinessService` mixin / template documenting the `await session.commit()` invariant for write paths; CI gate (ruff custom rule OR pytest meta-test) walks every `service.py` write function and fails if it lacks an explicit `commit` call (or an explicit `# noqa: SVC001 caller-owns-txn` comment).
-- [ ] **INFRA-14**: PROJECT.md `## Key Decisions` extended in Phase 15 commit with: (a) inclusive `end_date` semantics for memberships, (b) `gym_date` defined as `(checked_in_at AT TIME ZONE 'Europe/Moscow')::date`, (c) accepted residual friend-fraud risk for v1.2 single-zal scope.
+- [x] **INFRA-08**: `app/core/permissions.py` adds `Action.{CREATE, CANCEL, CHECK_IN}` and `Resource.{MEMBERSHIPS, MEMBERSHIP_PLANS, VISITS}` StrEnum entries; `OWNER_ONLY` frozenset extended with `(VIEW|EDIT|CREATE|DELETE, MEMBERSHIP_PLANS)` + `(CANCEL|DELETE, MEMBERSHIPS)`. Reception RETAINS `(CREATE, MEMBERSHIPS)` and `(CHECK_IN, VISITS)`.
+- [x] **INFRA-09**: `apps/admin-web/src/shared/session/registry.ts` and `can.ts` mirror the new resources/actions/OWNER_ONLY entries byte-paritetic with backend; TEST-06 three-way parity test (backend ↔ admin-web `can.ts` ↔ `registry.ts`) extended to cover the new pairs.
+- [x] **INFRA-10**: `app/core/sql.py` exposes `escape_like_pattern(value: str) -> str` (escapes `%`, `_`, `\`); migrated from `app/modules/clients/repository.py`; clients repository imports from `core/sql.py` (no behavior change, regression-tested).
+- [x] **INFRA-11**: `app/core/audit.py` defines `LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]]` (event_name, resource_type) tuples; `audit.emit()` validates the pair at call and raises if not in the set; locked list extended with the 10 new v1.2 events (`membership_plan_*` ×3, `membership_*` ×3 incl. `membership_expired`, `visit_*` ×4 incl. `visit_rejected_*`).
+- [x] **INFRA-12**: `app/core/schemas.py` exposes `BackendSchemaBase(BaseModel)` with `alias_generator=to_camel`, `validate_by_name=True`, `validate_by_alias=True`, `extra='forbid'` (Pydantic 2.11+ canonical pair, replacing the deprecated `populate_by_name=True`); v1.2 schemas (memberships, visits) inherit from it; ruff `UP007` enforced repo-wide (`X | None` not `Optional[X]`).
+- [x] **INFRA-13**: `app/core/services.py` exposes `BusinessService` mixin / template documenting the `await session.commit()` invariant for write paths; CI gate (ruff custom rule OR pytest meta-test) walks every `service.py` write function and fails if it lacks an explicit `commit` call (or an explicit `# noqa: SVC001 caller-owns-txn` comment).
+- [x] **INFRA-14**: PROJECT.md `## Key Decisions` extended in Phase 15 commit with: (a) inclusive `end_date` semantics for memberships, (b) `gym_date` defined as `(checked_in_at AT TIME ZONE 'Europe/Moscow')::date`, (c) accepted residual friend-fraud risk for v1.2 single-zal scope.
 
 ### Memberships — Plans Catalog (Phase 16)
 
-- [ ] **MEM-PLAN-01**: Alembic migration `0004_membership_plans.py` creates `membership_plans` table with columns: `id` (UUID PK gen_random_uuid()), `name` (VARCHAR(120) NOT NULL), `duration_days` (INT NOT NULL CHECK > 0), `price_kopecks` (BIGINT NOT NULL CHECK >= 0), `active` (BOOLEAN NOT NULL DEFAULT TRUE), `created_at`/`updated_at` (TIMESTAMPTZ via TimestampMixin), `deleted_at` (TIMESTAMPTZ NULL via SoftDeleteMixin). Partial unique index `WHERE deleted_at IS NULL` on `lower(name)`.
-- [ ] **MEM-PLAN-02**: `app/modules/memberships/{models,schemas,repository,service,router}.py` follow the validated `clients` module template; service write paths use the `BusinessService` template (INFRA-13); ILIKE search (if implemented) uses `core/sql.py:escape_like_pattern`.
-- [ ] **MEM-PLAN-EP-01**: `GET /api/v1/membership-plans` lists plans (owner-only via `Depends(require_permission(Action.VIEW, Resource.MEMBERSHIP_PLANS))`); paginated envelope `{items, total, page, pageSize}`; `?active=true` filter optional.
-- [ ] **MEM-PLAN-EP-02**: `POST /api/v1/membership-plans` creates a plan (owner-only, CSRF); body `{name, durationDays, priceKopecks, active?}`; returns 201 with the created plan.
-- [ ] **MEM-PLAN-EP-03**: `PATCH /api/v1/membership-plans/{id}` updates `name`/`price_kopecks`/`active` (owner-only, CSRF); `duration_days` is **immutable** post-creation (would invalidate existing sold instances' snapshots semantics).
-- [ ] **MEM-PLAN-EP-04**: `DELETE /api/v1/membership-plans/{id}` soft-deletes a plan (owner-only, CSRF); returns 409 `plan_in_use` if any non-cancelled `Membership` row references it (since FK is `ON DELETE RESTRICT`).
-- [ ] **MEM-PLAN-AUDIT-01**: `audit.emit("membership_plan_created", actor, resource_type='membership_plan', resource_id=plan.id, name, duration_days, price_kopecks)` on create; analogous events on update/archive.
+- [x] **MEM-PLAN-01**: Alembic migration `0004_membership_plans.py` creates `membership_plans` table with columns: `id` (UUID PK gen_random_uuid()), `name` (VARCHAR(120) NOT NULL), `duration_days` (INT NOT NULL CHECK > 0), `price_kopecks` (BIGINT NOT NULL CHECK >= 0), `active` (BOOLEAN NOT NULL DEFAULT TRUE), `created_at`/`updated_at` (TIMESTAMPTZ via TimestampMixin), `deleted_at` (TIMESTAMPTZ NULL via SoftDeleteMixin). Partial unique index `WHERE deleted_at IS NULL` on `lower(name)`.
+- [x] **MEM-PLAN-02**: `app/modules/memberships/{models,schemas,repository,service,router}.py` follow the validated `clients` module template; service write paths use the `BusinessService` template (INFRA-13); ILIKE search (if implemented) uses `core/sql.py:escape_like_pattern`.
+- [x] **MEM-PLAN-EP-01**: `GET /api/v1/membership-plans` lists plans (owner-only via `Depends(require_permission(Action.VIEW, Resource.MEMBERSHIP_PLANS))`); paginated envelope `{items, total, page, pageSize}`; `?active=true` filter optional.
+- [x] **MEM-PLAN-EP-02**: `POST /api/v1/membership-plans` creates a plan (owner-only, CSRF); body `{name, durationDays, priceKopecks, active?}`; returns 201 with the created plan.
+- [x] **MEM-PLAN-EP-03**: `PATCH /api/v1/membership-plans/{id}` updates `name`/`price_kopecks`/`active` (owner-only, CSRF); `duration_days` is **immutable** post-creation (would invalidate existing sold instances' snapshots semantics).
+- [x] **MEM-PLAN-EP-04**: `DELETE /api/v1/membership-plans/{id}` soft-deletes a plan (owner-only, CSRF); returns 409 `plan_in_use` if any non-cancelled `Membership` row references it (since FK is `ON DELETE RESTRICT`).
+- [x] **MEM-PLAN-AUDIT-01**: `audit.emit("membership_plan_created", actor, resource_type='membership_plan', resource_id=plan.id, name, duration_days, price_kopecks)` on create; analogous events on update/archive.
 
 ### Memberships — Instances (Phase 17)
 
-- [ ] **MEM-01**: Alembic migration `0005_memberships.py` creates `memberships` table with columns: `id` (UUID PK), `client_id` (UUID NOT NULL FK clients.id ON DELETE RESTRICT), `plan_id` (UUID NOT NULL FK membership_plans.id ON DELETE RESTRICT), `duration_days_snapshot` (INT NOT NULL), `price_kopecks_snapshot` (BIGINT NOT NULL), `plan_name_snapshot` (VARCHAR(120) NOT NULL), `start_date` (DATE NOT NULL), `end_date` (DATE NOT NULL — INCLUSIVE last valid check-in day), `status` (VARCHAR NOT NULL CHECK IN ('active','expired','cancelled') DEFAULT 'active'), `cancelled_at` (TIMESTAMPTZ NULL), `cancel_reason` (TEXT NULL), `paid_at` (TIMESTAMPTZ NULL — manual today, ЮKassa in v1.3), `notes` (TEXT NULL), `activation_policy` (VARCHAR NOT NULL DEFAULT 'purchase_date' CHECK = 'purchase_date'), `created_at`/`updated_at`. Index on `(client_id, status, end_date DESC)` for resolver queries.
-- [ ] **MEM-02**: `Membership.create_membership(session, client_id, plan_id, actor)` snapshots plan fields at insert time (`plan_name_snapshot`, `duration_days_snapshot`, `price_kopecks_snapshot`); `start_date = today (Europe/Moscow)`, `end_date = start_date + duration_days_snapshot - 1` (inclusive); `status='active'`. Plan edits after sale never affect existing membership rows.
-- [ ] **MEM-03**: `service.cancel_membership(session, membership_id, actor, reason?)` is **owner-only** (enforced at router level), only valid when current `status='active'`; sets `status='cancelled'`, `cancelled_at=now()`. Transition guards: `expired → cancelled` and `cancelled → cancelled` return 409 `invalid_transition`.
-- [ ] **MEM-04**: `service.resolve_active_membership_by_client(session, client_id) -> ActiveMembership | None` returns the SINGLE active membership matching `status='active' AND end_date >= today (Europe/Moscow)`. Tiebreak when client has multiple active memberships: latest `end_date`, then `created_at DESC`. Documented in service docstring.
-- [ ] **MEM-05**: `app/core/dependencies.py` defines `ActiveMembership` Protocol (`id, client_id, end_date, status`), `ActiveMembershipResolver` callable type, `register_active_membership_resolver(resolver)` setter, `resolve_active_membership(session, client_id)` consumer; `app/main.py:create_app()` registers `memberships.service.resolve_active_membership_by_client` as the resolver before `lifespan` starts.
-- [ ] **MEM-EP-01**: `GET /api/v1/memberships?clientId={uuid}&status={active|expired|cancelled}` lists memberships (paginated envelope); reception+owner can VIEW.
-- [ ] **MEM-EP-02**: `GET /api/v1/memberships/{id}` returns single membership; reception+owner can VIEW.
-- [ ] **MEM-EP-03**: `POST /api/v1/memberships` (CSRF) sells a membership; body `{clientId, planId, paidAt?, notes?}`; reception+owner can CREATE; returns 201 with created Membership.
-- [ ] **MEM-EP-04**: `POST /api/v1/memberships/{id}/cancel` (CSRF) cancels a membership; body `{reason?}`; **owner-only** via `Depends(require_permission(Action.CANCEL, Resource.MEMBERSHIPS))`; returns 200 with the updated row.
-- [ ] **MEM-AUDIT-01**: `audit.emit("membership_created", ...)` on sale, `"membership_cancelled"` on cancel (with reason in payload), `"membership_expired"` on auto-expiry (actor_user_id=None).
+- [x] **MEM-01**: Alembic migration `0005_memberships.py` creates `memberships` table with columns: `id` (UUID PK), `client_id` (UUID NOT NULL FK clients.id ON DELETE RESTRICT), `plan_id` (UUID NOT NULL FK membership_plans.id ON DELETE RESTRICT), `duration_days_snapshot` (INT NOT NULL), `price_kopecks_snapshot` (BIGINT NOT NULL), `plan_name_snapshot` (VARCHAR(120) NOT NULL), `start_date` (DATE NOT NULL), `end_date` (DATE NOT NULL — INCLUSIVE last valid check-in day), `status` (VARCHAR NOT NULL CHECK IN ('active','expired','cancelled') DEFAULT 'active'), `cancelled_at` (TIMESTAMPTZ NULL), `cancel_reason` (TEXT NULL), `paid_at` (TIMESTAMPTZ NULL — manual today, ЮKassa in v1.3), `notes` (TEXT NULL), `activation_policy` (VARCHAR NOT NULL DEFAULT 'purchase_date' CHECK = 'purchase_date'), `created_at`/`updated_at`. Index on `(client_id, status, end_date DESC)` for resolver queries.
+- [x] **MEM-02**: `Membership.create_membership(session, client_id, plan_id, actor)` snapshots plan fields at insert time (`plan_name_snapshot`, `duration_days_snapshot`, `price_kopecks_snapshot`); `start_date = today (Europe/Moscow)`, `end_date = start_date + duration_days_snapshot - 1` (inclusive); `status='active'`. Plan edits after sale never affect existing membership rows.
+- [x] **MEM-03**: `service.cancel_membership(session, membership_id, actor, reason?)` is **owner-only** (enforced at router level), only valid when current `status='active'`; sets `status='cancelled'`, `cancelled_at=now()`. Transition guards: `expired → cancelled` and `cancelled → cancelled` return 409 `invalid_transition`.
+- [x] **MEM-04**: `service.resolve_active_membership_by_client(session, client_id) -> ActiveMembership | None` returns the SINGLE active membership matching `status='active' AND end_date >= today (Europe/Moscow)`. Tiebreak when client has multiple active memberships: latest `end_date`, then `created_at DESC`. Documented in service docstring.
+- [x] **MEM-05**: `app/core/dependencies.py` defines `ActiveMembership` Protocol (`id, client_id, end_date, status`), `ActiveMembershipResolver` callable type, `register_active_membership_resolver(resolver)` setter, `resolve_active_membership(session, client_id)` consumer; `app/main.py:create_app()` registers `memberships.service.resolve_active_membership_by_client` as the resolver before `lifespan` starts.
+- [x] **MEM-EP-01**: `GET /api/v1/memberships?clientId={uuid}&status={active|expired|cancelled}` lists memberships (paginated envelope); reception+owner can VIEW.
+- [x] **MEM-EP-02**: `GET /api/v1/memberships/{id}` returns single membership; reception+owner can VIEW.
+- [x] **MEM-EP-03**: `POST /api/v1/memberships` (CSRF) sells a membership; body `{clientId, planId, paidAt?, notes?}`; reception+owner can CREATE; returns 201 with created Membership.
+- [x] **MEM-EP-04**: `POST /api/v1/memberships/{id}/cancel` (CSRF) cancels a membership; body `{reason?}`; **owner-only** via `Depends(require_permission(Action.CANCEL, Resource.MEMBERSHIPS))`; returns 200 with the updated row.
+- [x] **MEM-AUDIT-01**: `audit.emit("membership_created", ...)` on sale, `"membership_cancelled"` on cancel (with reason in payload), `"membership_expired"` on auto-expiry (actor_user_id=None).
 
 ### ARQ Scheduled Job — Membership Expiry (Phase 18)
 
 - [x] **ARQ-01**: `app/workers/scheduled/__init__.py` (namespace marker) and `app/workers/scheduled/expire_memberships.py` exist; the latter exposes `async def expire_memberships(ctx) -> int`. D-09 docstring documents the worker→module exception.
 - [x] **ARQ-02**: `expire_memberships(ctx)` is idempotent: single-transaction `UPDATE memberships SET status='expired' WHERE end_date < CURRENT_DATE AND status='active' RETURNING id` (or equivalent ORM flow); returns count of newly-expired rows; emits `audit.emit("membership_expired", actor_user_id=None, ...)` for each row.
-- [x] **ARQ-03**: `app/workers/__init__.py` defines a real `WorkerSettings` (replacing the placeholder docstring): `redis_settings` from `get_settings().redis_url`, `on_startup`/`on_shutdown` opening/closing the DB lifespan and exposing `sessionmaker` via `ctx`, `functions=[expire_memberships]`, `cron_jobs=[cron(expire_memberships, hour=3, minute=5, unique=True, keep_cronjob_progress=60)]` (06:05 Europe/Moscow with container `TZ=UTC`).
+- [x] **ARQ-03**: `app/workers/__init__.py` defines a real `WorkerSettings` (replacing the placeholder docstring): `redis_settings` from `get_settings().redis_url`, `on_startup`/`on_shutdown` opening/closing the DB lifespan and exposing `sessionmaker` via `ctx`, `functions=[expire_memberships]`, `cron_jobs=[cron(expire_memberships, hour=3, minute=5, unique=True, keep_result=60)]` (06:05 Europe/Moscow with container `TZ=UTC`). _Note: prose updated 2026-05-08 from `keep_cronjob_progress=60` to `keep_result=60` to match the ARQ 0.28 API rename — `keep_cronjob_progress` was removed in 0.27. Closes ARQ-03 audit gap from v1.2-MILESTONE-AUDIT.md._
 - [x] **ARQ-04**: ARQ worker is added to `apps/backend/docker-compose.yml` (per Phase 18 CD-02 — the canonical compose file lives at `apps/backend/`, not `infra/`; relocation deferred to a future infra-consolidation phase) as a 5th service `arq-worker` (`command: uv run arq app.workers.WorkerSettings`, `restart: unless-stopped`, `depends_on: [migrate (service_completed_successfully), redis (service_started)]`, `env_file: .env`, `environment: { TZ: UTC, DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal, REDIS_URL: redis://redis:6379/0 }`); placeholder `apps/backend/app/workers/scheduler.py` is deleted.
 - [x] **ARQ-05**: `on_job_start`/`on_job_end` hooks bind `job_id`/`job_name` to structlog contextvars so cron-job log lines carry the same shape as request log lines (analogous to `request_id` from RequestIdMiddleware).
 - [x] **ARQ-TEST-01**: Unit test calls `expire_memberships(ctx)` directly (no real ARQ runtime needed) with a fixture creating 3 memberships (1 expiring today, 1 expiring yesterday, 1 future); expects exactly 1 newly-expired row (yesterday's, end_date < today) and exactly 1 `membership_expired` audit event; today's row (end_date == today) stays `active` until tomorrow's tick (inclusive end_date per Phase 15 Key Decisions).
@@ -54,8 +54,8 @@
 
 ### Visits (Phase 19)
 
-- [ ] **VIS-01**: Alembic migration `0006_visits.py` creates `visits` table with columns: `id` (UUID PK), `client_id` (UUID NOT NULL FK clients.id ON DELETE RESTRICT), `membership_id` (UUID NOT NULL FK memberships.id ON DELETE RESTRICT), `checked_in_at` (TIMESTAMPTZ NOT NULL DEFAULT now()), `gym_date` (DATE NOT NULL GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED), `channel` (VARCHAR NOT NULL CHECK IN ('reception','telegram_bot')), `checked_in_by` (UUID NULL FK users.id ON DELETE SET NULL — nullable for telegram_bot), `created_at`. UNIQUE INDEX on `(client_id, gym_date)`. Indexes: `(client_id, checked_in_at DESC)` for history queries.
-- [ ] **VIS-02**: `app/modules/visits/{models,schemas,repository,service,router}.py` follow the validated module template; service uses `BusinessService` (INFRA-13).
+- [x] **VIS-01**: Alembic migration `0006_visits.py` creates `visits` table with columns: `id` (UUID PK), `client_id` (UUID NOT NULL FK clients.id ON DELETE RESTRICT), `membership_id` (UUID NOT NULL FK memberships.id ON DELETE RESTRICT), `checked_in_at` (TIMESTAMPTZ NOT NULL DEFAULT now()), `gym_date` (DATE NOT NULL GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED), `channel` (VARCHAR NOT NULL CHECK IN ('reception','telegram_bot')), `checked_in_by` (UUID NULL FK users.id ON DELETE SET NULL — nullable for telegram_bot), `created_at`. UNIQUE INDEX on `(client_id, gym_date)`. Indexes: `(client_id, checked_in_at DESC)` for history queries.
+- [x] **VIS-02**: `app/modules/visits/{models,schemas,repository,service,router}.py` follow the validated module template; service uses `BusinessService` (INFRA-13).
 - [x] **VIS-03**: `service.create_visit_reception(session, client_id, actor)` validates: (a) gym hours window via `settings.gym_hours_start` / `settings.gym_hours_end` Europe/Moscow → `OutsideGymHoursError(409)`, (b) calls `core.dependencies.resolve_active_membership(session, client_id)` → `NoActiveMembershipError(409)` if None, (c) inserts Visit row → IntegrityError on `(client_id, gym_date)` UNIQUE → `DuplicateCheckinError(409)`. Sets `channel='reception'`, `checked_in_by=actor.id`.
 - [x] **VIS-04**: `service.create_visit_self_checkin(session, telegram_user_id, chat_id)` looks up Client via `users.telegram_user_id` ↔ `users.id` ↔ existing client mapping (TBD in Phase 19 plan: how clients are linked to users — likely via `users.client_id` FK or lookup). Same anti-fraud chain as VIS-03 but: `channel='telegram_bot'`, `checked_in_by=NULL`. Specific exception classes for bot path: `NoActiveMembershipError`, `DuplicateCheckinError`, `OutsideGymHoursError`.
 - [x] **VIS-05**: `apps/backend/.env.example` adds `GYM_HOURS_START=07:00` and `GYM_HOURS_END=23:00` (HH:MM Europe/Moscow); `app/core/config.py` `Settings` parses to `time` objects; missing values fail loud at startup.
@@ -85,7 +85,7 @@
 - [x] **FE-06**: New routes: `/_protected/membership-plans.tsx` (owner-only via `beforeLoad` mirror of `clients.tsx:14-23`), `/_protected/memberships.tsx`, `/_protected/visits.tsx` — all loaders use `queryClient.ensureQueryData` with same keys as hooks.
 - [x] **FE-07**: `routes/_protected/clients.$clientId.tsx` (NEW — Pattern α) composes `Promise.all([ensureQueryData(client), ensureQueryData(memberships), ensureQueryData(visits)])` in loader (no waterfall). Page renders `<MembershipsBlock>` (from `features/memberships`) and `<RecentVisitsBlock>` (from `features/visits`) — `features/clients` does NOT import either.
 - [x] **FE-08**: Reception UX edge cases on check-in page: (a) phone-prefix search returns top-5 matches with disambiguation, (b) if today's visit already exists for that client, the button is disabled and shows badge "Отмечен в HH:MM via {channel}", (c) if active membership ends today (inclusive), the button still enables, (d) outside gym hours the button is disabled with the actual gym-hours string from a `GET /api/v1/visits/_meta` (or env-mirrored config) response.
-- [ ] **FE-09**: Active sessions UI on profile page (carryover from v1.1 Auth UX queue): `/auth/sessions` list + per-session "Revoke" button + "Logout all" button; uses existing `/api/v1/auth/logout-all` + new `GET /api/v1/auth/sessions` and `POST /api/v1/auth/sessions/{family_id}/revoke` endpoints (Phase 23 may also need to ship the `GET sessions` and per-family revoke endpoints if not present; this requirement spans both backend and frontend).
+- [x] **FE-09**: Active sessions UI on profile page (carryover from v1.1 Auth UX queue): `/auth/sessions` list + per-session "Revoke" button + "Logout all" button; uses existing `/api/v1/auth/logout-all` + new `GET /api/v1/auth/sessions` and `POST /api/v1/auth/sessions/{family_id}/revoke` endpoints (Phase 23 may also need to ship the `GET sessions` and per-family revoke endpoints if not present; this requirement spans both backend and frontend). _Shipped http-only by design (D-22-2): SessionsList + LogoutAllDialog + /profile route + HYG-03 backend endpoints all in place; mock service throws `mock_not_implemented` for write paths. Live E2E validation queued in 22-VERIFICATION.md `human_verification:` block (requires running backend)._
 - [x] **FE-10**: Cheap-win differentiator picks: D-3 (red badge "истёк сегодня" in client list memberships block), D-2 ("expiring within 7 days" filter on memberships list page), D-5 (Telegram bot success DM includes days-remaining). Other differentiators (D-1/D-4/D-6/D-7 from FEATURES.md) deferred to v1.3+.
 - [x] **FE-11**: ESLint flat config validates Pattern α — no `features/clients/*` imports `features/memberships/*` or `features/visits/*`; tested via negative-test fixture in `eslint.config.js` (mirror of v1.1 fixtures). Confirm `eslint.config.js` `import/no-restricted-paths` rules in Phase 22 plan.
 
@@ -97,10 +97,10 @@
 
 ### Tests
 
-- [ ] **TESTS-08**: TEST-06 RBAC parity test extended to cover the new (action, resource) pairs across backend `permissions.py` ↔ admin-web `can.ts` ↔ `registry.ts`; fails if any side drifts.
-- [ ] **TESTS-09**: `audit.emit` validation against `LOCKED_AUDIT_EVENTS` covered by a meta-test that walks every `audit.emit(...)` callsite in the codebase and confirms the (event_name, resource_type) pair is in the locked frozenset.
-- [ ] **TESTS-10**: Membership state-machine transition matrix unit test enumerates all 9 (from_status, action) cells and asserts allowed transitions match `MEM-03` rules + Postgres CHECK constraint.
-- [ ] **TESTS-11**: `_escape_like_pattern` regression suite from v1.1 CR-01 closure runs against `core/sql.py` (relocated module path); existing `clients` tests pass unchanged after import path swap.
+- [x] **TESTS-08**: TEST-06 RBAC parity test extended to cover the new (action, resource) pairs across backend `permissions.py` ↔ admin-web `can.ts` ↔ `registry.ts`; fails if any side drifts.
+- [x] **TESTS-09**: `audit.emit` validation against `LOCKED_AUDIT_EVENTS` covered by a meta-test that walks every `audit.emit(...)` callsite in the codebase and confirms the (event_name, resource_type) pair is in the locked frozenset.
+- [x] **TESTS-10**: Membership state-machine transition matrix unit test enumerates all 9 (from_status, action) cells and asserts allowed transitions match `MEM-03` rules + Postgres CHECK constraint.
+- [x] **TESTS-11**: `_escape_like_pattern` regression suite from v1.1 CR-01 closure runs against `core/sql.py` (relocated module path); existing `clients` tests pass unchanged after import path swap.
 
 ---
 
@@ -171,34 +171,34 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| INFRA-08 | Phase 15 | Pending |
-| INFRA-09 | Phase 15 | Pending |
-| INFRA-10 | Phase 15 | Pending |
-| INFRA-11 | Phase 15 | Pending |
-| INFRA-12 | Phase 15 | Pending |
-| INFRA-13 | Phase 15 | Pending |
-| INFRA-14 | Phase 15 | Pending |
-| TESTS-08 | Phase 15 | Pending |
-| TESTS-11 | Phase 15 | Pending |
-| MEM-PLAN-01 | Phase 16 | Pending |
-| MEM-PLAN-02 | Phase 16 | Pending |
-| MEM-PLAN-EP-01 | Phase 16 | Pending |
-| MEM-PLAN-EP-02 | Phase 16 | Pending |
-| MEM-PLAN-EP-03 | Phase 16 | Pending |
-| MEM-PLAN-EP-04 | Phase 16 | Pending |
-| MEM-PLAN-AUDIT-01 | Phase 16 | Pending |
-| MEM-01 | Phase 17 | Pending |
-| MEM-02 | Phase 17 | Pending |
-| MEM-03 | Phase 17 | Pending |
-| MEM-04 | Phase 17 | Pending |
-| MEM-05 | Phase 17 | Pending |
-| MEM-EP-01 | Phase 17 | Pending |
-| MEM-EP-02 | Phase 17 | Pending |
-| MEM-EP-03 | Phase 17 | Pending |
-| MEM-EP-04 | Phase 17 | Pending |
-| MEM-AUDIT-01 | Phase 17 | Pending |
-| TESTS-09 | Phase 17 | Pending |
-| TESTS-10 | Phase 17 | Pending |
+| INFRA-08 | Phase 15 | Complete |
+| INFRA-09 | Phase 15 | Complete |
+| INFRA-10 | Phase 15 | Complete |
+| INFRA-11 | Phase 15 | Complete |
+| INFRA-12 | Phase 15 | Complete |
+| INFRA-13 | Phase 15 | Complete |
+| INFRA-14 | Phase 15 | Complete |
+| TESTS-08 | Phase 15 | Complete |
+| TESTS-11 | Phase 15 | Complete |
+| MEM-PLAN-01 | Phase 16 | Complete |
+| MEM-PLAN-02 | Phase 16 | Complete |
+| MEM-PLAN-EP-01 | Phase 16 | Complete |
+| MEM-PLAN-EP-02 | Phase 16 | Complete |
+| MEM-PLAN-EP-03 | Phase 16 | Complete |
+| MEM-PLAN-EP-04 | Phase 16 | Complete (D-15: 409 plan_in_use FK enforcement deferred to Phase 17 0005 migration; shipped) |
+| MEM-PLAN-AUDIT-01 | Phase 16 | Complete |
+| MEM-01 | Phase 17 | Complete |
+| MEM-02 | Phase 17 | Complete |
+| MEM-03 | Phase 17 | Complete |
+| MEM-04 | Phase 17 | Complete (D-13: resolver filters by status='active' only; relies on Phase 18 ARQ tick to flip expired rows) |
+| MEM-05 | Phase 17 | Complete |
+| MEM-EP-01 | Phase 17 | Complete |
+| MEM-EP-02 | Phase 17 | Complete |
+| MEM-EP-03 | Phase 17 | Complete |
+| MEM-EP-04 | Phase 17 | Complete |
+| MEM-AUDIT-01 | Phase 17 | Complete |
+| TESTS-09 | Phase 17 | Complete |
+| TESTS-10 | Phase 17 | Complete |
 | ARQ-01 | Phase 18 | Complete |
 | ARQ-02 | Phase 18 | Complete |
 | ARQ-03 | Phase 18 | Complete |
@@ -206,8 +206,8 @@
 | ARQ-05 | Phase 18 | Complete |
 | ARQ-TEST-01 | Phase 18 | Complete |
 | ARQ-TEST-02 | Phase 18 | Complete |
-| VIS-01 | Phase 19 | Pending |
-| VIS-02 | Phase 19 | Pending |
+| VIS-01 | Phase 19 | Complete |
+| VIS-02 | Phase 19 | Complete |
 | VIS-03 | Phase 19 | Complete |
 | VIS-04 | Phase 19 | Complete |
 | VIS-05 | Phase 19 | Complete |
@@ -228,7 +228,7 @@
 | FE-06 | Phase 22 | Complete |
 | FE-07 | Phase 22 | Complete |
 | FE-08 | Phase 22 | Complete |
-| FE-09 | Phase 22 | Pending |
+| FE-09 | Phase 22 | Complete (D-22-2: shipped http-only by design; mock throws mock_not_implemented; live E2E queued in 22-VERIFICATION.md human_verification block) |
 | FE-10 | Phase 22 | Complete |
 | FE-11 | Phase 22 | Complete |
 | HYG-01 | Phase 23 | Complete |

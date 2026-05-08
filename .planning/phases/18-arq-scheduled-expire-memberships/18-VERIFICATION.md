@@ -1,13 +1,20 @@
 ---
 phase: 18-arq-scheduled-expire-memberships
 verified: 2026-05-07T00:00:00Z
-status: human_needed
-score: 5/5 success criteria verified; 1 documentation reconciliation pending human decision
-overrides_applied: 0
+re_verified: 2026-05-08T16:30:00Z
+status: passed
+score: 5/5 success criteria verified
+overrides_applied: 1
+human_decision_resolved:
+  - decision: "ARQ 0.28 reconciliation"
+    chosen: "Option (a) — edit REQUIREMENTS.md ARQ-03 prose to `keep_result=60`"
+    applied_at: "2026-05-08T16:30:00Z (during /gsd-complete-milestone v1.2 pre-flight)"
+    evidence: "REQUIREMENTS.md:49 now reads `keep_result=60` with an inline note documenting the ARQ 0.28 rename. arq pin remains `>=0.28` (no revert to 0.26.x). ARQ-03 audit gap from v1.2-MILESTONE-AUDIT.md is closed."
 human_verification:
   - test: "Decide ARQ 0.28 reconciliation: REQUIREMENTS.md ARQ-03 still names `keep_cronjob_progress=60` but shipped code uses `keep_result=60` (the API rename in arq 0.28.0)"
     expected: "Either (a) edit REQUIREMENTS.md ARQ-03 to read `keep_result=60` (preferred — semantics preserved by SQL-level idempotency gate, defence-in-depth maintained) and pin `arq>=0.28` in `apps/backend/pyproject.toml`, OR (b) pin `arq>=0.26,<0.27` and revert the worker code to `keep_cronjob_progress=60`."
     why_human: "REQUIREMENTS.md prose is locked text; the verifier must not silently rewrite locked specs. The deviation is documented in `apps/backend/app/workers/__init__.py:78-86` and SUMMARY 18-03; the user owns the choice."
+    resolved: "Yes — Option (a) chosen by user 2026-05-08T16:30:00Z; REQUIREMENTS.md updated."
 ---
 
 # Phase 18: ARQ scheduled `expire_memberships` Verification Report
