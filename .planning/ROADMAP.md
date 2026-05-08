@@ -46,7 +46,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - [x] **Phase 17: Membership Instances + Resolver (backend)** — `memberships` table with snapshot pricing + `paid_at`/`notes`/`activation_policy`; sell + cancel + active resolver via Protocol callback registered in `app/main.py`; transition matrix + audit events. (completed 2026-05-07)
 - [x] **Phase 18: ARQ scheduled `expire_memberships`** — first real ARQ cron job (D-09); idempotent SQL `UPDATE … RETURNING id`; new `arq-worker` compose service; structlog `job_id` contextvars binding. (completed 2026-05-07)
 - [x] **Phase 19: Visits — DB + reception check-in (backend)** — `visits` table with `gym_date GENERATED STORED` + UNIQUE `(client_id, gym_date)` for race-proof 1/day rule; gym-hours window from env; 3 endpoints; concurrent-request test. (completed 2026-05-07)
-- [ ] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off.
+- [x] **Phase 20: Telegram bot `/checkin` self check-in** — `HandlerContext.visits_service` (D-10); locked Russian DM strings (no oracle leak); Redis `update_id` dedup; owner copy sign-off. (completed 2026-05-08)
 - [ ] **Phase 21: OpenAPI drift gate refresh + api-client codegen** — regen byte-stable `openapi.json` + `schema.d.ts`; CI green on both diffs.
 - [ ] **Phase 22: admin-web wiring — memberships + visits + active sessions UI** — new `features/memberships`, `features/visits`; `/memberships`, `/membership-plans`, `/visits` routes; client-detail Pattern α; reception UX edge cases; cheap-win differentiators D-2/D-3/D-5; sessions UI.
 - [ ] **Phase 23: Hygiene + active sessions backend (parallel-eligible)** — Phase 04 CR-01 (Argon2 verify-error → 401) + CR-02 (invalid UUID in cookie → 401); ship `GET /auth/sessions` + per-family revoke endpoints if not present.
@@ -154,7 +154,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 **Plans**: 3 plans
   - [x] 20-01-PLAN.md — handlers.py extensions (HandlerContext + 4 DM constants + 2 helpers + checkin_handler) + audit.py LOCKED_AUDIT_EVENTS extension — AUTH-TG-07, AUTH-TG-08, AUTH-TG-11
   - [x] 20-02-PLAN.md — telegram_bot.py worker wiring (D-10 import + 5-field HandlerContext + checkin registration) + .importlinter verification — AUTH-TG-09, AUTH-TG-10
-  - [ ] 20-03-PLAN.md — Tests (7 integration + 5 unit) + PROJECT.md D-20 + REQUIREMENTS.md AUTH-TG-* check-off + owner sign-off checkpoint on locked Russian DM strings — AUTH-TG-07..11
+  - [x] 20-03-PLAN.md — Tests (7 integration + 5 unit) + PROJECT.md D-20 + REQUIREMENTS.md AUTH-TG-* check-off + owner sign-off checkpoint on locked Russian DM strings — AUTH-TG-07..11
 
 ### Phase 21: OpenAPI drift gate refresh + api-client codegen
 **Goal**: The frontend↔backend contract is byte-frozen for the new memberships/visits/sessions surface — drift becomes impossible without an explicit "I really meant it" commit.
@@ -213,7 +213,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 20. Telegram bot `/checkin` self check-in | v1.2 | 2/3 | In Progress|  |
+| 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete   | 2026-05-08 |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
 | 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
