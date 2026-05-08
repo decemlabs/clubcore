@@ -173,6 +173,34 @@ class InvalidTransitionError(ConflictError):
     status_code = 409
 
 
+class FreezeLimitExceededError(ConflictError):
+    """Raised on POST /memberships/{id}/freeze when cumulative freeze days
+    would exceed freeze_days_limit_snapshot (Phase 25 MEM-FRZ-04).
+
+    Constructor:
+        raise FreezeLimitExceededError(
+            "freeze_limit_exceeded",
+            fields={"limit": snapshot_limit, "used": days_used},
+        )
+    """
+
+    code = "freeze_limit_exceeded"
+    status_code = 409
+
+
+class AlreadyFrozenError(ConflictError):
+    """Raised on POST /memberships/{id}/freeze when partial unique index
+    uq_membership_freeze_periods_active_per_membership rejects concurrent
+    INSERT (Phase 25 MEM-FRZ-TEST-03 race).
+
+    Discriminated against IntegrityError by service.py:_is_already_frozen_conflict
+    checking constraint name.
+    """
+
+    code = "already_frozen"
+    status_code = 409
+
+
 class MembershipNotFoundError(NotFoundError):
     """Raised when GET / POST cancel references a non-existent membership id."""
 
