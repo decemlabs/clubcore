@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
-stopped_at: Phase 22 context gathered
-last_updated: "2026-05-08T10:58:02.514Z"
+stopped_at: Completed 22-03-PLAN.md visits feature
+last_updated: "2026-05-08T14:30:00.000Z"
 last_activity: 2026-05-08
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 35
-  completed_plans: 32
-  percent: 91
+  completed_plans: 34
+  percent: 97
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 22 (admin-web-wiring-memberships-visits-active-sessions-ui) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-05-08
 
@@ -68,6 +68,7 @@ Last activity: 2026-05-08
 | Phase 18 P06 | 5min | 3 tasks | 3 files |
 | Phase 22 P01 | 4min | 2 tasks | 6 files |
 | Phase 22 P02 | 90 | 3 tasks | 34 files |
+| Phase 22 P03 | 120min | 3 tasks | 25 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,10 @@ Recent decisions affecting current work (carried into v1.2 + new):
 - [Phase ?]: Phase 18 W-3 (Plan 18-05): structlog cached-logger invalidation autouse fixture required for any test scope mixing module-level loggers with capture_logs and per-test create_app() reconfigure
 - [Phase ?]: Phase 18-06: W-1 probe locked Form B (bare ints) — ARQ 0.28 cron stores hour/minute as int, not set
 - [Phase ?]: Phase 18-06: Rule 1 fix — unit tests assert on cron_jobs[0].coroutine.__name__ + .keep_result_s instead of .name + .keep_cronjob_progress (ARQ 0.28 attribute reality)
+- [Phase 22]: Plan 22-03: D-22-7 enforced — mock.visits.checkIn throws DomainError mock_not_implemented; write paths require VITE_API_MODE=http
+- [Phase 22]: Plan 22-03: Architecture Rule 5 upheld — useMembershipStatusForClient in features/visits consumes services.memberships via swap-seam, NOT importing @/features/memberships
+- [Phase 22]: Plan 22-03: formatTimeMSK uses Intl.DateTimeFormat Europe/Moscow (NOT date-fns formatTime) — critical for TZ-correct time rendering in visit history
+- [Phase 22]: Plan 22-03: FE-08(c) end_date inclusive — expiring-today condition is `activeMembership.endDate === todayMSK()`; button stays ENABLED (informational badge only)
 
 ### Pending Todos
 
@@ -137,6 +142,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-08T10:58:02.510Z
-Stopped at: Phase 22 context gathered
+Last session: 2026-05-08T14:30:00.000Z
+Stopped at: Completed 22-03-PLAN.md visits feature
 Resume file: None

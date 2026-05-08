@@ -81,7 +81,7 @@
 ### Frontend Wiring — admin-web (Phase 22)
 
 - [x] **FE-04**: `apps/admin-web/src/features/memberships/{api,components,model,index.ts}` exists; `useMembershipsByClient(clientId)` + `useMembershipPlans()` hooks wired to typed `services.memberships.*` swap-seam (mock + http impls).
-- [ ] **FE-05**: `apps/admin-web/src/features/visits/{api,components,model,index.ts}` exists; `useRecentVisitsByClient(clientId, opts)` hook wired.
+- [x] **FE-05**: `apps/admin-web/src/features/visits/{api,components,model,index.ts}` exists; `useRecentVisitsByClient(clientId, opts)` hook wired.
 - [x] **FE-06**: New routes: `/_protected/membership-plans.tsx` (owner-only via `beforeLoad` mirror of `clients.tsx:14-23`), `/_protected/memberships.tsx`, `/_protected/visits.tsx` — all loaders use `queryClient.ensureQueryData` with same keys as hooks.
 - [ ] **FE-07**: `routes/_protected/clients.$clientId.tsx` (NEW — Pattern α) composes `Promise.all([ensureQueryData(client), ensureQueryData(memberships), ensureQueryData(visits)])` in loader (no waterfall). Page renders `<MembershipsBlock>` (from `features/memberships`) and `<RecentVisitsBlock>` (from `features/visits`) — `features/clients` does NOT import either.
 - [x] **FE-08**: Reception UX edge cases on check-in page: (a) phone-prefix search returns top-5 matches with disambiguation, (b) if today's visit already exists for that client, the button is disabled and shows badge "Отмечен в HH:MM via {channel}", (c) if active membership ends today (inclusive), the button still enables, (d) outside gym hours the button is disabled with the actual gym-hours string from a `GET /api/v1/visits/_meta` (or env-mirrored config) response.
@@ -224,7 +224,7 @@
 | API-04 | Phase 21 | Complete |
 | API-05 | Phase 21 | Complete |
 | FE-04 | Phase 22 | Complete |
-| FE-05 | Phase 22 | Pending |
+| FE-05 | Phase 22 | Complete |
 | FE-06 | Phase 22 | Complete |
 | FE-07 | Phase 22 | Pending |
 | FE-08 | Phase 22 | Complete |
