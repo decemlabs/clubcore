@@ -5,6 +5,7 @@
 - ✅ **v1.0 Phase A: Skeleton** — Phases 1-3 (shipped 2026-05-01) — see [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Auth + Clients** — Phases 4-14 (shipped 2026-05-07) — see [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 Memberships + Visits** — Phases 15-23 (shipped 2026-05-08) — see [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
+- 🚧 **v1.3 Memberships Extras + Tech-Debt** — Phases 24-29 (planning, started 2026-05-08) — see [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 
 ## Phases
 
@@ -56,9 +57,21 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 </details>
 
+### 🚧 v1.3 Memberships Extras + Tech-Debt (Phases 24-29) — IN PROGRESS
+
+- [ ] **Phase 24: Foundations & Tech-Debt Bedrock** — INFRA-15/16 + DEBT-01/02/03 (5 reqs) — `LOCKED_AUDIT_EVENTS` extension, `frozen` status CHECK, resolver `end_date >= today` filter, `?expiring=` query, SVC001 walker → auth/service.py
+- [ ] **Phase 25: Memberships — Freeze (backend)** — MEM-FRZ-01..07 + EP-01..03 + AUDIT-01 + TEST-01..03 (14 reqs) — `freeze_days_limit` + `membership_freeze_periods` + freeze/unfreeze endpoints + resolver-rejects-frozen
+- [ ] **Phase 26: Memberships — Renewal (backend)** — MEM-REN-01..04 + EP-01 + AUDIT-01 + TEST-01..04 (10 reqs) — `previous_membership_id` FK + `POST /renew` with current-price snapshot + resolver tiebreak
+- [ ] **Phase 27: Expiring-soon Telegram Notifications** — NTF-01..06 + COPY-01 + TEST-01..03 (10 reqs) — ARQ cron 06:15 Europe/Moscow + 6 locked Russian DM templates (anti-oracle) + idempotency table
+- [ ] **Phase 28: OpenAPI Drift-Gate Refresh + admin-web Wiring** — FE-10..13 (4 reqs) — regenerate `openapi.json` + `schema.d.ts`; FE freeze/renewal UI + expiring-filter on `VITE_API_MODE=http` *(UI phase)*
+- [ ] **Phase 29: Milestone Verification** — DEBT-04 (1 req) — 6 human-verification smoke tests + cross-phase integration sweep + verification log
+
+Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
+
 ---
 
-*Roadmap last updated: 2026-05-08 — v1.2 milestone closed*
+*Roadmap last updated: 2026-05-08 — v1.3 milestone planning started*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt)*
+*v1.3 Coverage: 0/44 v1.3 requirements satisfied (44 mapped to phases, planning phase)*

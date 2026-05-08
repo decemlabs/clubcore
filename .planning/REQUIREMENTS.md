@@ -2,7 +2,7 @@
 
 **Milestone goal:** Доращиваем memberships до полноценной фичи (freeze, expiring-soon notifications, renewal) и закрываем 4 переноса из v1.2 — без новых внешних интеграций.
 
-**Status:** scoped 2026-05-08, awaiting roadmap.
+**Status:** scoped 2026-05-08, roadmap drafted 2026-05-08.
 
 REQ-IDs continue v1.2 conventions (`MEM-*`, `MEM-EP-*`, `MEM-AUDIT-*`, `ARQ-*`, `INFRA-*`, `FE-*`).
 
@@ -94,8 +94,67 @@ REQ-IDs continue v1.2 conventions (`MEM-*`, `MEM-EP-*`, `MEM-AUDIT-*`, `ARQ-*`, 
 
 ## Traceability
 
-_Filled by roadmapper in step 10 (gsd-roadmapper agent maps each REQ-ID to exactly one phase)._
+44/44 v1.3 requirements mapped to exactly one phase (no orphans, no double-mapping).
+
+| REQ-ID | Phase | Status |
+|---|---|---|
+| INFRA-15 | Phase 24 | Pending |
+| INFRA-16 | Phase 24 | Pending |
+| DEBT-01 | Phase 24 | Pending |
+| DEBT-02 | Phase 24 | Pending |
+| DEBT-03 | Phase 24 | Pending |
+| MEM-FRZ-01 | Phase 25 | Pending |
+| MEM-FRZ-02 | Phase 25 | Pending |
+| MEM-FRZ-03 | Phase 25 | Pending |
+| MEM-FRZ-04 | Phase 25 | Pending |
+| MEM-FRZ-05 | Phase 25 | Pending |
+| MEM-FRZ-06 | Phase 25 | Pending |
+| MEM-FRZ-07 | Phase 25 | Pending |
+| MEM-FRZ-EP-01 | Phase 25 | Pending |
+| MEM-FRZ-EP-02 | Phase 25 | Pending |
+| MEM-FRZ-EP-03 | Phase 25 | Pending |
+| MEM-FRZ-AUDIT-01 | Phase 25 | Pending |
+| MEM-FRZ-TEST-01 | Phase 25 | Pending |
+| MEM-FRZ-TEST-02 | Phase 25 | Pending |
+| MEM-FRZ-TEST-03 | Phase 25 | Pending |
+| MEM-REN-01 | Phase 26 | Pending |
+| MEM-REN-02 | Phase 26 | Pending |
+| MEM-REN-03 | Phase 26 | Pending |
+| MEM-REN-04 | Phase 26 | Pending |
+| MEM-REN-EP-01 | Phase 26 | Pending |
+| MEM-REN-AUDIT-01 | Phase 26 | Pending |
+| MEM-REN-TEST-01 | Phase 26 | Pending |
+| MEM-REN-TEST-02 | Phase 26 | Pending |
+| MEM-REN-TEST-03 | Phase 26 | Pending |
+| MEM-REN-TEST-04 | Phase 26 | Pending |
+| NTF-01 | Phase 27 | Pending |
+| NTF-02 | Phase 27 | Pending |
+| NTF-03 | Phase 27 | Pending |
+| NTF-04 | Phase 27 | Pending |
+| NTF-05 | Phase 27 | Pending |
+| NTF-06 | Phase 27 | Pending |
+| NTF-COPY-01 | Phase 27 | Pending |
+| NTF-TEST-01 | Phase 27 | Pending |
+| NTF-TEST-02 | Phase 27 | Pending |
+| NTF-TEST-03 | Phase 27 | Pending |
+| FE-10 | Phase 28 | Pending |
+| FE-11 | Phase 28 | Pending |
+| FE-12 | Phase 28 | Pending |
+| FE-13 | Phase 28 | Pending |
+| DEBT-04 | Phase 29 | Pending |
+
+### Coverage by Phase
+
+| Phase | Requirement Count | REQ-IDs |
+|---|---|---|
+| Phase 24: Foundations & Tech-Debt Bedrock | 5 | INFRA-15, INFRA-16, DEBT-01, DEBT-02, DEBT-03 |
+| Phase 25: Memberships — Freeze (backend) | 14 | MEM-FRZ-01..07, MEM-FRZ-EP-01..03, MEM-FRZ-AUDIT-01, MEM-FRZ-TEST-01..03 |
+| Phase 26: Memberships — Renewal (backend) | 10 | MEM-REN-01..04, MEM-REN-EP-01, MEM-REN-AUDIT-01, MEM-REN-TEST-01..04 |
+| Phase 27: Expiring-soon Telegram Notifications | 10 | NTF-01..06, NTF-COPY-01, NTF-TEST-01..03 |
+| Phase 28: OpenAPI Drift-Gate Refresh + admin-web Wiring | 4 | FE-10, FE-11, FE-12, FE-13 |
+| Phase 29: Milestone Verification | 1 | DEBT-04 |
+| **Total** | **44** | — |
 
 ---
 
-*Drafted 2026-05-08 during `/gsd-new-milestone`.*
+*Drafted 2026-05-08 during `/gsd-new-milestone`; traceability filled 2026-05-08 by gsd-roadmapper.*

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Memberships Extras + Tech-Debt
 status: planning
-last_updated: "2026-05-08T16:56:15.868Z"
+last_updated: "2026-05-08T17:00:00.000Z"
 last_activity: 2026-05-08
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,39 +20,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-08)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Planning v1.3 — run `/gsd-new-milestone` to scope.
+**Current focus:** v1.3 roadmap drafted (6 phases, 24–29). Next: `/gsd-plan-phase 24`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 24 — Foundations & Tech-Debt Bedrock (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-08 — Milestone v1.3 started
+Status: Roadmap drafted, awaiting phase planning
+Last activity: 2026-05-08 — v1.3 ROADMAP.md + REQUIREMENTS.md traceability written by gsd-roadmapper
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 5 (this milestone)
+- Total plans completed: 0 (this milestone)
 - Average duration: —
 - Total execution time: 0.0 hours
 
-**By Phase (v1.2):**
+**By Phase (v1.3):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 15. Foundations — RBAC + audit taxonomy + helper hoisting | 0/TBD | — | — |
-| 16. Membership Plans Catalog (backend) | 0/TBD | — | — |
-| 17. Membership Instances + Resolver (backend) | 0/TBD | — | — |
-| 18. ARQ scheduled `expire_memberships` | 0/TBD | — | — |
-| 19. Visits — DB + reception check-in (backend) | 0/TBD | — | — |
-| 20. Telegram bot `/checkin` self check-in | 0/TBD | — | — |
-| 21. OpenAPI drift gate refresh + api-client codegen | 0/TBD | — | — |
-| 22. admin-web wiring — memberships + visits + active sessions UI | 0/TBD | — | — |
-| 23. Hygiene + active sessions backend | 0/TBD | — | — |
-| 20 | 3 | - | - |
-| 21 | 1 | - | - |
-| 23 | 1 | - | - |
+| 24. Foundations & Tech-Debt Bedrock | 0/TBD | — | — |
+| 25. Memberships — Freeze (backend) | 0/TBD | — | — |
+| 26. Memberships — Renewal (backend) | 0/TBD | — | — |
+| 27. Expiring-soon Telegram Notifications | 0/TBD | — | — |
+| 28. OpenAPI Drift-Gate Refresh + admin-web Wiring | 0/TBD | — | — |
+| 29. Milestone Verification | 0/TBD | — | — |
 
 **Recent Trend:**
 
@@ -60,66 +54,46 @@ Last activity: 2026-05-08 — Milestone v1.3 started
 - Trend: —
 
 *Updated after each plan completion.*
-| Phase 18 P01 | 6 min | 2 tasks | 5 files |
-| Phase 18 P04 | 2min | 2 tasks | 2 files |
-| Phase 18 P02 | 1min | 2 tasks | 2 files |
-| Phase 18 P03 | 5min | 2 tasks | 4 files (1 source, 2 docs, 2 deletions) |
-| Phase 18-arq-scheduled-expire-memberships P05 | 5min | 3 tasks | 4 files |
-| Phase 18 P06 | 5min | 3 tasks | 3 files |
-| Phase 22 P01 | 4min | 2 tasks | 6 files |
-| Phase 22 P02 | 90 | 3 tasks | 34 files |
-| Phase 22 P03 | 120min | 3 tasks | 25 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work (carried into v1.2 + new):
+Recent decisions affecting v1.3:
 
-- Modular monolith (`core` / `modules` / `integrations` / `workers` / `api`) — locked
-- Python package named `app` (not `sportzal`) — locked
-- `frontend/` → `apps/admin-web/` without rewriting internals — locked
-- `import-linter` enforced from Phase A onward — locked
-- v1.2 phase numbering continues from v1.1 (last phase was 14 → v1.2 starts at 15); no `--reset-phase-numbers`
-- v1.2 build order (from research): 15 → 16 → 17 → {18 ∥ 19} → 20 → 21 → 22; 23 parallel-eligible with anything after 15
-- RBAC primitives stay in `core` (extended with `Action.{CREATE, CANCEL, CHECK_IN}` + `Resource.{MEMBERSHIPS, MEMBERSHIP_PLANS, VISITS}` in Phase 15)
-- Cross-module callbacks (visits → memberships) use Protocol `ActiveMembershipResolver` in `core/dependencies.py`, registered from `app/main.py` — direct mirror of v1.1 `register_user_loader`
-- ARQ `expire_memberships` placed in `app/workers/scheduled/` importing `app.modules.memberships.service` — documented as **D-09** (no `workers ⊥ modules` contract exists)
-- Telegram `/checkin` handler receives `visits_service` via `HandlerContext` (NOT direct import) — documented as **D-10** parallel to D-06
-- Membership `end_date` is **inclusive** (last valid check-in day = `end_date`); ARQ filter uses strict `<` against `CURRENT_DATE` — locked in Phase 15 Key Decisions
-- `gym_date` defined as `(checked_in_at AT TIME ZONE 'Europe/Moscow')::date` and materialized as a `GENERATED ALWAYS AS … STORED` Postgres column; `UNIQUE (client_id, gym_date)` enforces 1/day at DB level (not app-layer) — locked in Phase 15
-- Membership snapshot pricing is mandatory: `plan_name_snapshot`, `duration_days_snapshot`, `price_kopecks_snapshot` NOT NULL at insert + `ON DELETE RESTRICT` FK to plan
-- ARQ cron tick: container `TZ=UTC` + `cron(hour=3, minute=5, unique=True)` (06:05 Europe/Moscow)
-- Reception still has `(CREATE, MEMBERSHIPS)` and `(CHECK_IN, VISITS)`; ONLY plan-catalog mutations + membership cancel + plan delete are owner-only (extends v1.1 `OWNER_ONLY` frozenset by 6 entries)
-- Telegram `/checkin` rejection DMs are LOCKED constants (single generic string per branch, no client name / end_date / hours / membership status oracle leak); Russian copy signed off by owner before Phase 20 merge
-- Accepted residual friend-fraud risk for v1.2 single-zal scope — recorded in PROJECT.md Key Decisions in Phase 15
-- [Phase ?]: Phase 18 Plan 01: SVC prefix added to ruff lint.external for first production SVC001 callsite
-- [Phase ?]: Phase 18 Plan 04: arq-worker compose service shipped at apps/backend/docker-compose.yml (CD-02 honoured); REQUIREMENTS.md ARQ-04 + ARQ-TEST-01 wording reconciled with Phase 15 inclusive-end_date Key Decision (W-3 closed)
-- [Phase 18]: Plan 18-02: Worker entry owns session.commit (D-01) — async with session_factory() as session block scopes the transaction; commit happens in the worker after _expire_due_memberships returns. Service helper carries SVC001 caller-owns-txn marker.
-- [Phase 18]: Plan 18-02: Summary log shape <job_name>_complete count=N AFTER commit (CD-03) — Single structlog INFO emitted after session.commit() returns successfully — proves the cron tick booted, the connection worked, and the SQL resolved. Locks the convention for all future scheduled jobs (v1.3+ expire_otps_complete, aggregate_visits_daily_complete).
-- [Phase ?]: Phase 18 Plan 18-03 — WorkerSettings cron-resolution invariant in on_startup (CD-04, Pitfall 4 step 6)
-- [Phase ?]: Phase 18 Plan 18-03 — WorkerSettings on_job_start mirrors RequestIdMiddleware shape (Pitfall 14): clear_contextvars() then bind_contextvars(job_id, job_name); on_job_end clears. Locks structlog correlation pattern for all future ARQ scheduled jobs.
-- [Phase ?]: Phase 18 Plan 18-03 Rule 4 deviation — arq>=0.26 floor pin resolved to 0.28.0 which removed cron(keep_cronjob_progress=...). Implementation uses keep_result=60 (closest 0.28 semantic). User to confirm at 18-VERIFICATION whether to (a) update REQUIREMENTS.md ARQ-03 to the 0.28 API or (b) pin arq<0.27. Recommended (a).
-- [Phase ?]: Phase 18 Plan 18-03 — app/workers/arq_app.py + app/workers/scheduler.py DELETED (CD-01 + ARQ-04). Single canonical ARQ entrypoint at app.workers.WorkerSettings; matches docker-compose command from Plan 18-04.
-- [Phase ?]: Phase 18 W-2 SAVEPOINT auto-restart resolved via Branch A — outer db_session fixture's join_transaction_mode='create_savepoint' suffices (Plan 18-05)
-- [Phase ?]: Phase 18 W-3 (Plan 18-05): structlog cached-logger invalidation autouse fixture required for any test scope mixing module-level loggers with capture_logs and per-test create_app() reconfigure
-- [Phase ?]: Phase 18-06: W-1 probe locked Form B (bare ints) — ARQ 0.28 cron stores hour/minute as int, not set
-- [Phase ?]: Phase 18-06: Rule 1 fix — unit tests assert on cron_jobs[0].coroutine.__name__ + .keep_result_s instead of .name + .keep_cronjob_progress (ARQ 0.28 attribute reality)
-- [Phase 22]: Plan 22-03: D-22-7 enforced — mock.visits.checkIn throws DomainError mock_not_implemented; write paths require VITE_API_MODE=http
-- [Phase 22]: Plan 22-03: Architecture Rule 5 upheld — useMembershipStatusForClient in features/visits consumes services.memberships via swap-seam, NOT importing @/features/memberships
-- [Phase 22]: Plan 22-03: formatTimeMSK uses Intl.DateTimeFormat Europe/Moscow (NOT date-fns formatTime) — critical for TZ-correct time rendering in visit history
-- [Phase 22]: Plan 22-03: FE-08(c) end_date inclusive — expiring-today condition is `activeMembership.endDate === todayMSK()`; button stays ENABLED (informational badge only)
+- v1.3 phase numbering continues from v1.2 (last phase 23 → v1.3 starts at Phase 24); no `--reset-phase-numbers`
+- v1.3 build order: 24 → 25 → 26 → 27 → 28 → 29 (linear; 25/26 share migration `0007`, plan-time decision on combined-vs-extension revision)
+- Phase 24 owns INFRA-15 + INFRA-16 + DEBT-01 + DEBT-02 + DEBT-03 (foundations + 3 of 4 tech-debt closures); DEBT-04 is human-verification, lives in Phase 29
+- Resolver touch-points serialized: 24 ставит `end_date >= today` filter → 25 добавляет `status != 'frozen'` → 26 расширяет tiebreak — каждая phase оставляет резолвер в зелёном тесте
+- Cron ordering 06:05 (`expire_memberships`) → 06:15 (`send_expiring_notifications`) с buffer ~10min; `unique=True` ловит docker-restart races (Phase 27)
+- 6 locked Russian DM templates (NTF-COPY-01) требуют owner sign-off перед Phase 27 merge — pattern v1.2 D-5
+- Phase 28 — единый drift-gate refresh после backend phases (мигрировано из v1.2 Phase 21)
+- Carried-forward decisions from v1.2 close (still locked):
+  - Modular monolith (`core` / `modules` / `integrations` / `workers` / `api`)
+  - Python package `app`
+  - `frontend/` → `apps/admin-web/` без правок internals
+  - `import-linter` enforced
+  - Membership `end_date` is **inclusive** (last valid check-in day)
+  - `gym_date = (checked_in_at AT TIME ZONE 'Europe/Moscow')::date` STORED + `UNIQUE (client_id, gym_date)`
+  - Membership snapshot pricing mandatory (`*_snapshot` columns NOT NULL + `ON DELETE RESTRICT` FK)
+  - ARQ cron tick: container `TZ=UTC` + `cron(hour=H, minute=M, unique=True, keep_result=60)`
+  - Cross-module callbacks via Protocol + `app/main.py` composition root
+  - Telegram bot — отдельный процесс long-polling worker, НЕ ARQ task
+  - Backend wire format = camelCase via `BackendSchemaBase`
+  - Pagination envelope `{items, total, page, pageSize}`
 
 ### Pending Todos
 
-None yet (roadmap just created).
+None yet (roadmap just drafted; phase planning starts with `/gsd-plan-phase 24`).
 
 ### Blockers/Concerns
 
-- Phase 18 (first real ARQ cron) flagged in SUMMARY.md for plan-time research: validate `unique=True` on docker restart, `keep_cronjob_progress=60` semantics, `on_startup` cron resolution assertion, `job_id` contextvars binding design.
-- Phase 20 flagged: Russian DM copy needs explicit owner sign-off; Redis `update_id` dedup key-prefix discipline alongside `arq:*` and `sz:session:*`; residual-risk Key Decisions entry must land in PROJECT.md during Phase 15 (not Phase 20).
-- Phase 22 flagged: confirm `eslint.config.js` `import/no-restricted-paths` rules support Pattern α (route composes features, `features/clients` does not import `features/memberships`/`features/visits`).
+- **Phase 25/26 migration `0007`** — план-агент Phase 25 должен решить: единый combined revision (freeze + renewal columns) или extension hook для Phase 26. Не блокер для Phase 24.
+- **Phase 27 NTF-COPY-01** — owner sign-off на 6 Russian DM strings нужен до merge; включить в Phase 27 plan-time clarification (mirror of v1.2 D-5 process).
+- **Phase 27 cron ordering 06:05 → 06:15** — формализовать race-test или явно зафиксировать в Phase 27 Key Decisions, что 10-min gap + `unique=True` достаточны.
+- **Phase 28 drift-gate refresh** — выполнить ровно один `git diff --exit-code` failure → regenerate → commit cycle, не больше; mirrors v1.2 Phase 21 discipline.
+- **Phase 29 DEBT-04** — нужны live backend + Telegram sandbox для 6 smoke сценариев из `.planning/milestones/v1.2-phases/22-VERIFICATION.md`; ops session должна быть запланирована до старта Phase 29.
 
 ### Quick Tasks Completed
 
@@ -131,17 +105,20 @@ None yet (roadmap just created).
 
 ## Deferred Items
 
-Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried into v1.2 retrospective view, NOT v1.2 scope):
+Items carried into v1.3 from v1.1/v1.2 close:
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | 2026-05-07 (v1.1 close) |
-| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | 2026-05-07 (v1.1 close) |
-| uat_gap | Phase 11 11-HUMAN-UAT.md (0 pending — flagged by audit-open metadata only; resolved in body) | resolved | 2026-05-07 (v1.1 close) |
-| quick_task | 260501-ndi (status metadata missing; commit 71f28de shipped 2026-05-01) | missing-meta | 2026-05-07 (v1.1 close) |
+| Category | Item | Status | Source | Resolution |
+|----------|------|--------|--------|-----------|
+| tech_debt | MEM-04 D-13: resolver `end_date >= today` filter | scheduled | v1.2 close | Phase 24 / DEBT-01 |
+| tech_debt | WR-07: backend `?expiring=` query parity | scheduled | v1.2 close | Phase 24 / DEBT-02 |
+| tech_debt | SVC001 walker scope → auth/service.py | scheduled | v1.2 close | Phase 24 / DEBT-03 |
+| uat_gap | 22-VERIFICATION 6 human_verification smoke tests | scheduled | v1.2 close | Phase 29 / DEBT-04 |
+| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | rolled into Phase 29 sweep if relevant |
+| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | rolled into Phase 29 sweep if relevant |
+| quick_task | 260501-ndi (status metadata missing; commit shipped) | missing-meta | v1.1 close | informational only |
 
 ## Session Continuity
 
-Last session: 2026-05-08T13:08:05.328Z
-Stopped at: Phase 23 context gathered
-Resume file: .planning/phases/23-hygiene-active-sessions-backend-parallel-eligible/23-CONTEXT.md
+Last session: 2026-05-08T17:00:00.000Z
+Stopped at: v1.3 ROADMAP drafted, traceability filled (44/44 mapped)
+Resume: Next step is `/gsd-plan-phase 24` to break Phase 24 (Foundations & Tech-Debt Bedrock) into plans.
