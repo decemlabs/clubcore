@@ -20,6 +20,9 @@ import {
   UserCog,
   Wallet,
   Settings,
+  LogIn,
+  Ticket,
+  LayoutGrid,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -30,6 +33,9 @@ const ICONS: Record<string, LucideIcon> = {
   UserCog,
   Wallet,
   Settings,
+  LogIn, // NEW Phase 22 D-22-4
+  Ticket, // NEW Phase 22 D-22-4
+  LayoutGrid, // NEW Phase 22 D-22-4
 }
 
 export function AppSidebar() {

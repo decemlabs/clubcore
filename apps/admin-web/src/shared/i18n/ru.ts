@@ -14,7 +14,10 @@ export const ru = {
     },
     nav: {
       home: 'Главная',
+      visits: 'Отметки', // NEW Phase 22 D-22-4 (22-03 adds /visits route)
       clients: 'Клиенты',
+      memberships: 'Абонементы', // NEW Phase 22 D-22-4
+      membershipPlans: 'Тарифы', // NEW Phase 22 D-22-4
       schedule: 'Расписание',
       staff: 'Сотрудники',
       finance: 'Финансы',
@@ -122,6 +125,98 @@ export const ru = {
       confirm: 'Удалить',
       cancel: 'Не удалять',
     },
+  },
+  memberships: {
+    heading: 'Абонементы',
+    actions: {
+      sell: 'Продать абонемент',
+      cancel: 'Отменить',
+      create: 'Новый тариф',
+    },
+    status: {
+      active: 'Активен',
+      expired: 'Истёк',
+      cancelled: 'Отменён',
+    },
+    badge: {
+      expirestoday: 'истёк сегодня',
+      expiresToday: 'Абонемент истекает сегодня',
+    },
+    dialog: {
+      sellTitle: 'Продать абонемент',
+      sellSubmit: 'Продать',
+      sellSubmitting: 'Продажа…',
+      cancelTitle: 'Отменить абонемент?',
+      cancelBody: 'Действие нельзя отменить. Абонемент будет переведён в статус «Отменён».',
+      cancelReason: 'Причина отмены (необязательно)',
+      cancelConfirm: 'Отменить абонемент',
+      cancelAbort: 'Не отменять',
+    },
+    form: {
+      planSelect: 'Выберите тариф',
+      paidAt: 'Дата оплаты',
+      notes: 'Заметки',
+    },
+    empty: {
+      heading: 'Абонементов пока нет',
+      body: 'Продайте первый абонемент клиенту, открыв его профиль.',
+    },
+    emptyExpiring: {
+      heading: 'Нет абонементов, истекающих в ближайшие 7 дней',
+    },
+    error: {
+      heading: 'Не удалось загрузить абонементы',
+      body: 'Проверьте соединение или обновите страницу.',
+    },
+    filter: {
+      expiring: 'Истекают через 7 дней',
+    },
+    toast: {
+      sold: 'Абонемент продан',
+      cancelled: 'Абонемент отменён',
+    },
+    errors: {
+      planInUse: 'Тариф используется в активных абонементах и не может быть удалён.',
+      invalidTransition: 'Невозможно отменить: абонемент уже истёк или отменён.',
+      mockNotImplemented: 'Операция недоступна в демо-режиме. Используйте реальный API.',
+    },
+  },
+  membershipPlans: {
+    heading: 'Тарифы',
+    actions: {
+      create: 'Новый тариф',
+    },
+    form: {
+      createTitle: 'Новый тариф',
+      editTitle: 'Редактировать тариф',
+      name: 'Название',
+      price: 'Цена, ₽',
+      durationDays: 'Длительность, дн.',
+      active: 'Активный тариф',
+      saveCreate: 'Добавить тариф',
+      saveEdit: 'Сохранить изменения',
+      cancel: 'Не сохранять',
+      durationImmutable: 'Длительность нельзя изменить после создания',
+    },
+    delete: {
+      title: 'Архивировать тариф?',
+      body: 'Тариф будет скрыт из списка продаж.',
+      confirm: 'Архивировать',
+      cancel: 'Не архивировать',
+    },
+    status: {
+      active: 'Активен',
+      archived: 'Архивирован',
+    },
+    empty: {
+      heading: 'Тарифов пока нет',
+      body: 'Добавьте первый тариф, нажав «Новый тариф».',
+    },
+  },
+  clientProfile: {
+    backLink: '← Клиенты',
+    membershipsBlock: 'Абонементы',
+    visitsBlock: 'Посещения',
   },
 } as const
 

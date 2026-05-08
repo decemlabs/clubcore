@@ -31,12 +31,36 @@ export interface RouteEntry {
   /** lucide-react icon name */
   icon: string
   /** i18n key under shell.nav */
-  navKey: 'home' | 'clients' | 'schedule' | 'staff' | 'finance' | 'settings'
+  navKey:
+    | 'home'
+    | 'clients'
+    | 'schedule'
+    | 'staff'
+    | 'finance'
+    | 'settings'
+    | 'visits' // NEW Phase 22
+    | 'memberships' // NEW Phase 22
+    | 'membershipPlans' // NEW Phase 22
 }
 
 export const routeRegistry: readonly RouteEntry[] = [
   { path: '/', resource: 'dashboard', label: 'Главная', icon: 'LayoutDashboard', navKey: 'home' },
+  // NOTE: /visits entry added in 22-03 (position 2)
   { path: '/clients', resource: 'clients', label: 'Клиенты', icon: 'Users', navKey: 'clients' },
+  {
+    path: '/memberships',
+    resource: 'memberships',
+    label: 'Абонементы',
+    icon: 'Ticket',
+    navKey: 'memberships',
+  }, // NEW Phase 22 D-22-4
+  {
+    path: '/membership-plans',
+    resource: 'membership-plans',
+    label: 'Тарифы',
+    icon: 'LayoutGrid',
+    navKey: 'membershipPlans',
+  }, // NEW Phase 22 D-22-4 (owner-only — filtered by Sidebar can() check)
   {
     path: '/schedule',
     resource: 'schedule',
