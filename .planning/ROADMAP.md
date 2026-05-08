@@ -88,7 +88,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 **Depends on:** Phase 24 (нужен `'frozen'` в CHECK + новые audit events + резолвер с `end_date >= today` фильтром)
 **Requirements:** MEM-FRZ-01, MEM-FRZ-02, MEM-FRZ-03, MEM-FRZ-04, MEM-FRZ-05, MEM-FRZ-06, MEM-FRZ-07, MEM-FRZ-EP-01, MEM-FRZ-EP-02, MEM-FRZ-EP-03, MEM-FRZ-AUDIT-01, MEM-FRZ-TEST-01, MEM-FRZ-TEST-02, MEM-FRZ-TEST-03
 **Success Criteria** (what must be TRUE):
-  1. Миграция `0007_freeze.py` добавляет `freeze_days_limit` (immutable post-creation) в `membership_plans`, `freeze_days_limit_snapshot` в `memberships`, и таблицу `membership_freeze_periods` с partial unique index `WHERE ended_at IS NULL`.
+  1. Миграция `0008_freeze.py` добавляет `freeze_days_limit` (immutable post-creation) в `membership_plans`, `freeze_days_limit_snapshot` в `memberships`, и таблицу `membership_freeze_periods` с partial unique index `WHERE ended_at IS NULL`.
   2. `POST /api/v1/memberships/{id}/freeze` (CSRF, reception+owner) переводит active → frozen и открывает freeze period; `POST /api/v1/memberships/{id}/unfreeze` закрывает period, сдвигает `end_date += use_days` (half-day rounds up), переводит frozen → active.
   3. Membership detail responses включают `freezeDaysLimitSnapshot`, `freezeDaysUsed`, `freezeDaysRemaining`, `currentFreezePeriod` (object | null).
   4. Frozen membership не проходит check-in (reception + Telegram `/checkin` оба возвращают `no_active_membership` 409 без oracle-leak); cancel from frozen разрешён только owner-у и закрывает freeze period без extension; cumulative days > limit → 409 `freeze_limit_exceeded`; concurrent freeze → 409 `already_frozen`.
@@ -97,10 +97,10 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 ### Phase 26: Memberships — Renewal (backend)
 **Goal:** Reception/owner может продлить membership одной кнопкой — backend создаёт follow-up row со snapshot текущей цены плана, резолвер корректно отдаёт текущий membership пока он жив и переключается на renewal только после `end_date`.
-**Depends on:** Phase 24 (`membership_renewed` в `LOCKED_AUDIT_EVENTS`); Phase 25 (общая миграция `0007` либо combined revision, либо последовательное extension; renewal принимает `frozen` source)
+**Depends on:** Phase 24 (`membership_renewed` в `LOCKED_AUDIT_EVENTS`); Phase 25 (общая миграция `0008` либо combined revision, либо последовательное extension; renewal принимает `frozen` source)
 **Requirements:** MEM-REN-01, MEM-REN-02, MEM-REN-03, MEM-REN-04, MEM-REN-EP-01, MEM-REN-AUDIT-01, MEM-REN-TEST-01, MEM-REN-TEST-02, MEM-REN-TEST-03, MEM-REN-TEST-04
 **Success Criteria** (what must be TRUE):
-  1. Миграция `0007` добавляет `previous_membership_id` (UUID NULL FK memberships.id ON DELETE SET NULL) — audit-цепочка для renewal.
+  1. Миграция `0008` добавляет `previous_membership_id` (UUID NULL FK memberships.id ON DELETE SET NULL) — audit-цепочка для renewal.
   2. `POST /api/v1/memberships/{id}/renew` (CSRF, reception+owner) создаёт follow-up membership со snapshot **текущей** цены плана; разрешённые source-статусы — `active`, `frozen`, `expired`; cancelled source → 409 `cannot_renew_cancelled`; archived plan → 409 `plan_archived`.
   3. Дата старта: для active/frozen source — `start_date = source.end_date + 1` (Europe/Moscow); для expired source — `start_date = today` (новый membership начинается сразу, не ретроактивно); audit payload содержит `start_date_strategy`.
   4. Resolver tiebreak: при нескольких active membershipах с `end_date >= today` приоритет у того, у кого меньший `start_date` (текущий running), затем `created_at DESC`; check-in использует current до `end_date`, потом естественно переключается на renewal.
@@ -109,10 +109,10 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 ### Phase 27: Expiring-soon Telegram Notifications
 **Goal:** Клиент с привязанным Telegram получает анти-oracle DM за 7/3/1 день до истечения membership; cron идемпотентен, не задваивает после рестарта, не шлёт frozen/cancelled/expired/unlinked.
-**Depends on:** Phases 24 (locked audit events `expiring_notification_sent_{7d,3d,1d}` в фрозенсете), 25 (frozen status существует и фильтруется), 26 (миграция `0008` идёт после `0007`)
+**Depends on:** Phases 24 (locked audit events `expiring_notification_sent_{7d,3d,1d}` в фрозенсете), 25 (frozen status существует и фильтруется), 26 (миграция `0009` идёт после `0008`)
 **Requirements:** NTF-01, NTF-02, NTF-03, NTF-04, NTF-05, NTF-06, NTF-COPY-01, NTF-TEST-01, NTF-TEST-02, NTF-TEST-03
 **Success Criteria** (what must be TRUE):
-  1. Миграция `0008_notifications.py` создаёт `membership_notifications` с UNIQUE INDEX на `(membership_id, kind)` — single source of truth для cron-идемпотентности.
+  1. Миграция `0009_notifications.py` создаёт `membership_notifications` с UNIQUE INDEX на `(membership_id, kind)` — single source of truth для cron-идемпотентности.
   2. ARQ cron `send_expiring_notifications` (06:15 Europe/Moscow, container `TZ=UTC`, `cron(hour=3, minute=15, unique=True, keep_result=60)`) выбирает active memberships с `end_date IN (today+1, today+3, today+7)`, привязанным Telegram, и без существующей matching `membership_notifications` row; запускается **после** `expire_memberships` (06:05 → 06:15 ordering сохраняется через WorkerSettings.cron_jobs).
   3. Frozen, cancelled, expired memberships, и клиенты без `telegram_chat_id` или с `clients.deleted_at IS NOT NULL` пропускаются на уровне SQL select; 6 locked Russian DM templates (`EXPIRING_{7,3,1}D_VARIANT_{A,B}`, выбор по `client_id` hash, anti-oracle pattern из v1.2 D-5) загружены в `app/integrations/telegram/copy.py` с owner sign-off, занесённым в PROJECT.md Key Decisions.
   4. На каждую успешную отправку — INSERT `membership_notifications` row + `audit.emit("expiring_notification_sent_<kind>", actor=None, ...)`; ошибки send (403 bot blocked, network) логируются как WARNING, row НЕ вставляется → next tick retries; 403 не марает kind permanently (re-linked клиент получит будущие пинги).
