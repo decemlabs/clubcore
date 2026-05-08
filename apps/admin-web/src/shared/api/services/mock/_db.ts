@@ -1,16 +1,19 @@
 import { faker } from '@faker-js/faker'
 import type { Client, ClientId } from '@/entities/client'
 import type { Membership, MembershipId, MembershipPlan, MembershipPlanId, MembershipStatus } from '@/entities/membership'
+import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
 
 const STORAGE_KEY = 'sportzal:mock:v1'
 const SEED_COUNT = 30
 const PLAN_COUNT = 8
 const MEMBERSHIP_COUNT = 40
+const VISIT_COUNT = 150
 
 export interface DB {
   clients: Client[]
   memberships: Membership[]
   plans: MembershipPlan[]
+  visits: Visit[]
 }
 
 function generateClient(): Client {
@@ -93,6 +96,37 @@ function generateMembership(clients: Client[], plans: MembershipPlan[]): Members
   }
 }
 
+function generateVisit(clients: Client[], memberships: Membership[]): Visit {
+  const client = faker.helpers.arrayElement(clients)
+  const clientMemberships = memberships.filter((m) => m.clientId === client.id)
+  const membership =
+    clientMemberships.length > 0
+      ? faker.helpers.arrayElement(clientMemberships)
+      : memberships[0]! // fallback to first membership if client has none
+  // Generate a date within the last 60 days
+  const daysAgo = faker.number.int({ min: 0, max: 60 })
+  const checkedInAt = new Date()
+  checkedInAt.setDate(checkedInAt.getDate() - daysAgo)
+  // Randomize time within gym hours (07:00-23:00)
+  checkedInAt.setHours(faker.number.int({ min: 7, max: 22 }), faker.number.int({ min: 0, max: 59 }))
+  // gymDate: YYYY-MM-DD in Europe/Moscow
+  const gymDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Moscow' }).format(checkedInAt)
+  const channel: VisitChannel = faker.helpers.weightedArrayElement([
+    { value: 'reception' as const, weight: 8 },
+    { value: 'telegram_bot' as const, weight: 2 },
+  ])
+  return {
+    id: faker.string.uuid() as VisitId,
+    clientId: client.id,
+    membershipId: membership.id,
+    checkedInAt: checkedInAt.toISOString(),
+    gymDate,
+    channel,
+    checkedInBy: channel === 'telegram_bot' ? null : faker.string.uuid(),
+    createdAt: checkedInAt.toISOString(),
+  }
+}
+
 function seed(): DB {
   faker.seed(42)
   const clients: Client[] = Array.from({ length: SEED_COUNT }, generateClient)
@@ -100,7 +134,10 @@ function seed(): DB {
   const memberships: Membership[] = Array.from({ length: MEMBERSHIP_COUNT }, () =>
     generateMembership(clients, plans),
   )
-  const db: DB = { clients, memberships, plans }
+  const visits: Visit[] = Array.from({ length: VISIT_COUNT }, () =>
+    generateVisit(clients, memberships),
+  )
+  const db: DB = { clients, memberships, plans, visits }
   saveDB(db)
   return db
 }
@@ -119,10 +156,32 @@ export function loadDB(): DB {
       const memberships = Array.from({ length: MEMBERSHIP_COUNT }, () =>
         generateMembership(clients, plans),
       )
+      const visits = Array.from({ length: VISIT_COUNT }, () =>
+        generateVisit(clients, memberships),
+      )
       const full: DB = {
         clients: parsed.clients,
         memberships: parsed.memberships ?? memberships,
         plans: parsed.plans ?? plans,
+        visits: parsed.visits ?? visits,
+      }
+      saveDB(full)
+      return full
+    }
+    // Additive migration: if visits are missing, add them
+    if (!Array.isArray(parsed.visits)) {
+      faker.seed(42)
+      const clients = Array.from({ length: SEED_COUNT }, generateClient)
+      const plans = Array.from({ length: PLAN_COUNT }, generatePlan)
+      const memberships = Array.from({ length: MEMBERSHIP_COUNT }, () =>
+        generateMembership(clients, plans),
+      )
+      const visits = Array.from({ length: VISIT_COUNT }, () =>
+        generateVisit(clients, memberships),
+      )
+      const full: DB = {
+        ...parsed as DB,
+        visits,
       }
       saveDB(full)
       return full

@@ -29,3 +29,8 @@ export type {
   MembershipPlanCreateInput,
   MembershipPlanUpdateInput,
 } from './memberships'
+export type {
+  VisitsService,
+  VisitsListQuery,
+  GymMeta,
+} from './visits'
