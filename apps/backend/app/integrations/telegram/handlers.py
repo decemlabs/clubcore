@@ -327,10 +327,22 @@ async def checkin_handler(
         # D-22-11: compute days_remaining from membership end_date (INCLUSIVE per Phase 15).
         _today = _datetime.now(_ZoneInfo("Europe/Moscow")).date()
         days_remaining = (membership_end_date - _today).days
-        if days_remaining <= 0:
+        if days_remaining == 0:
             dm_text = _DM_CHECKIN_OK_LAST_DAY
-        else:
+        elif days_remaining > 0:
             dm_text = _DM_CHECKIN_OK_WITH_DAYS.format(days_remaining=days_remaining)
+        else:
+            # WR-08: anti-fraud chain SHOULD have rejected with no_active_membership
+            # before we reach the happy path with a past-end membership. If a future
+            # bug ever lets this slip through, surface it loudly instead of telling
+            # the user "today is the last day" for an already-expired membership.
+            logger.error(
+                "checkin_negative_days_remaining",
+                membership_end_date=str(membership_end_date),
+                chat_id=chat_id,
+                days_remaining=days_remaining,
+            )
+            dm_text = _DM_CHECKIN_OK_LAST_DAY  # safe fallback
         await ctx.sender.send_text_dm(bot, chat_id, dm_text)
         # Ignore SendResult: a blocked DM does not roll back the visit (mirror Phase 7).
         _ = visit  # silence unused; structlog at sender layer already logs send failures
