@@ -84,7 +84,7 @@ function CheckInCard({ client, onSuccess }: CheckInCardProps) {
             setServerError(err.message)
           }
         } else {
-          setServerError('Ошибка соединения.')
+          setServerError(t('common.errors.network'))
         }
       },
     })
