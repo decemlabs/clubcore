@@ -8,7 +8,6 @@ import type {
   MembershipPlanUpdateInput,
 } from '@/shared/api/contracts/memberships'
 import type { MembershipId, MembershipPlanId } from '@/entities/membership'
-import { todayMSK } from '@/shared/i18n/date'
 import { unwrap } from './_envelope'
 import {
   responseToMembership,
@@ -35,49 +34,29 @@ interface PaginatedMembershipPlanResponse {
   pageSize: number
 }
 
-// D-22-10: expiringWithinDays NOT present in backend query params (schema.d.ts verified).
-// Client-side filtering is applied in the list method.
-const EXPIRING_DAYS = 7
+// DEBT-02 (Phase 24): the http adapter forwards `expiring`/`within` to the
+// backend (`/api/v1/memberships?expiring=true&within=N`) and no longer
+// post-filters or collapses pagination. The backend paginates the filtered
+// set honestly (Phase 24 plan 24-04 commit), so consumers can show real
+// pagination controls when expiring=true. The previous client-side filter +
+// BLK-06 single-page collapse are gone (D-24-13).
+// TODO Phase 28 (FE-13): wire a `within` selector in MembershipsListPage.
 
 export const memberships: MembershipsService = {
   async list(query: MembershipsListQuery) {
-    const q: Record<string, string | number> = {
+    const q: Record<string, string | number | boolean> = {
       page: query.page,
       pageSize: query.pageSize,
     }
     if (query.clientId) q.clientId = query.clientId
+    if (query.expiring) {
+      q.expiring = true
+      q.within = query.within ?? 7
+    }
     const raw = unwrap<PaginatedMembershipResponse>(
       await request('get', '/api/v1/memberships', { query: q }),
     )
-    let items = raw.items.map(responseToMembership)
-    // D-22-10: client-side expiring filter applied AFTER pagination because the
-    // backend has no expiringWithinDays param yet. Pinned to Europe/Moscow via
-    // todayMSK() — adjacent code (CheckInPage, RecentVisitsBlock,
-    // useMembershipStatusForClient) all use MSK; do not drift to runtime TZ
-    // (WR-03).
-    //
-    // BLK-06: pagination is meaningless while expiring=true — the backend page
-    // contains both expiring and non-expiring rows, and `raw.total` counts ALL
-    // memberships, not the filtered subset. To keep the contract uniform with
-    // the mock impl and avoid misleading the operator (page 2 of "200 results"
-    // returning 0 visible items), we collapse the response to a single
-    // unpaginated page of whatever filtered items happen to be on THIS backend
-    // page. The UI MUST hide the pagination footer when expiring=true
-    // (MembershipsListPage does so). Tracking issue: add backend
-    // ?expiring=true&within=7 so this branch can paginate honestly.
-    if (query.expiring) {
-      const todayStr = todayMSK()
-      // YYYY-MM-DD parses as UTC midnight — UTC arithmetic is DST-safe.
-      const cutoff = new Date(todayStr)
-      cutoff.setUTCDate(cutoff.getUTCDate() + EXPIRING_DAYS)
-      const cutoffStr = cutoff.toISOString().slice(0, 10)
-      items = items.filter(
-        (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,
-      )
-      // pageSize must be >= 1 — UI's Math.ceil(total/pageSize) would NaN otherwise.
-      return { items, total: items.length, page: 1, pageSize: Math.max(1, items.length) }
-    }
-    return { ...raw, items }
+    return { ...raw, items: raw.items.map(responseToMembership) }
   },
 
   async byClient(clientId: string) {

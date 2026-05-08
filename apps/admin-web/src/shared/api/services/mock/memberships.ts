@@ -12,8 +12,8 @@ import { todayMSK } from '@/shared/i18n/date'
 import { loadDB } from './_db'
 import { delay } from './_latency'
 
-// D-22-10 mirror: keep mock filter window in sync with the http adapter.
-const EXPIRING_DAYS = 7
+// DEBT-02 (Phase 24): window size flows in via `query.within`; default 7 matches
+// the legacy FE-08 D-2 behaviour. No module-local window constant.
 
 function role() {
   return useSessionStore.getState().role
@@ -34,16 +34,16 @@ export const memberships: MembershipsService = {
     if (query.clientId) {
       all = all.filter((m) => m.clientId === query.clientId)
     }
-    // WR-07: apply expiring filter symmetrically with http adapter so the
-    // toggle on MembershipsListPage isn't a silent no-op in mock mode.
-    // BLK-06: when expiring=true, return ALL filtered items in a single page
-    // (no slicing) so the contract matches the http adapter, which cannot
-    // honestly paginate without backend ?expiring=true support. UI hides the
-    // pagination footer in this branch.
+    // DEBT-02 (Phase 24): window comes from `query.within ?? 7` (no module
+    // constant). Inclusive end-date semantics match the backend predicate
+    // `end_date <= today + (within - 1)`. Mock keeps the BLK-06 single-page
+    // collapse — only the http adapter strips it (the backend now paginates
+    // the filtered set honestly; the mock stays in-memory and predictable).
     if (query.expiring) {
+      const within = query.within ?? 7
       const todayStr = todayMSK()
       const cutoff = new Date(todayStr)
-      cutoff.setUTCDate(cutoff.getUTCDate() + EXPIRING_DAYS)
+      cutoff.setUTCDate(cutoff.getUTCDate() + (within - 1))
       const cutoffStr = cutoff.toISOString().slice(0, 10)
       const items = all.filter(
         (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,

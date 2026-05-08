@@ -10,7 +10,8 @@ export interface MembershipsListQuery {
   page: number
   pageSize: number
   clientId?: string
-  expiring?: boolean // D-22-10 client-side filter flag
+  expiring?: boolean // DEBT-02: forwarded to backend (Phase 24); both impls share semantics
+  within?: number // DEBT-02: 1..30, defaults to 7 server-side; ignored when expiring is false
 }
 
 export interface MembershipPlansListQuery {
