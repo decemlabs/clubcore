@@ -19,17 +19,21 @@ business route (RBAC-02..05). Auth endpoints don't need RBAC because login
 grants the role; logout/me are role-agnostic.
 """
 
+import hashlib
 from typing import Annotated, cast
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_authenticated, verify_csrf
-from app.core.exceptions import InvalidAccessToken
+from app.core.exceptions import InvalidAccessToken, NotFoundError
+from app.core.pagination import PageQuery, PaginatedData
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.core.security import (
@@ -38,8 +42,9 @@ from app.core.security import (
 )
 from app.modules.auth import telegram_service
 from app.modules.auth.exceptions import BotNotStarted
-from app.modules.auth.models import User
+from app.modules.auth.models import RefreshToken, User
 from app.modules.auth.schemas import (
+    ActiveSessionItem,
     LoginRequest,
     LoginResponse,
     MeResponse,
@@ -51,7 +56,9 @@ from app.modules.auth.schemas import (
 from app.modules.auth.service import (
     authenticate,
     issue_tokens,
+    list_user_sessions,
     revoke_all_sessions,
+    revoke_family,
     revoke_session,
     rotate_refresh,
 )
@@ -135,6 +142,83 @@ async def logout(
     if presented is not None:
         await revoke_session(session, redis, presented)
     clear_session_cookies(response, secure=settings.cookie_secure)
+    return envelope(None)
+
+
+@router.get(
+    "/sessions",
+    response_model=ResponseEnvelope[PaginatedData[ActiveSessionItem]],
+    summary="List the current user's active session families",
+)
+async def list_sessions(
+    request: Request,
+    user: Annotated[CurrentUser, Depends(require_authenticated())],
+    query: Annotated[PageQuery, Depends()],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> ResponseEnvelope[PaginatedData[ActiveSessionItem]]:
+    """Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).
+
+    GET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user
+    manages their own sessions. is_current resolved server-side via sha256(sz_refresh)
+    token_hash lookup (D-23-3).
+    """
+    presented = request.cookies.get("sz_refresh")
+    data = await list_user_sessions(
+        session,
+        redis,
+        user_id=user.id,
+        page=query.page,
+        page_size=query.page_size,
+        presented_refresh_token=presented,
+    )
+    return envelope(data)
+
+
+@router.post(
+    "/sessions/{family_id}/revoke",
+    response_model=ResponseEnvelope[None],
+    summary="Revoke a single session family (idempotent)",
+)
+async def revoke_session_family(
+    family_id: UUID,
+    request: Request,
+    response: Response,
+    # RBAC-04 ordering: auth dep FIRST so unauthenticated callers get 401 before 403.
+    user: Annotated[CurrentUser, Depends(require_authenticated())],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> ResponseEnvelope[None]:
+    """Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).
+
+    - 404-collapse on unknown family OR family belonging to another user (D-23-6).
+    - Idempotent: already-revoked family returns 200 (D-23-7).
+    - Self-revoke: if the revoked family matches THIS request's sz_refresh family,
+      clear the cookie matrix identical to /logout (D-23-8).
+    - Audit: session_revoked with resource_type='auth_session' (D-23-10).
+    """
+    result = await revoke_family(
+        session,
+        redis,
+        user_id=user.id,
+        family_id=family_id,
+    )
+    if result == "not_found":
+        raise NotFoundError("not_found")
+
+    # Self-revoke detection (D-23-8): if the revoked family_id matches the family bound
+    # to THIS request's sz_refresh, clear the cookie matrix (same as /logout).
+    presented = request.cookies.get("sz_refresh")
+    if presented is not None and result == "revoked":
+        presented_hash = hashlib.sha256(presented.encode("utf-8")).hexdigest()
+        current_row = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
+        )
+        if current_row is not None and current_row.family_id == family_id:
+            settings = get_settings()
+            clear_session_cookies(response, secure=settings.cookie_secure)
+
     return envelope(None)
 
 
