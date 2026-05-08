@@ -222,11 +222,17 @@ async def list_memberships(
 ) -> ResponseEnvelope[PaginatedData[MembershipResponse]]:
     """List memberships, paginated (MEM-EP-01).
 
-    Query parameters (Phase 17 D-09):
+    Query parameters (Phase 17 D-09; Phase 24 DEBT-02 adds expiring/within):
       - clientId — optional UUID filter; omit for global feed (owner)
       - status   — optional single-value enum (active|expired|cancelled); omit for all
       - sort     — created_at_desc (default) | end_date_desc | start_date_desc
       - page / pageSize — PageQuery contract (default 1 / 20, max 100)
+      - expiring — bool (default false); when true, forces status='active' and
+                   adds inclusive end_date window [today, today + (within - 1)]
+                   (Europe/Moscow today). Conflict with status != active -> 422
+                   query_invalid {status: incompatible_with_expiring}.
+      - within   — int (default 7, bounded 1..30); window size in days when
+                   expiring=true. Silently ignored when expiring=false.
     """
     page = await service.list_memberships(session, query)
     return envelope(page)

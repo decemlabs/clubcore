@@ -25,13 +25,15 @@ the import-time schema build (mirrors clients/repository.py:18-23).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Row, Select, and_, func, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ValidationAppError
 from app.core.pagination import PaginatedData
 from app.modules.memberships.models import Membership, MembershipPlan
 from app.modules.memberships.schemas import (
@@ -42,6 +44,7 @@ from app.modules.memberships.schemas import (
     MembershipPlanListQuery,
     MembershipPlanSort,
     MembershipPlanUpdateRequest,
+    MembershipStatus,
 )
 
 
@@ -212,6 +215,17 @@ async def list_memberships(
     appended on every branch (id desc) so identical timestamps don't shuffle
     between pages.
 
+    Phase 24 DEBT-02 (D-24-10..D-24-12): `?expiring=true` forces
+    `status='active'` and adds the inclusive date-window predicate
+    `today <= end_date <= today + (within - 1)` (Europe/Moscow `today`
+    resolved here so the repository owns its own clock — the resolver path
+    keeps the explicit-`today`-kwarg purity, but `list_memberships` is the
+    operator-facing endpoint and resolves wall-clock once per call). When
+    `expiring=False`, `query.within` is silently ignored. Conflict — caller
+    passed `status` non-active alongside `expiring=true` — raises
+    `ValidationAppError("query_invalid", ...)` -> 422 (D-24-11; no silent
+    override).
+
     Returns `PaginatedData[Membership]` via `model_construct` to skip Pydantic
     validation against the SA ORM generic parameter (mirrors `list_alive`
     rationale at line 60-65 above).
@@ -220,8 +234,27 @@ async def list_memberships(
 
     if query.client_id is not None:
         predicates.append(Membership.client_id == query.client_id)
-    if query.status is not None:
-        predicates.append(Membership.status == query.status.value)
+
+    if query.expiring:
+        # D-24-11: conflict — expiring forces active; explicit non-active 422.
+        if query.status is not None and query.status != MembershipStatus.ACTIVE:
+            err = ValidationAppError(
+                "query_invalid",
+                fields={"status": "incompatible_with_expiring"},
+            )
+            # AppError stores positional arg as `message`; set `code` per contract.
+            err.code = "query_invalid"
+            raise err
+        # D-24-12: inclusive window — end_date in [today, today + (within - 1)].
+        # `today` resolves to Europe/Moscow per S-5 (mirrors _expire_due_memberships).
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+        predicates.append(Membership.status == "active")
+        predicates.append(Membership.end_date >= today)
+        predicates.append(Membership.end_date <= today + timedelta(days=query.within - 1))
+    else:
+        # D-24-10: when expiring=False, `within` is silently ignored.
+        if query.status is not None:
+            predicates.append(Membership.status == query.status.value)
 
     where_clause = and_(*predicates) if predicates else true()
 

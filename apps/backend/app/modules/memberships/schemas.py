@@ -233,11 +233,25 @@ class MembershipResponse(ResponseData):
 
 
 class MembershipListQuery(PageQuery):
-    """GET /api/v1/memberships query parameters (Phase 17 D-09).
+    """GET /api/v1/memberships query parameters (Phase 17 D-09; Phase 24 DEBT-02).
 
     clientId — optional. Owner can call without it for a global feed.
     status   — single-value enum filter; omit -> all 3 statuses.
     sort     — single sort axis, default CREATED_AT_DESC.
+    expiring — Phase 24 DEBT-02: filter to active memberships whose `end_date`
+               falls in `[today_msk, today_msk + (within - 1)]` (inclusive on
+               both ends per PROJECT.md "Key Decisions" + D-24-12). Default
+               False — current behaviour unchanged.
+    within   — Phase 24 DEBT-02: window size in days, 1..30 (Pydantic-bounded;
+               out-of-range -> 422). Default 7 matches the legacy FE-08 D-2
+               window. Silently ignored when `expiring=False`.
+
+    Conflict semantics (D-24-11): `expiring=True` forces `status='active'`. If
+    the caller explicitly passes `status` as anything other than `active`, the
+    repository raises `ValidationAppError("query_invalid",
+    fields={"status": "incompatible_with_expiring"})` -> 422 (no silent
+    override). The schema stays flat (no model_validator) — the conflict
+    needs the resolved enum and is decided at the repository layer.
 
     NO `q` text search, NO date-range from/to in Phase 17 (D-09).
     """
@@ -245,3 +259,6 @@ class MembershipListQuery(PageQuery):
     client_id: UUID | None = None
     status: MembershipStatus | None = None
     sort: MembershipListSort = MembershipListSort.CREATED_AT_DESC
+    # Phase 24 DEBT-02 — defence-in-depth defaults.
+    expiring: bool = False
+    within: int = Field(default=7, ge=1, le=30)
