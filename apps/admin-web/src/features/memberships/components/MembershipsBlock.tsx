@@ -83,8 +83,8 @@ export function MembershipsBlock({ clientId }: Props) {
                     <td className="text-muted-foreground py-2 pr-4">
                       {formatDate(m.startDate)}–{formatDate(m.endDate)}
                       {m.status === 'active' && m.endDate === todayMSK() && (
-                        <Badge variant="destructive" className="ml-2 text-xs">
-                          {t('memberships.badge.expirestoday')}
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {t('memberships.badge.expiresToday')}
                         </Badge>
                       )}
                     </td>

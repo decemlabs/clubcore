@@ -139,7 +139,6 @@ export const ru = {
       cancelled: 'Отменён',
     },
     badge: {
-      expirestoday: 'истёк сегодня',
       expiresToday: 'Абонемент истекает сегодня',
     },
     dialog: {

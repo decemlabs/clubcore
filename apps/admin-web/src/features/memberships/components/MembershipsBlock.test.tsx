@@ -53,18 +53,23 @@ function makeMembership(
   }
 }
 
-describe('MembershipsBlock D-3 badge (истёк сегодня)', () => {
+// With INCLUSIVE endDate semantics (Phase 15 Key Decision), a membership whose
+// endDate equals today is still VALID today — the badge must read "expires
+// today" (Абонемент истекает сегодня), not "already expired today" (BLK-03).
+const EXPIRES_LABEL = 'Абонемент истекает сегодня'
+
+describe('MembershipsBlock D-3 badge (Абонемент истекает сегодня)', () => {
   beforeEach(() => {
     mockTodayMSK.mockReturnValue(TODAY)
   })
 
-  it('Test 1: renders destructive badge when status=active AND endDate === todayMSK()', () => {
+  it('Test 1: renders badge when status=active AND endDate === todayMSK()', () => {
     const membership = makeMembership({ endDate: TODAY, status: 'active' })
     vi.mocked(useMembershipsByClient).mockReturnValue(makeQuery([membership]))
 
     renderWithProviders(<MembershipsBlock clientId="client-1" />, { role: 'owner' })
 
-    expect(screen.getByText('истёк сегодня')).toBeInTheDocument()
+    expect(screen.getByText(EXPIRES_LABEL)).toBeInTheDocument()
   })
 
   it('Test 2: does NOT render badge when endDate < todayMSK() (past)', () => {
@@ -73,7 +78,7 @@ describe('MembershipsBlock D-3 badge (истёк сегодня)', () => {
 
     renderWithProviders(<MembershipsBlock clientId="client-1" />, { role: 'owner' })
 
-    expect(screen.queryByText('истёк сегодня')).not.toBeInTheDocument()
+    expect(screen.queryByText(EXPIRES_LABEL)).not.toBeInTheDocument()
   })
 
   it('Test 3: does NOT render badge when endDate > todayMSK() (future active)', () => {
@@ -82,7 +87,7 @@ describe('MembershipsBlock D-3 badge (истёк сегодня)', () => {
 
     renderWithProviders(<MembershipsBlock clientId="client-1" />, { role: 'owner' })
 
-    expect(screen.queryByText('истёк сегодня')).not.toBeInTheDocument()
+    expect(screen.queryByText(EXPIRES_LABEL)).not.toBeInTheDocument()
   })
 
   it('Test 4: does NOT render badge when status=cancelled even if endDate === today', () => {
@@ -91,6 +96,6 @@ describe('MembershipsBlock D-3 badge (истёк сегодня)', () => {
 
     renderWithProviders(<MembershipsBlock clientId="client-1" />, { role: 'owner' })
 
-    expect(screen.queryByText('истёк сегодня')).not.toBeInTheDocument()
+    expect(screen.queryByText(EXPIRES_LABEL)).not.toBeInTheDocument()
   })
 })
