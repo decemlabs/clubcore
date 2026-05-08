@@ -18,6 +18,7 @@ interface Props {
  */
 export function ClientProfileCard({ client }: Props) {
   const [editOpen, setEditOpen] = useState(false)
+  const editLabel = t('clients.actions.edit')
 
   return (
     <>
@@ -33,8 +34,8 @@ export function ClientProfileCard({ client }: Props) {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            aria-label="Редактировать клиента"
-            title="Редактировать клиента"
+            aria-label={editLabel}
+            title={editLabel}
             onClick={() => setEditOpen(true)}
           >
             <Pencil className="size-4" />
