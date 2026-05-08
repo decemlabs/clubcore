@@ -80,13 +80,13 @@
 
 ### Frontend Wiring — admin-web (Phase 22)
 
-- [ ] **FE-04**: `apps/admin-web/src/features/memberships/{api,components,model,index.ts}` exists; `useMembershipsByClient(clientId)` + `useMembershipPlans()` hooks wired to typed `services.memberships.*` swap-seam (mock + http impls).
+- [x] **FE-04**: `apps/admin-web/src/features/memberships/{api,components,model,index.ts}` exists; `useMembershipsByClient(clientId)` + `useMembershipPlans()` hooks wired to typed `services.memberships.*` swap-seam (mock + http impls).
 - [ ] **FE-05**: `apps/admin-web/src/features/visits/{api,components,model,index.ts}` exists; `useRecentVisitsByClient(clientId, opts)` hook wired.
-- [ ] **FE-06**: New routes: `/_protected/membership-plans.tsx` (owner-only via `beforeLoad` mirror of `clients.tsx:14-23`), `/_protected/memberships.tsx`, `/_protected/visits.tsx` — all loaders use `queryClient.ensureQueryData` with same keys as hooks.
+- [x] **FE-06**: New routes: `/_protected/membership-plans.tsx` (owner-only via `beforeLoad` mirror of `clients.tsx:14-23`), `/_protected/memberships.tsx`, `/_protected/visits.tsx` — all loaders use `queryClient.ensureQueryData` with same keys as hooks.
 - [ ] **FE-07**: `routes/_protected/clients.$clientId.tsx` (NEW — Pattern α) composes `Promise.all([ensureQueryData(client), ensureQueryData(memberships), ensureQueryData(visits)])` in loader (no waterfall). Page renders `<MembershipsBlock>` (from `features/memberships`) and `<RecentVisitsBlock>` (from `features/visits`) — `features/clients` does NOT import either.
 - [x] **FE-08**: Reception UX edge cases on check-in page: (a) phone-prefix search returns top-5 matches with disambiguation, (b) if today's visit already exists for that client, the button is disabled and shows badge "Отмечен в HH:MM via {channel}", (c) if active membership ends today (inclusive), the button still enables, (d) outside gym hours the button is disabled with the actual gym-hours string from a `GET /api/v1/visits/_meta` (or env-mirrored config) response.
 - [ ] **FE-09**: Active sessions UI on profile page (carryover from v1.1 Auth UX queue): `/auth/sessions` list + per-session "Revoke" button + "Logout all" button; uses existing `/api/v1/auth/logout-all` + new `GET /api/v1/auth/sessions` and `POST /api/v1/auth/sessions/{family_id}/revoke` endpoints (Phase 23 may also need to ship the `GET sessions` and per-family revoke endpoints if not present; this requirement spans both backend and frontend).
-- [ ] **FE-10**: Cheap-win differentiator picks: D-3 (red badge "истёк сегодня" in client list memberships block), D-2 ("expiring within 7 days" filter on memberships list page), D-5 (Telegram bot success DM includes days-remaining). Other differentiators (D-1/D-4/D-6/D-7 from FEATURES.md) deferred to v1.3+.
+- [x] **FE-10**: Cheap-win differentiator picks: D-3 (red badge "истёк сегодня" in client list memberships block), D-2 ("expiring within 7 days" filter on memberships list page), D-5 (Telegram bot success DM includes days-remaining). Other differentiators (D-1/D-4/D-6/D-7 from FEATURES.md) deferred to v1.3+.
 - [ ] **FE-11**: ESLint flat config validates Pattern α — no `features/clients/*` imports `features/memberships/*` or `features/visits/*`; tested via negative-test fixture in `eslint.config.js` (mirror of v1.1 fixtures). Confirm `eslint.config.js` `import/no-restricted-paths` rules in Phase 22 plan.
 
 ### Hygiene — v1.1 Carryover (Phase 23, parallel-eligible)
@@ -223,13 +223,13 @@
 | AUTH-TG-11 | Phase 20 | Complete |
 | API-04 | Phase 21 | Complete |
 | API-05 | Phase 21 | Complete |
-| FE-04 | Phase 22 | Pending |
+| FE-04 | Phase 22 | Complete |
 | FE-05 | Phase 22 | Pending |
-| FE-06 | Phase 22 | Pending |
+| FE-06 | Phase 22 | Complete |
 | FE-07 | Phase 22 | Pending |
 | FE-08 | Phase 22 | Complete |
 | FE-09 | Phase 22 | Pending |
-| FE-10 | Phase 22 | Pending |
+| FE-10 | Phase 22 | Complete |
 | FE-11 | Phase 22 | Pending |
 | HYG-01 | Phase 23 | Pending |
 | HYG-02 | Phase 23 | Pending |
