@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import pytest_asyncio
@@ -34,6 +34,7 @@ from app.integrations.telegram import sender as sender_mod
 from app.integrations.telegram.handlers import HandlerContext, start_handler
 from app.modules.auth import telegram_service
 from app.modules.auth.models import OtpCode, User
+from app.modules.visits import service as visits_service
 from tests.conftest import StubSenderResult, StubTelegramSender
 
 
@@ -110,10 +111,15 @@ def _build_ctx(db_session: AsyncSession) -> HandlerContext:
     async def _factory() -> AsyncIterator[AsyncSession]:
         yield db_session
 
+    # Phase 20: HandlerContext gained visits_service + redis fields. start_handler
+    # does not consume them, but the NamedTuple constructor requires every field —
+    # pass benign placeholders so this Phase 7 test continues to construct the ctx.
     return HandlerContext(
         session_factory=_factory,  # type: ignore[arg-type]
         telegram_service=telegram_service,
         sender=sender_mod,
+        visits_service=visits_service,
+        redis=cast(Any, None),
     )
 
 
