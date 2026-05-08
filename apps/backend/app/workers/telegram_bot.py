@@ -1,8 +1,10 @@
 """Telegram bot worker entry — long-polling python-telegram-bot 22 Application.
 
-Per Phase 7 D-06: workers MAY import a single owning module's service layer
-(here `app.modules.auth.telegram_service`). Cross-module imports inside
-workers are still forbidden — see app/workers/__init__.py docstring.
+Per Phase 7 D-06 + Phase 20 D-10: workers MAY import owning modules' service
+layers — currently `app.modules.auth.telegram_service` (D-06, /start handler)
+and `app.modules.visits.service` (D-10, /checkin handler). Cross-module
+imports inside workers are still forbidden — see app/workers/__init__.py
+docstring.
 
 Per Phase 7 D-09: NO module-level Application — built inside main()'s scope.
 Per Phase 7 D-08: opens db_lifespan_manager() + redis_lifespan_manager()
@@ -25,8 +27,13 @@ from app.core.logging import configure_logging
 from app.core.redis import redis_lifespan_manager
 from app.integrations.telegram import sender as telegram_sender
 from app.integrations.telegram.bot import build_application
-from app.integrations.telegram.handlers import HandlerContext, start_handler
+from app.integrations.telegram.handlers import (
+    HandlerContext,
+    checkin_handler,
+    start_handler,
+)
 from app.modules.auth import telegram_service  # D-06 relaxation
+from app.modules.visits import service as visits_service  # D-10 relaxation
 
 # Sentinel matched against settings.telegram_bot_token; fresh-clone default
 # from app/core/config.py. The worker refuses to start while this value is
@@ -53,16 +60,18 @@ async def main() -> None:
 
     async with AsyncExitStack() as stack:
         _engine, sessionmaker = await stack.enter_async_context(db_lifespan_manager())
-        _redis = await stack.enter_async_context(redis_lifespan_manager())
+        redis = await stack.enter_async_context(redis_lifespan_manager())
 
         ctx = HandlerContext(
             session_factory=sessionmaker,
             telegram_service=telegram_service,
             sender=telegram_sender,
+            visits_service=visits_service,
+            redis=redis,
         )
         application = build_application(
             token=settings.telegram_bot_token.get_secret_value(),
-            handlers=[("start", start_handler)],
+            handlers=[("start", start_handler), ("checkin", checkin_handler)],
             ctx=ctx,
         )
 
