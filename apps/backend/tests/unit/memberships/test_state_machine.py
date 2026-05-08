@@ -117,17 +117,21 @@ def test_membership_status_transitions_constant_is_immutable() -> None:
         MEMBERSHIP_STATUS_TRANSITIONS["active"] = frozenset()  # type: ignore[index]
 
 
-def test_membership_status_transitions_phase24_contents() -> None:
-    """D-24-03: Phase 24 contents.
+def test_membership_status_transitions_phase25_contents() -> None:
+    """D-25-14: Phase 25 contents.
 
-    `frozen` key present with empty target set (Phase 25 will populate).
+    Freeze edges populated: `active → {expired, cancelled, frozen}` and
+    `frozen → {active, cancelled}`. Terminal statuses (`expired`, `cancelled`)
+    remain empty. Phase 26 may extend renewal-related edges.
     """
     from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
 
-    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset({"expired", "cancelled"})
+    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset(
+        {"expired", "cancelled", "frozen"}
+    )
     assert MEMBERSHIP_STATUS_TRANSITIONS["expired"] == frozenset()
     assert MEMBERSHIP_STATUS_TRANSITIONS["cancelled"] == frozenset()
-    assert MEMBERSHIP_STATUS_TRANSITIONS["frozen"] == frozenset()
+    assert MEMBERSHIP_STATUS_TRANSITIONS["frozen"] == frozenset({"active", "cancelled"})
     assert set(MEMBERSHIP_STATUS_TRANSITIONS.keys()) == {
         "active",
         "expired",

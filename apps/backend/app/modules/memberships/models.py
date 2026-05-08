@@ -58,6 +58,7 @@ class MembershipPlan(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
     price_kopecks: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    freeze_days_limit: Mapped[int] = mapped_column(Integer, nullable=False)
     active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
@@ -73,6 +74,8 @@ class MembershipPlan(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
             # NAMING_CONVENTION expands to ck_membership_plans_price_kopecks_nonneg
             name="price_kopecks_nonneg",
         ),
+        # NAMING_CONVENTION expands to ck_membership_plans_freeze_days_limit_positive
+        CheckConstraint("freeze_days_limit > 0", name="freeze_days_limit_positive"),
         Index(
             "uq_membership_plans_name_alive",
             text("lower(name)"),
@@ -118,6 +121,7 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
     plan_name_snapshot: Mapped[str] = mapped_column(String(120), nullable=False)
     duration_days_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     price_kopecks_snapshot: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    freeze_days_limit_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(
@@ -157,5 +161,79 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
             "client_id",
             "status",
             text("end_date DESC"),
+        ),
+    )
+
+
+class MembershipFreezePeriod(Base, UUIDPkMixin, TimestampMixin):
+    """Membership freeze period — open while ended_at IS NULL (Phase 25 MEM-FRZ-02).
+
+    Composition: Base + UUIDPkMixin + TimestampMixin (NO SoftDeleteMixin —
+    lifecycle is encoded by `ended_at IS NULL` per D-25-04).
+
+    Note: `created_at` (TimestampMixin) and `started_at` are SEMANTICALLY DISTINCT:
+        - `created_at` is the audit-row wallclock (server-side func.now() at INSERT).
+        - `started_at` is the operational period start (explicit Python datetime
+          passed by the service layer at freeze time).
+    They will be near-identical at INSERT time but tests must NOT assume equality.
+
+    DB-level invariants:
+    - FK fk_membership_freeze_periods_membership_id_memberships ON DELETE RESTRICT
+      to memberships.id (audit-trail integrity — never cascade-delete history).
+    - FK fk_membership_freeze_periods_started_by_users ON DELETE RESTRICT to users.id.
+    - FK fk_membership_freeze_periods_ended_by_users ON DELETE SET NULL to users.id
+      (operator may be deleted; period stays).
+    - Partial unique index uq_membership_freeze_periods_active_per_membership on
+      (membership_id) WHERE ended_at IS NULL — single open period per membership.
+      The constraint name is literal-ref'd by service.py:_is_already_frozen_conflict
+      (D-25-22). Installed via raw op.execute() in the migration; mirrored here in
+      __table_args__ for ORM awareness; suppressed in alembic/env.py:_include_object
+      to keep autogenerate clean.
+    """
+
+    __tablename__ = "membership_freeze_periods"
+
+    membership_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "memberships.id",
+            ondelete="RESTRICT",
+            name="fk_membership_freeze_periods_membership_id_memberships",
+        ),
+        nullable=False,
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    started_by: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+            name="fk_membership_freeze_periods_started_by_users",
+        ),
+        nullable=False,
+    )
+    ended_by: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+            name="fk_membership_freeze_periods_ended_by_users",
+        ),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_membership_freeze_periods_active_per_membership",
+            "membership_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
         ),
     )

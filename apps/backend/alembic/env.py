@@ -64,6 +64,7 @@ def _include_object(
             "ix_clients_last_name_trgm",
             "ix_clients_first_name_trgm",
             "uq_membership_plans_name_alive",
+            "uq_membership_freeze_periods_active_per_membership",
         )
     )
 
