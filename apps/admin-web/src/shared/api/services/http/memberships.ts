@@ -87,6 +87,15 @@ export const memberships: MembershipsService = {
     const raw = unwrap<PaginatedMembershipResponse>(
       await request('get', '/api/v1/memberships', { query: { clientId, page: 1, pageSize: 100 } }),
     )
+    // WR-17: warn (not throw) when truncation actually happens so a long-lived
+    // gym member's missing history is at least visible in the dev console
+    // until proper pagination ships.
+    if (raw.total > raw.items.length) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[memberships.byClient] truncated: client=${clientId} total=${raw.total} returned=${raw.items.length} (pageSize=100). Add pagination to MembershipsBlock.`,
+      )
+    }
     return { ...raw, items: raw.items.map(responseToMembership) }
   },
 
