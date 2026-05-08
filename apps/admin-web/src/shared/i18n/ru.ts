@@ -183,30 +183,46 @@ export const ru = {
   },
   membershipPlans: {
     heading: 'Тарифы',
+    daysUnit: 'дн.',
     actions: {
       create: 'Новый тариф',
     },
-    form: {
+    columns: {
+      name: 'Название',
+      durationDays: 'Длительность',
+      price: 'Цена',
+      status: 'Статус',
+    },
+    dialog: {
       createTitle: 'Новый тариф',
       editTitle: 'Редактировать тариф',
+      deleteTitle: 'Удалить тариф?',
+      deleteBody: 'Тариф будет скрыт из списка продаж. Действие необратимо.',
+      deleteConfirm: 'Удалить',
+    },
+    form: {
       name: 'Название',
-      price: 'Цена, ₽',
+      priceRoubles: 'Цена, ₽',
       durationDays: 'Длительность, дн.',
       active: 'Активный тариф',
+      submitting: 'Сохраняется…',
       saveCreate: 'Добавить тариф',
       saveEdit: 'Сохранить изменения',
-      cancel: 'Не сохранять',
+      cancel: 'Отмена',
       durationImmutable: 'Длительность нельзя изменить после создания',
     },
-    delete: {
-      title: 'Архивировать тариф?',
-      body: 'Тариф будет скрыт из списка продаж.',
-      confirm: 'Архивировать',
-      cancel: 'Не архивировать',
+    toast: {
+      created: 'Тариф добавлен',
+      updated: 'Тариф сохранён',
+      deleted: 'Тариф удалён',
     },
     status: {
       active: 'Активен',
       archived: 'Архивирован',
+    },
+    error: {
+      heading: 'Не удалось загрузить тарифы',
+      retry: 'Повторить загрузку',
     },
     empty: {
       heading: 'Тарифов пока нет',

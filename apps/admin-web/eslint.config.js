@@ -145,6 +145,11 @@ export default tseslint.config(
       'src/shared/ui/data-grid.tsx',
       'src/shared/ui/input-otp.tsx',
       'src/shared/ui/tabs.tsx',
+      // Phase 22 new shadcn primitives
+      'src/shared/ui/badge.tsx',
+      'src/shared/ui/textarea.tsx',
+      'src/shared/ui/alert.tsx',
+      'src/shared/ui/card.tsx',
       // ReUI DataGrid multi-file component (radix-nova style, co-locates variant exports)
       'src/components/reui/**/*.tsx',
     ],
