@@ -67,11 +67,11 @@
 
 ### Telegram Bot — `/checkin` (Phase 20)
 
-- [ ] **AUTH-TG-07**: `HandlerContext` NamedTuple in `app/integrations/telegram/handlers.py` extends to include `visits_service: ModuleType`; D-10 documents the worker→visits_service exception (parallel to D-06 for telegram_service).
-- [ ] **AUTH-TG-08**: `app/integrations/telegram/handlers.py` adds `checkin_handler(update, context, ctx)`; calls `ctx.visits_service.create_visit_self_checkin(...)` inside `async with ctx.session_factory() as session`; explicit `await session.commit()` on success; failure paths reply with locked Russian DM strings (NEVER include client name, end_date, hours, membership status — single generic failure message per branch).
-- [ ] **AUTH-TG-09**: `app/workers/telegram_bot.py` imports `app.modules.visits.service` (D-10), passes it via `HandlerContext`, and registers `("checkin", checkin_handler)` in the handlers list alongside `("start", start_handler)`.
-- [ ] **AUTH-TG-10**: Redis-backed `update_id` dedup in the bot worker uses keyspace `sz:bot:update:{update_id}` (TTL 1 hour); replay attempts (Telegram resending an Update on bot restart) do not double-create visits. Key prefix coexists with `arq:*` and `sz:session:*` without collision.
-- [ ] **AUTH-TG-11**: Russian DM copy is locked in code constants (NOT freeform i18n) and reviewed/signed-off by the project owner before Phase 20 merge: success `"✅ Отмечено"`, no-membership `"У вас нет активного абонемента. Обратитесь к администратору."`, duplicate `"Вы уже отмечались сегодня."`, outside-hours `"Зал сейчас закрыт. Часы работы: {hours}."` (gym hours interpolated from env).
+- [x] **AUTH-TG-07**: `HandlerContext` NamedTuple in `app/integrations/telegram/handlers.py` extends to include `visits_service: ModuleType`; D-10 documents the worker→visits_service exception (parallel to D-06 for telegram_service).
+- [x] **AUTH-TG-08**: `app/integrations/telegram/handlers.py` adds `checkin_handler(update, context, ctx)`; calls `ctx.visits_service.create_visit_self_checkin(...)` inside `async with ctx.session_factory() as session`; explicit `await session.commit()` on success; failure paths reply with locked Russian DM strings (NEVER include client name, end_date, hours, membership status — single generic failure message per branch).
+- [x] **AUTH-TG-09**: `app/workers/telegram_bot.py` imports `app.modules.visits.service` (D-10), passes it via `HandlerContext`, and registers `("checkin", checkin_handler)` in the handlers list alongside `("start", start_handler)`.
+- [x] **AUTH-TG-10**: Redis-backed `update_id` dedup in the bot worker uses keyspace `sz:bot:update:{update_id}` (TTL 1 hour); replay attempts (Telegram resending an Update on bot restart) do not double-create visits. Key prefix coexists with `arq:*` and `sz:session:*` without collision.
+- [x] **AUTH-TG-11**: Russian DM copy is locked in code constants (NOT freeform i18n) and reviewed/signed-off by the project owner before Phase 20 merge: success `"✅ Отмечено"`, no-membership `"У вас нет активного абонемента. Обратитесь к администратору."`, duplicate `"Вы уже отмечались сегодня."`, outside-hours `"Зал сейчас закрыт. Часы работы: {hours}."` (gym hours interpolated from env).
 
 ### API Surface — OpenAPI Drift Gate Refresh (Phase 21)
 
@@ -216,11 +216,11 @@
 | VIS-EP-03 | Phase 19 | Complete |
 | VIS-AUDIT-01 | Phase 19 | Complete |
 | VIS-TEST-01 | Phase 19 | Complete |
-| AUTH-TG-07 | Phase 20 | Pending |
-| AUTH-TG-08 | Phase 20 | Pending |
-| AUTH-TG-09 | Phase 20 | Pending |
-| AUTH-TG-10 | Phase 20 | Pending |
-| AUTH-TG-11 | Phase 20 | Pending |
+| AUTH-TG-07 | Phase 20 | Complete |
+| AUTH-TG-08 | Phase 20 | Complete |
+| AUTH-TG-09 | Phase 20 | Complete |
+| AUTH-TG-10 | Phase 20 | Complete |
+| AUTH-TG-11 | Phase 20 | Complete |
 | API-04 | Phase 21 | Pending |
 | API-05 | Phase 21 | Pending |
 | FE-04 | Phase 22 | Pending |
