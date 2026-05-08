@@ -30,12 +30,12 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Row, Select, and_, func, select, true, update
+from sqlalchemy import Integer, Row, Select, Subquery, and_, func, select, text, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationAppError
 from app.core.pagination import PaginatedData
-from app.modules.memberships.models import Membership, MembershipPlan
+from app.modules.memberships.models import Membership, MembershipFreezePeriod, MembershipPlan
 from app.modules.memberships.schemas import (
     MembershipCreateRequest,
     MembershipListQuery,
@@ -394,3 +394,58 @@ async def expire_due_rows(
     )
     result = await session.execute(stmt)
     return result.all()
+
+
+# ===========================================================================
+# Phase 25 — MembershipFreezePeriod helpers (D-25-16, D-25-18)
+# ===========================================================================
+
+
+async def insert_freeze_period(
+    session: AsyncSession,
+    *,
+    membership_id: UUID,
+    started_by: UUID,
+    started_at: datetime,
+) -> MembershipFreezePeriod:
+    """Insert an open freeze period (Phase 25 D-25-16).
+
+    Caller (service) owns flush + commit and handles IntegrityError on the
+    partial unique index ``uq_membership_freeze_periods_active_per_membership``
+    (raised via ``_is_already_frozen_conflict`` discriminator in Plan 25-03).
+    """
+    period = MembershipFreezePeriod(
+        membership_id=membership_id,
+        started_by=started_by,
+        started_at=started_at,
+        # ended_at intentionally omitted — NULL while period is open.
+    )
+    session.add(period)
+    return period
+
+
+async def get_open_freeze_period(
+    session: AsyncSession, membership_id: UUID
+) -> MembershipFreezePeriod | None:
+    """Return the open freeze period for ``membership_id``, or None (D-25-16).
+
+    Defence-in-depth: if status='frozen' but no open period exists, that is a
+    DB-level invariant violation (manual SQL surgery, bug). Caller raises.
+    """
+    stmt = (
+        select(MembershipFreezePeriod)
+        .where(
+            MembershipFreezePeriod.membership_id == membership_id,
+            MembershipFreezePeriod.ended_at.is_(None),
+        )
+        .limit(1)
+    )
+    result: MembershipFreezePeriod | None = await session.scalar(stmt)
+    return result
+
+
+async def get_freeze_period_by_id(
+    session: AsyncSession, period_id: UUID
+) -> MembershipFreezePeriod | None:
+    """Return a freeze period by id, or None. Used by tests / debug paths (D-25-16)."""
+    return await session.get(MembershipFreezePeriod, period_id)
