@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: ready_to_plan
-stopped_at: Phase 21 context gathered
-last_updated: "2026-05-08T08:22:57.223Z"
-last_activity: 2026-05-08 -- Phase 21 execution started
+status: planning
+stopped_at: Phase 22 context gathered
+last_updated: "2026-05-08T09:13:19.546Z"
+last_activity: 2026-05-08
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 30
-  completed_plans: 29
-  percent: 78
+  completed_plans: 30
+  percent: 100
 ---
 
 # Project State
@@ -135,6 +135,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-08T08:12:15.795Z
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-openapi-drift-gate-refresh-api-client-codegen/21-CONTEXT.md
+Last session: 2026-05-08T09:13:19.542Z
+Stopped at: Phase 22 context gathered
+Resume file: .planning/phases/22-admin-web-wiring-memberships-visits-active-sessions-ui/22-CONTEXT.md
