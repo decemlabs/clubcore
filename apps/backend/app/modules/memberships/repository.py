@@ -449,3 +449,68 @@ async def get_freeze_period_by_id(
 ) -> MembershipFreezePeriod | None:
     """Return a freeze period by id, or None. Used by tests / debug paths (D-25-16)."""
     return await session.get(MembershipFreezePeriod, period_id)
+
+
+async def compute_freeze_days_used(
+    session: AsyncSession,
+    membership_id: UUID,
+    *,
+    today_msk: date,
+) -> int:
+    """Sum of completed-period days + ongoing days if frozen (MEM-FRZ-EP-03 / D-25-16).
+
+    Single SQL aggregate — O(1) extra query per row (avoids N+1 in list view).
+    ``CEIL((COALESCE(ended_at, now()) - started_at) seconds / 86400)`` matches
+    the "half-day rounds up" semantic byte-stable between Python (``math.ceil``)
+    and SQL.
+
+    Note on Europe/Moscow: seconds-based ceil is timezone-agnostic (UTC seconds
+    = MSK seconds, fixed UTC+3 offset, no DST since 2014). The ``today_msk``
+    parameter is reserved for a future calendar-day refactor; currently unused
+    at the SQL level. Do NOT remove it — it's part of the D-25-16 contract.
+    """
+    del today_msk  # currently unused; kept in signature per D-25-16 contract.
+    stmt = text(
+        "SELECT COALESCE(SUM("
+        "  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)"
+        "), 0)::int "
+        "FROM membership_freeze_periods "
+        "WHERE membership_id = :membership_id"
+    )
+    result = await session.scalar(stmt, {"membership_id": membership_id})
+    return int(result or 0)
+
+
+# Reserved for future list-view LEFT JOIN optimisation; current service path
+# (Plan 25-03) uses compute_freeze_days_used per row.
+def _freeze_days_used_subquery() -> Subquery:
+    """Reusable scalar subquery for the list view's freeze_days_used column (D-25-18).
+
+    Emitted as a LEFT JOIN against ``memberships`` so the list view stays
+    single-query (no N+1 per-row aggregate). Used by ``list_memberships``
+    when wired in a future plan.
+    """
+    return (
+        select(
+            MembershipFreezePeriod.membership_id.label("membership_id"),
+            func.coalesce(
+                func.sum(
+                    func.ceil(
+                        func.extract(
+                            "epoch",
+                            func.coalesce(
+                                MembershipFreezePeriod.ended_at, func.now()
+                            )
+                            - MembershipFreezePeriod.started_at,
+                        )
+                        / 86400
+                    )
+                ),
+                0,
+            )
+            .cast(Integer)
+            .label("days_used"),
+        )
+        .group_by(MembershipFreezePeriod.membership_id)
+        .subquery()
+    )
