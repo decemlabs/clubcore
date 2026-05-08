@@ -46,7 +46,7 @@ export function RecentVisitsBlock({ clientId }: Props) {
 
         {isError && (
           <Alert variant="destructive">
-            <AlertDescription>Не удалось загрузить посещения</AlertDescription>
+            <AlertDescription>{t('visits.recentBlock.error')}</AlertDescription>
           </Alert>
         )}
 
@@ -60,9 +60,9 @@ export function RecentVisitsBlock({ clientId }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-muted-foreground">
-                <th className="py-2 text-left font-medium">Дата</th>
-                <th className="py-2 text-left font-medium">Время</th>
-                <th className="py-2 text-left font-medium">Канал</th>
+                <th className="py-2 text-left font-medium">{t('visits.columns.date')}</th>
+                <th className="py-2 text-left font-medium">{t('visits.columns.time')}</th>
+                <th className="py-2 text-left font-medium">{t('visits.columns.channel')}</th>
               </tr>
             </thead>
             <tbody>

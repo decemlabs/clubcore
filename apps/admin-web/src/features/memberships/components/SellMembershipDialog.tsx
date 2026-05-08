@@ -62,7 +62,7 @@ function SellMembershipForm({ clientId, onSuccess, onCancel }: SellFormProps) {
       }
       return
     }
-    setRootError('Ошибка соединения.')
+    setRootError(t('common.errors.network'))
   }
 
   const onSubmit = form.handleSubmit((values) => {
@@ -100,7 +100,8 @@ function SellMembershipForm({ clientId, onSuccess, onCancel }: SellFormProps) {
           <SelectContent>
             {plans.map((p) => (
               <SelectItem key={p.id} value={p.id}>
-                {p.name} — {formatMoney(p.priceKopecks)} / {p.durationDays} дн.
+                {p.name} — {formatMoney(p.priceKopecks)} / {p.durationDays}{' '}
+                {t('membershipPlans.daysUnit')}
               </SelectItem>
             ))}
           </SelectContent>
@@ -153,7 +154,7 @@ export function SellMembershipDialog({ open, onClose, clientId }: Props) {
         <DialogHeader>
           <DialogTitle>{t('memberships.dialog.sellTitle')}</DialogTitle>
           <DialogDescription className="sr-only">
-            Форма продажи абонемента клиенту
+            {t('memberships.dialogDescription.sell')}
           </DialogDescription>
         </DialogHeader>
         <SellMembershipForm clientId={clientId} onSuccess={onClose} onCancel={onClose} />

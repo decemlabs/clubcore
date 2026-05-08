@@ -79,7 +79,7 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
             handleClose()
           },
           onError: () => {
-            toast.error('Ошибка при сохранении тарифа.')
+            toast.error(t('common.errors.saveTariff'))
           },
         },
       )
@@ -97,7 +97,7 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
             handleClose()
           },
           onError: () => {
-            toast.error('Ошибка при создании тарифа.')
+            toast.error(t('common.errors.createTariff'))
           },
         },
       )
@@ -114,7 +114,9 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
             : t('membershipPlans.dialog.createTitle')}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {isEdit ? 'Редактирование тарифа' : 'Создание нового тарифа'}
+            {isEdit
+              ? t('memberships.dialogDescription.edit')
+              : t('memberships.dialogDescription.create')}
           </DialogDescription>
         </DialogHeader>
 
@@ -180,7 +182,7 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
           {(createPlan.isError || updatePlan.isError) && (
             <Alert variant="destructive">
               <AlertDescription>
-                {isEdit ? 'Ошибка при сохранении тарифа.' : 'Ошибка при создании тарифа.'}
+                {isEdit ? t('common.errors.saveTariff') : t('common.errors.createTariff')}
               </AlertDescription>
             </Alert>
           )}

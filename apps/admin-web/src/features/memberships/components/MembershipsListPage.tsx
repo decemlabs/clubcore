@@ -42,17 +42,17 @@ export function MembershipsListPage() {
   const columns: ColumnDef<Membership>[] = [
     {
       accessorKey: 'clientId',
-      header: 'Клиент',
+      header: t('memberships.columns.client'),
       cell: ({ row }) => (
         <span className="text-muted-foreground font-mono text-xs">
           {row.original.clientId.slice(0, 8)}…
         </span>
       ),
     },
-    { accessorKey: 'planNameSnapshot', header: 'Тариф' },
+    { accessorKey: 'planNameSnapshot', header: t('memberships.columns.plan') },
     {
       id: 'period',
-      header: 'Период',
+      header: t('memberships.columns.period'),
       cell: ({ row }) => {
         const m = row.original
         return (
@@ -64,12 +64,12 @@ export function MembershipsListPage() {
     },
     {
       accessorKey: 'priceKopecksSnapshot',
-      header: 'Цена',
+      header: t('memberships.columns.price'),
       cell: ({ row }) => formatMoney(row.original.priceKopecksSnapshot),
     },
     {
       id: 'status',
-      header: 'Статус',
+      header: t('memberships.columns.status'),
       cell: ({ row }) => <StatusBadge status={row.original.status} />,
     },
     {
@@ -145,7 +145,7 @@ export function MembershipsListPage() {
         <div className="space-y-3 rounded-md border p-6 text-center">
           <h2 className="text-lg font-semibold">{t('memberships.error.heading')}</h2>
           <p className="text-muted-foreground text-sm">{t('memberships.error.body')}</p>
-          <Button onClick={() => void query.refetch()}>Повторить загрузку</Button>
+          <Button onClick={() => void query.refetch()}>{t('common.retryLoad')}</Button>
         </div>
       )}
 

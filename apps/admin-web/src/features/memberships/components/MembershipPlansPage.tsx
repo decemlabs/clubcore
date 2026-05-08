@@ -112,7 +112,7 @@ export function MembershipPlansPage() {
         setDeleteId(null)
       },
       onError: () => {
-        toast.error('Ошибка при удалении тарифа.')
+        toast.error(t('common.errors.deleteTariff'))
         setDeleteId(null)
       },
     })

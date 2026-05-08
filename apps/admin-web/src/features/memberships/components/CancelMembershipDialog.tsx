@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/shared/ui/alert'
-import { isDomainError } from '@/shared/api/errors'
+import { ApiError, isDomainError } from '@/shared/api/errors'
 import { t } from '@/shared/i18n'
 import { useCancelMembership } from '../api/hooks'
 import type { MembershipId } from '@/entities/membership'
@@ -41,7 +41,14 @@ export function CancelMembershipDialog({ open, onClose, membershipId }: Props) {
           if (code === 'invalid_transition') {
             setInlineError(t('memberships.errors.invalidTransition'))
           } else {
-            toast.error(isDomainError(err) ? err.message : 'Ошибка соединения.')
+            const fallback = t('common.errors.network')
+            toast.error(
+              isDomainError(err)
+                ? err.message
+                : err instanceof ApiError
+                  ? err.message
+                  : fallback,
+            )
             onClose()
           }
         },

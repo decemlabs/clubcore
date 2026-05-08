@@ -39,6 +39,13 @@ export const ru = {
     empty: 'Пусто',
     error: 'Ошибка',
     retry: 'Повторить',
+    retryLoad: 'Повторить загрузку',
+    errors: {
+      network: 'Ошибка соединения.',
+      saveTariff: 'Ошибка при сохранении тарифа.',
+      createTariff: 'Ошибка при создании тарифа.',
+      deleteTariff: 'Ошибка при удалении тарифа.',
+    },
   },
   auth: {
     login: {
@@ -156,6 +163,18 @@ export const ru = {
       paidAt: 'Дата оплаты',
       notes: 'Заметки',
     },
+    columns: {
+      client: 'Клиент',
+      plan: 'Тариф',
+      period: 'Период',
+      price: 'Цена',
+      status: 'Статус',
+    },
+    dialogDescription: {
+      sell: 'Форма продажи абонемента клиенту',
+      edit: 'Редактирование тарифа',
+      create: 'Создание нового тарифа',
+    },
     empty: {
       heading: 'Абонементов пока нет',
       body: 'Продайте первый абонемент клиенту, открыв его профиль.',
@@ -264,6 +283,12 @@ export const ru = {
     recentBlock: {
       heading: 'Посещения',
       empty: 'Посещений нет',
+      error: 'Не удалось загрузить посещения',
+    },
+    columns: {
+      date: 'Дата',
+      time: 'Время',
+      channel: 'Канал',
     },
     channel: {
       reception: 'Ресепшн',

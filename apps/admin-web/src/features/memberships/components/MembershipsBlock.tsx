@@ -70,9 +70,9 @@ export function MembershipsBlock({ clientId }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="pb-2 text-left font-medium">Тариф</th>
-                  <th className="pb-2 text-left font-medium">Период</th>
-                  <th className="pb-2 text-left font-medium">Статус</th>
+                  <th className="pb-2 text-left font-medium">{t('memberships.columns.plan')}</th>
+                  <th className="pb-2 text-left font-medium">{t('memberships.columns.period')}</th>
+                  <th className="pb-2 text-left font-medium">{t('memberships.columns.status')}</th>
                   <th className="pb-2 text-right font-medium"></th>
                 </tr>
               </thead>

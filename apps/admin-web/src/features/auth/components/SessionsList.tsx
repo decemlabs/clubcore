@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/button'
 import { Badge } from '@/shared/ui/badge'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Alert, AlertDescription } from '@/shared/ui/alert'
-import { isDomainError } from '@/shared/api/errors'
+import { ApiError, isDomainError } from '@/shared/api/errors'
 import { t } from '@/shared/i18n'
 import { formatDate } from '@/shared/i18n/date'
 import { useActiveSessions, useRevokeSession } from '../api/sessionsHooks'
@@ -27,7 +27,14 @@ function SessionRow({ session }: { session: SessionFamily }) {
         toast.success(t('sessions.toast.revoked'))
       },
       onError: (err) => {
-        toast.error(isDomainError(err) ? err.message : 'Ошибка соединения.')
+        const fallback = t('auth.errors.network')
+        toast.error(
+          isDomainError(err)
+            ? err.message
+            : err instanceof ApiError
+              ? err.message
+              : fallback,
+        )
       },
     })
   }

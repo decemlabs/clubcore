@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import { isDomainError } from '@/shared/api/errors'
+import { ApiError, isDomainError } from '@/shared/api/errors'
 import { t } from '@/shared/i18n'
 import { useLogoutAll } from '../api/sessionsHooks'
 
@@ -38,7 +38,14 @@ export function LogoutAllDialog({ open, onClose }: Props) {
         void navigate({ to: '/login', replace: true })
       },
       onError: (err) => {
-        toast.error(isDomainError(err) ? err.message : 'Ошибка соединения.')
+        const fallback = t('auth.errors.network')
+        toast.error(
+          isDomainError(err)
+            ? err.message
+            : err instanceof ApiError
+              ? err.message
+              : fallback,
+        )
         onClose()
       },
     })
