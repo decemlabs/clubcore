@@ -80,6 +80,8 @@ function CheckInCard({ client, onSuccess }: CheckInCardProps) {
                 .replace('{open}', gymHoursStart)
                 .replace('{close}', gymHoursEnd),
             )
+          } else if (err.code === 'mock_not_implemented') {
+            setServerError(t('visits.errors.mockNotImplemented'))
           } else {
             setServerError(err.message)
           }

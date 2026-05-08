@@ -289,6 +289,7 @@ export const ru = {
       noActiveMembership: 'Нет активного абонемента.',
       duplicateCheckin: 'Клиент уже отмечен сегодня.',
       outsideGymHours: 'Зал закрыт. Часы работы: {open}–{close}.',
+      mockNotImplemented: 'Отметка посещения недоступна в демо-режиме. Используйте VITE_API_MODE=http.',
     },
     recentBlock: {
       heading: 'Посещения',
