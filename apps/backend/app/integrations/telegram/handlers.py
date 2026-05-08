@@ -13,6 +13,19 @@ The /start <token> handler implements the atomic-after-DM pattern (D-11):
   5. If ok=True -> ctx.telegram_service.commit_otp(session, ...).
   6. If blocked / error / TelegramUnknownAccount / OtpAlreadyConsumed:
      emit structlog event, optional DM, no OTP commit.
+
+The /checkin handler (Phase 20 D-10):
+  1. Defensive update-field guard.
+  2. Redis SET-NX-EX dedup on `sz:bot:update:{update_id}` TTL 1h, fail-open on
+     Redis errors (D-20-3).
+  3. Open SAVEPOINT-rolled session via ctx.session_factory().
+  4. ctx.visits_service.create_visit_self_checkin(...) -- service owns commit
+     + audit emit on every branch EXCEPT ClientNotLinkedError (handler owns;
+     D-20-10).
+  5. Dispatch by type(exc).__name__ (string-name; integrations perp modules
+     forbids importing the classes).
+  6. DM one of 4 locked Russian strings (D-20-7); ClientNotLinkedError reuses
+     _DM_NO_MEMBERSHIP (D-20-9 anti-oracle).
 """
 
 from __future__ import annotations
@@ -216,3 +229,94 @@ async def start_handler(
             chat_id=chat_id,
             error=send_result.error,
         )
+
+
+async def checkin_handler(
+    update: Any,  # telegram.Update at runtime
+    context: Any,  # telegram.ext.CallbackContext at runtime
+    ctx: HandlerContext,
+) -> None:
+    """ptb /checkin handler (Phase 20 D-10).
+
+    Routes a client's /checkin DM into Phase 19's create_visit_self_checkin
+    service while preserving the integrations perp modules import-linter contract:
+    the visits service is reached only via ctx.visits_service.* (NamedTuple
+    attribute access; never `from app.modules.visits import ...`).
+    """
+    bot = context.bot
+    effective_user = update.effective_user
+    effective_chat = update.effective_chat
+    if effective_user is None or effective_chat is None or update.message is None:
+        return
+    update_id = getattr(update, "update_id", None)
+    if update_id is None:
+        return
+    chat_id: int = effective_chat.id
+    tg_user_id: int = effective_user.id
+
+    # Redis SET-NX-EX dedup (D-20-1, D-20-3, D-20-5, D-20-6). Fail-open on Redis errors;
+    # the DB UNIQUE on (client_id, gym_date) is the real anti-replay invariant.
+    dedup_key = f"sz:bot:update:{update_id}"
+    try:
+        set_result: Any = await ctx.redis.set(dedup_key, "1", nx=True, ex=3600)
+    except Exception as exc:  # fail-open per D-20-3
+        logger.warning(
+            "bot_redis_dedup_unavailable",
+            update_id=update_id,
+            chat_id=chat_id,
+            error=str(exc),
+        )
+        set_result = "OK"  # proceed; DB UNIQUE is the real anti-replay backstop
+    if set_result is None:
+        # Replay (Telegram resent the Update on bot restart). Silent per D-20-4.
+        logger.debug("bot_replay_skipped", update_id=update_id, chat_id=chat_id)
+        return
+
+    async with ctx.session_factory() as session:
+        try:
+            visit = await ctx.visits_service.create_visit_self_checkin(
+                session,
+                telegram_user_id=tg_user_id,
+                chat_id=chat_id,
+            )
+        except Exception as exc:  # string-name dispatch (integrations perp modules)
+            # D-20-9 anti-oracle: ClientNotLinkedError reuses _DM_NO_MEMBERSHIP so the
+            # bot is useless for account enumeration. Do NOT "fix" this to a 5th honest-UX
+            # string -- a stranger MUST see the same DM as a linked-but-no-membership client.
+            cls_name = type(exc).__name__
+            if cls_name == "NoActiveMembershipError":
+                await ctx.sender.send_text_dm(bot, chat_id, _DM_NO_MEMBERSHIP)
+                return
+            if cls_name == "DuplicateCheckinError":
+                await ctx.sender.send_text_dm(bot, chat_id, _DM_DUPLICATE)
+                return
+            if cls_name == "OutsideGymHoursError":
+                await ctx.sender.send_text_dm(
+                    bot,
+                    chat_id,
+                    _DM_OUTSIDE_HOURS.format(hours=_format_gym_hours(exc)),
+                )
+                return
+            if cls_name == "ClientNotLinkedError":
+                # D-20-10: handler owns the audit emit (Phase 19 D-12 deferred this).
+                await audit_emit(
+                    session,
+                    "telegram_unknown_checkin",
+                    actor_user_id=None,
+                    resource_type="visit",
+                    resource_id=None,
+                    chat_id=chat_id,
+                    telegram_user_id_hash=_hash_telegram_user_id(tg_user_id),
+                )
+                await session.commit()
+                await ctx.sender.send_text_dm(bot, chat_id, _DM_NO_MEMBERSHIP)
+                return
+            # Any other exception -- re-raise; ptb _global_error_handler logs and the
+            # polling loop continues (Phase 7 D-09 resilience).
+            raise
+
+        # Happy path. Phase 19 service has already committed + emitted visit_created.
+        # Handler does NOT call session.commit() (Phase 19 D-05 + INFRA-13 commit gate).
+        await ctx.sender.send_text_dm(bot, chat_id, _DM_CHECKIN_OK)
+        # Ignore SendResult: a blocked DM does not roll back the visit (mirror Phase 7).
+        _ = visit  # silence unused; structlog at sender layer already logs send failures
