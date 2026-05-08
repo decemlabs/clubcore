@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Memberships + Visits
-status: executing
+status: ready_to_plan
 stopped_at: Phase 20 context gathered
 last_updated: "2026-05-08T07:24:19.587Z"
 last_activity: 2026-05-08 -- Phase 20 execution started
 progress:
   total_phases: 9
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 29
   completed_plans: 26
-  percent: 90
+  percent: 67
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 ## Current Position
 
-Phase: 20 (telegram-bot-checkin-self-check-in) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 20
-Last activity: 2026-05-08 -- Phase 20 execution started
+Phase: 21
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-08
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (this milestone)
+- Total plans completed: 3 (this milestone)
 - Average duration: —
 - Total execution time: 0.0 hours
 
@@ -51,6 +51,7 @@ Last activity: 2026-05-08 -- Phase 20 execution started
 | 21. OpenAPI drift gate refresh + api-client codegen | 0/TBD | — | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | 0/TBD | — | — |
 | 23. Hygiene + active sessions backend | 0/TBD | — | — |
+| 20 | 3 | - | - |
 
 **Recent Trend:**
 

@@ -213,7 +213,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete   | 2026-05-08 |
+| 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete    | 2026-05-08 |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
 | 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
