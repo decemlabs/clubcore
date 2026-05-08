@@ -60,12 +60,13 @@ async def test_self_checkin_happy_path(
 
     _client_obj, _membership = await make_visit_setup(telegram_user_id=_TG_USER_ID)
 
-    result = await service.create_visit_self_checkin(
+    result, end_date = await service.create_visit_self_checkin(
         db_session, telegram_user_id=_TG_USER_ID, chat_id=_CHAT_ID
     )
 
     assert result.channel == "telegram_bot"
     assert result.checked_in_by is None
+    assert end_date == _membership.end_date  # 22-04 D-22-11: tuple now carries membership.end_date
 
     # Verify audit row
     row = await db_session.scalar(
