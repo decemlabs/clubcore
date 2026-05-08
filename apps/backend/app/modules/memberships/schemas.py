@@ -54,6 +54,7 @@ class MembershipPlanCreateRequest(BackendSchemaBase):
     name: str = Field(min_length=1, max_length=120)
     duration_days: int = Field(ge=1, le=3650)  # D-06
     price_kopecks: int = Field(ge=0, le=10**11)  # D-06
+    freeze_days_limit: int = Field(ge=1, le=365)  # Phase 25 D-25-10 — explicit, no default
     active: bool = Field(default=True)  # D-06
 
     @field_validator("name", mode="before")
@@ -110,11 +111,29 @@ class MembershipPlanResponse(ResponseData):
     name: str
     duration_days: int
     price_kopecks: int
+    freeze_days_limit: int  # Phase 25 D-25-10
     active: bool
     created_at: datetime
     updated_at: datetime
     # deleted_at intentionally omitted — soft-deleted rows are 404'd at the
     # repository boundary and never serialised.
+
+
+# --- Phase 25: Freeze period response (D-25-12) ---------------------------
+
+
+class FreezePeriodResponse(ResponseData):
+    """Outbound representation of a MembershipFreezePeriod (Phase 25 D-25-12).
+
+    Used as the value of MembershipResponse.current_freeze_period. When surfaced
+    that way, ended_at and ended_by are always None (open period definition).
+    """
+
+    id: UUID
+    started_at: datetime
+    started_by: UUID
+    ended_at: datetime | None
+    ended_by: UUID | None
 
 
 # --- List query ------------------------------------------------------------
@@ -142,6 +161,7 @@ class MembershipStatus(StrEnum):
     ACTIVE = "active"
     EXPIRED = "expired"
     CANCELLED = "cancelled"
+    FROZEN = "frozen"  # Phase 25 D-25-13
 
 
 class MembershipListSort(StrEnum):
@@ -227,6 +247,11 @@ class MembershipResponse(ResponseData):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+    # Phase 25 MEM-FRZ-EP-03 — freeze projection fields (D-25-12):
+    freeze_days_limit_snapshot: int
+    freeze_days_used: int
+    freeze_days_remaining: int  # computed = limit - used, clamped to 0
+    current_freeze_period: FreezePeriodResponse | None  # None when status != frozen
 
 
 # --- List query ------------------------------------------------------------
