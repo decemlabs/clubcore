@@ -110,11 +110,15 @@ async def _create_visit_with_anti_fraud(
     channel: str,
     checked_in_by: UUID | None,
     audit_actor_user_id: UUID | None,
-) -> VisitResponse:
+) -> tuple[VisitResponse, date]:
     """Shared anti-fraud chain (D-04). Reception + bot wrappers call this.
 
     Order: gym_hours → active_membership → insert+UNIQUE (D-03).
     Reject paths emit + commit + raise (D-05).
+
+    Returns (VisitResponse, membership.end_date) on success. The reception path
+    discards end_date; the bot path uses it to compute days_remaining for the
+    DM (D-22-11). The public VisitResponse schema is UNCHANGED.
     """
     settings = get_settings()
     now_msk_dt = _now_msk()
@@ -193,6 +197,7 @@ async def _create_visit_with_anti_fraud(
         raise  # un-translated DB error — request boundary's get_db.rollback() cleans up
 
     # ── Step 4: success ────────────────────────────────────────────────
+    membership_end_date = membership.end_date  # captured before commit for D-22-11
     await audit.emit(
         session,
         "visit_created",
@@ -204,7 +209,7 @@ async def _create_visit_with_anti_fraud(
         channel=channel,
     )
     await session.commit()
-    return VisitResponse.model_validate(visit)
+    return VisitResponse.model_validate(visit), membership_end_date
 
 
 # ─── Public reception path ───────────────────────────────────────────────────
@@ -214,13 +219,14 @@ async def create_visit_reception(
     payload: VisitCreateRequest,
 ) -> VisitResponse:
     """POST /api/v1/visits — reception manual check-in (VIS-EP-03)."""
-    return await _create_visit_with_anti_fraud(
+    visit_response, _end_date = await _create_visit_with_anti_fraud(
         session,
         client_id=payload.client_id,
         channel="reception",
         checked_in_by=actor.id,
         audit_actor_user_id=actor.id,
     )
+    return visit_response
 
 
 # ─── Public bot path (Phase 20 consumer) ─────────────────────────────────────
@@ -228,13 +234,17 @@ async def create_visit_self_checkin(
     session: AsyncSession,
     telegram_user_id: int,
     chat_id: int,
-) -> VisitResponse:
+) -> tuple[VisitResponse, date]:
     """Bot path — Phase 20 imports this via HandlerContext.visits_service (D-10).
 
     Looks up Client by telegram_user_id via the resolver (D-02). On None,
     raises ClientNotLinkedError WITHOUT an audit emit — Phase 20 owns the
     `telegram_unknown_checkin` event (its own taxonomy addition). Phase 19
     does NOT emit any audit row for unknown-tg lookups (D-12).
+
+    Returns (VisitResponse, membership.end_date) on success so the Telegram
+    handler can compute days_remaining for the DM (D-22-11) without a second
+    DB query. The public VisitResponse Pydantic schema is unchanged.
     """
     del chat_id  # forward-compat; Phase 20's handler may use it for DM routing
     client = await resolve_client_by_telegram_user_id(session, telegram_user_id)

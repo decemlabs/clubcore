@@ -31,8 +31,10 @@ The /checkin handler (Phase 20 D-10):
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime as _datetime
 from types import ModuleType
 from typing import Any, NamedTuple
+from zoneinfo import ZoneInfo as _ZoneInfo
 
 import structlog
 from redis.asyncio import Redis
@@ -74,7 +76,12 @@ _DM_STRANGER = (
 _DM_REPLAY = "Этот код уже использован, запросите новый."
 
 # Phase 20 — locked Russian DM copy per AUTH-TG-11. Owner-signed-off (gated in 20-03).
-_DM_CHECKIN_OK = "✅ Отмечено"
+# Phase 22 D-22-11 — owner sign-off received (Option B: special-case zero).
+# Two strings replace the single "✅ Отмечено":
+#   days_remaining > 0 : days-remaining variant
+#   days_remaining == 0 : last-day variant (INCLUSIVE end_date per Phase 15 Key Decision)
+_DM_CHECKIN_OK_WITH_DAYS = "✅ Отмечено. Абонемент действует ещё {days_remaining} дн."
+_DM_CHECKIN_OK_LAST_DAY = "✅ Отмечено. Сегодня — последний день абонемента."
 _DM_NO_MEMBERSHIP = "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
 _DM_DUPLICATE = "Вы уже отмечались сегодня."
 _DM_OUTSIDE_HOURS = "Зал сейчас закрыт. Часы работы: {hours}."
@@ -274,7 +281,7 @@ async def checkin_handler(
 
     async with ctx.session_factory() as session:
         try:
-            visit = await ctx.visits_service.create_visit_self_checkin(
+            visit, membership_end_date = await ctx.visits_service.create_visit_self_checkin(
                 session,
                 telegram_user_id=tg_user_id,
                 chat_id=chat_id,
@@ -317,6 +324,13 @@ async def checkin_handler(
 
         # Happy path. Phase 19 service has already committed + emitted visit_created.
         # Handler does NOT call session.commit() (Phase 19 D-05 + INFRA-13 commit gate).
-        await ctx.sender.send_text_dm(bot, chat_id, _DM_CHECKIN_OK)
+        # D-22-11: compute days_remaining from membership end_date (INCLUSIVE per Phase 15).
+        _today = _datetime.now(_ZoneInfo("Europe/Moscow")).date()
+        days_remaining = (membership_end_date - _today).days
+        if days_remaining <= 0:
+            dm_text = _DM_CHECKIN_OK_LAST_DAY
+        else:
+            dm_text = _DM_CHECKIN_OK_WITH_DAYS.format(days_remaining=days_remaining)
+        await ctx.sender.send_text_dm(bot, chat_id, dm_text)
         # Ignore SendResult: a blocked DM does not roll back the visit (mirror Phase 7).
         _ = visit  # silence unused; structlog at sender layer already logs send failures

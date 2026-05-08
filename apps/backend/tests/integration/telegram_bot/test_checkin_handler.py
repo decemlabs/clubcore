@@ -4,6 +4,10 @@ Direct call to checkin_handler(update, context, ctx) with stubbed update/context
 and the real Phase 19 service. The 7 cases pin the four ROADMAP success criteria
 that are observable from the user perspective (DM string per branch + audit row +
 replay-silent + Redis-outage-fail-open).
+
+Phase 22 D-22-11: the happy-path DM now includes days_remaining. Tests that assert
+the success DM use end_date = today + 29 days (default seed) → "Абонемент действует
+ещё 29 дн." substring. See test_checkin_dm_days_remaining.py for boundary cases.
 """
 
 from __future__ import annotations
@@ -204,7 +208,11 @@ async def test_checkin_happy_path(
     stub_telegram_sender: StubTelegramSender,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Happy path: handler sends '✅ Отмечено' + visit row + visit_created audit row."""
+    """Happy path: handler sends days-remaining DM + visit row + visit_created audit row.
+
+    Default seed: end_date = today + 29 days → days_remaining = 29.
+    D-22-11: success DM is now "✅ Отмечено. Абонемент действует ещё {N} дн."
+    """
     tg_user_id = _TG_USER_BASE + 1
     chat_id = _CHAT_ID + 1
     _open_gym_hours(monkeypatch)
@@ -219,7 +227,12 @@ async def test_checkin_happy_path(
 
     await checkin_handler(update, context, ctx)
 
-    assert stub_telegram_sender.text_calls == [(chat_id, "✅ Отмечено")]
+    # D-22-11: DM now includes days_remaining (29 days with default seed)
+    assert len(stub_telegram_sender.text_calls) == 1
+    sent_chat_id, sent_text = stub_telegram_sender.text_calls[0]
+    assert sent_chat_id == chat_id
+    assert "Отмечено" in sent_text
+    assert "Абонемент действует ещё" in sent_text
 
     visits = (
         await db_session.scalars(select(Visit).where(Visit.client_id == client.id))
@@ -448,9 +461,11 @@ async def test_checkin_replay_silent(
     ctx = _build_ctx(db_session, fake_redis)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
 
-    # First call — successful checkin.
+    # First call — successful checkin. D-22-11: DM now includes days_remaining.
     await checkin_handler(update, context, ctx)
-    assert stub_telegram_sender.text_calls == [(chat_id, "✅ Отмечено")]
+    assert len(stub_telegram_sender.text_calls) == 1
+    assert stub_telegram_sender.text_calls[0][0] == chat_id
+    assert "Отмечено" in stub_telegram_sender.text_calls[0][1]
     stub_telegram_sender.text_calls.clear()
 
     # Second call — same update_id; SET-NX-EX returns None → silent return.
@@ -504,8 +519,10 @@ async def test_checkin_redis_outage_fail_open(
     with capture_logs() as caplog:
         await checkin_handler(update, context, ctx)
 
-    # Handler still proceeded (fail-open per D-20-3).
-    assert stub_telegram_sender.text_calls == [(chat_id, "✅ Отмечено")]
+    # Handler still proceeded (fail-open per D-20-3). D-22-11: DM includes days_remaining.
+    assert len(stub_telegram_sender.text_calls) == 1
+    assert stub_telegram_sender.text_calls[0][0] == chat_id
+    assert "Отмечено" in stub_telegram_sender.text_calls[0][1]
 
     # structlog event bot_redis_dedup_unavailable emitted.
     events = [c.get("event") for c in caplog]
