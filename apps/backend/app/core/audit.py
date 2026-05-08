@@ -49,6 +49,10 @@ Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts 
   - visit_rejected_outside_hours        {client_id, channel,
                                          current_local_time, gym_open, gym_close}
 
+  ## v1.2 (Phase 20 — bot self check-in unknown-tg)
+  - telegram_unknown_checkin            {chat_id, telegram_user_id_hash}
+                                        # 'visit' (Phase 20 D-20-10)
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -113,6 +117,8 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("visit_rejected_no_membership", "visit"),
         ("visit_rejected_duplicate", "visit"),
         ("visit_rejected_outside_hours", "visit"),
+        # Phase 20 — bot self check-in: stranger /checkin lands here (D-20-10).
+        ("telegram_unknown_checkin", "visit"),
     }
 )
 

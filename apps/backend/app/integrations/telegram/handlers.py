@@ -13,6 +13,19 @@ The /start <token> handler implements the atomic-after-DM pattern (D-11):
   5. If ok=True -> ctx.telegram_service.commit_otp(session, ...).
   6. If blocked / error / TelegramUnknownAccount / OtpAlreadyConsumed:
      emit structlog event, optional DM, no OTP commit.
+
+The /checkin handler (Phase 20 D-10):
+  1. Defensive update-field guard.
+  2. Redis SET-NX-EX dedup on `sz:bot:update:{update_id}` TTL 1h, fail-open on
+     Redis errors (D-20-3).
+  3. Open SAVEPOINT-rolled session via ctx.session_factory().
+  4. ctx.visits_service.create_visit_self_checkin(...) -- service owns commit
+     + audit emit on every branch EXCEPT ClientNotLinkedError (handler owns;
+     D-20-10).
+  5. Dispatch by type(exc).__name__ (string-name; integrations perp modules
+     forbids importing the classes).
+  6. DM one of 4 locked Russian strings (D-20-7); ClientNotLinkedError reuses
+     _DM_NO_MEMBERSHIP (D-20-9 anti-oracle).
 """
 
 from __future__ import annotations
@@ -22,6 +35,7 @@ from types import ModuleType
 from typing import Any, NamedTuple
 
 import structlog
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.audit import emit as audit_emit
@@ -39,11 +53,17 @@ class HandlerContext(NamedTuple):
     telegram_service  : the app.modules.auth.telegram_service module
                         (workers->modules.auth, D-06).
     sender            : the app.integrations.telegram.sender module.
+    visits_service    : the app.modules.visits.service module
+                        (workers->modules.visits, D-10 — Phase 20).
+    redis             : redis.asyncio.Redis client for /checkin update_id dedup
+                        (Phase 20 D-20-2; keyspace `sz:bot:update:*`).
     """
 
     session_factory: async_sessionmaker[AsyncSession]
     telegram_service: ModuleType
     sender: ModuleType
+    visits_service: ModuleType
+    redis: Redis
 
 
 # Russian copy -- locked per specifics line 253. Single-language by design.
@@ -52,6 +72,12 @@ _DM_STRANGER = (
     "Обратитесь к администратору."
 )
 _DM_REPLAY = "Этот код уже использован, запросите новый."
+
+# Phase 20 — locked Russian DM copy per AUTH-TG-11. Owner-signed-off (gated in 20-03).
+_DM_CHECKIN_OK = "✅ Отмечено"
+_DM_NO_MEMBERSHIP = "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
+_DM_DUPLICATE = "Вы уже отмечались сегодня."
+_DM_OUTSIDE_HOURS = "Зал сейчас закрыт. Часы работы: {hours}."
 
 
 def _parse_start_token(message_text: str | None) -> str | None:
@@ -72,6 +98,33 @@ def _hash_token_for_log(raw_token: str) -> str:
     `ctx.telegram_service` private helpers (preserves integrations perp modules).
     """
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def _hash_telegram_user_id(tg_user_id: int) -> str:
+    """sha256(str(tg_user_id)) hex -- non-secret correlator for audit + structlog.
+
+    Used by the `telegram_unknown_checkin` audit emit (D-20-10) so the
+    audit_log table never stores the raw Telegram identifier (PII minimization).
+    """
+    return hashlib.sha256(str(tg_user_id).encode("utf-8")).hexdigest()
+
+
+def _format_gym_hours(exc: Exception) -> str:
+    """Format OutsideGymHoursError.fields as 'HH:MM-HH:MM' joined by U+2013 EN DASH.
+
+    Strips trailing ':SS' from time.isoformat() output ('07:00:00' -> '07:00').
+    Defensive: raises RuntimeError if exc.fields is missing 'open'/'close'
+    (Phase 19 service.py:99-100, 142 contract -- load-bearing for D-20-8).
+    """
+    fields = getattr(exc, "fields", None) or {}
+    try:
+        open_t = fields["open"][:5]
+        close_t = fields["close"][:5]
+    except (KeyError, TypeError) as e:
+        raise RuntimeError(
+            "OutsideGymHoursError fields contract broken — Phase 19 regression"
+        ) from e
+    return f"{open_t}–{close_t}"  # noqa: RUF001 — U+2013 EN DASH per D-20-8
 
 
 async def start_handler(
@@ -176,3 +229,94 @@ async def start_handler(
             chat_id=chat_id,
             error=send_result.error,
         )
+
+
+async def checkin_handler(
+    update: Any,  # telegram.Update at runtime
+    context: Any,  # telegram.ext.CallbackContext at runtime
+    ctx: HandlerContext,
+) -> None:
+    """ptb /checkin handler (Phase 20 D-10).
+
+    Routes a client's /checkin DM into Phase 19's create_visit_self_checkin
+    service while preserving the integrations perp modules import-linter contract:
+    the visits service is reached only via ctx.visits_service.* (NamedTuple
+    attribute access; never `from app.modules.visits import ...`).
+    """
+    bot = context.bot
+    effective_user = update.effective_user
+    effective_chat = update.effective_chat
+    if effective_user is None or effective_chat is None or update.message is None:
+        return
+    update_id = getattr(update, "update_id", None)
+    if update_id is None:
+        return
+    chat_id: int = effective_chat.id
+    tg_user_id: int = effective_user.id
+
+    # Redis SET-NX-EX dedup (D-20-1, D-20-3, D-20-5, D-20-6). Fail-open on Redis errors;
+    # the DB UNIQUE on (client_id, gym_date) is the real anti-replay invariant.
+    dedup_key = f"sz:bot:update:{update_id}"
+    try:
+        set_result: Any = await ctx.redis.set(dedup_key, "1", nx=True, ex=3600)
+    except Exception as exc:  # fail-open per D-20-3
+        logger.warning(
+            "bot_redis_dedup_unavailable",
+            update_id=update_id,
+            chat_id=chat_id,
+            error=str(exc),
+        )
+        set_result = "OK"  # proceed; DB UNIQUE is the real anti-replay backstop
+    if set_result is None:
+        # Replay (Telegram resent the Update on bot restart). Silent per D-20-4.
+        logger.debug("bot_replay_skipped", update_id=update_id, chat_id=chat_id)
+        return
+
+    async with ctx.session_factory() as session:
+        try:
+            visit = await ctx.visits_service.create_visit_self_checkin(
+                session,
+                telegram_user_id=tg_user_id,
+                chat_id=chat_id,
+            )
+        except Exception as exc:  # string-name dispatch (integrations perp modules)
+            # D-20-9 anti-oracle: ClientNotLinkedError reuses _DM_NO_MEMBERSHIP so the
+            # bot is useless for account enumeration. Do NOT "fix" this to a 5th honest-UX
+            # string -- a stranger MUST see the same DM as a linked-but-no-membership client.
+            cls_name = type(exc).__name__
+            if cls_name == "NoActiveMembershipError":
+                await ctx.sender.send_text_dm(bot, chat_id, _DM_NO_MEMBERSHIP)
+                return
+            if cls_name == "DuplicateCheckinError":
+                await ctx.sender.send_text_dm(bot, chat_id, _DM_DUPLICATE)
+                return
+            if cls_name == "OutsideGymHoursError":
+                await ctx.sender.send_text_dm(
+                    bot,
+                    chat_id,
+                    _DM_OUTSIDE_HOURS.format(hours=_format_gym_hours(exc)),
+                )
+                return
+            if cls_name == "ClientNotLinkedError":
+                # D-20-10: handler owns the audit emit (Phase 19 D-12 deferred this).
+                await audit_emit(
+                    session,
+                    "telegram_unknown_checkin",
+                    actor_user_id=None,
+                    resource_type="visit",
+                    resource_id=None,
+                    chat_id=chat_id,
+                    telegram_user_id_hash=_hash_telegram_user_id(tg_user_id),
+                )
+                await session.commit()
+                await ctx.sender.send_text_dm(bot, chat_id, _DM_NO_MEMBERSHIP)
+                return
+            # Any other exception -- re-raise; ptb _global_error_handler logs and the
+            # polling loop continues (Phase 7 D-09 resilience).
+            raise
+
+        # Happy path. Phase 19 service has already committed + emitted visit_created.
+        # Handler does NOT call session.commit() (Phase 19 D-05 + INFRA-13 commit gate).
+        await ctx.sender.send_text_dm(bot, chat_id, _DM_CHECKIN_OK)
+        # Ignore SendResult: a blocked DM does not roll back the visit (mirror Phase 7).
+        _ = visit  # silence unused; structlog at sender layer already logs send failures
