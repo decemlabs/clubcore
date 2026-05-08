@@ -34,12 +34,18 @@ export function useCheckIn() {
 /**
  * LOCAL hook (Architecture Rule 5: features must not import other features).
  * Calls services.memberships.byClient via the swap-seam — NOT the memberships feature hook.
- * The queryKey is namespaced under visitsKeys.all so cache invalidation stays inside features/visits.
+ *
+ * WR-15: shares the cache key with features/memberships' useMembershipsByClient
+ * so React Query dedupes the fetch when both hooks are active in the same render
+ * tree. The key tuple is hardcoded (not imported from the memberships feature)
+ * to respect the "features must not import other features" rule. If either
+ * side ever changes the key shape, both must be updated together.
+ *
  * Returns derived state suitable for FE-08(c): { activeMembership, expiringToday, isPending }.
  */
 export function useMembershipStatusForClient(clientId: string) {
   const query = useQuery({
-    queryKey: [...visitsKeys.all, 'membershipStatusForClient', clientId] as const,
+    queryKey: ['memberships', 'byClient', clientId] as const,
     queryFn: () => services.memberships.byClient(clientId),
     enabled: !!clientId,
     staleTime: 30_000,
