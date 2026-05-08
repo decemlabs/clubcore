@@ -69,7 +69,7 @@ export default tseslint.config(
               target: ['./src/features/clients/**'],
               from: ['./src/features/memberships/**', './src/features/visits/**'],
               message:
-                'Pattern α: features/clients must not import features/memberships or features/visits. Compose at the route level (clients.$clientId.tsx).',
+                'Pattern α: features/clients must not import features/memberships or features/visits. Compose at the route level (clients_.$clientId.tsx).',
             },
           ],
         },

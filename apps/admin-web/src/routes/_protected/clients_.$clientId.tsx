@@ -18,7 +18,7 @@ import type { ClientId } from '@/entities/client'
  * ESLint Pattern α zone (D-22-12) enforces this statically.
  */
 function ClientDetailPage() {
-  const { clientId } = useParams({ from: '/_protected/clients/$clientId' })
+  const { clientId } = useParams({ from: '/_protected/clients_/$clientId' })
   const id = clientId as ClientId
   const { data: client } = useClient(id)
 
@@ -34,7 +34,7 @@ function ClientDetailPage() {
   )
 }
 
-export const Route = createFileRoute('/_protected/clients/$clientId')({
+export const Route = createFileRoute('/_protected/clients_/$clientId')({
   beforeLoad: ({ context, location }) => {
     const { role } = context.getSession()
     if (!can(role, 'view', 'clients')) {
