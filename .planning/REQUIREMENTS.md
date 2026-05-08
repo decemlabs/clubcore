@@ -91,9 +91,9 @@
 
 ### Hygiene — v1.1 Carryover (Phase 23, parallel-eligible)
 
-- [ ] **HYG-01**: Phase 04 CR-01 closure — `/auth/login` Argon2 verify-error path returns 401 `invalid_credentials` (not 500); structlog logs the verify-error reason at WARNING level. Existing rate-limit (5/15min) still enforced.
-- [ ] **HYG-02**: Phase 04 CR-02 closure — invalid UUID in `sz_access`/`sz_refresh` cookie value (e.g. tampered) returns 401 `invalid_session` (not 500); auth dependency catches the parse error explicitly.
-- [ ] **HYG-03**: Active sessions backend endpoints (if not already shipped in v1.1): `GET /api/v1/auth/sessions` returns the user's active session families with `{family_id, created_at, last_used_at, user_agent?, channel}`; `POST /api/v1/auth/sessions/{family_id}/revoke` (CSRF) revokes a single family. Existing `POST /api/v1/auth/logout-all` retains its behavior. (FE-09 consumes these.)
+- [x] **HYG-01**: Phase 04 CR-01 closure — `/auth/login` Argon2 verify-error path returns 401 `invalid_credentials` (not 500); structlog logs the verify-error reason at WARNING level. Existing rate-limit (5/15min) still enforced.
+- [x] **HYG-02**: Phase 04 CR-02 closure — invalid UUID in `sz_access`/`sz_refresh` cookie value (e.g. tampered) returns 401 `invalid_session` (not 500); auth dependency catches the parse error explicitly.
+- [x] **HYG-03**: Active sessions backend endpoints (if not already shipped in v1.1): `GET /api/v1/auth/sessions` returns the user's active session families with `{family_id, created_at, last_used_at, user_agent?, channel}`; `POST /api/v1/auth/sessions/{family_id}/revoke` (CSRF) revokes a single family. Existing `POST /api/v1/auth/logout-all` retains its behavior. (FE-09 consumes these.)
 
 ### Tests
 
@@ -231,8 +231,8 @@
 | FE-09 | Phase 22 | Pending |
 | FE-10 | Phase 22 | Complete |
 | FE-11 | Phase 22 | Complete |
-| HYG-01 | Phase 23 | Pending |
-| HYG-02 | Phase 23 | Pending |
-| HYG-03 | Phase 23 | Pending |
+| HYG-01 | Phase 23 | Complete |
+| HYG-02 | Phase 23 | Complete |
+| HYG-03 | Phase 23 | Complete |
 
 **Coverage:** 63/63 v1.2 requirements mapped. No orphans, no duplicates.

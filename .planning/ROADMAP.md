@@ -183,7 +183,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   - [x] 22-02-PLAN.md — features/memberships + /memberships + /membership-plans routes + sidebar registry + ru.ts memberships keys (Wave 2)
   - [x] 22-03-PLAN.md — features/visits + /visits check-in page (FE-08 a..d) + ru.ts visits keys (Wave 2)
   - [x] 22-04-PLAN.md — Pattern α route /clients/$clientId + ESLint zone + D-3 badge + D-5 Telegram DM (Wave 3)
-  - [ ] 22-05-PLAN.md — FE-09 SessionsList + Logout-all (Wave 4 — blocked on Phase 23 main merge)
+  - [x] 22-05-PLAN.md — FE-09 SessionsList + Logout-all (Wave 4 — blocked on Phase 23 main merge) (completed 2026-05-08)
 
 ### Phase 23: Hygiene + active sessions backend (parallel-eligible)
 **Goal**: Close the v1.1 carryover error-mapping gaps (Argon2/UUID parse errors must surface as 401, not 500) and ship the backend endpoints the admin-web sessions UI needs in Phase 22.
@@ -223,7 +223,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete    | 2026-05-08 |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 1/1 | Complete    | 2026-05-08 |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 4/5 | In Progress|  |
-| 23. Hygiene + active sessions backend | v1.2 | 1/1 | Complete   | 2026-05-08 |
+| 23. Hygiene + active sessions backend | v1.2 | 1/1 | Complete    | 2026-05-08 |
 
 ---
 *Roadmap last updated: 2026-05-07 — Phase 18 planned (6 plans, 4 waves)*
