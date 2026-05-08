@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/shared/ui/alert'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { RoleGate } from '@/shared/session/RoleGate'
 import { t } from '@/shared/i18n'
-import { formatDate } from '@/shared/i18n/date'
+import { formatDate, todayMSK } from '@/shared/i18n/date'
 import { useMembershipsByClient } from '../api/hooks'
 import { SellMembershipDialog } from './SellMembershipDialog'
 import { CancelMembershipDialog } from './CancelMembershipDialog'
@@ -82,7 +82,11 @@ export function MembershipsBlock({ clientId }: Props) {
                     <td className="py-2 pr-4">{m.planNameSnapshot}</td>
                     <td className="text-muted-foreground py-2 pr-4">
                       {formatDate(m.startDate)}–{formatDate(m.endDate)}
-                      {/* TODO 22-04 D-3: insert <Badge variant="destructive">истёк сегодня</Badge> when endDate === todayMSK() && status==='active' */}
+                      {m.status === 'active' && m.endDate === todayMSK() && (
+                        <Badge variant="destructive" className="ml-2 text-xs">
+                          {t('memberships.badge.expirestoday')}
+                        </Badge>
+                      )}
                     </td>
                     <td className="py-2 pr-4">
                       <StatusBadge status={m.status} />

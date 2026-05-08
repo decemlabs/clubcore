@@ -60,7 +60,7 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
               className="h-9 w-9"
               aria-label="Редактировать клиента"
               title="Редактировать клиента"
-              onClick={() => onEdit(client)}
+              onClick={(e) => { e.stopPropagation(); onEdit(client) }}
             >
               <Pencil className="size-4" />
             </Button>
@@ -71,7 +71,7 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
                 className="text-destructive h-9 w-9"
                 aria-label="Удалить клиента"
                 title="Удалить клиента"
-                onClick={() => onDelete(client)}
+                onClick={(e) => { e.stopPropagation(); onDelete(client) }}
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -148,8 +148,19 @@ export function ClientsTable({ query, search, onEdit, onDelete, onRetry, onCreat
     )
   }
 
+  // D-22-5: row click navigates to the client detail page.
+  // DataGrid applies cursor-pointer + hover:bg-muted/40 automatically when onRowClick is set.
+  const handleRowClick = (client: Client) => {
+    void navigate({ to: '/clients/$clientId', params: { clientId: client.id } })
+  }
+
   return (
-    <DataGrid table={table} recordCount={data.total} tableLayout={{ headerSticky: true }}>
+    <DataGrid
+      table={table}
+      recordCount={data.total}
+      tableLayout={{ headerSticky: true }}
+      onRowClick={handleRowClick}
+    >
       <DataGridContainer>
         <DataGridTable />
       </DataGridContainer>
