@@ -164,7 +164,8 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   1. `apps/backend/scripts/export_openapi.py` regenerates `apps/backend/openapi.json` byte-stably with new operationIds for `membership-plans`, `memberships`, `visits` (and `sessions` if Phase 23 has merged); CI `git diff --exit-code apps/backend/openapi.json` passes.
   2. `pnpm --filter @sportzal/api-client codegen` regenerates `packages/api-client/src/schema.d.ts` to match the new spec; CI `git diff --exit-code packages/api-client/src/schema.d.ts` passes.
   3. The committed `schema.d.ts` exposes typed `paths['/membership-plans']`, `paths['/memberships']`, `paths['/visits']` (+ sessions when applicable) consumable from `apps/admin-web/src/shared/api`.
-**Plans**: TBD
+**Plans**: 1 plan
+  - [ ] 21-01-PLAN.md — Regenerate openapi.json (verify byte-stable) + schema.d.ts (v1.2 surface) + add schema.contract.test.ts forward-guard + record D-21 + flip API-04/API-05 — API-04, API-05
 
 ### Phase 22: admin-web wiring — memberships + visits + active sessions UI
 **Goal**: An owner/reception user can do the full v1.2 flow end-to-end in admin-web on `VITE_API_MODE=http` — manage plans, sell memberships, check clients in, and review history — without regressing any v1.1 mock-backed domain.
