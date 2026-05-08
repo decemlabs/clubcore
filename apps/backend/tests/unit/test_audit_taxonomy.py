@@ -162,14 +162,15 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 10 v1.2 = 28 locked pairs (Phase 15 lock).
+    """Sanity belt — 18 v1.1 + 11 v1.2 = 29 locked pairs (Phase 15 lock + Phase 20 D-20-10).
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:
     `(rbac_forbidden, 'rbac')` and `(csrf_mismatch, 'csrf')` (both Phase 6).
+    Phase 20 added `(telegram_unknown_checkin, 'visit')` (D-20-10).
     See 15-03-SUMMARY.md "Deviations" for details.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 28, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 28 (18 v1.1 + 10 v1.2), "
+    assert len(LOCKED_AUDIT_EVENTS) == 29, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 29 (18 v1.1 + 11 v1.2), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
