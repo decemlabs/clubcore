@@ -179,7 +179,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   4. Active-sessions UI on the profile page lists session families (created/last-used/UA/channel) and supports per-session "Revoke" + "Logout all" buttons consuming `GET /api/v1/auth/sessions`, `POST /api/v1/auth/sessions/{family_id}/revoke`, and existing `POST /api/v1/auth/logout-all`.
   5. Cheap-win differentiators ship: D-3 red badge "истёк сегодня" in the client list, D-2 "expiring within 7 days" filter on the memberships list, D-5 Telegram bot success DM includes days-remaining; other differentiators (D-1/D-4/D-6/D-7) explicitly deferred.
 **Plans**: 5 plans
-  - [ ] 22-01-PLAN.md — Backend GET /api/v1/visits/_meta + openapi.json/schema.d.ts regen + contract test (Wave 1)
+  - [x] 22-01-PLAN.md — Backend GET /api/v1/visits/_meta + openapi.json/schema.d.ts regen + contract test (Wave 1)
   - [ ] 22-02-PLAN.md — features/memberships + /memberships + /membership-plans routes + sidebar registry + ru.ts memberships keys (Wave 2)
   - [ ] 22-03-PLAN.md — features/visits + /visits check-in page (FE-08 a..d) + ru.ts visits keys (Wave 2)
   - [ ] 22-04-PLAN.md — Pattern α route /clients/$clientId + ESLint zone + D-3 badge + D-5 Telegram DM (Wave 3)
@@ -221,7 +221,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 20. Telegram bot `/checkin` self check-in | v1.2 | 3/3 | Complete    | 2026-05-08 |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 1/1 | Complete    | 2026-05-08 |
-| 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
+| 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 1/5 | In Progress|  |
 | 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
 
 ---

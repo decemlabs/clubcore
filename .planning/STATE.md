@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Memberships + Visits
 status: executing
 stopped_at: Phase 22 context gathered
-last_updated: "2026-05-08T10:24:17.803Z"
-last_activity: 2026-05-08 -- Phase 22 planning complete
+last_updated: "2026-05-08T10:34:30.621Z"
+last_activity: 2026-05-08
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 35
-  completed_plans: 30
-  percent: 86
+  completed_plans: 31
+  percent: 89
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 21 — openapi-drift-gate-refresh-api-client-codegen
+**Current focus:** Phase 22 — admin-web-wiring-memberships-visits-active-sessions-ui
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Phase: 22 (admin-web-wiring-memberships-visits-active-sessions-ui) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-05-08 -- Phase 22 planning complete
+Last activity: 2026-05-08
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Last activity: 2026-05-08 -- Phase 22 planning complete
 | Phase 18 P03 | 5min | 2 tasks | 4 files (1 source, 2 docs, 2 deletions) |
 | Phase 18-arq-scheduled-expire-memberships P05 | 5min | 3 tasks | 4 files |
 | Phase 18 P06 | 5min | 3 tasks | 3 files |
+| Phase 22 P01 | 4min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,6 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-05-07 (carried i
 
 ## Session Continuity
 
-Last session: 2026-05-08T09:13:19.542Z
+Last session: 2026-05-08T10:34:30.617Z
 Stopped at: Phase 22 context gathered
-Resume file: .planning/phases/22-admin-web-wiring-memberships-visits-active-sessions-ui/22-CONTEXT.md
+Resume file: None
