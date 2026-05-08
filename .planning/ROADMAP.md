@@ -151,7 +151,10 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. Each rejection branch DMs exactly one of the four locked Russian strings (`"У вас нет активного абонемента..."`, `"Вы уже отмечались сегодня."`, `"Зал сейчас закрыт. Часы работы: {hours}."`) with NO client name, end-date, or membership status leaked; the strings are constants in code, not freeform i18n, and signed off by the project owner before merge.
   4. Redis dedup on `sz:bot:update:{update_id}` (TTL 1h) prevents replay-driven double-creates; the namespace coexists with `arq:*` and `sz:session:*` without collision.
   5. `app/workers/telegram_bot.py` registers `("checkin", checkin_handler)` alongside `("start", start_handler)` and passes `visits_service` via `HandlerContext`; the bot-worker process restart does not double-create visits when Telegram resends Updates.
-**Plans**: TBD
+**Plans**: 3 plans
+  - [ ] 20-01-PLAN.md — handlers.py extensions (HandlerContext + 4 DM constants + 2 helpers + checkin_handler) + audit.py LOCKED_AUDIT_EVENTS extension — AUTH-TG-07, AUTH-TG-08, AUTH-TG-11
+  - [ ] 20-02-PLAN.md — telegram_bot.py worker wiring (D-10 import + 5-field HandlerContext + checkin registration) + .importlinter verification — AUTH-TG-09, AUTH-TG-10
+  - [ ] 20-03-PLAN.md — Tests (7 integration + 5 unit) + PROJECT.md D-20 + REQUIREMENTS.md AUTH-TG-* check-off + owner sign-off checkpoint on locked Russian DM strings — AUTH-TG-07..11
 
 ### Phase 21: OpenAPI drift gate refresh + api-client codegen
 **Goal**: The frontend↔backend contract is byte-frozen for the new memberships/visits/sessions surface — drift becomes impossible without an explicit "I really meant it" commit.
@@ -210,7 +213,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 17. Membership Instances + Resolver (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
 | 18. ARQ scheduled `expire_memberships` | v1.2 | 6/6 | Complete   | 2026-05-07 |
 | 19. Visits — DB + reception check-in (backend) | v1.2 | 5/5 | Complete   | 2026-05-07 |
-| 20. Telegram bot `/checkin` self check-in | v1.2 | 0/TBD | Not started | — |
+| 20. Telegram bot `/checkin` self check-in | v1.2 | 0/3 | Planned | — |
 | 21. OpenAPI drift gate refresh + api-client codegen | v1.2 | 0/TBD | Not started | — |
 | 22. admin-web wiring — memberships + visits + active sessions UI | v1.2 | 0/TBD | Not started | — |
 | 23. Hygiene + active sessions backend | v1.2 | 0/TBD | Not started | — |
