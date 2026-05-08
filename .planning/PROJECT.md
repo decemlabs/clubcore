@@ -16,27 +16,30 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-## Current Milestone: v1.3 (TBD — planning next milestone)
+## Current Milestone: v1.3 Memberships Extras + Tech-Debt
 
-v1.2 Memberships + Visits shipped 2026-05-08 (9 phases, 36 plans, 63/63 requirements satisfied; 2 accepted-at-planning deviations carried forward as tech-debt). See [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md) and `MILESTONES.md` v1.2 entry.
+**Goal:** Доращиваем memberships до полноценной фичи (freeze, expiring-soon notifications, renewal) и закрываем 4 переноса из v1.2 — без новых внешних интеграций.
 
-**Carry-forward tech-debt for v1.3:**
+**Target features:**
 
-- **MEM-04 fail-safe (D-13)** — `resolve_active_membership_by_client` filters by `status='active'` only and relies on Phase 18 ARQ tick to flip expired rows. Add a defence-in-depth `end_date >= today (Europe/Moscow)` filter at the resolver so a missed cron tick doesn't allow check-ins on expired memberships.
-- **WR-07 — D-2 expiring-7-days filter** is a no-op in mock mode. Long-term fix is backend `?expiring=true&within=7` so http+mock have parity.
-- **D-22-2 — FE-09 Active Sessions UI is http-only by design.** Mock service throws `mock_not_implemented`; live E2E queued in 22-VERIFICATION.md `human_verification:` block (requires running backend + Telegram sandbox).
-- **15-foundations SVC001 walker scope** — gate is currently scoped to `clients/service.py`; `auth/service.py:authenticate` has a possible audit-row loss on `login_failed` path. Mitigated by Phase 23 HYG-01 WARNING log + classify_verify_error helper, but the gate scope itself was not extended.
+- **Freeze (заморозка)** — бесплатная, лимит дней per-plan (`freeze_days_limit` immutable post-creation, как `duration_days`); reception/owner ставит и снимает заморозку; `end_date` сдвигается вперёд на использованные дни; `frozen` status; resolver не отдаёт frozen membership на check-in; cancel-during-freeze → 409; locked audit `membership_frozen` / `membership_unfrozen`.
+- **Expiring-soon Telegram уведомления** — эскалация 7 + 3 + 1 день до `end_date`; ARQ daily cron (06:15 Europe/Moscow, после `expire_memberships`); idempotency-tracking чтобы не задвоить ping после рестарта; 3 locked Russian DM templates (по 2 варианта, anti-oracle pattern как D-5); skip для frozen / не-привязанных к Telegram клиентов.
+- **Renewal flow** — `POST /api/v1/memberships/{id}/renew` создаёт follow-up membership (`start_date = old.end_date + 1`, snapshot pricing с **текущей** цены плана; `previous_membership_id` FK для аудит-цепочки); resolver приоритизирует currently-active, потом по `start_date ASC`; admin-web "Продлить" на странице membership; locked audit `membership_renewed`.
+- **Tech-debt closure (все 4):**
+  - **MEM-04 D-13** — `resolve_active_membership_by_client` добавляет `end_date >= today (Europe/Moscow)` defence-in-depth filter
+  - **WR-07** — backend `GET /api/v1/memberships?expiring=true&within=N` для mock/http parity (FE-08 D-2)
+  - **SVC001 walker** — расширить AST commit-gate scope на `auth/service.py` (`authenticate` path)
+  - **22-VERIFICATION human_verification** — 6 smoke tests прогнать через live backend + Telegram sandbox в рамках milestone verification
 
-**Likely v1.3 candidates** (from REQUIREMENTS.md "Future Requirements deferred to v1.3+"):
+**Key context:**
 
-- **Billing (entire category)** — ЮKassa intake + webhooks + 54-ФЗ чеки + refund flows + card vault + receipts UI.
-- **Memberships extras** — freeze (заморозка), visit-count plans, hybrid plans, expiring-soon Telegram notifications, renewal flow.
-- **Visits extras** — group lessons attendance, per-class booking integration (depends on schedule module).
-- **Audit log read API + UI** — `GET /api/v1/audit-log` (owner-only) with filters.
-- **Auth UX** — password reset via Telegram bot DM, HaveIBeenPwned check, webhook-based bot mode for prod.
-- **Clients extras** — photo upload, bulk CSV import, tags taxonomy CRUD.
+- Backend-heavy: ~2 alembic миграции (`freeze_days_limit` + freeze tracking + `previous_membership_id` FK), 1 новый ARQ cron, 3+ новых locked audit events.
+- Anti-oracle invariant сохраняется: expiring DMs не упоминают имя/план/end_date для не-привязанных клиентов.
+- Все Russian copy локается owner sign-off (как D-5 / Phase 20).
+- Snapshot pricing на renewal — берём **текущую** цену плана (если план подорожал — клиент платит новую цену); это user-visible decision.
+- Admin-web wiring продолжается на `VITE_API_MODE=http` для memberships домена; mocks остальных доменов не трогаем.
 
-Run `/gsd-new-milestone` to scope and plan v1.3.
+v1.2 Memberships + Visits shipped 2026-05-08 (9 phases, 36 plans, 63/63 requirements satisfied). См. [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md) and `MILESTONES.md`.
 
 ## Requirements
 
@@ -96,16 +99,16 @@ Run `/gsd-new-milestone` to scope and plan v1.3.
 - ✓ admin-web wiring on `VITE_API_MODE=http`: full v1.2 flow ships with `/membership-plans` (owner-only `beforeLoad`), `/memberships`, `/visits` reception check-in (FE-08 a..d edges: top-5 disambiguation, already-checked-in HH:MM badge, expires-today informational badge with button stays enabled, outside-hours disable + tooltip), `/clients/$clientId` Pattern α route (Promise.all loader of 3 `ensureQueryData` calls + ESLint `import/no-restricted-paths` zone forbidding `features/clients → features/{memberships,visits}`), `/profile` active-sessions UI (http-only по D-22-2); cheap-win differentiators D-2/D-3/D-5 — v1.2 (Phase 22)
 - ✓ Auth hygiene + active sessions backend: HYG-01 `/auth/login` Argon2 verify-error → 401 `invalid_credentials` (was 500), structlog WARNING; HYG-02 tampered cookie UUID → 401 `invalid_session` (was 500); HYG-03 `GET /api/v1/auth/sessions` lists family records and `POST /api/v1/auth/sessions/{family_id}/revoke` (CSRF) revokes a single family — feeds FE-09 SessionsList/LogoutAllDialog — v1.2 (Phase 23)
 
-### Active (v1.3 — TBD)
+### Active (v1.3 — Memberships Extras + Tech-Debt)
 
-См. `MILESTONES.md` v1.2 entry для shipped baseline. Run `/gsd-new-milestone` to scope v1.3 (likely candidates listed in **Current Milestone** section above: Billing / Memberships extras / Visits extras / Audit log read API+UI / Auth UX / Clients extras).
+См. **Current Milestone** выше. Полный REQ-ID список — в `.planning/REQUIREMENTS.md` после `/gsd-new-milestone` step 9.
 
-**Tech-debt carried forward from v1.2:**
+**Категории v1.3:**
 
-- MEM-04 D-13 — resolver fail-safe (defence-in-depth `end_date >= today` filter)
-- WR-07 — D-2 expiring filter mock/http parity gap
-- 15-foundations — SVC001 walker scope extension to `auth/service.py`
-- 22-VERIFICATION.md `human_verification:` queue (6 interactive smoke tests pending live backend / Telegram sandbox)
+- **Freeze (заморозка)** — `freeze_days_limit` per-plan, freeze/unfreeze endpoints, frozen status в resolver, cancel-during-freeze guard, locked audit events.
+- **Expiring-soon notifications** — ARQ daily cron 06:15 Europe/Moscow, idempotency tracking, 3 эскалирующих DM templates (7+3+1) с anti-oracle copy.
+- **Renewal** — `POST /memberships/{id}/renew`, follow-up membership creation, resolver active-priority logic, current-price snapshot, admin-web "Продлить" UI.
+- **Tech-debt closure** — MEM-04 D-13, WR-07, SVC001 scope, 22-VERIFICATION human queue (все 4 переноса из v1.2).
 
 ### Out of Scope
 
@@ -196,4 +199,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-08 — v1.2 (Memberships + Visits) milestone shipped*
+*Last updated: 2026-05-08 — v1.3 (Memberships Extras + Tech-Debt) milestone started*

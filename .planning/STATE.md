@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Memberships + Visits
-status: shipped
-stopped_at: v1.2 milestone closed 2026-05-08
-last_updated: "2026-05-08T16:45:00Z"
-last_activity: 2026-05-08 -- v1.2 (Memberships + Visits) milestone shipped (9 phases, 36 plans, 63/63 requirements satisfied)
+milestone: v1.3
+milestone_name: Memberships Extras + Tech-Debt
+status: planning
+last_updated: "2026-05-08T16:56:15.868Z"
+last_activity: 2026-05-08
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 36
-  completed_plans: 36
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,9 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-08)
 
 ## Current Position
 
-Milestone: v1.2 Memberships + Visits — SHIPPED 2026-05-08
-Next: v1.3 (TBD — see PROJECT.md "Current Milestone" for likely candidates)
-Last activity: 2026-05-08 -- v1.2 milestone close (audit re-passed, archives written, ROADMAP collapsed, PROJECT.md evolved)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-08 — Milestone v1.3 started
 
 ## Performance Metrics
 
