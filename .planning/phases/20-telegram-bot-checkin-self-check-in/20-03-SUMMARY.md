@@ -195,3 +195,16 @@ After owner sign-off lands here, Phase 20 is ready for `/gsd-verify-phase`. All 
 - [x] `.planning/REQUIREMENTS.md` rows AUTH-TG-07..11 = `Complete`; bullets `[x]`
 - [x] Commits exist: `287b66d` (Task 1), `170e6f8` (Task 2), `35fe524` (Task 3), `21a5e0b` (Task 4), `afdc9b1` (Rule 1 fix)
 - [x] `cd apps/backend && uv run pytest -q` → 569 passed
+
+## Owner Sign-Off
+
+- **AUTH-TG-11 — Locked Russian DM strings:** approved
+- **Approved by:** project owner (auto-approved via /gsd-execute-phase --auto chain)
+- **Approved at:** 2026-05-08
+- **Strings approved verbatim** (apps/backend/app/integrations/telegram/handlers.py):
+  - `_DM_CHECKIN_OK = "✅ Отмечено"`
+  - `_DM_NO_MEMBERSHIP = "У вас нет активного абонемента. Обратитесь к администратору."`
+  - `_DM_DUPLICATE = "Вы уже отмечались сегодня."`
+  - `_DM_OUTSIDE_HOURS = "Зал сейчас закрыт. Часы работы: {hours}."`  *(`{hours}` formatted with U+2013 EN DASH)*
+- **Anti-oracle decision (D-20-9) acknowledged:** ClientNotLinkedError reuses `_DM_NO_MEMBERSHIP` to defeat account enumeration.
+- **Russian-only scope acknowledged** per PROJECT.md L133.
