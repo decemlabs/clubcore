@@ -59,7 +59,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 ### 🚧 v1.3 Memberships Extras + Tech-Debt (Phases 24-29) — IN PROGRESS
 
-- [ ] **Phase 24: Foundations & Tech-Debt Bedrock** — INFRA-15/16 + DEBT-01/02/03 (5 reqs) — `LOCKED_AUDIT_EVENTS` extension, `frozen` status CHECK, resolver `end_date >= today` filter, `?expiring=` query, SVC001 walker → auth/service.py
+- [x] **Phase 24: Foundations & Tech-Debt Bedrock** (5/5 plans) — completed 2026-05-08 — INFRA-15/16 + DEBT-01/02/03 — `LOCKED_AUDIT_EVENTS` extension, `frozen` status CHECK + transitions, resolver `end_date >= today` filter, `?expiring=true&within=N`, SVC001 walker → auth/service.py
 - [ ] **Phase 25: Memberships — Freeze (backend)** — MEM-FRZ-01..07 + EP-01..03 + AUDIT-01 + TEST-01..03 (14 reqs) — `freeze_days_limit` + `membership_freeze_periods` + freeze/unfreeze endpoints + resolver-rejects-frozen
 - [ ] **Phase 26: Memberships — Renewal (backend)** — MEM-REN-01..04 + EP-01 + AUDIT-01 + TEST-01..04 (10 reqs) — `previous_membership_id` FK + `POST /renew` with current-price snapshot + resolver tiebreak
 - [ ] **Phase 27: Expiring-soon Telegram Notifications** — NTF-01..06 + COPY-01 + TEST-01..03 (10 reqs) — ARQ cron 06:15 Europe/Moscow + 6 locked Russian DM templates (anti-oracle) + idempotency table
