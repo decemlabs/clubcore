@@ -8,3 +8,4 @@ export {
   useTelegramStatus,
   useTelegramVerify,
 } from './api/hooks'
+export { useActiveSessions, useRevokeSession, useLogoutAll } from './api/sessionsHooks'

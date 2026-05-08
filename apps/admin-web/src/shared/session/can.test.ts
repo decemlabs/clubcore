@@ -33,4 +33,15 @@ describe('can()', () => {
     expect(pairs).toContain('delete:clients')
     expect(pairs).toContain('refund:finance')
   })
+
+  // Phase 22 FE-09 (Warning 2 fix): /profile is the both-roles surface for SessionsList.
+  // Reception cannot reach /settings (owner-only) but must manage their own sessions.
+  it('allows both roles to view profile', () => {
+    expect(can('owner', 'view', 'profile')).toBe(true)
+    expect(can('reception', 'view', 'profile')).toBe(true)
+  })
+
+  it('OWNER_ONLY does NOT include any pair with profile', () => {
+    expect(OWNER_ONLY.some((e) => e.resource === 'profile')).toBe(false)
+  })
 })

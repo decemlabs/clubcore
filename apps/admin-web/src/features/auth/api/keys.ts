@@ -6,5 +6,6 @@
 export const authKeys = {
   all: ['auth'] as const,
   me: ['auth', 'me'] as const,
+  sessions: ['auth', 'sessions'] as const,
   telegramStatus: (token: string) => ['auth', 'telegram-status', token] as const,
 } as const

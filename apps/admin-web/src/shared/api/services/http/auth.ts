@@ -13,11 +13,19 @@ import type {
   AuthService,
   MeResponse,
   EmailLoginInput,
+  SessionFamily,
   TelegramStartResponse,
   TelegramStatusResponse,
   TelegramVerifyInput,
 } from '@/shared/api/contracts/auth'
 import { unwrap } from './_envelope'
+
+interface PaginatedSessionsResponse {
+  items: SessionFamily[]
+  total: number
+  page: number
+  pageSize: number
+}
 
 export const auth: AuthService = {
   async me() {
@@ -34,6 +42,9 @@ export const auth: AuthService = {
   async logout() {
     await request('post', '/api/v1/auth/logout')
   },
+  async logoutAll() {
+    await request('post', '/api/v1/auth/logout-all')
+  },
   async telegramStart() {
     return unwrap<TelegramStartResponse>(await request('post', '/api/v1/auth/telegram/start'))
   },
@@ -47,5 +58,19 @@ export const auth: AuthService = {
     // Phase 7: verify response wraps user in {data: {user: {...}}} same as login.
     const envelope = unwrap<{ user: MeResponse }>(raw)
     return envelope.user as MeResponse
+  },
+  async sessions() {
+    // FE-09 / HYG-03: backend returns ResponseEnvelope[PaginatedData[ActiveSessionItem]].
+    // Wire fields are already camelCase (familyId, createdAt, lastUsedAt, userAgent,
+    // channel, isCurrent) via backend alias_generator=to_camel — pass through.
+    const raw = unwrap<PaginatedSessionsResponse>(
+      await request('get', '/api/v1/auth/sessions'),
+    )
+    return raw.items
+  },
+  async revokeSession(familyId: string) {
+    await request('post', '/api/v1/auth/sessions/{family_id}/revoke', {
+      params: { family_id: familyId },
+    })
   },
 }
