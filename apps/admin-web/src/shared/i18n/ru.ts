@@ -234,6 +234,43 @@ export const ru = {
     membershipsBlock: 'Абонементы',
     visitsBlock: 'Посещения',
   },
+  visits: {
+    heading: 'Отметить посещение',
+    search: {
+      label: 'Телефон клиента',
+      placeholder: '+7 (XXX) XXX-XX-XX',
+    },
+    checkin: {
+      button: 'Отметить',
+      submitting: 'Отметка…',
+      alreadyCheckedIn: 'Отмечен в {time} через {channel}',
+      channel: {
+        reception: 'ресепшн',
+        telegram: 'Telegram',
+      },
+      outsideHours: 'Зал закрыт. Часы работы: {start}–{end}.',
+      tooltip: {
+        outsideHours: 'Зал работает с {start} до {end}',
+      },
+      noClient: 'Клиент не найден. Проверьте номер телефона.',
+    },
+    toast: {
+      success: 'Посещение отмечено',
+    },
+    errors: {
+      noActiveMembership: 'Нет активного абонемента.',
+      duplicateCheckin: 'Клиент уже отмечен сегодня.',
+      outsideGymHours: 'Зал закрыт. Часы работы: {open}–{close}.',
+    },
+    recentBlock: {
+      heading: 'Посещения',
+      empty: 'Посещений нет',
+    },
+    channel: {
+      reception: 'Ресепшн',
+      telegram: 'Telegram',
+    },
+  },
 } as const
 
 type Dict = typeof ru

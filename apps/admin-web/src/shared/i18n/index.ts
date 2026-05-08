@@ -11,4 +11,5 @@ export {
   formatDate,
   formatTime,
   formatDateTime,
+  todayMSK,
 } from './date'
