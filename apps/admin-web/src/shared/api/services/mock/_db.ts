@@ -147,44 +147,20 @@ export function loadDB(): DB {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return seed()
     const parsed = JSON.parse(raw) as Partial<DB>
-    if (!parsed || !Array.isArray(parsed.clients)) return seed()
-    // Additive migration: if memberships/plans are missing from stored data, seed them
-    if (!Array.isArray(parsed.memberships) || !Array.isArray(parsed.plans)) {
-      faker.seed(42)
-      const clients = Array.from({ length: SEED_COUNT }, generateClient)
-      const plans = Array.from({ length: PLAN_COUNT }, generatePlan)
-      const memberships = Array.from({ length: MEMBERSHIP_COUNT }, () =>
-        generateMembership(clients, plans),
-      )
-      const visits = Array.from({ length: VISIT_COUNT }, () =>
-        generateVisit(clients, memberships),
-      )
-      const full: DB = {
-        clients: parsed.clients,
-        memberships: parsed.memberships ?? memberships,
-        plans: parsed.plans ?? plans,
-        visits: parsed.visits ?? visits,
-      }
-      saveDB(full)
-      return full
-    }
-    // Additive migration: if visits are missing, add them
-    if (!Array.isArray(parsed.visits)) {
-      faker.seed(42)
-      const clients = Array.from({ length: SEED_COUNT }, generateClient)
-      const plans = Array.from({ length: PLAN_COUNT }, generatePlan)
-      const memberships = Array.from({ length: MEMBERSHIP_COUNT }, () =>
-        generateMembership(clients, plans),
-      )
-      const visits = Array.from({ length: VISIT_COUNT }, () =>
-        generateVisit(clients, memberships),
-      )
-      const full: DB = {
-        ...parsed as DB,
-        visits,
-      }
-      saveDB(full)
-      return full
+    if (
+      !parsed ||
+      !Array.isArray(parsed.clients) ||
+      !Array.isArray(parsed.memberships) ||
+      !Array.isArray(parsed.plans) ||
+      !Array.isArray(parsed.visits)
+    ) {
+      // WR-09: re-seed the entire DB instead of trying to additively migrate.
+      // The previous additive branches kept stored `clients` while regenerating
+      // memberships/visits — but the regenerated rows reference fresh client
+      // UUIDs that don't exist in the kept stored clients, breaking joins
+      // (byClient, recent visits). It's a dev-mode mock store; seeding fresh
+      // is simpler and correct.
+      return seed()
     }
     return parsed as DB
   } catch {
