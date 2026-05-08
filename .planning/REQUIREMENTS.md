@@ -75,8 +75,8 @@
 
 ### API Surface — OpenAPI Drift Gate Refresh (Phase 21)
 
-- [ ] **API-04**: `apps/backend/scripts/export_openapi.py` regenerated `apps/backend/openapi.json` is byte-stable; CI `git diff --exit-code apps/backend/openapi.json` passes after Phases 16/17/19/23 merge.
-- [ ] **API-05**: `pnpm --filter @sportzal/api-client codegen` regenerates `packages/api-client/src/schema.d.ts`; new operation IDs surface for membership-plans / memberships / visits / sessions; CI `git diff --exit-code packages/api-client/src/schema.d.ts` passes.
+- [x] **API-04**: `apps/backend/scripts/export_openapi.py` regenerated `apps/backend/openapi.json` is byte-stable; CI `git diff --exit-code apps/backend/openapi.json` passes after Phases 16/17/19/23 merge.
+- [x] **API-05**: `pnpm --filter @sportzal/api-client codegen` regenerates `packages/api-client/src/schema.d.ts`; new operation IDs surface for membership-plans / memberships / visits / sessions; CI `git diff --exit-code packages/api-client/src/schema.d.ts` passes.
 
 ### Frontend Wiring — admin-web (Phase 22)
 
@@ -221,8 +221,8 @@
 | AUTH-TG-09 | Phase 20 | Complete |
 | AUTH-TG-10 | Phase 20 | Complete |
 | AUTH-TG-11 | Phase 20 | Complete |
-| API-04 | Phase 21 | Pending |
-| API-05 | Phase 21 | Pending |
+| API-04 | Phase 21 | Complete |
+| API-05 | Phase 21 | Complete |
 | FE-04 | Phase 22 | Pending |
 | FE-05 | Phase 22 | Pending |
 | FE-06 | Phase 22 | Pending |
