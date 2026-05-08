@@ -245,6 +245,200 @@ export interface paths {
         patch: operations["update_client_api_v1_clients__client_id__patch"];
         trace?: never;
     };
+    "/api/v1/membership-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alive membership plans (owner-only); paginated; ?active filter
+         * @description List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.
+         */
+        get: operations["list_plans_api_v1_membership_plans_get"];
+        put?: never;
+        /**
+         * Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)
+         * @description Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.
+         */
+        post: operations["create_plan_api_v1_membership_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/membership-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch a single alive membership plan (owner-only)
+         * @description Read one alive membership plan. 404 for missing or soft-deleted ids.
+         */
+        get: operations["get_plan_api_v1_membership_plans__plan_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Soft-delete a membership plan (owner-only); frees lower(name) unique slot
+         * @description Soft-delete an alive membership plan (MEM-PLAN-EP-04).
+         *
+         *     Owner-only: (DELETE, MEMBERSHIP_PLANS) is in OWNER_ONLY, so reception → 403 from
+         *     require_permission. CSRF required on the mutation. Returns 204 No Content.
+         *
+         *     D-15: Phase 16 ships soft-delete only — no 409 plan_in_use. The memberships table
+         *     FK plan_id ON DELETE RESTRICT and _is_plan_in_use_conflict helper arrive in Phase 17.
+         */
+        delete: operations["soft_delete_plan_api_v1_membership_plans__plan_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)
+         * @description Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.
+         */
+        patch: operations["update_plan_api_v1_membership_plans__plan_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List memberships filtered by clientId/status with pagination
+         * @description List memberships, paginated (MEM-EP-01).
+         *
+         *     Query parameters (Phase 17 D-09):
+         *       - clientId — optional UUID filter; omit for global feed (owner)
+         *       - status   — optional single-value enum (active|expired|cancelled); omit for all
+         *       - sort     — created_at_desc (default) | end_date_desc | start_date_desc
+         *       - page / pageSize — PageQuery contract (default 1 / 20, max 100)
+         */
+        get: operations["list_memberships_api_v1_memberships_get"];
+        put?: never;
+        /**
+         * Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive)
+         * @description Sell a membership (MEM-EP-03). CREATE permission + CSRF required.
+         *
+         *     (CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.
+         *     Service layer validates plan presence (404 plan_not_found) and active flag
+         *     (409 plan_inactive) and computes start_date/end_date server-side (D-04).
+         */
+        post: operations["create_membership_api_v1_memberships_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memberships/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a membership by id (404 membership_not_found)
+         * @description Read one membership (MEM-EP-02). 404 `membership_not_found` for missing ids.
+         */
+        get: operations["get_membership_api_v1_memberships__membership_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memberships/{membership_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a membership (owner-only; 409 invalid_transition for non-active source)
+         * @description Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.
+         *
+         *     (CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on
+         *     the mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —
+         *     the body carries the post-transition row including `cancelled_at`).
+         *
+         *     State machine (Phase 17 D-12): only `active → cancelled` is allowed; `expired`
+         *     and `cancelled` source states raise 409 `invalid_transition` with payload
+         *     `{from_status, to_status}`.
+         */
+        post: operations["cancel_membership_api_v1_memberships__membership_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List visits filtered by clientId/from/to with pagination
+         * @description List visits, paginated (VIS-EP-01). VIEW permission required.
+         */
+        get: operations["list_visits_api_v1_visits_get"];
+        put?: never;
+        /**
+         * Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)
+         * @description Reception manual check-in (VIS-EP-03). CHECK_IN permission + CSRF required.
+         *
+         *     Sealed body — only `clientId` accepted (D-01). Every other field is
+         *     server-derived: membershipId resolved via resolve_active_membership;
+         *     checkedInAt defaults to DB now(); gymDate is the STORED GENERATED column;
+         *     channel is 'reception'; checkedInBy is actor.id.
+         *
+         *     RBAC-04: `actor` (require_permission) parameter is declared BEFORE
+         *     `_csrf` (verify_csrf) so unauthenticated callers see 401, not CSRF
+         *     errors. (CHECK_IN, VISITS) is NOT in OWNER_ONLY — reception receives
+         *     201 on success.
+         */
+        post: operations["create_visit_api_v1_visits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single visit by id (404 visit_not_found)
+         * @description Read one visit (VIS-EP-02). 404 `visit_not_found` for missing ids.
+         */
+        get: operations["get_visit_api_v1_visits__visit_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -445,10 +639,222 @@ export interface components {
             id: string;
             role: components["schemas"]["Role"];
         };
+        /**
+         * MembershipCancelRequest
+         * @description POST /api/v1/memberships/{id}/cancel body (Phase 17 D-11).
+         *
+         *     Reason is optional (matches MEM-AUDIT-01 — `reason?` in audit payload).
+         *     Max length 500 — half the notes ceiling: a cancellation reason is a short
+         *     operator note, not a free-form essay (T-17-01 mitigation).
+         *
+         *     Explicit-null guard ported VERBATIM from Phase 16 D-05 (T-PYDANTIC-NULL).
+         */
+        MembershipCancelRequest: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * MembershipCreateRequest
+         * @description POST /api/v1/memberships body (Phase 17 D-03).
+         *
+         *     start_date / end_date / status / activation_policy are server-computed
+         *     (D-04) and intentionally absent — the inherited extra='forbid' will reject
+         *     any payload that includes them.
+         */
+        MembershipCreateRequest: {
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /** Notes */
+            notes?: string | null;
+            /** Paidat */
+            paidAt?: string | null;
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+        };
+        /**
+         * MembershipListSort
+         * @description Membership list sort modes (Phase 17 D-09).
+         * @enum {string}
+         */
+        MembershipListSort: "created_at_desc" | "end_date_desc" | "start_date_desc";
+        /**
+         * MembershipPlanCreateRequest
+         * @description POST /api/v1/membership-plans body.
+         */
+        MembershipPlanCreateRequest: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Durationdays */
+            durationDays: number;
+            /** Name */
+            name: string;
+            /** Pricekopecks */
+            priceKopecks: number;
+        };
+        /**
+         * MembershipPlanResponse
+         * @description Outbound representation of a MembershipPlan.
+         */
+        MembershipPlanResponse: {
+            /** Active */
+            active: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Durationdays */
+            durationDays: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Pricekopecks */
+            priceKopecks: number;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * MembershipPlanSort
+         * @description Membership plan list sort modes (D-08, CD-04).
+         * @enum {string}
+         */
+        MembershipPlanSort: "created_at_desc" | "name_asc";
+        /**
+         * MembershipPlanUpdateRequest
+         * @description PATCH /api/v1/membership-plans/{id} body.
+         *
+         *     D-04: duration_days is intentionally absent — extra='forbid' (inherited
+         *     from BackendSchemaBase) raises stock 422 if a payload contains
+         *     `durationDays` (or `duration_days`). The rejected key is named in the
+         *     Pydantic error response.
+         */
+        MembershipPlanUpdateRequest: {
+            /** Active */
+            active?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Pricekopecks */
+            priceKopecks?: number | null;
+        };
+        /**
+         * MembershipResponse
+         * @description Outbound representation of a Membership (Phase 17 D-10).
+         *
+         *     Exposes ALL snapshot fields so the frontend (Phase 22) can render
+         *     historical sales correctly even after the source plan is edited or
+         *     deleted.
+         */
+        MembershipResponse: {
+            /** Cancelreason */
+            cancelReason: string | null;
+            /** Cancelledat */
+            cancelledAt: string | null;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Durationdayssnapshot */
+            durationDaysSnapshot: number;
+            /**
+             * Enddate
+             * Format: date
+             */
+            endDate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notes */
+            notes: string | null;
+            /** Paidat */
+            paidAt: string | null;
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+            /** Plannamesnapshot */
+            planNameSnapshot: string;
+            /** Pricekopeckssnapshot */
+            priceKopecksSnapshot: number;
+            /**
+             * Startdate
+             * Format: date
+             */
+            startDate: string;
+            status: components["schemas"]["MembershipStatus"];
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * MembershipStatus
+         * @description Membership lifecycle status (CONTEXT.md domain line 12).
+         * @enum {string}
+         */
+        MembershipStatus: "active" | "expired" | "cancelled";
         /** PaginatedData[ClientResponse] */
         PaginatedData_ClientResponse_: {
             /** Items */
             items: components["schemas"]["ClientResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[MembershipPlanResponse] */
+        PaginatedData_MembershipPlanResponse_: {
+            /** Items */
+            items: components["schemas"]["MembershipPlanResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[MembershipResponse] */
+        PaginatedData_MembershipResponse_: {
+            /** Items */
+            items: components["schemas"]["MembershipResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[VisitResponse] */
+        PaginatedData_VisitResponse_: {
+            /** Items */
+            items: components["schemas"]["VisitResponse"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -468,6 +874,14 @@ export interface components {
         ResponseEnvelope_MeResponse_: {
             data: components["schemas"]["MeResponse"];
         };
+        /** ResponseEnvelope[MembershipPlanResponse] */
+        ResponseEnvelope_MembershipPlanResponse_: {
+            data: components["schemas"]["MembershipPlanResponse"];
+        };
+        /** ResponseEnvelope[MembershipResponse] */
+        ResponseEnvelope_MembershipResponse_: {
+            data: components["schemas"]["MembershipResponse"];
+        };
         /** ResponseEnvelope[NoneType] */
         ResponseEnvelope_NoneType_: {
             /** Data */
@@ -477,6 +891,18 @@ export interface components {
         ResponseEnvelope_PaginatedData_ClientResponse__: {
             data: components["schemas"]["PaginatedData_ClientResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[MembershipPlanResponse]] */
+        ResponseEnvelope_PaginatedData_MembershipPlanResponse__: {
+            data: components["schemas"]["PaginatedData_MembershipPlanResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[MembershipResponse]] */
+        ResponseEnvelope_PaginatedData_MembershipResponse__: {
+            data: components["schemas"]["PaginatedData_MembershipResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[VisitResponse]] */
+        ResponseEnvelope_PaginatedData_VisitResponse__: {
+            data: components["schemas"]["PaginatedData_VisitResponse_"];
+        };
         /** ResponseEnvelope[TelegramStartResponse] */
         ResponseEnvelope_TelegramStartResponse_: {
             data: components["schemas"]["TelegramStartResponse"];
@@ -484,6 +910,10 @@ export interface components {
         /** ResponseEnvelope[TelegramStatusResponse] */
         ResponseEnvelope_TelegramStatusResponse_: {
             data: components["schemas"]["TelegramStatusResponse"];
+        };
+        /** ResponseEnvelope[VisitResponse] */
+        ResponseEnvelope_VisitResponse_: {
+            data: components["schemas"]["VisitResponse"];
         };
         /**
          * Role
@@ -550,6 +980,64 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VisitCreateRequest
+         * @description POST /api/v1/visits body (Phase 19 D-01).
+         *
+         *     Only clientId is accepted; every other field is server-derived (see module
+         *     docstring). The inherited extra='forbid' rejects payload tampering.
+         */
+        VisitCreateRequest: {
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+        };
+        /**
+         * VisitResponse
+         * @description GET / POST response shape (Phase 19 VIS-EP-01..03).
+         *
+         *     from_attributes=True allows model_validate(visit_orm) directly.
+         *     extra='ignore' (via ContractModel base) is overridden here because
+         *     we merge BackendSchemaBase.model_config with from_attributes.
+         */
+        VisitResponse: {
+            /** Channel */
+            channel: string;
+            /**
+             * Checkedinat
+             * Format: date-time
+             */
+            checkedInAt: string;
+            /** Checkedinby */
+            checkedInBy: string | null;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Gymdate
+             * Format: date
+             */
+            gymDate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Membershipid
+             * Format: uuid
+             */
+            membershipId: string;
         };
     };
     responses: never;
@@ -911,6 +1399,401 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plans_api_v1_membership_plans_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                active?: boolean | null;
+                sort?: components["schemas"]["MembershipPlanSort"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_MembershipPlanResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_plan_api_v1_membership_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipPlanCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_api_v1_membership_plans__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    soft_delete_plan_api_v1_membership_plans__plan_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_plan_api_v1_membership_plans__plan_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipPlanUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipPlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memberships_api_v1_memberships_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                clientId?: string | null;
+                status?: components["schemas"]["MembershipStatus"] | null;
+                sort?: components["schemas"]["MembershipListSort"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_MembershipResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_membership_api_v1_memberships_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_membership_api_v1_memberships__membership_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_membership_api_v1_memberships__membership_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_visits_api_v1_visits_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                clientId?: string | null;
+                from_?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_VisitResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_visit_api_v1_visits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_VisitResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_visit_api_v1_visits__visit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_VisitResponse_"];
                 };
             };
             /** @description Validation Error */
