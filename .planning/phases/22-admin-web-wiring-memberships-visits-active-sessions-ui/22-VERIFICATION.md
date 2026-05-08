@@ -1,12 +1,27 @@
 ---
 phase: 22-admin-web-wiring-memberships-visits-active-sessions-ui
 verified: 2026-05-08T17:45:00Z
-status: gaps_found
-score: 4/5 must-haves verified
-overrides_applied: 0
-gaps:
+re_verified: 2026-05-08T16:23:17Z
+status: passed
+score: 5/5 must-haves verified (after gap closure)
+overrides_applied: 4
+overrides:
+  - gap: BLK-01
+    resolved_in: "18f0977 — fix(22): BLK-01 add beforeLoad RBAC guard to /visits route"
+    evidence: "apps/admin-web/src/routes/_protected/visits.tsx now declares beforeLoad calling can(role, 'view', 'visits') with redirect-on-deny, mirroring sibling routes."
+  - gap: BLK-02
+    resolved_in: "186f836 — fix(22): BLK-02 align plan-list cache key across loader/hook/page; superseded/extended by 0399340 (BLK-05 pagination via validateSearch) and 0a54fe6 (BLK-06 unify expiring=true contract)"
+    evidence: "Loader, hook, and page now share a single membershipsKeys.plansList(active) factory; the 'as unknown as boolean' cast is gone; ROADMAP SC #1 (loader keys match hooks) holds."
+  - gap: BLK-03
+    resolved_in: "704b6e9 — fix(22): BLK-03 use \"expires today\" badge, not \"expired today\""
+    evidence: "MembershipsBlock.tsx now calls t('memberships.badge.expiresToday'); the dead 'expirestoday' key was removed from ru.ts; MembershipsBlock.test.tsx asserts the correct copy."
+  - gap: BLK-04
+    resolved_in: "00e4bf8 — fix(22): BLK-04 stop lossy round-trip of priceKopecks through whole roubles"
+    evidence: "MembershipPlanFormDialog keeps form state in kopecks at the boundary; sub-rouble precision is preserved across edit roundtrips, satisfying the CLAUDE.md money convention."
+gaps_resolved:
   - truth: "Reception's check-in page handles all the documented edge cases (FE-08 a..d) AND the /visits route is RBAC-guarded as defense-in-depth"
-    status: partial
+    status: resolved
+    resolution: "BLK-01 closed in 18f0977. /_protected/visits now declares beforeLoad with can(role, 'view', 'visits') + redirect."
     reason: "FE-08(a..d) edge cases are wired in CheckInPage.tsx, but the /_protected/visits route is missing the beforeLoad guard that every other Phase 22 protected route declares. This violates the architecture invariant 'every protected route declares its beforeLoad' and the must-have evidenced by all 4 sibling routes (memberships, membership-plans, clients.$clientId, profile)."
     artifacts:
       - path: "apps/admin-web/src/routes/_protected/visits.tsx"
@@ -14,7 +29,8 @@ gaps:
     missing:
       - "Add beforeLoad in apps/admin-web/src/routes/_protected/visits.tsx that calls can(role, 'view', 'visits') and redirects on deny (mirror clients.tsx:14-23 / memberships.tsx:16-24 / profile.tsx)."
   - truth: "Cheap-win differentiator D-3 'expires today' badge displays correct copy on /clients/$clientId memberships block"
-    status: failed
+    status: resolved
+    resolution: "BLK-03 closed in 704b6e9. MembershipsBlock now uses t('memberships.badge.expiresToday'); dead 'expirestoday' key removed; test updated."
     reason: "BLK-03 confirmed in code: MembershipsBlock.tsx:87 calls t('memberships.badge.expirestoday') which resolves to 'истёк сегодня' ('expired today') — but the predicate is m.status === 'active' && m.endDate === todayMSK(), i.e. the membership is still valid today (INCLUSIVE end_date per Phase 15). Operator-facing copy must read 'expires today', not 'already expired today'. ru.ts has BOTH keys present (expirestoday + expiresToday); the wrong one is wired. CheckInPage uses the correct expiresToday key for the same predicate, so the two surfaces disagree."
     artifacts:
       - path: "apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx"
@@ -29,7 +45,8 @@ gaps:
       - "Update MembershipsBlock.test.tsx to assert 'Абонемент истекает сегодня'."
       - "Reconsider variant — destructive looks alarmist for a still-valid membership; CheckInPage uses outline."
   - truth: "MembershipPlansPage (FE-06) loader prefetches the SAME cache key the consuming hook reads (no waterfall, no double-fetch — Success Criterion #1)"
-    status: failed
+    status: resolved
+    resolution: "BLK-02 closed in 186f836 (key alignment); 0399340 wired pagination via validateSearch; 0a54fe6 unified the expiring=true contract across http+mock."
     reason: "BLK-02 confirmed in code: three layers disagree on the cache key for /membership-plans. Loader uses [...membershipsKeys.plans, { active: undefined }] and calls listPlans({}). Page calls useMembershipPlans({ active: undefined as unknown as boolean }). Hook destructures with default { active = true }, so undefined property triggers the default, yielding queryKey [...plans, { active: true }] and listPlans({ active: true }). Result: (1) loader prefetch is a cache miss against the hook's key — wasted round-trip and a real second fetch on every navigation; (2) page filters to active-only plans yet renders an Active/Archived badge column expecting both — operators can never see archived plans on the screen they're meant to manage. The 'as unknown as boolean' double cast is the visible smell of the bug. This fails ROADMAP Success Criterion #1 'loaders use queryClient.ensureQueryData with the same keys as the feature hooks (no waterfall, no double-fetch)'."
     artifacts:
       - path: "apps/admin-web/src/routes/_protected/membership-plans.tsx"
@@ -43,7 +60,8 @@ gaps:
       - "Align hook signature, hook usage in MembershipPlansPage, and route loader to share one key (e.g. via membershipsKeys.plansList(active) helper) and pass the same active value (undefined for 'all') through all three sites."
       - "Drop the 'as unknown as boolean' cast — fix the type, not the call site."
   - truth: "Plan edit form preserves money precision (FE-04 / FE-06 — money is integer minor units per CLAUDE.md domain convention)"
-    status: failed
+    status: resolved
+    resolution: "BLK-04 closed in 00e4bf8. Form state stays in kopecks at the boundary; sub-rouble precision survives edit roundtrips."
     reason: "BLK-04 confirmed in code: MembershipPlanFormDialog initialises priceRoubles via Math.round(plan.priceKopecks / 100) (lines 38, 48) and on submit ships back priceKopecks = values.priceRoubles * 100 (line 60). Any plan whose priceKopecks is not a multiple of 100 (e.g. 250050 → 2500.50 RUB) is silently snapped to the nearest 100 kopecks on the next save — direct violation of the 'Money: integer minor units (kopecks)' convention in CLAUDE.md. The Zod schema priceRoubles: z.number().int() enforces rouble integers on input but does not protect existing data on edit."
     artifacts:
       - path: "apps/admin-web/src/features/memberships/components/MembershipPlanFormDialog.tsx"
@@ -76,8 +94,9 @@ human_verification:
 **Phase Goal:** "An owner/reception user can do the full v1.2 flow end-to-end in admin-web on `VITE_API_MODE=http` — manage plans, sell memberships, check clients in, and review history — without regressing any v1.1 mock-backed domain."
 
 **Verified:** 2026-05-08T17:45:00Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Re-verified:** 2026-05-08T16:23:17Z — all four BLK gaps closed via code-review-fix round 2 + UAT inline fix
+**Status:** passed (was: gaps_found at initial verification)
+**Re-verification:** Yes — overrides applied for BLK-01..04 with fix-commit citations
 
 ## Goal Achievement
 
@@ -85,13 +104,13 @@ human_verification:
 
 | #   | Truth                                                                                                                              | Status     | Evidence                                                                                                                                                                                                                                |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | New routes `/membership-plans` (owner-only beforeLoad), `/memberships`, `/visits` work end-to-end; loaders use ensureQueryData with same keys as feature hooks (SC #1) | ✗ FAILED   | `/visits` route lacks beforeLoad (BLK-01); `/membership-plans` loader key disagrees with hook (BLK-02 → wasted prefetch + wrong filter). Routes exist and routeTree.gen.ts contains them. |
+| 1   | New routes `/membership-plans` (owner-only beforeLoad), `/memberships`, `/visits` work end-to-end; loaders use ensureQueryData with same keys as feature hooks (SC #1) | ✓ VERIFIED (post-fix) | BLK-01 closed in 18f0977 (`/visits` beforeLoad + can(role,'view','visits') + redirect); BLK-02 closed in 186f836 (loader/hook/page share `membershipsKeys.plansList(active)`); BLK-05 (0399340) + BLK-06 (0a54fe6) extended the same alignment to pagination/expiring contracts. |
 | 2   | `/clients/$clientId` Pattern α: Promise.all(ensureQueryData) + composed blocks, ESLint enforces features/clients ↛ memberships/visits (SC #2) | ✓ VERIFIED | Route file colocates ClientDetailPage; Promise.all loader has 3 ensureQueryData; ESLint Pattern α zone present in eslint.config.js:68-72; verify-pattern-alpha.sh exits 0 with PASS; no cross-feature imports under features/clients/. |
 | 3   | Reception check-in page handles all FE-08 a..d edge cases (SC #3)                                                                  | ✓ VERIFIED | CheckInPage.tsx uses useGymMeta + useClientsList + useRecentVisitsByClient + useMembershipStatusForClient; role=listbox disambiguation, formatTimeMSK TZ-safe, outside_gym_hours/duplicate_checkin/no_active_membership all wired; 7 unit tests cover all four edges. |
 | 4   | Active-sessions UI on profile page (SC #4)                                                                                         | ✓ VERIFIED | `/_protected/profile` route exists with both-roles can('view', 'profile'); SessionsList consumes useActiveSessions/useRevokeSession; LogoutAllDialog wraps useLogoutAll with destructive AlertDialog; ProfileMenu has Профиль link to /profile. Mock throws mock_not_implemented per D-22-2; http impl wired to /auth/sessions GET + /auth/sessions/{family_id}/revoke POST. |
-| 5   | Cheap-win differentiators D-2/D-3/D-5 ship (SC #5)                                                                                 | ✗ FAILED   | D-3 wires the WRONG i18n key — 'expirestoday'='истёк сегодня' (already expired) for the active+endDate==today predicate (BLK-03); test asserts the wrong string. D-2 expiring filter wired client-side but a no-op in mock mode (WR-07). D-5 Telegram DM correct with two locked Russian strings + 3 boundary tests passing. |
+| 5   | Cheap-win differentiators D-2/D-3/D-5 ship (SC #5)                                                                                 | ✓ VERIFIED (post-fix) | D-3 closed in 704b6e9 — `MembershipsBlock.tsx` now uses `t('memberships.badge.expiresToday')` and the test asserts "Абонемент истекает сегодня"; dead `expirestoday` key removed from ru.ts. D-2 mock no-op accepted as documented tech-debt (WR-07; mock-only ship gap). D-5 Telegram DM unchanged — two locked Russian strings + 3 boundary tests still pass. |
 
-**Score:** 3/5 truths verified
+**Score:** 5/5 truths verified (post-fix; was 3/5 at initial verification)
 
 ### Required Artifacts
 
@@ -101,10 +120,10 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------- |
 | `apps/backend/app/modules/visits/router.py` (`/_meta`)                                                 | GET /_meta returns `{gymHoursStart, gymHoursEnd}` with Cache-Control                   | ✓ VERIFIED  | Endpoint registered before `/{visit_id}`; integration tests pass (test_visits_meta.py: 5 tests). |
 | `packages/api-client/src/schema.d.ts`                                                                  | `paths['/api/v1/visits/_meta']['get']` and `paths['/api/v1/auth/sessions']*` present  | ✓ VERIFIED  | grep counts: visits/_meta=2, /auth/sessions=2. Contract test asserts both unconditionally. |
-| `apps/admin-web/src/routes/_protected/visits.tsx`                                                      | Route w/ ensureQueryData(visitsKeys.gymMeta) loader (no beforeLoad explicitly noted in plan) | ⚠️ ORPHANED  | Loader present and correct, but missing beforeLoad (BLK-01) violates the cross-route invariant despite plan literally saying "no beforeLoad". |
+| `apps/admin-web/src/routes/_protected/visits.tsx`                                                      | Route w/ ensureQueryData(visitsKeys.gymMeta) loader + beforeLoad RBAC guard | ✓ VERIFIED (post-fix) | beforeLoad added in 18f0977 — calls `can(role, 'view', 'visits')` and redirects on deny, matching sibling routes. Loader unchanged. |
 | `apps/admin-web/src/routes/_protected/clients.$clientId.tsx`                                           | Promise.all loader + colocated ClientDetailPage                                       | ✓ VERIFIED  | Promise.all of 3 ensureQueryData; ClientDetailPage function colocated; imports MembershipsBlock + RecentVisitsBlock; no ClientDetailPage.tsx under features/clients (verified absent). |
 | `apps/admin-web/src/features/memberships/**`                                                            | feature dir end-to-end (entities + contracts + hooks + 6 components + 2 routes)        | ✓ VERIFIED  | Files all present; barrel exports correct; mock + http services wired into seam. |
-| `apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx`                               | D-3 destructive badge using todayMSK() imported from @/shared/i18n/date                | ⚠️ HOLLOW   | Predicate (status==='active' && endDate===todayMSK()) is correct, todayMSK is imported, badge renders — but the i18n key is the wrong one (BLK-03). |
+| `apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx`                               | D-3 badge using todayMSK() imported from @/shared/i18n/date                | ✓ VERIFIED (post-fix) | BLK-03 closed in 704b6e9. i18n key switched to `expiresToday`; dead `expirestoday` key deleted from ru.ts; test asserts the corrected copy. |
 | `apps/admin-web/src/features/visits/**`                                                                 | feature dir end-to-end                                                                | ✓ VERIFIED  | All files present; CheckInPage covers FE-08 a..d; RecentVisitsBlock TZ-safe via formatTimeMSK; useMembershipStatusForClient is local (no @/features/memberships import in features/visits/). |
 | `apps/admin-web/src/features/auth/components/SessionsList.tsx`                                          | List + revoke + logout-all CTA                                                         | ✓ VERIFIED  | Component renders skeleton/empty/error/data states; useActiveSessions + useRevokeSession wired. |
 | `apps/admin-web/src/features/auth/components/LogoutAllDialog.tsx`                                       | AlertDialog destructive confirm                                                        | ✓ VERIFIED  | shadcn AlertDialog; on confirm calls useLogoutAll, qc.clear, navigate /login.                  |
@@ -121,10 +140,10 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 | ------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ |
 | visits route loader                                | services.visits.gymMeta (typed paths)               | ensureQueryData(visitsKeys.gymMeta)                 | ✓ WIRED    | Same key used by useGymMeta hook.                                                    |
 | memberships route loader                           | services.memberships.list                           | ensureQueryData(membershipsKeys.list(search))       | ✓ WIRED    | Search schema validated; key matches hook.                                           |
-| membership-plans route loader                      | services.memberships.listPlans                      | ensureQueryData(...plans, { active: undefined })   | ✗ NOT_WIRED | Key disagrees with the consumed hook's queryKey ([...plans, { active: true }]) — BLK-02. |
+| membership-plans route loader                      | services.memberships.listPlans                      | ensureQueryData via shared `membershipsKeys.plansList(active)` factory | ✓ WIRED (post-fix) | BLK-02 closed in 186f836; pagination/expiring contract extended in 0399340 + 0a54fe6. Loader, hook, and page now share one key. |
 | clients.$clientId route loader                     | clients.get + memberships.byClient + visits.recentByClient | Promise.all(ensureQueryData × 3)             | ✓ WIRED    | Three keys match the consuming hooks.                                                |
 | profile route                                      | SessionsList component                              | direct import in route file                        | ✓ WIRED    | SessionsList imports from @/features/auth.                                            |
-| MembershipsBlock D-3 badge                         | todayMSK from @/shared/i18n/date                    | imported, called in render predicate                | ⚠️ PARTIAL  | Helper invoked; predicate correct; copy resolved via wrong i18n key (BLK-03).           |
+| MembershipsBlock D-3 badge                         | todayMSK from @/shared/i18n/date                    | imported, called in render predicate                | ✓ WIRED (post-fix) | Helper invoked; predicate correct; copy resolved via the correct `expiresToday` key after 704b6e9. |
 | ClientsTable rows                                  | navigate({to:'/clients/$clientId'})                  | useNavigate + onRowClick                           | ✓ WIRED    | Pencil/Trash2 stopPropagation; cursor-pointer auto via DataGrid.                      |
 | SessionsList                                       | services.auth.sessions / revokeSession              | useActiveSessions + useRevokeSession                | ✓ WIRED    | Hooks consume swap-seam services.                                                    |
 | http auth.sessions                                 | paths['/api/v1/auth/sessions']                      | request('get', '/api/v1/auth/sessions')             | ✓ WIRED    | Typed path; envelope unwrap; PaginatedSessionsResponse.items returned.                |
@@ -134,9 +153,9 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 
 | Artifact                                                                  | Data Variable                       | Source                                                          | Produces Real Data | Status         |
 | ------------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------- | ------------------ | -------------- |
-| MembershipsBlock                                                           | useMembershipsByClient(clientId).data | services.memberships.byClient → mock seeded list / http /api/v1/memberships | Yes (mock+http)     | ⚠️ HOLLOW      |
+| MembershipsBlock                                                           | useMembershipsByClient(clientId).data | services.memberships.byClient → mock seeded list / http /api/v1/memberships | Yes (mock+http)     | ✓ FLOWING (post-fix) |
 | MembershipsListPage                                                        | useMembershipsList(search).data      | services.memberships.list                                        | Yes                | ✓ FLOWING      |
-| MembershipPlansPage                                                        | useMembershipPlans({active: undefined as boolean}).data | services.memberships.listPlans({active: true})            | Yes (active-only)   | ⚠️ HOLLOW      |
+| MembershipPlansPage                                                        | useMembershipPlans(active).data | services.memberships.listPlans(active) via shared key factory | Yes                 | ✓ FLOWING (post-fix) |
 | RecentVisitsBlock                                                          | useRecentVisitsByClient.data        | services.visits.recentByClient → seeded mock / http /visits      | Yes                | ✓ FLOWING      |
 | CheckInPage gym-hours window                                               | useGymMeta().data                   | services.visits.gymMeta → /api/v1/visits/_meta (cached 5min)     | Yes                | ✓ FLOWING      |
 | CheckInPage active-membership status                                       | useMembershipStatusForClient        | services.memberships.byClient (LOCAL hook, no cross-feature)     | Yes                | ✓ FLOWING      |
@@ -156,10 +175,10 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 | Cross-feature isolation under features/clients         | `grep -rE "from '@/features/(memberships|visits)'" apps/admin-web/src/features/clients/`        | no matches | ✓ PASS |
 | ClientDetailPage colocated, not under features/clients | `test ! -f apps/admin-web/src/features/clients/components/ClientDetailPage.tsx`                 | absent | ✓ PASS |
 | Locked Telegram DM strings present                     | `grep "Сегодня — последний день абонемента\|Абонемент действует ещё" apps/backend/app/integrations/telegram/handlers.py` | both present | ✓ PASS |
-| /visits beforeLoad guard                               | `grep -q "beforeLoad" apps/admin-web/src/routes/_protected/visits.tsx`                           | NO MATCH | ✗ FAIL (BLK-01) |
-| /membership-plans loader/hook key parity                | manual code read of route + hook                                                                | mismatch | ✗ FAIL (BLK-02) |
-| MembershipsBlock D-3 badge copy                         | `grep "expirestoday" apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx`   | wrong key wired | ✗ FAIL (BLK-03) |
-| MembershipPlanFormDialog kopecks roundtrip              | manual code read                                                                                | lossy round-trip | ✗ FAIL (BLK-04) |
+| /visits beforeLoad guard                               | `grep -q "beforeLoad" apps/admin-web/src/routes/_protected/visits.tsx`                           | match | ✓ PASS (BLK-01 closed in 18f0977) |
+| /membership-plans loader/hook key parity                | manual code read of route + hook + page                                                         | shared `plansList(active)` factory | ✓ PASS (BLK-02 closed in 186f836; pagination/expiring extended in 0399340 + 0a54fe6) |
+| MembershipsBlock D-3 badge copy                         | `grep "expiresToday" apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx`   | correct key wired | ✓ PASS (BLK-03 closed in 704b6e9) |
+| MembershipPlanFormDialog kopecks roundtrip              | manual code read                                                                                | precision preserved | ✓ PASS (BLK-04 closed in 00e4bf8) |
 
 ### Requirements Coverage
 
@@ -167,11 +186,11 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 | ----------- | -------------- | ------------------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | FE-04       | 22-02          | features/memberships hooks wired to services.memberships.* swap-seam (mock+http)                              | ✓ SATISFIED         | features/memberships/api/hooks.ts contains all required hooks; mock + http impls wired; 184 tests green.                                  |
 | FE-05       | 22-03          | features/visits with useRecentVisitsByClient wired                                                            | ✓ SATISFIED         | features/visits/api/hooks.ts present; RecentVisitsBlock consumes it; tests green.                                                          |
-| FE-06       | 22-02 + 22-03  | New routes /memberships, /membership-plans (owner-only), /visits — all loaders use ensureQueryData same keys  | ✗ BLOCKED           | Routes exist, but /membership-plans loader/hook key disagree (BLK-02), and /visits lacks beforeLoad architectural guard (BLK-01).         |
+| FE-06       | 22-02 + 22-03  | New routes /memberships, /membership-plans (owner-only), /visits — all loaders use ensureQueryData same keys  | ✓ SATISFIED (post-fix) | BLK-01 closed in 18f0977 (`/visits` beforeLoad); BLK-02 closed in 186f836 (`/membership-plans` shared key factory). Loader/hook parity holds. |
 | FE-07       | 22-04          | clients.$clientId Pattern α — Promise.all + features/clients does not import other features                   | ✓ SATISFIED         | Pattern α route + colocated page; ESLint zone enforced; isolation grep clean.                                                              |
 | FE-08       | 22-01 + 22-03  | Reception check-in edge cases (a..d) including /visits/_meta gym-hours                                        | ✓ SATISFIED         | CheckInPage covers all four edges; backend /_meta endpoint live with Cache-Control 5min.                                                   |
 | FE-09       | 22-05          | Active sessions UI on profile page                                                                            | ✓ SATISFIED         | /profile route + SessionsList + LogoutAllDialog wired to /api/v1/auth/sessions* endpoints; HYG-03 paths in schema.d.ts; D-22-2 mock-only enforced. |
-| FE-10       | 22-02 + 22-04  | Cheap-win D-2 + D-3 + D-5                                                                                     | ✗ BLOCKED           | D-2 wired (works in http; mock no-op — WR-07); D-3 destructive badge fires correctly but uses WRONG copy (BLK-03); D-5 done correctly.    |
+| FE-10       | 22-02 + 22-04  | Cheap-win D-2 + D-3 + D-5                                                                                     | ✓ SATISFIED (post-fix) | D-2 wired (mock no-op accepted as documented tech-debt WR-07); D-3 closed in 704b6e9 — `expiresToday` copy + test corrected; D-5 unchanged. |
 | FE-11       | 22-04          | ESLint validates Pattern α with negative-test fixture                                                         | ✓ SATISFIED         | eslint.config.js zone + fixture + verify-pattern-alpha.sh = PASS.                                                                          |
 
 **Orphaned requirements check:** ROADMAP.md row 173 lists FE-04..FE-11 for Phase 22; all 8 are claimed by sub-plan frontmatter. No orphans.
@@ -180,10 +199,10 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 
 | File                                                                        | Line          | Pattern                                                                                  | Severity | Impact                                                       |
 | --------------------------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
-| apps/admin-web/src/features/memberships/components/MembershipPlansPage.tsx  | 40            | `useMembershipPlans({ active: undefined as unknown as boolean })`                          | Blocker  | BLK-02: type lie hides cache-key mismatch.                   |
-| apps/admin-web/src/features/memberships/components/MembershipPlanFormDialog.tsx | 38, 48, 60 | `Math.round(plan.priceKopecks / 100)` round-trip                                           | Blocker  | BLK-04: silent precision loss on every plan edit.             |
-| apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx     | 87            | t('memberships.badge.expirestoday') wired into active-and-end-today branch                 | Blocker  | BLK-03: operator sees "expired today" for a still-valid membership. |
-| apps/admin-web/src/routes/_protected/visits.tsx                              | 6-13          | createFileRoute without beforeLoad in a /_protected/* file                                 | Blocker  | BLK-01: future RBAC narrowing on (view, visits) silently bypassed. |
+| apps/admin-web/src/features/memberships/components/MembershipPlansPage.tsx  | 40            | ~~`useMembershipPlans({ active: undefined as unknown as boolean })`~~                       | Resolved | BLK-02 closed in 186f836; cast removed; shared key factory in use.                |
+| apps/admin-web/src/features/memberships/components/MembershipPlanFormDialog.tsx | 38, 48, 60 | ~~`Math.round(plan.priceKopecks / 100)` round-trip~~                                        | Resolved | BLK-04 closed in 00e4bf8; form state stays in kopecks across edit roundtrip.       |
+| apps/admin-web/src/features/memberships/components/MembershipsBlock.tsx     | 87            | ~~t('memberships.badge.expirestoday') wired into active-and-end-today branch~~              | Resolved | BLK-03 closed in 704b6e9; key swapped to `expiresToday`; dead key removed; test updated. |
+| apps/admin-web/src/routes/_protected/visits.tsx                              | 6-13          | ~~createFileRoute without beforeLoad in a /_protected/* file~~                              | Resolved | BLK-01 closed in 18f0977; beforeLoad now calls `can(role, 'view', 'visits')` + redirect. |
 | apps/admin-web/src/shared/i18n/ru.ts                                         | 142-143       | Two near-identical keys (expirestoday vs expiresToday) — lint-bait                          | Warning  | Encourages confusion; wrong key was wired (BLK-03).            |
 | apps/admin-web/src/features/auth/components/SessionsList.tsx + LogoutAllDialog.tsx + numerous mem/visit components | various | ~16 hardcoded Russian literals violating "t()-only" rule (CLAUDE.md i18n) | Warning | i18n discipline regression (WR-01) |
 | apps/admin-web/src/shared/api/services/http/memberships.ts                   | 42-64         | Client-side `expiring` filter applied AFTER pagination + uses local-TZ `new Date()` not todayMSK | Warning  | WR-03: total/page mismatch + DST risk; mock path ignores filter entirely (WR-07). |
@@ -194,27 +213,32 @@ Sampled across all 5 sub-plans. All exist; level 4 (data flow) traced for compon
 
 ### Human Verification Required
 
-See `human_verification:` block in frontmatter. Six items documenting interactive smoke tests for the http-mode flow (FE-09 sessions, FE-08 check-in edges, D-22-11 Telegram DM), since all of these require a live backend / Telegram sandbox / browser visual confirmation that grep-level verification cannot substitute for. Note: human verification will only be exercised AFTER the four BLK gaps are closed via `/gsd-code-review-fix 22`; gap-fix verification supersedes the human queue while gaps remain.
+See `human_verification:` block in frontmatter. Six items documenting interactive smoke tests for the http-mode flow (FE-09 sessions, FE-08 check-in edges, D-22-11 Telegram DM), since all of these require a live backend / Telegram sandbox / browser visual confirmation that grep-level verification cannot substitute for. The four BLK gaps that previously gated this queue have been closed (re-verified 2026-05-08T16:23:17Z); the human queue is now eligible for an ops session whenever a live backend + Telegram sandbox are available.
 
 ### Gaps Summary
 
 Phase 22 is **architecturally sound** — Pattern α composes correctly, swap-seam holds, the new feature dirs land with proper RBAC at the feature/contract layer, the Telegram bot DM upgrade is owner-signed-off, the OpenAPI/api-client codegen is byte-stable, and 184/184 admin-web tests + 8 backend visit-meta + days-remaining tests all pass. Architecture Rule 5 (no cross-feature imports under features/clients) is statically enforced via ESLint and the fixture script, and confirmed by grep.
 
-Four blockers prevent the phase goal from being declared achieved:
+All four BLK gaps from the initial 2026-05-08T17:45 verification have been closed in code-review-fix round 2 + UAT inline fix:
 
-1. **BLK-01** — `/visits` route lacks the `beforeLoad` guard that every sibling route declares. Today's `(view, visits)` rule allows both roles, so the omission isn't user-visible — but it silently breaks the architecture invariant the moment a future change narrows the rule. Aligns with REVIEW finding flagged by the user as related to SC #1. **Fix: 1-line route patch.**
+1. **BLK-01 — RESOLVED in 18f0977.** `/visits` route now declares `beforeLoad` calling `can(role, 'view', 'visits')` with redirect-on-deny, mirroring sibling routes. Architecture invariant (every protected route declares its beforeLoad) restored.
 
-2. **BLK-02** — `/membership-plans` loader prefetches `[...plans, {active: undefined}]` while the page hook destructures `active = true` and queries `[...plans, {active: true}]`. Result: every navigation does a wasted prefetch + a real second fetch, AND the page filters to active-only plans while rendering an Active/Archived badge column meant to show both. Direct violation of ROADMAP SC #1 ("loaders use ensureQueryData with same keys as feature hooks, no waterfall, no double-fetch"). The `as unknown as boolean` cast in MembershipPlansPage.tsx:40 is the visible smell. **Fix: align hook signature, page call site, and loader on a single key (e.g. `membershipsKeys.plansList(active)`); decide whether the page shows all plans or active-only.**
+2. **BLK-02 — RESOLVED in 186f836.** Loader, page, and hook now share a single `membershipsKeys.plansList(active)` factory; the `as unknown as boolean` cast is gone. Pagination contract extended in 0399340 (BLK-05 — page/pageSize via validateSearch) and the `expiring=true` contract unified across http+mock in 0a54fe6 (BLK-06).
 
-3. **BLK-03** — `MembershipsBlock.tsx:87` wires `t('memberships.badge.expirestoday')` ("истёк сегодня" = "expired today") inside the `status === 'active' && endDate === todayMSK()` branch. With INCLUSIVE end_date semantics the membership is still **valid** today — operator-facing copy must say "expires today", not "already expired today". `CheckInPage` correctly uses `expiresToday`. The unit test asserts the wrong string, freezing the regression in. ROADMAP SC #5 (D-3 cheap-win badge) ships with wrong copy. **Fix: switch to `t('memberships.badge.expiresToday')`, delete the unused lower-cased key, update the test, reconsider destructive variant.**
+3. **BLK-03 — RESOLVED in 704b6e9.** `MembershipsBlock.tsx` switched to `t('memberships.badge.expiresToday')`; the dead `expirestoday` key was removed from `ru.ts`; `MembershipsBlock.test.tsx` asserts the corrected copy "Абонемент истекает сегодня".
 
-4. **BLK-04** — `MembershipPlanFormDialog` initialises `priceRoubles = Math.round(plan.priceKopecks / 100)` and submits back `priceKopecks = priceRoubles * 100`. Any plan with sub-rouble precision (e.g. 250050 kopecks = 2500.50 RUB) is silently snapped to the nearest 100 kopecks on every edit — direct violation of CLAUDE.md "Money: integer minor units (kopecks)" domain convention. **Fix: keep form state in kopecks (display roubles only), or initialise without rounding and round only at submit.**
+4. **BLK-04 — RESOLVED in 00e4bf8.** `MembershipPlanFormDialog` keeps form state in kopecks at the boundary; sub-rouble precision survives edit roundtrips, satisfying the CLAUDE.md "Money: integer minor units (kopecks)" domain convention.
 
-The four blockers are independent, focused, and bounded. They are addressed by the user-mentioned `/gsd-code-review-fix 22` follow-up. WARNINGS (i18n hardcoded literals, mock filter no-op, optimistic snapshot gap, etc.) are real but non-blocking and can be queued behind the four BLK fixes.
+UAT (10 tests passing, 1 inline fix `4452c28` localizing `mock_not_implemented` errors in demo mode) and code-review-fix round 2 (REVIEW-FIX.md) corroborate the closure. Score moves from 3/5 → 5/5 truths verified.
 
-After the four BLK fixes land, the phase will be ready for the human-verification smoke pass listed above.
+Outstanding non-blocking items remain as documented tech-debt (carried into v1.2 milestone audit):
+
+- **WR-07** — D-2 expiring filter is a no-op in mock mode; backend `?expiring=true&within=7` is the proper long-term fix.
+- **D-22-2** — FE-09 Active Sessions UI is http-only by design; mock throws `mock_not_implemented`.
+- Six `human_verification:` items (interactive smoke tests for FE-09 sessions, FE-08 check-in edges, D-22-11 Telegram DM) require live backend / Telegram sandbox / browser visual confirmation — queued for the next ops session.
 
 ---
 
 _Verified: 2026-05-08T17:45:00Z_
-_Verifier: Claude (gsd-verifier)_
+_Re-verified: 2026-05-08T16:23:17Z — all 4 BLK overrides applied with fix-commit citations_
+_Verifier: Claude (gsd-verifier) + manual override pass via /gsd-verify-work 22_
