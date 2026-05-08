@@ -11,10 +11,12 @@ here at the contract boundary so `authenticate(...)` never sees < 12 char
 inputs.
 """
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import EmailStr, Field
 
+from app.core.pagination import PaginatedData
 from app.core.permissions import Role
 from app.core.schemas import BackendSchemaBase, ResponseData
 
@@ -81,3 +83,28 @@ class TelegramVerifyRequest(BackendSchemaBase):
 
     deep_link_token: str
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+# ---------------------------------------------------------------------------
+# Phase 23 — Active sessions surface (HYG-03, FE-09 consumer).
+# ---------------------------------------------------------------------------
+
+
+class ActiveSessionItem(ResponseData):
+    """Single active session family row in the /sessions list response (D-23-4).
+
+    camelCase serialization is automatic via alias_generator=to_camel on ContractModel.
+    Wire names: familyId, createdAt, lastUsedAt, userAgent, channel, isCurrent.
+    """
+
+    family_id: UUID  # → familyId
+    created_at: datetime  # → createdAt
+    last_used_at: datetime  # → lastUsedAt
+    user_agent: str | None  # → userAgent (None for pre-Phase-23 sessions, CD-01 trade-off)
+    channel: str  # 'email_password' | 'telegram' | future; default 'email_password'
+    is_current: bool  # → isCurrent (True if this family matches the current sz_refresh)
+
+
+# Type alias — ResponseEnvelope[PaginatedData[ActiveSessionItem]] on the wire.
+# Wire shape: {"data": {"items": [...], "total": N, "page": 1, "pageSize": 20}}
+ActiveSessionsListResponse = PaginatedData[ActiveSessionItem]
