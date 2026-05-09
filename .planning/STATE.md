@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Memberships Extras + Tech-Debt
-status: executing
+status: ready_to_plan
 stopped_at: Phase 27 context gathered
 last_updated: "2026-05-09T19:08:03.176Z"
 last_activity: 2026-05-09 -- Phase 27 execution started
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 19
   completed_plans: 14
-  percent: 74
+  percent: 67
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-05-08)
 
 ## Current Position
 
-Phase: 27 (expiring-soon-telegram-notifications) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 27
-Last activity: 2026-05-09 -- Phase 27 execution started
+Phase: 28
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-09
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (this milestone)
+- Total plans completed: 5 (this milestone)
 - Average duration: —
 - Total execution time: 0.0 hours
 
@@ -48,6 +48,7 @@ Last activity: 2026-05-09 -- Phase 27 execution started
 | 27. Expiring-soon Telegram Notifications | 0/TBD | — | — |
 | 28. OpenAPI Drift-Gate Refresh + admin-web Wiring | 0/TBD | — | — |
 | 29. Milestone Verification | 0/TBD | — | — |
+| 27 | 5 | - | - |
 
 **Recent Trend:**
 

@@ -51,16 +51,16 @@ REQ-IDs continue v1.2 conventions (`MEM-*`, `MEM-EP-*`, `MEM-AUDIT-*`, `ARQ-*`, 
 
 ### Notifications — Expiring-soon (NTF)
 
-- [ ] **NTF-01**: Alembic migration `0010_notifications.py` creates `membership_notifications` table: `id` (UUID PK), `membership_id` (UUID NOT NULL FK memberships.id ON DELETE CASCADE), `kind` (VARCHAR NOT NULL CHECK IN ('expiring_7d','expiring_3d','expiring_1d')), `sent_at` (TIMESTAMPTZ NOT NULL DEFAULT now()), `telegram_chat_id` (BIGINT NOT NULL), `created_at`. UNIQUE INDEX on `(membership_id, kind)` for cron idempotency.
-- [ ] **NTF-02**: `app/workers/scheduled/send_expiring_notifications.py` exposes `async def send_expiring_notifications(ctx) -> int`; selects memberships matching `status='active' AND end_date IN (today+1, today+3, today+7) AND client.telegram_chat_id IS NOT NULL AND NOT EXISTS (membership_notification of matching kind)`; sends DM via `telegram.bot_api.send_message`; inserts `membership_notifications` row only on successful send (failure → WARNING log, no row → retry next tick).
-- [ ] **NTF-03**: `app.workers.WorkerSettings.cron_jobs` adds `cron(send_expiring_notifications, hour=3, minute=15, unique=True, keep_result=60)` (06:15 Europe/Moscow with container `TZ=UTC`, after `expire_memberships` at 06:05).
-- [ ] **NTF-04**: Frozen, cancelled, and expired memberships skipped (filter `status='active'` in select); also skipped when client has no Telegram link (`telegram_chat_id IS NULL`) or when client soft-deleted (`clients.deleted_at IS NOT NULL`).
-- [ ] **NTF-05**: Send failure (network, rate-limit, blocked DM, deactivated chat) — `structlog.warning("expiring_notification_send_failed", ...)` with reason; Telegram error 403 (bot blocked) does NOT permanently mark this kind as sent (so a re-linked client still gets future pings); the idempotency table is the single source of truth.
-- [ ] **NTF-06**: `audit.emit("expiring_notification_sent_<kind>", actor=None, membership_id, client_id, telegram_chat_id, kind)` per successful send (3 locked event names, see INFRA-15).
-- [ ] **NTF-COPY-01**: `app/integrations/telegram/copy.py` exposes 6 locked Russian DM strings: `EXPIRING_7D_VARIANT_A/B`, `EXPIRING_3D_VARIANT_A/B`, `EXPIRING_1D_VARIANT_A/B` (selected by `client_id` hash for stable per-client variant — anti-oracle pattern from v1.2 D-5); each contains `end_date` formatted via Europe/Moscow date-fns `ru` locale; owner sign-off recorded in PROJECT.md Key Decisions for v1.3.
-- [ ] **NTF-TEST-01**: integration test — membership expiring in 7 days + linked Telegram → DM sent, idempotent on second cron run (no duplicate row, no second send).
-- [ ] **NTF-TEST-02**: integration test — frozen membership at `end_date - 7` does NOT trigger notification.
-- [ ] **NTF-TEST-03**: integration test — Telegram send raises 403 → no `membership_notifications` row inserted → next tick retries; once succeeds, row inserted; second tick same day is a no-op.
+- [x] **NTF-01**: Alembic migration `0010_notifications.py` creates `membership_notifications` table: `id` (UUID PK), `membership_id` (UUID NOT NULL FK memberships.id ON DELETE CASCADE), `kind` (VARCHAR NOT NULL CHECK IN ('expiring_7d','expiring_3d','expiring_1d')), `sent_at` (TIMESTAMPTZ NOT NULL DEFAULT now()), `telegram_chat_id` (BIGINT NOT NULL), `created_at`. UNIQUE INDEX on `(membership_id, kind)` for cron idempotency.
+- [x] **NTF-02**: `app/workers/scheduled/send_expiring_notifications.py` exposes `async def send_expiring_notifications(ctx) -> int`; selects memberships matching `status='active' AND end_date IN (today+1, today+3, today+7) AND client.telegram_chat_id IS NOT NULL AND NOT EXISTS (membership_notification of matching kind)`; sends DM via `telegram.bot_api.send_message`; inserts `membership_notifications` row only on successful send (failure → WARNING log, no row → retry next tick).
+- [x] **NTF-03**: `app.workers.WorkerSettings.cron_jobs` adds `cron(send_expiring_notifications, hour=3, minute=15, unique=True, keep_result=60)` (06:15 Europe/Moscow with container `TZ=UTC`, after `expire_memberships` at 06:05).
+- [x] **NTF-04**: Frozen, cancelled, and expired memberships skipped (filter `status='active'` in select); also skipped when client has no Telegram link (`telegram_chat_id IS NULL`) or when client soft-deleted (`clients.deleted_at IS NOT NULL`).
+- [x] **NTF-05**: Send failure (network, rate-limit, blocked DM, deactivated chat) — `structlog.warning("expiring_notification_send_failed", ...)` with reason; Telegram error 403 (bot blocked) does NOT permanently mark this kind as sent (so a re-linked client still gets future pings); the idempotency table is the single source of truth.
+- [x] **NTF-06**: `audit.emit("expiring_notification_sent_<kind>", actor=None, membership_id, client_id, telegram_chat_id, kind)` per successful send (3 locked event names, see INFRA-15).
+- [x] **NTF-COPY-01**: `app/integrations/telegram/copy.py` exposes 6 locked Russian DM strings: `EXPIRING_7D_VARIANT_A/B`, `EXPIRING_3D_VARIANT_A/B`, `EXPIRING_1D_VARIANT_A/B` (selected by `client_id` hash for stable per-client variant — anti-oracle pattern from v1.2 D-5); each contains `end_date` formatted via Europe/Moscow date-fns `ru` locale; owner sign-off recorded in PROJECT.md Key Decisions for v1.3.
+- [x] **NTF-TEST-01**: integration test — membership expiring in 7 days + linked Telegram → DM sent, idempotent on second cron run (no duplicate row, no second send).
+- [x] **NTF-TEST-02**: integration test — frozen membership at `end_date - 7` does NOT trigger notification.
+- [x] **NTF-TEST-03**: integration test — Telegram send raises 403 → no `membership_notifications` row inserted → next tick retries; once succeeds, row inserted; second tick same day is a no-op.
 
 ### Admin-web wiring (FE)
 
@@ -127,16 +127,16 @@ REQ-IDs continue v1.2 conventions (`MEM-*`, `MEM-EP-*`, `MEM-AUDIT-*`, `ARQ-*`, 
 | MEM-REN-TEST-02 | Phase 26 | Pending |
 | MEM-REN-TEST-03 | Phase 26 | Pending |
 | MEM-REN-TEST-04 | Phase 26 | Pending |
-| NTF-01 | Phase 27 | Pending |
-| NTF-02 | Phase 27 | Pending |
-| NTF-03 | Phase 27 | Pending |
-| NTF-04 | Phase 27 | Pending |
-| NTF-05 | Phase 27 | Pending |
-| NTF-06 | Phase 27 | Pending |
-| NTF-COPY-01 | Phase 27 | Pending |
-| NTF-TEST-01 | Phase 27 | Pending |
-| NTF-TEST-02 | Phase 27 | Pending |
-| NTF-TEST-03 | Phase 27 | Pending |
+| NTF-01 | Phase 27 | Complete |
+| NTF-02 | Phase 27 | Complete |
+| NTF-03 | Phase 27 | Complete |
+| NTF-04 | Phase 27 | Complete |
+| NTF-05 | Phase 27 | Complete |
+| NTF-06 | Phase 27 | Complete |
+| NTF-COPY-01 | Phase 27 | Complete |
+| NTF-TEST-01 | Phase 27 | Complete |
+| NTF-TEST-02 | Phase 27 | Complete |
+| NTF-TEST-03 | Phase 27 | Complete |
 | FE-10 | Phase 28 | Pending |
 | FE-11 | Phase 28 | Pending |
 | FE-12 | Phase 28 | Pending |
