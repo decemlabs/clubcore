@@ -61,7 +61,7 @@ def test_renewal_strategies_are_distinct() -> None:
 
 
 def test_membership_status_transitions_unchanged_in_phase_26() -> None:
-    """D-26-24: renewal is INSERT, not transition. State machine 4×4 untouched."""
+    """D-26-24: renewal is INSERT, not transition. State machine 4x4 untouched."""
     assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset(
         {"expired", "cancelled", "frozen"}
     )
