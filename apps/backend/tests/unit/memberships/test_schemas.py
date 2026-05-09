@@ -49,6 +49,7 @@ def test_create_trims_leading_trailing_whitespace_preserves_casing() -> None:
         name="  Базовый  ",
         duration_days=30,
         price_kopecks=250000,
+        freeze_days_limit=14,
     )
     assert m.name == "Базовый"
 
@@ -60,6 +61,7 @@ def test_create_post_trim_empty_rejected() -> None:
             name="   ",
             duration_days=30,
             price_kopecks=250000,
+            freeze_days_limit=14,
         )
     assert "min_length" in str(exc_info.value) or "least 1 character" in str(exc_info.value)
 
@@ -127,6 +129,7 @@ def test_create_rejects_duration_days_below_one() -> None:
             name="Test",
             duration_days=0,
             price_kopecks=250000,
+            freeze_days_limit=14,
         )
 
 
@@ -137,6 +140,7 @@ def test_create_rejects_duration_days_above_3650() -> None:
             name="Test",
             duration_days=3651,
             price_kopecks=250000,
+            freeze_days_limit=14,
         )
 
 
@@ -146,11 +150,13 @@ def test_create_accepts_duration_days_at_bounds() -> None:
         name="Min",
         duration_days=1,
         price_kopecks=0,
+        freeze_days_limit=14,
     )
     m_max = MembershipPlanCreateRequest(
         name="Max",
         duration_days=3650,
         price_kopecks=0,
+        freeze_days_limit=14,
     )
     assert m_min.duration_days == 1
     assert m_max.duration_days == 3650
@@ -163,6 +169,7 @@ def test_create_rejects_negative_price() -> None:
             name="Test",
             duration_days=30,
             price_kopecks=-1,
+            freeze_days_limit=14,
         )
 
 
@@ -173,6 +180,7 @@ def test_create_rejects_price_above_ceiling() -> None:
             name="Test",
             duration_days=30,
             price_kopecks=10**11 + 1,
+            freeze_days_limit=14,
         )
 
 
@@ -182,11 +190,13 @@ def test_create_accepts_price_at_bounds() -> None:
         name="Free",
         duration_days=30,
         price_kopecks=0,
+        freeze_days_limit=14,
     )
     m_max = MembershipPlanCreateRequest(
         name="Max Price",
         duration_days=30,
         price_kopecks=10**11,
+        freeze_days_limit=14,
     )
     assert m_min.price_kopecks == 0
     assert m_max.price_kopecks == 10**11
@@ -199,6 +209,7 @@ def test_create_rejects_name_above_120_chars() -> None:
             name="x" * 121,
             duration_days=30,
             price_kopecks=250000,
+            freeze_days_limit=14,
         )
 
 
@@ -208,6 +219,7 @@ def test_create_active_defaults_to_true() -> None:
         name="Test",
         duration_days=30,
         price_kopecks=250000,
+        freeze_days_limit=14,
     )
     assert m.active is True
 
@@ -218,10 +230,16 @@ def test_create_active_defaults_to_true() -> None:
 def test_create_camel_to_snake_alias_pair() -> None:
     """BackendSchemaBase alias_generator maps camelCase wire keys to snake_case."""
     m = MembershipPlanCreateRequest.model_validate(
-        {"name": "Test", "durationDays": 30, "priceKopecks": 250000}
+        {
+            "name": "Test",
+            "durationDays": 30,
+            "priceKopecks": 250000,
+            "freezeDaysLimit": 14,
+        }
     )
     assert m.duration_days == 30
     assert m.price_kopecks == 250000
+    assert m.freeze_days_limit == 14
 
 
 def test_update_camel_to_snake_alias_pair() -> None:
@@ -431,6 +449,10 @@ def test_response_serialises_plan_name_snapshot_camelcase() -> None:
         notes=None,
         created_at=datetime.now(tz=UTC),
         updated_at=datetime.now(tz=UTC),
+        freeze_days_limit_snapshot=14,
+        freeze_days_used=0,
+        freeze_days_remaining=14,
+        current_freeze_period=None,
     )
     dumped = response.model_dump(by_alias=True)
     # D-10 snapshot fields in camelCase
@@ -448,6 +470,13 @@ def test_response_serialises_plan_name_snapshot_camelcase() -> None:
     assert "paidAt" in dumped
     assert "createdAt" in dumped
     assert "updatedAt" in dumped
+    # Phase 25 freeze projection fields in camelCase
+    assert "freezeDaysLimitSnapshot" in dumped
+    assert "freezeDaysUsed" in dumped
+    assert "freezeDaysRemaining" in dumped
+    assert "currentFreezePeriod" in dumped
+    assert dumped["freezeDaysLimitSnapshot"] == 14
+    assert dumped["currentFreezePeriod"] is None
 
 
 def test_response_status_serialises_as_string_value() -> None:
@@ -469,6 +498,10 @@ def test_response_status_serialises_as_string_value() -> None:
         notes=None,
         created_at=datetime.now(tz=UTC),
         updated_at=datetime.now(tz=UTC),
+        freeze_days_limit_snapshot=14,
+        freeze_days_used=0,
+        freeze_days_remaining=14,
+        current_freeze_period=None,
     )
     dumped = response.model_dump(by_alias=True)
     assert dumped["status"] == "cancelled"
