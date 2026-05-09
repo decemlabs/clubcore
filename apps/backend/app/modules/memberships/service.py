@@ -517,8 +517,32 @@ async def cancel_membership(
         raise MembershipNotFoundError("membership_not_found")
 
     # D-15: transition guard BEFORE any mutation. Raises InvalidTransitionError
-    # on non-active source state; no partial write.
+    # on non-{active,frozen} source state; no partial write.
     _assert_can_cancel(membership)
+
+    # Phase 25 D-25-09: if cancelling from frozen, close the open period first.
+    # Audit ordering: emit "membership_unfrozen" (with days_added=0 sentinel)
+    # BEFORE the existing "membership_cancelled" emit. Both rows live in the
+    # same UoW (single commit at function end); audit_log.id auto-increment
+    # provides forensic chronology. NO end_date extension — cancellation
+    # supersedes freeze (REQUIREMENTS MEM-FRZ-07).
+    if membership.status == "frozen":
+        period = await repository.get_open_freeze_period(session, membership.id)
+        if period is None:
+            raise RuntimeError("frozen_membership_without_open_period")
+        period.ended_at = datetime.now(tz=UTC)
+        period.ended_by = actor.id
+        await session.flush()
+        await audit.emit(
+            session,
+            "membership_unfrozen",  # LITERAL — Phase 15 INFRA-11 AST gate
+            actor_user_id=actor.id,
+            resource_type="membership",  # LITERAL
+            resource_id=membership.id,
+            client_id=str(membership.client_id),
+            freeze_period_id=str(period.id),
+            days_added=0,  # sentinel discriminates cancel-from-frozen in audit log
+        )
 
     # D-12: mutate (cancelled_at uses UTC; the column is timestamptz so the wall-time
     # encoding is preserved regardless of zone).
