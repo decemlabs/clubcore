@@ -415,3 +415,99 @@ async def test_renew_creates_chained_row_in_db(
     assert new_row.previous_membership_id == source.id
     assert new_row.client_id == source.client_id
     assert new_row.status == "active"
+
+
+# --- Plan 26-04 acceptance shims ------------------------------------------
+#
+# Plan 26-04 acceptance criteria require these EXACT function names. The
+# semantics duplicate the longer-named tests above but pin the contract under
+# the names the criteria check, so a future rename of the longer tests can
+# never silently drop the matrix coverage.
+
+
+async def test_renew_reception_returns_201(
+    authed_client_reception: AsyncClient,
+    make_plan: Any,
+    make_membership: Any,
+) -> None:
+    """Plan 26-04 acceptance shim: reception POST → 201 (CREATE ∉ OWNER_ONLY)."""
+    plan = await make_plan(name="Acceptance reception")
+    client = await _create_client(authed_client_reception, phone="+79991235021")
+    client_uuid = UUID(client["id"])
+    source = await make_membership(client_id=client_uuid, plan=plan, status="active")
+
+    r = await authed_client_reception.post(
+        f"/api/v1/memberships/{source.id}/renew",
+        headers=_csrf_headers(authed_client_reception),
+    )
+    assert r.status_code == 201, r.text
+
+
+async def test_renew_owner_returns_201(
+    authed_client_owner: AsyncClient,
+    make_plan: Any,
+    make_membership: Any,
+) -> None:
+    """Plan 26-04 acceptance shim: owner POST → 201."""
+    plan = await make_plan(name="Acceptance owner")
+    client = await _create_client(authed_client_owner, phone="+79991235022")
+    client_uuid = UUID(client["id"])
+    source = await make_membership(client_id=client_uuid, plan=plan, status="active")
+
+    r = await authed_client_owner.post(
+        f"/api/v1/memberships/{source.id}/renew",
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r.status_code == 201, r.text
+
+
+async def test_renew_response_includes_previous_membership_id_camelcase(
+    authed_client_reception: AsyncClient,
+    make_plan: Any,
+    make_membership: Any,
+) -> None:
+    """Plan 26-04 acceptance shim: response.data.previousMembershipId == source.id (camelCase)."""
+    plan = await make_plan(name="Acceptance camelCase")
+    client = await _create_client(authed_client_reception, phone="+79991235023")
+    client_uuid = UUID(client["id"])
+    source = await make_membership(client_id=client_uuid, plan=plan, status="active")
+
+    r = await authed_client_reception.post(
+        f"/api/v1/memberships/{source.id}/renew",
+        headers=_csrf_headers(authed_client_reception),
+    )
+    assert r.status_code == 201, r.text
+    body: dict[str, Any] = r.json()["data"]
+    # The wire field is camelCase (BackendSchemaBase alias_generator).
+    assert "previousMembershipId" in body
+    assert body["previousMembershipId"] == str(source.id)
+
+
+async def test_renew_response_includes_freeze_projection_zero_baseline(
+    authed_client_reception: AsyncClient,
+    make_plan: Any,
+    make_membership: Any,
+) -> None:
+    """Plan 26-04 acceptance shim: zero-baseline freeze projection on a brand-new row.
+
+    A renewal row is freshly created — it has no MembershipFreezePeriod rows
+    yet, so freezeDaysUsed=0, currentFreezePeriod=None, and
+    freezeDaysRemaining=plan.freeze_days_limit (unclamped baseline).
+    """
+    plan = await make_plan(
+        name="Acceptance freeze baseline",
+        freeze_days_limit=14,
+    )
+    client = await _create_client(authed_client_reception, phone="+79991235024")
+    client_uuid = UUID(client["id"])
+    source = await make_membership(client_id=client_uuid, plan=plan, status="active")
+
+    r = await authed_client_reception.post(
+        f"/api/v1/memberships/{source.id}/renew",
+        headers=_csrf_headers(authed_client_reception),
+    )
+    assert r.status_code == 201, r.text
+    body: dict[str, Any] = r.json()["data"]
+    assert body["freezeDaysUsed"] == 0
+    assert body["currentFreezePeriod"] is None
+    assert body["freezeDaysRemaining"] == 14
