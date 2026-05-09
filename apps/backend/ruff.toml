@@ -35,6 +35,13 @@ external = ["SVC"]
 # (rationale-bearing). BLE rule is not in `select`, so the noqa would otherwise be
 # flagged as redundant (RUF100). Plan locks the literal except form — preserve it.
 "tests/conftest.py" = ["RUF100"]
+# Phase 27 NTF-COPY-01 (plan 27-03): the locked Russian DM templates each carry a
+# disciplinary `# noqa: RUF001` tripwire so that a future edit which introduces an
+# ambiguous Cyrillic letter is silently allowed (vs. needing a re-review). The
+# specific shipped strings happen to mix unambiguous Cyrillic with the Latin
+# `{end_date}` placeholder, and ruff does not currently flag them under RUF001 --
+# so without this allowance every line would trip RUF100 ("unused noqa").
+"app/integrations/telegram/copy.py" = ["RUF100"]
 
 [format]
 quote-style = "double"
