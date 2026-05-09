@@ -95,6 +95,11 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
     Structurally satisfies the `ActiveMembership` Protocol that Plan 17-02
     declares in core/dependencies.py (matches on id, client_id, end_date,
     status — D-18). No DTO conversion at the resolver boundary.
+
+    Phase 26 MEM-REN-01: `previous_membership_id` self-FK — set ONCE at
+    INSERT by `service.renew_membership`; immutable post-creation (D-26-04).
+    ON DELETE SET NULL preserves renewal-row data when source is hard-deleted
+    (D-26-05). Chain depth is implicitly unbounded (D-26-06).
     """
 
     __tablename__ = "memberships"
@@ -144,6 +149,16 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
         server_default=text("'purchase_date'"),
         nullable=False,
     )
+    # Phase 26 MEM-REN-01 — chain attribution self-FK (D-26-04 / D-26-05).
+    previous_membership_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "memberships.id",
+            ondelete="SET NULL",
+            name="fk_memberships_previous_membership_id_memberships",
+        ),
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -161,6 +176,11 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
             "client_id",
             "status",
             text("end_date DESC"),
+        ),
+        # Phase 26 D-26-02 — forensic lookup index on the renewal chain column.
+        Index(
+            "ix_memberships_previous_membership_id",
+            "previous_membership_id",
         ),
     )
 
