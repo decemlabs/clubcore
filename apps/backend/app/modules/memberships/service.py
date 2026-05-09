@@ -715,7 +715,9 @@ async def unfreeze_membership(
     period.ended_at = now_utc
     period.ended_by = actor.id
 
-    delta_seconds = (period.ended_at - period.started_at).total_seconds()
+    # Use `now_utc` directly — `period.ended_at` is Mapped[datetime | None];
+    # Pyright doesn't narrow after assignment, and the local already holds the value.
+    delta_seconds = (now_utc - period.started_at).total_seconds()
     days_added = max(1, math.ceil(delta_seconds / 86400))
     membership.end_date = membership.end_date + timedelta(days=days_added)
 
