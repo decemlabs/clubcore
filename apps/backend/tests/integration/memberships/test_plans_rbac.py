@@ -24,6 +24,7 @@ VALID_PLAN: dict[str, Any] = {
     "name": "Базовый",
     "durationDays": 30,
     "priceKopecks": 250000,
+    "freezeDaysLimit": 14,
     "active": True,
 }
 

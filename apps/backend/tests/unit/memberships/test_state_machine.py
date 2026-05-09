@@ -1,19 +1,19 @@
-"""Unit tests for the Phase 17 membership state-machine guards (TESTS-10, D-19).
+"""Unit tests for the membership state-machine guards (Phase 17 + Phase 25).
 
-Tests `_assert_can_cancel` and `_assert_can_expire` directly against a
-SimpleNamespace stub — no DB, no FastAPI, no fixtures. Per D-15 the guards
-read only `.status`; the stub need not provide more.
+Tests `_assert_can_cancel`, `_assert_can_expire`, `_assert_can_freeze`, and
+`_assert_can_unfreeze` directly against a SimpleNamespace stub — no DB,
+no FastAPI, no fixtures. Per D-15 the guards read only `.status`; the stub
+need not provide more.
 
-D-19: explicit 9-cell parametrize matrix
-  rows by cols = {active, expired, cancelled} by {cancel, expire, create-self}
-
-Allowed (2): active+cancel, active+expire — must NOT raise.
-Disallowed (4): expired+cancel, expired+expire, cancelled+cancel,
-                cancelled+expire — must raise InvalidTransitionError(409,
-                code='invalid_transition') with fields={from_status, to_status}.
-N/A (3): every status + create-self — creation is `void -> active`, not a
-         state-machine transition; cells are returned-on early so the matrix
-         stays at the documented 9-row count.
+Phase 25 D-25-15: 16-cell parametrize matrix (4 sources x 4 actions).
+The 5 allowed cells:
+  - ("active", "freeze", "ok")
+  - ("active", "expire", "ok")
+  - ("active", "cancel", "ok")
+  - ("frozen", "unfreeze", "ok")
+  - ("frozen", "cancel", "ok")
+All other 11 cells expect `InvalidTransitionError(409, code='invalid_transition')`
+with `fields={from_status, to_status}`.
 """
 
 from __future__ import annotations
@@ -25,7 +25,12 @@ import pytest
 
 from app.core.exceptions import InvalidTransitionError
 from app.modules.memberships.models import Membership
-from app.modules.memberships.service import _assert_can_cancel, _assert_can_expire
+from app.modules.memberships.service import (
+    _assert_can_cancel,
+    _assert_can_expire,
+    _assert_can_freeze,
+    _assert_can_unfreeze,
+)
 
 
 def _stub_membership(*, status: str) -> Membership:
@@ -38,56 +43,66 @@ def _stub_membership(*, status: str) -> Membership:
     return cast(Membership, SimpleNamespace(status=status))
 
 
-# 9-cell parametrize matrix — keep order grouped by source status so a coverage
+# 16-cell parametrize matrix — keep order grouped by source status so a coverage
 # diff in source surfaces gaps loudly. The `expect` column is the assertion shape.
 @pytest.mark.parametrize(
     ("from_status", "action", "expect"),
     [
-        # active row — both transitions allowed (active is the only source state).
+        # active source — 4 actions
+        ("active", "freeze", "ok"),
+        ("active", "unfreeze", "invalid_transition"),
         ("active", "cancel", "ok"),
         ("active", "expire", "ok"),
-        ("active", "create-self", "n/a"),
-        # expired row — terminal status; no further transitions.
+        # frozen source — 4 actions
+        ("frozen", "freeze", "invalid_transition"),
+        ("frozen", "unfreeze", "ok"),
+        ("frozen", "cancel", "ok"),
+        ("frozen", "expire", "invalid_transition"),
+        # expired source — terminal; nothing allowed
+        ("expired", "freeze", "invalid_transition"),
+        ("expired", "unfreeze", "invalid_transition"),
         ("expired", "cancel", "invalid_transition"),
         ("expired", "expire", "invalid_transition"),
-        ("expired", "create-self", "n/a"),
-        # cancelled row — terminal status; no further transitions.
+        # cancelled source — terminal; nothing allowed
+        ("cancelled", "freeze", "invalid_transition"),
+        ("cancelled", "unfreeze", "invalid_transition"),
         ("cancelled", "cancel", "invalid_transition"),
         ("cancelled", "expire", "invalid_transition"),
-        ("cancelled", "create-self", "n/a"),
     ],
 )
 def test_state_machine_matrix(from_status: str, action: str, expect: str) -> None:
-    """TESTS-10 / D-19 9-cell matrix for membership lifecycle transitions."""
-    if expect == "n/a":
-        # Creation is `void → active`, NOT a state-machine cell. The 3 N/A
-        # rows keep the matrix at the documented 9-row coverage shape.
-        return
-
+    """Phase 25 D-25-15 — 16-cell matrix for membership lifecycle transitions."""
     membership = _stub_membership(status=from_status)
+
+    # Dispatch table: action -> (target_status, guard_fn)
+    if action == "freeze":
+        target = "frozen"
+        guard = _assert_can_freeze
+    elif action == "unfreeze":
+        target = "active"
+        guard = _assert_can_unfreeze
+    elif action == "cancel":
+        target = "cancelled"
+        guard = _assert_can_cancel
+    elif action == "expire":
+        target = "expired"
+        guard = _assert_can_expire
+    else:
+        pytest.fail(f"unreachable: action={action}")
 
     if expect == "ok":
         # Allowed transition — guard must NOT raise.
-        if action == "cancel":
-            _assert_can_cancel(membership)
-        elif action == "expire":
-            _assert_can_expire(membership)
-        else:
-            pytest.fail(f"unreachable: action={action} expect=ok")
+        guard(membership)
         return
 
     # expect == "invalid_transition"
-    expected_to = "cancelled" if action == "cancel" else "expired"
     with pytest.raises(InvalidTransitionError) as exc_info:
-        if action == "cancel":
-            _assert_can_cancel(membership)
-        else:
-            _assert_can_expire(membership)
+        guard(membership)
     assert exc_info.value.code == "invalid_transition"
     assert exc_info.value.status_code == 409
     assert exc_info.value.fields == {
         "from_status": from_status,
-        "to_status": expected_to,
+        "to_status": target,
     }
 
 
@@ -95,13 +110,16 @@ def test_central_helper_matches_per_helper_guards() -> None:
     """D-24-05: central `_assert_can_transition` agrees with the thin per-action wrappers."""
     from app.modules.memberships.service import _assert_can_transition
 
-    # Allowed in Phase 24:
+    # Allowed in Phase 25:
     _assert_can_transition(_stub_membership(status="active"), target="cancelled")
     _assert_can_transition(_stub_membership(status="active"), target="expired")
+    _assert_can_transition(_stub_membership(status="active"), target="frozen")
+    _assert_can_transition(_stub_membership(status="frozen"), target="active")
+    _assert_can_transition(_stub_membership(status="frozen"), target="cancelled")
 
     # Disallowed (terminal sources):
     for src in ("expired", "cancelled"):
-        for tgt in ("cancelled", "expired"):
+        for tgt in ("cancelled", "expired", "frozen", "active"):
             with pytest.raises(InvalidTransitionError):
                 _assert_can_transition(_stub_membership(status=src), target=tgt)
 

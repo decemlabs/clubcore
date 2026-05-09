@@ -119,6 +119,7 @@ async def insert_plan(
         name=data.name,
         duration_days=data.duration_days,
         price_kopecks=data.price_kopecks,
+        freeze_days_limit=data.freeze_days_limit,
         active=data.active,
     )
     session.add(plan)
@@ -183,6 +184,7 @@ async def insert_membership(
         plan_name_snapshot=plan.name,
         duration_days_snapshot=plan.duration_days,
         price_kopecks_snapshot=plan.price_kopecks,
+        freeze_days_limit_snapshot=plan.freeze_days_limit,
         start_date=start_date,
         end_date=end_date,
         status="active",

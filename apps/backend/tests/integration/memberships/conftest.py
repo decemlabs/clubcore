@@ -25,8 +25,10 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.permissions import Role
 from app.core.redis import get_redis
@@ -294,6 +296,46 @@ async def make_user(
         return user
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Phase 25 Plan 25-05 — D-13 sibling fixture for MEM-FRZ-TEST-03 race test only.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def db_session_real_commit() -> AsyncIterator[AsyncSession]:
+    """Real BEGIN/COMMIT per request — used ONLY by test_freeze_race.py.
+
+    The default `db_session` fixture wraps every test in a SAVEPOINT for
+    per-test isolation. Concurrent INSERTs racing against the partial
+    UNIQUE index `uq_membership_freeze_periods_active_per_membership` do
+    NOT compose with nested savepoints — savepoint rollback on
+    IntegrityError can mask second-+ failures and interferes with the
+    serialisation guarantees we need to prove MEM-FRZ-TEST-03.
+
+    Mirrors the visits-package sibling fixture verbatim
+    (tests/integration/visits/conftest.py:251) — TRUNCATE the seeded
+    tables at fixture exit so the next test starts clean.
+    """
+    settings = get_settings()
+    engine = create_async_engine(str(settings.database_url), pool_pre_ping=True)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with session_factory() as session:
+        yield session
+
+    # Cleanup: real-commit writes are NOT rolled back. TRUNCATE every table the
+    # race test seeds: users + plans + clients + memberships +
+    # membership_freeze_periods + audit_log. CASCADE handles the FK chain.
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "TRUNCATE users, membership_plans, clients, memberships, "
+                "membership_freeze_periods, audit_log RESTART IDENTITY CASCADE"
+            )
+        )
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture

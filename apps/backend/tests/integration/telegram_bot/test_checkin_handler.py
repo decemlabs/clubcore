@@ -134,6 +134,7 @@ async def _seed_client_with_membership(
         name=f"Plan-{uuid4().hex[:8]}",
         duration_days=30,
         price_kopecks=250000,
+        freeze_days_limit=14,
         active=True,
     )
     db_session.add(plan)
@@ -155,6 +156,7 @@ async def _seed_client_with_membership(
         plan_id=plan.id,
         duration_days_snapshot=plan.duration_days,
         price_kopecks_snapshot=plan.price_kopecks,
+        freeze_days_limit_snapshot=plan.freeze_days_limit,
         plan_name_snapshot=plan.name,
         start_date=_today_msk() - timedelta(days=1),
         end_date=end_date or (_today_msk() + timedelta(days=29)),

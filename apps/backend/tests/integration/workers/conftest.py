@@ -115,6 +115,7 @@ async def seeded_plan(db_session: AsyncSession) -> MembershipPlan:
         name="ARQ Test Plan",
         duration_days=30,
         price_kopecks=250000,
+        freeze_days_limit=14,
         active=True,
     )
     db_session.add(plan)
@@ -178,6 +179,7 @@ async def make_membership_with_dates(
             plan_name_snapshot=seeded_plan.name,
             duration_days_snapshot=seeded_plan.duration_days,
             price_kopecks_snapshot=seeded_plan.price_kopecks,
+        freeze_days_limit_snapshot=seeded_plan.freeze_days_limit,
             start_date=today,
             end_date=end_date,
             status=status,
