@@ -47,8 +47,12 @@ def test_worker_settings_cron_resolves_to_registered_function() -> None:
     `"cron:expire_memberships"`); we assert on `.coroutine.__name__` instead so
     the test mirrors the on_startup invariant exactly and survives ARQ version
     bumps that change the prefix scheme.
+
+    Phase 27 (D-27-16): cron_jobs grew to 2 entries — 06:05 expire_memberships
+    (kept at index 0) followed by 06:15 send_expiring_notifications. Order is
+    preserved per plan 27-04 acceptance.
     """
-    assert len(WorkerSettings.cron_jobs) == 1
+    assert len(WorkerSettings.cron_jobs) == 2
     cron_entry = WorkerSettings.cron_jobs[0]
     assert cron_entry.coroutine.__name__ == "expire_memberships"
     assert cron_entry.coroutine is expire_memberships, (
@@ -73,9 +77,14 @@ def test_worker_settings_cron_locked_args() -> None:
 
 
 def test_worker_settings_functions_registered() -> None:
-    """ARQ-03 verbatim: functions=[expire_memberships]."""
+    """ARQ-03 verbatim: functions=[expire_memberships].
+
+    Phase 27 (D-27-16) extended the list to also include
+    send_expiring_notifications; expire_memberships membership is asserted
+    here, the new entry is asserted by Phase 27 tests.
+    """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 1
+    assert len(WorkerSettings.functions) == 2
 
 
 def test_worker_settings_redis_settings_resolved() -> None:
