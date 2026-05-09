@@ -75,7 +75,7 @@ from app.core.exceptions import (
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
 from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
-from app.modules.memberships.models import Membership
+from app.modules.memberships.models import Membership, MembershipFreezePeriod
 from app.modules.memberships.schemas import (
     FreezePeriodResponse,
     MembershipCancelRequest,
@@ -201,9 +201,10 @@ async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-o
     inlines an equivalent bulk-projection pattern (with prefetched freeze-period
     maps to avoid N+1 queries) but does NOT call this helper per-row.
 
-    Do NOT call `MembershipResponse.model_validate(membership)` directly —
-    Pydantic will raise ValidationError because freeze_days_limit_snapshot /
-    freeze_days_used / freeze_days_remaining have no defaults on the schema.
+    Do NOT call ``MembershipResponse.model_validate`` on a Membership ORM
+    directly — Pydantic will raise ValidationError because
+    freeze_days_limit_snapshot / freeze_days_used / freeze_days_remaining
+    have no defaults on the schema.
 
     Locked projection mechanism (revision iteration 1):
       1. `MembershipResponse.model_validate(membership, from_attributes=True)`
@@ -489,7 +490,11 @@ async def create_membership(
     )
     # 7: commit the unit of work (SVC001 AST gate enforces explicit commit)
     await session.commit()
-    return MembershipResponse.model_validate(membership)
+    # Phase 25 D-25-12 migration: route through _build_membership_response so
+    # the 4 freeze projection fields populate. At create time, no freeze
+    # period exists yet — compute_freeze_days_used returns 0,
+    # current_freeze_period resolves to None (status='active').
+    return await _build_membership_response(session, membership)
 
 
 async def cancel_membership(
@@ -571,7 +576,11 @@ async def cancel_membership(
     # SA 2.0 expires attributes after flush; refresh `updated_at` for response.
     await session.refresh(membership, attribute_names=["updated_at"])
     await session.commit()
-    return MembershipResponse.model_validate(membership)
+    # Phase 25 D-25-12 migration: when cancelling from frozen source, the
+    # period is closed above, so current_freeze_period resolves to None
+    # (helper guards on membership.status == 'frozen', and after the cancel
+    # mutation the status is now 'cancelled').
+    return await _build_membership_response(session, membership)
 
 
 # ===========================================================================
@@ -734,13 +743,101 @@ async def list_memberships(
     session: AsyncSession,
     query: MembershipListQuery,
 ) -> PaginatedData[MembershipResponse]:
-    """Return paginated memberships matching the query (MEM-EP-01).
+    """Return paginated memberships with freeze projection (MEM-EP-01 + MEM-FRZ-EP-03).
+
+    Phase 25 D-25-18: avoids N+1 by bulk-fetching freeze_days_used (one
+    GROUP BY query for the page) and open freeze periods (one IN-list query
+    for the page). Three queries total regardless of N rows: outer list +
+    days_used aggregate + open periods bulk fetch — no per-row queries.
+
+    Why duplicate the projection pattern instead of calling
+    `_build_membership_response` per row? `_build_membership_response`
+    issues per-row queries by design (it is the single-row projector). The
+    list path inlines the same Step 1 + Step 2 pattern with bulk-prefetched
+    maps to satisfy the no-N+1 invariant. Single source of truth for
+    projection logic is maintained: the two implementations only differ in
+    I/O batching.
 
     Read-side: no audit emit, no actor. RBAC is enforced at the router.
     """
     page = await repository.list_memberships(session, query)
+
+    if not page.items:
+        return PaginatedData.model_construct(
+            items=[],
+            total=page.total,
+            page=page.page,
+            page_size=page.page_size,
+        )
+
+    # Bulk-fetch days_used per membership_id via a single GROUP BY aggregate.
+    # Mirrors the SQL expression in repository.compute_freeze_days_used.
+    page_ids = [m.id for m in page.items]
+    days_used_rows = (
+        await session.execute(
+            select(
+                MembershipFreezePeriod.membership_id,
+                func.coalesce(
+                    func.sum(
+                        func.ceil(
+                            func.extract(
+                                "epoch",
+                                func.coalesce(
+                                    MembershipFreezePeriod.ended_at, func.now()
+                                )
+                                - MembershipFreezePeriod.started_at,
+                            )
+                            / 86400
+                        )
+                    ),
+                    0,
+                ).label("days_used"),
+            )
+            .where(MembershipFreezePeriod.membership_id.in_(page_ids))
+            .group_by(MembershipFreezePeriod.membership_id)
+        )
+    ).all()
+    days_used_map: dict[UUID, int] = {
+        row.membership_id: int(row.days_used) for row in days_used_rows
+    }
+
+    # Bulk-fetch open freeze periods for the page in a single IN-list query.
+    open_period_rows = (
+        await session.execute(
+            select(MembershipFreezePeriod).where(
+                MembershipFreezePeriod.membership_id.in_(page_ids),
+                MembershipFreezePeriod.ended_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    open_period_map: dict[UUID, MembershipFreezePeriod] = {
+        p.membership_id: p for p in open_period_rows
+    }
+
+    items: list[MembershipResponse] = []
+    for m in page.items:
+        days_used = days_used_map.get(m.id, 0)
+        remaining = max(0, m.freeze_days_limit_snapshot - days_used)
+        current_period: FreezePeriodResponse | None = None
+        if m.status == "frozen":
+            p = open_period_map.get(m.id)
+            if p is not None:
+                current_period = FreezePeriodResponse.model_validate(
+                    p, from_attributes=True
+                )
+        overlay = {
+            "freeze_days_used": days_used,
+            "freeze_days_remaining": remaining,
+            "current_freeze_period": current_period,
+        }
+        items.append(
+            MembershipResponse.model_validate(m, from_attributes=True).model_copy(
+                update=overlay
+            )
+        )
+
     return PaginatedData.model_construct(
-        items=[MembershipResponse.model_validate(m) for m in page.items],
+        items=items,
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -751,11 +848,17 @@ async def get_membership(
     session: AsyncSession,
     membership_id: UUID,
 ) -> MembershipResponse:
-    """Return a membership by id; raise 404 if missing (MEM-EP-03)."""
+    """Return a membership by id; raise 404 if missing (MEM-EP-03).
+
+    Phase 25 D-25-12: routes through `_build_membership_response` so the 4
+    freeze projection fields populate (freeze_days_limit_snapshot from the
+    ORM column; freeze_days_used / freeze_days_remaining /
+    current_freeze_period computed via repository helpers).
+    """
     membership = await repository.get_membership(session, membership_id)
     if membership is None:
         raise MembershipNotFoundError("membership_not_found")
-    return MembershipResponse.model_validate(membership)
+    return await _build_membership_response(session, membership)
 
 
 async def resolve_active_membership_by_client(
