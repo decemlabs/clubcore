@@ -58,8 +58,12 @@ Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts 
                                         # 'membership' (Phase 25 — freeze clock)
   - membership_unfrozen                 {membership_id, client_id, resumed_at}
                                         # 'membership' (Phase 25 — resume frozen)
-  - membership_renewed                  {membership_id, client_id, plan_id, new_end_date}
-                                        # 'membership' (Phase 26 — before/after expiry)
+  - membership_renewed                  {client_id, source_membership_id, source_plan_id,
+                                         current_price_kopecks, start_date_strategy}
+                                        # 'membership' (Phase 26 — operator-initiated renewal;
+                                        # resource_id = new_membership.id; current_price_kopecks
+                                        # captures plan price at renewal time, not source snapshot;
+                                        # start_date_strategy literal is one of D-26-13 constants)
   - expiring_notification_sent_7d       {membership_id, client_id, channel}
                                         # 'membership' (Phase 27 — 7-day reminder, ARQ)
   - expiring_notification_sent_3d       {membership_id, client_id, channel}
