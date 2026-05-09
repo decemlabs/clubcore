@@ -63,13 +63,15 @@ access before service is called.
 
 import math
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import audit
 from app.core.dependencies import CurrentUser
@@ -88,11 +90,21 @@ from app.core.exceptions import (
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
 from app.modules.memberships.constants import (
+    EXPIRING_KIND_1D,
+    EXPIRING_KIND_3D,
+    EXPIRING_KIND_7D,
     MEMBERSHIP_STATUS_TRANSITIONS,
     RENEWAL_STRATEGY_FROM_SOURCE_END_DATE,
     RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE,
 )
-from app.modules.memberships.models import Membership, MembershipFreezePeriod
+from app.modules.memberships.models import (
+    Membership,
+    MembershipFreezePeriod,
+    MembershipNotification,
+)
+
+if TYPE_CHECKING:
+    from telegram import Bot
 from app.modules.memberships.schemas import (
     FreezePeriodResponse,
     MembershipCancelRequest,
@@ -1143,3 +1155,180 @@ async def _expire_due_memberships(  # noqa: SVC001 caller-owns-txn
         )
 
     return len(rows)
+
+
+# ===========================================================================
+# Phase 27 — Expiring-soon Telegram notifications fanout (D-27-07/09/12/14/15)
+# ===========================================================================
+
+
+async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    *,
+    kind: str,
+    membership_id: UUID,
+    client_id: UUID,
+    chat_id: int,
+) -> None:
+    """Emit one of three locked Phase 27 audit events with literal event names.
+
+    AST literal-string gate (Phase 15 INFRA-11; tests/unit/test_audit_taxonomy.py)
+    REJECTS dynamic / f-string event names — both ``event`` and ``resource_type``
+    at every ``audit.emit`` callsite must be ``ast.Constant(str)``. So we branch
+    on ``kind`` with three explicit ``if/elif/else`` callsites (D-27-12).
+
+    Caller (service ``_send_expiring_notifications``) owns the per-send write
+    session; this helper carries ``# noqa: SVC001 caller-owns-txn`` because it
+    does NOT commit (its caller does after the audit row joins the UoW).
+    """
+    if kind == EXPIRING_KIND_7D:
+        await audit.emit(
+            session,
+            "expiring_notification_sent_7d",  # LITERAL (Phase 15 INFRA-11 AST gate)
+            actor_user_id=None,  # system-driven cron — no human actor
+            resource_type="membership",  # LITERAL
+            resource_id=membership_id,
+            client_id=str(client_id),
+            telegram_chat_id=chat_id,
+            kind="expiring_7d",
+            channel="telegram",
+        )
+    elif kind == EXPIRING_KIND_3D:
+        await audit.emit(
+            session,
+            "expiring_notification_sent_3d",  # LITERAL (Phase 15 INFRA-11 AST gate)
+            actor_user_id=None,  # system-driven cron — no human actor
+            resource_type="membership",  # LITERAL
+            resource_id=membership_id,
+            client_id=str(client_id),
+            telegram_chat_id=chat_id,
+            kind="expiring_3d",
+            channel="telegram",
+        )
+    else:
+        # kind == EXPIRING_KIND_1D — assert defensively to surface a stale enum.
+        assert kind == EXPIRING_KIND_1D, f"unknown kind {kind!r}"
+        await audit.emit(
+            session,
+            "expiring_notification_sent_1d",  # LITERAL (Phase 15 INFRA-11 AST gate)
+            actor_user_id=None,  # system-driven cron — no human actor
+            resource_type="membership",  # LITERAL
+            resource_id=membership_id,
+            client_id=str(client_id),
+            telegram_chat_id=chat_id,
+            kind="expiring_1d",
+            channel="telegram",
+        )
+
+
+async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    today: date | None = None,
+    bot: "Bot",
+    sender: ModuleType,
+    copy_module: ModuleType,
+) -> int:
+    """Per-cron-tick fanout — Phase 27 NTF-02 / NTF-04 / NTF-05 / NTF-06.
+
+    Multi-session pattern (D-27-07 b):
+      1. Open ONE read session, call ``find_expiring_candidates``, close.
+      2. Iterate candidates. Per candidate:
+         - Render DM via ``copy_module.render_expiring_dm(kind, client_id, end_date)``.
+         - Send via ``sender.send_text_dm(bot, chat_id, text)`` -> ``SendResult``.
+         - Failure (``ok=False``) -> structlog WARNING with reason classification,
+           NO DB write (D-27-14).
+         - Success -> open NEW write session, INSERT ``MembershipNotification``,
+           emit audit via ``_emit_send_event``, commit (D-27-15 catches race
+           IntegrityError on UNIQUE constraint).
+
+    SVC001 marker: this is a private ``_``-prefixed helper (Phase 18 pattern).
+    The transaction owner is the worker's ``send_expiring_notifications(ctx)``
+    — THIS helper opens its own per-send write sessions (which DO commit each).
+    The ``# noqa: SVC001 caller-owns-txn`` line is for the AST commit-gate walker
+    in ``tests/unit/test_service_commit_gate.py`` (mirrors Phase 18
+    ``_expire_due_memberships``).
+
+    Args:
+        session_factory: ``async_sessionmaker`` for opening per-send write
+            sessions.
+        today: Europe/Moscow date; if None, resolves to
+            ``datetime.now(ZoneInfo("Europe/Moscow")).date()``.
+        bot: ``telegram.Bot`` instance (caller / worker injects; tests inject
+            fake).
+        sender: ``app.integrations.telegram.sender`` module (must expose
+            ``send_text_dm``).
+        copy_module: ``app.integrations.telegram.copy`` module (must expose
+            ``render_expiring_dm``).
+
+    Returns:
+        int — count of successful DM sends (also count of newly-inserted rows
+        + audit events).
+    """
+    if today is None:
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+
+    log = structlog.get_logger("memberships.notifications")
+
+    # 1) Read session — SELECT candidates, close before send loop.
+    async with session_factory() as read_session:
+        candidates = await repository.find_expiring_candidates(
+            read_session, today=today
+        )
+
+    sent = 0
+    for cand in candidates:
+        # 2) Render + send (no session held during network I/O).
+        text_body = copy_module.render_expiring_dm(
+            kind=cand.kind,
+            client_id=cand.client_id,
+            end_date=cand.end_date,
+        )
+        result = await sender.send_text_dm(bot, cand.chat_id, text_body)
+
+        # 3) Failure path — WARNING + skip; idempotency table catches retry on
+        #    next tick (no row insert, no audit emit per D-27-14).
+        if not result.ok:
+            reason = "bot_blocked" if result.blocked else "transient"
+            log.warning(
+                "expiring_notification_send_failed",
+                reason=reason,
+                membership_id=str(cand.membership_id),
+                client_id=str(cand.client_id),
+                telegram_chat_id=cand.chat_id,
+                kind=cand.kind,
+                error_msg=result.error,
+            )
+            continue
+
+        # 4) Success path — fresh write session: INSERT + audit emit + commit.
+        async with session_factory() as write_session:
+            try:
+                write_session.add(
+                    MembershipNotification(
+                        membership_id=cand.membership_id,
+                        kind=cand.kind,
+                        telegram_chat_id=cand.chat_id,
+                    )
+                )
+                await _emit_send_event(
+                    write_session,
+                    kind=cand.kind,
+                    membership_id=cand.membership_id,
+                    client_id=cand.client_id,
+                    chat_id=cand.chat_id,
+                )
+                await write_session.commit()
+                sent += 1
+            except IntegrityError:
+                # D-27-15: race-duplicate on uq_membership_notifications_membership_kind
+                # — another worker tick committed first; rollback + warn, NO audit emit.
+                await write_session.rollback()
+                log.warning(
+                    "expiring_notification_idempotency_conflict",
+                    membership_id=str(cand.membership_id),
+                    kind=cand.kind,
+                    reason="duplicate_row",
+                )
+
+    return sent
