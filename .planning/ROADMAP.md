@@ -93,11 +93,11 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. Membership detail responses включают `freezeDaysLimitSnapshot`, `freezeDaysUsed`, `freezeDaysRemaining`, `currentFreezePeriod` (object | null).
   4. Frozen membership не проходит check-in (reception + Telegram `/checkin` оба возвращают `no_active_membership` 409 без oracle-leak); cancel from frozen разрешён только owner-у и закрывает freeze period без extension; cumulative days > limit → 409 `freeze_limit_exceeded`; concurrent freeze → 409 `already_frozen`.
   5. Каждое freeze/unfreeze эмитит `audit.emit("membership_frozen"|"membership_unfrozen", ...)`; integration tests покрывают full freeze cycle, limit-exceeded, и race на одновременный freeze.
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
   - [x] 25-01-PLAN.md (wave 1) — Migration 0008_freeze + ORM model + transitions map + exception classes (MEM-FRZ-01/02/03)
   - [x] 25-02-PLAN.md (wave 2, depends on 25-01) — Repository helpers: insert/get/compute freeze periods + list-view subquery + Postgres-backed compute test (MEM-FRZ-02/03/EP-03)
   - [x] 25-04-PLAN.md (wave 3, depends on 25-01, 25-02) — Schemas + Router: FROZEN enum + 4 freeze fields + POST /freeze + /unfreeze (MEM-FRZ-01/06/EP-01/02/03) — runs BEFORE service plan so MembershipResponse fields exist before projection
-  - [ ] 25-03-PLAN.md (wave 4, depends on 25-01, 25-02, 25-04) — Service layer: freeze_membership + unfreeze_membership + cancel-during-freeze branch + _build_membership_response projector + read-path migration (MEM-FRZ-04/05/07/EP-03/AUDIT-01)
+  - [x] 25-03-PLAN.md (wave 4, depends on 25-01, 25-02, 25-04) — Service layer: freeze_membership + unfreeze_membership + cancel-during-freeze branch + _build_membership_response projector + read-path migration (MEM-FRZ-04/05/07/EP-03/AUDIT-01)
   - [ ] 25-05-PLAN.md (wave 5, depends on 25-01..04) — Tests: 16-cell matrix + ceil rounding + 6 integration tests (MEM-FRZ-06/AUDIT-01/TEST-01/02/03)
 
 ### Phase 26: Memberships — Renewal (backend)
