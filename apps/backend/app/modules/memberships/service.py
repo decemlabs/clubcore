@@ -37,6 +37,17 @@ Audit emit ordering (D-14):
     emit `membership_unfrozen` (with `days_added=0` sentinel) BEFORE the
     existing `membership_cancelled` emit; both rows live in the same UoW so
     audit_log id auto-increment preserves chronology.
+  - renew_membership (Phase 26 D-26-14): load source → status guard
+    (cancelled → 409 cannot_renew_cancelled; expired/active/frozen ok) →
+    load plan via get_plan_for_renewal (None → 404 plan_not_found;
+    archived → 409 plan_archived) → compute dates by source status
+    (active/frozen → source.end_date + 1; expired → today MSK) →
+    insert via insert_renewal_membership (snapshots from CURRENT plan;
+    previous_membership_id = source.id) → flush → emit `membership_renewed`
+    (LITERAL; payload includes start_date_strategy literal; current_price_kopecks
+    captures plan price at renewal time) → refresh(created_at, updated_at) →
+    commit. Source row is NOT mutated — renewal is INSERT, not transition
+    (D-26-24).
 
 D-11 audit payload: membership_plan_created = {name, duration_days, price_kopecks}
   (plan_id is in resource_id column, not payload).
@@ -64,9 +75,11 @@ from app.core import audit
 from app.core.dependencies import CurrentUser
 from app.core.exceptions import (
     AlreadyFrozenError,
+    CannotRenewCancelledError,
     FreezeLimitExceededError,
     InvalidTransitionError,
     MembershipNotFoundError,
+    PlanArchivedError,
     PlanInactiveError,
     PlanInUseError,
     PlanNameExistsError,
@@ -74,7 +87,11 @@ from app.core.exceptions import (
 )
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
-from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
+from app.modules.memberships.constants import (
+    MEMBERSHIP_STATUS_TRANSITIONS,
+    RENEWAL_STRATEGY_FROM_SOURCE_END_DATE,
+    RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE,
+)
 from app.modules.memberships.models import Membership, MembershipFreezePeriod
 from app.modules.memberships.schemas import (
     FreezePeriodResponse,
@@ -758,6 +775,136 @@ async def unfreeze_membership(
     await session.commit()
 
     return await _build_membership_response(session, membership)
+
+
+# ===========================================================================
+# Phase 26 — Renewal service path (MEM-REN-02, D-26-14)
+# ===========================================================================
+
+
+async def renew_membership(
+    session: AsyncSession,
+    actor: CurrentUser,
+    source_membership_id: UUID,
+) -> MembershipResponse:
+    """Create a follow-up membership chained to source (MEM-REN-02 / Phase 26 D-26-14).
+
+    Order (mirrors freeze_membership: D-15 invariant — guard BEFORE mutation):
+      1. Load source — 404 ``membership_not_found`` if missing.
+      2. Source-status guard:
+         - 'cancelled' → 409 ``cannot_renew_cancelled`` (terminal/intentional
+           revocation; renewal would mask cancellation intent — D-26-07).
+         - {'active','frozen','expired'} → ok.
+         - other (defence-in-depth, currently impossible per CHECK constraint) →
+           409 ``invalid_transition``.
+         NO call to ``_assert_can_transition`` — renewal is NOT a status transition
+         on source row; source remains untouched (D-26-24).
+      3. Load plan via ``repository.get_plan_for_renewal``:
+         - ``(None, _)`` → 404 ``plan_not_found`` (defence-in-depth; FK ON DELETE
+           RESTRICT makes this practically impossible).
+         - ``(_, True)`` → 409 ``plan_archived`` (owner soft-deleted the plan;
+           operator must sell a new membership instead — D-26-08).
+         - ``(plan, False)`` → proceed. NOTE: ``plan.active=False`` is ALLOWED
+           for renewal per D-26-08 — ``active=False`` only pauses NEW catalogue
+           sales; existing memberships continue lifecycle including renewal.
+           Owner archives the plan to block renewals.
+      4. Compute dates (D-26-10..D-26-12):
+         - source.status in ('active','frozen') →
+           ``start_date = source.end_date + 1d``;
+           strategy = ``RENEWAL_STRATEGY_FROM_SOURCE_END_DATE``.
+         - source.status == 'expired' →
+           ``start_date = today (Europe/Moscow)``;
+           strategy = ``RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE``.
+         - ``end_date = start_date + (plan.duration_days - 1)`` — INCLUSIVE
+           (mirrors create_membership + PROJECT.md Key Decisions).
+      5. INSERT via ``repository.insert_renewal_membership`` (snapshots from
+         CURRENT plan; ``previous_membership_id = source.id``).
+      6. Flush — surfaces self-FK errors (e.g. concurrent source delete;
+         practically impossible).
+      7. ``audit.emit('membership_renewed', ...)`` — payload per D-26-15;
+         ``resource_id = NEW`` membership.id (forensic queries answer "what
+         was the renewal record"); source_membership_id back-pointer in payload;
+         ``current_price_kopecks`` captures plan price at renewal time (NOT
+         source.price_kopecks_snapshot) per PROJECT.md "snapshot pricing
+         берём ТЕКУЩУЮ цену плана".
+      8. Refresh ``created_at`` + ``updated_at`` on the new row.
+      9. Commit (SVC001 gate enforces).
+     10. Return response via ``_build_membership_response`` — populates the 4
+         freeze projection fields (freezeDaysUsed=0, currentFreezePeriod=None,
+         freezeDaysRemaining=snapshot_limit) + previousMembershipId field.
+    """
+    # 1: load source
+    source = await repository.get_membership(session, source_membership_id)
+    if source is None:
+        raise MembershipNotFoundError("membership_not_found")
+
+    # 2: status guard
+    if source.status == "cancelled":
+        raise CannotRenewCancelledError("cannot_renew_cancelled")
+    if source.status not in {"active", "frozen", "expired"}:
+        # Defence-in-depth — keeps the source-acceptance set explicit.
+        # Currently unreachable: CHECK ck_memberships_status admits exactly
+        # the 4 known statuses; this branch fires only on DBA-direct surgery
+        # or a future state addition.
+        raise InvalidTransitionError(
+            "invalid_renewal_source",
+            fields={"from_status": source.status, "to_status": "renew"},
+        )
+
+    # 3: load plan (renewal-specific — bypasses soft-delete to discriminate)
+    plan, is_archived = await repository.get_plan_for_renewal(
+        session, source.plan_id
+    )
+    if plan is None:
+        raise PlanNotFoundError("plan_not_found")
+    if is_archived:
+        raise PlanArchivedError("plan_archived")
+
+    # 4: compute dates (D-26-10..D-26-12)
+    if source.status == "expired":
+        start_date = datetime.now(ZoneInfo("Europe/Moscow")).date()
+        strategy = RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE
+    else:
+        # active or frozen — start the day after source.end_date.
+        start_date = source.end_date + timedelta(days=1)
+        strategy = RENEWAL_STRATEGY_FROM_SOURCE_END_DATE
+    end_date = start_date + timedelta(days=plan.duration_days - 1)
+
+    # 5 + 6: insert + flush
+    new_membership = await repository.insert_renewal_membership(
+        session,
+        source=source,
+        plan=plan,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    await session.flush()
+
+    # 7: audit emit BEFORE commit (Phase 16 D-14 co-transactional)
+    await audit.emit(
+        session,
+        "membership_renewed",  # LITERAL — Phase 15 INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="membership",  # LITERAL
+        resource_id=new_membership.id,  # NEW row's id (forensic anchor)
+        client_id=str(new_membership.client_id),  # str-cast for JSONB
+        source_membership_id=str(source.id),
+        source_plan_id=str(source.plan_id),
+        current_price_kopecks=plan.price_kopecks,  # int from CURRENT plan
+        start_date_strategy=strategy,  # one of D-26-13 constants
+    )
+
+    # 8: refresh server-side timestamps for response
+    await session.refresh(
+        new_membership, attribute_names=["created_at", "updated_at"]
+    )
+
+    # 9: commit (SVC001 gate enforces)
+    await session.commit()
+
+    # 10: project response (freeze fields default-zero on new row;
+    # previous_membership_id surfaces via D-26-21 schema field).
+    return await _build_membership_response(session, new_membership)
 
 
 async def list_memberships(

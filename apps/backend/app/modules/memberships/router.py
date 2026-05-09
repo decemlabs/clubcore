@@ -17,6 +17,9 @@ Phase 25 endpoint surface (2 new routes — both on `memberships_router`):
   - POST   /api/v1/memberships/{id}/freeze         — freeze, 200 (MEM-FRZ-EP-01)
   - POST   /api/v1/memberships/{id}/unfreeze       — unfreeze, 200 (MEM-FRZ-EP-02)
 
+Phase 26 endpoint surface (1 new route on `memberships_router`):
+  - POST   /api/v1/memberships/{id}/renew          — renew, 201 (MEM-REN-EP-01)
+
 Phase 17 permission mapping (CONTEXT.md `<domain>` line 19):
   - GET (list + read-one) → require_permission(VIEW, MEMBERSHIPS)   — reception+owner
   - POST (sell)           → require_permission(CREATE, MEMBERSHIPS) + verify_csrf
@@ -381,3 +384,43 @@ async def unfreeze_membership(
     """
     membership = await service.unfreeze_membership(session, actor, membership_id)
     return envelope(membership)
+
+
+@memberships_router.post(
+    "/{membership_id}/renew",
+    response_model=ResponseEnvelope[MembershipResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary=(
+        "Renew membership (reception+owner; "
+        "404 plan_not_found / membership_not_found; "
+        "409 cannot_renew_cancelled / plan_archived)"
+    ),
+)
+async def renew_membership(
+    membership_id: UUID,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.
+
+    Creates a follow-up membership chained via ``previous_membership_id`` to
+    the source. Snapshots from the CURRENT plan (so price increases between
+    sale and renewal apply — PROJECT.md). Returns 201 + new
+    ``MembershipResponse`` including ``previousMembershipId`` field.
+
+    Date strategy:
+      - source 'active' / 'frozen' → start_date = source.end_date + 1 day
+      - source 'expired'           → start_date = today (Europe/Moscow)
+
+    Errors:
+      - 404 membership_not_found  (source missing)
+      - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)
+      - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)
+      - 409 plan_archived          (source's plan soft-deleted by owner)
+    """
+    new_membership = await service.renew_membership(session, actor, membership_id)
+    return envelope(new_membership)

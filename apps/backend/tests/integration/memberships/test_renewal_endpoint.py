@@ -238,7 +238,7 @@ async def test_renew_active_source_uses_from_source_end_date_strategy(
 
     audit_row = await db_session.scalar(
         select(AuditLog).where(
-            AuditLog.event == "membership_renewed",
+            AuditLog.action == "membership_renewed",
             AuditLog.resource_id == new_id,
         )
     )
@@ -288,7 +288,7 @@ async def test_renew_expired_source_uses_today_msk_and_from_today_strategy(
 
     audit_row = await db_session.scalar(
         select(AuditLog).where(
-            AuditLog.event == "membership_renewed",
+            AuditLog.action == "membership_renewed",
             AuditLog.resource_id == UUID(body["id"]),
         )
     )
@@ -325,7 +325,7 @@ async def test_renew_frozen_source_uses_from_source_end_date_and_keeps_source_fr
 
     audit_row = await db_session.scalar(
         select(AuditLog).where(
-            AuditLog.event == "membership_renewed",
+            AuditLog.action == "membership_renewed",
             AuditLog.resource_id == UUID(body["id"]),
         )
     )
@@ -376,7 +376,7 @@ async def test_renew_snapshots_use_current_plan_after_price_change(
 
     audit_row = await db_session.scalar(
         select(AuditLog).where(
-            AuditLog.event == "membership_renewed",
+            AuditLog.action == "membership_renewed",
             AuditLog.resource_id == UUID(body["id"]),
         )
     )
