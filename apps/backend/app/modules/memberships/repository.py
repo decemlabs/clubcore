@@ -321,24 +321,50 @@ async def find_active_for_client(
     *,
     today: date,
 ) -> Membership | None:
-    """Return the canonical active membership for `client_id`, or None (MEM-04, DEBT-01).
+    """Return the canonical active membership for ``client_id`` (MEM-04, DEBT-01, Phase 26 D-26-17).
 
-    Tiebreak: ORDER BY end_date DESC, created_at DESC LIMIT 1 (D-17 — silent,
-    no structlog warning, no audit event). The composite index
-    `ix_memberships_client_id_status_end_date` on
-    `(client_id, status, end_date DESC)` covers this query (rightmost column
-    is range-scan friendly for the new `end_date >= today` predicate).
+    Tiebreak (Phase 26 D-26-17): ``ORDER BY start_date ASC, created_at DESC LIMIT 1``.
+    Inverts Phase 17 D-17 ``end_date DESC`` ordering. Rationale: when a client
+    holds both a still-running source membership AND a renewal sold ahead, the
+    running one starts earlier and wins — check-in keeps using it until
+    ``source.end_date`` passes. After that, ARQ ``expire_memberships`` (06:05
+    cron) flips source ``status='expired'`` so it no longer matches the
+    ``status='active'`` filter and the renewal naturally takes over.
 
-    Date filter (DEBT-01, Phase 24): we apply `end_date >= today` here as a
-    defence-in-depth backstop. Phase 18's ARQ `expire_memberships` cron is
-    the primary `active → expired` flipper, but a missed tick (worker crash,
-    deploy window) would otherwise leave a stale `status='active'` row
-    passable for visits / Telegram check-in. The resolver is the ultimate
-    gate, so it filters by date as well.
+    Index adequacy: the composite index
+    ``ix_memberships_client_id_status_end_date`` on
+    ``(client_id, status, end_date DESC)`` covers the WHERE clause; the new
+    ORDER BY ``start_date ASC`` is NOT in the index, so the executor sorts the
+    post-filter set in memory. Expected per-client cardinality ≤ 2 active
+    rows → effectively O(1). No new index added (cost > benefit at pet-project
+    scale; see CONTEXT.md Risks/Watchpoints #2).
 
-    `today` is a required keyword-only argument; callers MUST resolve their
-    Europe/Moscow `date` before calling (the service-layer wrapper
-    `service.resolve_active_membership_by_client` does this).
+    Date filter (DEBT-01, Phase 24): ``end_date >= today`` is a defence-in-depth
+    backstop. Phase 18's ARQ ``expire_memberships`` cron is the primary
+    ``active → expired`` flipper, but a missed tick (worker crash, deploy
+    window) would otherwise leave a stale ``status='active'`` row passable
+    for visits / Telegram check-in. The resolver is the ultimate gate, so it
+    filters by date as well.
+
+    Manual-stacking compatibility (Phase 17 D-01): two memberships sold raw
+    without renewal linkage — the older ``start_date`` runs first; if equal,
+    ``created_at DESC`` tiebreaks to the LATER-created row (silent — no
+    structlog warning, no audit event — matches Phase 17 D-17 silence
+    contract).
+
+    ``today`` is a required keyword-only argument; callers MUST resolve their
+    Europe/Moscow ``date`` before calling (the service-layer wrapper
+    ``service.resolve_active_membership_by_client`` does this).
+
+    Cross-phase regression discipline: if you change the resolver tiebreak
+    again, update integration test ``test_renewal_resolver_tiebreak.py`` and
+    cross-check Phase 27 expiring-cron query selects (NTF-02 reads memberships
+    but does NOT depend on tiebreak — it filters all matching rows, not
+    LIMIT 1). Reception ``POST /api/v1/visits`` (Phase 19) and Telegram
+    ``/checkin`` (Phase 20) consume this resolver via the
+    ``ActiveMembership`` Protocol slot wired in ``app/main.py``; rerun the
+    visits + auth integration suites BEFORE and AFTER any change to prove
+    no regression.
     """
     stmt = (
         select(Membership)
@@ -347,7 +373,7 @@ async def find_active_for_client(
             Membership.status == "active",
             Membership.end_date >= today,
         )
-        .order_by(Membership.end_date.desc(), Membership.created_at.desc())
+        .order_by(Membership.start_date.asc(), Membership.created_at.desc())
         .limit(1)
     )
     result: Membership | None = await session.scalar(stmt)
