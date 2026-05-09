@@ -23,6 +23,20 @@ Audit emit ordering (D-14):
     `membership_plan_updated` → refresh(updated_at) → commit.
   - soft_delete_plan: get → mutate (set deleted_at = now()) → emit
     `membership_plan_archived` → flush → commit.
+  - freeze_membership (Phase 25 D-25-07): load → transition guard → preventive
+    limit check → INSERT freeze period → flush (translate IntegrityError on
+    `uq_membership_freeze_periods_active_per_membership` → 409 already_frozen) →
+    update status='frozen' → flush → emit `membership_frozen` → refresh(updated_at)
+    → commit.
+  - unfreeze_membership (Phase 25 D-25-08): load → transition guard → load open
+    period → close period (set ended_at / ended_by) → extend end_date by
+    max(1, ceil(delta_seconds / 86400)) → update status='active' → flush →
+    emit `membership_unfrozen` → refresh(updated_at) → commit.
+  - cancel_membership (Phase 25 D-25-09 frozen-source extension): when source
+    status is 'frozen', close the open period without `end_date` extension and
+    emit `membership_unfrozen` (with `days_added=0` sentinel) BEFORE the
+    existing `membership_cancelled` emit; both rows live in the same UoW so
+    audit_log id auto-increment preserves chronology.
 
 D-11 audit payload: membership_plan_created = {name, duration_days, price_kopecks}
   (plan_id is in resource_id column, not payload).
@@ -36,6 +50,7 @@ Service does NOT re-check RBAC; the router-layer `require_permission` dependency
 access before service is called.
 """
 
+import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -48,6 +63,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import audit
 from app.core.dependencies import CurrentUser
 from app.core.exceptions import (
+    AlreadyFrozenError,
+    FreezeLimitExceededError,
     InvalidTransitionError,
     MembershipNotFoundError,
     PlanInactiveError,
@@ -58,8 +75,9 @@ from app.core.exceptions import (
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
 from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
-from app.modules.memberships.models import Membership
+from app.modules.memberships.models import Membership, MembershipFreezePeriod
 from app.modules.memberships.schemas import (
+    FreezePeriodResponse,
     MembershipCancelRequest,
     MembershipCreateRequest,
     MembershipListQuery,
@@ -102,6 +120,20 @@ def _is_plan_in_use_conflict(exc: IntegrityError) -> bool:
     return "fk_memberships_plan_id_membership_plans" in str(exc.orig)
 
 
+def _is_already_frozen_conflict(exc: IntegrityError) -> bool:
+    """Return True iff `exc` was caused by uq_membership_freeze_periods_active_per_membership.
+
+    Direct mirror of `_is_plan_name_conflict` with constraint name substituted
+    (Phase 25 D-25-22). Concurrent-INSERT race on the partial unique index —
+    second freeze loses and is translated to 409 `already_frozen` by the
+    `freeze_membership` service path.
+    """
+    constraint = getattr(exc.orig, "constraint_name", None) or ""
+    if constraint == "uq_membership_freeze_periods_active_per_membership":
+        return True
+    return "uq_membership_freeze_periods_active_per_membership" in str(exc.orig)
+
+
 def _assert_can_transition(membership: Membership, *, target: str) -> None:
     """Central state-machine guard (INFRA-16, D-24-04).
 
@@ -122,7 +154,11 @@ def _assert_can_transition(membership: Membership, *, target: str) -> None:
 
 
 def _assert_can_cancel(membership: Membership) -> None:
-    """Phase 17 D-12 + D-15: only status='active' may transition to 'cancelled'.
+    """Phase 17 + Phase 25 D-25-09: status='active' OR status='frozen' may transition to 'cancelled'.
+
+    Cancel-during-freeze closes the open period without `end_date` extension and
+    emits `membership_unfrozen` (with `days_added=0` sentinel) BEFORE the
+    `membership_cancelled` audit row in the same UoW.
 
     Phase 24 INFRA-16 D-24-05: thin wrapper over `_assert_can_transition`.
     """
@@ -135,6 +171,22 @@ def _assert_can_expire(membership: Membership) -> None:
     Phase 24 INFRA-16 D-24-05: thin wrapper over `_assert_can_transition`.
     """
     _assert_can_transition(membership, target="expired")
+
+
+def _assert_can_freeze(membership: Membership) -> None:
+    """Phase 25 D-25-15: only status='active' may transition to 'frozen'.
+
+    Thin wrapper over `_assert_can_transition` — same Phase 24 D-24-05 pattern.
+    """
+    _assert_can_transition(membership, target="frozen")
+
+
+def _assert_can_unfreeze(membership: Membership) -> None:
+    """Phase 25 D-25-15: only status='frozen' may transition to 'active'.
+
+    Thin wrapper over `_assert_can_transition` — same Phase 24 D-24-05 pattern.
+    """
+    _assert_can_transition(membership, target="active")
 
 
 async def list_plans(
