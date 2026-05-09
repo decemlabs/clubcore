@@ -311,4 +311,10 @@ class MembershipNotification(Base, UUIDPkMixin, TimestampMixin):
             "kind",
             name="uq_membership_notifications_membership_kind",
         ),
+        # Mirrors migration 0010 op.create_index() — required for `alembic check`
+        # to stay clean (drift detection treats migration-only indexes as drift).
+        Index(
+            "ix_membership_notifications_membership_id",
+            "membership_id",
+        ),
     )
