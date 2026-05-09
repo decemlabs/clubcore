@@ -59,6 +59,7 @@ from arq.cron import cron
 from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
 from app.workers.scheduled.expire_memberships import expire_memberships
+from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 
 _log = structlog.get_logger("workers")
 
@@ -73,7 +74,7 @@ class WorkerSettings:
 
     redis_settings = RedisSettings.from_dsn(str(get_settings().redis_url))
 
-    functions: ClassVar[list[Any]] = [expire_memberships]
+    functions: ClassVar[list[Any]] = [expire_memberships, send_expiring_notifications]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
     # `keep_cronjob_progress=60` from ARQ 0.26 docs, but the installed
@@ -89,6 +90,13 @@ class WorkerSettings:
             expire_memberships,
             hour=3,
             minute=5,
+            unique=True,
+            keep_result=60,
+        ),
+        cron(
+            send_expiring_notifications,
+            hour=3,
+            minute=15,
             unique=True,
             keep_result=60,
         ),

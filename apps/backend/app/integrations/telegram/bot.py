@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
-from telegram import Update
+from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from app.integrations.telegram.handlers import HandlerContext
@@ -80,3 +80,17 @@ def build_application(
 
     application.add_error_handler(_global_error_handler)
     return application
+
+
+def build_bot(*, token: str) -> Bot:
+    """Construct a bare Bot for outbound DM use (no long-polling Application).
+
+    Phase 27 cron worker uses this — it only sends DMs and does NOT need
+    Application's update-loop / handler dispatch. The Bot instance is
+    lightweight (lazy aiohttp session) so per-tick instantiation is fine
+    at pet-project scale (D-27-06 / CONTEXT Risks/Watchpoints).
+
+    Returns a FRESH Bot per call (no caching) — keeps the helper pure and
+    avoids cross-tick session leak risks.
+    """
+    return Bot(token=token)
