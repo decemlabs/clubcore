@@ -252,6 +252,8 @@ class MembershipResponse(ResponseData):
     freeze_days_used: int
     freeze_days_remaining: int  # computed = limit - used, clamped to 0
     current_freeze_period: FreezePeriodResponse | None  # None when status != frozen
+    # Phase 26 MEM-REN-01 — chain attribution (auto-camelCased to previousMembershipId).
+    previous_membership_id: UUID | None = None
 
 
 # --- List query ------------------------------------------------------------

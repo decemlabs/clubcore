@@ -155,6 +155,34 @@ class PlanInUseError(ConflictError):
     status_code = 409
 
 
+class CannotRenewCancelledError(ConflictError):
+    """Raised on POST /memberships/{id}/renew when source status is 'cancelled'.
+
+    Phase 26 MEM-REN-02 / D-26-09. Rationale: cancellation is terminal /
+    intentional revocation; renewal would mask cancellation intent. Operator
+    must sell a NEW membership via POST /api/v1/memberships instead. If owner
+    needs an "uncancel" path, that is a separate endpoint (currently backlog —
+    CONTEXT.md Deferred).
+    """
+
+    code = "cannot_renew_cancelled"
+    status_code = 409
+
+
+class PlanArchivedError(ConflictError):
+    """Raised on POST /memberships/{id}/renew when source.plan is soft-deleted.
+
+    Phase 26 MEM-REN-02 / D-26-08. Distinct from PlanInactiveError
+    (active=False = paused but alive — renewal ALLOWED for inactive plans per
+    D-26-08). Renewal cannot use a plan that owner archived. Operator must
+    sell a new membership using a current alive plan instead. Discriminated
+    by repository.get_plan_for_renewal returning (plan, is_archived=True).
+    """
+
+    code = "plan_archived"
+    status_code = 409
+
+
 class InvalidTransitionError(ConflictError):
     """Raised on POST /memberships/{id}/cancel for non-active source state (Phase 17 D-12).
 
