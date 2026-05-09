@@ -229,14 +229,31 @@ async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-o
                 period, from_attributes=True
             )
 
-    # Step 1: validate base ORM (carries freeze_days_limit_snapshot via from_attributes).
-    # Step 2: overlay the 3 service-computed fields (cannot come from ORM).
-    overlay = {
+    # Build dict from ORM attributes (explicit list — avoids `**membership.__dict__`
+    # pattern that leaks SA state attributes), then merge the 3 service-computed
+    # freeze fields. Single `model_validate(dict)` call validates the full payload.
+    payload: dict[str, Any] = {
+        "id": membership.id,
+        "client_id": membership.client_id,
+        "plan_id": membership.plan_id,
+        "plan_name_snapshot": membership.plan_name_snapshot,
+        "duration_days_snapshot": membership.duration_days_snapshot,
+        "price_kopecks_snapshot": membership.price_kopecks_snapshot,
+        "freeze_days_limit_snapshot": membership.freeze_days_limit_snapshot,
+        "start_date": membership.start_date,
+        "end_date": membership.end_date,
+        "status": membership.status,
+        "cancelled_at": membership.cancelled_at,
+        "cancel_reason": membership.cancel_reason,
+        "paid_at": membership.paid_at,
+        "notes": membership.notes,
+        "created_at": membership.created_at,
+        "updated_at": membership.updated_at,
         "freeze_days_used": days_used,
         "freeze_days_remaining": remaining,
         "current_freeze_period": current_period,
     }
-    return MembershipResponse.model_validate(membership, from_attributes=True).model_copy(update=overlay)  # noqa: E501 -- locked Phase 25 D-25-12 projection pattern; grep-acceptance gate
+    return MembershipResponse.model_validate(payload)
 
 
 async def list_plans(
