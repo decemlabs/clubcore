@@ -252,6 +252,8 @@ async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-o
         "freeze_days_used": days_used,
         "freeze_days_remaining": remaining,
         "current_freeze_period": current_period,
+        # Phase 26 D-26-21 — renewal chain attribution (auto-camelCased).
+        "previous_membership_id": membership.previous_membership_id,
     }
     return MembershipResponse.model_validate(payload)
 
@@ -868,6 +870,8 @@ async def list_memberships(
             "freeze_days_used": days_used,
             "freeze_days_remaining": remaining,
             "current_freeze_period": current_period,
+            # Phase 26 D-26-21 — renewal chain attribution (auto-camelCased).
+            "previous_membership_id": m.previous_membership_id,
         }
         items.append(MembershipResponse.model_validate(payload))
 

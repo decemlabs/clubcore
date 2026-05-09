@@ -58,6 +58,26 @@ async def get_alive(session: AsyncSession, plan_id: UUID) -> MembershipPlan | No
     return result
 
 
+async def get_plan_for_renewal(
+    session: AsyncSession,
+    plan_id: UUID,
+) -> tuple[MembershipPlan | None, bool]:
+    """Read plan ignoring soft-delete; return ``(plan, is_archived)`` (Phase 26 D-26-08).
+
+    Phase 26 needs to discriminate "plan never existed" (404 plan_not_found)
+    from "plan exists but archived" (409 plan_archived). ``get_alive`` collapses
+    both to None, so renewal uses this helper instead. NO other caller should
+    use this — bypassing soft-delete in any other write path is a bug.
+    """
+    stmt: Select[tuple[MembershipPlan]] = select(MembershipPlan).where(
+        MembershipPlan.id == plan_id,
+    )
+    plan: MembershipPlan | None = await session.scalar(stmt)
+    if plan is None:
+        return (None, False)
+    return (plan, plan.deleted_at is not None)
+
+
 async def list_alive(
     session: AsyncSession, query: MembershipPlanListQuery
 ) -> PaginatedData[MembershipPlan]:
@@ -542,3 +562,44 @@ def _freeze_days_used_subquery() -> Subquery:
         .group_by(MembershipFreezePeriod.membership_id)
         .subquery()
     )
+
+
+# ===========================================================================
+# Phase 26 — Renewal helper (D-26-16)
+# ===========================================================================
+
+
+async def insert_renewal_membership(
+    session: AsyncSession,
+    *,
+    source: Membership,
+    plan: MembershipPlan,
+    start_date: date,
+    end_date: date,
+) -> Membership:
+    """Insert a follow-up membership chained to ``source`` (Phase 26 D-26-16).
+
+    Snapshots from CURRENT plan (price/duration/freeze_limit/name); copies
+    client_id from source; previous_membership_id = source.id (immutable; D-26-04).
+    Status always starts 'active'; resolver tiebreak (D-26-17) handles overlap
+    between still-running source and newly-created renewal.
+
+    Caller (service) owns flush + commit (Phase 16 D-14 / SVC001 gate).
+    NO snapshot from source's snapshots — uses the plan's CURRENT values per
+    PROJECT.md "Snapshot pricing на renewal — берём текущую цену плана".
+    """
+    new_membership = Membership(
+        client_id=source.client_id,
+        plan_id=plan.id,
+        plan_name_snapshot=plan.name,
+        duration_days_snapshot=plan.duration_days,
+        price_kopecks_snapshot=plan.price_kopecks,
+        freeze_days_limit_snapshot=plan.freeze_days_limit,
+        start_date=start_date,
+        end_date=end_date,
+        status="active",
+        previous_membership_id=source.id,
+        # activation_policy intentionally omitted — server_default 'purchase_date'.
+    )
+    session.add(new_membership)
+    return new_membership
