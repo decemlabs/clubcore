@@ -86,6 +86,7 @@ async def test_concurrent_check_in_one_wins(
         name=f"ConcPlan-{uuid4().hex[:6]}",
         duration_days=30,
         price_kopecks=250000,
+        freeze_days_limit=14,
         active=True,
     )
     db_session_real_commit.add(plan)
@@ -107,6 +108,7 @@ async def test_concurrent_check_in_one_wins(
         plan_id=plan.id,
         duration_days_snapshot=plan.duration_days,
         price_kopecks_snapshot=plan.price_kopecks,
+        freeze_days_limit_snapshot=plan.freeze_days_limit,
         plan_name_snapshot=plan.name,
         start_date=today_msk - timedelta(days=1),
         end_date=today_msk + timedelta(days=29),

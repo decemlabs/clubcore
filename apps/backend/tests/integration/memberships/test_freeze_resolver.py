@@ -14,8 +14,8 @@ status.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date, time, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -33,7 +33,6 @@ import app.modules.visits.service as visits_svc_mod
 from app.core.audit_models import AuditLog
 from app.core.config import get_settings
 from app.core.permissions import Role
-from app.core.security import hash_password
 from app.integrations.telegram import handlers as handlers_mod
 from app.integrations.telegram import sender as sender_mod
 from app.integrations.telegram.handlers import HandlerContext, checkin_handler
@@ -108,9 +107,10 @@ async def test_frozen_membership_excluded_from_resolver(
 
 async def test_frozen_membership_visits_endpoint_no_active_membership(
     authed_client_reception: AsyncClient,
-    db_session: AsyncSession,  # noqa: ARG001 -- forces savepoint scope
+    db_session: AsyncSession,
     make_plan: Any,
     make_membership: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """MEM-FRZ-06 part 2: reception POST /api/v1/visits → 409 no_active_membership.
 
@@ -131,10 +131,13 @@ async def test_frozen_membership_visits_endpoint_no_active_membership(
     )
     assert r.status_code == 200
 
-    # Open gym hours so this isn't a hours-rejection
+    # Open gym hours so this isn't a hours-rejection — use monkeypatch so the
+    # mutation is undone at test teardown (avoids leaking into later tests
+    # that read default gym_hours_start='07:00').
     settings = get_settings()
-    settings.gym_hours_start = time(0, 0)
-    settings.gym_hours_end = time(23, 59)
+    monkeypatch.setattr(settings, "gym_hours_start", time(0, 0))
+    monkeypatch.setattr(settings, "gym_hours_end", time(23, 59))
+    monkeypatch.setattr(visits_svc_mod, "get_settings", lambda: settings)
 
     # POST /visits — should hit NoActiveMembershipError → 409 no_active_membership
     r = await authed_client_reception.post(
@@ -200,9 +203,9 @@ async def test_telegram_checkin_frozen_oracle_safe_dm(
     stub_telegram_sender: StubTelegramSender,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """MEM-FRZ-06 part 3: Telegram /checkin on frozen membership → generic DM.
+    """MEM-FRZ-06 part 3: Telegram /checkin on frozen membership generic DM.
 
-    The frozen client receives the SAME "У вас нет активного абонемента" DM
+    The frozen client receives the SAME "no active membership" Russian DM
     as a client without any membership (oracle-safe per Phase 20 D-5).
     No leak that the membership exists but is frozen.
     """

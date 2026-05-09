@@ -37,7 +37,8 @@ def test_action_value_set() -> None:
 
 
 def test_resource_value_set() -> None:
-    # Verbatim from apps/admin-web/src/shared/session/registry.ts (15 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09).
+    # Verbatim from apps/admin-web/src/shared/session/registry.ts
+    # (15 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09).
     # Note: OWNER_AREA / MEMBERSHIP_PLANS Python identifiers map to hyphenated string values.
     assert {r.value for r in Resource} == {
         "dashboard",

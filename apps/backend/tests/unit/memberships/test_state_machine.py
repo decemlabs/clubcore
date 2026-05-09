@@ -5,7 +5,7 @@ Tests `_assert_can_cancel`, `_assert_can_expire`, `_assert_can_freeze`, and
 no FastAPI, no fixtures. Per D-15 the guards read only `.status`; the stub
 need not provide more.
 
-Phase 25 D-25-15: 16-cell parametrize matrix (4 sources × 4 actions).
+Phase 25 D-25-15: 16-cell parametrize matrix (4 sources x 4 actions).
 The 5 allowed cells:
   - ("active", "freeze", "ok")
   - ("active", "expire", "ok")

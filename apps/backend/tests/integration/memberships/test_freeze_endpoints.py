@@ -178,7 +178,7 @@ async def test_freeze_response_shape_includes_4_new_fields(
     assert data["freezeDaysRemaining"] == 14 - data["freezeDaysUsed"]
 
 
-async def test_freeze_response_currentFreezePeriod_object_shape(
+async def test_freeze_response_currentFreezePeriod_object_shape(  # noqa: N802 -- camelCase mirrors API field name
     authed_client_reception: AsyncClient,
     make_plan: Any,
     make_membership: Any,
@@ -207,7 +207,7 @@ async def test_freeze_response_currentFreezePeriod_object_shape(
     assert period["endedBy"] is None
 
 
-async def test_membership_get_after_unfreeze_currentFreezePeriod_null(
+async def test_membership_get_after_unfreeze_currentFreezePeriod_null(  # noqa: N802 -- camelCase mirrors API field name
     authed_client_reception: AsyncClient,
     make_plan: Any,
     make_membership: Any,
@@ -290,7 +290,7 @@ async def test_unfreeze_invalid_transition_from_active_returns_409(
 # Note: db_session imported only via fixture chain; explicit import for type stability
 async def test_freeze_membership_not_found_returns_404(
     authed_client_reception: AsyncClient,
-    db_session: AsyncSession,  # noqa: ARG001 -- forces savepoint scope
+    db_session: AsyncSession,
 ) -> None:
     """POST /freeze on a non-existent membership → 404 membership_not_found."""
     r = await authed_client_reception.post(

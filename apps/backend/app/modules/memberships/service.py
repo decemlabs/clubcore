@@ -844,16 +844,32 @@ async def list_memberships(
                 current_period = FreezePeriodResponse.model_validate(
                     p, from_attributes=True
                 )
-        overlay = {
+        # Same explicit-dict projection pattern as `_build_membership_response`
+        # — avoids `model_validate(ORM, from_attributes=True)` which fails
+        # because the 3 freeze-derived fields have no defaults on the schema
+        # and aren't ORM-mapped columns.
+        payload: dict[str, Any] = {
+            "id": m.id,
+            "client_id": m.client_id,
+            "plan_id": m.plan_id,
+            "plan_name_snapshot": m.plan_name_snapshot,
+            "duration_days_snapshot": m.duration_days_snapshot,
+            "price_kopecks_snapshot": m.price_kopecks_snapshot,
+            "freeze_days_limit_snapshot": m.freeze_days_limit_snapshot,
+            "start_date": m.start_date,
+            "end_date": m.end_date,
+            "status": m.status,
+            "cancelled_at": m.cancelled_at,
+            "cancel_reason": m.cancel_reason,
+            "paid_at": m.paid_at,
+            "notes": m.notes,
+            "created_at": m.created_at,
+            "updated_at": m.updated_at,
             "freeze_days_used": days_used,
             "freeze_days_remaining": remaining,
             "current_freeze_period": current_period,
         }
-        items.append(
-            MembershipResponse.model_validate(m, from_attributes=True).model_copy(
-                update=overlay
-            )
-        )
+        items.append(MembershipResponse.model_validate(payload))
 
     return PaginatedData.model_construct(
         items=items,
