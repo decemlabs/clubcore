@@ -62,7 +62,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 - [x] **Phase 24: Foundations & Tech-Debt Bedrock** (5/5 plans) — completed 2026-05-08 — INFRA-15/16 + DEBT-01/02/03 — `LOCKED_AUDIT_EVENTS` extension, `frozen` status CHECK + transitions, resolver `end_date >= today` filter, `?expiring=true&within=N`, SVC001 walker → auth/service.py
 - [x] **Phase 25: Memberships — Freeze (backend)** — MEM-FRZ-01..07 + EP-01..03 + AUDIT-01 + TEST-01..03 (14 reqs) — `freeze_days_limit` + `membership_freeze_periods` + freeze/unfreeze endpoints + resolver-rejects-frozen (completed 2026-05-09)
 - [x] **Phase 26: Memberships — Renewal (backend)** — MEM-REN-01..04 + EP-01 + AUDIT-01 + TEST-01..04 (10 reqs) — `previous_membership_id` FK + `POST /renew` with current-price snapshot + resolver tiebreak (completed 2026-05-09)
-- [ ] **Phase 27: Expiring-soon Telegram Notifications** — NTF-01..06 + COPY-01 + TEST-01..03 (10 reqs) — ARQ cron 06:15 Europe/Moscow + 6 locked Russian DM templates (anti-oracle) + idempotency table
+- [x] **Phase 27: Expiring-soon Telegram Notifications** — NTF-01..06 + COPY-01 + TEST-01..03 (10 reqs) — ARQ cron 06:15 Europe/Moscow + 6 locked Russian DM templates (anti-oracle) + idempotency table (completed 2026-05-09)
 - [ ] **Phase 28: OpenAPI Drift-Gate Refresh + admin-web Wiring** — FE-10..13 (4 reqs) — regenerate `openapi.json` + `schema.d.ts`; FE freeze/renewal UI + expiring-filter on `VITE_API_MODE=http` *(UI phase)*
 - [ ] **Phase 29: Milestone Verification** — DEBT-04 (1 req) — 6 human-verification smoke tests + cross-phase integration sweep + verification log
 
@@ -126,12 +126,12 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. Frozen, cancelled, expired memberships, и клиенты без `telegram_chat_id` или с `clients.deleted_at IS NOT NULL` пропускаются на уровне SQL select; 6 locked Russian DM templates (`EXPIRING_{7,3,1}D_VARIANT_{A,B}`, выбор по `client_id` hash, anti-oracle pattern из v1.2 D-5) загружены в `app/integrations/telegram/copy.py` с owner sign-off, занесённым в PROJECT.md Key Decisions.
   4. На каждую успешную отправку — INSERT `membership_notifications` row + `audit.emit("expiring_notification_sent_<kind>", actor=None, ...)`; ошибки send (403 bot blocked, network) логируются как WARNING, row НЕ вставляется → next tick retries; 403 не марает kind permanently (re-linked клиент получит будущие пинги).
   5. Integration tests покрывают: 7d-перед-истечением + linked Telegram → DM sent + idempotent на повторный run, frozen-membership-NOT-notified, send-403-then-retry-success.
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
   - [x] 27-01-PLAN.md (wave 1) — Migration 0010_notifications + ORM MembershipNotification + EXPIRING_KIND_* constants + audit docstring drift fix + 3 doc-wording fixes (NTF-01, NTF-06 prep)
   - [x] 27-02-PLAN.md (wave 2, depends on 27-01) — Repository find_expiring_candidates + ExpiringCandidate dataclass + service _send_expiring_notifications + _emit_send_event 3-branch literal callsites (NTF-02, NTF-04, NTF-05, NTF-06)
   - [x] 27-03-PLAN.md (wave 2, depends on 27-01) — New file app/integrations/telegram/copy.py with 6 locked Russian DM templates + pick_variant + render_expiring_dm + _format_ru_date (NTF-COPY-01 code)
   - [x] 27-04-PLAN.md (wave 3, depends on 27-02, 27-03) — Worker file send_expiring_notifications.py + WorkerSettings cron registration (06:15 after 06:05 expire_memberships) + owner sign-off human_verification (NTF-02, NTF-03, NTF-COPY-01)
-  - [ ] 27-05-PLAN.md (wave 4, depends on 27-01..04) — 6 integration tests + 2 unit tests + final full-suite green-bar (NTF-TEST-01, NTF-TEST-02, NTF-TEST-03)
+  - [x] 27-05-PLAN.md (wave 4, depends on 27-01..04) — 6 integration tests + 2 unit tests + final full-suite green-bar (NTF-TEST-01, NTF-TEST-02, NTF-TEST-03)
 
 ### Phase 28: OpenAPI Drift-Gate Refresh + admin-web Wiring
 **Goal:** Backend контракт регенерирован байт-стабильно; admin-web на `VITE_API_MODE=http` показывает freeze/renewal UI и expiring-filter с реальным backend, mock-сервисы синхронизированы для оффлайн-разработки.
