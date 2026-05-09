@@ -25,6 +25,7 @@ the import-time schema build (mirrors clients/repository.py:18-23).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -46,6 +47,28 @@ from app.modules.memberships.schemas import (
     MembershipPlanUpdateRequest,
     MembershipStatus,
 )
+
+
+@dataclass(frozen=True)
+class ExpiringCandidate:
+    """A membership eligible for expiring-soon DM (Phase 27 NTF-02 / D-27-18).
+
+    `kind` matches the corresponding `audit.emit` event suffix AND the migration
+    CHECK / UNIQUE-index value (one of `expiring_7d` / `expiring_3d` / `expiring_1d`,
+    captured as `EXPIRING_KIND_*` constants in `memberships.constants`).
+    `chat_id` is the snapshot value passed to `bot.send_message` (D-27-04 — Telegram
+    private-DM convention chat_id == user_id; sourced from `clients.telegram_user_id`).
+
+    Returned by `find_expiring_candidates`; consumed by
+    `service._send_expiring_notifications` (Phase 27 D-27-07 multi-session pattern —
+    helper closes the read session before iterating sends).
+    """
+
+    membership_id: UUID
+    client_id: UUID
+    end_date: date
+    chat_id: int
+    kind: str  # one of EXPIRING_KIND_7D / _3D / _1D from constants.py
 
 
 async def get_alive(session: AsyncSession, plan_id: UUID) -> MembershipPlan | None:
@@ -442,6 +465,96 @@ async def expire_due_rows(
     )
     result = await session.execute(stmt)
     return result.all()
+
+
+# ===========================================================================
+# Phase 27 — Expiring-soon notification candidate helper (D-27-05 / D-27-18)
+# ===========================================================================
+
+
+async def find_expiring_candidates(
+    session: AsyncSession,
+    *,
+    today: date,
+) -> Sequence[ExpiringCandidate]:
+    """SELECT memberships expiring in 1/3/7 days for clients with linked Telegram
+    AND no matching ``membership_notifications`` row yet (Phase 27 NTF-02 + NTF-04).
+
+    Filters (D-27-05):
+      - ``memberships.status = 'active'`` (frozen / cancelled / expired excluded)
+      - ``memberships.end_date IN (today+1, today+3, today+7)``
+      - ``clients.telegram_user_id IS NOT NULL``
+      - ``clients.deleted_at IS NULL``
+      - ``NOT EXISTS (SELECT 1 FROM membership_notifications mn
+        WHERE mn.membership_id = memberships.id AND mn.kind = <matched_kind>)``
+
+    Cross-module note (D-27-19): import-linter's ``modules-independent`` contract
+    forbids importing the clients ORM (``app.modules.clients.models``) from
+    inside ``app/modules/memberships/*``. The clients JOIN therefore uses
+    ``text()`` raw SQL — kept inline here rather than a Core ``Table``
+    declaration (premature for one query).
+
+    Returns a fully-materialised list (NOT a generator) so the caller can close
+    the read session before iterating sends — see Phase 27 D-27-07 multi-session
+    pattern.
+
+    Args:
+        session: AsyncSession (caller owns lifecycle; this helper does not
+            commit/rollback).
+        today: Reference date (Europe/Moscow); caller injects for determinism.
+
+    Returns:
+        Sequence[ExpiringCandidate] in row-order from the DB; may be empty.
+    """
+    today_plus_1 = today + timedelta(days=1)
+    today_plus_3 = today + timedelta(days=3)
+    today_plus_7 = today + timedelta(days=7)
+
+    sql = text(
+        """
+        SELECT
+            m.id           AS membership_id,
+            m.client_id    AS client_id,
+            m.end_date     AS end_date,
+            c.telegram_user_id AS chat_id,
+            CASE
+                WHEN m.end_date = :today_plus_7 THEN 'expiring_7d'
+                WHEN m.end_date = :today_plus_3 THEN 'expiring_3d'
+                WHEN m.end_date = :today_plus_1 THEN 'expiring_1d'
+            END AS kind
+        FROM memberships m
+        JOIN clients c ON c.id = m.client_id
+        WHERE m.status = 'active'
+          AND m.end_date IN (:today_plus_1, :today_plus_3, :today_plus_7)
+          AND c.telegram_user_id IS NOT NULL
+          AND c.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM membership_notifications mn
+              WHERE mn.membership_id = m.id
+                AND mn.kind = CASE
+                    WHEN m.end_date = :today_plus_7 THEN 'expiring_7d'
+                    WHEN m.end_date = :today_plus_3 THEN 'expiring_3d'
+                    WHEN m.end_date = :today_plus_1 THEN 'expiring_1d'
+                END
+          )
+        """
+    ).bindparams(
+        today_plus_1=today_plus_1,
+        today_plus_3=today_plus_3,
+        today_plus_7=today_plus_7,
+    )
+
+    result = await session.execute(sql)
+    return [
+        ExpiringCandidate(
+            membership_id=row.membership_id,
+            client_id=row.client_id,
+            end_date=row.end_date,
+            chat_id=row.chat_id,
+            kind=row.kind,
+        )
+        for row in result
+    ]
 
 
 # ===========================================================================
