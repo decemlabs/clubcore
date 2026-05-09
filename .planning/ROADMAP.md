@@ -110,10 +110,10 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. Дата старта: для active/frozen source — `start_date = source.end_date + 1` (Europe/Moscow); для expired source — `start_date = today` (новый membership начинается сразу, не ретроактивно); audit payload содержит `start_date_strategy`.
   4. Resolver tiebreak: при нескольких active membershipах с `end_date >= today` приоритет у того, у кого меньший `start_date` (текущий running), затем `created_at DESC`; check-in использует current до `end_date`, потом естественно переключается на renewal.
   5. `audit.emit("membership_renewed", actor, source_membership_id, new_membership_id, source_plan_id, current_price_kopecks, start_date_strategy)` на каждый renewal; integration tests покрывают active-renewal, price-changed-between-sale-and-renewal, expired-source-from-today, и rejection paths.
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
   - [x] 26-01-PLAN.md (wave 1) — Migration 0009_renewal + ORM previous_membership_id + MembershipResponse field + RENEWAL_STRATEGY_* constants + CannotRenewCancelledError/PlanArchivedError (MEM-REN-01)
   - [x] 26-02-PLAN.md (wave 2, depends on 26-01) — Resolver tiebreak ORDER BY start_date ASC + regression test + Phase 19/20 baseline reruns (MEM-REN-03)
-  - [ ] 26-03-PLAN.md (wave 3, depends on 26-01, 26-02) — Repository helpers (get_plan_for_renewal + insert_renewal_membership) + service.renew_membership + POST /memberships/{id}/renew + audit docstring drift fix (MEM-REN-02/04/EP-01/AUDIT-01)
+  - [x] 26-03-PLAN.md (wave 3, depends on 26-01, 26-02) — Repository helpers (get_plan_for_renewal + insert_renewal_membership) + service.renew_membership + POST /memberships/{id}/renew + audit docstring drift fix (MEM-REN-02/04/EP-01/AUDIT-01)
   - [ ] 26-04-PLAN.md (wave 4, depends on 26-01, 26-02, 26-03) — Test matrix: constants unit test + 6 integration tests (active/price-change/expired/frozen happy paths + RBAC+CSRF matrix + archived-plan + cancelled-source rejection) (MEM-REN-TEST-01/02/03/04)
 
 ### Phase 27: Expiring-soon Telegram Notifications
