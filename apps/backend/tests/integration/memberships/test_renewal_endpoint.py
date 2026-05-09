@@ -18,7 +18,7 @@ RED-phase coverage for the renewal write path:
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -114,7 +114,7 @@ async def test_renew_reception_active_source_returns_201(
     )
     client = await _create_client(authed_client_reception, phone="+79991235012")
     client_uuid = UUID(client["id"])
-    today = date.today()
+    today = datetime.now(tz=UTC).date()
     source = await make_membership(
         client_id=client_uuid,
         plan=plan,
@@ -306,7 +306,7 @@ async def test_renew_frozen_source_uses_from_source_end_date_and_keeps_source_fr
     plan = await make_plan(name="Strategy frozen")
     client = await _create_client(authed_client_reception, phone="+79991235018")
     client_uuid = UUID(client["id"])
-    today = date.today()
+    today = datetime.now(tz=UTC).date()
     source = await make_membership(
         client_id=client_uuid,
         plan=plan,

@@ -17,7 +17,7 @@ exclusively here so the service can stay declarative.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -153,7 +153,7 @@ async def test_insert_renewal_membership_does_not_flush_or_commit(
     client = await make_client()
     source = await make_membership(client_id=client.id, plan=plan)
 
-    today = date.today()
+    today = datetime.now(tz=UTC).date()
     new_membership = await repository.insert_renewal_membership(
         db_session,
         source=source,
