@@ -61,7 +61,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 - [x] **Phase 24: Foundations & Tech-Debt Bedrock** (5/5 plans) — completed 2026-05-08 — INFRA-15/16 + DEBT-01/02/03 — `LOCKED_AUDIT_EVENTS` extension, `frozen` status CHECK + transitions, resolver `end_date >= today` filter, `?expiring=true&within=N`, SVC001 walker → auth/service.py
 - [x] **Phase 25: Memberships — Freeze (backend)** — MEM-FRZ-01..07 + EP-01..03 + AUDIT-01 + TEST-01..03 (14 reqs) — `freeze_days_limit` + `membership_freeze_periods` + freeze/unfreeze endpoints + resolver-rejects-frozen (completed 2026-05-09)
-- [ ] **Phase 26: Memberships — Renewal (backend)** — MEM-REN-01..04 + EP-01 + AUDIT-01 + TEST-01..04 (10 reqs) — `previous_membership_id` FK + `POST /renew` with current-price snapshot + resolver tiebreak
+- [x] **Phase 26: Memberships — Renewal (backend)** — MEM-REN-01..04 + EP-01 + AUDIT-01 + TEST-01..04 (10 reqs) — `previous_membership_id` FK + `POST /renew` with current-price snapshot + resolver tiebreak (completed 2026-05-09)
 - [ ] **Phase 27: Expiring-soon Telegram Notifications** — NTF-01..06 + COPY-01 + TEST-01..03 (10 reqs) — ARQ cron 06:15 Europe/Moscow + 6 locked Russian DM templates (anti-oracle) + idempotency table
 - [ ] **Phase 28: OpenAPI Drift-Gate Refresh + admin-web Wiring** — FE-10..13 (4 reqs) — regenerate `openapi.json` + `schema.d.ts`; FE freeze/renewal UI + expiring-filter on `VITE_API_MODE=http` *(UI phase)*
 - [ ] **Phase 29: Milestone Verification** — DEBT-04 (1 req) — 6 human-verification smoke tests + cross-phase integration sweep + verification log
@@ -110,11 +110,11 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. Дата старта: для active/frozen source — `start_date = source.end_date + 1` (Europe/Moscow); для expired source — `start_date = today` (новый membership начинается сразу, не ретроактивно); audit payload содержит `start_date_strategy`.
   4. Resolver tiebreak: при нескольких active membershipах с `end_date >= today` приоритет у того, у кого меньший `start_date` (текущий running), затем `created_at DESC`; check-in использует current до `end_date`, потом естественно переключается на renewal.
   5. `audit.emit("membership_renewed", actor, source_membership_id, new_membership_id, source_plan_id, current_price_kopecks, start_date_strategy)` на каждый renewal; integration tests покрывают active-renewal, price-changed-between-sale-and-renewal, expired-source-from-today, и rejection paths.
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
   - [x] 26-01-PLAN.md (wave 1) — Migration 0009_renewal + ORM previous_membership_id + MembershipResponse field + RENEWAL_STRATEGY_* constants + CannotRenewCancelledError/PlanArchivedError (MEM-REN-01)
   - [x] 26-02-PLAN.md (wave 2, depends on 26-01) — Resolver tiebreak ORDER BY start_date ASC + regression test + Phase 19/20 baseline reruns (MEM-REN-03)
   - [x] 26-03-PLAN.md (wave 3, depends on 26-01, 26-02) — Repository helpers (get_plan_for_renewal + insert_renewal_membership) + service.renew_membership + POST /memberships/{id}/renew + audit docstring drift fix (MEM-REN-02/04/EP-01/AUDIT-01)
-  - [ ] 26-04-PLAN.md (wave 4, depends on 26-01, 26-02, 26-03) — Test matrix: constants unit test + 6 integration tests (active/price-change/expired/frozen happy paths + RBAC+CSRF matrix + archived-plan + cancelled-source rejection) (MEM-REN-TEST-01/02/03/04)
+  - [x] 26-04-PLAN.md (wave 4, depends on 26-01, 26-02, 26-03) — Test matrix: constants unit test + 6 integration tests (active/price-change/expired/frozen happy paths + RBAC+CSRF matrix + archived-plan + cancelled-source rejection) (MEM-REN-TEST-01/02/03/04)
 
 ### Phase 27: Expiring-soon Telegram Notifications
 **Goal:** Клиент с привязанным Telegram получает анти-oracle DM за 7/3/1 день до истечения membership; cron идемпотентен, не задваивает после рестарта, не шлёт frozen/cancelled/expired/unlinked.
