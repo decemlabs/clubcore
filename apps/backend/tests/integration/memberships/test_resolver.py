@@ -5,8 +5,11 @@ import resolve_active_membership_by_client`) AND the registered slot via
 `app.core.dependencies.resolve_active_membership` to verify the composition-root
 wiring from Plan 17-04 holds end-to-end.
 
-D-17 silent tiebreak: `ORDER BY end_date DESC, created_at DESC LIMIT 1` — no
-warning, no audit event. Resolver returns the canonical row only.
+Phase 26 D-26-17 tiebreak: `ORDER BY start_date ASC, created_at DESC LIMIT 1`
+— silent (no warning, no audit event). Resolver returns the canonical row;
+the earliest start_date (the running membership) wins so check-in keeps
+using it until `end_date` passes and a renewal naturally takes over once
+ARQ flips the source `active → expired`.
 """
 
 from __future__ import annotations
@@ -152,40 +155,46 @@ async def test_resolver_filters_expired_active_row(
     )
 
 
-# --- D-17 / MEM-04 tiebreak ------------------------------------------------
+# --- MEM-04 tiebreak (Phase 26 D-26-17: ORDER BY start_date ASC, created_at DESC) -----
 
 
-async def test_resolver_tiebreak_picks_latest_end_date(
+async def test_resolver_tiebreak_picks_earliest_start_date(
     authed_client_owner: AsyncClient,
     db_session: AsyncSession,
     make_plan: Any,
     make_membership: Any,
 ) -> None:
-    """MEM-04 + D-17: when 2 active memberships, the one with the latest end_date wins."""
-    plan = await make_plan(name="Tiebreak End")
+    """MEM-REN-03 / D-26-17: with 2 active memberships, the earlier start_date wins.
+
+    Phase 26 inverted the Phase 17 D-17 tiebreak (`end_date DESC` → `start_date ASC`)
+    so that renewal stacking lets the running membership keep running until its
+    `end_date` passes — the renewal then naturally takes over once ARQ flips the
+    source `active → expired`.
+    """
+    plan = await make_plan(name="Tiebreak Start")
     client = await _create_client(authed_client_owner, phone="+79991232005")
     client_uuid = UUID(client["id"])
     today = datetime.now(tz=UTC).date()
 
-    m_short = await make_membership(
+    m_running = await make_membership(
         client_id=client_uuid,
         plan=plan,
         status="active",
         start_date=today,
-        end_date=today + timedelta(days=89),
+        end_date=today + timedelta(days=29),
     )
-    m_long = await make_membership(
+    m_renewal = await make_membership(
         client_id=client_uuid,
         plan=plan,
         status="active",
-        start_date=today,
-        end_date=today + timedelta(days=179),
+        start_date=today + timedelta(days=30),
+        end_date=today + timedelta(days=59),
     )
 
     got = await resolve_active_membership_by_client(db_session, client_uuid)
     assert got is not None
-    assert got.id == m_long.id
-    assert got.id != m_short.id
+    assert got.id == m_running.id
+    assert got.id != m_renewal.id
 
 
 async def test_resolver_tiebreak_falls_back_to_created_at(
@@ -194,7 +203,7 @@ async def test_resolver_tiebreak_falls_back_to_created_at(
     make_plan: Any,
     make_membership: Any,
 ) -> None:
-    """MEM-04: same end_date -> tiebreak on created_at DESC (later wins)."""
+    """MEM-04 / D-26-17: same start_date → tiebreak on created_at DESC (later wins)."""
     plan = await make_plan(name="Tiebreak Created")
     client = await _create_client(authed_client_owner, phone="+79991232006")
     client_uuid = UUID(client["id"])
@@ -222,11 +231,11 @@ async def test_resolver_tiebreak_falls_back_to_created_at(
     got = await resolve_active_membership_by_client(db_session, client_uuid)
     assert got is not None
     # Within a single SAVEPOINT, func.now() may be identical for both rows.
-    # The repository orders by (end_date DESC, created_at DESC) — and rows that
+    # The repository orders by (start_date ASC, created_at DESC) — rows that
     # tie on both fall through to db-natural ordering. Accept either id but
-    # with end_date matching (the tie set).
+    # with start_date matching (the tie set).
     assert got.id in {m_first.id, m_second.id}
-    assert got.end_date == today + timedelta(days=89)
+    assert got.start_date == today
 
 
 # --- Cancellation chain (D-12 silent transition) ---------------------------
