@@ -126,7 +126,12 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. Frozen, cancelled, expired memberships, и клиенты без `telegram_chat_id` или с `clients.deleted_at IS NOT NULL` пропускаются на уровне SQL select; 6 locked Russian DM templates (`EXPIRING_{7,3,1}D_VARIANT_{A,B}`, выбор по `client_id` hash, anti-oracle pattern из v1.2 D-5) загружены в `app/integrations/telegram/copy.py` с owner sign-off, занесённым в PROJECT.md Key Decisions.
   4. На каждую успешную отправку — INSERT `membership_notifications` row + `audit.emit("expiring_notification_sent_<kind>", actor=None, ...)`; ошибки send (403 bot blocked, network) логируются как WARNING, row НЕ вставляется → next tick retries; 403 не марает kind permanently (re-linked клиент получит будущие пинги).
   5. Integration tests покрывают: 7d-перед-истечением + linked Telegram → DM sent + idempotent на повторный run, frozen-membership-NOT-notified, send-403-then-retry-success.
-**Plans:** TBD
+**Plans:** 5 plans
+  - [ ] 27-01-PLAN.md (wave 1) — Migration 0010_notifications + ORM MembershipNotification + EXPIRING_KIND_* constants + audit docstring drift fix + 3 doc-wording fixes (NTF-01, NTF-06 prep)
+  - [ ] 27-02-PLAN.md (wave 2, depends on 27-01) — Repository find_expiring_candidates + ExpiringCandidate dataclass + service _send_expiring_notifications + _emit_send_event 3-branch literal callsites (NTF-02, NTF-04, NTF-05, NTF-06)
+  - [ ] 27-03-PLAN.md (wave 2, depends on 27-01) — New file app/integrations/telegram/copy.py with 6 locked Russian DM templates + pick_variant + render_expiring_dm + _format_ru_date (NTF-COPY-01 code)
+  - [ ] 27-04-PLAN.md (wave 3, depends on 27-02, 27-03) — Worker file send_expiring_notifications.py + WorkerSettings cron registration (06:15 after 06:05 expire_memberships) + owner sign-off human_verification (NTF-02, NTF-03, NTF-COPY-01)
+  - [ ] 27-05-PLAN.md (wave 4, depends on 27-01..04) — 6 integration tests + 2 unit tests + final full-suite green-bar (NTF-TEST-01, NTF-TEST-02, NTF-TEST-03)
 
 ### Phase 28: OpenAPI Drift-Gate Refresh + admin-web Wiring
 **Goal:** Backend контракт регенерирован байт-стабильно; admin-web на `VITE_API_MODE=http` показывает freeze/renewal UI и expiring-filter с реальным backend, mock-сервисы синхронизированы для оффлайн-разработки.
