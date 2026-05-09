@@ -1205,9 +1205,7 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
             kind="expiring_3d",
             channel="telegram",
         )
-    else:
-        # kind == EXPIRING_KIND_1D — assert defensively to surface a stale enum.
-        assert kind == EXPIRING_KIND_1D, f"unknown kind {kind!r}"
+    elif kind == EXPIRING_KIND_1D:
         await audit.emit(
             session,
             "expiring_notification_sent_1d",  # LITERAL (Phase 15 INFRA-11 AST gate)
@@ -1219,6 +1217,11 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
             kind="expiring_1d",
             channel="telegram",
         )
+    else:
+        # Defensive guard — survives `python -O` (REVIEW.md CR-01).
+        # `find_expiring_candidates` only ever produces EXPIRING_KIND_{7,3,1}D;
+        # any other value indicates a stale enum or contract violation upstream.
+        raise ValueError(f"unknown notification kind {kind!r}")
 
 
 async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
