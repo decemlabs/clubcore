@@ -64,12 +64,18 @@ Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts 
                                         # resource_id = new_membership.id; current_price_kopecks
                                         # captures plan price at renewal time, not source snapshot;
                                         # start_date_strategy literal is one of D-26-13 constants)
-  - expiring_notification_sent_7d       {membership_id, client_id, channel}
-                                        # 'membership' (Phase 27 — 7-day reminder, ARQ)
-  - expiring_notification_sent_3d       {membership_id, client_id, channel}
-                                        # 'membership' (Phase 27 — 3-day reminder, ARQ)
-  - expiring_notification_sent_1d       {membership_id, client_id, channel}
-                                        # 'membership' (Phase 27 — 1-day reminder, ARQ)
+  - expiring_notification_sent_7d       {client_id, telegram_chat_id, kind, channel}
+                                        # 'membership' (Phase 27 — 7-day reminder, ARQ;
+                                        # resource_id = membership.id; kind="expiring_7d";
+                                        # channel="telegram")
+  - expiring_notification_sent_3d       {client_id, telegram_chat_id, kind, channel}
+                                        # 'membership' (Phase 27 — 3-day reminder, ARQ;
+                                        # resource_id = membership.id; kind="expiring_3d";
+                                        # channel="telegram")
+  - expiring_notification_sent_1d       {client_id, telegram_chat_id, kind, channel}
+                                        # 'membership' (Phase 27 — 1-day reminder, ARQ;
+                                        # resource_id = membership.id; kind="expiring_1d";
+                                        # channel="telegram")
 
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).

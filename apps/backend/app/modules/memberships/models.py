@@ -42,6 +42,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
@@ -255,5 +256,65 @@ class MembershipFreezePeriod(Base, UUIDPkMixin, TimestampMixin):
             "membership_id",
             unique=True,
             postgresql_where=text("ended_at IS NULL"),
+        ),
+    )
+
+
+class MembershipNotification(Base, UUIDPkMixin, TimestampMixin):
+    """Idempotency record for expiring-soon Telegram DM (Phase 27 NTF-01).
+
+    Composition: Base + UUIDPkMixin + TimestampMixin (NO SoftDeleteMixin —
+    rows are append-only; the (membership_id, kind) UNIQUE is the single
+    source of truth for cron idempotency per D-27-15).
+
+    DB-level invariants:
+    - kind IN ('expiring_7d', 'expiring_3d', 'expiring_1d')
+      (CHECK ck_membership_notifications_kind).
+    - FK fk_membership_notifications_membership_id_memberships ON DELETE CASCADE
+      to memberships.id — DBA-direct hard-delete drops history (D-27-02).
+    - UNIQUE (membership_id, kind) (uq_membership_notifications_membership_kind) —
+      single source of truth for cron idempotency. Service helper
+      `_send_expiring_notifications` catches IntegrityError on this constraint
+      to skip race-duplicates (D-27-15). NOT literal-ref'd by service code
+      (no constraint-name discriminator needed) — NO entry added to
+      alembic/env.py:_include_object.
+    """
+
+    __tablename__ = "membership_notifications"
+
+    membership_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "memberships.id",
+            ondelete="CASCADE",
+            name="fk_membership_notifications_membership_id_memberships",
+        ),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("now()"),
+        nullable=False,
+    )
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('expiring_7d', 'expiring_3d', 'expiring_1d')",
+            # NAMING_CONVENTION expands to ck_membership_notifications_kind
+            # (matches migration 0010_notifications.py op.f()-derived name).
+            name="kind",
+        ),
+        UniqueConstraint(
+            "membership_id",
+            "kind",
+            name="uq_membership_notifications_membership_kind",
+        ),
+        # Mirrors migration 0010 op.create_index() — required for `alembic check`
+        # to stay clean (drift detection treats migration-only indexes as drift).
+        Index(
+            "ix_membership_notifications_membership_id",
+            "membership_id",
         ),
     )
