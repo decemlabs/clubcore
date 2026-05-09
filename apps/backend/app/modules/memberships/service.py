@@ -23,6 +23,20 @@ Audit emit ordering (D-14):
     `membership_plan_updated` → refresh(updated_at) → commit.
   - soft_delete_plan: get → mutate (set deleted_at = now()) → emit
     `membership_plan_archived` → flush → commit.
+  - freeze_membership (Phase 25 D-25-07): load → transition guard → preventive
+    limit check → INSERT freeze period → flush (translate IntegrityError on
+    `uq_membership_freeze_periods_active_per_membership` → 409 already_frozen) →
+    update status='frozen' → flush → emit `membership_frozen` → refresh(updated_at)
+    → commit.
+  - unfreeze_membership (Phase 25 D-25-08): load → transition guard → load open
+    period → close period (set ended_at / ended_by) → extend end_date by
+    max(1, ceil(delta_seconds / 86400)) → update status='active' → flush →
+    emit `membership_unfrozen` → refresh(updated_at) → commit.
+  - cancel_membership (Phase 25 D-25-09 frozen-source extension): when source
+    status is 'frozen', close the open period without `end_date` extension and
+    emit `membership_unfrozen` (with `days_added=0` sentinel) BEFORE the
+    existing `membership_cancelled` emit; both rows live in the same UoW so
+    audit_log id auto-increment preserves chronology.
 
 D-11 audit payload: membership_plan_created = {name, duration_days, price_kopecks}
   (plan_id is in resource_id column, not payload).
@@ -36,6 +50,7 @@ Service does NOT re-check RBAC; the router-layer `require_permission` dependency
 access before service is called.
 """
 
+import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -48,6 +63,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import audit
 from app.core.dependencies import CurrentUser
 from app.core.exceptions import (
+    AlreadyFrozenError,
+    FreezeLimitExceededError,
     InvalidTransitionError,
     MembershipNotFoundError,
     PlanInactiveError,
@@ -58,8 +75,9 @@ from app.core.exceptions import (
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
 from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
-from app.modules.memberships.models import Membership
+from app.modules.memberships.models import Membership, MembershipFreezePeriod
 from app.modules.memberships.schemas import (
+    FreezePeriodResponse,
     MembershipCancelRequest,
     MembershipCreateRequest,
     MembershipListQuery,
@@ -102,6 +120,20 @@ def _is_plan_in_use_conflict(exc: IntegrityError) -> bool:
     return "fk_memberships_plan_id_membership_plans" in str(exc.orig)
 
 
+def _is_already_frozen_conflict(exc: IntegrityError) -> bool:
+    """Return True iff `exc` was caused by uq_membership_freeze_periods_active_per_membership.
+
+    Direct mirror of `_is_plan_name_conflict` with constraint name substituted
+    (Phase 25 D-25-22). Concurrent-INSERT race on the partial unique index —
+    second freeze loses and is translated to 409 `already_frozen` by the
+    `freeze_membership` service path.
+    """
+    constraint = getattr(exc.orig, "constraint_name", None) or ""
+    if constraint == "uq_membership_freeze_periods_active_per_membership":
+        return True
+    return "uq_membership_freeze_periods_active_per_membership" in str(exc.orig)
+
+
 def _assert_can_transition(membership: Membership, *, target: str) -> None:
     """Central state-machine guard (INFRA-16, D-24-04).
 
@@ -122,7 +154,11 @@ def _assert_can_transition(membership: Membership, *, target: str) -> None:
 
 
 def _assert_can_cancel(membership: Membership) -> None:
-    """Phase 17 D-12 + D-15: only status='active' may transition to 'cancelled'.
+    """Phase 17 + Phase 25 D-25-09: status='active' OR 'frozen' may transition to 'cancelled'.
+
+    Cancel-during-freeze closes the open period without `end_date` extension and
+    emits `membership_unfrozen` (with `days_added=0` sentinel) BEFORE the
+    `membership_cancelled` audit row in the same UoW.
 
     Phase 24 INFRA-16 D-24-05: thin wrapper over `_assert_can_transition`.
     """
@@ -135,6 +171,72 @@ def _assert_can_expire(membership: Membership) -> None:
     Phase 24 INFRA-16 D-24-05: thin wrapper over `_assert_can_transition`.
     """
     _assert_can_transition(membership, target="expired")
+
+
+def _assert_can_freeze(membership: Membership) -> None:
+    """Phase 25 D-25-15: only status='active' may transition to 'frozen'.
+
+    Thin wrapper over `_assert_can_transition` — same Phase 24 D-24-05 pattern.
+    """
+    _assert_can_transition(membership, target="frozen")
+
+
+def _assert_can_unfreeze(membership: Membership) -> None:
+    """Phase 25 D-25-15: only status='frozen' may transition to 'active'.
+
+    Thin wrapper over `_assert_can_transition` — same Phase 24 D-24-05 pattern.
+    """
+    _assert_can_transition(membership, target="active")
+
+
+async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-only projection helper
+    session: AsyncSession, membership: Membership
+) -> MembershipResponse:
+    """Project a Membership ORM into MembershipResponse with the 4 freeze fields.
+
+    Phase 25 D-25-12 contract — SOLE single-row projector for MembershipResponse
+    in this module. Every read path (`get_membership`) and every mutation
+    terminal (`create_membership`, `cancel_membership`, `freeze_membership`,
+    `unfreeze_membership`) routes through this helper. `list_memberships`
+    inlines an equivalent bulk-projection pattern (with prefetched freeze-period
+    maps to avoid N+1 queries) but does NOT call this helper per-row.
+
+    Do NOT call ``MembershipResponse.model_validate`` on a Membership ORM
+    directly — Pydantic will raise ValidationError because
+    freeze_days_limit_snapshot / freeze_days_used / freeze_days_remaining
+    have no defaults on the schema.
+
+    Locked projection mechanism (revision iteration 1):
+      1. `MembershipResponse.model_validate(membership, from_attributes=True)`
+         — populates existing ORM-mapped fields plus
+         `freeze_days_limit_snapshot` (which IS a real ORM column on
+         Membership added in Plan 25-01).
+      2. `.model_copy(update={...})` overlays the 3 computed/projected fields.
+
+    This avoids the brittle `**membership.__dict__` pattern (SQLAlchemy state
+    attributes pollute the dict) and the executor-discretion shortcut.
+    """
+    today_msk = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    days_used = await repository.compute_freeze_days_used(
+        session, membership.id, today_msk=today_msk
+    )
+    remaining = max(0, membership.freeze_days_limit_snapshot - days_used)
+    current_period: FreezePeriodResponse | None = None
+    if membership.status == "frozen":
+        period = await repository.get_open_freeze_period(session, membership.id)
+        if period is not None:
+            current_period = FreezePeriodResponse.model_validate(
+                period, from_attributes=True
+            )
+
+    # Step 1: validate base ORM (carries freeze_days_limit_snapshot via from_attributes).
+    # Step 2: overlay the 3 service-computed fields (cannot come from ORM).
+    overlay = {
+        "freeze_days_used": days_used,
+        "freeze_days_remaining": remaining,
+        "current_freeze_period": current_period,
+    }
+    return MembershipResponse.model_validate(membership, from_attributes=True).model_copy(update=overlay)  # noqa: E501 -- locked Phase 25 D-25-12 projection pattern; grep-acceptance gate
 
 
 async def list_plans(
@@ -388,7 +490,11 @@ async def create_membership(
     )
     # 7: commit the unit of work (SVC001 AST gate enforces explicit commit)
     await session.commit()
-    return MembershipResponse.model_validate(membership)
+    # Phase 25 D-25-12 migration: route through _build_membership_response so
+    # the 4 freeze projection fields populate. At create time, no freeze
+    # period exists yet — compute_freeze_days_used returns 0,
+    # current_freeze_period resolves to None (status='active').
+    return await _build_membership_response(session, membership)
 
 
 async def cancel_membership(
@@ -416,8 +522,32 @@ async def cancel_membership(
         raise MembershipNotFoundError("membership_not_found")
 
     # D-15: transition guard BEFORE any mutation. Raises InvalidTransitionError
-    # on non-active source state; no partial write.
+    # on non-{active,frozen} source state; no partial write.
     _assert_can_cancel(membership)
+
+    # Phase 25 D-25-09: if cancelling from frozen, close the open period first.
+    # Audit ordering: emit "membership_unfrozen" (with days_added=0 sentinel)
+    # BEFORE the existing "membership_cancelled" emit. Both rows live in the
+    # same UoW (single commit at function end); audit_log.id auto-increment
+    # provides forensic chronology. NO end_date extension — cancellation
+    # supersedes freeze (REQUIREMENTS MEM-FRZ-07).
+    if membership.status == "frozen":
+        period = await repository.get_open_freeze_period(session, membership.id)
+        if period is None:
+            raise RuntimeError("frozen_membership_without_open_period")
+        period.ended_at = datetime.now(tz=UTC)
+        period.ended_by = actor.id
+        await session.flush()
+        await audit.emit(
+            session,
+            "membership_unfrozen",  # LITERAL — Phase 15 INFRA-11 AST gate
+            actor_user_id=actor.id,
+            resource_type="membership",  # LITERAL
+            resource_id=membership.id,
+            client_id=str(membership.client_id),
+            freeze_period_id=str(period.id),
+            days_added=0,  # sentinel discriminates cancel-from-frozen in audit log
+        )
 
     # D-12: mutate (cancelled_at uses UTC; the column is timestamptz so the wall-time
     # encoding is preserved regardless of zone).
@@ -446,20 +576,268 @@ async def cancel_membership(
     # SA 2.0 expires attributes after flush; refresh `updated_at` for response.
     await session.refresh(membership, attribute_names=["updated_at"])
     await session.commit()
-    return MembershipResponse.model_validate(membership)
+    # Phase 25 D-25-12 migration: when cancelling from frozen source, the
+    # period is closed above, so current_freeze_period resolves to None
+    # (helper guards on membership.status == 'frozen', and after the cancel
+    # mutation the status is now 'cancelled').
+    return await _build_membership_response(session, membership)
+
+
+# ===========================================================================
+# Phase 25 — Freeze cycle service paths (MEM-FRZ-04..05, D-25-07/08)
+# ===========================================================================
+
+
+async def freeze_membership(
+    session: AsyncSession,
+    actor: CurrentUser,
+    membership_id: UUID,
+) -> MembershipResponse:
+    """Open a freeze period and transition active → frozen (MEM-FRZ-04).
+
+    Order (Phase 25 D-25-07; mirrors cancel_membership: guard BEFORE mutation):
+      1. Load — 404 `membership_not_found` if missing.
+      2. Transition guard — 409 `invalid_transition` for non-active source
+         (via `_assert_can_freeze` thin wrapper).
+      3. Preventive limit check — 409 `freeze_limit_exceeded` when cumulative
+         days_used already >= snapshot_limit. Document: this guards on the
+         *current* ledger; a concurrent close-then-freeze race is impossible
+         because the partial unique index serialises freeze inserts per
+         membership_id.
+      4. INSERT freeze period → flush → catch IntegrityError → discriminate
+         via `_is_already_frozen_conflict` → 409 `already_frozen`.
+      5. update_membership_status(status='frozen') — narrow setter (no
+         cancelled_at / cancel_reason mutation).
+      6. Flush.
+      7. audit.emit('membership_frozen', ...) — LITERAL strings; payload
+         carries client_id (str-cast for JSONB), freeze_period_id,
+         started_at (ISO).
+      8. Refresh updated_at for the response.
+      9. Commit (SVC001 gate enforces).
+     10. Return response via `_build_membership_response` so the 4 freeze
+         projection fields populate.
+    """
+    membership = await repository.get_membership(session, membership_id)
+    if membership is None:
+        raise MembershipNotFoundError("membership_not_found")
+
+    _assert_can_freeze(membership)
+
+    today_msk = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    days_used = await repository.compute_freeze_days_used(
+        session, membership.id, today_msk=today_msk
+    )
+    if days_used >= membership.freeze_days_limit_snapshot:
+        raise FreezeLimitExceededError(
+            "freeze_limit_exceeded",
+            fields={
+                "limit": membership.freeze_days_limit_snapshot,
+                "used": days_used,
+            },
+        )
+
+    now_utc = datetime.now(tz=UTC)
+    period = await repository.insert_freeze_period(
+        session,
+        membership_id=membership.id,
+        started_by=actor.id,
+        started_at=now_utc,
+    )
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_already_frozen_conflict(exc):
+            raise AlreadyFrozenError("already_frozen") from exc
+        raise
+
+    await repository.update_membership_status(session, membership, status="frozen")
+    await session.flush()
+
+    await audit.emit(
+        session,
+        "membership_frozen",  # LITERAL — Phase 15 INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="membership",  # LITERAL
+        resource_id=membership.id,
+        client_id=str(membership.client_id),
+        freeze_period_id=str(period.id),
+        started_at=period.started_at.isoformat(),
+    )
+
+    await session.refresh(membership, attribute_names=["updated_at"])
+    await session.commit()
+
+    return await _build_membership_response(session, membership)
+
+
+async def unfreeze_membership(
+    session: AsyncSession,
+    actor: CurrentUser,
+    membership_id: UUID,
+) -> MembershipResponse:
+    """Close open freeze period, extend end_date by ceil days, transition
+    frozen → active (MEM-FRZ-05). Half-day rounds up; minimum 1 day.
+
+    Order (Phase 25 D-25-08):
+      1. Load — 404 `membership_not_found` if missing.
+      2. Transition guard — 409 `invalid_transition` for non-frozen source
+         (via `_assert_can_unfreeze` thin wrapper).
+      3. Load open period via `get_open_freeze_period`. Defence-in-depth:
+         status='frozen' implies an open period exists; if not, raise
+         RuntimeError so the inconsistency is surfaced rather than silently
+         masked.
+      4. Set period.ended_at = now(UTC); period.ended_by = actor.id.
+      5. days_added = max(1, ceil(delta_seconds / 86400)) — anti-abuse minimum
+         (instant freeze→unfreeze still costs 1 day) + client-favouring
+         rounding for partial days.
+      6. Extend membership.end_date by days_added.
+      7. update_membership_status(status='active').
+      8. Flush.
+      9. audit.emit('membership_unfrozen', ..., days_added=days_added).
+     10. Refresh updated_at.
+     11. Commit (SVC001 gate enforces).
+     12. Return via `_build_membership_response` (current_freeze_period
+         resolves to None — status is now 'active').
+    """
+    membership = await repository.get_membership(session, membership_id)
+    if membership is None:
+        raise MembershipNotFoundError("membership_not_found")
+
+    _assert_can_unfreeze(membership)
+
+    period = await repository.get_open_freeze_period(session, membership.id)
+    if period is None:
+        # Defence-in-depth: status='frozen' implies open period exists.
+        raise RuntimeError("frozen_membership_without_open_period")
+
+    now_utc = datetime.now(tz=UTC)
+    period.ended_at = now_utc
+    period.ended_by = actor.id
+
+    delta_seconds = (period.ended_at - period.started_at).total_seconds()
+    days_added = max(1, math.ceil(delta_seconds / 86400))
+    membership.end_date = membership.end_date + timedelta(days=days_added)
+
+    await repository.update_membership_status(session, membership, status="active")
+    await session.flush()
+
+    await audit.emit(
+        session,
+        "membership_unfrozen",  # LITERAL — Phase 15 INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="membership",  # LITERAL
+        resource_id=membership.id,
+        client_id=str(membership.client_id),
+        freeze_period_id=str(period.id),
+        days_added=days_added,
+    )
+
+    await session.refresh(membership, attribute_names=["updated_at"])
+    await session.commit()
+
+    return await _build_membership_response(session, membership)
 
 
 async def list_memberships(
     session: AsyncSession,
     query: MembershipListQuery,
 ) -> PaginatedData[MembershipResponse]:
-    """Return paginated memberships matching the query (MEM-EP-01).
+    """Return paginated memberships with freeze projection (MEM-EP-01 + MEM-FRZ-EP-03).
+
+    Phase 25 D-25-18: avoids N+1 by bulk-fetching freeze_days_used (one
+    GROUP BY query for the page) and open freeze periods (one IN-list query
+    for the page). Three queries total regardless of N rows: outer list +
+    days_used aggregate + open periods bulk fetch — no per-row queries.
+
+    Why duplicate the projection pattern instead of calling
+    `_build_membership_response` per row? `_build_membership_response`
+    issues per-row queries by design (it is the single-row projector). The
+    list path inlines the same Step 1 + Step 2 pattern with bulk-prefetched
+    maps to satisfy the no-N+1 invariant. Single source of truth for
+    projection logic is maintained: the two implementations only differ in
+    I/O batching.
 
     Read-side: no audit emit, no actor. RBAC is enforced at the router.
     """
     page = await repository.list_memberships(session, query)
+
+    if not page.items:
+        return PaginatedData.model_construct(
+            items=[],
+            total=page.total,
+            page=page.page,
+            page_size=page.page_size,
+        )
+
+    # Bulk-fetch days_used per membership_id via a single GROUP BY aggregate.
+    # Mirrors the SQL expression in repository.compute_freeze_days_used.
+    page_ids = [m.id for m in page.items]
+    days_used_rows = (
+        await session.execute(
+            select(
+                MembershipFreezePeriod.membership_id,
+                func.coalesce(
+                    func.sum(
+                        func.ceil(
+                            func.extract(
+                                "epoch",
+                                func.coalesce(
+                                    MembershipFreezePeriod.ended_at, func.now()
+                                )
+                                - MembershipFreezePeriod.started_at,
+                            )
+                            / 86400
+                        )
+                    ),
+                    0,
+                ).label("days_used"),
+            )
+            .where(MembershipFreezePeriod.membership_id.in_(page_ids))
+            .group_by(MembershipFreezePeriod.membership_id)
+        )
+    ).all()
+    days_used_map: dict[UUID, int] = {
+        row.membership_id: int(row.days_used) for row in days_used_rows
+    }
+
+    # Bulk-fetch open freeze periods for the page in a single IN-list query.
+    open_period_rows = (
+        await session.execute(
+            select(MembershipFreezePeriod).where(
+                MembershipFreezePeriod.membership_id.in_(page_ids),
+                MembershipFreezePeriod.ended_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    open_period_map: dict[UUID, MembershipFreezePeriod] = {
+        p.membership_id: p for p in open_period_rows
+    }
+
+    items: list[MembershipResponse] = []
+    for m in page.items:
+        days_used = days_used_map.get(m.id, 0)
+        remaining = max(0, m.freeze_days_limit_snapshot - days_used)
+        current_period: FreezePeriodResponse | None = None
+        if m.status == "frozen":
+            p = open_period_map.get(m.id)
+            if p is not None:
+                current_period = FreezePeriodResponse.model_validate(
+                    p, from_attributes=True
+                )
+        overlay = {
+            "freeze_days_used": days_used,
+            "freeze_days_remaining": remaining,
+            "current_freeze_period": current_period,
+        }
+        items.append(
+            MembershipResponse.model_validate(m, from_attributes=True).model_copy(
+                update=overlay
+            )
+        )
+
     return PaginatedData.model_construct(
-        items=[MembershipResponse.model_validate(m) for m in page.items],
+        items=items,
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -470,11 +848,17 @@ async def get_membership(
     session: AsyncSession,
     membership_id: UUID,
 ) -> MembershipResponse:
-    """Return a membership by id; raise 404 if missing (MEM-EP-03)."""
+    """Return a membership by id; raise 404 if missing (MEM-EP-03).
+
+    Phase 25 D-25-12: routes through `_build_membership_response` so the 4
+    freeze projection fields populate (freeze_days_limit_snapshot from the
+    ORM column; freeze_days_used / freeze_days_remaining /
+    current_freeze_period computed via repository helpers).
+    """
     membership = await repository.get_membership(session, membership_id)
     if membership is None:
         raise MembershipNotFoundError("membership_not_found")
-    return MembershipResponse.model_validate(membership)
+    return await _build_membership_response(session, membership)
 
 
 async def resolve_active_membership_by_client(

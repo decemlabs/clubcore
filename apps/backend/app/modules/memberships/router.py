@@ -351,9 +351,7 @@ async def freeze_membership(
       - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)
       - 409 already_frozen (concurrent INSERT race)
     """
-    membership = await service.freeze_membership(  # type: ignore[attr-defined]  # Wave 4: service.freeze_membership defined in Plan 03
-        session, actor, membership_id
-    )
+    membership = await service.freeze_membership(session, actor, membership_id)
     return envelope(membership)
 
 
@@ -381,7 +379,5 @@ async def unfreeze_membership(
       - 404 membership_not_found
       - 409 invalid_transition (source not frozen)
     """
-    membership = await service.unfreeze_membership(  # type: ignore[attr-defined]  # Wave 4: service.unfreeze_membership defined in Plan 03
-        session, actor, membership_id
-    )
+    membership = await service.unfreeze_membership(session, actor, membership_id)
     return envelope(membership)
