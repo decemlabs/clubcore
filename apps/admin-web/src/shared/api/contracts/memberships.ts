@@ -3,6 +3,7 @@ import type {
   MembershipId,
   MembershipPlan,
   MembershipPlanId,
+  MembershipStatus,
   Pagination,
 } from '@/entities/membership'
 
@@ -10,6 +11,7 @@ export interface MembershipsListQuery {
   page: number
   pageSize: number
   clientId?: string
+  status?: MembershipStatus
   expiring?: boolean // DEBT-02: forwarded to backend (Phase 24); both impls share semantics
   within?: number // DEBT-02: 1..30, defaults to 7 server-side; ignored when expiring is false
 }
@@ -46,6 +48,9 @@ export interface MembershipsService {
   get(id: MembershipId): Promise<Membership>
   create(input: MembershipCreateInput): Promise<Membership>
   cancel(id: MembershipId, reason?: string): Promise<Membership>
+  freeze(id: MembershipId): Promise<Membership>
+  unfreeze(id: MembershipId): Promise<Membership>
+  renew(id: MembershipId): Promise<Membership>
   // Plans (the catalog) — co-located on the same service per D-22-7
   listPlans(query: MembershipPlansListQuery): Promise<Pagination<MembershipPlan>>
   getPlan(id: MembershipPlanId): Promise<MembershipPlan>
