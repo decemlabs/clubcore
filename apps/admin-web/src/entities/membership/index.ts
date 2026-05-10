@@ -1,5 +1,6 @@
 export type {
   Membership,
+  FreezePeriod,
   MembershipId,
   MembershipPlan,
   MembershipPlanId,

@@ -2,7 +2,15 @@ import type { Brand } from '@/shared/lib/brand'
 
 export type MembershipId = Brand<string, 'MembershipId'>
 export type MembershipPlanId = Brand<string, 'MembershipPlanId'>
-export type MembershipStatus = 'active' | 'expired' | 'cancelled'
+export type MembershipStatus = 'active' | 'expired' | 'cancelled' | 'frozen'
+
+export interface FreezePeriod {
+  id: string
+  startedAt: string // ISO datetime
+  startedBy: string // user ID (mock uses role string as proxy)
+  endedAt: string | null
+  endedBy: string | null
+}
 
 export interface MembershipPlan {
   id: MembershipPlanId
@@ -28,6 +36,11 @@ export interface Membership {
   notes?: string | null
   cancelledAt?: string | null
   cancelReason?: string | null
+  freezeDaysLimitSnapshot: number
+  freezeDaysUsed: number
+  freezeDaysRemaining: number
+  currentFreezePeriod: FreezePeriod | null
+  previousMembershipId?: string | null
   createdAt: string
   updatedAt: string
 }
