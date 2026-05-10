@@ -206,4 +206,16 @@ describe('mock/memberships RBAC + shape', () => {
     expect(isDomainError(caught)).toBe(true)
     if (isDomainError(caught)) expect(caught.code).toBe('mock_not_implemented')
   })
+
+  // Phase 28 FE-11: status filter parity with http (verifier gap close)
+  it('list filters by status when query.status is provided (FE-11 mock parity)', async () => {
+    useSessionStore.setState({ role: 'owner' })
+    const all = await memberships.list({ page: 1, pageSize: 1000 })
+    const frozen = await memberships.list({ page: 1, pageSize: 1000, status: 'frozen' })
+    expect(frozen.items.every((m) => m.status === 'frozen')).toBe(true)
+    expect(frozen.total).toBeLessThanOrEqual(all.total)
+    const active = await memberships.list({ page: 1, pageSize: 1000, status: 'active' })
+    expect(active.items.every((m) => m.status === 'active')).toBe(true)
+    expect(frozen.items.length + active.items.length).toBeLessThanOrEqual(all.total)
+  })
 })

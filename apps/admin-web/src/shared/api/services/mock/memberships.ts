@@ -35,6 +35,9 @@ export const memberships: MembershipsService = {
     if (query.clientId) {
       all = all.filter((m) => m.clientId === query.clientId)
     }
+    if (query.status) {
+      all = all.filter((m) => m.status === query.status)
+    }
     // DEBT-02 (Phase 24): window comes from `query.within ?? 7` (no module
     // constant). Inclusive end-date semantics match the backend predicate
     // `end_date <= today + (within - 1)`. Mock keeps the BLK-06 single-page
