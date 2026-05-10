@@ -6,7 +6,6 @@ import { Route as MembershipsRoute } from '@/routes/_protected/memberships'
 import { services } from '@/shared/api/services'
 import type { ClientId } from '@/entities/client'
 import { Button } from '@/shared/ui/button'
-import { Badge } from '@/shared/ui/badge'
 import { Alert, AlertDescription } from '@/shared/ui/alert'
 import {
   DataGrid,
@@ -21,14 +20,8 @@ import { formatDate } from '@/shared/i18n/date'
 import { formatMoney } from '@/shared/lib/money'
 import { useMembershipsList } from '../api/hooks'
 import { CancelMembershipDialog } from './CancelMembershipDialog'
+import { StatusBadge } from './StatusBadge'
 import type { Membership, MembershipId } from '@/entities/membership'
-
-function StatusBadge({ status }: { status: Membership['status'] }) {
-  if (status === 'active') return <Badge variant="default">{t('memberships.status.active')}</Badge>
-  if (status === 'expired')
-    return <Badge variant="secondary">{t('memberships.status.expired')}</Badge>
-  return <Badge variant="outline">{t('memberships.status.cancelled')}</Badge>
-}
 
 export function MembershipsListPage() {
   const search = MembershipsRoute.useSearch()
@@ -38,6 +31,7 @@ export function MembershipsListPage() {
   const query = useMembershipsList({
     page: search.page,
     pageSize: search.pageSize,
+    status: search.status,
     expiring: search.expiring,
   })
 
@@ -163,17 +157,40 @@ export function MembershipsListPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{t('memberships.heading')}</h1>
-        <Button
-          variant={search.expiring ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={() =>
-            void navigate({
-              search: (prev) => ({ ...prev, expiring: !prev.expiring, page: 1 }),
-            })
-          }
-        >
-          {t('memberships.filter.expiring')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={search.status === 'frozen' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() =>
+              void navigate({
+                search: (prev) => ({
+                  ...prev,
+                  status: prev.status === 'frozen' ? undefined : 'frozen',
+                  expiring: false,
+                  page: 1,
+                }),
+              })
+            }
+          >
+            {t('memberships.status.frozen')}
+          </Button>
+          <Button
+            variant={search.expiring ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() =>
+              void navigate({
+                search: (prev) => ({
+                  ...prev,
+                  expiring: !prev.expiring,
+                  status: undefined,
+                  page: 1,
+                }),
+              })
+            }
+          >
+            {t('memberships.filter.expiring')}
+          </Button>
+        </div>
       </div>
 
       {/* WR-16: explicit notice while expiring=true so the operator
