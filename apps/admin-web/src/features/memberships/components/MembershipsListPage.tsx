@@ -18,6 +18,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { t } from '@/shared/i18n'
 import { formatDate } from '@/shared/i18n/date'
 import { formatMoney } from '@/shared/lib/money'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { useMembershipsList } from '../api/hooks'
 import { CancelMembershipDialog } from './CancelMembershipDialog'
 import { StatusBadge } from './StatusBadge'
@@ -191,6 +192,30 @@ export function MembershipsListPage() {
           >
             {t('memberships.filter.expiring')}
           </Button>
+          {search.expiring && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-sm">
+                {t('memberships.list.expiringWithin.label')}
+              </span>
+              <Select
+                value={String(search.within ?? 7)}
+                onValueChange={(v) =>
+                  void navigate({ search: (prev) => ({ ...prev, within: Number(v), page: 1 }) })
+                }
+              >
+                <SelectTrigger size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 3, 7, 14, 30].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n} {t('memberships.list.expiringWithin.option_days')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       </div>
 
