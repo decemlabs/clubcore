@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
 import { useRenewMembership } from './hooks'
-import { membershipsKeys } from './keys'
 import { DomainError } from '@/shared/api/errors'
 import type { Membership, MembershipId, MembershipPlanId } from '@/entities/membership'
 
