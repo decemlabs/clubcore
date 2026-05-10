@@ -9,7 +9,8 @@ import { can } from '@/shared/session/can'
 import { useSessionStore } from '@/shared/session/store'
 import type { Action, Resource } from '@/shared/session/registry'
 import { todayMSK } from '@/shared/i18n/date'
-import { loadDB } from './_db'
+import { faker } from '@faker-js/faker'
+import { loadDB, saveDB } from './_db'
 import { delay } from './_latency'
 
 // DEBT-02 (Phase 24): window size flows in via `query.within`; default 7 matches
@@ -96,29 +97,112 @@ export const memberships: MembershipsService = {
     )
   },
 
-  // TODO(28-03): real freeze/unfreeze/renew semantics land in plan 28-03
-  async freeze(): Promise<Membership> {
+  async freeze(id: MembershipId): Promise<Membership> {
     await delay()
-    throw new DomainError(
-      'mock_not_implemented',
-      'Mock does not implement write paths — use VITE_API_MODE=http',
-    )
+    ensure('create', 'memberships')
+    const db = loadDB()
+    const idx = db.memberships.findIndex((m) => m.id === id)
+    if (idx === -1) throw new DomainError('not_found', 'Абонемент не найден')
+    const m = db.memberships[idx]!
+    if (m.status === 'frozen') throw new DomainError('already_frozen', 'Абонемент уже заморожен.')
+    if (m.status !== 'active')
+      throw new DomainError(
+        'invalid_transition',
+        'Нельзя заморозить: статус абонемента не позволяет это действие.',
+      )
+    if (m.freezeDaysRemaining <= 0)
+      throw new DomainError('freeze_limit_exceeded', 'Лимит дней заморозки исчерпан.')
+    const now = new Date().toISOString()
+    const updated: Membership = {
+      ...m,
+      status: 'frozen',
+      currentFreezePeriod: {
+        id: faker.string.uuid(),
+        startedAt: now,
+        startedBy: role(),
+        endedAt: null,
+        endedBy: null,
+      },
+      updatedAt: now,
+    }
+    db.memberships[idx] = updated
+    saveDB(db)
+    return updated
   },
 
-  async unfreeze(): Promise<Membership> {
+  async unfreeze(id: MembershipId): Promise<Membership> {
     await delay()
-    throw new DomainError(
-      'mock_not_implemented',
-      'Mock does not implement write paths — use VITE_API_MODE=http',
-    )
+    ensure('create', 'memberships')
+    const db = loadDB()
+    const idx = db.memberships.findIndex((m) => m.id === id)
+    if (idx === -1) throw new DomainError('not_found', 'Абонемент не найден')
+    const m = db.memberships[idx]!
+    if (m.status !== 'frozen' || !m.currentFreezePeriod) {
+      throw new DomainError(
+        'invalid_transition',
+        'Нельзя снять заморозку: абонемент не заморожен.',
+      )
+    }
+    const now = new Date()
+    const startedAt = new Date(m.currentFreezePeriod.startedAt)
+    const daysFrozen = Math.max(1, Math.ceil((now.getTime() - startedAt.getTime()) / 86_400_000))
+    const newEnd = new Date(m.endDate)
+    newEnd.setUTCDate(newEnd.getUTCDate() + daysFrozen)
+    const newUsed = m.freezeDaysUsed + daysFrozen
+    const newRemaining = Math.max(m.freezeDaysLimitSnapshot - newUsed, 0)
+    const nowIso = now.toISOString()
+    const updated: Membership = {
+      ...m,
+      status: 'active',
+      endDate: newEnd.toISOString().slice(0, 10),
+      freezeDaysUsed: newUsed,
+      freezeDaysRemaining: newRemaining,
+      currentFreezePeriod: null,
+      updatedAt: nowIso,
+    }
+    db.memberships[idx] = updated
+    saveDB(db)
+    return updated
   },
 
-  async renew(): Promise<Membership> {
+  async renew(id: MembershipId): Promise<Membership> {
     await delay()
-    throw new DomainError(
-      'mock_not_implemented',
-      'Mock does not implement write paths — use VITE_API_MODE=http',
-    )
+    ensure('create', 'memberships')
+    const db = loadDB()
+    const source = db.memberships.find((m) => m.id === id)
+    if (!source) throw new DomainError('not_found', 'Абонемент не найден')
+    if (source.status === 'cancelled')
+      throw new DomainError('cannot_renew_cancelled', 'Нельзя продлить отменённый абонемент.')
+    const plan = db.plans.find((p) => p.id === source.planId)
+    if (!plan || !plan.active)
+      throw new DomainError('plan_archived', 'Тариф архивирован — продление недоступно.')
+    const today = todayMSK()
+    const afterEnd = new Date(source.endDate)
+    afterEnd.setUTCDate(afterEnd.getUTCDate() + 1)
+    const afterEndStr = afterEnd.toISOString().slice(0, 10)
+    const newStart = afterEndStr > today ? afterEndStr : today
+    const newEndDate = new Date(newStart)
+    newEndDate.setUTCDate(newEndDate.getUTCDate() + source.durationDaysSnapshot - 1)
+    const now = new Date().toISOString()
+    const newMembership: Membership = {
+      ...source,
+      id: faker.string.uuid() as MembershipId,
+      startDate: newStart,
+      endDate: newEndDate.toISOString().slice(0, 10),
+      status: 'active',
+      previousMembershipId: source.id,
+      currentFreezePeriod: null,
+      freezeDaysUsed: 0,
+      freezeDaysRemaining: source.freezeDaysLimitSnapshot,
+      cancelledAt: null,
+      cancelReason: null,
+      paidAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }
+    db.memberships.push(newMembership)
+    saveDB(db)
+    return newMembership
   },
 
   async listPlans(query: MembershipPlansListQuery): Promise<Pagination<MembershipPlan>> {
