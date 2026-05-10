@@ -364,11 +364,17 @@ export interface paths {
          * List memberships filtered by clientId/status with pagination
          * @description List memberships, paginated (MEM-EP-01).
          *
-         *     Query parameters (Phase 17 D-09):
+         *     Query parameters (Phase 17 D-09; Phase 24 DEBT-02 adds expiring/within):
          *       - clientId — optional UUID filter; omit for global feed (owner)
          *       - status   — optional single-value enum (active|expired|cancelled); omit for all
          *       - sort     — created_at_desc (default) | end_date_desc | start_date_desc
          *       - page / pageSize — PageQuery contract (default 1 / 20, max 100)
+         *       - expiring — bool (default false); when true, forces status='active' and
+         *                    adds inclusive end_date window [today, today + (within - 1)]
+         *                    (Europe/Moscow today). Conflict with status != active -> 422
+         *                    query_invalid {status: incompatible_with_expiring}.
+         *       - within   — int (default 7, bounded 1..30); window size in days when
+         *                    expiring=true. Silently ignored when expiring=false.
          */
         get: operations["list_memberships_api_v1_memberships_get"];
         put?: never;
@@ -424,11 +430,109 @@ export interface paths {
          *     the mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —
          *     the body carries the post-transition row including `cancelled_at`).
          *
-         *     State machine (Phase 17 D-12): only `active → cancelled` is allowed; `expired`
-         *     and `cancelled` source states raise 409 `invalid_transition` with payload
-         *     `{from_status, to_status}`.
+         *     State machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and
+         *     `frozen → cancelled` are both allowed; `expired` and `cancelled` source
+         *     states raise 409 `invalid_transition` with payload `{from_status, to_status}`.
+         *
+         *     Phase 25 D-25-20: also accepts frozen source. When called on a frozen
+         *     membership, the open freeze period is closed without end_date extension
+         *     (cancellation supersedes freeze) and audit emits `membership_unfrozen`
+         *     (days_added=0) before `membership_cancelled` in the same UoW. Owner-only
+         *     via existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.
          */
         post: operations["cancel_membership_api_v1_memberships__membership_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memberships/{membership_id}/freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Freeze membership (reception+owner; 409 freeze_limit_exceeded / already_frozen / invalid_transition)
+         * @description Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.
+         *
+         *     Transitions active -> frozen and opens a freeze period. Returns the
+         *     updated MembershipResponse including freezeDaysUsed/Remaining and
+         *     currentFreezePeriod populated.
+         *
+         *     Errors:
+         *       - 404 membership_not_found
+         *       - 409 invalid_transition (source not active)
+         *       - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)
+         *       - 409 already_frozen (concurrent INSERT race)
+         */
+        post: operations["freeze_membership_api_v1_memberships__membership_id__freeze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memberships/{membership_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew membership (reception+owner; 404 plan_not_found / membership_not_found; 409 cannot_renew_cancelled / plan_archived)
+         * @description Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.
+         *
+         *     Creates a follow-up membership chained via ``previous_membership_id`` to
+         *     the source. Snapshots from the CURRENT plan (so price increases between
+         *     sale and renewal apply — PROJECT.md). Returns 201 + new
+         *     ``MembershipResponse`` including ``previousMembershipId`` field.
+         *
+         *     Date strategy:
+         *       - source 'active' / 'frozen' → start_date = source.end_date + 1 day
+         *       - source 'expired'           → start_date = today (Europe/Moscow)
+         *
+         *     Errors:
+         *       - 404 membership_not_found  (source missing)
+         *       - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)
+         *       - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)
+         *       - 409 plan_archived          (source's plan soft-deleted by owner)
+         */
+        post: operations["renew_membership_api_v1_memberships__membership_id__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memberships/{membership_id}/unfreeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unfreeze membership (reception+owner; 409 invalid_transition)
+         * @description Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.
+         *
+         *     Closes the open freeze period, extends end_date by ceil(delta_seconds /
+         *     86400) (minimum 1 day), and transitions frozen -> active.
+         *
+         *     Errors:
+         *       - 404 membership_not_found
+         *       - 409 invalid_transition (source not frozen)
+         */
+        post: operations["unfreeze_membership_api_v1_memberships__membership_id__unfreeze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -692,6 +796,34 @@ export interface components {
             relation?: string | null;
         };
         /**
+         * FreezePeriodResponse
+         * @description Outbound representation of a MembershipFreezePeriod (Phase 25 D-25-12).
+         *
+         *     Used as the value of MembershipResponse.current_freeze_period. When surfaced
+         *     that way, ended_at and ended_by are always None (open period definition).
+         */
+        FreezePeriodResponse: {
+            /** Endedat */
+            endedAt: string | null;
+            /** Endedby */
+            endedBy: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /**
+             * Startedby
+             * Format: uuid
+             */
+            startedBy: string;
+        };
+        /**
          * Gender
          * @description Client gender (D-15). Closed enum — only male/female v1.
          * @enum {string}
@@ -799,6 +931,8 @@ export interface components {
             active: boolean;
             /** Durationdays */
             durationDays: number;
+            /** Freezedayslimit */
+            freezeDaysLimit: number;
             /** Name */
             name: string;
             /** Pricekopecks */
@@ -818,6 +952,8 @@ export interface components {
             createdAt: string;
             /** Durationdays */
             durationDays: number;
+            /** Freezedayslimit */
+            freezeDaysLimit: number;
             /**
              * Id
              * Format: uuid
@@ -879,6 +1015,7 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+            currentFreezePeriod: components["schemas"]["FreezePeriodResponse"] | null;
             /** Durationdayssnapshot */
             durationDaysSnapshot: number;
             /**
@@ -886,6 +1023,12 @@ export interface components {
              * Format: date
              */
             endDate: string;
+            /** Freezedayslimitsnapshot */
+            freezeDaysLimitSnapshot: number;
+            /** Freezedaysremaining */
+            freezeDaysRemaining: number;
+            /** Freezedaysused */
+            freezeDaysUsed: number;
             /**
              * Id
              * Format: uuid
@@ -902,6 +1045,8 @@ export interface components {
             planId: string;
             /** Plannamesnapshot */
             planNameSnapshot: string;
+            /** Previousmembershipid */
+            previousMembershipId?: string | null;
             /** Pricekopeckssnapshot */
             priceKopecksSnapshot: number;
             /**
@@ -921,7 +1066,7 @@ export interface components {
          * @description Membership lifecycle status (CONTEXT.md domain line 12).
          * @enum {string}
          */
-        MembershipStatus: "active" | "expired" | "cancelled";
+        MembershipStatus: "active" | "expired" | "cancelled" | "frozen";
         /** PaginatedData[ActiveSessionItem] */
         PaginatedData_ActiveSessionItem_: {
             /** Items */
@@ -1781,6 +1926,8 @@ export interface operations {
                 clientId?: string | null;
                 status?: components["schemas"]["MembershipStatus"] | null;
                 sort?: components["schemas"]["MembershipListSort"];
+                expiring?: boolean;
+                within?: number;
             };
             header?: never;
             path?: never;
@@ -1886,6 +2033,99 @@ export interface operations {
                 "application/json": components["schemas"]["MembershipCancelRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    freeze_membership_api_v1_memberships__membership_id__freeze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_membership_api_v1_memberships__membership_id__renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfreeze_membership_api_v1_memberships__membership_id__unfreeze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

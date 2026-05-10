@@ -480,6 +480,59 @@
         "title": "EmergencyContact",
         "type": "object"
       },
+      "FreezePeriodResponse": {
+        "description": "Outbound representation of a MembershipFreezePeriod (Phase 25 D-25-12).\n\nUsed as the value of MembershipResponse.current_freeze_period. When surfaced\nthat way, ended_at and ended_by are always None (open period definition).",
+        "properties": {
+          "endedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "endedBy": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedby"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "startedBy": {
+            "format": "uuid",
+            "title": "Startedby",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "startedAt",
+          "startedBy",
+          "endedAt",
+          "endedBy"
+        ],
+        "title": "FreezePeriodResponse",
+        "type": "object"
+      },
       "Gender": {
         "description": "Client gender (D-15). Closed enum — only male/female v1.",
         "enum": [
@@ -663,6 +716,12 @@
             "title": "Durationdays",
             "type": "integer"
           },
+          "freezeDaysLimit": {
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Freezedayslimit",
+            "type": "integer"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -679,7 +738,8 @@
         "required": [
           "name",
           "durationDays",
-          "priceKopecks"
+          "priceKopecks",
+          "freezeDaysLimit"
         ],
         "title": "MembershipPlanCreateRequest",
         "type": "object"
@@ -698,6 +758,10 @@
           },
           "durationDays": {
             "title": "Durationdays",
+            "type": "integer"
+          },
+          "freezeDaysLimit": {
+            "title": "Freezedayslimit",
             "type": "integer"
           },
           "id": {
@@ -724,6 +788,7 @@
           "name",
           "durationDays",
           "priceKopecks",
+          "freezeDaysLimit",
           "active",
           "createdAt",
           "updatedAt"
@@ -821,6 +886,16 @@
             "title": "Createdat",
             "type": "string"
           },
+          "currentFreezePeriod": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreezePeriodResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "durationDaysSnapshot": {
             "title": "Durationdayssnapshot",
             "type": "integer"
@@ -829,6 +904,18 @@
             "format": "date",
             "title": "Enddate",
             "type": "string"
+          },
+          "freezeDaysLimitSnapshot": {
+            "title": "Freezedayslimitsnapshot",
+            "type": "integer"
+          },
+          "freezeDaysRemaining": {
+            "title": "Freezedaysremaining",
+            "type": "integer"
+          },
+          "freezeDaysUsed": {
+            "title": "Freezedaysused",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -867,6 +954,18 @@
             "title": "Plannamesnapshot",
             "type": "string"
           },
+          "previousMembershipId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previousmembershipid"
+          },
           "priceKopecksSnapshot": {
             "title": "Pricekopeckssnapshot",
             "type": "integer"
@@ -900,7 +999,11 @@
           "paidAt",
           "notes",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "freezeDaysLimitSnapshot",
+          "freezeDaysUsed",
+          "freezeDaysRemaining",
+          "currentFreezePeriod"
         ],
         "title": "MembershipResponse",
         "type": "object"
@@ -910,7 +1013,8 @@
         "enum": [
           "active",
           "expired",
-          "cancelled"
+          "cancelled",
+          "frozen"
         ],
         "title": "MembershipStatus",
         "type": "string"
@@ -2417,7 +2521,7 @@
     },
     "/api/v1/memberships": {
       "get": {
-        "description": "List memberships, paginated (MEM-EP-01).\n\nQuery parameters (Phase 17 D-09):\n  - clientId — optional UUID filter; omit for global feed (owner)\n  - status   — optional single-value enum (active|expired|cancelled); omit for all\n  - sort     — created_at_desc (default) | end_date_desc | start_date_desc\n  - page / pageSize — PageQuery contract (default 1 / 20, max 100)",
+        "description": "List memberships, paginated (MEM-EP-01).\n\nQuery parameters (Phase 17 D-09; Phase 24 DEBT-02 adds expiring/within):\n  - clientId — optional UUID filter; omit for global feed (owner)\n  - status   — optional single-value enum (active|expired|cancelled); omit for all\n  - sort     — created_at_desc (default) | end_date_desc | start_date_desc\n  - page / pageSize — PageQuery contract (default 1 / 20, max 100)\n  - expiring — bool (default false); when true, forces status='active' and\n               adds inclusive end_date window [today, today + (within - 1)]\n               (Europe/Moscow today). Conflict with status != active -> 422\n               query_invalid {status: incompatible_with_expiring}.\n  - within   — int (default 7, bounded 1..30); window size in days when\n               expiring=true. Silently ignored when expiring=false.",
         "operationId": "list_memberships_api_v1_memberships_get",
         "parameters": [
           {
@@ -2483,6 +2587,28 @@
             "schema": {
               "$ref": "#/components/schemas/MembershipListSort",
               "default": "created_at_desc"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiring",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Expiring",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "within",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 30,
+              "minimum": 1,
+              "title": "Within",
+              "type": "integer"
             }
           }
         ],
@@ -2600,7 +2726,7 @@
     },
     "/api/v1/memberships/{membership_id}/cancel": {
       "post": {
-        "description": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12): only `active → cancelled` is allowed; `expired`\nand `cancelled` source states raise 409 `invalid_transition` with payload\n`{from_status, to_status}`.",
+        "description": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and\n`frozen → cancelled` are both allowed; `expired` and `cancelled` source\nstates raise 409 `invalid_transition` with payload `{from_status, to_status}`.\n\nPhase 25 D-25-20: also accepts frozen source. When called on a frozen\nmembership, the open freeze period is closed without end_date extension\n(cancellation supersedes freeze) and audit emits `membership_unfrozen`\n(days_added=0) before `membership_cancelled` in the same UoW. Owner-only\nvia existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.",
         "operationId": "cancel_membership_api_v1_memberships__membership_id__cancel_post",
         "parameters": [
           {
@@ -2647,6 +2773,138 @@
           }
         },
         "summary": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
+        "tags": [
+          "memberships"
+        ]
+      }
+    },
+    "/api/v1/memberships/{membership_id}/freeze": {
+      "post": {
+        "description": "Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.\n\nTransitions active -> frozen and opens a freeze period. Returns the\nupdated MembershipResponse including freezeDaysUsed/Remaining and\ncurrentFreezePeriod populated.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not active)\n  - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)\n  - 409 already_frozen (concurrent INSERT race)",
+        "operationId": "freeze_membership_api_v1_memberships__membership_id__freeze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Freeze membership (reception+owner; 409 freeze_limit_exceeded / already_frozen / invalid_transition)",
+        "tags": [
+          "memberships"
+        ]
+      }
+    },
+    "/api/v1/memberships/{membership_id}/renew": {
+      "post": {
+        "description": "Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.\n\nCreates a follow-up membership chained via ``previous_membership_id`` to\nthe source. Snapshots from the CURRENT plan (so price increases between\nsale and renewal apply — PROJECT.md). Returns 201 + new\n``MembershipResponse`` including ``previousMembershipId`` field.\n\nDate strategy:\n  - source 'active' / 'frozen' → start_date = source.end_date + 1 day\n  - source 'expired'           → start_date = today (Europe/Moscow)\n\nErrors:\n  - 404 membership_not_found  (source missing)\n  - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)\n  - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)\n  - 409 plan_archived          (source's plan soft-deleted by owner)",
+        "operationId": "renew_membership_api_v1_memberships__membership_id__renew_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renew membership (reception+owner; 404 plan_not_found / membership_not_found; 409 cannot_renew_cancelled / plan_archived)",
+        "tags": [
+          "memberships"
+        ]
+      }
+    },
+    "/api/v1/memberships/{membership_id}/unfreeze": {
+      "post": {
+        "description": "Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.\n\nCloses the open freeze period, extends end_date by ceil(delta_seconds /\n86400) (minimum 1 day), and transitions frozen -> active.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not frozen)",
+        "operationId": "unfreeze_membership_api_v1_memberships__membership_id__unfreeze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unfreeze membership (reception+owner; 409 invalid_transition)",
         "tags": [
           "memberships"
         ]
