@@ -96,6 +96,31 @@ export const memberships: MembershipsService = {
     )
   },
 
+  // TODO(28-03): real freeze/unfreeze/renew semantics land in plan 28-03
+  async freeze(): Promise<Membership> {
+    await delay()
+    throw new DomainError(
+      'mock_not_implemented',
+      'Mock does not implement write paths — use VITE_API_MODE=http',
+    )
+  },
+
+  async unfreeze(): Promise<Membership> {
+    await delay()
+    throw new DomainError(
+      'mock_not_implemented',
+      'Mock does not implement write paths — use VITE_API_MODE=http',
+    )
+  },
+
+  async renew(): Promise<Membership> {
+    await delay()
+    throw new DomainError(
+      'mock_not_implemented',
+      'Mock does not implement write paths — use VITE_API_MODE=http',
+    )
+  },
+
   async listPlans(query: MembershipPlansListQuery): Promise<Pagination<MembershipPlan>> {
     await delay()
     ensure('view', 'membership-plans')

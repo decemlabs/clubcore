@@ -175,7 +175,7 @@ describe('mock/memberships RBAC + shape', () => {
     useSessionStore.setState({ role: 'owner' })
     let caught: unknown
     try {
-      await memberships.createPlan({ name: 'Test', durationDays: 30, priceKopecks: 100000 })
+      await memberships.createPlan({ name: 'Test', durationDays: 30, priceKopecks: 100000, freezeDaysLimit: 4 })
     } catch (e) {
       caught = e
     }

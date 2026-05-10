@@ -96,7 +96,7 @@ function SellMembershipForm({ clientId, onSuccess, onCancel }: SellFormProps) {
         <Label htmlFor="planId">{t('memberships.form.planSelect')}</Label>
         <Select
           value={form.watch('planId')}
-          onValueChange={(v) => form.setValue('planId', v, { shouldValidate: true })}
+          onValueChange={(v) => v !== null && form.setValue('planId', v, { shouldValidate: true })}
         >
           <SelectTrigger id="planId">
             <SelectValue placeholder={t('memberships.form.planSelect')} />

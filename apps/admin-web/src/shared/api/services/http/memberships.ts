@@ -103,6 +103,33 @@ export const memberships: MembershipsService = {
     return responseToMembership(raw)
   },
 
+  async freeze(id: MembershipId) {
+    const raw = unwrap<MembershipResponse>(
+      await request('post', '/api/v1/memberships/{membership_id}/freeze', {
+        params: { membership_id: id },
+      }),
+    )
+    return responseToMembership(raw)
+  },
+
+  async unfreeze(id: MembershipId) {
+    const raw = unwrap<MembershipResponse>(
+      await request('post', '/api/v1/memberships/{membership_id}/unfreeze', {
+        params: { membership_id: id },
+      }),
+    )
+    return responseToMembership(raw)
+  },
+
+  async renew(id: MembershipId) {
+    const raw = unwrap<MembershipResponse>(
+      await request('post', '/api/v1/memberships/{membership_id}/renew', {
+        params: { membership_id: id },
+      }),
+    )
+    return responseToMembership(raw)
+  },
+
   async listPlans(query: MembershipPlansListQuery) {
     const q: Record<string, string | number | boolean> = {
       page: query.page ?? 1,

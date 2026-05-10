@@ -33,6 +33,7 @@ export interface MembershipPlanCreateInput {
   name: string
   durationDays: number
   priceKopecks: number
+  freezeDaysLimit: number
   active?: boolean
 }
 

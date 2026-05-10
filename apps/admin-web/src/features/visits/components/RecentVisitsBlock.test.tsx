@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test/utils'
 import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
+import type { UseQueryResult } from '@tanstack/react-query'
 import { RecentVisitsBlock } from './RecentVisitsBlock'
 
 vi.mock('@/features/visits/api/hooks', () => ({
@@ -44,10 +45,10 @@ describe('RecentVisitsBlock', () => {
   // Test 9: renders "Посещений нет" when empty
   it('renders empty state when no visits', () => {
     vi.mocked(useRecentVisitsByClient).mockReturnValue({
-      data: [],
+      data: [] as Visit[],
       isPending: false,
       isError: false,
-    } as ReturnType<typeof useRecentVisitsByClient>)
+    } as UseQueryResult<Visit[], Error>)
     renderWithProviders(<RecentVisitsBlock clientId="c1" />, { role: 'owner' })
     expect(screen.getByText('Посещений нет')).toBeDefined()
   })

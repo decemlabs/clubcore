@@ -94,6 +94,9 @@ export function MembershipPlanFormDialog({ open, onClose, plan }: Props) {
           name: values.name,
           durationDays: values.durationDays,
           priceKopecks,
+          // TODO Phase 28: add a freezeDaysLimit field to the form (D-28-05).
+          // Default: 1 week per month of plan duration, rounded.
+          freezeDaysLimit: Math.round(values.durationDays / 7),
           active: values.active,
         },
         {

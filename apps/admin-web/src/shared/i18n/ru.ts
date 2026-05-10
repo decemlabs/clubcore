@@ -151,6 +151,7 @@ export const ru = {
       active: 'Активен',
       expired: 'Истёк',
       cancelled: 'Отменён',
+      frozen: 'Заморожен',
     },
     badge: {
       expiresToday: 'Абонемент истекает сегодня',
@@ -208,6 +209,52 @@ export const ru = {
       planInUse: 'Тариф используется в активных абонементах и не может быть удалён.',
       invalidTransition: 'Невозможно отменить: абонемент уже истёк или отменён.',
       mockNotImplemented: 'Операция недоступна в демо-режиме. Используйте реальный API.',
+    },
+    freeze: {
+      button: 'Заморозить',
+      no_days_remaining: 'Все дни заморозки использованы',
+      errors: {
+        freeze_limit_exceeded: 'Лимит дней заморозки исчерпан.',
+        already_frozen: 'Абонемент уже заморожен.',
+        invalid_transition: 'Нельзя заморозить: статус абонемента не позволяет это действие.',
+      },
+      success: 'Абонемент заморожен',
+    },
+    unfreeze: {
+      button: 'Снять заморозку',
+      success: 'Заморозка снята',
+    },
+    frozen: {
+      badge: 'Заморожено с {date}',
+      period_dates: 'С {startedAt} по {nowOrEndedAt}',
+    },
+    renew: {
+      button: 'Продлить',
+      confirm: {
+        title: 'Продлить абонемент?',
+        body: 'Тариф: {plan} · {price}\nНовый период: {startDate} — {endDate}',
+        cta: 'Продлить',
+        cancel: 'Отмена',
+      },
+      success: 'Абонемент продлён',
+      errors: {
+        cannot_renew_cancelled: 'Нельзя продлить отменённый абонемент.',
+        plan_archived: 'Тариф архивирован — продление недоступно.',
+      },
+    },
+    list: {
+      expiringWithin: {
+        label: 'Истекает в течение',
+        option_days: 'дн.',
+      },
+    },
+    detail: {
+      title: 'Абонемент',
+      section: {
+        freeze: 'Заморозка',
+        renewal: 'Продление',
+      },
+      previousMembership: 'Продлён из абонемента',
     },
   },
   membershipPlans: {

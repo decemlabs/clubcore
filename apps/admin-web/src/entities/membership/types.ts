@@ -17,6 +17,7 @@ export interface MembershipPlan {
   name: string
   durationDays: number
   priceKopecks: number
+  freezeDaysLimit: number
   active: boolean
   createdAt: string // ISO datetime
   updatedAt: string

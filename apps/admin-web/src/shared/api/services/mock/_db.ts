@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker'
 import type { Client, ClientId } from '@/entities/client'
-import type { Membership, MembershipId, MembershipPlan, MembershipPlanId, MembershipStatus } from '@/entities/membership'
+import type { Membership, MembershipId, MembershipPlan, MembershipPlanId, MembershipStatus, FreezePeriod } from '@/entities/membership'
 import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
 
 const STORAGE_KEY = 'sportzal:mock:v1'
@@ -44,11 +44,14 @@ const DURATION_OPTIONS = [30, 90, 180, 365] as const
 function generatePlan(): MembershipPlan {
   const durationDays = faker.helpers.arrayElement(DURATION_OPTIONS)
   const priceKopecks = faker.number.int({ min: 200_000, max: 2_500_000 })
+  // freezeDaysLimit: 1 week per month of plan duration (sensible default per D-28-05)
+  const freezeDaysLimit = Math.round(durationDays / 7)
   return {
     id: faker.string.uuid() as MembershipPlanId,
     name: `${faker.word.adjective()} ${durationDays}-дневный абонемент`,
     durationDays,
     priceKopecks,
+    freezeDaysLimit,
     active: faker.datatype.boolean({ probability: 0.85 }),
     createdAt: faker.date.recent({ days: 365 }).toISOString(),
     updatedAt: faker.date.recent({ days: 30 }).toISOString(),
@@ -77,6 +80,10 @@ function generateMembership(clients: Client[], plans: MembershipPlan[]): Members
       : null
   const cancelReason =
     status === 'cancelled' ? faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.6 }) ?? null : null
+  const freezeDaysLimitSnapshot = plan.freezeDaysLimit
+  const freezeDaysUsed = 0
+  const freezeDaysRemaining = freezeDaysLimitSnapshot
+  const currentFreezePeriod: FreezePeriod | null = null
   return {
     id: faker.string.uuid() as MembershipId,
     clientId: client.id,
@@ -91,6 +98,11 @@ function generateMembership(clients: Client[], plans: MembershipPlan[]): Members
     notes: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.3 }) ?? null,
     cancelledAt,
     cancelReason,
+    freezeDaysLimitSnapshot,
+    freezeDaysUsed,
+    freezeDaysRemaining,
+    currentFreezePeriod,
+    previousMembershipId: null,
     createdAt: startDate.toISOString(),
     updatedAt: faker.date.recent({ days: 14 }).toISOString(),
   }

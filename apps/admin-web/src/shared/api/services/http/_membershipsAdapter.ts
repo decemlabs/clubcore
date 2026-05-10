@@ -14,6 +14,7 @@
 import type { components } from '@sportzal/api-client'
 import type {
   Membership,
+  FreezePeriod,
   MembershipId,
   MembershipPlan,
   MembershipPlanId,
@@ -40,6 +41,16 @@ type MembershipPlanUpdateRequest = components['schemas']['MembershipPlanUpdateRe
  * - Preserves nullable optional fields (`paidAt`, `notes`, etc.).
  */
 export function responseToMembership(r: MembershipResponse): Membership {
+  const fp = r.currentFreezePeriod
+  const currentFreezePeriod: FreezePeriod | null = fp
+    ? {
+        id: fp.id,
+        startedAt: fp.startedAt,
+        startedBy: fp.startedBy,
+        endedAt: fp.endedAt,
+        endedBy: fp.endedBy,
+      }
+    : null
   return {
     id: r.id as MembershipId,
     clientId: r.clientId,
@@ -54,6 +65,11 @@ export function responseToMembership(r: MembershipResponse): Membership {
     notes: r.notes ?? null,
     cancelledAt: r.cancelledAt ?? null,
     cancelReason: r.cancelReason ?? null,
+    freezeDaysLimitSnapshot: r.freezeDaysLimitSnapshot,
+    freezeDaysUsed: r.freezeDaysUsed,
+    freezeDaysRemaining: r.freezeDaysRemaining,
+    currentFreezePeriod,
+    previousMembershipId: r.previousMembershipId ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }
@@ -71,6 +87,7 @@ export function responseToMembershipPlan(r: MembershipPlanResponse): MembershipP
     name: r.name,
     durationDays: r.durationDays,
     priceKopecks: r.priceKopecks,
+    freezeDaysLimit: r.freezeDaysLimit,
     active: r.active,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
@@ -101,6 +118,7 @@ export function planCreateInputToRequest(input: MembershipPlanCreateInput): Memb
     name: input.name,
     durationDays: input.durationDays,
     priceKopecks: input.priceKopecks,
+    freezeDaysLimit: input.freezeDaysLimit,
     active: input.active ?? true,
   }
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '@/test/utils'
 import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
+import type { Membership, MembershipId, MembershipPlanId } from '@/entities/membership'
 import type { GymMeta } from '@/shared/api/contracts/visits'
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query'
 import { CheckInPage } from './CheckInPage'
@@ -62,7 +63,7 @@ function setupDefaults(overrides: {
   recentVisits?: Visit[]
   clients?: Client[]
   mutate?: ReturnType<typeof vi.fn>
-  activeMembership?: object
+  activeMembership?: Membership
   expiringToday?: boolean
 } = {}) {
   const mutate = overrides.mutate ?? vi.fn()
@@ -157,7 +158,28 @@ describe('CheckInPage', () => {
     const clients = [makeClient()]
     setupDefaults({
       clients,
-      activeMembership: { id: 'm1', endDate: '2026-05-09', status: 'active' },
+      activeMembership: {
+        id: 'm1' as MembershipId,
+        clientId: 'c1',
+        planId: 'p1' as MembershipPlanId,
+        planNameSnapshot: 'Test Plan',
+        durationDaysSnapshot: 30,
+        priceKopecksSnapshot: 100000,
+        startDate: '2026-04-09',
+        endDate: '2026-05-09',
+        status: 'active' as const,
+        paidAt: null,
+        notes: null,
+        cancelledAt: null,
+        cancelReason: null,
+        freezeDaysLimitSnapshot: 4,
+        freezeDaysUsed: 0,
+        freezeDaysRemaining: 4,
+        currentFreezePeriod: null,
+        previousMembershipId: null,
+        createdAt: '2026-04-09T00:00:00Z',
+        updatedAt: '2026-04-09T00:00:00Z',
+      } satisfies Membership,
       expiringToday: true,
     })
     renderWithProviders(<CheckInPage />, { role: 'reception' })

@@ -128,6 +128,11 @@ describe('useMembershipStatusForClient', () => {
       notes: null,
       cancelledAt: null,
       cancelReason: null,
+      freezeDaysLimitSnapshot: 4,
+      freezeDaysUsed: 0,
+      freezeDaysRemaining: 4,
+      currentFreezePeriod: null,
+      previousMembershipId: null,
       createdAt: '2026-04-01T00:00:00Z',
       updatedAt: '2026-04-01T00:00:00Z',
     }
@@ -159,6 +164,11 @@ describe('useMembershipStatusForClient', () => {
       notes: null,
       cancelledAt: null,
       cancelReason: null,
+      freezeDaysLimitSnapshot: 4,
+      freezeDaysUsed: 0,
+      freezeDaysRemaining: 4,
+      currentFreezePeriod: null,
+      previousMembershipId: null,
       createdAt: '2026-04-01T00:00:00Z',
       updatedAt: '2026-04-01T00:00:00Z',
     }
