@@ -10,16 +10,11 @@ import { formatDate, todayMSK } from '@/shared/i18n/date'
 import { useMembershipsByClient } from '../api/hooks'
 import { SellMembershipDialog } from './SellMembershipDialog'
 import { CancelMembershipDialog } from './CancelMembershipDialog'
-import type { Membership, MembershipId } from '@/entities/membership'
+import { StatusBadge } from './StatusBadge'
+import type { MembershipId } from '@/entities/membership'
 
 interface Props {
   clientId: string
-}
-
-function StatusBadge({ status }: { status: Membership['status'] }) {
-  if (status === 'active') return <Badge variant="default">{t('memberships.status.active')}</Badge>
-  if (status === 'expired') return <Badge variant="secondary">{t('memberships.status.expired')}</Badge>
-  return <Badge variant="outline">{t('memberships.status.cancelled')}</Badge>
 }
 
 export function MembershipsBlock({ clientId }: Props) {
