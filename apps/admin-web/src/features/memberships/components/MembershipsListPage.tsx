@@ -33,6 +33,7 @@ export function MembershipsListPage() {
     pageSize: search.pageSize,
     status: search.status,
     expiring: search.expiring,
+    within: search.within,
   })
 
   const data = query.data

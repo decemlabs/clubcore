@@ -10,6 +10,7 @@ const searchSchema = z.object({
   pageSize: z.coerce.number().int().min(10).max(100).default(20),
   status: z.enum(['active', 'expired', 'cancelled', 'frozen']).optional(),
   expiring: z.boolean().optional().default(false),
+  within: z.coerce.number().int().min(1).max(30).default(7),
 })
 
 export const Route = createFileRoute('/_protected/memberships')({
