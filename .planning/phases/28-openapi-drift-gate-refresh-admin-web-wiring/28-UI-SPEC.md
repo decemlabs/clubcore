@@ -3,7 +3,7 @@ phase: 28
 slug: openapi-drift-gate-refresh-admin-web-wiring
 status: draft
 shadcn_initialized: true
-preset: new-york / neutral (detected from components.json + apps/admin-web/CLAUDE.md)
+preset: base-nova / neutral (per apps/admin-web/components.json:3 — `"style": "base-nova"`, `"baseColor": "neutral"`)
 created: 2026-05-10
 ---
 
@@ -19,8 +19,8 @@ created: 2026-05-10
 
 | Property | Value |
 |----------|-------|
-| Tool | shadcn/ui (new-york style, neutral base color) |
-| Preset | new-york / neutral — detected from `apps/admin-web/CLAUDE.md` and `components.json` |
+| Tool | shadcn/ui (base-nova style, neutral base color) |
+| Preset | base-nova / neutral — per `apps/admin-web/components.json:3` (`"style": "base-nova"`, `"baseColor": "neutral"`). Note: project CLAUDE.md still references "new-york"; the live `components.json` is authoritative. |
 | Component library | @base-ui/react (badge, tooltip via radix-ui) + Radix UI (alert-dialog, select, tooltip) |
 | Icon library | lucide-react 0.469.0 |
 | Font | System default (no custom font declared in @theme) |
