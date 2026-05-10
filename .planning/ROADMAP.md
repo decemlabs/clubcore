@@ -143,7 +143,15 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   3. `/memberships` list + `/clients/$clientId` overview показывают `frozen` как отдельный статус (не active/expired/cancelled); фильтр/сортировка учитывают; mock service синхронизирован.
   4. "Продлить" кнопка на membership detail показывает confirm dialog с current plan price (server-fetched, kopecks → ru-RU RUB через `formatMoney`) и computed `start_date`/`end_date`; optimistic mutation с rollback; success → toast + navigate на renewed membership.
   5. `/memberships?expiring=true&within=N` фильтр работает на `VITE_API_MODE=http` (DEBT-02 закрыт); FE-08 D-2 cheap-win больше не mock-only; mock service реализует identical filter для symmetric mock/http behaviour.
-**Plans:** TBD
+**Plans:** 8 plans
+  - [ ] 28-01-PLAN.md (wave 1) — Atomic regen of openapi.json + schema.d.ts in one commit; CI drift-gate stays green (drift-gate refresh)
+  - [ ] 28-02-PLAN.md (wave 2, depends on 28-01) — Domain types extension (MembershipStatus + freeze fields + FreezePeriod), MembershipsService contract (freeze/unfreeze/renew + status filter), Russian i18n keys lock (FE-10/11/12/13 type+i18n surface)
+  - [ ] 28-03-PLAN.md (wave 3, depends on 28-02) — Mock service freeze/unfreeze/renew impls + extended _db.ts seed + parity tests (memberships.freeze.test.ts + memberships.renew.test.ts) (FE-10, FE-12)
+  - [ ] 28-04-PLAN.md (wave 3, depends on 28-02) — HTTP service freeze/unfreeze/renew impls against regenerated paths + responseToMembership extended for new fields + status filter forwarding (FE-10, FE-11, FE-12)
+  - [ ] 28-05-PLAN.md (wave 4, depends on 28-03, 28-04) — TanStack Query mutation hooks: useFreezeMembership + useUnfreezeMembership (optimistic + rollback) + useRenewMembership (non-optimistic + navigate) + Vitest hook tests (FE-10, FE-12)
+  - [ ] 28-06-PLAN.md (wave 5, depends on 28-05) — Flat detail route /memberships/$membershipId + StatusBadge extracted with frozen warning-token + FreezeSection (button states + tooltip + frozen badge) + RenewSection + RenewConfirmDialog + RBAC matrix tests (FE-10, FE-12)
+  - [ ] 28-07-PLAN.md (wave 5, depends on 28-05) — Shared StatusBadge wired into list page + clients overview (inline duplicates removed) + Заморожен filter pill on list page + integration test (FE-11)
+  - [ ] 28-08-PLAN.md (wave 5, depends on 28-05) — Within selector for expiring filter on list page + Zod schema clamping (1..30, default 7) + integration test (FE-13)
 **UI hint**: yes
 
 ### Phase 29: Milestone Verification
