@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { useSessionStore } from '@/shared/session/store'
 import { memberships } from './memberships'
 import { resetDB, loadDB, saveDB } from './_db'
-import type { Membership, MembershipId } from '@/entities/membership'
+import type { Membership, MembershipId, MembershipPlanId } from '@/entities/membership'
 
 /**
  * Phase 28 mock service renew parity tests.
@@ -56,11 +56,15 @@ describe('mock/memberships renew parity', () => {
   it('renew throws plan_archived when source plan is not active', async () => {
     // Inject a plan with active=false, then a membership pointing to it.
     const db = loadDB()
-    const archivedPlan = { ...db.plans[0]!, id: 'archived-plan-id', active: false }
+    const archivedPlan = {
+      ...db.plans[0]!,
+      id: 'archived-plan-id' as MembershipPlanId,
+      active: false,
+    }
     db.plans.push(archivedPlan)
     saveDB(db)
     const id = 'fixture-renew-archived' as MembershipId
-    injectMembership({ id, status: 'active', planId: 'archived-plan-id' as Membership['planId'] })
+    injectMembership({ id, status: 'active', planId: 'archived-plan-id' as MembershipPlanId })
     await expect(memberships.renew(id)).rejects.toMatchObject({ code: 'plan_archived' })
   })
 
