@@ -232,9 +232,7 @@ export function useRenewMembership() {
     mutationFn: ({ membershipId }: RenewVars) => services.memberships.renew(membershipId),
     onSuccess: (newMembership) => {
       toast.success(t('memberships.renew.success'))
-      // TODO Phase 28-06: route '/memberships/$membershipId' added in wave-5; cast until then
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      void (navigate as (opts: any) => void)({
+      void navigate({
         to: '/memberships/$membershipId',
         params: { membershipId: newMembership.id },
       })
