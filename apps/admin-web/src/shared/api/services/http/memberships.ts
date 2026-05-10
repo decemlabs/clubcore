@@ -49,6 +49,7 @@ export const memberships: MembershipsService = {
       pageSize: query.pageSize,
     }
     if (query.clientId) q.clientId = query.clientId
+    if (query.status) q.status = query.status
     if (query.expiring) {
       q.expiring = true
       q.within = query.within ?? 7
