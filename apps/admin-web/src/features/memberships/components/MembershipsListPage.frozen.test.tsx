@@ -19,7 +19,13 @@ vi.mock('@tanstack/react-router', async () => {
 // --- route search mock -------------------------------------------------------
 // MembershipsListPage calls MembershipsRoute.useSearch() — mock the route module
 // to return a controllable search object.
-const useSearchMock = vi.fn(() => ({ page: 1, pageSize: 20, expiring: false, status: undefined }))
+type SearchState = { page: number; pageSize: number; expiring: boolean; status?: string }
+const useSearchMock = vi.fn((): SearchState => ({
+  page: 1,
+  pageSize: 20,
+  expiring: false,
+  status: undefined,
+}))
 
 vi.mock('@/routes/_protected/memberships', () => ({
   Route: {
