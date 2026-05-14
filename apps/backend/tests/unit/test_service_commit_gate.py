@@ -167,10 +167,18 @@ def _check_function(
 _CLIENTS_SERVICE = _BACKEND_APP / "modules" / "clients" / "service.py"
 _MEMBERSHIPS_SERVICE = _BACKEND_APP / "modules" / "memberships" / "service.py"
 _AUTH_SERVICE = _BACKEND_APP / "modules" / "auth" / "service.py"
+# Phase 30 INFRA-21 — pre-register placeholder service files so the live walker
+# enters the new modules' write paths from the first commit in Phases 31/32/33.
+_TRAINERS_SERVICE = _BACKEND_APP / "modules" / "trainers" / "service.py"
+_PAYMENTS_SERVICE = _BACKEND_APP / "modules" / "payments" / "service.py"
+_PT_PACKAGES_SERVICE = _BACKEND_APP / "modules" / "pt_packages" / "service.py"
 _INSPECTED_SERVICES: tuple[Path, ...] = (
     _CLIENTS_SERVICE,
     _MEMBERSHIPS_SERVICE,
     _AUTH_SERVICE,
+    _TRAINERS_SERVICE,
+    _PAYMENTS_SERVICE,
+    _PT_PACKAGES_SERVICE,
 )
 
 
@@ -203,6 +211,11 @@ def test_service_commit_gate_against_app_modules() -> None:
     `revoke_all_sessions`, `revoke_sessions_on_password_change`,
     `revoke_family`) is recorded in
     `.planning/phases/24-foundations-tech-debt-bedrock/24-05-SUMMARY.md`.
+
+    Phase 30 INFRA-21 extends the live scope to `trainers/service.py`,
+    `payments/service.py`, `pt_packages/service.py` (empty placeholders at
+    Phase 30 — substantive write paths land in Phases 31/32/33). A zero-
+    function service passes the gate trivially (no functions → no offenders).
 
     The walker glob (`_SERVICE_GLOB`) and predicate apparatus are
     exercised by `test_walker_scope_is_modules_service_only` and the

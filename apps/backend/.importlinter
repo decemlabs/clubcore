@@ -23,6 +23,8 @@ modules =
     app.modules.bookings
     app.modules.billing
     app.modules.notifications
+    app.modules.payments
+    app.modules.pt_packages
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules
