@@ -1,162 +1,317 @@
-# Project Research Summary — v1.2 Memberships + Visits
+# Project Research Summary — v1.4 Cash Sales + PT Packages
 
-**Project:** Sportzal — single-gym CRM (РФ/СНГ)
-**Domain:** Time-based memberships (plan catalog + per-client snapshot instance with active|expired|cancelled lifecycle) + visits (reception manual check-in via admin-web + self check-in via Telegram bot `/checkin`) on the v1.1 modular monolith. First real ARQ scheduled job (`expire_memberships`). admin-web wiring of new domains through the validated `VITE_API_MODE=http` swap-seam.
-**Researched:** 2026-05-07
-**Confidence:** HIGH
-
----
-
-## Executive Summary
-
-v1.2 is a **low-novelty, high-leverage milestone** — every capability is covered by the locked v1.1 stack with no new runtime dependencies. ARQ 0.26 ships native `arq.cron`; ptb-22 `CommandHandler` plugs straight into the existing `build_application` factory; the cross-module `Visits → Memberships` validation is a direct mirror of the validated `register_user_loader` Protocol pattern; audit_log is already centralized in `core/audit.py`; admin-web composition reuses the route-as-orchestrator pattern from `clients.tsx`. **No `.importlinter` contract changes are needed** — every new edge either lives inside a module, or routes through `app/main.py` composition root, or extends the documented D-06 worker exception with parallel D-09 (ARQ→memberships) and D-10 (telegram_bot→visits).
-
-The risk profile is concentrated in three integrity bands, not architecture: (1) **`await session.commit()` discipline** (Phase 12.1 reprise risk), addressed by a `BusinessService` template + AST commit gate in Phase 15; (2) **snapshot pricing** — Membership row MUST carry `price_kopecks_snapshot`/`duration_days_snapshot`/`plan_name_snapshot` NOT NULL at insert with `ON DELETE RESTRICT` FK to plan, so plan edits never retroactively rewrite history; (3) **1/day enforcement at DB level** — Postgres UNIQUE INDEX on `(client_id, gym_date)` where `gym_date` is `GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED` — app-layer check has a race window. All three are addressable with patterns specified down to file-and-function level.
-
-Suggested 9 phases (15–23). Strict critical path 15→16→17 then 18 ∥ 19, 20 after 19, 21 after 16+17+19, 22 after 21. Phase 23 (CR-01/CR-02 + active sessions UI) parallel-eligible with anything.
+**Project:** Sportzal
+**Milestone:** v1.4 — Cash Sales + PT Packages (subsequent milestone; v1.0–v1.3 already shipped)
+**Domain:** Single-gym CRM (RU/CIS) — adding cash payment ledger + refund flow + trainers catalog + PT-package tariff + PT-session recording on top of an existing modular monolith.
+**Researched:** 2026-05-14
+**Overall confidence:** HIGH on stack + architecture (grounded in v1.0–v1.3 patterns); MEDIUM on PT-package domain edge cases (Q1/Q2 pro-rata, Q5 multi-package, Q7 expiry policy) that require operator input at discuss-phase.
 
 ---
 
-## Key Findings
+## TL;DR
 
-### Stack
-
-- **Zero new runtime deps.** ARQ 0.26 cron, ptb-22 `CommandHandler` list, plain Postgres enum + UPDATE for lifecycle, stdlib `datetime` + `zoneinfo` cover everything.
-- **Optional dev dep:** `time-machine>=2.16,<3` if cron / gym-hours tests grow brittle. Defer until pain forces it.
-- **Rejected libraries:** APScheduler (use ARQ cron), pg_cron (out of scope, infra), `transitions`/`python-statemachine` (3 states, 2 transitions — 3-line UPDATE wins), `pendulum` (stdlib + zoneinfo sufficient since Russia abolished DST in 2014), anti-fraud libraries (uniqueness constraint, not detection problem).
-- **One placeholder cleanup:** delete `apps/backend/app/workers/scheduler.py` placeholder during Phase 18 — its TODO is fulfilled by `cron_jobs` directly on `WorkerSettings`.
-- **Compose topology gets a 5th service:** `arq-worker` (`uv run arq app.workers.WorkerSettings`) — mirrors precedent of bot worker as separate process.
-
-### Features
-
-- **Locked v1.2 scope is sound.** Every domain item maps cleanly to RU-market table stakes (FitBase, 1С:Фитнес-клуб, fitness365, impulseCRM all have plan catalog + snapshot instance + active/expired/cancelled tri-state + 1/day cap + gym-hours window).
-- **Three "free" column additions strongly recommended** in Phase 17 migration: `paid_at TIMESTAMPTZ NULL` (seeds v1.3 billing), `notes TEXT NULL` (operational reality), `activation_policy VARCHAR DEFAULT 'purchase_date' CHECK (activation_policy = 'purchase_date')` (forward-compat for v1.3 first-visit activation). Zero-cost now, expensive later.
-- **Top cheap-win differentiators (D-1…D-7) — pure-read views over locked tables.** Best ROI: D-3 ("истёк сегодня" red badge in client list), D-2 (filter "expiring within N days"), D-5 (TG-bot reply with days-remaining on success). Pick 3-4 for Phase 22.
-- **Anti-features explicitly rejected:** per-class booking, family memberships, visit-count plans, freeze, proportional refund, expiring-soon notifications, trainer commissions, CSV import, photo upload, websockets-driven "who's in the gym now" (poll instead), multi-gym, audit-log read API. Each has a "when to reconsider" in FEATURES.md so v1.2 planners can defend scope.
-- **Anti-fraud verdict — gym-hours + 1/day is sufficient for honest single-gym pet project.** Telegram-bot binding to `telegram_chat_id` is higher friction than card-swap; reception-collusion vector exists but constrained by mandatory active-membership validation + audit log + (in pet-project context) owner often IS the reception. Real RU clubs use photo+biometrics at turnstile; v1.2 deliberately rejects that hardware tier. Document accepted residual risk in PROJECT.md Key Decisions in Phase 15.
-
-### Architecture
-
-- **Visits → Memberships dependency** via `ActiveMembership` Protocol callback in `core/dependencies.py` registered from `app/main.py`. Direct mirror of `register_user_loader` (`app/core/dependencies.py:44-61`, `app/main.py:88`). FK at DB level (string ref, no Python import).
-- **ARQ scheduled job placement** in `app/workers/scheduled/expire_memberships.py`, importing `app.modules.memberships.service`. No `workers ⊥ modules` contract exists (verified in `apps/backend/.importlinter`). Documented as **D-09** parallel to D-06.
-- **Telegram bot `/checkin` handler** via `HandlerContext.visits_service: ModuleType` extension (NOT direct import in `handlers.py` — would violate `integrations-not-depend-on-modules`). Anti-fraud lives in `visits.service` so reception manual + bot self check-in share validation. Documented as **D-10** parallel to D-06.
-- **audit_log already centralized.** Pure stateless `audit.emit(...)` in `core/audit.py`; new modules write identically to `clients.service`. Add 10 new locked event names: `membership_plan_*` (3), `membership_*` (3), `visit_*` (4).
-- **admin-web client-detail composition — Pattern α (route IS the page).** `routes/_protected/clients.$clientId.tsx` composes via `Promise.all(ensureQueryData)` in loader; `MembershipsBlock` and `RecentVisitsBlock` exported from their own features and consumed by the route — never `features/clients` importing them. Verify `eslint.config.js` `import/no-restricted-paths` rules in Phase 22 plan.
-
-### Pitfalls (BLOCKER ranks)
-
-1. **Service write paths missing `await session.commit()`** (Phase 12.1 reprise) → Phase 15 ships `BusinessService` template + AST gate verifying every `service.py` write path explicitly commits.
-2. **Snapshot pricing not copied** → Phase 17 schema MUST include `price_kopecks_snapshot`/`duration_days_snapshot`/`plan_name_snapshot` NOT NULL at insert; `MembershipPlan` FK uses `ON DELETE RESTRICT` so plans can't be hard-deleted while instances exist.
-3. **Visit `1/day` race window via app-layer check** → Phase 19 migration adds Postgres UNIQUE INDEX on `(client_id, gym_date)` with `gym_date GENERATED ALWAYS AS ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date) STORED`. Concurrent-request test in Phase 19: 10 parallel → 1×201 + 9×409.
-
-### Pitfalls (HIGH)
-
-- **End_date calendar math** — days-only model (no `relativedelta` weirdness on Jan 31 + 30 days); end_date computed once at sell time, never recomputed. **Inclusive semantics** (last valid check-in day = `end_date`); ARQ filter uses strict `<`.
-- **ARQ `expire_memberships` not idempotent** → use `UPDATE … WHERE end_date < CURRENT_DATE AND status='active' RETURNING id` in single transaction. ARQ `unique=True` + `keep_cronjob_progress=60` does NOT protect against worker-restart re-runs (verified: ARQ issue #193). Idempotency must be SQL-level.
-- **ILIKE search forgets CR-01 escape pattern** → promote `_escape_like_pattern` from `clients/repository.py` to `core/sql.py`. Future modules import without `modules-independent` violation.
-- **import-linter drift via TYPE_CHECKING/Protocol abuse** — visits never `from app.modules.memberships import ...` even under `TYPE_CHECKING`. The `ActiveMembership` Protocol lives in `core/dependencies.py`, not in memberships.
-- **Bot `/checkin` DM oracle leak** — single generic Russian failure DM. Precise reason audit-only, NEVER include client name / end_date / hours / membership status in DM. Owner copy review before Phase 20 merge.
-- **Bot replay / friend-fraud** — Redis `update_id` dedup with key-prefix discipline alongside `arq:*` and `sz:session:*`. Accept residual risk for v1.2 single-zal scope; lock as Key Decision in Phase 15.
-- **Audit log taxonomy drift** — frozenset of `(action, resource_type)` tuples in `core/audit.py`; `audit.emit` validates at call. Test that walks every new event added in v1.2.
-- **OpenAPI drift on schema add** — `BackendSchemaBase` (camelCase + `populate_by_name=True`) template; ruff `UP007` enforces `X | None` not `Optional[X]` (Pydantic v2 schema differences).
+- **Zero new runtime libraries — backend or frontend.** Every v1.4 capability composes from the locked Python (FastAPI / SQLAlchemy / asyncpg / Pydantic v2) and TS (React 19 / TanStack / shadcn / Zod) stack. Money stays integer kopecks; status guards stay declarative-constant + `_assert_can_transition`; no FSM library, no `Money` class, no fiscal SDKs, no Stripe, no ЮKassa.
+- **Three new backend modules: `trainers/`, `payments/`, `pt_packages/`.** Each respects `modules-independent` via four new Protocol slots in `core/dependencies.py` (`trainer_by_id_resolver`, `payment_recorder`, `payment_refunder`, `active_pt_package_resolver`) wired exclusively from `app/main.py:create_app()`. Three import-linter contracts unchanged — only the modules-independent list grows.
+- **Architectural fork resolved: PT-packages get a separate `pt_packages` module with their own tables.** Both researcher recommendations are technically viable; we pick the separate-module path because it gives clean schema (no `NULL XOR NULL` columns), clean resolver semantics (date-based vs counter-based are different queries), clean audit taxonomy (`pt_package_*` ≠ `membership_*`), and clean v1.5 reporting (no `WHERE kind=` scans). Trade-off explicitly called out in §Bedrock decisions B-04 for operator override at requirements time.
+- **Foundations Phase 30 locks the bedrock before any callsite:** `LOCKED_AUDIT_EVENTS` extension (34 → 50), `Resource` + `OWNER_ONLY` extensions with byte-paritet to admin-web `can.ts`, `.importlinter` modules list, SVC001 walker scope, append-only AST guard on `payments` writes, and all 12 Bedrock Decisions (B-01..B-12) recorded in PROJECT.md Key Decisions. This mirrors the v1.3 Phase 24 INFRA-15 discipline that let Phases 25/26/27 pass CI from their first commit.
+- **Recommended ship order: 7 phases (30..36).** Foundations → Trainers (smallest, validates new-module template) → Payments + Membership sale-with-payment + Membership refund → PT-package plans + instances (no sessions) → PT-session recording → OpenAPI + admin-web full sweep → Milestone-verification with cross-phase human scenarios + Postgres race tests (REF-TEST-01, PTS-TEST-01) + 6-gate CI evidence.
 
 ---
 
-## Cross-Research Conflicts Resolved
+## Stack Additions
 
-| Topic | Conflict | Resolution |
+**Decision: no new runtime dependencies.** Rejection summary:
+
+| Candidate | Status | Why rejected |
 |---|---|---|
-| `paid_at` / `notes` / `activation_policy` columns | FEATURES recommends adding (M-7/M-9/M-8); ARCHITECTURE schema sketch omits | **Add per FEATURES** — zero runtime cost, saves v1.3 migration cost. Phase 17 plan-author includes them. |
-| `end_date` inclusive vs exclusive | ARCHITECTURE Protocol comment: exclusive; FEATURES + PITFALLS: inclusive | **Inclusive wins** — matches client expectation "купил на месяц до 30 числа = тренируюсь 30-го числа". ARQ filter `end_date < CURRENT_DATE AT TIME ZONE 'Europe/Moscow'` (strict `<`). Lock in Phase 15 Key Decisions. |
-| 1/day index mechanism | STACK/FEATURES/ARCHITECTURE: partial unique on date expression; PITFALLS: STORED GENERATED `gym_date` column + UNIQUE on `(client_id, gym_date)` | **PITFALLS approach wins** — generated column prevents app from writing wrong value; Phase 19 migration uses `GENERATED ALWAYS AS (...) STORED`. |
-| ARQ daily tick time | STACK `hour=3, minute=5` UTC; ARCHITECTURE `hour=3, minute=15` (TZ unspecified); PITFALLS "03:05 MSK" | **Defer to Phase 18 plan** — recommend UTC tick `hour=3, minute=5` (06:05 MSK), document MSK conversion in WorkerSettings docstring. Container `TZ=UTC`. |
-| `/checkin` cross-module shape | STACK "decision deferred"; ARCHITECTURE "extend HandlerContext"; PITFALLS aligns | **Aligned — extend `HandlerContext` with `visits_service: ModuleType`**, document as D-10. |
-| State-machine library | STACK rejects (3 states, 2 transitions); PITFALLS adds Postgres CHECK + transition matrix unit test | **Aligned — plain enum + CHECK constraint + service-layer guards + transition test.** No library. |
+| `py-moneyed` / Pydantic Money type | REJECT | Single-currency RUB; kopecks integer locked since v1.0. |
+| Postgres `MONEY` type | REJECT | Locale-sensitive, driver-dependent string output (SQLAlchemy issue #5965). |
+| `transitions` / `python-statemachine` | REJECT | v1.3 declarative `MEMBERSHIP_STATUS_TRANSITIONS` + `_assert_can_transition()` is enough. |
+| `eventsourcing` | REJECT | Append-only payments + `audit_log` + `LOCKED_AUDIT_EVENTS` gate already give traceability. |
+| ATOL / `ofd-py` / ЮKassa SDK / Stripe | REJECT | 54-ФЗ out of scope; ЮKassa deferred to v1.6; Stripe region-banned. |
+| `dinero.js` / `money.js` | REJECT | `formatMoney(minor)` + BLK-04 form-boundary precedent work. |
+| `xstate` (frontend FSM) | REJECT | Refund/PT-package status server-authoritative. |
+| Chart / PDF / receipt libs | REJECT | Reports deferred to v1.5; no fiscal receipts. |
+
+**Frontend cosmetic additions only:** extend `StatusBadge` discriminated union with 4 PT-package variants; add `PaymentBadge` for sale-vs-refund tinting. No new npm packages.
 
 ---
 
-## Build Order — Suggested Phase Sequence
+## Feature Categories
+
+### Category 1 — Payments (cash)
+- Single `payments` ledger row per sale, server-side `received_at`, `received_by_user_id`.
+- `method TEXT NOT NULL DEFAULT 'cash'` from day one (forward seam for v1.6 ЮKassa).
+- Append-only: no `deleted_at`, no `updated_at`, no UPDATE/DELETE in any service path (AST-guarded).
+- Mandatory snapshot: `payment.amount == subject.price_kopecks_snapshot`.
+- Audit `payment_recorded` with `payment_row_hash` (SHA-256 canonical-JSON).
+
+**Anti-features:** card payments, fiscal receipts, partial payments, discounts, multi-currency, cash drawer reconciliation.
+
+### Category 2 — Refunds
+- **Refund is a row, not a column.** New `payments` row, `subject_kind='refund'`, `amount_kopecks < 0`, `refund_of FK`, partial UNIQUE on `refund_of`.
+- Endpoint surfaces on subject: `POST /memberships/{id}/refund`, `POST /pt-packages/{id}/refund`.
+- Reception self-serves (no owner approval). `(REFUND, MEMBERSHIPS)`+`(REFUND, PT_PACKAGES)` NOT in `OWNER_ONLY`.
+- Full-refund only in v1.4. No pro-rata.
+- Refund of `frozen` → 409 `must_unfreeze_first` (B-08).
+- Refund of renewed source → 409 `cannot_refund_renewed_source` (B-09).
+- Audit: `payment_refunded` + `membership_refunded` (distinct from `membership_cancelled`).
+
+**Anti-features:** partial refunds, refund reversal, refund to different method, refund-window enforcement.
+
+### Category 3 — Trainers
+- `trainers` table: `id, full_name, phone NULL, is_active BOOLEAN, deleted_at`.
+- Owner-only CRUD; reception has `(LIST, TRAINERS)` for PT-session picker.
+- Hard-delete → 409 `trainer_in_use` if FK references exist. Owner deactivates instead.
+- `trainer_name_snapshot` on PT-sessions (mirrors v1.2 plan snapshot).
+- 4 audit events: created/updated/deactivated/reactivated.
+
+**Anti-features:** schedules, shifts, pay rate, commission, trainer login, Telegram bot for trainers, ratings, certifications.
+
+### Category 4 — PT Packages (tariff)
+- Dedicated `pt_package_plans` (mirrors `membership_plans`).
+- Dedicated `pt_packages` instance table with full snapshot suite + `sessions_remaining INTEGER NOT NULL CHECK >= 0 AND <= session_count_snapshot`.
+- Status enum: `('active','exhausted','expired','cancelled')`.
+- One active PT-package per client (partial UNIQUE).
+- Expiry = sessions=0 OR `end_date < today`; new ARQ cron `expire_pt_packages` 06:25 MSK.
+- **No freeze on PT-packages in v1.4.**
+
+**Anti-features:** half-sessions, group PT, unlimited-session pt_package, PT-only floor access, per-trainer pricing, family-sharing.
+
+### Category 5 — PT Sessions (recording)
+- `pt_sessions` table: `pt_package_id, trainer_id, client_id (denormalised), performed_at, performed_by_user_id, cancelled_at NULL, cancel_reason NULL, trainer_name_snapshot, notes NULL`.
+- Race-safe decrement: `UPDATE pt_packages SET sessions_remaining = sessions_remaining - 1 WHERE id=:id AND sessions_remaining > 0 AND status='active' RETURNING sessions_remaining`. 0 rows → 409 `pt_package_exhausted`.
+- Auto-transition to `'exhausted'` when balance hits 0.
+- Reception logs (not trainer self-service). `(CREATE, PT_SESSIONS)` reception+owner; `(CANCEL, PT_SESSIONS)` owner-only.
+- Backdating: reception 7 days, owner unlimited.
+- Cancellation: reception 24h, owner anytime; restores balance atomically.
+- **PT-sessions independent of visits** (orthogonal events).
+
+**Anti-features:** trainer self-service logging, scheduling/pre-booking, multi-trainer sessions, tip tracking, client signature.
+
+---
+
+## Architectural Integration
+
+### Module structure — 3 new modules
+
+| Module | Tables | Notes |
+|---|---|---|
+| `trainers/` | `trainers` | OWNER CRUD; reception LIST |
+| `payments/` | `payments` (single table, refund = row with `refund_of` self-FK) | Reception writes; owner reads history |
+| `pt_packages/` | `pt_package_plans`, `pt_packages`, `pt_sessions` | Plans owner-only; instances + sessions reception+owner |
+
+Module count grows from 4 → 7. Within modular monolith scope.
+
+### PT-package architectural fork — resolved
+
+**Variant B (separate module) chosen.** Rationale:
+1. **Schema integrity:** avoids `end_date NULL XOR sessions_remaining NULL` CHECK soup.
+2. **Resolver semantics:** date-based vs counter-based queries have different indexes.
+3. **Audit taxonomy:** `pt_package_*` ≠ `membership_*` audit verbs.
+4. **v1.5 reports forward-seam:** revenue-from-memberships vs revenue-from-PT will be separate metrics.
+5. **Freeze isolation:** PT-packages don't freeze → variant B avoids `if kind == 'pt_package'` branches in freeze service.
+
+**Trade-off:** variant B adds 1 module skeleton + 1 Protocol slot + ~30% snapshot/transition boilerplate duplication.
+
+**Override path (B-04):** if operator prefers variant A (extend `memberships`), Phase 33 scope internals shift; phases 30/31/32/34/35/36 unchanged.
+
+### Protocol slots (`core/dependencies.py`)
+
+| Slot | Producer | Consumer |
+|---|---|---|
+| `register_trainer_by_id_resolver` | `trainers.service` | `pt_packages.service.record_pt_session` |
+| `register_payment_recorder` | `payments.service.record_payment` | `memberships.service.create_membership`, `pt_packages.service.create_pt_package` |
+| `register_payment_refunder` | `payments.service.issue_refund` | `memberships.service.refund_membership`, `pt_packages.service.refund_pt_package` |
+| `register_active_pt_package_resolver` | `pt_packages.service.resolve_active_pt_package_by_client` | reception PT-session form prefill |
+
+All registered exactly once in `app/main.py:create_app()`. Inverse direction (`payments → memberships`) NOT needed — refund initiates from subject's module.
+
+### Database migrations (0011 → 0015)
+
+- **0011_trainers** — `trainers` + partial UNIQUE on `phone WHERE deleted_at IS NULL AND phone IS NOT NULL`.
+- **0012_payments** — `payments` ledger; `subject_kind ∈ {'membership','pt_package','refund'}` CHECK; amount sign CHECK; `refund_of` self-FK + partial UNIQUE. **No `deleted_at`, no `updated_at`** (append-only).
+- **0013_pt_package_plans** — `lower(name)` partial UNIQUE.
+- **0014_pt_packages** — instances with full snapshot suite + CHECK invariants.
+- **0015_pt_sessions** — sessions with denormalised `client_id` + `trainer_name_snapshot` + composite indexes.
+
+Memberships status enum and Phase 17/24 machinery — **untouched.**
+
+### RBAC additions
+
+- New `Resource`: `TRAINERS`, `PAYMENTS`, `PT_PACKAGE_PLANS`, `PT_PACKAGES`, `PT_SESSIONS`.
+- No new `Action` (reuse `VIEW/CREATE/EDIT/DELETE/REFUND/CANCEL`).
+- `OWNER_ONLY` grows 15 → ~26 entries.
+- Three-way byte-paritet to `apps/admin-web/src/shared/session/can.ts` enforced by existing parity test.
+
+### LOCKED_AUDIT_EVENTS additions (34 → 50)
 
 ```
-15 → 16 → 17 ┬→ 18
-             └→ 19 → 20 → 21 → 22
-
-23 (independent — anywhere)
+trainer_created, trainer_updated, trainer_deactivated, trainer_reactivated,
+payment_recorded, refund_issued, membership_refunded,
+pt_package_plan_created, pt_package_plan_updated, pt_package_plan_archived,
+pt_package_sold, pt_package_cancelled, pt_package_refunded, pt_package_exhausted, pt_package_expired,
+pt_session_recorded, pt_session_cancelled
 ```
 
-| # | Phase | Inputs | Outputs |
-|---|-------|--------|---------|
-| **15** | **Foundations: RBAC parity + audit taxonomy + helper hoisting** | none | `Action.{CREATE, CANCEL, CHECK_IN}`, `Resource.{MEMBERSHIPS, MEMBERSHIP_PLANS, VISITS}`, `OWNER_ONLY` extensions both sides; TEST-06 byte-paritet extended; `BusinessService` template + AST commit gate; `_escape_like_pattern` hoisted to `core/sql.py`; audit taxonomy frozenset; `BackendSchemaBase`; **Key Decisions:** inclusive `end_date`, `gym_date` definition, accepted residual fraud risk. |
-| **16** | **Memberships DB + plans CRUD backend** | 15 | Alembic 0004 (`membership_plans` table); module template; `/api/v1/membership-plans` 4 routes (owner-only); audit events `membership_plan_*`. |
-| **17** | **Membership instances backend (sell + cancel + resolver)** | 16 | Alembic 0005 (`memberships` with snapshots + `paid_at` + `notes` + `activation_policy CHECK`); `service.create_membership` (computes `end_date` once); `service.cancel_membership` (transition guard); `service.resolve_active_membership_by_client` (latest `end_date` then `created_at DESC`); `register_active_membership_resolver` Protocol; `app/main.py` wiring; `/api/v1/memberships` 4 routes; transition matrix tests; Postgres CHECK on status. |
-| **18** | **ARQ scheduled `expire_memberships`** ∥ 19 | 17 | `app/workers/scheduled/expire_memberships.py` (D-09); `WorkerSettings.cron_jobs`; idempotent `UPDATE … RETURNING id`; `on_job_start`/`on_job_end` `job_id` contextvars binding; new docker-compose `arq-worker` service; patched-clock double-run test. Delete `scheduler.py` placeholder. |
-| **19** | **Visits DB + reception check-in backend** ∥ 18 | 17 | Alembic 0006 (`visits` with STORED GENERATED `gym_date` + UNIQUE + channel ENUM + `checked_in_by` FK); module template; shared anti-fraud helpers (gym hours from env + active-membership lookup via core resolver); `/api/v1/visits` 3 routes; concurrent-request test (10 parallel → 1×201 + 9×409). |
-| **20** | **Telegram bot `/checkin`** | 19 | `HandlerContext.visits_service` (D-10); `checkin_handler` with single generic Russian failure DM; `service.create_visit_self_checkin`; Redis `update_id` dedup; `visit_rejected_bot` vs `visit_rejected_reception` audit events. Owner Russian-copy sign-off. |
-| **21** | **OpenAPI drift gate refresh + api-client codegen** | 16, 17, 19 | Regen `apps/backend/openapi.json`; `pnpm --filter @sportzal/api-client codegen`; commit both; CI green. |
-| **22** | **admin-web wiring (memberships + visits)** | 21 | `features/memberships`, `features/visits`; new routes `/_protected/memberships.tsx`, `/_protected/membership-plans.tsx` (owner-only via `beforeLoad`), `/_protected/visits.tsx`; client-detail Pattern α (route IS page; `Promise.all(ensureQueryData)` in loader); reception UX edge cases (expired-today / already-today / multi-phone-match); cheap-wins D-2/D-3/D-5/D-1 per budget. |
-| **23** | **Hygiene + v1.1 carryover** ∥ anywhere | none | Phase 04 CR-01 (Argon2 verify-error → 401), CR-02 (invalid UUID in cookie → 401), active sessions UI + revoke. |
+Pre-registered in Phase 30 (v1.3 INFRA-15 discipline). Canonical payload schemas locked there — especially `payment_refunded` carrying `payment_row_hash`.
 
-### Dependencies and Parallelization
+### Import-linter — unchanged
 
-- 15 must finish first — RBAC contract that 16/17/19 all depend on.
-- 18 and 19 are parallelizable after 17 (no shared code beyond the resolver from 17).
-- 20 must wait for 19 (handler imports `visits_service`).
-- 21 cannot start until 16+17+19 are merged — OpenAPI drift gate is byte-stable.
-- 22 cannot start until 21 — admin-web codegen depends on `schema.d.ts` from 21.
-- 23 is fully independent — touches Phase 4 auth code + frontend session UI.
+Only `modules-independent` list extends with `trainers`, `payments`, `pt_packages`.
 
 ---
 
-## Research Flags for Plan-Phase
+## HIGH-Severity Pitfalls & Prevention
 
-**Needs deeper plan-time research:**
+| # | Pitfall | Prevention |
+|---|---|---|
+| H-01 | Payment row not append-only | Schema has NO `deleted_at`/`updated_at`; AST walker forbids UPDATE/DELETE on `payments`. B-01. |
+| H-02 | Refund without sale | Refund endpoint requires `payment_id` FK `ON DELETE RESTRICT`. |
+| H-03 | Double refund / refund > original | Partial UNIQUE on `refund_of`; full-refund-only (B-02). Test REF-TEST-01. |
+| H-04 | PT-session decrement race | Atomic `UPDATE … WHERE sessions_remaining > 0 RETURNING …`; CHECK `>= 0`. Test PTS-TEST-01. |
+| H-05 | Refund of frozen membership | Reject 409 `must_unfreeze_first` (B-08). |
+| H-06 | Refund of renewed-source | Reject 409 `cannot_refund_renewed_source` (B-09). |
+| H-07 | Refund missing audit row | Pre-register events Phase 30; SVC001 walker extended to `payments/service.py`. |
+| H-08 | Trainer hard-delete breaks PT-session FK | `ON DELETE RESTRICT` + 409 `trainer_in_use` + `trainer_name_snapshot` (B-05). |
+| H-09 | PT-package `session_count` mutability post-sale | Mandatory snapshot; plan-level immutable. |
+| H-10 | Sale double-submit | RHF `formState.isSubmitting` + `Idempotency-Key` header + Redis 1h cache. |
+| H-12 | Cash drawer reconciliation drift | NO end-of-day close in v1.4 (B-06); deferred to v1.5. |
+| H-13 | Refund single-click footgun | AlertDialog + confirm checkbox; >24h refund owner-only (B-07). |
+| H-14 | Audit payload missing payment hash | Lock canonical schema Phase 30: `payment_refunded` includes `payment_row_hash`. |
 
-- **Phase 18 (first real ARQ cron):** validate `unique=True` on docker restart, `keep_cronjob_progress=60` semantics, `on_startup` cron-resolves assertion, design `job_id` contextvars convention for structlog binding.
-- **Phase 20:** Russian copy review with owner; Redis `update_id` dedup design with key-prefix discipline alongside `arq:*` and `sz:session:*`; accepted-residual-risk Key Decisions entry in PROJECT.md.
-
-**Standard patterns — skip deeper research:**
-
-- Phase 15 — extends three v1.1 patterns (RBAC parity, audit taxonomy, repository helper hoisting).
-- Phases 16/17/19 — full mirror of `clients` module template (validated v1.1).
-- Phase 21 — rerun of v1.1 Phase 9 (OpenAPI drift gate established).
-- Phase 22 — rerun of v1.1 Phases 10/11/13. Only Pitfall 12 (waterfall + stale-while-revalidate) is novel and addressed by the route loader pattern.
-- Phase 23 — micro-fixes.
+Full pitfalls (14 HIGH + 14 MEDIUM + 4 LOW) in PITFALLS.md.
 
 ---
 
-## Open Decisions for Plan-Phase Authors
+## Bedrock Decisions (lock in Phase 30)
 
-1. **`Action.CREATE` vs reusing `EDIT`** (Phase 15) — recommend introducing CREATE + CANCEL for clarity.
-2. **Gym hours config location** (Phase 19) — recommend env vars `GYM_HOURS_START` / `GYM_HOURS_END` (Europe/Moscow); tunable per deploy without redeploy.
-3. **`end_date` inclusive semantics** (Phase 15) — lock as PROJECT.md Key Decision; ARQ filter strict `<`.
-4. **`activation_policy` "now-vs-later"** (Phase 17) — ship column NOW with single CHECK value `'purchase_date'`, widen the CHECK in v1.3.
-5. **ARQ cron timezone + slot** (Phase 18) — recommend container `TZ=UTC` + `hour=3, minute=5` (06:05 MSK).
-6. **Multiple-overlapping-active-memberships tiebreak** (Phase 17) — latest `end_date`, then `created_at DESC`. Document explicitly in resolver docstring.
-7. **Russian DM copy lock** (Phase 20) — single generic failure string; owner sign-off before merge.
-8. **Reception UX edge cases** (Phase 22) — pre-fetch today's visit + channel badge; top-5 phone-prefix search results.
+| # | Decision | Default |
+|---|---|---|
+| B-01 | `payments` append-only — no soft-delete, no UPDATE | LOCK; AST-enforced |
+| B-02 | Refund full-amount only (no pro-rata in v1.4) | LOCK; defer pro-rata to v1.5+ |
+| B-03 | `LOCKED_AUDIT_EVENTS` pre-registered in Phase 30 | LOCK (workflow) |
+| B-04 | **PT-packages separate module + dedicated tables** | LOCK variant B; override path documented |
+| B-05 | `trainer_name_snapshot` on PT-session | LOCK (non-negotiable) |
+| B-06 | No end-of-day cash-drawer close in v1.4 | LOCK |
+| B-07 | Refund permission: reception <24h, owner >24h | LOCK (confirm at requirements) |
+| B-08 | Refund of frozen → 409 `must_unfreeze_first` | LOCK simpler-path |
+| B-09 | Refund of renewed-source → 409 | LOCK |
+| B-10 | PT-package alone does NOT grant gym entry | RECOMMENDED; flag for operator |
+| B-11 | PT-session backdating: reception 7d / owner unlimited | LOCK |
+| B-12 | PT-session cancellation: reception 24h / owner anytime | LOCK |
+
+Sub-decisions deferred to discuss-phase: Q5 (multi-package), Q7 (date-expiry), Q13 (resolver tiebreak FIFO), M-13 (trainer phone uniqueness), M-10 (PT-package renewal carry-over).
+
+---
+
+## Suggested Phase Order
+
+**7 phases (30..36), mirrors v1.3 cadence (6 feature + 1 verify).**
+
+### Phase 30 — Foundations (bedrock)
+**Delivers:** 12 Bedrock Decisions; `LOCKED_AUDIT_EVENTS` extended; `Resource`+`OWNER_ONLY` extended with three-way parity; `.importlinter` modules list; SVC001 walker scope; append-only AST walker; v1.3 deferred `mock/memberships.ts ?status=` parity closed.
+**Mirrors:** v1.3 Phase 24.
+**Research flag:** NO.
+
+### Phase 31 — Trainers module
+**Delivers:** Migration 0011; `trainers/` full module; 4 CRUD endpoints + `?active=true`; Protocol slot `register_trainer_by_id_resolver` (wired in both `main.py` and `telegram_bot.py` per REG-29-03 lesson); admin-web `/trainers` page + mock service.
+**Mirrors:** v1.2 Phase 16.
+**Research flag:** NO.
+
+### Phase 32 — Payment ledger + Membership sale-with-payment + Membership refund
+**Delivers:** Migration 0012; `payments/` with `record_payment` + `issue_refund`; Protocol slots `payment_recorder`+`payment_refunder`; modified `memberships.service.create_membership`; `POST /memberships/{id}/refund`; audit events; admin-web sale-form extension + refund button + AlertDialog; `Idempotency-Key` header.
+**Mirrors:** v1.2 Phase 17-22 + v1.3 Phase 25.
+**Research flag:** NO.
+
+### Phase 33 — PT-package plans + instances (no sessions)
+**Delivers:** Migrations 0013+0014; `pt_packages/` plans router (owner-only) + packages router (sell/cancel/refund/list/get); `PT_PACKAGE_STATUS_TRANSITIONS` constant; Protocol slot `active_pt_package_resolver`; ARQ cron `expire_pt_packages` 06:25 MSK; admin-web `/pt-package-plans` + `/pt-packages`.
+**Research flag:** YES (light) — needs Q5, Q7, B-04 confirmation at discuss-phase.
+
+### Phase 34 — PT-session recording
+**Delivers:** Migration 0015; `record_pt_session` + `cancel_pt_session` with race-safe decrement; endpoints + audit; admin-web "record PT-session" panel + session history.
+**Research flag:** YES (light) — Q3, Q4.
+
+### Phase 35 — OpenAPI drift gate refresh + admin-web full sweep
+**Delivers:** Regenerated byte-stable `openapi.json` + `schema.d.ts`; full http-mode validation; TanStack Query mutation hooks; `PaymentBadge` + `PtPackageStatusBadge`; locked Russian i18n; three-way RBAC parity.
+**Mirrors:** v1.2 Phase 21-22 + v1.3 Phase 28.
+**Research flag:** NO.
+
+### Phase 36 — Milestone verification
+**Delivers:** 7+ operator scenarios; live backend+Telegram sandbox; REF-TEST-01 + PTS-TEST-01 + PAY-TEST-01 + AUDIT-TEST-01 real-Postgres tests; 6 CI gate evidence; operator sign-off in `milestones/v1.4-VERIFICATION-LOG.md`.
+**Mirrors:** v1.3 Phase 29.
+**Research flag:** NO.
+
+### Ordering rationale
+- Trainers before PT-sessions (FK target).
+- Payments before PT-packages (recorder slot reuse).
+- PT-package instances before PT-sessions (decrement target).
+- OpenAPI sweep at end (single atomic regen).
+- Foundations first (all subsequent phases pass CI from commit 1).
+
+---
+
+## Open Questions for Discuss-Phase
+
+| # | Phase | Question | Default |
+|---|---|---|---|
+| Q1 | 32 | Pro-rata refund for partial use? | Full-only (B-02) |
+| Q2 | 32 | Refund permission: uniform reception OR 24h split? | 24h split (B-07) |
+| Q3 | 34 | PT-session implicit visit-creation? | NO — orthogonal |
+| Q4 | 34 | PT-session cancellation: 24h reception / owner anytime? | YES (B-12) |
+| Q5 | 33 | Multiple active PT-packages per client? | NO — one active |
+| Q6 | 33 | PT-package alone grants gym entry? | NO (B-10) |
+| Q7 | 33 | PT-package expiry: time / count / both? | BOTH whichever first |
+| Q8 | 33/34 | PT-package renewal carries remaining sessions? | NO |
+| Q9 | 32 | Refund reason: enum / free-text / both? | Both |
+| Q10 | 30 | **B-04 fork: variant A or B?** | Variant B |
+| Q11 | 30 | Trainer phone E.164 validation when present? | YES |
+| Q12 | 32 | Idempotency: header+Redis OR `SELECT FOR UPDATE`? | Header+Redis |
+| Q13 | 33 | Active-PT-package resolver tiebreak if ≥2? | `start_date ASC, created_at DESC` FIFO |
+| Q14 | 33 | `expire_pt_packages` cron slot? | 06:25 MSK |
+| Q15 | 35 | Telegram bot extension for PT? | NO — out of scope |
+| Q16 | 30 | Trainer soft-delete: `is_active` toggle OR `deleted_at`? | BOTH |
 
 ---
 
 ## Confidence Assessment
 
-| Area | Level | Reason |
-|------|-------|--------|
-| Stack additions (none required) | HIGH | Context7 verification of ARQ 0.26.3 + ptb-22.5; no library introduces incompatibility |
-| Architecture integration | HIGH | Direct repo reads; `register_user_loader` precedent; `.importlinter` contracts inspected |
-| Pitfall coverage | HIGH | Grounded in v1.1 retrospective + Phase 12.1 incident + ARQ issue #193 |
-| Feature scope (RU market) | MEDIUM-HIGH | Triangulated from FitBase, 1С:Фитнес-клуб, fitness365, impulseCRM, Sigur primary docs |
-| Anti-fraud sufficiency | MEDIUM | Argument is structural (TG account-binding > card-swap friction; owner=reception in pet-project) — sound logic but assumption-heavy. Document accepted residual risk explicitly. |
-| Build order + dependencies | HIGH | Falls out of file-level inspection of cross-module edges |
+| Area | Confidence | Notes |
+|---|---|---|
+| Stack additions | HIGH | Zero new libs verified. |
+| Features (Cat 1, 2, 3) | HIGH | Industry-triangulated. |
+| Features (Cat 4, 5) | MEDIUM | PT-package edges divergent industry-wide; defaults defensible. |
+| Architecture (modules+slots+migrations) | HIGH | Grounded in v1.0-v1.3 precedents. |
+| Architecture (PT-package fork) | MEDIUM | Variant B recommended; A is valid override. |
+| Pitfalls HIGH-severity | HIGH | Each has concrete prevention. |
+| Pitfalls MEDIUM/LOW | HIGH | Same rigor. |
 
-**Gaps to flag for plan-phase:**
+**Overall: HIGH** for shippability; **MEDIUM** for PT-package architectural choice + 5 policy edges (B-04/Q1/Q5/Q6/Q7) — all with explicit override paths.
 
-- Pattern α vs β admin-web confirmation needs `eslint.config.js` `no-restricted-paths` read in Phase 22 plan.
-- ARQ `keep_cronjob_progress` docker-restart end-to-end validation pending in Phase 18.
-- Russian DM copy needs explicit owner sign-off before Phase 20 merge.
-- Pitfall 9 (residual friend-fraud risk acceptance) must land in PROJECT.md Key Decisions during Phase 15, not buried in comments.
+### Gaps to address during planning
+1. B-04 / Q10 — variant A vs B (Phase 30 discuss-phase).
+2. Q1 — pro-rata refund policy (Phase 32).
+3. Q7 — PT-package date-expiry (Phase 33).
+4. Q6 — PT-package floor-access (Phase 33).
+5. Q5 — multi-package per client (Phase 33).
+
+None block roadmap creation.
 
 ---
 
-## Ready for Requirements
+## Sources
 
-All four research files (STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md) on disk. Cross-research conflicts resolved with concrete decisions. Pitfalls mapped to phases. Build order derived from dependency analysis with parallelization noted. Orchestrator can proceed to REQUIREMENTS.md definition + ROADMAP creation.
+### Primary
+- SQLAlchemy 2.1 PostgreSQL dialect docs
+- SQLAlchemy issue #5965 — PostgreSQL MONEY returns string
+- PostgreSQL official Monetary Types docs
+- `.planning/PROJECT.md`, `apps/backend/.importlinter`, `apps/backend/app/main.py`, `app/core/dependencies.py`, `app/core/permissions.py`, `app/core/audit.py`
+- v1.2/v1.3 verification logs
+
+### Secondary
+- Resawod, PushPress, Club-OS, Pipedrive gym CRM industry references
+
+---
+
+*Research completed: 2026-05-14. Ready for roadmap: yes.*
+*Synthesized from: STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md, PROJECT.md*

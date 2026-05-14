@@ -1,519 +1,569 @@
-# v1.2 Memberships + Visits — Architectural Integration
+# Architecture — v1.4 Cash Sales + PT Packages
 
-**Mode:** Project Research — Subsequent Milestone Integration
-**Confidence:** HIGH (all claims backed by actual code in repo)
+**Project:** Sportzal v1.4 (Cash Sales + PT Packages)
+**Researched:** 2026-05-14
+**Confidence:** HIGH (grounded in concrete v1.0–v1.3 patterns; all references verified against current codebase)
 
-## Executive Summary
+This file answers: *how do v1.4's five business themes (payments, refund, trainers catalog, PT-package plan kind, PT session recording) plug into the existing modular-monolith without breaking the three import-linter contracts or the Locked-Audit-Events frozenset gate?*
 
-v1.2 introduces the first cross-module dependency (Visits → Memberships), the first real ARQ scheduled job, and the second non-trivial Telegram bot command. The existing skeleton already anticipates each of these: the `register_user_loader` Protocol pattern in `app/main.py`, the `HandlerContext` NamedTuple in `app/integrations/telegram/handlers.py`, the `app.workers ⊥ app.modules` documented exception D-06, and `app/core/audit.py` as a cross-cutting emit point all generalize cleanly. **No `.importlinter` rule needs to change** — every new edge either lives inside a module, or routes through the existing `app/main.py` composition root, or extends the existing D-06 worker exception with a parallel D-09/D-10 docstring entry.
+## Module structure decisions
 
-The hard part is **not** the import graph — it's payment-of-attention to four specific seams: (1) the membership-validation callback for Visits, (2) ARQ job module placement, (3) bot `/checkin` handler ctx extension, (4) admin-web client-detail composition without `features → features` violation. All four have concrete, validated patterns from v1.1 to mirror.
+### 1. `payments/` — NEW module, owns ledger + refund
 
----
+**Decision: create `app/modules/payments/`.**
 
-## 1. Visits → Memberships Dependency
+Rationale:
+- A payment is **not** a property of a membership — it is an independent ledger fact owned by the operator (who took the cash, when). v1.5 reports will need to read it without traversing memberships. v1.6 (ЮKassa) will swap the *source* of a payment row without touching memberships.
+- Putting it inside `memberships/` would make refund logic asymmetric the day PT-packages arrive (refund touches both `memberships` and PT-package state), and would force `memberships/` to grow finance-shaped concepts (`actor_received_by_user_id`, refund accounting) that it does not own.
+- The `modules-independent` contract forbids `memberships → payments` and `payments → memberships`. Both directions are needed at sale + refund time. The fix is the same Protocol pattern v1.1 / v1.2 / v1.3 used three times already: **`payments` exposes a Protocol slot that the composition root wires into `memberships.service`'s sale + cancel paths**, and **`memberships` exposes its existing slots to `payments` for refund coordination**.
 
-**Decision: Option (a) — Protocol callback registered in `app/main.py`, named `register_active_membership_resolver`.**
+Module shape (mirrors `clients/` and `memberships/`):
+```
+app/modules/payments/
+├── __init__.py
+├── router.py           — /api/v1/payments (list, get) + /refunds (POST refund)
+├── service.py          — record_payment(), issue_refund(), list_payments_for_client(), list_payments_for_membership()
+├── repository.py       — insert_payment, insert_refund, select_by_subject, etc.
+├── models.py           — Payment, Refund (or one Payment row with refund_of FK — see below)
+├── schemas.py          — Pydantic request/response (camelCase, ResponseEnvelope)
+├── permissions.py      — (optional, only if reception-specific checks beyond RBAC dependency)
+└── constants.py        — payment kinds, refund reasons enum, error codes
+```
 
-### Rationale
+### 2. `trainers/` — promote placeholder to a real module
 
-The other two options fail under scrutiny:
-- **Option (b) — shared `core/` helper that queries memberships by ID.** Dead-on-arrival. `app.core` MUST NOT import `app.modules.memberships.models`. The contract `core-not-depend-on-modules` (`.importlinter:5-11`) makes this option a literal contract violation — no docstring exception covers it because the contract is a `forbidden` type, not `independence`.
-- **Option (c) — FK-only at DB level + service queries the FK without importing the other module.** Possible but smelly. Visits.service would need to write raw SQL or use SQLAlchemy `Table()` definitions to query `memberships` without importing `memberships.models`. This duplicates schema knowledge, breaks type safety, and gets worse the moment validation needs more than `id, end_date, status, client_id` (e.g. plan name for a 409 message).
+**Decision: create `app/modules/trainers/`.**
 
-Option (a) is **already validated** by `register_user_loader` (see `app/core/dependencies.py:44-61` and `app/main.py:88`). It's the same shape, same boundary, same idempotency guarantee.
+Currently `app/modules/trainers/` is an empty placeholder (no files inside). Promote it to a real module with the standard shape. It is the smallest scope in v1.4 and the cleanest first phase.
 
-### Concrete Wiring
+Trainers cannot logically live anywhere else — it is a top-level catalog, owner-only, no overlap with clients (no auth, no Telegram, no payments). Single table, 4 CRUD endpoints, ~150 LOC service.
 
-**NEW** `app/core/dependencies.py` (extend, not replace):
+### 3. PT-packages — NEW module `pt_packages/` (NOT extension of `memberships`)
+
+**Decision: create `app/modules/pt_packages/` as a separate module.**
+
+This is the most consequential decision. Argument both ways:
+
+**For "extend `memberships`":**
+- 80% lifecycle overlap (sell → hold balance → cancel/refund).
+- Audit events and RBAC actions could be reused (`membership_*`).
+- Saves one module.
+
+**For "new module" (chosen):**
+- The *balance* model is fundamentally different: memberships hold a date (`end_date`), PT-packages hold a counter (`sessions_remaining` decremented per use). Putting both into one ORM table forces a nullable-pair schema (`end_date NULL XOR sessions_remaining NULL`) — exactly the kind of soft union that v1.3 audit-and-CHECK culture rejects.
+- The active-instance *resolver* is different: visits resolver currently returns `ActiveMembership` with `end_date` and `status`. PT-session recording needs `sessions_remaining > 0` instead. Trying to merge these into one Protocol creates an oracle (which kind?) at every caller. Two separate Protocol slots is cleaner.
+- The audit taxonomy is already separable. `pt_package_sold`, `pt_session_recorded`, `pt_package_refunded` are distinct verbs from `membership_*`.
+- v1.5 reports will likely treat revenue-from-memberships vs revenue-from-PT as separate metrics anyway — the schema separation makes that 1-line SQL instead of a discriminator scan.
+- The two share zero query patterns: memberships query by `(client_id, status, end_date DESC)`, PT-packages query by `(client_id, status, sessions_remaining > 0)`. No composite index serves both.
+
+PT-package module shape:
+```
+app/modules/pt_packages/
+├── __init__.py
+├── router.py           — /api/v1/pt-package-plans/* (owner CRUD) +
+│                          /api/v1/pt-packages/* (sell, cancel, list, get) +
+│                          /api/v1/pt-sessions/* (record, list, get, ?cancel)
+├── service.py
+├── repository.py
+├── models.py           — PtPackagePlan, PtPackage, PtSession
+├── schemas.py
+├── constants.py        — PT-package status transitions matrix + error codes
+```
+
+Why fold PT-sessions into the same module rather than a 4th `pt_sessions/`:
+- Sessions cannot exist without a parent PT-package; balance decrement is one transaction; the only cross-module reference is `trainer_id` (Protocol slot).
+- v1.2 lesson from `memberships/` containing both `membership_plans` and `memberships` (two ORM types, two routers, one service file): one module per *bounded context*, not per table.
+
+### Summary — new modules: 3
+| Module | Tables | Routers |
+|---|---|---|
+| `trainers` | `trainers` | 1 |
+| `payments` | `payments` (+ refund as a row or separate table — see below) | 1–2 |
+| `pt_packages` | `pt_package_plans`, `pt_packages`, `pt_sessions` | 3 |
+
+Module count goes from 4 (auth, clients, memberships, visits) → 7. Still well within "modular monolith" scope.
+
+## Database migration plan
+
+Existing migration chain ends at `0010_notifications.py`. v1.4 adds **migrations 0011 through 0015** in this order (each one self-contained; later ones reference earlier FKs):
+
+### 0011_trainers.py — Trainers catalog
+```sql
+CREATE TABLE trainers (
+  id UUID PRIMARY KEY,
+  full_name        VARCHAR(120) NOT NULL,
+  phone            VARCHAR(32)  NULL,       -- E.164 if present; nullable per scope
+  active           BOOLEAN NOT NULL DEFAULT true,
+  notes            TEXT NULL,
+  created_at, updated_at, deleted_at         -- standard mixins
+);
+CREATE UNIQUE INDEX uq_trainers_phone_alive
+  ON trainers (phone) WHERE deleted_at IS NULL AND phone IS NOT NULL;
+-- Mirrors clients soft-delete partial-unique pattern (Phase 8).
+```
+
+### 0012_payments.py — Payment ledger + refund
+**One table, refunds are rows that point at parents** (chosen over two tables):
+
+```sql
+CREATE TABLE payments (
+  id UUID PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
+  subject_kind VARCHAR(16) NOT NULL,        -- 'membership' | 'pt_package' | 'refund'
+  subject_id   UUID NOT NULL,               -- membership.id OR pt_package.id OR original payment.id
+  amount_kopecks BIGINT NOT NULL,            -- positive on sale; negative on refund row
+  method VARCHAR(16) NOT NULL DEFAULT 'cash', -- forward-compat enum: 'cash' | 'yookassa' (v1.6) | 'card_offline'
+  received_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  refund_of UUID NULL REFERENCES payments(id) ON DELETE RESTRICT,
+                                             -- set on refund rows; one-to-one logical link
+  refund_reason TEXT NULL,
+  created_at, updated_at                     -- (no soft-delete; ledger is append-only)
+  CONSTRAINT ck_payments_subject_kind CHECK (subject_kind IN ('membership','pt_package','refund')),
+  CONSTRAINT ck_payments_amount_sign  CHECK (
+    (subject_kind = 'refund' AND amount_kopecks < 0) OR
+    (subject_kind != 'refund' AND amount_kopecks > 0)
+  ),
+  CONSTRAINT ck_payments_refund_link CHECK (
+    (subject_kind = 'refund') = (refund_of IS NOT NULL)
+  )
+);
+CREATE INDEX ix_payments_client_id_received_at ON payments (client_id, received_at DESC);
+CREATE INDEX ix_payments_subject_kind_subject_id ON payments (subject_kind, subject_id);
+CREATE UNIQUE INDEX uq_payments_refund_of ON payments (refund_of) WHERE refund_of IS NOT NULL;
+-- one refund per original payment; reattempts must replace, not stack
+```
+
+Rationale for one-table:
+- Refund is a payment in the bookkeeping sense (negative cash event). Two tables would split a query like "show me all the cash flow on this client" into a `UNION`.
+- The `subject_kind = 'refund'` + `refund_of` CHECK is the schema-level integrity, not app-layer.
+- Matches v1.3 lesson: discriminated unions guarded by CHECKs are clearer than parallel tables.
+
+### 0013_pt_package_plans.py
+```sql
+CREATE TABLE pt_package_plans (
+  id UUID PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  session_count INTEGER NOT NULL,            -- e.g. 10 sessions
+  price_kopecks BIGINT NOT NULL,
+  validity_days INTEGER NULL,                -- optional expiry; NULL = never
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at, updated_at, deleted_at
+  CONSTRAINT ck_pt_package_plans_session_count_positive CHECK (session_count > 0),
+  CONSTRAINT ck_pt_package_plans_price_kopecks_nonneg   CHECK (price_kopecks >= 0),
+  CONSTRAINT ck_pt_package_plans_validity_days_positive CHECK (validity_days IS NULL OR validity_days > 0)
+);
+CREATE UNIQUE INDEX uq_pt_package_plans_name_alive
+  ON pt_package_plans (lower(name)) WHERE deleted_at IS NULL;
+-- Mirrors uq_membership_plans_name_alive (Phase 16).
+```
+
+### 0014_pt_packages.py
+```sql
+CREATE TABLE pt_packages (
+  id UUID PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
+  plan_id   UUID NOT NULL REFERENCES pt_package_plans(id) ON DELETE RESTRICT,
+  plan_name_snapshot     VARCHAR(120) NOT NULL,    -- mandatory snapshot pattern (v1.2 lesson)
+  session_count_snapshot INTEGER     NOT NULL,
+  price_kopecks_snapshot BIGINT      NOT NULL,
+  validity_days_snapshot INTEGER     NULL,
+  sessions_remaining     INTEGER     NOT NULL,     -- decremented per pt_session
+  start_date             DATE        NOT NULL,
+  end_date               DATE        NULL,         -- start + validity_days - 1; NULL if no expiry
+  status VARCHAR(16) NOT NULL DEFAULT 'active',
+  cancelled_at TIMESTAMPTZ NULL,
+  cancel_reason TEXT NULL,
+  paid_at TIMESTAMPTZ NULL,
+  notes TEXT NULL,
+  created_at, updated_at
+  CONSTRAINT ck_pt_packages_status CHECK (status IN ('active','exhausted','expired','cancelled')),
+  CONSTRAINT ck_pt_packages_sessions_remaining_nonneg CHECK (sessions_remaining >= 0),
+  CONSTRAINT ck_pt_packages_sessions_remaining_le_snapshot
+    CHECK (sessions_remaining <= session_count_snapshot)
+);
+CREATE INDEX ix_pt_packages_client_id_status_remaining
+  ON pt_packages (client_id, status, sessions_remaining DESC);
+-- supports the active-PT-package resolver lookup
+```
+
+Status taxonomy (declarative constant, like `MEMBERSHIP_STATUS_TRANSITIONS`):
+```
+active → exhausted   (sessions_remaining hits 0)
+active → expired     (cron: end_date < today)
+active → cancelled   (operator refund)
+```
+No `frozen` for PT-packages in v1.4 (out of scope; PT-package freeze is a v1.5+ ask if at all).
+
+### 0015_pt_sessions.py
+```sql
+CREATE TABLE pt_sessions (
+  id UUID PRIMARY KEY,
+  pt_package_id UUID NOT NULL REFERENCES pt_packages(id) ON DELETE RESTRICT,
+  client_id     UUID NOT NULL REFERENCES clients(id)     ON DELETE RESTRICT,
+                                            -- denormalised for fast client-history query (one JOIN avoided)
+  trainer_id    UUID NOT NULL REFERENCES trainers(id)    ON DELETE RESTRICT,
+  performed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  performed_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                                            -- reception operator who logged the session
+  cancelled_at TIMESTAMPTZ NULL,             -- if reception mis-recorded; cancel restores balance
+  cancel_reason TEXT NULL,
+  notes TEXT NULL,
+  created_at, updated_at
+);
+CREATE INDEX ix_pt_sessions_client_id_performed_at ON pt_sessions (client_id, performed_at DESC);
+CREATE INDEX ix_pt_sessions_trainer_id_performed_at ON pt_sessions (trainer_id, performed_at DESC);
+CREATE INDEX ix_pt_sessions_pt_package_id ON pt_sessions (pt_package_id);
+```
+
+PT-session decrement is **two SQL statements in one UoW**: INSERT into `pt_sessions` + UPDATE `pt_packages SET sessions_remaining = sessions_remaining - 1 WHERE id = $1 AND sessions_remaining > 0` (returning-clause guarded — Postgres wins the race, not app-layer; this mirrors visits's DB-level `UNIQUE (client_id, gym_date)` discipline). Zero-decrement → 409 `pt_package_exhausted`.
+
+### Out-of-band: status enum on `memberships` does **NOT** change
+
+PT-packages live in a separate table → no need to extend `ck_memberships_status`. The `'pt_package'` discriminator never reaches the memberships taxonomy. This preserves Phase 17 / 24 status guard machinery intact.
+
+## Cross-module callbacks (Protocol slots)
+
+Each callback lives in `app/core/dependencies.py` next to existing `register_user_loader` / `register_active_membership_resolver` / `register_client_by_telegram_resolver`. Each is registered exactly once in `app/main.py:create_app()` and re-registered in `app/workers/telegram_bot.py:main()` (the REG-29-03 lesson from v1.3 verification — both processes must register or one will silently fail).
+
+### Slot 4: `register_trainer_by_id_resolver` — consumed by PT-sessions
 
 ```python
-class ActiveMembership(Protocol):
-    """Structural type for an active membership lookup (visits → memberships)."""
+class TrainerRef(Protocol):
+    id: UUID
+    full_name: str
+    active: bool
+
+TrainerByIdResolver = Callable[[AsyncSession, UUID], Awaitable[TrainerRef | None]]
+```
+
+Used by `pt_packages.service.record_pt_session()` to validate `trainer_id` exists + is active. Production wiring: `trainers.service.resolve_trainer_by_id`. Without this, `pt_packages` would need to `from app.modules.trainers import ...` which violates `modules-independent`.
+
+### Slot 5: `register_payment_recorder` — consumed by memberships + pt_packages at sale time
+
+```python
+@dataclass
+class PaymentRecordRequest:
+    client_id: UUID
+    subject_kind: Literal['membership','pt_package']
+    subject_id: UUID
+    amount_kopecks: int
+    received_by_user_id: UUID
+
+PaymentRecorder = Callable[[AsyncSession, PaymentRecordRequest], Awaitable[UUID]]
+                  # returns the new payment.id
+```
+
+Used by `memberships.service.create_membership()` and `pt_packages.service.create_pt_package()` to atomically record the cash event in the same UoW as the sale. Production wiring: `payments.service.record_payment`. **Co-transactional discipline** (D-03 from Phase 8 audit): the caller owns the transaction; `record_payment` adds the row to the session and does not commit.
+
+### Slot 6: `register_payment_refunder` — consumed by memberships + pt_packages at cancel time
+
+```python
+PaymentRefunder = Callable[[AsyncSession, UUID, UUID, str | None], Awaitable[UUID]]
+                  # (session, subject_id, refunded_by_user_id, reason) -> refund_payment.id
+```
+
+Used by `memberships.service.cancel_membership()` (when initiated as a refund — see RBAC below) and `pt_packages.service.cancel_pt_package()` to insert the negative payment row. Looks up the original payment via `subject_kind + subject_id`, inserts the refund row, and (transactionally) cancels the parent.
+
+**Inverse direction (payments → memberships/pt_packages) is NOT needed:** the refund flow is initiated from the *subject*'s module (`memberships` or `pt_packages`), which calls `payments` to record. The refund endpoint surfaces *on the subject* (`POST /memberships/{id}/refund`, `POST /pt-packages/{id}/refund`) — not on payments. This matches reception's mental model ("refund this membership") and avoids `payments → memberships` dependency.
+
+### Slot 7: `register_active_pt_package_resolver` — consumed by pt_sessions logic + future reports
+
+```python
+class ActivePtPackage(Protocol):
     id: UUID
     client_id: UUID
-    end_date: date  # exclusive upper bound; visit valid iff today < end_date
-    status: str     # 'active' (others won't be returned by the resolver)
+    sessions_remaining: int
+    status: str
+    end_date: date | None
 
-
-ActiveMembershipResolver = Callable[
-    [AsyncSession, UUID],            # (session, client_id)
-    Awaitable[ActiveMembership | None],
-]
-
-_active_membership_resolver: ActiveMembershipResolver | None = None
-
-
-def register_active_membership_resolver(resolver: ActiveMembershipResolver) -> None:
-    """Composition-root setter — called once by `app.main.create_app`.
-
-    Returns the SINGLE active membership for the client, or None. If a client has
-    multiple active memberships (overlapping purchases), the resolver picks the one
-    with the latest `end_date` (Memberships service contract — see modules/memberships/service.py).
-    """
-    global _active_membership_resolver
-    _active_membership_resolver = resolver
-
-
-async def resolve_active_membership(
-    session: AsyncSession, client_id: UUID
-) -> ActiveMembership | None:
-    if _active_membership_resolver is None:
-        raise RuntimeError(
-            "active_membership_resolver_not_registered — composition root must call "
-            "register_active_membership_resolver in create_app()."
-        )
-    return await _active_membership_resolver(session, client_id)
+ActivePtPackageResolver = Callable[[AsyncSession, UUID], Awaitable[ActivePtPackage | None]]
+                          # (session, client_id) -> first active package with sessions_remaining > 0
 ```
 
-**MODIFIED** `app/main.py`:
+Used by reception UI's "record PT-session" flow (find which package to decrement). Same pattern as `ActiveMembership` from Phase 17.
+
+### Composition-root wiring (`app/main.py`)
 
 ```python
-from app.core.dependencies import register_active_membership_resolver, register_user_loader
-from app.modules.memberships.service import resolve_active_membership_by_client
+# After existing register_* calls in create_app():
 
-# inside create_app(), right after register_user_loader(...)
-register_active_membership_resolver(resolve_active_membership_by_client)
+from app.modules.trainers import service as trainers_service
+from app.modules.payments import service as payments_service
+from app.modules.pt_packages import service as pt_packages_service
+
+register_trainer_by_id_resolver(trainers_service.resolve_trainer_by_id)
+register_payment_recorder(payments_service.record_payment)
+register_payment_refunder(payments_service.issue_refund)
+register_active_pt_package_resolver(pt_packages_service.resolve_active_pt_package_by_client)
 ```
 
-**Visits service consumes via core, not via memberships:**
+**Mirror in `app/workers/telegram_bot.py:main()` is NOT needed** in v1.4 — the bot does not record payments or PT-sessions. (Future v1.5+ Telegram self-PT-record would require the mirror.)
+
+### Import-linter contracts: no changes needed
+
+The three existing contracts (`core ⊥ modules`, `modules-independent`, `integrations ⊥ modules`) hold without modification:
+- All new cross-module talk goes through `core/dependencies.py` Protocol slots, identical to v1.1/v1.2/v1.3.
+- `app/main.py` retains its single carve-out (it is outside `source_modules = app.core`).
+- The new modules `payments`, `trainers`, `pt_packages` are added to the `modules-independent` contract's modules list.
+
+Update needed in `apps/backend/.importlinter`:
+```ini
+[importlinter:contract:modules-independent]
+modules =
+    app.modules.auth
+    app.modules.clients
+    app.modules.memberships
+    app.modules.visits
+    app.modules.trainers     ; (was placeholder; now real)
+    app.modules.payments     ; NEW
+    app.modules.pt_packages  ; NEW
+    app.modules.schedule
+    app.modules.bookings
+    app.modules.billing
+    app.modules.notifications
+```
+
+## RBAC additions
+
+### New `Action` enum values (`app/core/permissions.py`)
+
+Existing: `VIEW, CREATE, EDIT, DELETE, REFUND, CANCEL, CHECK_IN`.
+
+**No new `Action` values needed.**
+- `REFUND` already exists (was previously paired with `FINANCE` for owner-only owner-view). Reuse it for `(REFUND, MEMBERSHIPS)` and `(REFUND, PT_PACKAGES)`.
+- Decrement of a PT-session is `(CREATE, PT_SESSIONS)`. Mis-record cancel is `(CANCEL, PT_SESSIONS)`.
+- Trainers CRUD uses standard `CREATE/EDIT/DELETE/VIEW`.
+
+### New `Resource` enum values
 
 ```python
-# app/modules/visits/service.py
-from app.core.dependencies import resolve_active_membership
-
-async def create_visit(session, actor, client_id, channel):
-    membership = await resolve_active_membership(session, client_id)
-    if membership is None:
-        raise NoActiveMembershipError("no_active_membership")
-    # ... insert Visit row with membership_id=membership.id ...
-```
-
-### Why This Doesn't Break `modules-independent`
-
-`app/modules/visits/*` only imports `app.core.dependencies.resolve_active_membership`. It never imports `app.modules.memberships.*`. The `app.main` composition root imports both — but `app.main` is OUT OF SCOPE for both `core-not-depend-on-modules` (which scopes `app.core`) and `modules-independent` (which scopes `app.modules.{auth,clients,...}`). The same exemption that lets `app.main` call `register_user_loader(load_user_by_id)` covers this.
-
-**FK at DB level**: keep the FK `visits.membership_id → memberships.id` — that's a DB schema constraint, not a Python import. Alembic migration declares it as `ForeignKey("memberships.id", ondelete="RESTRICT")` without either module importing the other (FKs in SA are string-referenced, exactly like `audit_log.actor_user_id → users.id` in `core/audit_models.py:39`).
-
----
-
-## 2. ARQ Scheduled Job Placement
-
-**Decision: `app/workers/scheduled/expire_memberships.py` — under workers, importing `app.modules.memberships.service`. Documented as parallel to D-06.**
-
-### Why Not Inside `modules/memberships/jobs.py`
-
-That would force `app.workers/__init__.py` (the `WorkerSettings` cron list) to import `app.modules.memberships.jobs`. Today `app/workers/__init__.py` does NOT import any module — only the bot worker does, and only with the documented D-06 relaxation. Adding a second import path inside the ARQ settings file would invert the convention.
-
-### Why Workers Importing Modules is OK
-
-The import-linter contract list has only THREE rules (`apps/backend/.importlinter`):
-1. `core-not-depend-on-modules` (scopes `app.core`)
-2. `modules-independent` (scopes the listed modules)
-3. `integrations-not-depend-on-modules` (scopes `app.integrations`)
-
-**There is NO `workers ⊥ modules` contract.** The docstring in `app/workers/__init__.py:1-14` already states:
-> "This relaxation is documented-only — no importlinter contract change is required because no current contract enforces `workers ⊥ modules`."
-
-So `app/workers/scheduled/expire_memberships.py → app.modules.memberships.service` is **structurally legal**. We document the convention to keep it bounded:
-
-> **D-09 (v1.2):** A scheduled worker job MAY import the single owning module's service layer when the job IS that module's lifecycle automation (e.g. `expire_memberships.py → app.modules.memberships.service`). Cross-module imports inside one worker job are still forbidden.
-
-### Concrete Files
-
-**NEW** `app/workers/scheduled/__init__.py` — empty namespace marker.
-
-**NEW** `app/workers/scheduled/expire_memberships.py`:
-
-```python
-"""Daily ARQ job: flip memberships from active → expired when end_date <= today (D-09).
-
-Per D-09: a scheduled worker MAY import its owning module's service layer; same
-narrow exception shape as D-06 for the telegram bot worker.
-
-Run via the ARQ WorkerSettings cron in app/workers/__init__.py.
-"""
-from datetime import date
-
-from app.core.database import db_lifespan_manager
-from app.modules.memberships import service as memberships_service  # D-09 relaxation
-
-
-async def expire_memberships(ctx: dict) -> int:
-    """Idempotent daily expirer. Returns count of newly expired rows."""
-    sessionmaker = ctx["sessionmaker"]
-    async with sessionmaker() as session:
-        count = await memberships_service.expire_due_memberships(session, today=date.today())
-        await session.commit()
-    return count
-```
-
-**MODIFIED** `app/workers/__init__.py` — replace the placeholder docstring section with a real `WorkerSettings`:
-
-```python
-from arq import cron
-from arq.connections import RedisSettings
-
-from app.core.config import get_settings
-from app.core.database import db_lifespan_manager
-from app.workers.scheduled.expire_memberships import expire_memberships
-
-
-async def startup(ctx):
-    db_cm = db_lifespan_manager()
-    engine, sessionmaker = await db_cm.__aenter__()
-    ctx["db_cm"] = db_cm
-    ctx["engine"] = engine
-    ctx["sessionmaker"] = sessionmaker
-
-
-async def shutdown(ctx):
-    await ctx["db_cm"].__aexit__(None, None, None)
-
-
-class WorkerSettings:
-    redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
-    on_startup = startup
-    on_shutdown = shutdown
-    functions = [expire_memberships]
-    cron_jobs = [cron(expire_memberships, hour=3, minute=15)]
-```
-
-**MODIFIED** `infra/docker-compose.yml` — add a 5th service:
-```yaml
-arq-worker:
-  build: { context: ../apps/backend }
-  command: python -m arq app.workers.WorkerSettings
-  depends_on: [postgres, redis, migrate]
-  env_file: ../apps/backend/.env
-```
-
----
-
-## 3. Telegram Bot `/checkin` Handler
-
-**Decision: (a) — extend `HandlerContext` to include `visits_service` ModuleType. Add a parallel D-10 to D-06.**
-
-### Why Not (b) Direct Import in `telegram_bot.py`
-
-D-06 currently says `app.workers.telegram_bot` MAY import `app.modules.auth.telegram_service`. The `/checkin` handler runs inside `app.integrations.telegram.handlers` — NOT inside `app.workers.telegram_bot`. The existing handler design (`app/integrations/telegram/handlers.py:29-31`) is explicit:
-
-> `# NOTE: NO from app.modules.auth import ... -- integrations perp modules.`
-> `# Domain modules arrive via HandlerContext.`
-
-Handlers receive everything via `HandlerContext` precisely because `integrations-not-depend-on-modules` (`.importlinter:27-33`) is a hard `forbidden` contract. Direct import in handlers.py would BREAK the contract.
-
-### Concrete Files
-
-**MODIFIED** `app/integrations/telegram/handlers.py`:
-
-```python
-class HandlerContext(NamedTuple):
-    session_factory: async_sessionmaker[AsyncSession]
-    telegram_service: ModuleType   # app.modules.auth.telegram_service (D-06)
-    visits_service: ModuleType     # app.modules.visits.service          (D-10, v1.2)
-    sender: ModuleType
-
-
-_DM_CHECKIN_OK = "✅ Отмечено в {gym_name} в {time_msk}."
-_DM_NO_MEMBERSHIP = "У вас нет активного абонемента. Обратитесь к администратору."
-_DM_DUPLICATE = "Вы уже отмечались сегодня."
-_DM_OUTSIDE_HOURS = "Зал сейчас закрыт. Часы работы: {hours}."
-
-
-async def checkin_handler(update, context, ctx: HandlerContext) -> None:
-    """ptb /checkin handler (v1.2). Errors map to the four locked DM strings."""
-    bot = context.bot
-    if update.effective_user is None or update.effective_chat is None:
-        return
-    chat_id = update.effective_chat.id
-    telegram_user_id = update.effective_user.id
-
-    async with ctx.session_factory() as session:
-        try:
-            visit = await ctx.visits_service.create_visit_self_checkin(
-                session, telegram_user_id=telegram_user_id, chat_id=chat_id,
-            )
-            await session.commit()
-        except Exception as exc:
-            cls_name = type(exc).__name__
-            if cls_name == "NoActiveMembershipError":
-                await ctx.sender.send_text_dm(bot, chat_id, _DM_NO_MEMBERSHIP)
-            elif cls_name == "DuplicateCheckinError":
-                await ctx.sender.send_text_dm(bot, chat_id, _DM_DUPLICATE)
-            elif cls_name == "OutsideGymHoursError":
-                await ctx.sender.send_text_dm(bot, chat_id, _DM_OUTSIDE_HOURS.format(hours="07:00–23:00"))
-            return
-        await ctx.sender.send_text_dm(bot, chat_id, _DM_CHECKIN_OK.format(...))
-```
-
-**MODIFIED** `app/workers/telegram_bot.py`:
-
-```python
-from app.modules.auth import telegram_service       # D-06 relaxation
-from app.modules.visits import service as visits_service  # D-10 relaxation (v1.2)
-
-ctx = HandlerContext(
-    session_factory=sessionmaker,
-    telegram_service=telegram_service,
-    visits_service=visits_service,                   # v1.2
-    sender=telegram_sender,
-)
-application = build_application(
-    token=settings.telegram_bot_token.get_secret_value(),
-    handlers=[("start", start_handler), ("checkin", checkin_handler)],
-    ctx=ctx,
-)
-```
-
-**Anti-fraud lives in `visits.service`**, not in the handler — that way reception manual check-in (router path) and self check-in (bot path) share the same validation.
-
----
-
-## 4. audit_log Architecture
-
-**Already centralized.** No new wiring needed. New modules write the same way `clients.service` does.
-
-### Verified Locations
-
-- ORM model: `app/core/audit_models.py` — lives in `core` (NOT in any module). FK to `users.id` is a string ref.
-- Emitter: `app/core/audit.py:emit(session, event, *, actor_user_id, resource_type, resource_id=None, **payload)` — async, co-transactional, never commits/flushes (caller owns the txn).
-- Locked event-name list: `audit.py:11-29` — modules MUST add new event names to this list.
-
-### v1.2 Emit Calls
-
-`memberships.service` and `visits.service` write to audit identically to `clients.service`:
-
-```python
-await audit.emit(
-    session, "membership_created",
-    actor_user_id=actor.id, resource_type="membership", resource_id=membership.id,
-    client_id=str(client_id), plan_id=str(plan_id),
-    duration_days=plan.duration_days, price_kopecks=plan.price_kopecks,
-)
-await session.commit()
-```
-
-### New Locked Event Names
-
-```
-membership_plan_created   {plan_id, name, duration_days, price_kopecks}
-membership_plan_updated   {plan_id, changed_fields}
-membership_plan_archived  {plan_id, name}
-membership_created        {membership_id, client_id, plan_id, duration_days, price_kopecks_snapshot}
-membership_cancelled      {membership_id, client_id, reason?}
-membership_expired        {membership_id, client_id}              # actor_user_id=None (job-driven)
-visit_created             {visit_id, client_id, membership_id, channel}
-visit_rejected_no_membership {client_id, channel}                 # actor_user_id=None for telegram
-visit_rejected_duplicate  {client_id, channel}
-visit_rejected_outside_hours {client_id, channel}
-```
-
----
-
-## 5. admin-web Client-Detail Composition
-
-**Decision: route component composes; each feature exports `useXxxByClient(clientId)` hooks. Validated pattern, no architectural change.**
-
-A route is allowed to import multiple features simultaneously because the route IS the composition layer, exactly analogous to `app/main.py` on the backend. `routes/_protected/clients.tsx:5-6` already imports both `@/features/clients/api/keys` AND `@/shared/api/services`.
-
-### Concrete Pattern for v1.2
-
-**NEW** `apps/admin-web/src/routes/_protected/clients.$clientId.tsx`:
-
-```typescript
-export const Route = createFileRoute('/_protected/clients/$clientId')({
-  beforeLoad: ({ context }) => { /* role guard same shape as clients.tsx:14-23 */ },
-  loader: async ({ params, context }) => {
-    const { clientId } = params
-    await Promise.all([
-      context.queryClient.ensureQueryData({
-        queryKey: clientsKeys.detail(clientId as ClientId),
-        queryFn: () => services.clients.get(clientId as ClientId),
-      }),
-      context.queryClient.ensureQueryData({
-        queryKey: membershipsKeys.byClient(clientId as ClientId),
-        queryFn: () => services.memberships.listByClient(clientId as ClientId),
-      }),
-      context.queryClient.ensureQueryData({
-        queryKey: visitsKeys.byClient(clientId as ClientId, { limit: 10 }),
-        queryFn: () => services.visits.listByClient(clientId as ClientId, { limit: 10 }),
-      }),
-    ])
-  },
-  component: ClientDetailPage,
-})
-```
-
-**Two acceptable patterns; pick Pattern α**:
-- **Pattern α (preferred): page component lives in `routes/_protected/clients.$clientId.tsx`, NOT in `features/clients/components/`.** The route component IS the page, composing three feature blocks. Keeps `features/clients` sterile. Closer to the existing `clients.tsx` shape.
-- **Pattern β: blocks live in route-private siblings.** Less aligned with current convention.
-
-`MembershipsBlock` and `RecentVisitsBlock` are exported from `features/memberships` and `features/visits` respectively. The ROUTE imports them — never `features/clients` importing them.
-
----
-
-## 6. New Endpoint Surface and Route Mounting
-
-### Resource & Action Enum Additions
-
-**MODIFIED** `app/core/permissions.py`:
-
-```python
-class Action(StrEnum):
-    VIEW = "view"
-    CREATE = "create"      # ← NEW
-    EDIT = "edit"
-    DELETE = "delete"
-    REFUND = "refund"
-    CANCEL = "cancel"      # ← NEW: for membership cancel
-    CHECK_IN = "check_in"  # ← NEW: for visits
-
 class Resource(StrEnum):
-    DASHBOARD = "dashboard"
-    CLIENTS = "clients"
-    MEMBERSHIPS = "memberships"          # ← NEW
-    MEMBERSHIP_PLANS = "membership-plans" # ← NEW
-    VISITS = "visits"                    # ← NEW
-    SCHEDULE = "schedule"
-    STAFF = "staff"
-    FINANCE = "finance"
-    REPORTS = "reports"
-    PAYROLL = "payroll"
-    COMPENSATION = "compensation"
-    TEMPLATES = "templates"
-    SETTINGS = "settings"
-    OWNER_AREA = "owner-area"
+    ...
+    TRAINERS         = "trainers"
+    PAYMENTS         = "payments"
+    PT_PACKAGE_PLANS = "pt-package-plans"   # kebab on wire
+    PT_PACKAGES      = "pt-packages"
+    PT_SESSIONS      = "pt-sessions"
 ```
 
-**Critical:** these values must be **byte-paritetic** with `apps/admin-web/src/shared/session/registry.ts` and `can.ts`. The Phase 6 TEST-06 parity test (`permissions.py:7-9`) FAILS if frontend and backend disagree.
-
-### OWNER_ONLY Additions
+### `OWNER_ONLY` additions (must mirror byte-for-byte in `apps/admin-web/src/shared/session/can.ts`)
 
 ```python
-OWNER_ONLY = frozenset({
-    # ... existing 9 entries ...
-    (Action.VIEW, Resource.MEMBERSHIP_PLANS),
-    (Action.EDIT, Resource.MEMBERSHIP_PLANS),
-    (Action.CREATE, Resource.MEMBERSHIP_PLANS),
-    (Action.DELETE, Resource.MEMBERSHIP_PLANS),
-    (Action.CANCEL, Resource.MEMBERSHIPS),
-    (Action.DELETE, Resource.MEMBERSHIPS),
-    # NOTE: VIEW MEMBERSHIPS / VIEW VISITS / CREATE MEMBERSHIPS / CHECK_IN VISITS are NOT
-    # — reception can sell memberships and check clients in (PROJECT.md core feature).
-})
+# Trainers — owner-only catalog (mirrors membership-plans pattern from v1.2)
+(Action.VIEW,   Resource.TRAINERS),
+(Action.CREATE, Resource.TRAINERS),
+(Action.EDIT,   Resource.TRAINERS),
+(Action.DELETE, Resource.TRAINERS),
+
+# PT-package plans — owner-only catalog (mirrors membership-plans)
+(Action.VIEW,   Resource.PT_PACKAGE_PLANS),
+(Action.CREATE, Resource.PT_PACKAGE_PLANS),
+(Action.EDIT,   Resource.PT_PACKAGE_PLANS),
+(Action.DELETE, Resource.PT_PACKAGE_PLANS),
+
+# Payments — reception writes (sale + refund), owner reads
+# Reception RETAINS (CREATE, PAYMENTS) — not listed here.
+# Reception RETAINS (REFUND, MEMBERSHIPS) and (REFUND, PT_PACKAGES) — per scope: reception can refund without owner approval
+(Action.VIEW, Resource.PAYMENTS),    # history is owner-only (finance-adjacent)
+
+# PT-packages instances — same shape as MEMBERSHIPS:
+# Reception RETAINS (CREATE, PT_PACKAGES) and (CREATE, PT_SESSIONS).
+(Action.CANCEL, Resource.PT_PACKAGES),
+(Action.DELETE, Resource.PT_PACKAGES),
+(Action.CANCEL, Resource.PT_SESSIONS),   # mis-record cancel = owner-only
 ```
 
-### Endpoint Surface
+**Open question deferred to discuss-phase:** the milestone goal text says "ресепшен сам без owner approval" for refund — so `(REFUND, MEMBERSHIPS)` is **NOT** in OWNER_ONLY. But `(VIEW, PAYMENTS)` is owner-only because viewing the full ledger is a finance surface. Confirm with operator.
 
-**Memberships module** — `/api/v1/memberships`:
+`OWNER_ONLY` grows from 15 entries → ~26 entries.
 
-| Method | Path                          | Permission                          | CSRF | Notes                                              |
-|--------|-------------------------------|-------------------------------------|------|----------------------------------------------------|
-| GET    | `/memberships`                | VIEW, MEMBERSHIPS                   | —    | List by `?clientId=` filter; paginated envelope    |
-| GET    | `/memberships/{id}`           | VIEW, MEMBERSHIPS                   | —    | Single                                             |
-| POST   | `/memberships`                | CREATE, MEMBERSHIPS                 | ✓    | Sell — body: clientId, planId. Service snapshots price/duration |
-| POST   | `/memberships/{id}/cancel`    | CANCEL, MEMBERSHIPS (→ OWNER only)  | ✓    | Manual cancel, owner-only                          |
+### Three-way RBAC parity gate
 
-**Membership Plans module** — `/api/v1/membership-plans`:
+Phase 6 TEST-06 asserts `apps/backend OWNER_ONLY` set-equals `apps/admin-web can.ts OWNER_ONLY` set-equals `packages/api-client` if it surfaces any. All new entries must land in **both** files in the same commit.
 
-| Method | Path                           | Permission                            | CSRF | Notes                       |
-|--------|--------------------------------|---------------------------------------|------|-----------------------------|
-| GET    | `/membership-plans`            | VIEW, MEMBERSHIP_PLANS (→ OWNER)      | —    | Catalog list                |
-| POST   | `/membership-plans`            | CREATE, MEMBERSHIP_PLANS (→ OWNER)    | ✓    | Create plan                 |
-| PATCH  | `/membership-plans/{id}`       | EDIT, MEMBERSHIP_PLANS (→ OWNER)      | ✓    | Update name/price/active    |
-| DELETE | `/membership-plans/{id}`       | DELETE, MEMBERSHIP_PLANS (→ OWNER)    | ✓    | Soft delete / archive       |
+## LOCKED_AUDIT_EVENTS additions
 
-**Visits module** — `/api/v1/visits`:
+Pre-register the full v1.4 frozenset extension in the foundations phase (mirrors v1.3 Phase 24 INFRA-15 / D-24-18 — register events BEFORE callsites land, so all subsequent phases pass CI from their first commit).
 
-| Method | Path                          | Permission                  | CSRF | Notes                                                            |
-|--------|-------------------------------|-----------------------------|------|------------------------------------------------------------------|
-| GET    | `/visits`                     | VIEW, VISITS                | —    | List, filter by `?clientId=`, `?from=`, `?to=`; paginated        |
-| GET    | `/visits/{id}`                | VIEW, VISITS                | —    | Single                                                           |
-| POST   | `/visits`                     | CHECK_IN, VISITS            | ✓    | Reception manual check-in. Body: clientId. Service: channel='reception' |
-
-**Note:** bot-driven self check-ins do NOT have an HTTP endpoint — they enter via `visits.service.create_visit_self_checkin(...)` called from the Telegram handler with `channel='telegram_bot'`.
-
-### Route Mounting Order
-
-**MODIFIED** `app/api/v1/router.py`:
+Add to `apps/backend/app/core/audit.py` `LOCKED_AUDIT_EVENTS`:
 
 ```python
-v1 = APIRouter()
-v1.include_router(auth_router, prefix="/auth", tags=["auth"])
-v1.include_router(clients_router, prefix="/clients", tags=["clients"])
-v1.include_router(membership_plans_router, prefix="/membership-plans", tags=["membership-plans"])
-v1.include_router(memberships_router, prefix="/memberships", tags=["memberships"])
-v1.include_router(visits_router, prefix="/visits", tags=["visits"])
+# v1.4 — Trainers (Phase X1)
+("trainer_created",       "trainer"),
+("trainer_updated",       "trainer"),
+("trainer_deactivated",   "trainer"),   # soft-delete (active=false) — chose "deactivated" over "deleted" to match domain language
+("trainer_reactivated",   "trainer"),   # owner toggle active=false → true
+
+# v1.4 — Payments (Phase X2)
+("payment_recorded",      "payment"),   # cash sale
+("refund_issued",         "payment"),   # negative-amount payment row inserted
+# NOTE: payment_recorded fires from BOTH memberships sale AND pt_packages sale —
+# `subject_kind` payload discriminates. Single audit verb, payload differentiates.
+
+# v1.4 — Memberships refund (Phase X2 — touches memberships state via refund)
+("membership_refunded",   "membership"),  # distinct from membership_cancelled:
+                                          # refund cancels + reverses payment.
+                                          # cancelled (existing) does NOT reverse payment.
+
+# v1.4 — PT-package plans (Phase X3)
+("pt_package_plan_created",   "pt_package_plan"),
+("pt_package_plan_updated",   "pt_package_plan"),
+("pt_package_plan_archived",  "pt_package_plan"),
+
+# v1.4 — PT-packages (Phase X3)
+("pt_package_sold",        "pt_package"),
+("pt_package_cancelled",   "pt_package"),
+("pt_package_refunded",    "pt_package"),
+("pt_package_exhausted",   "pt_package"),   # sessions_remaining hit 0 (state transition)
+("pt_package_expired",     "pt_package"),   # ARQ cron (if validity_days set)
+
+# v1.4 — PT-sessions (Phase X4)
+("pt_session_recorded",    "pt_session"),
+("pt_session_cancelled",   "pt_session"),   # mis-record reversal; restores balance
+
+# Total: 16 new entries → LOCKED_AUDIT_EVENTS goes from 34 → 50
 ```
 
-Mount plans BEFORE memberships so the catalog appears first in /docs (cosmetic but stable for byte-stable diff gate). Mount visits last because it's the only consumer of the membership resolver.
+Decision notes:
+- **`membership_refunded` ≠ `membership_cancelled`**: cancel (existing v1.2) is operator-initiated state change with no money implication. Refund (new v1.4) is cancel + reverse-payment. Two distinct verbs so audit grep yields clean revenue numbers.
+- **No `pt_package_freezing` events** — freeze is out of scope for v1.4.
+- **No `payment_voided`** — refund is the only reverse path; we never delete or "void" a row. The append-only ledger discipline is the audit guarantee.
+- Same AST literal-only gate (Phase 15 INFRA-11) applies — every `audit.emit("...", resource_type="...")` callsite must use string literals.
 
----
+## Frontend admin-web structure
 
-## 7. Build Order — Phase Sequencing
+Mirror module/route boundaries on the frontend to keep ESLint `import/no-restricted-paths` consistent.
 
-Eight phases, dependencies marked. Phase numbers illustrative.
-
-| # | Phase | Inputs | Outputs | Blocks |
-|---|-------|--------|---------|--------|
-| **15** | **Foundations: RBAC enums + parity** | none | New `Action.{CREATE,CANCEL,CHECK_IN}`, `Resource.{MEMBERSHIPS,MEMBERSHIP_PLANS,VISITS}`, `OWNER_ONLY` additions in BOTH `permissions.py` and admin-web `registry.ts`/`can.ts`; TEST-06 parity test extended; no functional code yet | 16, 17, 21 |
-| **16** | **Memberships DB schema + plans CRUD backend** | 15 | Alembic 0004: `membership_plans` table; `app/modules/memberships/{models,schemas,repository,service,router}.py` mirroring clients template; `/api/v1/membership-plans` 4 routes; `audit.emit("membership_plan_*", ...)` event names added; tests | 17 |
-| **17** | **Membership instances backend (sell + cancel + resolver)** | 16 | Alembic 0005: `memberships` table (id, client_id FK, plan_id FK, duration_days_snapshot, price_kopecks_snapshot, start_date, end_date, status, cancelled_at); `service.create_membership`, `service.cancel_membership`, `service.resolve_active_membership_by_client`; `register_active_membership_resolver` Protocol added to `core/dependencies.py`; `app/main.py` wires the resolver; `/api/v1/memberships` 4 routes; tests | 18, 19, 21 |
-| **18** | **ARQ scheduled job: expire_memberships** | 17 | `app/workers/scheduled/expire_memberships.py`; `WorkerSettings` populated; `service.expire_due_memberships(session, today)`; D-09 docstring; new docker-compose `arq-worker` service; tests; `audit.emit("membership_expired", actor_user_id=None, ...)` | 21 |
-| **19** | **Visits DB schema + reception check-in backend** | 17 | Alembic 0006: `visits` table (id, client_id FK, membership_id FK, checked_in_at, channel ENUM `reception\|telegram_bot`, checked_in_by FK users; UNIQUE on `(client_id, date(checked_in_at AT TIME ZONE 'Europe/Moscow'))` for the 1/day rule); `app/modules/visits/{models,schemas,repository,service,router}.py`; `service.create_visit_reception(...)` calling `core.dependencies.resolve_active_membership`; anti-fraud (gym hours via Settings); `/api/v1/visits` 3 routes; tests | 20, 21 |
-| **20** | **Telegram bot `/checkin` handler** | 19 | `HandlerContext` extended with `visits_service`; `checkin_handler` in `handlers.py`; `telegram_bot.py` registers second handler + adds D-10 import; `service.create_visit_self_checkin(session, telegram_user_id, chat_id)`; locked Russian DM strings; tests with stubbed bot context | 21 |
-| **21** | **OpenAPI drift gate refresh + api-client codegen** | 16, 17, 19 | `apps/backend/openapi.json` updated; `pnpm --filter @sportzal/api-client codegen` → `schema.d.ts`; both files committed; CI green | 22, 23 |
-| **22** | **admin-web wiring: memberships + visits** | 21 | New `features/memberships`, `features/visits`; new routes `/_protected/memberships.tsx`, `/_protected/membership-plans.tsx` (owner-only via `beforeLoad`), `/_protected/visits.tsx`; client-detail route `/_protected/clients.$clientId.tsx` with parallel `ensureQueryData`; `services.memberships`/`services.visits` swap-seam (mock + http); ESLint passes | 23 |
-| **23** | **Hygiene + v1.1 carryover (CR-01/CR-02)** | none (parallel-eligible) | Phase 04 CR-01 (Argon2 verify-error → 401) + CR-02 (invalid UUID in cookie → 401); active sessions UI + revoke; cleanup | — |
-
-### Critical Path
-
+### New top-level routes (TanStack file-based)
 ```
-15 → 16 → 17 → 18
-              ↘
-               19 → 20 → 21 → 22
-              ↗
-17 ────────────
+src/routes/
+├── trainers.tsx                       — list (owner-only beforeLoad)
+├── trainers.$trainerId.tsx            — detail + edit (owner-only)
+├── pt-package-plans.tsx               — owner-only catalog (mirrors membership-plans)
+├── pt-package-plans.$planId.tsx
+├── pt-packages.tsx                    — list (reception + owner)
+├── pt-packages.$ptPackageId.tsx       — detail with balance + session history
+├── payments.tsx                       — owner-only history page
 ```
 
-- **15 must finish first** because it changes the RBAC contract that 16/17/19 all depend on.
-- **18 and 19 are parallelizable after 17**.
-- **20 must wait for 19**.
-- **21 cannot start until 16+17+19 are merged** — OpenAPI drift gate is byte-stable.
-- **22 cannot start until 21**.
-- **23 is independent** — can run in parallel with any of 16–22.
+### Modified routes / flows
+- `/memberships` sale form (existing) — add "payment received" section: amount (pre-filled from snapshot price, editable for cash-discount cases) + "received by" (auto-set to current user). One TanStack mutation, two co-transactional inserts on backend.
+- `/memberships/$membershipId` detail — add **Refund button** (reception or owner per scope). Confirm dialog with reason field. Add **payments section** showing the original + any refund rows.
+- `/clients/$clientId` — extend Pattern α loader to fan into 5 ensureQueryData calls (clients, memberships, visits, pt-packages, payments). ESLint `no-restricted-paths` updated to allow `routes/clients` to import from `features/pt-packages` + `features/payments` per same Pattern α carve-out.
 
-### Import-Linter Implications Summary
+### New shared primitives
+- `PaymentBadge` (semantic colors via `bg-success` token for sale, `bg-warning` for refunded) — extends `StatusBadge` family.
+- `PtPackageStatusBadge` (4 variants: active / exhausted / expired / cancelled) — mirrors v1.3 `StatusBadge`.
 
-| New edge | Source → Target | Contract impact | Resolution |
-|----------|----------------|-----------------|------------|
-| `app.main → app.modules.memberships.service` | (composition root) | None — `app.main` already exempt | Document in `main.py` docstring alongside D-15 |
-| `app.modules.visits.service → app.core.dependencies.resolve_active_membership` | core function | None — modules MAY import core | OK |
-| `app.modules.visits.models.Visit` FK to `memberships.id` | DB constraint | None — string FK ref | OK |
-| `app.workers.scheduled.expire_memberships → app.modules.memberships.service` | worker → module | None — no `workers ⊥ modules` contract | Document as D-09 |
-| `app.workers.telegram_bot → app.modules.visits.service` | worker → module | None | Document as D-10 (parallel to D-06) |
-| `app.integrations.telegram.handlers → app.modules.visits.service` | **WOULD VIOLATE** `integrations-not-depend-on-modules` | **Forbidden** | NOT done — visits_service arrives via HandlerContext |
-| `app.modules.memberships → app.modules.visits` (or vice versa) | **WOULD VIOLATE** `modules-independent` | **Forbidden** | NOT done — cross-module via Protocol callback in core, registered in main |
+### Mock services
+- `mock/trainers.ts`, `mock/payments.ts`, `mock/pt-packages.ts` — full parity with backend service contracts.
+- `mock/memberships.ts` — extend `createMembership` to optionally accept `payment` parameter, returning `{membership, payment}`. Wire to existing sale flow.
+- v1.3 deferred tech-debt: `mock/memberships.ts ?status=` filter parity — land in foundations phase.
 
----
+### OpenAPI drift gate refresh
+Single atomic regen at end of v1.4 (mirrors Phase 28 + Phase 21): `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` byte-stable, CI `git diff --exit-code` on both. Adds typed paths for:
+- `/trainers/*`, `/payments/*`, `/pt-package-plans/*`, `/pt-packages/*`, `/pt-sessions/*`
+- Extended `MembershipResponse` if it carries `latestPaymentId` (decision deferred — recommend NO, fetch separately, keep `MembershipResponse` stable).
 
-## Confidence Assessment
+## Suggested phase build order
 
-| Area | Level | Reason |
-|------|-------|--------|
-| Cross-module callback pattern (Q1) | HIGH | Direct mirror of validated `register_user_loader` |
-| ARQ job placement (Q2) | HIGH | `workers/__init__.py:1-15` explicitly says no `workers ⊥ modules` contract exists |
-| Bot `/checkin` ctx extension (Q3) | HIGH | `HandlerContext` is a NamedTuple already designed for extension |
-| audit_log scaling (Q4) | HIGH | `audit.py` is pure stateless; pattern verified in `clients/service.py:130-141` |
-| admin-web composition (Q5) | MEDIUM | Pattern α sound; haven't read `eslint.config.js` to confirm `features → features` ban — flagging for verification during phase 22 plan |
-| Endpoint surface + RBAC parity (Q6) | HIGH | TEST-06 enforces FE↔BE parity |
-| Build order (Q7) | HIGH | Dependency chain falls out of file-level inspection |
+**Recommended order (8 phases for milestone v1.4):**
 
-## Open Questions / Flags for Plan Authors
+### Phase 30 — Foundations (audit, RBAC, importlinter, deferred mock parity)
+- LOCKED_AUDIT_EVENTS extension (all 16 new pairs locked up-front per v1.3 lesson).
+- `Resource` enum values added.
+- `OWNER_ONLY` entries added (~11 new) — three-way parity assertion runs.
+- `.importlinter` modules-independent list extended.
+- v1.3 deferred mock-mode `?status=` filter parity closed.
+- No new tables yet; no new endpoints. Just the contract bedrock.
 
-1. **`Action.CREATE` vs reusing `Action.EDIT`.** Lean toward introducing `CREATE` and `CANCEL` as new enum values (parity changes needed both sides). Decide in Phase 15 plan.
-2. **Anti-fraud `gym_open_hour` / `gym_close_hour` config.** Lean toward `Settings` env-config so they're tunable per deploy. Phase 19 plan.
-3. **Membership "active" definition under multiple overlapping purchases.** Resolver returns ONE — pick the one with latest `end_date`. Document in Phase 17 plan.
-4. **ARQ job timezone.** `cron(hour=3, minute=15)` — confirm UTC vs Europe/Moscow. Phase 18 plan.
-5. **Pattern α vs β for admin-web client-detail.** Confirm `eslint.config.js` rules in Phase 22 plan.
+### Phase 31 — Trainers module
+- Migration 0011_trainers.
+- `app/modules/trainers/` full module: 4 CRUD endpoints owner-only + 1 `GET /trainers?active=true` for reception filter.
+- Protocol slot 4 (`register_trainer_by_id_resolver`) added.
+- Wired in `app/main.py` AND `app/workers/telegram_bot.py:main()` (defensive — REG-29-03 lesson, even though bot doesn't use it yet).
+- Frontend `/trainers` page + mock service.
+- Smallest scope → validates the "new module" template before bigger phases.
+
+### Phase 32 — Payment ledger + Membership sale-with-payment + Membership refund
+- Migration 0012_payments.
+- `app/modules/payments/` module: list/get + internal `record_payment` / `issue_refund` functions.
+- Protocol slots 5 + 6 (`register_payment_recorder`, `register_payment_refunder`).
+- Modify `memberships.service.create_membership` to call payment recorder in same UoW.
+- New endpoint `POST /memberships/{id}/refund` (separate from cancel — refund cascades to payments).
+- Audit: `payment_recorded`, `refund_issued`, `membership_refunded` callsites land.
+- Frontend: sale form extension, refund button + dialog.
+- **Why before PT-packages:** PT-package sale-with-payment reuses the recorder slot. Wrong order = rework.
+
+### Phase 33 — PT-package plans + PT-package instances (no sessions yet)
+- Migrations 0013_pt_package_plans + 0014_pt_packages.
+- `app/modules/pt_packages/` — plans router + packages router (sell, list, get, cancel, refund). Reuses payment recorder + refunder slots from Phase 32.
+- Protocol slot 7 (`register_active_pt_package_resolver`) — registered but not yet consumed.
+- Audit: `pt_package_plan_*`, `pt_package_sold`, `pt_package_cancelled`, `pt_package_refunded`, `pt_package_expired` callsites.
+- Frontend: `/pt-package-plans` (owner) + `/pt-packages` list + detail (no session history yet).
+- ARQ cron `expire_pt_packages` at 06:25 MSK (10-min stagger after expiring-notifications; pattern from v1.2 D-cron-ordering).
+
+### Phase 34 — PT-session recording
+- Migration 0015_pt_sessions.
+- `pt_packages.service.record_pt_session` + cancel — DB-level race-proof decrement (UPDATE ... WHERE sessions_remaining > 0 RETURNING ...).
+- Consumes Slot 4 (trainer resolver) + Slot 7 (active PT-package resolver).
+- New endpoints: `POST /pt-sessions` + `POST /pt-sessions/{id}/cancel` (owner-only) + `GET /pt-sessions?clientId=` + `GET /pt-sessions/{id}`.
+- Audit: `pt_session_recorded`, `pt_session_cancelled` callsites.
+- Frontend: "record PT-session" panel on PT-package detail; session history list.
+
+### Phase 35 — OpenAPI drift gate refresh + admin-web full wiring sweep
+- Regenerate `openapi.json` + `schema.d.ts` (single atomic commit).
+- admin-web: full http-mode pass on all new routes; `VITE_API_MODE=http` validation; mock-parity tests.
+- New TanStack Query mutation hooks (sell-with-payment optimistic, refund non-optimistic + navigate, record-PT-session optimistic with rollback on decrement failure).
+- Three-way RBAC parity assertion re-run.
+
+### Phase 36 — Milestone verification (replicates Phase 29 v1.3 pattern)
+- Operator runs cross-phase human scenarios:
+  1. Sell membership with cash → see payment row on client card.
+  2. Refund the membership → ledger shows two rows, membership status flips to refunded/cancelled.
+  3. Sell PT-package → record 3 sessions with different trainers → balance ticks down.
+  4. Refund half-used PT-package → confirm partial-refund policy (deferred discuss-phase: full vs prorated).
+  5. Owner-only gate checks (reception → 403 on trainers CRUD, on PT-package plan CRUD).
+  6. Cron ordering: `expire_memberships 06:05` → `send_expiring_notifications 06:15` → `expire_pt_packages 06:25` all idempotent.
+- Live backend + Telegram sandbox.
+- Capture 6 CI gate evidence (no new gates added).
+- Operator sign-off in `milestones/v1.4-VERIFICATION-LOG.md`.
+
+### Dependency-order rationale
+- **Trainers first** because PT-sessions reference trainers. (Cannot record a session without a trainer catalog.)
+- **Payments before PT-packages** because PT-package sale reuses the recorder slot; landing PT-packages first would force a second migration on the sale path.
+- **PT-package instances before PT-sessions** because sessions reference a package and decrement its counter; the instance schema and resolver must exist first.
+- **OpenAPI/admin-web sweep at the end**, not per-phase: one byte-stable regen avoids the per-phase drift-gate churn that bloated v1.2 / v1.3 phases.
+- **Foundations Phase 30 first** so all subsequent phases pass `LOCKED_AUDIT_EVENTS` + RBAC parity from their first commit (v1.3 INFRA-15 lesson).
+
+## Open architectural questions for discuss-phase
+
+1. **Refund — full or prorated?** For a 30-day membership cancelled on day 10, does the refund row equal full price or 2/3 of price? Scope text says "ресепшен возвращает деньги напрямую" — silent on amount. **Recommendation: full refund in v1.4** (matches "симуляция продажи без денег" → "симуляция возврата без денег"; pro-rata adds complexity that is not in scope; the operator can adjust the amount manually before confirming if the form allows an editable field). Confirm.
+
+2. **Multiple payments per membership?** If a client pays half cash now + half later, is that two `payment_recorded` rows pointing at the same `subject_id` membership, or is the second one a separate type? **Recommendation: yes, allow multiple payment rows per `subject_id`** (the schema already supports it; no UNIQUE on `subject_id`). Sale flow inserts one row; future "add additional payment" UI is post-v1.4. Confirm operator wants this open or wants a UNIQUE constraint.
+
+3. **PT-session "cancel" or "delete"?** Phase 34 surface — when reception mis-records a session, is the row soft-cancelled (`cancelled_at` populated, balance restored) or hard-deleted? **Recommendation: soft-cancel** (audit trail, mirrors visits-style discipline). Owner-only per RBAC table above.
+
+4. **`(REFUND, MEMBERSHIPS)` / `(REFUND, PT_PACKAGES)` — reception or owner?** Milestone text is explicit: reception, without owner approval. But this is a notable departure from v1.2 where `(CANCEL, MEMBERSHIPS)` is owner-only. **Recommendation: confirm** — if reception can refund, can they also cancel-without-refund (i.e. avoid the payment reversal)? Or are cancel and refund now operationally the same action, with cancel-only being an owner-only escape hatch?
+
+5. **Active-PT-package resolver tiebreak** — if a client has two active PT-packages (rare but possible if they buy two before exhausting the first), which one does the recorder decrement? **Recommendation: `start_date ASC, created_at DESC`** (same tiebreak as v1.3 memberships resolver — oldest live package consumed first, predictable FIFO). Confirm.
+
+6. **Cron stagger for `expire_pt_packages`** — pick 06:25 MSK (10 min after expiring-notifications) for the same "no ordering races, all idempotent" rationale as v1.2 cron-ordering. Confirm no operator scheduling conflicts.
+
+7. **Telegram bot extension** — does v1.4 add any `/pt_packages` or `/payments` commands? **Recommendation: no.** Out of scope. Bot stays at `/start` + `/checkin`. Confirm.
+
+8. **Trainer phone E.164 validation** — reuse the `clients/` E.164 validator? **Recommendation: yes**, lift the helper to `app/core/` if not already there (clean opportunity surfaced by trainers module).
+
+## Sources
+
+- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — invariants, completed-milestone summaries, key-decisions table
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/.importlinter` — three contracts
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/main.py` — composition root, three Protocol registrations
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/dependencies.py` — Protocol slot patterns (lines 33–192)
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/permissions.py` — `Role`/`Action`/`Resource` enums, `OWNER_ONLY` frozenset
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/audit.py` — `LOCKED_AUDIT_EVENTS` frozenset + emit gate
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/memberships/router.py` + `models.py` + `service.py` — closest analog for plan + instance + lifecycle module
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/alembic/versions/` — 0001–0010 migration history
+- `/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/shared/session/can.ts` — frontend RBAC mirror (parity contract)
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/workers/telegram_bot.py` — bot-process Protocol-registration mirror (REG-29-03 lesson)

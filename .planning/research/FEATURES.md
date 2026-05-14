@@ -1,341 +1,295 @@
-# Feature Research — v1.2 Memberships + Visits
+# Features — v1.4 Cash Sales + PT Packages
 
-**Domain:** Single-gym CRM, RU/CIS market — "Memberships catalog + per-client membership instances + reception/Telegram visit check-in"
-**Researched:** 2026-05-07
-**Confidence:** MEDIUM-HIGH (RU CRM market behavior triangulated from FitBase, 1С:Фитнес-клуб, fitness365, impulseCRM, Mobifitness public docs and articles; pet-project anti-fraud heuristics extrapolated from real-club practices documented in those sources)
+**Domain:** Single-gym CRM, RU/CIS market — "Cash payment ledger + refund flow + trainers catalog + PT-package tariff + PT-session recording"
+**Researched:** 2026-05-14
+**Confidence:** MEDIUM-HIGH for domain patterns (triangulated from FitBase, 1С:Фитнес-клуб, Mobifitness, Resawod, PushPress, Club-OS, ClickUp Gyms public materials and industry-wide cancellation/refund norms). LOW-MEDIUM where claims rely on a single secondary source — flagged inline.
 
-**Goal of this document:** validate that the **locked v1.2 scope** covers daily-operations table stakes for a single-gym CRM, surface cheap wins inside the locked scope, and explicitly reject features that look reasonable but are out-of-scope traps. Categorized by **Memberships / Visits / admin-web wiring / Anti-fraud**, with complexity (S/M/L) and dependency on existing v1.1 patterns.
+**Scope discipline:** ONLY the five v1.4 themes. Anything that drifts toward online payments (ЮKassa), fiscal receipts (54-ФЗ), schedule/booking, payroll, or reports is explicitly out of scope and surfaced as "anti-feature" so the discuss-phase can reject it cleanly.
+
+**Existing primitives this builds on (DO NOT re-research):**
+- `memberships` with mandatory snapshot pricing (`plan_name_snapshot`, `duration_days_snapshot`, `price_kopecks_snapshot` NOT NULL), `status ∈ {active, frozen, expired, cancelled}`, central `_assert_can_transition`, `MEMBERSHIP_STATUS_TRANSITIONS`.
+- `membership_plans` catalog with `freeze_days_limit` and `duration_days` immutable post-creation; `lower(name)` partial unique on `WHERE deleted_at IS NULL`; soft-delete with 409 `plan_in_use` when FK references exist.
+- `visits` with `gym_date STORED` + `UNIQUE (client_id, gym_date)` — DB-level race-proof 1-visit-per-day.
+- `audit_log` + `LOCKED_AUDIT_EVENTS` 34-entry frozenset + `audit.emit` AST literal-string gate.
+- `clients` CRUD + `users` (reception/owner) — both already have `id` FKs available for "received by whom" and "performed by whom" attribution.
+- RBAC `(Action, Resource)` pairs through `OWNER_ONLY` set and `Depends(require_permission)`.
 
 ---
 
-## TL;DR — Validation of locked v1.2 scope
+## Category 1: Payments (cash)
 
-| Locked scope item | Verdict | Reason |
+### Table stakes
+
+| Feature | Complexity | Notes |
 |---|---|---|
-| `MembershipPlan` (name + duration_days + price_kopecks + active flag) | **Sufficient** | Matches FitBase/1С "услуга/абонемент" minimum: name + срок + цена + active toggle. |
-| `Membership` instance with **snapshot** of price/duration | **Correct, table-stakes** | Standard CRM pattern — price changes in catalog must not retroactively rewrite sold memberships. FitBase/1С both snapshot. |
-| `start_date` = purchase date, `end_date` = `start_date + duration_days` | **Acceptable but missed table-stakes alternative** | Russian market convention is **`start_date = first visit OR fallback day N`** (1С default, FitBase opt-in). Pure purchase-date semantics is simpler but less common; **see "Activation policy" below — recommended addition: explicit `activation_policy: 'purchase_date'` constant column** so v1.3 can flip to `'first_visit'` without migration of existing rows. |
-| `status: active | expired | cancelled` | **Sufficient** | Matches market norm. `frozen` deliberately deferred. |
-| ARQ daily `expire_memberships` job | **Sufficient with one boundary clarification** | Need explicit decision on **end_date inclusive vs exclusive** — see "Boundary semantics" pitfall in PITFALLS.md (recommendation: inclusive — membership valid through 23:59:59 Europe/Moscow on `end_date`). |
-| Manual cancel (owner-only) | **Sufficient for pet-project** | Real CRMs add proportional refund — explicitly out-of-scope per locked v1.3 deferral. v1.2 cancel = "stop counting", **no money refund logic**. |
-| Reception manual check-in | **Sufficient** | Matches v1.1 pattern: search → button → audit. |
-| Telegram bot `/checkin` | **Sufficient + differentiating** | RU market norm is **QR + turnstile** (Sigur/PocketKey). Telegram bot self-check-in is a cheap-win differentiator for a 1-gym pet project — no turnstile hardware required. |
-| Anti-fraud: gym-hours window + 1/day/client → 409 | **Minimum viable, not "real-club grade"** | Sufficient for honest clients; weak against motivated fraud (proxy check-in, friend's phone). Real RU clubs use photo verification at turnstile + biometrics (out-of-scope). **See Anti-Fraud section below for cheap additions inside scope.** |
-| `/memberships/*` + `/visits/*` admin-web routes | **Sufficient** | Mirrors v1.1 `/clients/*` wiring pattern. |
-| Active sessions UI + revoke | **Out-of-scope-but-tracked, hygiene-grade** | Already-built JWT family infra exists; this is just rendering. S complexity. |
+| **Record sale-payment row at sale time** — `payments` table with `(id, membership_id, amount_kopecks, method='cash', received_by_user_id, received_at, note?)` | S | One row per sale event. Sale endpoint becomes atomic "create membership + insert payment" within a single transaction. Same shape works for both duration-memberships and PT-packages because both reference the same `memberships` table (PT-package is a plan-kind, not a separate table — see Category 4). |
+| **Snapshot the price on the payment row** | S | Already half-done — `memberships.price_kopecks_snapshot` exists. The payment row also carries `amount_kopecks` so future partial-payment / discount scenarios don't break the invariant that `payment.amount` = what client actually handed over (may differ from snapshot if a manual discount is applied at sale). For v1.4 MVP, `amount_kopecks == price_kopecks_snapshot` is enforced server-side and the UI doesn't expose a discount field. |
+| **"Received by" = reception user_id, not free-text** | S | Use `users.id` FK with `ON DELETE RESTRICT` so the operator can never become orphaned. The audit log already carries `actor_user_id` from `audit.emit`; the payment row stores it denormalised for fast "who took this money" queries on the client card without a join across audit. |
+| **Payment timestamp is server-side, never client-supplied** | S | `received_at TIMESTAMPTZ NOT NULL DEFAULT now()`. Reception cannot back-date or forward-date a cash sale (anti-fraud). |
+| **Surface payment history on client card** | S | Read-only list under "Платежи" tab: date, amount, method, who received, linked membership. Source = `payments` filtered by `membership_id IN (memberships of client)`. |
+| **Surface payment on membership detail** | S | One payment per membership in v1.4 (one sale = one cash event); the detail card shows "Оплачено 3 000 ₽ наличными, принял Анна, 14.05.2026 15:30". |
+| **Audit event `payment_recorded`** | S | New entry in `LOCKED_AUDIT_EVENTS`. Payload: `payment_id`, `membership_id`, `amount_kopecks`, `received_by`. Required because this IS the financial event. |
 
-**Headline gap to surface:** v1.2 does not name an explicit **activation policy**. Without that decision encoded as a column-level constant (even if locked to one value), v1.3 will pay a migration cost. **Recommend: add `activation_policy: str = 'purchase_date'` to `Membership` schema today, even though the only allowed value in v1.2 is `'purchase_date'`.** See "Table stakes inside locked scope" item M-2.
+### Differentiators
 
----
-
-## Feature Landscape
-
-### Table Stakes (Users Expect These) — INSIDE locked scope
-
-Features users expect from any gym CRM. These are **the locked v1.2 scope re-validated**, plus three small additions the locked scope is silent on.
-
-#### Memberships
-
-| Feature | Why Expected | Complexity | Notes / Dependency |
-|---|---|---|---|
-| **M-1. MembershipPlan catalog (owner-only CRUD)** | Every RU gym CRM has it (FitBase "Прайс абонементов", 1С "Виды услуг/Пакеты"). Reception sells from a closed list; owner edits prices/active flag. | **S** | Reuses **v1.1 module template** (`router/service/repository/schemas`) + RBAC `OWNER_ONLY` matrix (`{action: 'edit', resource: 'templates'}`). Existing `clients` migration patterns (Alembic naming convention, `MetaData(...)`, `UUIDPkMixin`/`TimestampMixin`) apply directly. Likely **soft-delete** via `SoftDeleteMixin` + partial-unique on `name WHERE deleted_at IS NULL` if name uniqueness is desired. |
-| **M-2. Membership instance with price/duration snapshot** | Catalog price changes must not retroactively rewrite sold memberships. Universal in RU CRMs. | **S** | Plain columns `snapshot_price_kopecks INTEGER NOT NULL` + `snapshot_duration_days INTEGER NOT NULL`. **Recommendation: add `activation_policy VARCHAR NOT NULL DEFAULT 'purchase_date'` now** (CHECK constraint to single value `'purchase_date'`); v1.3 will widen the CHECK to include `'first_visit'`. Without this column, v1.3 needs a migration to add it AND backfill semantics. |
-| **M-3. Active/expired/cancelled status enum** | Standard tri-state. Matches FitBase ("активен/закончен/расторгнут") and 1С. | **S** | `StrEnum` in `models.py`; ARQ daily job transitions `active → expired` by `end_date` comparison; manual cancel sets `status='cancelled'` + `cancelled_at = now()`. |
-| **M-4. ARQ daily expiry job** | Without it, "expired" never appears — reception sees stale data. | **S-M** | First real ARQ scheduled job (skeleton exists from v1.0). Idempotent: `UPDATE memberships SET status='expired' WHERE status='active' AND end_date < CURRENT_DATE`. **Pitfall**: must run AFTER local-midnight Europe/Moscow (see PITFALLS). |
-| **M-5. Manual cancel (owner-only)** | Required for "клиент сдал, верну позже / медотвод / переезд". | **S** | RBAC: add `{action: 'cancel', resource: 'memberships'}` to `OWNER_ONLY`. `cancelled_at` timestamp + audit row. **No proportional refund** in v1.2 (deferred to v1.3 billing). |
-| **M-6. Audit-log writes (create/cancel/expire)** | v1.1 pattern; without it, "who cancelled this" is unanswerable. | **S** | Reuse v1.1 `audit_log` writer. ARQ-driven `expire` events: log with `actor_user_id = NULL, actor_kind = 'system'`. |
-
-#### Missing-but-trivial (recommended additions inside locked scope)
-
-| Feature | Why It's Table-Stakes | Complexity | Recommendation |
-|---|---|---|---|
-| **M-7. `paid_at` timestamp on Membership** | Owner sells today — needs to know "когда продал" for end-of-month informal reporting (no billing module yet). 1С/FitBase always store this. | **S** | One nullable timestamp column, set by `POST /memberships`. Even without ЮKassa, this is the seed for v1.3 billing reconciliation. |
-| **M-8. `activation_policy` column with single allowed value** | See M-2 — guards v1.3 migration cost. | **S** | `VARCHAR NOT NULL DEFAULT 'purchase_date' CHECK (activation_policy = 'purchase_date')`. Schema-level placeholder. |
-| **M-9. `notes` free-text column on Membership** | Reception inevitably needs "оплатил наличными", "акция 1+1", "перенос с прошлого зала". Universal in RU CRMs. | **S** | `TEXT NULL`. No semantic logic; just storage. |
-
-#### Visits
-
-| Feature | Why Expected | Complexity | Notes / Dependency |
-|---|---|---|---|
-| **V-1. Reception manual check-in (search → button)** | Mirrors v1.1 `/clients/*` UX exactly: ILIKE search → list → action button. | **S** | Reuses `pg_trgm` GIN-indexed search + LIKE-escape from CR-01. New endpoint `POST /visits/check-in` with body `{client_id, channel: 'reception'}`. |
-| **V-2. Telegram self check-in `/checkin`** | Anti-stakes for v1.2 differentiation. | **M** | Extends existing ptb-22 long-polling worker (Phase 7). Bot resolves `telegram_chat_id → user → client_id`, calls internal service, replies "✅ Отмечено в HH:MM". Cross-module callback via Protocol (existing pattern). |
-| **V-3. Active-membership validation** | Without it, expired clients can self-check-in. | **S** | Service-layer guard: `SELECT 1 FROM memberships WHERE client_id = :id AND status='active' AND CURRENT_DATE BETWEEN start_date AND end_date`. **409 Conflict** if no active membership; bot replies "❌ Активный абонемент не найден". |
-| **V-4. Anti-fraud: 1 visit per day per client** | Universal "1 заход в день" cap in RU clubs (premierfit/dorfit рули правила). Without it, accidental double-tap creates noise. | **S** | DB-level: partial unique index `UNIQUE (client_id, (checked_in_at::date AT TIME ZONE 'Europe/Moscow'))`. On conflict → 409. |
-| **V-5. Anti-fraud: gym-hours window** | Server-time `08:00–23:00 Europe/Moscow` from env. Outside → 409. | **S** | Env var `GYM_HOURS_START=08:00 / GYM_HOURS_END=23:00`. Service-layer check before insert. **Note**: must use `Europe/Moscow` zone-aware comparison, not UTC. |
-| **V-6. Audit-log writes** | v1.1 pattern. | **S** | `actor_user_id` for reception channel; `actor_kind='telegram_bot'` for bot channel. |
-| **V-7. Visit-history per client** | Reception needs "когда был последний раз". Standard in every RU CRM. | **S** | Read-only endpoint `GET /clients/:id/visits?limit=20`; renders in client-detail page. |
-
-### Differentiators (Cheap-Win, FIT inside locked scope)
-
-These are not in the explicit locked-scope text but are **computed views over already-locked data** — no new tables, no new domain concepts, very small backend code, clear daily-operations value. Owner saves money on a turnstile by getting these for free in admin-web.
-
-| Feature | Value Proposition | Complexity | Notes / Dependency |
-|---|---|---|---|
-| **D-1. "Кто сейчас в зале" (currently checked-in)** | Reception/owner glanceable: "сейчас 7 человек". RU CRM staple — Gymdesk/PushPress have it; FitBase displays via attendance dashboard. | **S** | Pure read: `SELECT clients.* FROM visits JOIN clients ON ... WHERE checked_in_at::date = CURRENT_DATE AT TIME ZONE 'Europe/Moscow'`. **No "checkout"** event is in scope, so this is "checked in today" — adequate for a 1-gym pet project where physical presence is loosely tracked. Display as a card on the visits index page. |
-| **D-2. "Истекает сегодня / на этой неделе" filter** | Owner runs this once per morning to pre-emptively call clients before silence-churn. Universal upsell hook in RU CRMs. | **S** | Pure read: `SELECT * FROM memberships WHERE status='active' AND end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7`. Add as `?expiringWithinDays=N` query param on `GET /memberships`. **No notifications** — just a filter (notifications deferred to v1.3). |
-| **D-3. "Истёк сегодня" filter** | Critical UX moment: client walks in expecting to train, reception sees "истёк сегодня" badge in red, can immediately offer renewal. Without it, reception sees just "expired" with no urgency cue. | **S** | Computed badge in admin-web: if `end_date == today` AND `status='expired'` → render "истёк сегодня" red badge. Pure frontend — no backend change. |
-| **D-4. "Renewal stack" — chronological plan history per client** | When client renews 5×, reception needs to see "купил 30-day → 90-day → 90-day → ..." chronologically. Trivial join, but **only valuable if rendered as a timeline** in client-detail. Builds trust ("система помнит всё"). | **S** | Pure read; existing `GET /clients/:id` enrichment OR separate `GET /clients/:id/memberships`. Render as vertical timeline in client-detail tab. |
-| **D-5. Telegram bot reply enrichment: "до конца N дней"** | When bot replies "✅ Отмечено", append "Абонемент действует ещё 12 дней" — trivial computation, but converts every check-in into a passive churn-prevention nudge. | **S** | Compute `(end_date - CURRENT_DATE).days` server-side, include in bot reply text. Especially valuable when N ≤ 7 (urgency nudge). |
-| **D-6. Reception view: "сегодняшние посещения" log** | End-of-shift reception wants to see "кого я сегодня отмечал" for handoff. Standard in 1С. | **S** | `GET /visits?date=today&channel=reception&actor=:current_user_id`. List view with timestamps. |
-| **D-7. Membership "снимок" view (sold-with-these-prices)** | Owner runs catalog price increase, then 3 months later wonders "сколько у меня клиентов на старой цене". Snapshot column already exists (M-2) — only needs a filter UI: "Активные мемберы по проданной цене". | **S** | `GET /memberships?soldPriceMin=...&soldPriceMax=...`. Pure SQL filter. |
-
-### Anti-Features (DO NOT BUILD in v1.2 — explicit reject list)
-
-These are features that look reasonable for a "gym CRM" but cost a lot for a single-gym pet-project. **Each is documented here so v1.2 planners can point at this list when stakeholders ask.**
-
-| Feature | Why Requested | Why Problematic for v1.2 | Alternative / When to Reconsider |
-|---|---|---|---|
-| **AF-1. Per-class booking / group lessons** | "Mindbody has it" / "FitBase has it". | Requires `Schedule` + `Class` + `Booking` + `Trainer` modules — at minimum 4 new entities, calendar UX (react-big-calendar wiring), waitlists, no-show penalties. Multiplies v1.2 LOC ~3×. | Wait for v1.3+ (already reserved as "trainers / schedule / bookings — TBD" in PROJECT.md). v1.2 ships **time-based** memberships only — no per-class accounting. |
-| **AF-2. Family / corporate memberships (one plan, many clients)** | "Семейная карта на двоих, со скидкой". | Requires N:M between `Membership` and `Client`, "primary holder" semantics, billing distribution, per-member visit attribution. Doubles complexity of every membership query. | Single-client memberships only in v1.2. If owner sells to 2 family members, owner sells 2 memberships. Reconsider only if owner brings real demand and business case. |
-| **AF-3. Visit-count plans ("10 занятий")** | RU market norm — "пакет на 10/20/30 занятий". | Need decrementing counter, lifecycle "5 of 10 used → 0 of 10 used → expired by count OR by date (whichever first)", refund-on-cancel proportional to unused visits. Cancel-with-partial-use multiplies edge cases. **Already explicitly deferred** in PROJECT.md to v1.3. | v1.2 only ships time-based plans. v1.3 can add `plan_kind: 'time' | 'count'` discriminator. |
-| **AF-4. Membership freeze / pause** | RU market table-stakes for **commercial** clubs ("заморозка на отпуск"). | Requires extra state (`frozen`), freeze-window tracking (start/end of pause), end-date arithmetic ("end_date += paused_days"), per-day idle-extension policies. **Already explicitly deferred** in PROJECT.md to v1.3. | Not in v1.2. If owner of pet-project gym wants it informally, owner extends `end_date` manually — no UX. v1.3 introduces real freeze. |
-| **AF-5. Proportional refund on cancel** | Russian consumer protection law (ст. 32 ЗоЗПП) requires proportional refund on early cancel. | Requires money math, paid_amount tracking with billing trail, and **really** wants ЮKassa refund integration. v1.2 has no billing module. | v1.2 cancel = "stop counting"; owner handles real-money refund out-of-band (cash or bank transfer). v1.3 billing module owns refund logic. **Document this constraint visibly in admin-web cancel dialog**: "Это не вернёт деньги клиенту — обработайте возврат отдельно". |
-| **AF-6. Expiring-soon notifications (Telegram DM, email, SMS)** | Every commercial CRM has it. | Requires notification scheduling (ARQ), per-client opt-in, deduplication ("не слать дважды в один день"), template management, GDPR/152-ФЗ consent tracking. **Already explicitly deferred** in PROJECT.md. | v1.2 ships D-2 ("expiring filter") instead — owner pulls instead of system pushes. Achieves 80% of the value at 5% of complexity. |
-| **AF-7. Per-trainer commission / payroll on membership sale** | "Тренер должен получить % с проданного абонемента". | Requires Trainer module (not in v1.2), commission rules engine, payroll calc. RBAC `OWNER_ONLY` already blocks reception from `compensation` resource — keep it that way. | v1.3+ trainers module. v1.2 memberships have no `sold_by_trainer_id`. |
-| **AF-8. CSV import of legacy memberships** | "У меня есть Excel с 200 клиентами и их датами окончания". | Bulk import of dated/snapshot data is a UX rabbit hole (validation errors per row, partial commits, idempotent re-runs). | v1.2 reception types them in. v1.3 ships CSV import (already deferred in PROJECT.md). For 1-gym pet project, manual entry of <200 rows is one-evening's work; building robust CSV import is a week. |
-| **AF-9. Photo upload on client / facial verification at check-in** | Real RU clubs do this (1С:Фитнес + PocketKey/Sigur — see Anti-Fraud section). | Requires file storage (S3-compatible, MinIO?), image processing, EXIF stripping, GDPR/152-ФЗ implications. **Already explicitly deferred** in PROJECT.md. | v1.2 ships text-only. The TG-bot self-check-in differentiates **without** turnstile hardware — that's the v1.2 value prop. |
-| **AF-10. Live websocket "currently in gym" auto-refresh** | "Хочу видеть в реальном времени". | Websocket infra cost (sticky sessions, scaling, FastAPI websocket lifecycle, frontend reconnect logic) for a 1-gym pet project where peak occupancy is ~20 people and reception refreshes the page anyway. | v1.2 D-1 ships as **stale-30s React Query auto-refresh**. Reception clicks refresh. Sufficient. v2+ websocket only if >100 concurrent visits. |
-| **AF-11. Multi-gym scoping (`gym_id` on every table)** | "А вдруг откроется второй зал?" | **Explicitly out-of-scope** in PROJECT.md ("Multi-tenancy — добавим только когда появится второй покупатель"). Every preemptive scoping column is structural debt that bleeds through every query. | Add `tenant_id` columns ONLY when second gym is real and paying. Until then, single-tenant assumption. |
-| **AF-12. Audit-log read API + UI** | Owner wants to see "кто что сделал". | Already exists in `audit_log` table (writes only). Read API + UI is its own slice with filters, pagination, PII concerns, retention. **Already deferred** in PROJECT.md to v1.3+. | v1.2 audit is write-only — debugging via direct SQL access. v1.3 ships read UI. |
-
-### Anti-Fraud — what real RU gyms actually do, and what fits inside v1.2
-
-**Question from prompt:** Is `gym-hours window + 1/day` enough?
-
-**Verdict:** **Sufficient for an honest single-gym pet project; insufficient against motivated fraud. The locked scope is correct for v1.2 — do not over-engineer.**
-
-#### Real-club fraud landscape (RU/CIS)
-
-Distilled from FitBase, 1С:Фитнес, fitness365, Sigur public docs:
-
-| Fraud vector | Real-club countermeasure | v1.2 self-check-in exposure | v1.2 mitigation |
-|---|---|---|---|
-| **Friend's card / proxy entry** ("даю свою карту другу") | (a) Photo on file shown to admin at turnstile; (b) facial recognition at turnstile; (c) biometric (fingerprint/palm vein) — 1С + PocketKey/Sigur. | TG-bot `/checkin` is **bound to `telegram_chat_id`** (verified during v1.1 OTP flow → upsert by chat_id). To proxy-check-in, friend would need access to the client's Telegram account. Higher friction than swiping a card. | **Already strong** — Telegram account compromise is a much higher bar than card swap. **Reception manual check-in is the weak spot** (administrator can fake a check-in for a friend) — see CR-mitigations below. |
-| **Replay / duplicate check-in** ("отметился, а потом ещё раз через 5 минут") | DB unique constraint on `(client_id, date)`. | Locked: 1/day partial unique index. | **Already adequate** — V-4 covers this. |
-| **Off-hours sneak-in** ("пришёл в 7:00, зал работает с 8") | Turnstile schedule + access-list. | Locked: gym-hours window. | **Already adequate** — V-5 covers this. Note: server time, not client local time. |
-| **Reception-administrator collusion** ("админ отмечает свою подругу без абонемента") | (a) `Membership` validation BEFORE check-in (system blocks if expired); (b) audit-log + retro-review by owner; (c) photo verification. | Reception can `POST /visits/check-in {client_id}` for any client with active membership; can fake-check-in a real member's record (no money cost, but inflates visit data). | **Acceptable for v1.2** because: (1) `Membership` validation already blocks check-in for clients without active membership — admin can't conjure fake clients; (2) audit-log records `actor_user_id` — owner can retro-review; (3) for 1-gym pet project the single owner often IS the reception, so "collusion" is inapplicable until staff grows. |
-| **Expired-but-walked-in client** ("истёк сегодня, реcепшн пропускает") | System hard-blocks at turnstile. Some clubs allow grace window via "истекает сегодня" amber badge but require manual override + audit. | Depends on **boundary semantics** (see PITFALLS.md). Locked: `end_date < CURRENT_DATE` → expired by ARQ. So `end_date == today` is **still active** until midnight. **This is correct behavior** for client UX; reception sees green "active". | **Already adequate** — ARQ daily job runs after midnight, so client whose `end_date == today` can train all day. Surface "истекает сегодня" badge (D-3 differentiator) so reception can offer renewal at the door. |
-
-#### Cheap anti-fraud additions that fit inside locked scope
-
-| Addition | Cost | Value |
+| Feature | Complexity | Notes |
 |---|---|---|
-| **AF-cheap-1. `channel` column on Visit (`reception | telegram_bot`)** | **Already in locked scope.** | Owner can audit-review by channel: "сколько отметок reception сделал сам, без TG-подтверждения от клиента" — high-friction reception fraud signal. |
-| **AF-cheap-2. `checked_in_by` column = the User who actioned** | **Already in locked scope.** | For reception channel = staff user_id; for telegram_bot channel = NULL or the client's user_id. Audit-log dedup: who clicked. |
-| **AF-cheap-3. Hard-block check-in if Membership.status != 'active'** | S — already implied in V-3. | Admin cannot bypass UI to check in expired client without first reactivating the membership (which is owner-only). Cuts reception-admin collusion vectors. |
-| **AF-cheap-4. Daily summary log line per visit (structlog)** | S — reuses v1.0 structlog infra. | `event=visit.checked_in client_id=... channel=... actor=...` — owner greps logs, retroreview. |
-| **AF-cheap-5. Telegram bot replies with timestamp + days-remaining** | S (already D-5). | Two-way confirmation: client sees "✅ Отмечено в 18:42, 12 дней до окончания" — if reception fakes a check-in for that client, the client doesn't get the message and can complain. Cheap accountability layer **only on telegram_bot channel**. |
+| **Daily cash-drawer summary on owner dashboard** | M | "Today: 5 sales, 12 500 ₽; refunded 1 sale, 3 000 ₽; net 9 500 ₽." Useful for end-of-day reconciliation against physical cash. **Defer to v1.5 reports** — v1.4 only writes the data; reports come next milestone. PROJECT.md explicitly defers reports to v1.5. |
+| **Per-reception-user shift totals** | M | "Анна приняла сегодня 4 продажи на 10 000 ₽." Same defer to v1.5. |
+| **Note field on payment** (`text NULL`) | S | Reception writes "оплатил частично, остаток обещал в пятницу" — even though v1.4 doesn't model partial payments, a free-text note is a cheap escape hatch for "weird situations". LOW confidence on whether this is actually needed; pet-project owner may prefer the discipline of "no notes, no weirdness". Flag for discuss-phase. |
 
-**What we explicitly DO NOT add for anti-fraud in v1.2:**
+### Anti-features (do not build in v1.4)
 
-- IP/device-binding for TG-bot check-in (overkill; bot already binds to `telegram_chat_id`)
-- Geofencing ("you must be within 100m of the gym to /checkin") — requires location handler, privacy implications, false negatives (bad GPS indoors)
-- Photo verification at reception (out-of-scope per PROJECT.md anti-features)
-- "Two-step" admin check-in requiring client TG confirmation (creates UX friction; v1.2 reception channel must remain a single click)
-
----
-
-## Feature Dependencies
-
-```
-M-1 (MembershipPlan)
-  └──required-by──> M-2 (Membership instance, snapshots from plan)
-                       ├──required-by──> M-3 (status enum)
-                       │                    └──required-by──> M-4 (ARQ expire job)
-                       ├──required-by──> M-5 (manual cancel)
-                       └──required-by──> V-3 (active-membership validation)
-
-V-1 (reception check-in) ──independent──> V-2 (TG bot check-in)
-   both depend on V-3 (active-membership validation)
-   both required-by V-4 (1/day unique) + V-5 (gym hours)
-   both required-by V-6 (audit) + V-7 (visit history)
-
-D-1 ("currently in gym") ──reads──> Visit table — pure-read, no schema change
-D-2 ("expiring soon") ──reads──> Membership table — pure-read, parameterized query
-D-3 ("expired today" badge) ──reads──> Membership(status, end_date) — pure-frontend
-D-4 (renewal stack) ──reads──> Membership filtered by client_id — pure-read
-D-5 (TG-bot days-remaining reply) ──reads──> Membership.end_date — text concatenation
-D-6 (today's visits) ──reads──> Visit filtered by date+channel — pure-read
-D-7 (snapshot price filter) ──reads──> Membership.snapshot_price — pure-SQL filter
-
-M-7 (paid_at) ──seed-for──> v1.3 billing reconciliation
-M-8 (activation_policy column) ──seed-for──> v1.3 first-visit activation
-```
-
-### Critical Notes
-
-- **M-1 must ship before any Membership-instance work** because instance schema imports plan_id FK.
-- **M-2 + M-8 should ship in same migration** — adding `activation_policy` later means backfilling existing rows.
-- **V-3 (active-membership validation) is the critical join** between Memberships and Visits modules. It must be a **service-layer call**, not a direct cross-module SQL query, to preserve `modules-independent` import-linter contract. Use the existing v1.1 cross-module Protocol pattern (`HandlerContext`-style).
-- **D-1 through D-7 are all post-MVP polish** — none block the v1.2 ship. Recommend cutting any that don't fit phase budget; D-3 + D-2 are the highest ROI.
-- **AF-cheap-1 + AF-cheap-2 are already inside locked scope** — they're columns on `Visit`. Just make sure they're queried in the audit views (D-6).
+| Anti-feature | Why avoid | What to do instead |
+|---|---|---|
+| **Card payments / online payments** | PROJECT.md explicit: ЮKassa in v1.6 only. | Hard-code `method='cash'` as a Postgres CHECK on `payments.method`. When v1.6 lands, alter the CHECK to admit `'card'`. |
+| **Fiscal receipt printing (54-ФЗ)** | PROJECT.md explicit: gym is grey-zone, no checks. | No `receipt_number`, no `kkm_*` columns, no integration. |
+| **Partial payments / installment plans** | Real industry feature (gyms often let clients pay 50/50), but adds state machine on `payments` (paid, due, overdue) that is a milestone of its own. | One payment per sale. If client can't afford full price, reception sells a cheaper plan or no plan. |
+| **Discounts / promo codes** | Adds a `discount_kopecks` field, a justification field, an audit event, and an owner-approval workflow. | v1.4 enforces `payment.amount == membership.price_kopecks_snapshot`. Sale flow has no discount UI. |
+| **Overpayment / change-given tracking** | In a cash drawer, "client gave 5 000 ₽ for 3 000 ₽ plan, got 2 000 ₽ change" is just normal cash handling — the system records the **price**, not the bill physically handed over. | `payment.amount` is the price, period. No `cash_tendered` / `change_given` columns. |
+| **Multi-currency** | Single-gym RU/CIS, kopecks-only. | Inherit existing `_kopecks INT NOT NULL` discipline. |
+| **Refund as `payment.amount < 0`** | Tempting because it keeps one table, but breaks the "one payment per sale" invariant and makes the client-card payment list confusing (mixing positive and negative rows that aren't obviously paired). | Separate `refunds` table — see Category 2. |
 
 ---
 
-## MVP Definition (for v1.2)
+## Category 2: Refunds
 
-### Launch With (locked v1.2 — the minimum viable slice)
+### Table stakes
 
-#### Memberships module
+| Feature | Complexity | Notes |
+|---|---|---|
+| **Separate `refunds` table** with `(id, payment_id FK, amount_kopecks, performed_by_user_id, performed_at, reason TEXT NULL)` | S | One refund per payment, enforced by `UNIQUE (payment_id)`. "Already refunded" → 409 `already_refunded`. Industry norm (LA Fitness, Edge, Club Fitness all treat a refund as a distinct event with its own audit trail). |
+| **Refund cancels the linked membership/package** | S | Atomic: refund creation + `memberships.status` transition `{active, frozen} → cancelled`. Add transition to `MEMBERSHIP_STATUS_TRANSITIONS` constant. New literal `cancelled_reason='refunded'` column or a `cancellation_reason` enum on memberships — preferred: a single new column `memberships.cancellation_reason VARCHAR NULL CHECK IN ('refunded','owner_decision', NULL)` so the existing 4-state status stays clean. |
+| **Reception can perform refund (no owner approval)** | S | PROJECT.md explicit: "без owner approval". Add `(REFUND, PAYMENTS)` to `Action`/`Resource` enums; do NOT add to `OWNER_ONLY` — reception keeps it. |
+| **Full refund only in v1.4** | S | `refund.amount == payment.amount`. Server-side enforced; UI has no amount field, just a "Вернуть деньги" confirm dialog showing the original amount. Eliminates the pro-rata question for MVP. |
+| **Audit event `payment_refunded`** + `membership_cancelled` (already locked) | S | Both fire in the same transaction. `payment_refunded` payload: `refund_id`, `payment_id`, `amount_kopecks`, `reason`. |
+| **Refund button hidden if already refunded** | S | UI reads `refund_id` on payment surface and disables the button. Server is still authoritative — UNIQUE constraint catches the race. |
+| **Refund button hidden if membership has visits/PT-sessions consumed** (configurable per discuss-phase) | S | LOW confidence — this is a policy decision, not a technical one. Industry varies: some gyms refund freely, some lock once a single visit is logged. RECOMMEND: v1.4 ships the technical capability but the UI shows a warning ("Уже было 3 посещения") and lets reception proceed. Owner sees the audit. |
 
-- [x] **M-1** — `MembershipPlan` CRUD (owner-only)
-- [x] **M-2** — `Membership` instance with `snapshot_price_kopecks` + `snapshot_duration_days`
-- [+] **M-2-add** — also add `activation_policy VARCHAR DEFAULT 'purchase_date' CHECK (...)` column **even though only one value is allowed in v1.2** (zero-cost forward compat with v1.3 first-visit activation)
-- [x] **M-3** — status `active|expired|cancelled`
-- [x] **M-4** — ARQ daily `expire_memberships` job
-- [x] **M-5** — manual cancel (owner-only)
-- [x] **M-6** — audit-log writes (create / cancel / expire)
-- [+] **M-7-add** — `paid_at` timestamp column on Membership (one column; seeds v1.3 billing)
-- [+] **M-9-add** — `notes` TEXT NULL on Membership (one column; cost = nothing, daily-ops value high)
+### Differentiators
 
-#### Visits module
+| Feature | Complexity | Notes |
+|---|---|---|
+| **Pro-rata refund for PT-packages** ("used 3 of 10 → refund 7/10") | M | Real question, surfaced in milestone_context. Computable: `refund_amount = price * (remaining_sessions / total_sessions)`, ceil to kopeck. Adds a refund-amount field to UI, validation server-side. **RECOMMEND: defer to v1.5 or later** — pet-project owner can do the math by selling a new short package as compensation, or refund full + apologise. Flag for discuss-phase. |
+| **Pro-rata refund for duration-memberships** ("30-day plan, used 10 days, refund 20/30") | M | Same shape. Same recommendation: defer. |
+| **Refund reason picklist** (sickness / moving / dissatisfaction / other) | S | Cheap to add as a `reason_code` enum alongside free-text `reason`. Useful for v1.5 reports. RECOMMEND: ship the enum even if reports defer — the data is cheap to collect and expensive to backfill. |
+| **Owner-only override for refund-after-N-visits** | M | "Reception can refund freely; if ≥1 visit consumed, requires owner role." Adds an RBAC branch. RECOMMEND: do NOT add — PROJECT.md explicit "ресепшен сам", solo-dev simplicity wins. |
 
-- [x] **V-1** — reception manual check-in via admin-web
-- [x] **V-2** — Telegram bot `/checkin` (extends existing ptb-22 worker)
-- [x] **V-3** — active-membership validation (cross-module via Protocol callback)
-- [x] **V-4** — 1/day partial unique index on `(client_id, checked_in_at::date AT TIME ZONE 'Europe/Moscow')`
-- [x] **V-5** — gym-hours window from env (`GYM_HOURS_START` / `GYM_HOURS_END`, Europe/Moscow)
-- [x] **V-6** — audit-log writes
-- [x] **V-7** — visit-history per client
+### Anti-features
 
-#### admin-web wiring (`VITE_API_MODE=http`)
-
-- [x] `/memberships/plans` — owner-only CRUD list/form
-- [x] `/memberships` — list of all memberships (filter by status, by client name search via existing v1.1 ILIKE)
-- [x] `/visits` — today's-visits list (filter by date/channel)
-- [x] `/visits/check-in` — search-and-button page
-- [x] client-detail enhancements — Memberships tab + Visits tab
-- [x] Active sessions UI + revoke (renders existing JWT-family data)
-
-#### Hygiene
-
-- [x] CR-01: Argon2 verify-error → 401 (not 500)
-- [x] CR-02: invalid UUID in cookie → 401 (not 500)
-
-### Add If Phase Budget Permits (cheap-win differentiators)
-
-Strongest ROI first — pick top-N from this list per phase budget:
-
-- [+] **D-3** — "истёк сегодня" red badge in admin-web membership list (pure frontend, S)
-- [+] **D-2** — "истекает в течение N дней" filter (1 query param + 1 frontend filter UI, S)
-- [+] **D-5** — TG-bot reply enrichment "до конца N дней" (1 line of bot code, S)
-- [+] **D-1** — "Кто сейчас в зале" card on visits page (1 query, S)
-- [+] **D-4** — renewal stack timeline in client-detail (1 query, S frontend timeline component)
-- [+] **D-6** — today's-visits log filtered by current reception user (1 query param, S)
-- [+] **D-7** — filter by snapshot-price range (1 query, S)
-
-### Defer to v1.3+ (already on PROJECT.md deferred list)
-
-- [ ] AF-3: visit-count plans
-- [ ] AF-4: freeze
-- [ ] AF-5: proportional refund (depends on billing module)
-- [ ] AF-6: expiring-soon notifications (Telegram DM, email)
-- [ ] AF-8: CSV bulk import
-- [ ] AF-9: photo upload, biometrics
-- [ ] AF-12: audit-log read API + UI
-- [ ] Billing / ЮKassa integration
-- [ ] Trainers / schedule / bookings module(s)
+| Anti-feature | Why avoid |
+|---|---|
+| **Partial refunds with custom amount** | Opens "reception under-refunded by 500 ₽" social-engineering risk. Full refund or no refund. |
+| **Refund reversal ("undo refund")** | A refund means cash physically left the drawer. Reversing requires the client to bring it back — that's just a new sale, not a system operation. |
+| **Refund to a different payment method** | "Paid cash, refund to card" — adds payout integration. Not relevant for cash-only. |
+| **Refund window enforcement** ("14 days from purchase") | Adds time logic and operator confusion. Reception's job is to apply judgement; system records the event. |
+| **Refund-pending state** | No async approval needed (reception self-serves) → no need for "pending" status. Synchronous transaction. |
 
 ---
 
-## Feature Prioritization Matrix
+## Category 3: Trainers
 
-| Feature | User Value | Implementation Cost | Priority |
+### Table stakes
+
+| Feature | Complexity | Notes |
+|---|---|---|
+| **`trainers` table** with `(id, full_name, phone NULL, is_active BOOL NOT NULL DEFAULT true, created_at, updated_at)` | S | Identity-only catalog. No user account, no login, no Telegram link — reception logs sessions **about** a trainer, the trainer does not log in. |
+| **Soft-delete via `is_active=false`, not `deleted_at`** | S | Trainers historically attribute past PT-sessions; cannot break FK chain. `is_active=false` means "don't show in pickers for new sessions" but historical references stay intact. **Decision shortcut**: avoid `SoftDeleteMixin` here — use a simple boolean. Different semantics than `clients` where soft-delete = "this person is gone". |
+| **Owner-only CRUD** | S | Add `(CREATE, TRAINERS)`, `(UPDATE, TRAINERS)`, `(DELETE, TRAINERS)` to `OWNER_ONLY`. Reception reads-only (needs to pick a trainer when logging a PT-session). |
+| **Phone optional, no E.164 enforcement** | S | Trainers are internal staff; reception knows them. Phone is contact info, not a unique key. **Optional**: free-text `phone TEXT NULL`, no unique constraint. Differs deliberately from `clients.phone`. |
+| **List endpoint with `?active=true` filter for pickers** | S | Reception PT-session UI calls `GET /api/v1/trainers?active=true` to populate dropdown. Default = all (for owner directory page). |
+| **Audit events** `trainer_created`, `trainer_updated`, `trainer_archived`, `trainer_unarchived` | S | Add 4 entries to `LOCKED_AUDIT_EVENTS`. |
+
+### Differentiators
+
+| Feature | Complexity | Notes |
+|---|---|---|
+| **Trainer profile fields** (specialization, photo, bio) | M | Useful if displayed to clients — but no client-web in v1.4. Skip. |
+| **Trainer-client preference link** ("этот клиент работает с этим тренером") | M | Adds a join table. Useful in workflow but not table-stakes when log-flow is "reception picks trainer at session time". Skip for v1.4. |
+| **Per-trainer session counter** ("Анна провела 23 ПТ за месяц") | S | Trivial aggregate query off `pt_sessions`. Defer surfacing to v1.5 reports. |
+
+### Anti-features (when does adding schedules/pay become necessary?)
+
+| Anti-feature | When it becomes necessary |
+|---|---|
+| **Trainer schedule / shift table** | When trainers have fixed hours, when clients book trainers in advance, when a "trainer-not-available" check is needed at booking. **v1.4 = pet project, no schedule, no bookings** — reception logs after-the-fact: "Анна провела ПТ с Иваном в 14:30". |
+| **Pay rate / commission per session** | When the gym owes the trainer money the system computes (payroll). PROJECT.md explicit: "тренеры только справочник, расчёт зарплат — не в этом milestone." |
+| **Trainer login / Telegram bot for trainers** | When trainers self-log sessions or check their schedule. v1.4 says reception logs everything. Adding trainer auth doubles the user-management surface. |
+| **Trainer rating / client feedback** | Client-web feature; no client-web in v1.4 (deferred to Phase J per Out of Scope). |
+| **Trainer certifications / expiry tracking** | Compliance feature for chains. Single-gym pet project — owner knows their two trainers personally. |
+| **Trainer-availability calendar UI** | Needs schedule first; same defer. |
+
+**Rule of thumb (LOW confidence, but actionable):** when the trainer catalog needs more than 5 columns or the table grows a child table, the milestone has drifted into "schedule/payroll" territory. v1.4 should ship 4 columns max (`id`, `full_name`, `phone`, `is_active`, plus timestamps).
+
+---
+
+## Category 4: PT Packages (tariff)
+
+### Table stakes
+
+| Feature | Complexity | Notes |
+|---|---|---|
+| **New plan kind `'pt_package'`** on existing `membership_plans` table | S | Add column `membership_plans.kind VARCHAR NOT NULL DEFAULT 'duration' CHECK IN ('duration', 'pt_package')`. Existing rows backfill to `'duration'`. This avoids a separate `pt_packages` table and inherits all soft-delete / `freeze_days_limit` / pricing infrastructure. **RECOMMEND** over a parallel table — re-uses the existing sale flow. |
+| **`session_count INT NULL`** on `membership_plans` | S | NULL for duration plans (CHECK enforces `kind='duration' → session_count IS NULL`). NOT NULL > 0 for pt_package plans (CHECK enforces `kind='pt_package' → session_count IS NOT NULL AND session_count > 0`). Immutable post-creation, mirroring `duration_days` and `freeze_days_limit`. |
+| **PT-package membership instance reuses `memberships` table** | S | A sold pt_package is a row in `memberships` with `plan_kind_snapshot='pt_package'` + `session_count_snapshot` (mandatory snapshot, mirrors price/duration/freeze-limit snapshots). Inherits status state machine (`active/frozen/expired/cancelled`), inherits resolver tiebreak, inherits cancel/refund flow. |
+| **`remaining_sessions INT`** on `memberships` (NULL for duration plans) | S | NOT NULL for pt_package memberships; initial value = `session_count_snapshot`. Decremented by PT-session recording (see Category 5). CHECK `remaining_sessions >= 0`. |
+| **Client can have BOTH a duration membership AND a pt_package simultaneously** | S | Resolver already returns at most one row, but the relationship between the two is independent — they are separate `memberships` rows with different `plan_kind_snapshot`. Reception check-in resolves the duration plan; PT-session recording resolves the pt_package. **Decision:** the resolver needs a `kind` parameter, or split into `resolve_active_duration_membership` + `resolve_active_pt_package`. Recommend the latter for clarity. |
+| **Expiry policy for pt_packages: duration in days OR session-count** | S | Industry norm: PT-packages expire on **whichever comes first** — N sessions consumed OR N days elapsed. **RECOMMEND** require both `duration_days` AND `session_count` on pt_package plans. Inherits existing `expire_memberships` ARQ cron for the time dimension; session-exhaustion is a separate transition (see Category 5). |
+| **Audit events** `pt_package_sold` (or reuse `membership_sold` with `kind` in payload?) | S | RECOMMEND reuse `membership_sold` with `kind` discriminator in the payload, to keep `LOCKED_AUDIT_EVENTS` smaller. Add only the PT-specific events (`pt_session_recorded`, see Category 5). |
+
+### Differentiators
+
+| Feature | Complexity | Notes |
+|---|---|---|
+| **Multiple pt_packages in flight per client** ("client has 5 sessions left from Aug package + just bought 10 more") | M | Industry handles this with FIFO/LIFO consumption rules. **RECOMMEND** v1.4: only ONE active pt_package per client at a time. If client buys another while one is active, reception either (a) waits until first is done, (b) refunds the old + sells new. Add a partial unique constraint similar to freeze periods: `UNIQUE (client_id, plan_kind_snapshot) WHERE status='active' AND plan_kind_snapshot='pt_package'`. Flag for discuss-phase. LOW confidence on right answer. |
+| **Package sharing with family/friend** | M | Some gyms allow "buy 10 PT, use them for spouse too." Adds `beneficiary_client_id` per session. **RECOMMEND** anti-feature for v1.4 — adds attribution ambiguity to reports. |
+| **Carry-over of unused sessions after package expires** | S | "5 unused → roll into next purchase." Tempting; adds the question "for how long?" and complicates expire_memberships cron. **RECOMMEND** anti-feature for v1.4 — when package expires by time, remaining sessions are forfeited (industry norm, harsh but defensible). |
+| **PT-package freeze** | S | Inherits existing `freeze_days_limit` infra trivially because pt_package is a row in `memberships`. **Decision needed:** does freezing a pt_package pause the time component only, or also "lock" the session balance from any decrement? Recommend: freeze == pause time only; balance is just a counter, freeze doesn't affect it. |
+
+### Anti-features
+
+| Anti-feature | Why avoid |
+|---|---|
+| **Half-sessions / fractional consumption** ("client did 30 min instead of 60 min, decrement 0.5") | Integer counter is precious. Round to whole sessions. Operator judgement: if the session was substantively done, decrement 1; otherwise don't log it at all. |
+| **Group PT (one trainer, multiple clients in one session)** | Different product entirely (small-group training). v1.4 is 1:1. |
+| **PT-package with unlimited sessions** | "Unlimited" is a duration plan, not a pt_package. Sell it as a duration plan. |
+| **PT-only access to gym** ("PT clients don't need a regular membership to use the floor") | Adds resolver complexity: which kind grants check-in rights? RECOMMEND v1.4: pt_package does NOT grant gym check-in by itself. Client needs ALSO an active duration membership to enter the gym. The two are independent products. Flag for discuss-phase. |
+| **Different prices per trainer for same package** | "10 sessions with Senior trainer cost more than 10 with Junior." Adds plan×trainer matrix. v1.4: package price is fixed per plan; trainer choice happens at session-recording time. |
+
+---
+
+## Category 5: PT Sessions (recording)
+
+### Table stakes
+
+| Feature | Complexity | Notes |
+|---|---|---|
+| **`pt_sessions` table** with `(id, membership_id FK, trainer_id FK, performed_at TIMESTAMPTZ NOT NULL, recorded_by_user_id FK, recorded_at TIMESTAMPTZ NOT NULL DEFAULT now())` | S | One row per consumed session. `membership_id` links to the pt_package membership (which links to client + plan-snapshots). `performed_at` is the actual training time (reception can back-date by hours if logging at end-of-shift). `recorded_at` is server-side immutable. |
+| **Atomic decrement of `memberships.remaining_sessions` on insert** | S | Single transaction: insert `pt_sessions` row + `UPDATE memberships SET remaining_sessions = remaining_sessions - 1 WHERE id = $1 AND remaining_sessions > 0 RETURNING remaining_sessions`. If RETURNING is empty → 409 `package_exhausted`. DB-level race-proof (mirrors the visits `gym_date STORED + UNIQUE` discipline). |
+| **Auto-transition pt_package membership to `expired` when `remaining_sessions = 0`** | S | In the same transaction: if new balance == 0 → `status → expired`. Or rely on a scheduled check. **RECOMMEND** do it inline — keeps the state machine consistent and makes the "package exhausted" UX feedback synchronous. Add transition to `MEMBERSHIP_STATUS_TRANSITIONS`. |
+| **Reception-only recording (PT session log)** | S | `(CREATE, PT_SESSIONS)` permission, NOT in `OWNER_ONLY`. Reception is the day-to-day operator. |
+| **Surface session history on client card** | S | Read-only timeline: "14.05 14:30 ПТ с Анной (осталось 7 из 10)". |
+| **Surface session history on pt_package membership detail** | S | Same data, scoped to one membership. |
+| **Audit event `pt_session_recorded`** | S | Payload: `pt_session_id`, `membership_id`, `trainer_id`, `performed_at`, `remaining_after`. |
+| **Performed_at validation: not in the future, not before membership start_date** | S | Cheap server-side check. 409 `invalid_performed_at`. |
+
+### Differentiators
+
+| Feature | Complexity | Notes |
+|---|---|---|
+| **Undo / cancel a logged session** | M | "Reception logged session by mistake, undo." Adds `pt_sessions.deleted_at` or a separate `pt_session_cancellations` table. Re-credit the balance. **RECOMMEND** ship this for v1.4 — same-day fat-finger is real, and audit captures the cancellation. Owner-only? Reception-only same-day? Flag for discuss-phase. LOW confidence on right policy. |
+| **PT-session duration field** | S | `duration_minutes INT NULL`. Useful for trainer payroll later. Cheap to ship now and ignore until v1.5. |
+| **PT-session note** | S | `note TEXT NULL` for "client wants to focus on legs next time" or "trainer ran 15 min late". Cheap, opinion-light. |
+| **PT-session location** ("downstairs cardio room") | S | Not relevant for single-gym. Skip. |
+| **Require gym check-in (visit row) on same day before allowing PT-session log** | M | A client cannot do PT without entering the gym. Linking enforces "must check in first." Trade-off: clients in real gyms sometimes do PT and skip the floor; reception might still log it. **RECOMMEND** anti-feature for v1.4 — keep PT sessions independent of visits. The two events are recorded separately; reports can later join them. Flag for discuss-phase. |
+
+### Anti-features
+
+| Anti-feature | Why avoid |
+|---|---|
+| **Trainer self-service PT-session logging** | Adds trainer auth — already noted in Category 3. |
+| **PT-session scheduling / pre-booking** | Schedule milestone, not v1.4. |
+| **Multi-trainer PT-session** ("two trainers ran this together") | 1:1 product. |
+| **Decrement multiple sessions in one log entry** ("client did a double session, decrement 2") | Just log two rows. |
+| **Tip / gratuity tracking on session** | Cash flow outside the system, owner judgement. |
+| **Client signature / confirmation on session log** | Physical-world process; pet-project doesn't model it. |
+
+---
+
+## Dependencies on existing features
+
+### Sale flow integration
+
+**Question:** "Does a PT-package sale need a separate sale flow, or is it the same as membership sale with a different plan type?"
+
+**Answer:** SAME flow. By making `pt_package` a `kind` on `membership_plans` and reusing `memberships` rows for instances, the existing `POST /api/v1/memberships` sell endpoint accepts any plan and atomically:
+1. Inserts the `memberships` row with kind-discriminated snapshots (`session_count_snapshot` for pt_package, NULL for duration).
+2. Inserts the `payments` row in the same transaction.
+3. Emits `membership_sold` + `payment_recorded` audit events.
+
+The sale-flow UI gets ONE new field: when `kind='pt_package'` the form shows `session_count` (read-only, derived from selected plan). The "Записать оплату" panel below is identical for both kinds.
+
+### PT session vs visits
+
+**Question:** "Does PT session decrement need to integrate with visits table, or is it a separate concept entirely?"
+
+**Answer:** SEPARATE concept. PT sessions are NOT visits. A client who does a PT might or might not check in on the gym floor; a client who checks in on the gym floor might or might not do a PT. They are recorded in two different tables (`visits` vs `pt_sessions`), they decrement two different counters (the 1-per-day visit slot vs the package balance), they require different RBAC (`CHECK_IN` vs `CREATE PT_SESSION`), and they emit two different audit events.
+
+**Discuss-phase open question:** should a PT-session log also implicitly create a visit row if there isn't one already? RECOMMEND: NO. Keep them orthogonal. Reception logs each event explicitly. If reports want "client was at the gym on day X" they UNION the two tables.
+
+### Refunds and audit
+
+**Question:** "Do refunds interact with audit log?"
+
+**Answer:** YES — audit is mandatory.
+
+A refund is THE financial event of the milestone. The audit trail is the only retroactive defence against "the system says I refunded 3 000 ₽ but the drawer is short." Every refund emits:
+1. `payment_refunded` with `actor_user_id=<reception user>`, payload `(payment_id, refund_id, amount_kopecks, reason)`.
+2. `membership_cancelled` with `actor_user_id=<reception user>`, payload `(membership_id, cancellation_reason='refunded')`.
+
+Both events are added to `LOCKED_AUDIT_EVENTS` in the FIRST phase of v1.4 (mirrors v1.3's "freeze audit events locked up-front in Phase 24 before callsites land in Phases 25/26/27"). The `audit.emit` AST literal-string gate then enforces them automatically from each downstream phase's first commit.
+
+### RBAC additions
+
+New `(Action, Resource)` pairs:
+- `(CREATE, PAYMENTS)` — implicit on sale (transaction-bundled), not separately exposed.
+- `(REFUND, PAYMENTS)` — reception + owner. **NOT** in `OWNER_ONLY`.
+- `(CREATE, TRAINERS)`, `(UPDATE, TRAINERS)`, `(DELETE, TRAINERS)` — owner only. ALL in `OWNER_ONLY`.
+- `(LIST, TRAINERS)` — both (reception needs to pick).
+- `(CREATE, PT_SESSIONS)` — reception + owner. **NOT** in `OWNER_ONLY`.
+- `(CANCEL, PT_SESSIONS)` — TBD per discuss-phase (Category 5 differentiator).
+
+### Schema migrations expected
+
+Single migration (preferred) or thin chain (acceptable):
+- `0010_payments_refunds.sql` — `payments`, `refunds`, `memberships.cancellation_reason`
+- `0011_trainers.sql` — `trainers`
+- `0012_pt_packages.sql` — `membership_plans.kind`, `membership_plans.session_count`, `memberships.plan_kind_snapshot`, `memberships.session_count_snapshot`, `memberships.remaining_sessions`
+- `0013_pt_sessions.sql` — `pt_sessions`
+
+Plus the carryover from PROJECT.md "Tech-debt carryover" — `mock/memberships.ts` `?status=` filter parity (one-liner).
+
+---
+
+## Open questions for discuss-phase
+
+These are NOT decisions to make in research. They are flagged so the requirements step can either resolve them or explicitly defer them.
+
+| # | Question | Default recommendation | Confidence |
 |---|---|---|---|
-| M-1 MembershipPlan CRUD | HIGH | LOW | **P1 (locked)** |
-| M-2 Membership instance + snapshots | HIGH | LOW | **P1 (locked)** |
-| M-2-add activation_policy column placeholder | LOW (now) HIGH (v1.3) | LOW | **P1 (recommended add)** |
-| M-3 status enum | HIGH | LOW | **P1 (locked)** |
-| M-4 ARQ daily expire | HIGH | MEDIUM | **P1 (locked)** |
-| M-5 manual cancel | HIGH | LOW | **P1 (locked)** |
-| M-6 audit | HIGH | LOW | **P1 (locked)** |
-| M-7 paid_at column | MEDIUM | LOW | **P1 (recommended add)** |
-| M-9 notes column | MEDIUM | LOW | **P1 (recommended add)** |
-| V-1 reception check-in | HIGH | LOW | **P1 (locked)** |
-| V-2 TG-bot check-in | HIGH | MEDIUM | **P1 (locked)** |
-| V-3 active-membership validation | HIGH | LOW | **P1 (locked)** |
-| V-4 1/day unique | HIGH | LOW | **P1 (locked)** |
-| V-5 gym-hours | MEDIUM | LOW | **P1 (locked)** |
-| V-6 audit | HIGH | LOW | **P1 (locked)** |
-| V-7 visit history | HIGH | LOW | **P1 (locked)** |
-| D-1 currently in gym | MEDIUM | LOW | **P2** |
-| D-2 expiring-soon filter | HIGH | LOW | **P2 (highest ROI add)** |
-| D-3 "истёк сегодня" badge | HIGH | LOW | **P2 (highest ROI add)** |
-| D-4 renewal stack timeline | MEDIUM | LOW | **P2** |
-| D-5 TG-bot days-remaining | MEDIUM | LOW | **P2** |
-| D-6 today's-visits per-user log | LOW | LOW | **P3** |
-| D-7 snapshot-price filter | LOW | LOW | **P3** |
-| Active sessions UI + revoke | MEDIUM | LOW | **P1 (locked)** |
-| CR-01/CR-02 hygiene | HIGH (security) | LOW | **P1 (locked)** |
-
-**Priority key:**
-- **P1**: Must have for v1.2 (locked scope + zero-cost forward-compat columns)
-- **P2**: Should have, add if phase budget permits — pick top 3-4 by ROI (recommend D-2, D-3, D-5, D-1)
-- **P3**: Nice to have, defer if pressed for time
+| Q1 | **Pro-rata refund for partially-used PT-packages?** (Used 3 of 10 → refund 7/10 of price? Or 0%?) | Full refund only in v1.4; pro-rata deferred to v1.5+. | MEDIUM — full-only is operationally simpler; the gym can compensate manually if needed. |
+| Q2 | **Pro-rata refund for partially-elapsed duration-memberships?** | Full refund only in v1.4. | MEDIUM |
+| Q3 | **Does a PT session require a gym check-in (visit) first, or are they separate events?** | Separate events. PT session is recorded independently. | HIGH — coupling them constrains operator workflow without product gain. |
+| Q4 | **Can PT sessions be cancelled / undone (e.g. trainer no-show, fat-finger logging)?** | YES — reception same-day undo; owner anytime. Audit captures the undo. | LOW — depends on whether owner trusts reception. |
+| Q5 | **Multiple pt_packages in flight per client?** | NO — one active pt_package at a time. Partial unique constraint enforces. | LOW — real gyms sometimes stack packages. |
+| Q6 | **Does an active pt_package alone grant gym floor access?** | NO — client needs an active duration membership to check in. PT-package is purely the PT product. | MEDIUM — RU/CIS gyms sometimes bundle "PT includes floor access on PT day". |
+| Q7 | **PT-package expiry: time-based (days), count-based (sessions), or both?** | BOTH — whichever comes first. Inherits existing duration expiry cron, adds session-exhaustion transition. | MEDIUM — some gyms sell "10 sessions, no expiry"; recommendation flags this for owner choice. |
+| Q8 | **Refund button when membership has visits/sessions already consumed?** | Show warning, allow proceed. Audit captures it. | LOW — could also be owner-only override. |
+| Q9 | **Refund reason: free-text only, enum-only, or both?** | Both — `reason_code` enum (sickness/moving/dissatisfaction/other) + free-text `reason`. | MEDIUM — cheap to collect, valuable for v1.5 reports. |
+| Q10 | **Discount field at sale time?** | NO — `payment.amount == membership.price_kopecks_snapshot` enforced. | HIGH — adding discount opens approval-workflow can of worms. |
+| Q11 | **Trainer phone format — E.164 or free-text?** | Free-text. Trainers are internal; phone is contact info, not identity. | HIGH — differs deliberately from `clients.phone`. |
+| Q12 | **Auto-archive trainer = soft-delete = `is_active=false`?** | YES, boolean only, no `deleted_at`. | HIGH — preserves FK chain for historical PT-sessions. |
 
 ---
 
-## Competitor Feature Analysis (RU/CIS market)
+## Confidence summary
 
-| Feature | FitBase | 1С:Фитнес-клуб | fitness365 | Our v1.2 Approach |
-|---|---|---|---|---|
-| Activation policy (purchase vs first-visit) | Configurable per plan: "Активация с первого посещения" toggle (default OFF in some plans, ON in others) | Configurable per plan: "при первом посещении / в день покупки", with "but no later than N days" auto-activation fallback | Service-snapshot model | **v1.2: purchase-date only, but `activation_policy` column placeholder ships now** |
-| Snapshot of price at sale | Yes — historical price preserved | Yes — `Пакет услуг` snapshots | Yes | **v1.2: yes — `snapshot_price_kopecks`, `snapshot_duration_days`** |
-| Freeze / pause | Yes — first-class feature with date-range tracking | Yes — first-class | Yes | **v1.2: explicitly NO (deferred to v1.3)** |
-| Visit-count plans (10/20/30 sessions) | Yes — first-class | Yes — `Виды услуг` discriminator | Yes | **v1.2: explicitly NO (time-based only)** |
-| Self check-in | Mobile app (FitBase mobile), QR code at gym | Mobile app, QR code, integrations with Sigur/PocketKey/Gantner turnstiles | Mobile app | **v1.2: Telegram bot `/checkin` (no app, no QR, no turnstile)** — differentiator-by-omission |
-| 1/day cap | Yes (configurable per plan: "лимит посещений в день") | Yes (per-plan limit) | Yes | **v1.2: hardcoded 1/day at DB level** |
-| Gym-hours window | Yes (per-plan time-band: "утренний абонемент 06–17") | Yes | Yes | **v1.2: single global window from env** |
-| Photo at turnstile | Yes (admin-screen photo verification) | Yes (admin-screen + turnstile photo cross-check) | Yes | **v1.2: NO (anti-feature for pet project)** |
-| Biometric (fingerprint, palm vein, face) | No (third-party integration) | Yes (Sigur, PocketKey, Gantner integrations) | Limited | **v1.2: NO** |
-| Currently-in-gym dashboard | Yes | Yes | Yes | **v1.2: D-1 cheap-win — read-only counter, no real-time updates** |
-| Expiring-soon Telegram notification | Yes (push to mobile app + Telegram bot) | Yes | Yes | **v1.2: NO push — D-2 filter (pull-mode)** |
-| Cancel with proportional refund | Yes (with billing integration) | Yes | Yes | **v1.2: cancel without refund (no billing module)** |
-
-**Sportzal v1.2's positioning:** **"Single-gym, owner-operated, no turnstile, no biometrics, no payments — but every honest daily-ops scenario covered, with full audit and Telegram-bot self-check-in"**. Trades enterprise features for radical simplicity, suitable for one-gym pet project; differentiates from Russian commercial CRMs by **not** requiring hardware. The locked v1.2 scope correctly identifies this niche.
-
----
+| Category | Confidence | Key uncertainty |
+|---|---|---|
+| Payments | HIGH | Anti-features (cards, fiscal, partial pay) explicitly excluded by PROJECT.md — no ambiguity. |
+| Refunds | MEDIUM-HIGH | Pro-rata question (Q1/Q2) is real but recommendation defensible. |
+| Trainers | HIGH | Scope deliberately minimal — owner directory only — and PROJECT.md confirms. |
+| PT Packages | MEDIUM | Reuse-`memberships`-vs-separate-table is a real architectural fork; recommendation reuses for snapshot/state-machine inheritance but could go either way. Multi-package flow (Q5) and expiry policy (Q7) are open. |
+| PT Sessions | MEDIUM | Visits-coupling (Q3) and cancellation (Q4) are real workflow questions. |
 
 ## Sources
 
-### Russian gym CRM market (primary references)
-
-- [FitBase: "Шаг 4. Как создать прайс абонементов"](https://help.fitbase.io/article/16064) — plan catalog model
-- [FitBase: "Как запустить клиента в клуб и отметить посещение"](https://help.fitbase.io/article/3811) — check-in UX reference
-- [FitBase: "Обновление CRM 15.08.2023"](https://fitbase.io/blog/update15082023) — "активация с первого посещения" toggle and freeze interaction with future-dated cards
-- [FitBase: возможности](https://fitbase.io/capabilities) and [Mobifitness: CRM](https://mobifitness.ru/crm/) — feature surface area benchmark
-- [1С:Фитнес-клуб — Настройка услуг](https://1eska.ru/projects/publications/1s-fitnes-klub/kak-nastroit-vidy-uslug-v-1s-fitnes-klub/) — service kinds, activation policies, "but no later than N days" fallback
-- [1С:Фитнес-клуб — создание пакета услуг и членства](https://www.fitness1c.ru/knowledge-base/prodazhi/nomenklatura/sozdanie-paketa-uslug/) — snapshot pattern + plan→instance separation
-- [1С:Фитнес-клуб — пробная тренировка](https://www.fitness1c.ru/knowledge-base/prodazhi/nomenklatura/probnaya-trenirovka/) — alternative entry-flow patterns
-- [1С:Фитнес-клуб — главная](https://www.fitness1c.ru/) and [PocketKey integration](https://www.fitness1c.ru/integration-pocketkey) — turnstile/biometric integration landscape
-- [1С:Фитнес-клуб — "Как пресечь воровство и махинации сотрудников"](https://www.fitness1c.ru/blog/kak-presech-vorovstvo-i-mahinatsii/) — RU-club fraud taxonomy + countermeasures
-- [fitness365: "Как пресечь мошенничество и воровство в фитнес клубе"](https://support.fitness365.ru/база-знаний/мошенничество-в-клубе/) — manager vs admin RBAC, "deception revealed on next visit" pattern (HTTPS cert issue prevented WebFetch deep-read; cited from search snippet)
-- [fitness365: абонементная и клубная системы](https://support.fitness365.ru/documentation/руководство-администратора/абонементная-и-клубная-системы/) — visit-cap-per-day plans
-- [impulseCRM: возврат денег за абонемент](https://impulsecrm.ru/news/vozvrat-deneg-za-sportivnyy-abonement) — RU consumer-protection law constraints on cancel/refund (anti-feature AF-5 justification)
-- [impulseCRM: запись клиентов](https://impulsecrm.ru/vozmozhnosti/zapis-klientov) — self-registration widget patterns
-- [Sigur: решение для фитнесов](https://sigur.com/solutions/fitness/) — turnstile + photo + biometric integration patterns (anti-feature AF-9 justification)
-
-### English-market gym CRM (reference, secondary — confirms table-stakes universality, not RU specifics)
-
-- [Gymdesk: attendance tracking](https://gymdesk.com/features/attendance) and [reporting](https://gymdesk.com/features/reporting) — live attendance dashboard pattern (D-1)
-- [PushPress](https://www.pushpress.com/) and [GymMaster](https://www.gymmaster.com/) — feature surface benchmark
-- [Mindbody-style ClubOS](https://www.club-os.com/) — class-based booking model (anti-feature AF-1 justification)
-
-### Russian consumer law / market context
-
-- [Russian fraud schemes in fitness apps (РИА Новости 2026-05-06)](https://ria.ru/20260506/moshenniki-2090727656.html), [Известия 2026-05-06](https://iz.ru/2091859/2026-05-06/v-mvd-rasskazali-o-novoi-skheme-moshennikov-s-utechkoi-dannykh-iz-fitnes-klubov) — current RU threat landscape (data-leak driven, not in-club fraud)
-- [advgazeta: возврат денег за абонемент фитнес-центра](https://www.advgazeta.ru/ag-expert/advices/kak-poluchit-obratno-dengi-pri-vozvrate-abonementa-fitnes-tsentra/) — proportional refund obligation
-- [Сеть клубов Премьер-Фит правила посещения](https://www.premierfit.ru/pravila-poseshcheniya-fitnes-kluba), [DorFit правила](https://dorfit.ru/pravila-posesheniya.html) — typical RU club rules, including 1-2-visits-per-day max
-
-### Internal references
-
-- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — locked v1.2 scope, Out of Scope list, Key Decisions
-- `/Users/andre/Workspace/Development/clubcore/.planning/MILESTONES.md` — v1.1 patterns (module template, audit-log, RBAC byte-parity, OpenAPI drift gate, partial unique index, ARQ skeleton, Telegram OTP worker)
-- `/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/shared/session/can.ts` — RBAC `OWNER_ONLY` matrix; v1.2 will add `{action: 'cancel', resource: 'memberships'}` and possibly `{action: 'edit', resource: 'memberships'}` for plan catalog (re-using existing `templates` resource is also acceptable)
-- `/Users/andre/Workspace/Development/clubcore/apps/admin-web/CLAUDE.md` — frontend conventions (FSD-lite, Zod-shared schemas, RHF, money in kopecks, dates ISO + Europe/Moscow)
-
----
-
-*Feature research for: Sportzal v1.2 — Memberships + Visits (single-gym, RU/CIS market, owner+reception roles, Telegram-bot self-check-in)*
-*Researched: 2026-05-07*
-*Confidence: MEDIUM-HIGH — RU-market feature norms triangulated from multiple primary sources (FitBase, 1С, fitness365, impulseCRM); pet-project anti-fraud heuristics extrapolated rather than primary-sourced (LOW-MEDIUM confidence on anti-fraud "what real clubs actually do day-to-day" but HIGH confidence on "what features exist in the CRM products").*
+- [Resawod gym CRM features](https://resawod.com/en/gym-crm-software/) — PT package expiry & renewal reminders pattern
+- [PushPress best gym CRM 2026](https://www.pushpress.com/blog/best-gym-crm-software) — PT package management & expiry tracking
+- [Club-OS gym marketing software](https://www.club-os.com/features/gym-marketing-software/) — PT sales & retention model
+- [Pipedrive gym CRM](https://www.pipedrive.com/en/industries/gym-crm) — Personal-trainer CRM patterns
+- [The Edge Fitness Clubs payments & cancellation policies](https://www.theedgefitnessclubs.com/support/payments-billing-and-cancellation-policies) — Cash refund norms
+- [Nolo: Gym membership cancellation laws & refund rights](https://www.nolo.com/legal-encyclopedia/do-i-have-to-pay-gym-membership-while-my-gym-is-temporarily-closed.html) — Industry refund norms (LA Fitness, etc.)
+- [California DCA — Health club closures legal guide](https://www.dca.ca.gov/publications/legal_guides/w_9.shtml) — Refund payment-method matching norms
+- Internal: `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` (v1.4 scope, explicit anti-features, RU/CIS constraints)
+- Internal: v1.3 patterns (mandatory snapshot pricing, central transition guard, LOCKED_AUDIT_EVENTS pre-locking, partial unique on "open period")

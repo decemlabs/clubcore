@@ -1,313 +1,222 @@
-# Stack Research — v1.2 Memberships + Visits
+# Stack — v1.4 Cash Sales + PT Packages
 
-**Domain:** Backend modular monolith (FastAPI) — adds `memberships` + `visits` modules, first real ARQ scheduled job, second Telegram bot command.
-**Researched:** 2026-05-07
-**Confidence:** HIGH (verified against Context7 `/python-arq/arq` v0.26.3 and `/python-telegram-bot/python-telegram-bot` v22.5; cross-checked against in-repo handler/worker code that already implements the relevant patterns)
-
----
-
-## TL;DR
-
-**No new runtime dependencies are required for v1.2.** Every capability the milestone needs is already covered by the locked stack:
-
-- **ARQ daily `expire_memberships`** — `arq>=0.26` ships `arq.cron` with hour/minute/weekday selectors and per-cron `unique=True`, `job_id=...`, `run_at_startup=...`. The existing `WorkerSettings` skeleton in `app/workers/arq_app.py` plugs straight in.
-- **`/checkin` Telegram command** — `app/integrations/telegram/bot.py:build_application` already accepts `handlers: list[tuple[str, HandlerCallable]]` and is wired via `[("start", start_handler)]`. Adding `("checkin", checkin_handler)` to the list in `app/workers/telegram_bot.py:main()` is the entire integration. The DM reply uses `update.message.reply_text(...)` — the same `python-telegram-bot>=22.7,<23` API surface already in use.
-- **Membership lifecycle (`active → expired → cancelled`)** — three terminal states with deterministic transitions (date-driven expiry + manual cancel only; no fork-join, no retries, no parallel branches). A `state_machine` library would add ceremony and a runtime dependency without removing any logic that currently lives in three lines of SQL/Python. **Recommendation: keep status as a plain Postgres enum + `WHERE end_date <= now() AND status='active'` UPDATE — no library.**
-- **Visit anti-fraud** (gym-hours window + 1/day/client) — pure SQL: a partial unique index `UNIQUE (client_id) WHERE date_trunc('day', checked_in_at AT TIME ZONE 'Europe/Moscow') = current_date` is overkill; simpler is a checked_in_at-day partial unique on `(client_id, (checked_in_at::date AT TIME ZONE 'Europe/Moscow'))` plus an in-service `BETWEEN gym_open AND gym_close` check pulled from `app/core/config.py`. **No anti-fraud library justified at this scale.**
-- **Date/time** — stdlib `datetime` + `zoneinfo` (Python 3.12 stdlib, `Europe/Moscow` already implied by frontend convention) is sufficient. No `pendulum`, no `arrow`, no `pytz`.
-
-The only **dev-group** addition worth weighing is `freezegun` or `time-machine` for testing the daily expiry cron + the gym-hours window edge cases — and even that is optional, because the existing test suite (`test_security.py`, `test_telegram_verify_errors.py`) already mocks time by mutating row fields (`row.expires_at = datetime.now(tz=UTC) - timedelta(seconds=1)`). Verdict below.
+**Project:** Sportzal
+**Milestone:** v1.4 — Cash Sales + PT Packages (subsequent milestone)
+**Researched:** 2026-05-14
+**Overall confidence:** HIGH (existing stack covers v1.4 fully; recommendation is "no new libraries")
 
 ---
 
-## Recommended Stack (Additions Only)
+## Recommendation Summary
 
-### Core Technologies — NEW DEPENDENCIES
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| _none_ | — | — | All v1.2 capabilities are covered by the locked v1.1 stack. See "Existing Stack — How v1.2 Uses It" below. |
-
-### Dev-Group Additions (Optional, Low Priority)
-
-| Tool | Version Pin | Purpose | When Justified |
-|------|-------------|---------|----------------|
-| `time-machine` | `>=2.16,<3` | Mock `datetime.now()` / `time.time()` in pytest. C-extension, faster than `freezegun`, async-safe (no thread-local pitfalls). | If `expire_memberships` cron tests or gym-hours-window tests grow brittle from row-mutation patterns. **Defer until first test pain point.** Not added in v1.2 unless a test forces it. |
-
-**Why `time-machine` over `freezegun`** (if it's added later): freezegun patches Python-level globals and has known async/`pytest-asyncio` interaction quirks; `time-machine` patches at the C level and works cleanly with async test loops. The existing test convention (mutate row timestamps directly) avoids the question entirely for most cases.
+- **No new backend runtime libraries.** Existing FastAPI 0.115 / SQLAlchemy 2.0 async / Alembic / Pydantic v2 / asyncpg / structlog stack covers payments, refunds, trainers, PT packages, PT sessions end-to-end. Add domain models + endpoints, not dependencies.
+- **No new frontend runtime libraries.** shadcn/ui + Radix + TanStack Query/Router + react-hook-form + Zod cover sale-with-payment, refund confirmation, trainers CRUD, PT session recording UI without exception. Reuse the existing `formatMoney(minor)` / `StatusBadge` / mutation hook patterns from v1.3.
+- **Money: stay with `INTEGER` kopecks** column type + Pydantic v2 `int` field + `formatMoney(minor)` on the frontend. **Do NOT introduce `py-moneyed`, `python-money`, `Decimal`, or `Numeric(18,4)`.** This is consistent with v1.2 mandatory snapshot pricing (`price_kopecks_snapshot INTEGER NOT NULL`) and is the locked Sportzal convention. RUB is single-currency; minor units are exact; integer math is race-safe and trivial for refunds.
+- **PT packages: separate table `pt_packages` + new plan kind `pt_package` on the existing `membership_plans` catalog.** Do NOT bolt a `session_count_remaining` column onto `memberships`. PT packages have different lifecycle (no `end_date` semantics, no freeze, no expiring-soon DM, balance-decrement instead of date-based resolver). A separate table keeps the freeze / renewal / resolver / cron code paths from acquiring `if kind == pt_package` branches.
+- **Trainers: single `trainers` table.** No FSM, no role, no `Trainer` user account. Owner-only CRUD endpoints mirror the `membership_plans` pattern (v1.2 Phase 16).
+- **Refunds: domain logic, not a library.** A refund is an audit-emitting service method that (a) inserts a negative-amount payment row linked to the original payment, (b) transitions the related membership / pt_package to `status='refunded'` via the existing `_assert_can_transition` central guard, (c) writes a `LOCKED_AUDIT_EVENTS` entry. **Do NOT introduce `transitions`, `python-statemachine`, or any FSM library** — the v1.3 `MEMBERSHIP_STATUS_TRANSITIONS` declarative-constant pattern is the precedent and works.
+- **Architectural placement:** new logic lives in **two new modules** — `app/modules/payments/` (cash ledger + refund) and `app/modules/trainers/` (catalog + PT session recording, OR a third dedicated module). PT-package model lives next to `memberships` (likely `app/modules/memberships/pt_packages_*`) OR a third module `app/modules/pt_packages/`. Roadmapper picks the split — both respect `modules-independent` import-linter contract via Protocol/composition-root callbacks (precedent: `ActiveMembershipResolver`, `register_user_loader`).
 
 ---
 
-## Existing Stack — How v1.2 Uses It
+## Backend additions
 
-### `arq>=0.26` — First Real Cron Job (`expire_memberships`)
+### Runtime dependencies — ZERO new packages
 
-`arq` 0.26 ships first-class cron support via `arq.cron.cron()`. Verified against Context7 `/python-arq/arq` v0.26.3.
+Every v1.4 capability composes from libraries already pinned in `apps/backend/pyproject.toml`:
 
-**Pattern for `app/workers/arq_app.py`:**
+| Capability | Existing tool | Why no new dep |
+|---|---|---|
+| Cash payment ledger schema | SQLAlchemy 2.0 async + Alembic | `payments` table is a plain ORM model (`Integer` kopecks; FK to `clients` + nullable FKs to `memberships` and `pt_packages`; CHECK `amount_kopecks != 0`; `method TEXT NOT NULL DEFAULT 'cash'`). |
+| Refund row | Same `payments` table | A refund is a row with `kind='refund'` and `amount_kopecks < 0` linked to the original `payment_id` via self-FK. No FSM library — service method + central transition guard on the related membership / pt_package. |
+| Trainer catalog | SQLAlchemy + Alembic | `trainers` table with `UUIDPkMixin` + `TimestampMixin` + `SoftDeleteMixin` (mirrors `clients` and `membership_plans`). `lower(name)` partial unique on `WHERE deleted_at IS NULL`. |
+| PT package plan kind | SQLAlchemy CHECK constraint | Extend `membership_plans.kind` Postgres CHECK to `('duration', 'pt_package')`; add nullable `session_count INTEGER CHECK (session_count > 0)`; service-layer assertion that `pt_package` plans have `session_count NOT NULL` and `duration_days IS NULL` (and vice versa). |
+| PT package instance | SQLAlchemy + Alembic | New `pt_packages` table (separate from `memberships`): `id`, `client_id` FK, `plan_id` FK ON DELETE RESTRICT, `plan_name_snapshot`, `price_kopecks_snapshot`, `session_count_snapshot`, `sessions_remaining`, `status` ('active', 'depleted', 'cancelled', 'refunded'), `purchased_at`, audit columns. **No `end_date`, no freeze, no expiring-soon DM.** |
+| PT session recording | SQLAlchemy + Alembic | `pt_sessions` table: `id`, `pt_package_id` FK ON DELETE RESTRICT, `trainer_id` FK ON DELETE RESTRICT, `client_id` FK (denormalised for query speed), `occurred_at TIMESTAMPTZ NOT NULL`, `created_by_user_id` FK to `users`. Decrement happens in service via `UPDATE pt_packages SET sessions_remaining = sessions_remaining - 1 WHERE id=:id AND sessions_remaining > 0 RETURNING sessions_remaining` (DB-level race-safe, same pattern as `visits` uniqueness — Postgres wins races, not the app). |
+| Money handling | Python `int` + Pydantic v2 `int` field + Postgres `INTEGER` | Mirrors v1.2/v1.3 `price_kopecks_snapshot`. Integer math; no float; no Decimal; refunds are negative integers; sums use `SUM(amount_kopecks)` (Postgres `bigint` accumulator handles it). |
+| Audit trail | Existing `audit_log` table + `LOCKED_AUDIT_EVENTS` frozenset | Pre-register new events in Phase A of v1.4: `payment_recorded`, `payment_refunded`, `trainer_created`, `trainer_updated`, `trainer_deleted`, `pt_package_sold`, `pt_package_cancelled`, `pt_package_refunded`, `pt_session_recorded`. AST commit-gate already covers `audit.emit` literal strings. |
+| RBAC for new endpoints | Existing `Resource` + `Action` StrEnums + `OWNER_ONLY` frozenset | Add `Resource.PAYMENTS`, `Resource.TRAINERS`, `Resource.PT_PACKAGES`, `Resource.PT_SESSIONS` and `Action.REFUND`. Reception gets `(CREATE, PAYMENTS)` + `(REFUND, PAYMENTS)` + `(CREATE, PT_PACKAGES)` + `(CREATE, PT_SESSIONS)`. Owner-only: trainer mutations + payment list across all clients. Three-way parity test (backend ↔ admin-web `can.ts` ↔ test snapshot) already exists. |
+| CSRF / cookie auth | Existing `CSRFCookie` dependency | Every new POST/PATCH/DELETE inherits `Depends(csrf_required)` via router-level dependency. |
+| Pagination | Existing `Page[T]` envelope | `/api/v1/payments?clientId=...` and `/api/v1/trainers` return `{items, total, page, pageSize}` — same shape as v1.3. |
+| OpenAPI drift gate | Existing `export_openapi.py` + CI gate | Regenerate `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` once, both byte-stable; CI fails the milestone if drift slips in unsigned. |
+| Testing | pytest-asyncio + httpx ASGITransport + SAVEPOINT isolation + VIS-TEST-01-style real-Postgres concurrent race test | Reuse for PT-session-decrement race ("two receptionists log the same PT click at the same moment — Postgres rejects the second `UPDATE … WHERE sessions_remaining > 0`"). |
+
+### Library decisions — verified rejected
+
+| Candidate | Status | Reason |
+|---|---|---|
+| `py-moneyed` / `python-money` | REJECT | Adds a `Money` class wrapping `(amount: Decimal, currency: str)`. Sportzal is single-currency RUB; the kopecks integer convention is already locked and works through the v1.0–v1.3 stack including Pydantic serialisation, JSON wire format (`priceKopecks`), and frontend `formatMoney(minor)`. Introducing `Money` here would force a full migration of `price_kopecks_snapshot` (4+ callsites in memberships alone) for zero functional gain. |
+| `Decimal` / SQLAlchemy `Numeric(18,4)` | REJECT | Solves a problem we don't have (multi-currency, fractional minor units). Kopecks are exact integers. Sums of integers in Postgres are race-safe and overflow-impossible at our scale (1 zal × years of history fits in `int8`). |
+| Native Postgres `MONEY` type | REJECT | Locale-sensitive; SQLAlchemy issue #5965 confirms it returns formatted strings depending on driver; community consensus across SQLAlchemy mailing list and PostgreSQL official docs is "don't use it for portable money handling". |
+| `transitions` / `python-statemachine` | REJECT | v1.3 already proved declarative `MEMBERSHIP_STATUS_TRANSITIONS: dict[Status, frozenset[Status]]` + `_assert_can_transition()` is enough — grep-able, unit-testable, no runtime dependency. PT package status transitions (`active → depleted | cancelled | refunded`) get the same pattern in a `PT_PACKAGE_STATUS_TRANSITIONS` constant. |
+| `python-fsm` / `automat` | REJECT | Same as above. |
+| `sqlalchemy-utils` `MoneyType` | REJECT | Pulls a 30-utility-class dependency for one type. Plain `Integer` column wins. |
+| ARQ scheduled job for "deplete PT package on `sessions_remaining = 0`" | REJECT | Status transition happens **synchronously** inside the PT-session-recording service when the `UPDATE … RETURNING sessions_remaining` returns 0. No cron needed — refusing to over-charge is enforced by the `WHERE sessions_remaining > 0` predicate, not by a scheduled sweeper. |
+| Event-sourcing framework (`eventsourcing`, etc.) | REJECT | Audit log + payment ledger are append-only by convention; we don't need event-sourcing machinery. The `LOCKED_AUDIT_EVENTS` + service-write commit-gate already gives audit traceability. |
+| `pydantic-extra-types` Money / Currency | REJECT | Same single-currency reason; no benefit over plain `int`. |
+
+### New `Resource` and `Action` enum values
 
 ```python
-from arq import cron
-from arq.connections import RedisSettings
-from typing import ClassVar, Any
+# app/core/rbac.py — additions (no new dep)
+class Resource(StrEnum):
+    # ... existing ...
+    PAYMENTS = "payments"
+    TRAINERS = "trainers"
+    PT_PACKAGES = "pt_packages"
+    PT_SESSIONS = "pt_sessions"
 
-from app.core.config import get_settings
-from app.workers.tasks.memberships import expire_memberships  # NEW in v1.2
+class Action(StrEnum):
+    # ... existing ...
+    REFUND = "refund"
 
-class WorkerSettings:
-    functions: ClassVar[list[Any]] = []
-    cron_jobs: ClassVar[list[Any]] = [
-        cron(
-            expire_memberships,
-            hour=3,            # 03:05 UTC == 06:05 Europe/Moscow
-            minute=5,
-            unique=True,       # only one worker runs it per scheduled tick
-            job_id="memberships:expire-daily",  # idempotent; surfaces in audit
-            timeout=300,
-        ),
-    ]
-    redis_settings = RedisSettings.from_dsn(str(get_settings().redis_url))
+# OWNER_ONLY frozenset additions (best-guess — roadmapper to lock):
+#   (CREATE, TRAINERS), (UPDATE, TRAINERS), (DELETE, TRAINERS), (LIST, TRAINERS)
+# Reception keeps: (CREATE, PAYMENTS), (REFUND, PAYMENTS),
+#                   (CREATE, PT_PACKAGES), (CREATE, PT_SESSIONS),
+#                   (LIST, PT_PACKAGES), (LIST, PT_SESSIONS)
 ```
 
-**Notes:**
-- `cron()` defaults `second=0` and `microsecond=0`, so omitting them is correct (avoids unintended high-frequency re-runs).
-- `unique=True` plus a stable `job_id` is the standard idiom for "run exactly once per scheduled tick across N workers" — required because docker-compose may eventually scale the ARQ service.
-- The job itself opens a fresh DB session via `db_lifespan_manager()` in `on_startup`, mirroring the telegram_bot worker pattern.
-- **No new dependency.** The placeholder `app/workers/scheduler.py` should be deleted (its TODO is now fulfilled by `cron_jobs` directly on `WorkerSettings`); the file currently misleads by suggesting APScheduler is on the table.
+### New `LOCKED_AUDIT_EVENTS` (must be pre-registered in Phase A of v1.4)
 
-**Do NOT add APScheduler.** It is a separate scheduler with its own job store, conflicts with ARQ's Redis-based persistence, and would split scheduled-job operability across two systems. ARQ's `cron_jobs` is sufficient and already locked.
-
-### `python-telegram-bot>=22.7,<23` — `/checkin` Command Extension
-
-The existing `build_application()` factory in `app/integrations/telegram/bot.py` already supports a list of commands. Verified against Context7 `/python-telegram-bot/python-telegram-bot` v22.5: `CommandHandler` accepts a single command string OR a list — and the codebase already uses the loop-with-default-arg pattern that avoids late-binding bugs.
-
-**Pattern for `app/workers/telegram_bot.py:main()`:**
-
-```python
-from app.integrations.telegram.handlers import (
-    HandlerContext,
-    start_handler,
-    checkin_handler,  # NEW in v1.2
-)
-
-# ... inside main(), after building HandlerContext:
-application = build_application(
-    token=settings.telegram_bot_token.get_secret_value(),
-    handlers=[
-        ("start", start_handler),
-        ("checkin", checkin_handler),  # +1 line
-    ],
-    ctx=ctx,
-)
+```
+payment_recorded, payment_refunded,
+trainer_created, trainer_updated, trainer_deleted,
+pt_package_sold, pt_package_cancelled, pt_package_refunded,
+pt_session_recorded
 ```
 
-**Notes:**
-- The `checkin_handler` reuses `ctx.session_factory` for DB access. Per the existing `integrations ⊥ modules` import-linter contract (with the D-06 relaxation), the handler MUST go through a `ctx.visits_service` ModuleType passed in — analogous to how `telegram_service` is threaded today. This means `HandlerContext` gets a new optional field (`visits_service: ModuleType | None = None`) or — preferred — `HandlerContext` becomes generic over the modules each command needs and a small protocol describes the surface. **Decision deferred to architecture phase**, but no library is needed either way.
-- DM reply uses `await update.message.reply_text("✅ Отмечено • <plan_name> • до <end_date>")` — straight ptb-22 API.
-- Anti-fraud (gym-hours window + 1/day) is enforced **bot-side AND server-side**: bot-side fails fast with a Russian DM ("Сейчас зал закрыт" / "Уже отмечались сегодня"); server-side returns 409 from `POST /api/v1/visits` when reception triggers the same conflict from admin-web. The pattern matches the existing `/start <token>` handler's defensive style.
-- **No new ptb-22 features needed.** v22.x has been stable since Feb 2025; no breaking changes in the `CommandHandler` / `Application.builder()` surface.
+That brings the frozenset to ~43 entries (34 v1.3 + 9 v1.4). Pre-registration pattern locked in v1.3 Phase 24 / INFRA-15.
 
-### Postgres 16 + SQLAlchemy 2.0 — Membership Lifecycle as Plain SQL
+### Alembic migrations (estimate)
 
-**Recommendation: keep status as a plain Postgres enum (`active | expired | cancelled`).** No state-machine library.
+- `0010_payments` — `payments` table (FKs, indexes including `(client_id, purchased_at DESC)` + `(method, purchased_at)` for v1.5 reports forward-seam).
+- `0011_trainers` — `trainers` table with `lower(name)` partial unique on `WHERE deleted_at IS NULL`.
+- `0012_pt_packages` — extend `membership_plans.kind` CHECK + add `session_count` nullable; add `pt_packages` table.
+- `0013_pt_sessions` — `pt_sessions` table with indexes on `(pt_package_id, occurred_at DESC)` and `(trainer_id, occurred_at DESC)`.
 
-**Rationale (from a state-machine design perspective):**
+(Roadmapper may merge or split. The migration discipline from v1.0–v1.3 — naming convention, async env.py — is already locked.)
 
-| State Machine Concern | v1.2 Membership Reality |
-|-----------------------|-------------------------|
-| Number of states | 3 (active, expired, cancelled) |
-| Number of transitions | 2 (`active→expired` automatic; `active→cancelled` manual) |
-| Branching / conditional transitions | None |
-| Side-effects on transition | Audit log emit (already has `audit_emit()` in `app/core/audit.py`) |
-| Re-activation | Out of scope (see PROJECT.md "no freeze") |
-| Concurrency / optimistic locking | A daily cron + occasional manual cancel — collision is a single `UPDATE ... WHERE status='active'` away |
+### Import-linter contracts — unchanged
 
-A library like `transitions` or `python-statemachine` would add:
-- A new runtime dependency
-- A new `mypy` plugin or type-stub gap
-- A new way to model state that diverges from the SQLAlchemy model the rest of the codebase uses
-- A second source of truth for "is this active?" that has to stay in sync with the DB
-
-For 3 states and 2 transitions, the cost/benefit is **strongly negative.** The existing `clients` module's soft-delete + status-as-column approach is the established pattern; `memberships` follows it.
-
-**Plain-SQL implementation sketch:**
-
-```python
-# app/workers/tasks/memberships.py — the cron job body
-async def expire_memberships(ctx: dict) -> int:
-    async with db_session_factory() as session:
-        stmt = (
-            update(Membership)
-            .where(
-                Membership.status == MembershipStatus.ACTIVE,
-                Membership.end_date <= func.current_date(),
-            )
-            .values(status=MembershipStatus.EXPIRED)
-            .returning(Membership.id)
-        )
-        result = await session.execute(stmt)
-        expired_ids = [row.id for row in result]
-        for mid in expired_ids:
-            await audit_emit(session, "membership_expired", resource_type="membership", resource_id=str(mid))
-        await session.commit()
-        return len(expired_ids)
-```
-
-That is the entire lifecycle engine. No library.
-
-### Visit Anti-Fraud — Plain SQL, No Heuristics Library
-
-| Anti-Fraud Rule | Enforcement Mechanism |
-|-----------------|----------------------|
-| Gym hours window (env-config `GYM_OPEN_HOUR`/`GYM_CLOSE_HOUR`, e.g. 06:00–23:00 Europe/Moscow) | In-service guard in `visits/service.py`: `if not (open_h <= local_now.hour < close_h): raise VisitOutsideHours()` → 409 |
-| Max 1 check-in per day per client | Partial unique index on `visits` table: `UNIQUE (client_id, (checked_in_at AT TIME ZONE 'Europe/Moscow')::date)`; service catches `IntegrityError` → 409 `visit_already_today` |
-| Active membership required | `service.py` query: `WHERE membership.status='active' AND now() BETWEEN start_date AND end_date` — 409 `no_active_membership` if none |
-
-This is the same defense-in-depth pattern v1.1 used for `clients.phone` (partial unique index `WHERE deleted_at IS NULL` + service-level check + DB-level catch). **No anti-fraud library** (no `python-fraud-detection`, no `presidio`, no rate-limiter beyond the existing `rate_limit_login`) is justified for a single-gym pet project. ML/heuristic anti-fraud is out of scope per PROJECT.md.
-
-### `pydantic>=2.11,<3` — Schemas (No Plugins Needed)
-
-`MembershipPlan`, `Membership`, `Visit`, `VisitCreate` schemas are all standard Pydantic v2 models. They inherit the project-wide `alias_generator=to_camel` + `populate_by_name=True` from `app/core/schemas.py`. Money is `int` (kopecks); dates use `date | datetime`; status is a `StrEnum` mirrored from the DB enum.
-
-**No Pydantic plugin** (no `pydantic-extra-types` for phone/etc.) is needed beyond what v1.1 already uses. `email-validator>=2.0` is already in deps. E.164 phone validation lives in `clients/schemas.py` and is not duplicated by memberships/visits.
-
-### `structlog>=24.0` + `audit_emit()` — Already Wired
-
-Every state transition (membership purchase, manual cancel, cron expiry, visit check-in via reception OR Telegram) writes to `audit_log` via the existing `app/core/audit.py:emit()`. No new logging library. No new audit primitive.
+The three locked contracts (`core ⊥ modules`, `modules independent`, `integrations ⊥ modules`) hold without modification. Cross-module references (e.g. "selling a PT package emits a payment" — `pt_packages` module → `payments` module) go through **Protocol-based registration in `app/main.py` composition root**, identical to the v1.2 `ActiveMembershipResolver` and v1.1 `register_user_loader` precedents. No new contract needed.
 
 ---
 
-## Installation
+## Frontend additions
 
-**No `uv add` invocations required for v1.2.**
+### Runtime dependencies — ZERO new packages
 
-If `time-machine` becomes necessary during testing (low likelihood, defer until needed):
+| UI capability | Existing tool | Why no new dep |
+|---|---|---|
+| Sale-with-payment form (amount input + cash confirmation) | react-hook-form + Zod + shadcn `<Input>` + `<Button>` | Same pattern as v1.2 `MembershipSellForm`. Money input uses kopecks-as-integer with display-layer `formatMoney(minor)`. BLK-04 (kopecks-at-form-boundary) precedent from v1.2 Phase 22. |
+| Refund button + confirm dialog | shadcn `<AlertDialog>` + TanStack Query mutation | Mirrors v1.3 `RenewConfirmDialog`. Mutation is non-optimistic (financial action — wait for server). |
+| Payments history list on client/membership card | TanStack Query + existing `<DataTable>` (TanStack Table 8) | Same pattern as v1.3 memberships list with pagination + status pills. |
+| `/trainers` owner-only CRUD page | TanStack Router + existing CRUD pattern from `/membership-plans` | Owner-only `beforeLoad` guard already established (v1.2 Phase 22). Active/inactive toggle = shadcn `<Switch>` (already available via shadcn primitives copy). |
+| PT package detail page (balance + history) | TanStack Router flat-detail route (precedent: `/memberships/$membershipId` from v1.3) | Same Pattern α: route loader composes `Promise.all([pkg, sessions, payments])` via `ensureQueryData` with feature-isolated imports. |
+| PT session recording UI (pick trainer, confirm "1 session used") | shadcn `<Select>` (Radix Select) + `<Button>` + Sonner toast | Trainer picker = active trainers from `/trainers?active=true`. shadcn registry pulls the underlying Radix primitive transparently. |
+| Status badges (PT pkg `active / depleted / cancelled / refunded`) | Existing `StatusBadge` (v1.3 4-variant pattern) | Extend discriminated-union to cover 4 new variants; reuse semantic Tailwind tokens (`bg-warning`, `bg-destructive`, `bg-muted`). |
+| Phone validation for trainer form | Existing E.164 Zod schema from `clients` entity | Reuse `phoneSchema` (optional variant). Don't duplicate. |
+| API client types | Existing `@sportzal/api-client` workspace package + `openapi-typescript` codegen | One `pnpm --filter @sportzal/api-client codegen` run after backend OpenAPI regen — drift-gate already enforces byte stability. |
 
-```bash
-cd apps/backend
-uv add --group dev "time-machine>=2.16,<3"
-```
+### Libraries explicitly ruled out for the frontend
 
-That is the only conceivable v1.2 dependency edit. The PR introducing it must be justified by a specific test that the row-mutation pattern cannot express cleanly.
-
----
-
-## Alternatives Considered
-
-| Recommended | Alternative | Why Not (for v1.2) |
-|-------------|-------------|--------------------|
-| `arq.cron` for `expire_memberships` | **APScheduler** | Separate scheduler with its own job store; conflicts with ARQ's Redis-based persistence; splits "what scheduled jobs run on this system" across two systems. ARQ already locked. |
-| `arq.cron` for `expire_memberships` | **Postgres `pg_cron` extension** | Requires installing a PG extension on every dev machine + CI Postgres image; moves scheduling out of the application code where it can be tested. ARQ's Python cron is in-process, easier to reason about, easier to test (`time-machine` if needed). |
-| `arq.cron` for `expire_memberships` | **Linux cron + `python -m app.cli expire`** | Adds a host-level moving part outside the docker-compose surface; harder to operate; nothing inside ARQ that's blocking us. |
-| Plain status enum + SQL UPDATE | **`transitions`** library | 3 states, 2 transitions, no fork-join — library overhead exceeds the logic it would replace. |
-| Plain status enum + SQL UPDATE | **`python-statemachine`** | Same reasoning — DSL ceremony for nothing. Would also fight with SQLAlchemy ORM as the source of truth. |
-| Stdlib `datetime` + `zoneinfo` | **`pendulum`** | Adds a runtime dep for ergonomics that don't justify it; Python 3.12's `zoneinfo` is sufficient for `Europe/Moscow` boundary math. |
-| Stdlib `datetime` + `zoneinfo` | **`arrow`** | Same; ergonomic API for date manipulation with no algorithmic advantage. |
-| Partial unique index for "1 visit/day/client" | **In-service Redis SETNX** | Two sources of truth (Redis + Postgres); Postgres unique index is atomic and crash-safe; Redis adds an extra failure mode. |
-| Existing test row-mutation pattern | **`time-machine` from day one** | New dep without a forcing function; tests so far don't need it. Add reactively. |
-| Existing test row-mutation pattern | **`freezegun`** | Slower (Python-level patching), known async-test quirks; if time mocking is needed, `time-machine` is the better choice. |
+| Candidate | Status | Reason |
+|---|---|---|
+| `dinero.js` / `money.js` | REJECT | Same reason as backend `py-moneyed` — we don't need a Money class. `formatMoney(minor)` + `Intl.NumberFormat('ru-RU', {currency: 'RUB'})` already do the job; raw integer kopecks travel through forms via BLK-04 pattern. |
+| Currency input components (`react-currency-input-field`, etc.) | REJECT | shadcn `<Input>` with on-blur normalisation and `inputMode="numeric"` is enough. Russian locale formatting on display is handled by `formatMoney`. |
+| State machine library (`xstate`) | REJECT | Refund / PT-package status is server-authoritative; the frontend renders status and shows/hides buttons based on it. No client-side FSM needed. |
+| New chart library | REJECT | v1.4 has NO reports. Reports/dashboard is explicitly deferred to v1.5 per `.planning/PROJECT.md` line 49. |
+| Receipt PDF / printing libraries | REJECT | No fiscal receipts in v1.4 (54-ФЗ out of scope per owner). |
 
 ---
 
-## What NOT to Use
+## Explicitly NOT adding (with reasons)
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `transitions` / `python-statemachine` | 3-state lifecycle does not justify a state-machine framework; adds a runtime dep, type-stub gap, and a second source of truth for status. | Postgres enum + `UPDATE ... WHERE status='active' AND end_date <= current_date` |
-| **APScheduler** | Conflicts with ARQ's job store; doubles the operational surface for scheduling. | `arq.cron.cron(...)` in `WorkerSettings.cron_jobs` |
-| **`pg_cron` extension** | Per-environment DB extension install; moves scheduling out of the app where it can be tested with `time-machine`. | `arq.cron` |
-| **`aiogram`** | Already rejected in v1.1 in favor of `python-telegram-bot`; no reason to revisit for one extra command. The ptb-22 `CommandHandler` list pattern handles this trivially. | Append `("checkin", checkin_handler)` to the existing handlers list |
-| **`pendulum` / `arrow`** | Nothing in v1.2's date arithmetic exceeds what `datetime` + `zoneinfo` (Python 3.12 stdlib) handles. Adds a runtime dep for marginal ergonomics. | Stdlib `datetime` + `zoneinfo.ZoneInfo("Europe/Moscow")` |
-| **Anti-fraud heuristic libraries** (`presidio`, `python-fraud-detection`, ML packages) | Out of scope per PROJECT.md ("simple time-based абонементы"); single-gym pet project; ML anti-fraud is a billing concern, not a check-in concern. | Plain SQL: gym-hours guard + partial unique index |
-| **Rate-limit libraries beyond what's already in core** (`slowapi`, `aiolimiter`, etc.) | Existing `rate_limit_login` infrastructure handles login throttling; the 1-per-day-per-client visit rule is a uniqueness constraint, not a rate limit. | Partial unique index on `visits(client_id, day)` |
-| **`Casbin` / policy DSLs** | Already rejected in v1.1; RBAC is the existing `Role`/`Action`/`Resource` StrEnum + `OWNER_ONLY` frozenset, which v1.2 will extend with new `(Action, Resource)` pairs for memberships/visits. | Add new entries to `OWNER_ONLY` + parity test |
-| **`passlib` / `python-jose`** | Already rejected in v1.1 in favor of `argon2-cffi` + `pyjwt`. v1.2 introduces no new password/JWT surface. | (n/a) |
-| **`python-dateutil`** | Stdlib `datetime` + `zoneinfo` handles every v1.2 case (no recurring-RRULE needs since cron lives in ARQ). | Stdlib only |
+### Backend
 
----
+1. **`py-moneyed` / `python-money` / `Decimal` / `Numeric` columns.** Single-currency RUB; kopecks are exact integers; convention locked since v1.0. Adding now = migration churn for zero benefit.
+2. **Native Postgres `MONEY` type.** Locale-sensitive, driver-dependent string output, community-rejected.
+3. **State-machine library (`transitions`, `python-statemachine`, `automat`).** v1.3 proved declarative constant + central guard is enough and grep-able.
+4. **Event-sourcing framework.** Append-only ledger + audit log already give traceability; ES would dwarf the feature scope.
+5. **Background cron for PT package depletion.** Synchronous status update inside the recording service is race-safe via `WHERE sessions_remaining > 0`. No 6th ARQ job needed.
+6. **Fiscal-receipt libraries (`ofd-py`, ATOL SDKs, ЮKassa SDK).** 54-ФЗ explicitly out of scope ("серая зона" per owner). ЮKassa deferred to v1.6.
+7. **Stripe SDK.** Region-banned. Never.
+8. **`pydantic-extra-types` Money / Currency types.** Same single-currency reason; no benefit over plain `int`.
+9. **PT-trainer payroll / commission engine.** v1.4 scope is "тренеры — только справочник"; payroll deferred indefinitely.
+10. **`sqlalchemy-utils`.** One-type wrappers don't justify pulling 30 classes; plain Integer columns suffice.
+11. **`alembic-utils` for materialised view of "balance per client".** Premature; v1.4 reads remaining balance directly from `pt_packages.sessions_remaining`. No view needed.
 
-## Stack Patterns by Variant
+### Frontend
 
-**If the gym ever opens a second branch (multi-tenant):**
-- Memberships and visits will need a `gym_id`/`tenant_id` column.
-- `expire_memberships` cron stays single-job; UPDATE just covers all tenants.
-- `Europe/Moscow` becomes per-tenant config, not env-global.
-- **Out of scope for v1.2 per PROJECT.md.**
-
-**If `/checkin` ever needs argument parsing (e.g. `/checkin <gym-name>`):**
-- ptb-22 `context.args` already provides the parsed list (verified in Context7 docs).
-- No library change.
-
-**If membership freeze/pause arrives in v1.3+:**
-- Adds states `frozen`, transitions `active→frozen→active`. 5 states, 4 transitions — still does not cross the line into needing a state-machine library, but this is the threshold to revisit.
-
-**If notifications "expiring soon" land in v1.3+:**
-- A second daily cron (`notify_expiring_soon`) joins `WorkerSettings.cron_jobs`. Same pattern. No new dep.
+1. **Money input library.** Use shadcn `<Input>` + Zod + `formatMoney`. Mirrors v1.2 BLK-04 precedent.
+2. **Date-range pickers for "payments between X and Y".** Out of scope — v1.4 surfaces payments per-client / per-membership, not as a global date-ranged report. That's v1.5.
+3. **Chart libraries.** Reports are v1.5.
+4. **Receipt PDF generation libraries.** No fiscal receipts in v1.4.
+5. **A new modal/dialog framework.** Radix `<Dialog>` + `<AlertDialog>` already cover refund-confirm and PT-session-confirm flows.
+6. **Optimistic updates for refunds.** Financial actions stay non-optimistic (server-authoritative), same precedent as v1.3 renewal.
+7. **A new chart/badge library.** Extend the v1.3 `StatusBadge` discriminated union with new variants.
+8. **Trainer avatar uploads / image library.** Out of scope; v1.4 trainers have name + phone + active flag only.
 
 ---
 
-## Version Compatibility
+## Integration notes
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `arq>=0.26` | `redis>=5,<6` | ARQ 0.26 supports `redis-py` v5; both already locked. |
-| `arq>=0.26` | Python 3.12 | Verified — ARQ 0.26.3 ships Python 3.12 wheels. |
-| `arq.cron` | `WorkerSettings.cron_jobs` | Class attribute; takes a list of `cron()` results. Stable API since 0.20+. |
-| `python-telegram-bot>=22.7,<23` | `Application.builder()` + `CommandHandler` list pattern | Verified — `CommandHandler` accepts a single command or list; existing `bot.py` uses single-command-per-handler with a per-iteration adapter, which is the safer pattern (preserves per-command logging/error handling). |
-| `python-telegram-bot 22.x` | `python-telegram-bot 23.x` (future) | v23 is not yet released; staying on `<23` keeps the 22.x major's documented API guarantees. |
-| `sqlalchemy>=2.0` | Postgres `daterange` types | Native SQLAlchemy 2.0 typing supports daterange via `psycopg`/`asyncpg` — but v1.2 doesn't need range types (start_date + end_date scalar columns + `BETWEEN` is simpler and matches PG enum + index conventions already in use). |
-| `pydantic>=2.11,<3` | `StrEnum` for `MembershipStatus`, `VisitChannel` | Native — no plugin. |
-| `time-machine` (if added) | `pytest-asyncio>=0.23` | Compatible; uses C-level patching, async-safe. |
+### Existing import-linter contracts hold
 
----
+- **`core ⊥ modules`** — new `Resource.PAYMENTS / TRAINERS / PT_PACKAGES / PT_SESSIONS` enum values live in `app/core/rbac.py`, which already hosts `Resource`. No change to direction.
+- **`modules independent`** — cross-module references go through Protocol callbacks registered in `app/main.py`. Precedents:
+  - v1.1 `register_user_loader` (auth → clients)
+  - v1.2 `ActiveMembershipResolver` (visits → memberships)
+  - v1.3 `HandlerContext` (telegram-bot → visits_service)
 
-## Integration Considerations
+  v1.4 will likely need:
+  - `PaymentRecorder` Protocol (sellers of memberships and pt_packages call this to insert a payment row without importing `payments` module).
+  - `PtPackageResolver` Protocol (if any other module needs "active pt_package for client" — likely only the admin-web wiring needs this through the dedicated endpoint, so the Protocol may not be required).
+  - `TrainerResolver` Protocol (pt_sessions service validates trainer exists + is active without importing `trainers` module directly).
+- **`integrations ⊥ modules`** — no v1.4 work in `app/integrations/` (cash payments are entered through admin-web; no external SDK).
 
-### Import-linter contracts — no changes
+### Existing patterns to reuse verbatim
 
-- `core ⊥ modules` — memberships/visits live under `modules/`, untouched.
-- `modules independent` — visits MUST NOT import memberships directly. Either:
-  1. Cross-module Protocol registration in `app/main.py` composition root (mirrors the `register_user_loader` pattern from v1.1 Phase 4–7), OR
-  2. The "active membership lookup" goes through a thin `core/` helper that both modules consume.
-  - **Decision deferred to architecture phase**, but neither path requires a library.
-- `integrations ⊥ modules` — D-06 relaxation already covers `workers/telegram_bot.py` importing a single owning module's service. v1.2 either:
-  1. Extends D-06 to allow `visits.service` import in the bot worker (analogous to `auth.telegram_service`), OR
-  2. Threads `visits_service` through `HandlerContext` and the bot worker remains pure-routing.
-  - Option 2 is more consistent with the established pattern.
+| v1.4 surface | Precedent | What to copy |
+|---|---|---|
+| `/api/v1/payments` list + POST | v1.2 `/api/v1/membership-plans` (Phase 16) | RBAC dependency, CSRF, `Page[T]` envelope, audit emit, SVC001 explicit `await session.commit()` |
+| `/api/v1/payments/{id}/refund` POST | v1.3 `/api/v1/memberships/{id}/freeze` (Phase 25) | Mutation endpoint with central-guard transition + 409 `invalid_transition` |
+| `pt_packages` table snapshot semantics | v1.2 `memberships` `price_kopecks_snapshot` (Phase 17) | Mandatory NOT NULL snapshot columns; FK to plan with `ON DELETE RESTRICT` |
+| `pt_sessions` race-safety | v1.2 `visits` UNIQUE `(client_id, gym_date)` (Phase 19) | Let the DB win the race via `UPDATE … WHERE sessions_remaining > 0 RETURNING …`; second concurrent click returns no rows → service raises 409 `pt_package_depleted_or_missing` |
+| PT package status guard | v1.3 `MEMBERSHIP_STATUS_TRANSITIONS` (Phase 24) | Same declarative constant + `_assert_can_transition()` helper |
+| Trainer soft-delete + name partial unique | v1.1 clients (Phase 8) + v1.2 membership_plans (Phase 16) | `lower(name)` partial unique on `WHERE deleted_at IS NULL`; 409 `trainer_in_use` if FK from `pt_sessions` exists |
+| Admin-web sale form refactor | v1.2 `MembershipSellForm` (Phase 22) | Add a "payment received" subsection; same RHF + Zod single-schema-for-form-and-service |
+| Admin-web PT package detail | v1.3 `/memberships/$membershipId` (Phase 28) | Flat route, Pattern α loader, sibling sections (here: `BalanceSection` + `SessionsHistorySection` + `PaymentsSection`) |
 
-### `mypy --strict` — no changes
+### Russian-market constraints respected
 
-Every recommendation here uses already-typed packages. No `# type: ignore` strategy needed beyond what v1.1 already established. The `pydantic.mypy` plugin handles new schemas without extra config.
+- No Stripe (banned).
+- No ЮKassa (deferred to v1.6; the payment ledger is shaped so a future ЮKassa intake just inserts rows with `method='card_yookassa'` instead of `method='cash'` — schema needs the `method TEXT` column even though v1.4 only writes `'cash'`).
+- No 54-ФЗ fiscal receipts (explicit grey-zone decision per `.planning/PROJECT.md` line 40).
+- Russian-only locked DM strings — N/A for v1.4 (no Telegram-side cash flows in scope).
+- All amounts in kopecks (RUB minor units); display via `Intl.NumberFormat('ru-RU', {currency: 'RUB'})` with NBSPs.
 
-### `ruff` — no changes
+### CI gates — unchanged
 
-No new lint rules needed. The existing `S105` placeholder noqa pattern in `telegram_bot.py` may need to repeat for any new placeholder constants in `checkin_handler` (e.g. localized reply strings); these are unit-level decisions.
+Existing 6-gate matrix (backend ruff / mypy / pytest / openapi-drift + frontend typecheck / lint / test / codegen-drift) holds without modification. v1.4 will add tests inside `apps/backend/tests/` and `apps/admin-web/src/**/__tests__/` trees and let the existing gates catch them.
 
-### Alembic — one new migration
+### Forward seam for v1.5 reports
 
-`memberships_plans`, `memberships`, `visits` tables + indexes (partial unique on `visits(client_id, day)`, plain index on `memberships(status, end_date)` for the cron's `WHERE` clause). No new migration tooling.
+The `payments` table schema should include `purchased_at TIMESTAMPTZ NOT NULL DEFAULT now()` indexed on `(purchased_at)` AND `(method, purchased_at)` so v1.5 daily-revenue queries are fast without re-indexing. Same forward-thinking discipline as v1.2 visits `gym_date` STORED column being designed for future reports.
 
-### Docker-compose — one updated service
+### Forward seam for v1.6 ЮKassa
 
-The `web`/`migrate`/`postgres`/`redis`/`telegram-bot` topology is unchanged. The ARQ cron now needs an actual worker process — either:
-1. Add a 5th compose service `arq` running `uv run arq app.workers.arq_app.WorkerSettings`, OR
-2. Run ARQ in-process inside the FastAPI container under a supervisor.
-  - **Option 1 is cleaner** and matches the bot-worker-as-separate-process precedent. No new dependency; just compose plumbing.
+Include `method TEXT NOT NULL DEFAULT 'cash' CHECK (method IN ('cash', ...))` from day one. v1.6 extends the CHECK constraint (one-line Alembic migration) and adds a webhook intake; the ledger schema doesn't need a v1.6 rewrite.
 
 ---
 
 ## Sources
 
-- **Context7 `/python-arq/arq`** v0.26.3 — verified `cron()` API (hour/minute/weekday/run_at_startup/unique/job_id/timeout); verified `cron_jobs` is a `WorkerSettings` class attribute; verified `enqueue_job` deferred-execution patterns. **HIGH confidence.**
-- **Context7 `/python-telegram-bot/python-telegram-bot`** v22.5 — verified `CommandHandler` accepts list of commands; verified `application.add_handler(CommandHandler(name, callback))` pattern; verified `update.message.reply_text` and `context.args` API. **HIGH confidence.**
-- **In-repo `apps/backend/app/integrations/telegram/bot.py:43-82`** — confirmed the `handlers: list[tuple[str, HandlerCallable]]` factory pattern is already in production for v1.1 `/start`; adding `/checkin` is a one-line append. **HIGH confidence (direct read).**
-- **In-repo `apps/backend/app/workers/arq_app.py`** — confirmed `WorkerSettings` skeleton already imports `RedisSettings` and exposes `functions` as `ClassVar[list[Any]]`; adding `cron_jobs` as a parallel `ClassVar[list[Any]]` is the documented arq pattern. **HIGH confidence (direct read).**
-- **In-repo `apps/backend/pyproject.toml`** — confirmed locked deps cover the v1.2 surface; no version bumps required. **HIGH confidence (direct read).**
-- **In-repo `apps/backend/app/modules/clients/repository.py`** — confirmed datetime conventions (`from datetime import UTC, datetime`; `datetime.now(tz=UTC)`); v1.2 follows the same convention without `pendulum`/`arrow`. **HIGH confidence (direct read).**
-- **PROJECT.md "Out of Scope"** — Stripe/multi-tenant/ML-anti-fraud explicitly out; informs the "no Casbin / no fraud lib / no daterange engine" verdicts. **HIGH confidence (direct read).**
-
----
-
-*Stack research for: Sportzal v1.2 — Memberships + Visits backend modules*
-*Researched: 2026-05-07*
-*Verdict: zero new runtime dependencies; one optional dev-group dep (`time-machine`) deferred until a test forces it.*
+- [SQLAlchemy 2.1 PostgreSQL dialect docs](https://docs.sqlalchemy.org/en/21/dialects/postgresql.html) (HIGH — official docs)
+- [SQLAlchemy issue #5965 — PostgreSQL MONEY returns string](https://github.com/sqlalchemy/sqlalchemy/issues/5965) (HIGH — upstream confirmation that native MONEY is not viable)
+- [SQLAlchemy discussion #7124 — Money precision strategies](https://github.com/sqlalchemy/sqlalchemy/discussions/7124) (MEDIUM — community consensus on Numeric vs minor-units)
+- [PostgreSQL official docs — Monetary Types](https://www.postgresql.org/docs/current/datatype-money.html) (HIGH — confirms locale sensitivity)
+- Existing project decisions: `.planning/PROJECT.md` Key Decisions (kopecks integer convention since v1.0; BLK-04 form-boundary precedent v1.2; `MEMBERSHIP_STATUS_TRANSITIONS` declarative pattern v1.3) — HIGH confidence (in-repo, validated through 729 backend tests + 233 admin-web tests).
+- `apps/backend/pyproject.toml` — current backend dependency lockset (HIGH).
+- `apps/admin-web/package.json` + `apps/admin-web/CLAUDE.md` — current frontend dependency lockset and locked conventions (HIGH).
