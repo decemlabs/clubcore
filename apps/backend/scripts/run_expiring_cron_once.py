@@ -43,8 +43,6 @@ import sys
 from typing import Any
 
 from app.core.config import get_settings
-from app.workers import WorkerSettings
-from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 
 # REG-29-04 (Phase 29 wave 3): SQLAlchemy resolves FK references lazily at
 # first flush. The cron callable inserts audit_log rows that FK into users
@@ -57,6 +55,8 @@ from app.modules.auth import models as _auth_models  # noqa: F401 — eager FK r
 from app.modules.clients import models as _client_models  # noqa: F401 — eager FK reg
 from app.modules.memberships import models as _memberships_models  # noqa: F401 — eager FK reg
 from app.modules.visits import models as _visits_models  # noqa: F401 — eager FK reg
+from app.workers import WorkerSettings
+from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 
 
 async def _run() -> int:
