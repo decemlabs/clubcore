@@ -14,6 +14,11 @@ export type Resource =
   | 'membership-plans' // NEW Phase 15 INFRA-09 — kebab-case mirror of Resource.MEMBERSHIP_PLANS.value
   | 'visits' // NEW Phase 15 INFRA-09
   | 'profile' // NEW Phase 22 FE-09 — own-account surface; both roles allowed (NOT in OWNER_ONLY)
+  | 'trainers' // NEW Phase 30 INFRA-18 — mirror Resource.TRAINERS.value
+  | 'payments' // NEW Phase 30 INFRA-18 — mirror Resource.PAYMENTS.value
+  | 'pt-package-plans' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_PACKAGE_PLANS.value
+  | 'pt-packages' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_PACKAGES.value
+  | 'pt-sessions' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_SESSIONS.value
 
 export type Action =
   | 'view'

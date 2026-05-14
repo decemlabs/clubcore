@@ -13,10 +13,11 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_fifteen_entries() -> None:
-    # Mirrors apps/admin-web/src/shared/session/can.ts (15 entries: 9 v1.1 + 6 v1.2 INFRA-08).
-    # Phase 6 TEST-06 / Phase 15 TESTS-08 add regex-based parity tests against can.ts.
-    assert len(OWNER_ONLY) == 15
+def test_owner_only_has_exactly_twenty_six_entries() -> None:
+    # Mirrors apps/admin-web/src/shared/session/can.ts (26 entries: 9 v1.1 + 6 v1.2 INFRA-08 +
+    # 11 v1.4 INFRA-19). Phase 6 TEST-06 / Phase 15 TESTS-08 / Phase 30 INFRA-19 add regex-based
+    # parity tests against can.ts.
+    assert len(OWNER_ONLY) == 26
 
 
 def test_role_value_set() -> None:
@@ -38,8 +39,9 @@ def test_action_value_set() -> None:
 
 def test_resource_value_set() -> None:
     # Verbatim from apps/admin-web/src/shared/session/registry.ts
-    # (15 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09).
-    # Note: OWNER_AREA / MEMBERSHIP_PLANS Python identifiers map to hyphenated string values.
+    # (20 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18).
+    # Note: OWNER_AREA / MEMBERSHIP_PLANS / PT_PACKAGE_PLANS / PT_PACKAGES / PT_SESSIONS
+    # Python identifiers map to hyphenated string values.
     assert {r.value for r in Resource} == {
         "dashboard",
         "clients",
@@ -56,6 +58,11 @@ def test_resource_value_set() -> None:
         "membership-plans",
         "visits",
         "profile",  # Phase 22 FE-09 — both-roles own-account surface
+        "trainers",  # Phase 30 INFRA-18
+        "payments",  # Phase 30 INFRA-18
+        "pt-package-plans",  # Phase 30 INFRA-18
+        "pt-packages",  # Phase 30 INFRA-18
+        "pt-sessions",  # Phase 30 INFRA-18
     }
 
 
@@ -95,7 +102,7 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check the 15 known-locked entries (9 v1.1 + 6 v1.2 INFRA-08) — drift tripwire."""
+    """Spot-check 26 locked entries (v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19) — drift tripwire."""
     expected = frozenset({
         (Action.VIEW, Resource.FINANCE),
         (Action.VIEW, Resource.REPORTS),
@@ -113,5 +120,41 @@ def test_specific_owner_only_membership() -> None:
         (Action.DELETE, Resource.MEMBERSHIP_PLANS),
         (Action.CANCEL, Resource.MEMBERSHIPS),
         (Action.DELETE, Resource.MEMBERSHIPS),
+        # Phase 30 INFRA-19 — v1.4 owner-only pairs
+        (Action.CREATE, Resource.TRAINERS),
+        (Action.EDIT, Resource.TRAINERS),
+        (Action.DELETE, Resource.TRAINERS),
+        (Action.VIEW, Resource.PT_PACKAGE_PLANS),
+        (Action.CREATE, Resource.PT_PACKAGE_PLANS),
+        (Action.EDIT, Resource.PT_PACKAGE_PLANS),
+        (Action.DELETE, Resource.PT_PACKAGE_PLANS),
+        (Action.VIEW, Resource.PAYMENTS),
+        (Action.CANCEL, Resource.PT_PACKAGES),
+        (Action.DELETE, Resource.PT_PACKAGES),
+        (Action.CANCEL, Resource.PT_SESSIONS),
     })
     assert expected == OWNER_ONLY
+
+
+def test_reception_retains_v1_4_rights() -> None:
+    """Phase 30 INFRA-19: reception MUST retain these rights (NOT in OWNER_ONLY).
+
+    Source of truth: REQUIREMENTS.md §INFRA-19 verbatim list. INFRA-18 forbids new
+    Action values; reception's "(LIST, TRAINERS)" right is expressed semantically via
+    (VIEW, TRAINERS) — owner-only is CRUD writes only (CREATE/EDIT/DELETE).
+    """
+    retained_pairs = [
+        (Action.VIEW, Resource.TRAINERS),       # TRN-04 reception picker
+        (Action.CREATE, Resource.PAYMENTS),     # PAY-04 sale-flow
+        (Action.REFUND, Resource.MEMBERSHIPS),  # B-07 uniform-reception
+        (Action.CREATE, Resource.PT_PACKAGES),  # PT-07 reception sells
+        (Action.REFUND, Resource.PT_PACKAGES),  # B-07 / REF-02
+        (Action.CREATE, Resource.PT_SESSIONS),  # PT-15 reception records
+    ]
+    for action, resource in retained_pairs:
+        assert (action, resource) not in OWNER_ONLY, (
+            f"({action}, {resource}) erroneously in OWNER_ONLY"
+        )
+        assert can(Role.RECEPTION, action, resource) is True, (
+            f"reception should be allowed ({action}, {resource})"
+        )

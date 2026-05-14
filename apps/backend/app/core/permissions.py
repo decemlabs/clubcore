@@ -43,9 +43,14 @@ class Resource(StrEnum):
     MEMBERSHIP_PLANS = "membership-plans"  # Phase 15 INFRA-08 — kebab on wire (mirrors OWNER_AREA)
     VISITS = "visits"                      # Phase 15 INFRA-08
     PROFILE = "profile"                    # Phase 22 FE-09 — both roles, not OWNER_ONLY
+    TRAINERS = "trainers"                  # Phase 30 INFRA-18 — v1.4 trainers module
+    PAYMENTS = "payments"                  # Phase 30 INFRA-18 — v1.4 payments ledger
+    PT_PACKAGE_PLANS = "pt-package-plans"  # Phase 30 INFRA-18 — kebab (mirrors MEMBERSHIP_PLANS)
+    PT_PACKAGES = "pt-packages"            # Phase 30 INFRA-18 — kebab (multi-word)
+    PT_SESSIONS = "pt-sessions"            # Phase 30 INFRA-18 — kebab (multi-word)
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts:12-22 (15 entries).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (26 entries after Phase 30 INFRA-19).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset({
     (Action.VIEW, Resource.FINANCE),
@@ -65,6 +70,22 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset({
     (Action.DELETE, Resource.MEMBERSHIP_PLANS),
     (Action.CANCEL, Resource.MEMBERSHIPS),
     (Action.DELETE, Resource.MEMBERSHIPS),
+    # Phase 30 INFRA-19 — v1.4 owner-only pairs (trainers / payments / pt-package-plans /
+    # pt-packages / pt-sessions). Reception RETAINS: (VIEW, TRAINERS) for ?active=true
+    # picker (TRN-04), (CREATE, PAYMENTS) for sale flow (PAY-04), (REFUND, MEMBERSHIPS)
+    # uniform-reception (B-07), (CREATE, PT_PACKAGES) + (REFUND, PT_PACKAGES) (B-07/PT-07),
+    # (CREATE, PT_SESSIONS) (PT-15). 11 new entries → final OWNER_ONLY size = 26.
+    (Action.CREATE, Resource.TRAINERS),
+    (Action.EDIT, Resource.TRAINERS),
+    (Action.DELETE, Resource.TRAINERS),
+    (Action.VIEW, Resource.PT_PACKAGE_PLANS),
+    (Action.CREATE, Resource.PT_PACKAGE_PLANS),
+    (Action.EDIT, Resource.PT_PACKAGE_PLANS),
+    (Action.DELETE, Resource.PT_PACKAGE_PLANS),
+    (Action.VIEW, Resource.PAYMENTS),
+    (Action.CANCEL, Resource.PT_PACKAGES),
+    (Action.DELETE, Resource.PT_PACKAGES),
+    (Action.CANCEL, Resource.PT_SESSIONS),
 })
 
 

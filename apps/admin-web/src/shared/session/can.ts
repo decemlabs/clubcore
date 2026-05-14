@@ -26,6 +26,20 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   { action: 'delete', resource: 'membership-plans' },
   { action: 'cancel', resource: 'memberships' },
   { action: 'delete', resource: 'memberships' },
+  // Phase 30 INFRA-19 — v1.4 owner-only pairs (mirror permissions.py). 11 net entries.
+  // Reception RETAINS (NOT in this array): {view, trainers}, {create, payments},
+  // {refund, memberships}, {create, pt-packages}, {refund, pt-packages}, {create, pt-sessions}.
+  { action: 'create', resource: 'trainers' },
+  { action: 'edit', resource: 'trainers' },
+  { action: 'delete', resource: 'trainers' },
+  { action: 'view', resource: 'pt-package-plans' },
+  { action: 'create', resource: 'pt-package-plans' },
+  { action: 'edit', resource: 'pt-package-plans' },
+  { action: 'delete', resource: 'pt-package-plans' },
+  { action: 'view', resource: 'payments' },
+  { action: 'cancel', resource: 'pt-packages' },
+  { action: 'delete', resource: 'pt-packages' },
+  { action: 'cancel', resource: 'pt-sessions' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {
