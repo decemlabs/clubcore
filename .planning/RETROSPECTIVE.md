@@ -114,6 +114,63 @@
 
 ---
 
+## Milestone: v1.3 — Memberships Extras + Tech-Debt
+
+**Shipped:** 2026-05-14
+**Phases:** 6 (24–29) | **Plans:** 33 | **Tasks:** 29
+**Requirements:** 44/44 satisfied (1 mock-mode UX gap deferred to v1.4)
+**Code:** ~9.9K LOC backend Python (+1.8K vs v1.2), ~18.8K LOC TS (+2K vs v1.2)
+**Timeline:** 2026-05-08 → 2026-05-14 (6 days), 199 commits (45 feat), 204 files changed (+37,353 / −393)
+**Verification:** Phase 29 served as the milestone audit — passed (7/7 human-verification scenarios + cross-phase smoke; 3 production-blocker regressions REG-29-01/03/04 found and fixed inline; 1 minor UX gap deferred); `.planning/milestones/v1.3-VERIFICATION-LOG.md`.
+
+### What Was Built
+
+- **Foundations & tech-debt bedrock (Phase 24)** — `LOCKED_AUDIT_EVENTS` extended to 34-entry; status taxonomy with central `_assert_can_transition` + declarative `MEMBERSHIP_STATUS_TRANSITIONS`; resolver defence-in-depth `end_date >= today` filter; backend `?expiring=true&within=N` mock/http parity; SVC001 walker extended to `auth/service.py`. Closes 3 of 4 v1.2 carry-overs (DEBT-01/02/03).
+- **Memberships — Freeze (Phase 25)** — `freeze_days_limit` immutable per-plan field; `membership_freeze_periods` table with partial unique `WHERE ended_at IS NULL`; `freeze_membership` / `unfreeze_membership` with ceil-rounded day accounting; resolver rejects `frozen` (anti-oracle DM); 2 new endpoints (`/freeze`, `/unfreeze`); 16-cell state-machine matrix + race tests.
+- **Memberships — Renewal (Phase 26)** — self-FK `previous_membership_id`; current-price snapshot on `renew_membership`; resolver tiebreak inverted to `start_date ASC` so running membership stays primary until its `end_date`; expired-source date strategy `start_date = today` with audit-traceable literal; `POST /memberships/{id}/renew`.
+- **Expiring-soon Telegram (Phase 27)** — `membership_notifications` UNIQUE `(membership_id, kind)` for idempotency; ARQ cron 06:15 MSK (10-min buffer after `expire_memberships`); 6 locked Russian DM templates with per-client A/B variant (`client_id.bytes[0] & 1`, anti-oracle); insert idempotency row only on successful send.
+- **OpenAPI drift gate + admin-web wiring (Phase 28)** — atomic regen of `openapi.json` + `schema.d.ts` (one drift-gate cycle); admin-web freeze/renewal UI: `/memberships/$membershipId` flat detail route with `FreezeSection` + `RenewSection` + `RenewConfirmDialog`; shared `StatusBadge`; «Заморожен» filter pill + «Истекает в течение» selector on list page; 3 mutation hooks (freeze/unfreeze optimistic, renew non-optimistic); 24 locked Russian i18n strings.
+- **Milestone verification (Phase 29)** — 7/7 inherited human-verification scenarios against live backend + Telegram sandbox; cross-phase freeze→renewal→expiring-cron smoke; 729 backend + 233 admin-web tests + 6/6 CI gates evidence captured; 3 production-blocker regressions found and fixed inline (REG-29-01 Vite dev-proxy; REG-29-03 bot worker resolver registrations; REG-29-04 cron eager-import); operator sign-off with verbatim DM evidence.
+
+### What Worked
+
+1. **`LOCKED_AUDIT_EVENTS` pre-registration in Phase 24 paid off across Phases 25/26/27.** Adding the 6 v1.3 event pairs to the frozenset *before* their callsites existed meant every later phase passed CI from its first commit — no "add event then add callsite" iteration churn. The AST literal-string gate stayed honest the whole milestone.
+2. **Phase 29 as the milestone-verification phase (not a separate audit doc).** Replacing a hand-written `v1.3-MILESTONE-AUDIT.md` with a verification phase that ran 6 plans (live-stack runbook, one-shot cron runner, 6 scenarios, cross-phase smoke, test-suite + CI evidence, finalize log) caught 3 production-blocker regressions (REG-29-01/03/04) that would have shipped silently. Live-stack verification was a real gate, not a check-the-box.
+3. **DB-level enforcement habit carried forward.** Freeze period concurrency via partial unique `WHERE ended_at IS NULL` (parallel to v1.2 visits `UNIQUE (client_id, gym_date)`) made MEM-FRZ-TEST-03 (race-on-active-freeze) green first try. Expiring-soon idempotency via UNIQUE `(membership_id, kind)` survived a docker-restart at 06:14 race in Phase 29 cross-phase smoke.
+4. **Inline production-blocker fixes during milestone verification.** REG-29-01 (Vite dev-proxy), REG-29-03 (bot worker missing resolver registrations), REG-29-04 (cron runner missing eager imports) — all caught at the gate, fixed without opening gap-closure phases. Verbatim operator confirmations made the gate authoritative.
+5. **Resolver tiebreak rule extension survived three touch-points cleanly.** Phase 24 added `end_date >= today`, Phase 25 added `status != frozen`, Phase 26 inverted `ORDER BY` to `start_date ASC` — each phase left the resolver in a green test and the others' assumptions intact. The "resolver touch-points serialized" planning decision (recorded in PROJECT.md) prevented merge conflict between Phases 25 and 26.
+
+### What Was Inefficient
+
+1. **REQUIREMENTS.md traceability table drift again.** Same shape as v1.2: phase verifications passed but the central table stayed Pending for 32 rows until milestone close pre-flight bulk-flipped them. Lesson from v1.2 retrospective wasn't applied — `gsd-sdk query verify` still doesn't write back to the traceability row. Either codify a CLI shim or accept the close-time flip as a recurring 5-minute cost.
+2. **STATE.md auto-extracted accomplishments at close were unusable.** `gsd-sdk query milestone.complete` extracted SUMMARY one-liners but many SUMMARY files have weak frontmatter (or none) and the body fallback grabbed text like "None — plan executed exactly as written.", "Before:", or "Task 1 — Status forwarding (FE-11):" Manual rewrite of the MILESTONES.md entry took ~15 minutes of curation. Either tighten SUMMARY one-liner discipline at phase close, or write an LLM-side curator for the entry.
+3. **Phase 28 mock-mode `?status=` filter parity gap shipped despite Phase 28 verification.** CONTEXT.md D-28-11 wrongly stated "Mock already accepts status" — the gap was a CONTEXT claim, not a missed implementation. Phase 28 verification *did* catch it as "PARTIAL" but accepted the gap rather than blocking. With hindsight, a CONTEXT-claim audit ("is this claim actually true today, grep history") before any phase plan would have caught this.
+4. **`gsd-sdk milestone.complete` doesn't archive the audit when there isn't one.** Phase 29 wrote `v1.3-VERIFICATION-LOG.md` directly to `milestones/`, but the CLI's `milestones/v1.3-MILESTONE-AUDIT.md` path stayed empty. Functionally fine, but breaks the audit-as-file pattern from v1.1/v1.2.
+
+### Patterns Established
+
+- **`LOCKED_AUDIT_EVENTS` extended UP-FRONT, in the bedrock phase of a milestone.** Audit events are the cheap, declarative front-of-house contract; lock them before any callsites land so the AST gate stays meaningful.
+- **Milestone-verification-as-phase** (Phase 29 model) — a phase whose plans are "set up live stack + run human scenarios + write evidence" replaces a hand-authored audit doc and runs against the real production stack. Use when the milestone has user-facing behaviour worth eyeballing.
+- **Cron ordering with explicit buffer + `unique=True`** (06:05 expire, 06:15 expiring-soon) — 10-minute gap absorbs slow runs, `unique=True` survives docker-restart races. Reusable for every future ARQ chain.
+- **Per-client anti-oracle variant via stable hash bit** (`client_id.bytes[0] & 1`) — keeps the security model intact (same DM for the same client every time) while making the message set look organic. Reusable for any future locked-copy expansion.
+- **Inline regression fixes during milestone verification, not gap-closure phases** — when the regression is small and the verification phase is already running, fix in the phase's plan rather than spawning a 30.x phase. Cheap and the audit-as-phase model handles it cleanly.
+
+### Key Lessons
+
+1. **A milestone-verification phase against live production stack is worth ~3 production incidents avoided.** REG-29-01/03/04 were all gate-time catches that would have failed in v1.4 production setup; the cost of Phase 29 (1 day) bought 3 days of v1.4 firefighting avoided.
+2. **CONTEXT.md claims need a "grep this is still true" gate before each phase plan.** D-28-11's "Mock already accepts status" was wrong at write-time; it survived because nobody re-greped. Add a CONTEXT-claim audit step to `/gsd-plan-phase` (or accept that one mock-parity gap per UI phase is the going rate).
+3. **`gsd-sdk milestone.complete` output is a draft, not a final.** Auto-extracted accomplishments need manual curation every milestone close. Plan ~15 minutes of MILESTONES.md rewriting into the close routine.
+4. **Defence-in-depth filters in resolvers are cheap and worth it.** DEBT-01's `end_date >= today` resolver filter cost 1 line of SQL + 1 test; it would have caught REG-29 class issues during ARQ-outage scenarios that the test suite doesn't model. Apply same pattern to any future scheduled-job-driven status transitions.
+5. **Quick-fixes via /gsd-fast scale.** Three of the v1.3 inline production-blocker fixes (REG-29-01/03/04) used the existing `await session.commit()` + plan-then-commit discipline; no /gsd-fast needed since they landed inside the active Phase 29 plans. Confirms the quick-task lane is for *between-phase* fixes, not *within-phase*.
+
+### Cost Observations
+
+- **Phase 28 was the densest** at 8 plans (vs the 4-6 plan v1.2 average) because the OpenAPI drift gate + admin-web wiring touched 11 file types in one phase. Predictable concentration; would split this differently next time (one phase for backend types/schema regen, one for FE wiring) if the milestone weren't on a 6-day rhythm.
+- **Phase 29 was the highest-value-per-LOC** — 6 plans, mostly orchestration scripts (`seed_verification_fixtures.py`, `run_expiring_cron_once.py`) plus markdown evidence — and caught 3 production blockers. Verification phases should always be on the roadmap when the milestone has live-stack-observable behaviour.
+- **v1.3 was the fastest milestone** by feature-density (6 days, 33 plans, 44 reqs) but only because Phases 24-27 backend work was tightly scoped + Phase 28 admin-web was atomically regen-able. v1.4 Billing won't share this profile.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -123,6 +180,7 @@
 | v1.0 Phase A | 3 | 17 | Skeleton-only; `import-linter` and quality tooling shipped before any business code |
 | v1.1 Auth + Clients | 11 (incl. 3 gap-closure) | 63 | Gap-closure phases (12/13/14) introduced; OpenAPI drift gate; Protocol-based cross-module callbacks; SAVEPOINT test isolation |
 | v1.2 Memberships + Visits | 9 | 36 | DB-level race-proof constraints (`GENERATED STORED` + composite UNIQUE); first real ARQ scheduled cron; second + third Protocol-based cross-module slots; locked code-constant copy for security-sensitive bot DMs; inline UAT issue fixing |
+| v1.3 Memberships Extras + Tech-Debt | 6 | 33 | `LOCKED_AUDIT_EVENTS` pre-registration discipline; milestone-verification-as-phase replacing standalone audit doc; second ARQ scheduled cron with ordered buffer; per-client anti-oracle hash-bit variant for locked copy; inline regression fixes during verification phase |
 
 ### Cumulative Quality
 
@@ -131,6 +189,7 @@
 | v1.0 | ~46 files | unchanged | 47/47 | 3 |
 | v1.1 | ~52 files (~4.4K LOC) | ~12.8K LOC | 70/70 | 132 unit + integration suites for auth/RBAC/clients/persistence/search |
 | v1.2 | ~8.1K LOC backend | ~16.8K LOC | 63/63 (2 accepted-deviations) | 569+ backend (incl. VIS-TEST-01 concurrent race + ARQ-TEST-01/02 cron correctness/idempotency) + 184+ admin-web |
+| v1.3 | ~9.9K LOC backend | ~18.8K LOC | 44/44 (1 mock-mode UX deferred) | 729 backend (incl. 16-cell freeze state-machine matrix + expiring-soon idempotency + renewal date strategy) + 233 admin-web |
 
 ### Top Lessons (Verified Across Milestones)
 

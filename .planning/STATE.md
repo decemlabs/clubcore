@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Memberships Extras + Tech-Debt
-status: ready_to_close
-stopped_at: Phase 29 complete (7/7 verification scenarios passed, 3 production blockers fixed inline)
-last_updated: "2026-05-14T09:45:00Z"
-last_activity: 2026-05-14 -- Phase 29 verified passed; ready for /gsd-complete-milestone
+status: milestone_complete
+stopped_at: v1.3 milestone closed and archived
+last_updated: "2026-05-14T10:05:00Z"
+last_activity: 2026-05-14 -- v1.3 milestone completed and archived; awaiting /gsd-new-milestone for v1.4 scoping
 progress:
   total_phases: 6
   completed_phases: 6
@@ -18,86 +18,46 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-08)
+See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Milestone v1.3 close — Phase 29 verified passed; awaiting `/gsd-complete-milestone` to author v1.3-MILESTONE-AUDIT.md and archive Phases 24-29.
+**Current focus:** Planning v1.4 — run `/gsd-new-milestone` to begin questioning → research → requirements → roadmap. Carry-over candidates listed in PROJECT.md under "Next Milestone Goals" (Billing, owner notification config, paid freeze, audit log read API, visit-count plans, admin-web housekeeping).
 
 ## Current Position
 
-Phase: 29 (Milestone Verification) — ✓ COMPLETE
-Plan: 6 of 6 complete
-Status: Milestone ready to close
-Last activity: 2026-05-14 -- Phase 29 closed; status passed; 3 production-blocker regressions fixed inline, 1 minor UX deferred to v1.4 backlog
+Milestone: v1.3 — ✓ SHIPPED 2026-05-14
+Phase: none active
+Plan: none active
+Status: between milestones — fresh `.planning/REQUIREMENTS.md` will be created by `/gsd-new-milestone`
+Last activity: 2026-05-14 -- v1.3 archived (6 phases, 33 plans, 44/44 requirements, 199 commits over 6 days)
 
-## Performance Metrics
+## v1.3 Milestone Summary
 
-**Velocity:**
-
-- Total plans completed: 5 (this milestone)
-- Average duration: —
-- Total execution time: 0.0 hours
-
-**By Phase (v1.3):**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 24. Foundations & Tech-Debt Bedrock | 0/TBD | — | — |
-| 25. Memberships — Freeze (backend) | 0/TBD | — | — |
-| 26. Memberships — Renewal (backend) | 0/TBD | — | — |
-| 27. Expiring-soon Telegram Notifications | 0/TBD | — | — |
-| 28. OpenAPI Drift-Gate Refresh + admin-web Wiring | 0/TBD | — | — |
-| 29. Milestone Verification | 0/TBD | — | — |
-| 27 | 5 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: none yet (this milestone)
-- Trend: —
-
-*Updated after each plan completion.*
-| Phase 24 P02 | 10min | 2 tasks | 7 files |
+**Shipped:** 2026-05-14 (6 days, 199 commits, 45 feat)
+**Phases:** 24 (Foundations & Tech-Debt) → 25 (Freeze) → 26 (Renewal) → 27 (Expiring-soon Telegram) → 28 (OpenAPI drift gate + admin-web wiring) → 29 (Milestone verification)
+**Plans / tasks:** 33 / 29
+**Tests:** backend 729 (95 files), admin-web 233 (41 files) — all green; 6/6 CI gates green
+**Verification:** Phase 29 acted as the milestone audit — passed (7/7 human-verification scenarios + cross-phase smoke; 3 production-blocker regressions REG-29-01/03/04 found and fixed inline; 1 minor UX gap deferred to v1.4); operator sign-off in `.planning/milestones/v1.3-VERIFICATION-LOG.md`.
+**Archive:** `.planning/milestones/v1.3-ROADMAP.md`, `.planning/milestones/v1.3-REQUIREMENTS.md`, `.planning/milestones/v1.3-VERIFICATION-LOG.md`.
+**Tag:** `v1.3` (annotated; to be created during close sequence).
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting v1.3:
+Full decisions log lives in PROJECT.md Key Decisions table. v1.3 added 12 new locked decisions covering status taxonomy guard, resolver defence-in-depth filter, mock/http parity for `?expiring=`/`?within=`, freeze concurrency / day accounting, renewal date strategy + pricing + tiebreak, expiring-soon idempotency + cron ordering, `LOCKED_AUDIT_EVENTS` pre-registration discipline, and Phase 29 as milestone-verification-as-audit.
 
-- v1.3 phase numbering continues from v1.2 (last phase 23 → v1.3 starts at Phase 24); no `--reset-phase-numbers`
-- v1.3 build order: 24 → 25 → 26 → 27 → 28 → 29 (linear; 25/26 share migration `0007`, plan-time decision on combined-vs-extension revision)
-- Phase 24 owns INFRA-15 + INFRA-16 + DEBT-01 + DEBT-02 + DEBT-03 (foundations + 3 of 4 tech-debt closures); DEBT-04 is human-verification, lives in Phase 29
-- Resolver touch-points serialized: 24 ставит `end_date >= today` filter → 25 добавляет `status != 'frozen'` → 26 расширяет tiebreak — каждая phase оставляет резолвер в зелёном тесте
-- Cron ordering 06:05 (`expire_memberships`) → 06:15 (`send_expiring_notifications`) с buffer ~10min; `unique=True` ловит docker-restart races (Phase 27)
-- 6 locked Russian DM templates (NTF-COPY-01) требуют owner sign-off перед Phase 27 merge — pattern v1.2 D-5
-- Phase 28 — единый drift-gate refresh после backend phases (мигрировано из v1.2 Phase 21)
-- Carried-forward decisions from v1.2 close (still locked):
-  - Modular monolith (`core` / `modules` / `integrations` / `workers` / `api`)
-  - Python package `app`
-  - `frontend/` → `apps/admin-web/` без правок internals
-  - `import-linter` enforced
-  - Membership `end_date` is **inclusive** (last valid check-in day)
-  - `gym_date = (checked_in_at AT TIME ZONE 'Europe/Moscow')::date` STORED + `UNIQUE (client_id, gym_date)`
-  - Membership snapshot pricing mandatory (`*_snapshot` columns NOT NULL + `ON DELETE RESTRICT` FK)
-  - ARQ cron tick: container `TZ=UTC` + `cron(hour=H, minute=M, unique=True, keep_result=60)`
-  - Cross-module callbacks via Protocol + `app/main.py` composition root
-  - Telegram bot — отдельный процесс long-polling worker, НЕ ARQ task
-  - Backend wire format = camelCase via `BackendSchemaBase`
-  - Pagination envelope `{items, total, page, pageSize}`
-- [Phase ?]: INFRA-16 Phase 24: status taxonomy locked — central _assert_can_transition guard + MEMBERSHIP_STATUS_TRANSITIONS read-only constant; Postgres CHECK admits 'frozen' as of migration 0007_status_taxonomy
+Locked v1.0–v1.2 invariants still hold (modular monolith with `core ⊥ modules` import-linter contract, Python package `app`, frontend integrity, inclusive `end_date`, `gym_date STORED + UNIQUE`, mandatory snapshot pricing, ARQ container `TZ=UTC` + `cron(unique=True, keep_result=60)`, cross-module Protocol callbacks via composition root, Telegram as separate long-polling worker, backend wire format camelCase via `BackendSchemaBase`, pagination `{items, total, page, pageSize}`).
 
 ### Pending Todos
 
-None yet (roadmap just drafted; phase planning starts with `/gsd-plan-phase 24`).
+None at milestone-close time. The next `/gsd-new-milestone` will surface v1.4 candidates.
 
 ### Blockers/Concerns
 
-- **Phase 25/26 migration `0007`** — план-агент Phase 25 должен решить: единый combined revision (freeze + renewal columns) или extension hook для Phase 26. Не блокер для Phase 24.
-- **Phase 27 NTF-COPY-01** — owner sign-off на 6 Russian DM strings нужен до merge; включить в Phase 27 plan-time clarification (mirror of v1.2 D-5 process).
-- **Phase 27 cron ordering 06:05 → 06:15** — формализовать race-test или явно зафиксировать в Phase 27 Key Decisions, что 10-min gap + `unique=True` достаточны.
-- **Phase 28 drift-gate refresh** — выполнить ровно один `git diff --exit-code` failure → regenerate → commit cycle, не больше; mirrors v1.2 Phase 21 discipline.
-- **Phase 29 DEBT-04** — нужны live backend + Telegram sandbox для 6 smoke сценариев из `.planning/milestones/v1.2-phases/22-VERIFICATION.md`; ops session должна быть запланирована до старта Phase 29.
+None blocking v1.4 start. Open watch-items:
+- v1.1 `06-HUMAN-UAT.md` and `08-HUMAN-UAT.md` advisory scenarios were not exercised in Phase 29 sweep — re-evaluate at v1.4 scoping if any touch user-facing flows.
+- The `260501-ndi` orphan directory in `.planning/quick/` should be archived during a future `/gsd-cleanup` run.
 
 ### Quick Tasks Completed
 
@@ -109,20 +69,27 @@ None yet (roadmap just drafted; phase planning starts with `/gsd-plan-phase 24`)
 
 ## Deferred Items
 
-Items carried into v1.3 from v1.1/v1.2 close:
+Items carried into v1.3 from v1.1/v1.2 close (all resolved during v1.3):
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| tech_debt | MEM-04 D-13: resolver `end_date >= today` filter | scheduled | v1.2 close | Phase 24 / DEBT-01 |
-| tech_debt | WR-07: backend `?expiring=` query parity | scheduled | v1.2 close | Phase 24 / DEBT-02 |
-| tech_debt | SVC001 walker scope → auth/service.py | scheduled | v1.2 close | Phase 24 / DEBT-03 |
-| uat_gap | 22-VERIFICATION 6 human_verification smoke tests | scheduled | v1.2 close | Phase 29 / DEBT-04 |
-| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | rolled into Phase 29 sweep if relevant |
-| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | rolled into Phase 29 sweep if relevant |
+| tech_debt | MEM-04 D-13: resolver `end_date >= today` filter | ✅ closed | v1.2 close | Phase 24 / DEBT-01 |
+| tech_debt | WR-07: backend `?expiring=` query parity | ✅ closed | v1.2 close | Phase 24 / DEBT-02 |
+| tech_debt | SVC001 walker scope → auth/service.py | ✅ closed | v1.2 close | Phase 24 / DEBT-03 |
+| uat_gap | 22-VERIFICATION 6 human_verification smoke tests | ✅ closed | v1.2 close | Phase 29 / DEBT-04 (7/7 passed against live stack) |
+| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
+| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
 | quick_task | 260501-ndi (status metadata missing; commit shipped) | missing-meta | v1.1 close | informational only |
+
+### Items acknowledged and deferred at milestone close on 2026-05-14
+
+| Category | Item | Status | Notes |
+|----------|------|--------|-------|
+| verification_gap | Phase 28 — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` does not filter by `query.status`; «Заморожен» filter pill on `/memberships` is a no-op under `VITE_API_MODE=mock` | deferred-to-v1.4 | Mock-only; `http` (production) path forwards `status` correctly. One-line fix recorded in `.planning/phases/28-openapi-drift-gate-refresh-admin-web-wiring/28-VERIFICATION.md` gap block. Will fold into v1.4 admin-web housekeeping. |
+| quick_task | `260501-ndi` orphan in `.planning/quick/` from v1.0 era | acknowledged | Task itself completed 2026-05-01 (commits `71f28de`, `efdb7cc`); only the directory listing remains. Defer to `/gsd-cleanup`. |
 
 ## Session Continuity
 
-Last session: 2026-05-14T06:41:29.818Z
-Stopped at: Phase 29 context gathered
-Resume: Next step is `/gsd-plan-phase 24` to break Phase 24 (Foundations & Tech-Debt Bedrock) into plans.
+Last session: 2026-05-14T10:05:00Z
+Stopped at: v1.3 milestone close and archive complete
+Resume: Run `/gsd-new-milestone` to scope v1.4.
