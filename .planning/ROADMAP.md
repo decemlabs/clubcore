@@ -110,7 +110,9 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   3. Protocol slot `register_trainer_by_id_resolver` в `core/dependencies.py` зарегистрирован из `app/main.py:create_app()` И из `app/workers/telegram_bot.py:main()` (defensive double-wiring per REG-29-03 lesson из v1.3).
   4. Каждая lifecycle transition эмитит соответствующее audit-событие (`trainer_created`/`trainer_updated`/`trainer_deactivated`/`trainer_reactivated`); `BusinessService` SVC001 gate проходит.
   5. admin-web `/trainers` route (owner-only `beforeLoad`) показывает таблицу тренеров с active filter pill, create/edit modal (RHF + Zod), deactivate/reactivate кнопки, hard-delete с inline 409 surface; mock service синхронизирован.
-**Plans:** TBD
+**Plans:** 2 plans
+- [ ] 31-01-PLAN.md — Backend trainers module: migration 0011 + ORM/schemas/repo/service/router + Protocol slot double-wiring + 4 audit emits + integration tests (TRN-01..07) — Wave 1
+- [ ] 31-02-PLAN.md — admin-web /trainers mock-mode UI: entity + Zod schemas + mock service + features/trainers + route owner-only beforeLoad + vitest specs (TRN-08) — Wave 2
 **UI hint**: yes
 
 ### Phase 32: Payment Ledger + Sale Flow + Refund
@@ -178,7 +180,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 30. Foundations & Tech-Debt Bedrock | 4/4 | Complete    | 2026-05-14 |
-| 31. Trainers Module | 0/? | Not started | — |
+| 31. Trainers Module | 0/2 | In progress (planning complete) | — |
 | 32. Payment Ledger + Sale Flow + Refund | 0/? | Not started | — |
 | 33. PT-Package Plans + Instances | 0/? | Not started | — |
 | 34. PT-Session Recording | 0/? | Not started | — |
