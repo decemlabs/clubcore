@@ -34,7 +34,7 @@
 
 ### DEBT — Tech-debt carryover from v1.3 (Phase 30)
 
-- [ ] **DEBT-05**: Close v1.3 deferred mock-mode parity gap — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` must filter by `query.status`. The «Заморожен» filter pill on `/memberships` must be a no-op no longer under `VITE_API_MODE=mock`. One-liner fix + 1-2 mock-parity tests.
+- [x] **DEBT-05**: Close v1.3 deferred mock-mode parity gap — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` must filter by `query.status`. The «Заморожен» filter pill on `/memberships` must be a no-op no longer under `VITE_API_MODE=mock`. One-liner fix + 1-2 mock-parity tests.
 
 ### TRN — Trainers Module (Phase 31)
 

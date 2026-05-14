@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
-stopped_at: Phase 30 context gathered
-last_updated: "2026-05-14T12:31:11.257Z"
+stopped_at: Completed Plan 30-04 (DEBT-05)
+last_updated: "2026-05-14T12:37:06.020Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 ## Current Position
 
 Phase: 30 (foundations-tech-debt-bedrock) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-05-14
 
@@ -72,6 +72,7 @@ v1.3 added 12 locked decisions covering status taxonomy guard, resolver defence-
 Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ modules` import-linter contract, Python package `app`, frontend integrity, inclusive `end_date`, `gym_date STORED + UNIQUE`, mandatory snapshot pricing, ARQ container `TZ=UTC` + `cron(unique=True, keep_result=60)`, cross-module Protocol callbacks via composition root, Telegram as separate long-polling worker, backend wire format camelCase via `BackendSchemaBase`, pagination `{items, total, page, pageSize}`).
 
 - [Phase ?]: D-30-01..D-30-04 implemented in Plan 30-01: 17 Pydantic v2 audit payload schemas with extra='forbid', registry AUDIT_PAYLOAD_SCHEMAS in audit_payloads.py, emit() validates after locked-set check, payment_row_hash pattern ^sha256:[0-9a-f]{64}$ locked
+- [Phase 30]: Plan 30-04 (DEBT-05): mock/memberships.list() expiring branch now respects query.status — closes v1.3 deferred mock-parity gap; in-code rationale comment documents bug-vs-verbatim-REQ semantic mismatch
 
 ### Pending Todos
 
@@ -98,13 +99,13 @@ Items carried into v1.4 from v1.3 close:
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| verification_gap | Phase 28 — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` does not filter by `query.status` | scheduled-v1.4 | v1.3 close | Phase 30 / DEBT-05 (one-liner + parity tests) |
+| verification_gap | Phase 28 — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` does not filter by `query.status` | resolved | v1.3 close | Closed by Phase 30 Plan 04 (commit dd69b21) — one-liner fix + 2 DEBT-05 vitest specs |
 | quick_task | `260501-ndi` orphan in `.planning/quick/` from v1.0 era | acknowledged | v1.3 close | Defer to `/gsd-cleanup` |
 | uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
 | uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
 
 ## Session Continuity
 
-Last session: 2026-05-14T12:31:03.549Z
-Stopped at: Phase 30 context gathered
-Resume: Run `/gsd-discuss-phase 30` to begin Phase 30 (Foundations & Tech-Debt Bedrock).
+Last session: 2026-05-14T12:36:26.645Z
+Stopped at: Completed Plan 30-04 (DEBT-05)
+Resume: Continue Phase 30 with remaining plans 30-02 (RBAC bedrock) and 30-03 (Architectural bedrock).
