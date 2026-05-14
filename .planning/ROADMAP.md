@@ -94,7 +94,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   3. `.importlinter` `modules-independent` контракт расширен на `trainers`, `payments`, `pt_packages`; три top-level контракта остаются неизменными по форме; `lint-imports` зелёный.
   4. SVC001 AST commit-gate walker покрывает `payments/service.py`, `trainers/service.py`, `pt_packages/service.py` (даже на заглушках); новый AST walker запрещает `UPDATE`/`DELETE` SQL против таблицы `payments` в любом service-файле, negative-test fixture проваливается на CI.
   5. v1.3 deferred gap закрыт — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` фильтрует по `query.status`; «Заморожен» pill на `/memberships` работает идентично в mock и http режимах; 1-2 mock-parity теста зафиксированы.
-**Plans:** 4/4 plans executed
+**Plans:** 4/4 plans complete
 - [x] 30-01-PLAN.md — Audit bedrock: LOCKED_AUDIT_EVENTS 34→51 + audit_payloads.py Pydantic schemas + emit() validation hook (INFRA-17, INFRA-23) — Wave 1
 - [x] 30-02-PLAN.md — RBAC bedrock: backend Resource/OWNER_ONLY +5/+11 + admin-web can.ts/registry.ts byte-paritet + parity test (INFRA-18, INFRA-19) — Wave 2
 - [x] 30-03-PLAN.md — Architectural bedrock: .importlinter modules-independent +2 + SVC001 walker scope +3 + new append-only AST walker + 5 fixtures + module placeholders (INFRA-20, INFRA-21, INFRA-22) — Wave 2
@@ -177,7 +177,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 30. Foundations & Tech-Debt Bedrock | 3/4 | In Progress|  |
+| 30. Foundations & Tech-Debt Bedrock | 4/4 | Complete    | 2026-05-14 |
 | 31. Trainers Module | 0/? | Not started | — |
 | 32. Payment Ledger + Sale Flow + Refund | 0/? | Not started | — |
 | 33. PT-Package Plans + Instances | 0/? | Not started | — |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
-status: executing
+status: ready_to_plan
 stopped_at: Completed Plan 30-03 (Architectural bedrock — INFRA-20 + INFRA-21 + INFRA-22; commits be962d7 + 091c8ee)
 last_updated: "2026-05-14T12:51:39Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
   completed_plans: 4
-  percent: 100
+  percent: 29
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: 30 (foundations-tech-debt-bedrock) — COMPLETE (4/4 plans)
-Plan: — (next: Phase 31 Trainers Module)
-Status: Phase 30 complete; ready to start Phase 31
+Phase: 31
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-14
 
 ## v1.4 Milestone Plan
