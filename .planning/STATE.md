@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: planning
-stopped_at: Phase 31 context gathered (auto mode)
-last_updated: "2026-05-14T13:08:03.944Z"
+stopped_at: Phase 31 UI-SPEC approved
+last_updated: "2026-05-14T13:15:59.386Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 7
@@ -108,6 +108,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-14T13:08:03.940Z
-Stopped at: Phase 31 context gathered (auto mode)
+Last session: 2026-05-14T13:15:59.382Z
+Stopped at: Phase 31 UI-SPEC approved
 Resume: Start Phase 31 (Trainers Module — TRN-01..08). Run `/gsd-discuss-phase 31` to lock context.
