@@ -23,6 +23,7 @@ import structlog
 
 from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
+from app.core.dependencies import register_client_by_telegram_resolver
 from app.core.logging import configure_logging
 from app.core.redis import redis_lifespan_manager
 from app.integrations.telegram import sender as telegram_sender
@@ -33,6 +34,7 @@ from app.integrations.telegram.handlers import (
     start_handler,
 )
 from app.modules.auth import telegram_service  # D-06 relaxation
+from app.modules.clients import service as clients_service  # REG-29-03 fix
 from app.modules.visits import service as visits_service  # D-10 relaxation
 
 # Sentinel matched against settings.telegram_bot_token; fresh-clone default
@@ -45,6 +47,16 @@ async def main() -> None:
     """Long-polling bot main loop."""
     settings = get_settings()
     configure_logging(settings)
+
+    # REG-29-03 (Phase 29 verification): the bot worker is a separate process
+    # from the FastAPI app, so it never goes through `app.main.create_app()`
+    # which is where the Protocol slot resolvers are registered. Without this
+    # call, `core.dependencies.resolve_client_by_telegram_user_id` returns
+    # None for every lookup, so every /checkin hits the no-active-membership
+    # oracle-safe shared DM (D-20-9) and the bot is effectively dead. Register
+    # the resolver here so the worker process can map Telegram user_id to
+    # Client the same way the API process does.
+    register_client_by_telegram_resolver(clients_service.resolve_client_by_telegram_user_id)
 
     if settings.telegram_bot_token.get_secret_value() == _PLACEHOLDER_TELEGRAM_BOT_TOKEN:
         log = structlog.get_logger("workers.telegram_bot")
