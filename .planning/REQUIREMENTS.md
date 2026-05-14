@@ -162,12 +162,28 @@ New for v1.4:
 
 ## Traceability
 
-To be filled by `gsd-roadmapper` during ROADMAP creation. Each REQ-ID maps to exactly one phase; 100% coverage required.
+Filled by `gsd-roadmapper` on 2026-05-14. Each REQ-ID maps to exactly one phase; 100% coverage validated (69/69).
 
-| Phase | REQ-IDs |
-|-------|---------|
-| (filled by roadmapper) | |
+| Phase | REQ-IDs | Count |
+|-------|---------|-------|
+| **Phase 30 — Foundations & Tech-Debt Bedrock** | INFRA-17, INFRA-18, INFRA-19, INFRA-20, INFRA-21, INFRA-22, INFRA-23, DEBT-05 | 8 |
+| **Phase 31 — Trainers Module** | TRN-01, TRN-02, TRN-03, TRN-04, TRN-05, TRN-06, TRN-07, TRN-08 | 8 |
+| **Phase 32 — Payment Ledger + Sale Flow + Refund** | PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07, PAY-08, PAY-09, PAY-10, REF-01, REF-02, REF-03, REF-04, REF-05, REF-06, REF-07, REF-08 | 18 |
+| **Phase 33 — PT-Package Plans + Instances** | PT-01, PT-02, PT-03, PT-04, PT-05, PT-06, PT-07, PT-08, PT-09, PT-10, PT-11, PT-12, PT-13 | 13 |
+| **Phase 34 — PT-Session Recording** | PT-14, PT-15, PT-16, PT-17, PT-18, PT-19, PT-20, PT-21, PT-22 | 9 |
+| **Phase 35 — OpenAPI Drift Gate + admin-web Full Wiring** | FE-10, FE-11, FE-12, FE-13, FE-14, FE-15, FE-16, FE-17, FE-18 | 9 |
+| **Phase 36 — Milestone Verification** | VER-01, VER-02, VER-03, VER-04 | 4 |
+| **TOTAL** | | **69 / 69** |
+
+Coverage: 100% (every v1.4 REQ-ID mapped to exactly one phase). Dependency ordering validated:
+- Phase 31 (Trainers) lands before Phase 34 (PT-sessions FK target).
+- Phase 32 (Payments + payment_recorder Protocol slot) lands before Phase 33 (PT-package sale consumes recorder).
+- Phase 33 (PT-package instances + sessions_remaining counter) lands before Phase 34 (PT-session decrement target).
+- Phase 35 (OpenAPI + admin-web wiring) lands after all backend Phases 31..34.
+- Phase 36 (verification) gates on Phase 35 (full stack required for smoke).
+
+REF-02 endpoint shape is defined in Phase 32 (RBAC + Protocol slot wiring) but the actual `POST /api/v1/pt-packages/{id}/refund` router lands in Phase 33 alongside the `pt_packages` module — this cross-phase coordination mirrors v1.3 Phase 24/25 audit-event pre-registration.
 
 ---
 
-*Requirements locked: 2026-05-14. Phase numbering continues from v1.3 (start at Phase 30).*
+*Requirements locked: 2026-05-14. Phase numbering continues from v1.3 (start at Phase 30). Roadmap created 2026-05-14 by `gsd-roadmapper`.*

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: planning
-last_updated: "2026-05-14T10:26:25.353Z"
+last_updated: "2026-05-14T14:30:00.000Z"
 last_activity: 2026-05-14
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Planning v1.4 — run `/gsd-new-milestone` to begin questioning → research → requirements → roadmap. Carry-over candidates listed in PROJECT.md under "Next Milestone Goals" (Billing, owner notification config, paid freeze, audit log read API, visit-count plans, admin-web housekeeping).
+**Current focus:** v1.4 — Cash Sales + PT Packages — roadmap locked (7 phases, 30..36, 69 requirements mapped). Next: run `/gsd-discuss-phase 30` to scope Phase 30 (Foundations & Tech-Debt Bedrock).
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 30 — Foundations & Tech-Debt Bedrock
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-14 — Milestone v1.4 started
+Status: planning (awaiting `/gsd-discuss-phase 30`)
+Last activity: 2026-05-14 — Roadmap created (7 phases, 69 REQ-IDs mapped, 100% coverage)
 
-## v1.3 Milestone Summary
+## v1.4 Milestone Plan
+
+**Phases:** 30 (Foundations & Tech-Debt) → 31 (Trainers) → 32 (Payments + Refund) → 33 (PT-Package Plans + Instances) → 34 (PT-Sessions) → 35 (OpenAPI + admin-web wiring) → 36 (Milestone Verification)
+**Cadence:** 6 feature phases + 1 verification phase (v1.3 cadence + 1 extra feature phase because PT-package plans/instances and PT-sessions cannot share one phase — sessions decrement instances and need them landed first).
+**Requirements:** 69 mapped (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 9 FE + 4 VER); 100% coverage validated.
+
+## v1.3 Milestone Summary (previous)
 
 **Shipped:** 2026-05-14 (6 days, 199 commits, 45 feat)
 **Phases:** 24 (Foundations & Tech-Debt) → 25 (Freeze) → 26 (Renewal) → 27 (Expiring-soon Telegram) → 28 (OpenAPI drift gate + admin-web wiring) → 29 (Milestone verification)
@@ -43,19 +49,35 @@ Last activity: 2026-05-14 — Milestone v1.4 started
 
 ### Decisions
 
-Full decisions log lives in PROJECT.md Key Decisions table. v1.3 added 12 new locked decisions covering status taxonomy guard, resolver defence-in-depth filter, mock/http parity for `?expiring=`/`?within=`, freeze concurrency / day accounting, renewal date strategy + pricing + tiebreak, expiring-soon idempotency + cron ordering, `LOCKED_AUDIT_EVENTS` pre-registration discipline, and Phase 29 as milestone-verification-as-audit.
+Full decisions log lives in PROJECT.md Key Decisions table.
 
-Locked v1.0–v1.2 invariants still hold (modular monolith with `core ⊥ modules` import-linter contract, Python package `app`, frontend integrity, inclusive `end_date`, `gym_date STORED + UNIQUE`, mandatory snapshot pricing, ARQ container `TZ=UTC` + `cron(unique=True, keep_result=60)`, cross-module Protocol callbacks via composition root, Telegram as separate long-polling worker, backend wire format camelCase via `BackendSchemaBase`, pagination `{items, total, page, pageSize}`).
+**v1.4 bedrock decisions (to be locked in Phase 30):**
+- B-01 — `payments` table append-only (no soft-delete, no UPDATE; AST-enforced)
+- B-02 — full-refund only in v1.4 (no pro-rata; defer to v1.5+)
+- B-03 — `LOCKED_AUDIT_EVENTS` pre-registered in Phase 30 before any callsite
+- B-04 — **PT-packages live in separate `pt_packages` module with dedicated tables** (variant B) — **CONFIRMED by user**
+- B-05 — `trainer_name_snapshot` on PT-session (historical UI integrity)
+- B-06 — no end-of-day cash-drawer close in v1.4 (deferred to v1.5)
+- B-07 — **uniform reception refund (no 24h owner-approval split)** — **CONFIRMED by user**; H-13 mitigated by AlertDialog + confirm checkbox
+- B-08 — refund of `frozen` membership → 409 `must_unfreeze_first`
+- B-09 — refund of renewed-source → 409 `cannot_refund_renewed_source`
+- B-10 — PT-package alone does NOT grant gym floor access
+- B-11 — PT-session backdating: reception 7d / owner unlimited
+- B-12 — PT-session cancellation: reception 24h / owner anytime; balance restored atomically
+
+v1.3 added 12 locked decisions covering status taxonomy guard, resolver defence-in-depth filter, mock/http parity for `?expiring=`/`?within=`, freeze concurrency / day accounting, renewal date strategy + pricing + tiebreak, expiring-soon idempotency + cron ordering, `LOCKED_AUDIT_EVENTS` pre-registration discipline, and Phase 29 as milestone-verification-as-audit.
+
+Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ modules` import-linter contract, Python package `app`, frontend integrity, inclusive `end_date`, `gym_date STORED + UNIQUE`, mandatory snapshot pricing, ARQ container `TZ=UTC` + `cron(unique=True, keep_result=60)`, cross-module Protocol callbacks via composition root, Telegram as separate long-polling worker, backend wire format camelCase via `BackendSchemaBase`, pagination `{items, total, page, pageSize}`).
 
 ### Pending Todos
 
-None at milestone-close time. The next `/gsd-new-milestone` will surface v1.4 candidates.
+- Run `/gsd-discuss-phase 30` to lock Phase 30 plan (Foundations & Tech-Debt Bedrock).
 
 ### Blockers/Concerns
 
-None blocking v1.4 start. Open watch-items:
+None blocking Phase 30 start. Open watch-items inherited from v1.3:
 
-- v1.1 `06-HUMAN-UAT.md` and `08-HUMAN-UAT.md` advisory scenarios were not exercised in Phase 29 sweep — re-evaluate at v1.4 scoping if any touch user-facing flows.
+- v1.1 `06-HUMAN-UAT.md` and `08-HUMAN-UAT.md` advisory scenarios were not exercised in Phase 29 sweep — re-evaluate at Phase 36 verification if any touch user-facing flows.
 - The `260501-ndi` orphan directory in `.planning/quick/` should be archived during a future `/gsd-cleanup` run.
 
 ### Quick Tasks Completed
@@ -68,27 +90,17 @@ None blocking v1.4 start. Open watch-items:
 
 ## Deferred Items
 
-Items carried into v1.3 from v1.1/v1.2 close (all resolved during v1.3):
+Items carried into v1.4 from v1.3 close:
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| tech_debt | MEM-04 D-13: resolver `end_date >= today` filter | ✅ closed | v1.2 close | Phase 24 / DEBT-01 |
-| tech_debt | WR-07: backend `?expiring=` query parity | ✅ closed | v1.2 close | Phase 24 / DEBT-02 |
-| tech_debt | SVC001 walker scope → auth/service.py | ✅ closed | v1.2 close | Phase 24 / DEBT-03 |
-| uat_gap | 22-VERIFICATION 6 human_verification smoke tests | ✅ closed | v1.2 close | Phase 29 / DEBT-04 (7/7 passed against live stack) |
+| verification_gap | Phase 28 — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` does not filter by `query.status` | scheduled-v1.4 | v1.3 close | Phase 30 / DEBT-05 (one-liner + parity tests) |
+| quick_task | `260501-ndi` orphan in `.planning/quick/` from v1.0 era | acknowledged | v1.3 close | Defer to `/gsd-cleanup` |
 | uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
 | uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
-| quick_task | 260501-ndi (status metadata missing; commit shipped) | missing-meta | v1.1 close | informational only |
-
-### Items acknowledged and deferred at milestone close on 2026-05-14
-
-| Category | Item | Status | Notes |
-|----------|------|--------|-------|
-| verification_gap | Phase 28 — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` does not filter by `query.status`; «Заморожен» filter pill on `/memberships` is a no-op under `VITE_API_MODE=mock` | deferred-to-v1.4 | Mock-only; `http` (production) path forwards `status` correctly. One-line fix recorded in `.planning/phases/28-openapi-drift-gate-refresh-admin-web-wiring/28-VERIFICATION.md` gap block. Will fold into v1.4 admin-web housekeeping. |
-| quick_task | `260501-ndi` orphan in `.planning/quick/` from v1.0 era | acknowledged | Task itself completed 2026-05-01 (commits `71f28de`, `efdb7cc`); only the directory listing remains. Defer to `/gsd-cleanup`. |
 
 ## Session Continuity
 
-Last session: 2026-05-14T10:05:00Z
-Stopped at: v1.3 milestone close and archive complete
-Resume: Run `/gsd-new-milestone` to scope v1.4.
+Last session: 2026-05-14T14:30:00Z
+Stopped at: v1.4 roadmap created (7 phases 30..36, 69 REQ-IDs mapped, 100% coverage validated, bedrock decisions B-04/B-07 confirmed)
+Resume: Run `/gsd-discuss-phase 30` to begin Phase 30 (Foundations & Tech-Debt Bedrock).
