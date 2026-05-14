@@ -22,18 +22,36 @@ Sportzal — CRM для тренажёрного зала. Пет-проект �
 
 Cumulative shipped versions: v1.0 (Skeleton, 47/47), v1.1 (Auth + Clients, 70/70), v1.2 (Memberships + Visits, 63/63), v1.3 (Memberships Extras + Tech-Debt, 44/44). See `MILESTONES.md` for full history and `.planning/milestones/v1.X-ROADMAP.md` for per-milestone phase breakdowns.
 
-## Next Milestone Goals
+## Current Milestone: v1.4 Cash Sales + PT Packages
 
-v1.4 is **not yet scoped** — start with `/gsd-new-milestone` (questioning → research → requirements → roadmap). Likely candidates carried into discovery:
+**Goal:** Закрыть критический MVP-gap "симуляция продажи без денег" + добавить персональные тренировки как новый тип услуги, чтобы зал реально мог принимать клиентов на двух тарифах (месячный абонемент и ПТ-пакет) с настоящим учётом наличных и возвратов.
 
-- **Billing (full category)** — ЮKassa intake + webhooks + 54-ФЗ чеки + refund flows + card vault + receipts UI. Largest remaining business gap; self-contained milestone of its own.
-- **Owner UI for notification config** — opting in/out of expiring pings per-plan or per-client (v1.3 ships hardcoded 7+3+1 cadence).
-- **Paid freeze model** — kopecks/day pricing; depends on Billing.
-- **Audit log read API + UI** — `GET /api/v1/audit-log` (owner-only) with filters.
-- **Visit-count / hybrid plans** — `visit_count` on plan + `visits_used` on membership.
-- **Admin-web housekeeping** — close v1.3 deferred `mock/memberships.ts` `?status=` filter parity gap; review v1.1 06/08 HUMAN-UAT residual scenarios.
+**Target features:**
+- **Payment ledger (наличные)** — каждая продажа абонемента/пакета фиксирует платёж (сумма, кто из ресепшена принял, когда); история платежей видна на карточке клиента и в карточке абонемента. Без ЮKassa, без чеков 54-ФЗ.
+- **Refund flow** — ресепшен возвращает деньги напрямую, без owner approval; возврат отменяет абонемент/пакет и фиксируется в audit log.
+- **PT-пакет (новый тип услуги)** — новый kind плана `pt_package` с `session_count`; параллельно с месячными абонементами; клиент может иметь оба одновременно.
+- **Trainers catalog** — owner-only справочник тренеров (имя, телефон опционально, active/inactive); без расписания, зарплат, смен.
+- **PT session recording** — ресепшен фиксирует "клиент использовал 1 ПТ с тренером Y"; баланс пакета списывается; история занятий на карточке.
+- **Admin UI** — обновлённый sale flow с записью оплаты, refund-кнопка, `/trainers` страница, UI записи ПТ-занятия, детали ПТ-пакета с балансом и историей.
+- **Tech-debt carryover** — v1.3 deferred `mock/memberships.ts` `?status=` filter parity (one-liner).
 
-These are candidates, not commitments — `/gsd-new-milestone` revisits scope against the latest project state before the next roadmap is drawn.
+**Key context:**
+- ❌ Онлайн-оплата отложена в v1.6 (ЮKassa); сейчас только наличные.
+- ❌ Чеки 54-ФЗ не делаем (серая зона).
+- ❌ Расчёт зарплат тренерам — не в этом milestone (тренеры только справочник).
+- ❌ Reports/dashboard для собственника отложены в v1.5 — v1.4 только записывает данные.
+- ✅ ПТ-пакет — новая модель `pt_package` рядом с существующими `duration` планами; не visit-count на тех же memberships.
+- ✅ Refund — без двойного approval, ресепшен сам.
+
+## Long-term MVP roadmap (post-v1.4)
+
+| Milestone | Focus |
+|---|---|
+| **v1.5 — Reports + Audit Log** | Дашборд собственника (выручка по дням/месяцам, активные/истекающие клиенты), `GET /api/v1/audit-log` + UI |
+| **v1.6 — Online Payments (ЮKassa)** | Когда зал будет готов принимать карты онлайн: ЮKassa intake + webhooks + чеки 54-ФЗ |
+| **v1.7 — UI polish** | Прицельная работа над админкой под ежедневную работу ресепшена (формы, скорость типовых сценариев, планшет/mobile) |
+
+После v1.5 зал может работать каждый день. v1.6 + v1.7 — расширение и шлифовка.
 
 <details>
 <summary>Previous milestone scope (v1.3 — shipped 2026-05-14)</summary>
@@ -115,9 +133,15 @@ Target features (all delivered):
 - ✓ admin-web wiring on `VITE_API_MODE=http`: full v1.2 flow ships with `/membership-plans` (owner-only `beforeLoad`), `/memberships`, `/visits` reception check-in (FE-08 a..d edges: top-5 disambiguation, already-checked-in HH:MM badge, expires-today informational badge with button stays enabled, outside-hours disable + tooltip), `/clients/$clientId` Pattern α route (Promise.all loader of 3 `ensureQueryData` calls + ESLint `import/no-restricted-paths` zone forbidding `features/clients → features/{memberships,visits}`), `/profile` active-sessions UI (http-only по D-22-2); cheap-win differentiators D-2/D-3/D-5 — v1.2 (Phase 22)
 - ✓ Auth hygiene + active sessions backend: HYG-01 `/auth/login` Argon2 verify-error → 401 `invalid_credentials` (was 500), structlog WARNING; HYG-02 tampered cookie UUID → 401 `invalid_session` (was 500); HYG-03 `GET /api/v1/auth/sessions` lists family records and `POST /api/v1/auth/sessions/{family_id}/revoke` (CSRF) revokes a single family — feeds FE-09 SessionsList/LogoutAllDialog — v1.2 (Phase 23)
 
-### Active (next milestone — not yet scoped)
+### Active (v1.4 — Cash Sales + PT Packages)
 
-`.planning/REQUIREMENTS.md` will be created by `/gsd-new-milestone` after milestone scope is questioned and a roadmap is drawn. Carry-over candidates listed under **Next Milestone Goals** above; nothing is committed until `/gsd-new-milestone` produces a fresh requirements file.
+See `.planning/REQUIREMENTS.md` for the locked REQ-IDs. Themes:
+- **Payments (cash-only)** — payment ledger on sale, history surface, refund flow without owner approval
+- **PT packages** — new `pt_package` plan kind with `session_count`; PT-membership instances; session-decrement on use
+- **Trainers** — owner-only lightweight catalog (no schedule, no payroll)
+- **PT session recording** — reception-driven session log linked to trainer + PT-package; balance accounting
+- **Admin-web wiring** — sale-with-payment flow, refund button, `/trainers` page, PT session UI, PT package detail page
+- **Tech-debt carryover** — v1.3 deferred `mock/memberships.ts` `?status=` filter parity
 
 ### Out of Scope
 
@@ -221,4 +245,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-14 — v1.3 (Memberships Extras + Tech-Debt) milestone shipped*
+*Last updated: 2026-05-14 — v1.4 (Cash Sales + PT Packages) milestone scoped*

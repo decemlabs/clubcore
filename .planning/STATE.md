@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Memberships Extras + Tech-Debt
-status: milestone_complete
-stopped_at: v1.3 milestone closed and archived
-last_updated: "2026-05-14T10:05:00Z"
-last_activity: 2026-05-14 -- v1.3 milestone completed and archived; awaiting /gsd-new-milestone for v1.4 scoping
+milestone: v1.4
+milestone_name: Cash Sales + PT Packages
+status: planning
+last_updated: "2026-05-14T10:26:25.353Z"
+last_activity: 2026-05-14
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 33
-  completed_plans: 33
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,11 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Milestone: v1.3 — ✓ SHIPPED 2026-05-14
-Phase: none active
-Plan: none active
-Status: between milestones — fresh `.planning/REQUIREMENTS.md` will be created by `/gsd-new-milestone`
-Last activity: 2026-05-14 -- v1.3 archived (6 phases, 33 plans, 44/44 requirements, 199 commits over 6 days)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-14 — Milestone v1.4 started
 
 ## v1.3 Milestone Summary
 
@@ -56,6 +54,7 @@ None at milestone-close time. The next `/gsd-new-milestone` will surface v1.4 ca
 ### Blockers/Concerns
 
 None blocking v1.4 start. Open watch-items:
+
 - v1.1 `06-HUMAN-UAT.md` and `08-HUMAN-UAT.md` advisory scenarios were not exercised in Phase 29 sweep — re-evaluate at v1.4 scoping if any touch user-facing flows.
 - The `260501-ndi` orphan directory in `.planning/quick/` should be archived during a future `/gsd-cleanup` run.
 
