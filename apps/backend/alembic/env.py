@@ -25,6 +25,7 @@ from app.core.database import Base
 import app.modules.auth.models
 import app.modules.clients.models
 import app.modules.memberships.models
+import app.modules.trainers.models  # Phase 31 TRN-01
 import app.modules.visits.models
 import app.core.audit_models  # noqa: F401
 
@@ -63,8 +64,10 @@ def _include_object(
         in (
             "ix_clients_last_name_trgm",
             "ix_clients_first_name_trgm",
+            "uq_clients_phone_alive",
             "uq_membership_plans_name_alive",
             "uq_membership_freeze_periods_active_per_membership",
+            "uq_trainers_phone_alive",  # Phase 31: partial index, skip autogenerate drift
         )
     )
 

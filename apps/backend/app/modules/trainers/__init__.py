@@ -1,1 +1,1 @@
-"""Trainers module placeholder. TODO Phase B+: trainer profiles + assignments."""
+"""Trainers module — Phase 31 (TRN-01..07)."""
