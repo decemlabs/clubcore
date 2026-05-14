@@ -22,3 +22,4 @@ node_modules/
 pnpm-debug.log*
 yarn-debug.log*
 npm-debug.log*
+.planning/milestones/v1.3-verification-evidence/

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Memberships Extras + Tech-Debt
-status: executing
-stopped_at: Phase 29 context gathered
-last_updated: "2026-05-14T07:12:11.798Z"
-last_activity: 2026-05-14 -- Phase 29 planning complete
+status: ready_to_close
+stopped_at: Phase 29 complete (7/7 verification scenarios passed, 3 production blockers fixed inline)
+last_updated: "2026-05-14T09:45:00Z"
+last_activity: 2026-05-14 -- Phase 29 verified passed; ready for /gsd-complete-milestone
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 33
-  completed_plans: 27
-  percent: 82
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-08)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 27 — expiring-soon-telegram-notifications
+**Current focus:** Milestone v1.3 close — Phase 29 verified passed; awaiting `/gsd-complete-milestone` to author v1.3-MILESTONE-AUDIT.md and archive Phases 24-29.
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-14 -- Phase 29 planning complete
+Phase: 29 (Milestone Verification) — ✓ COMPLETE
+Plan: 6 of 6 complete
+Status: Milestone ready to close
+Last activity: 2026-05-14 -- Phase 29 closed; status passed; 3 production-blocker regressions fixed inline, 1 minor UX deferred to v1.4 backlog
 
 ## Performance Metrics
 
