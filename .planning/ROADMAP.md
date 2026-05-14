@@ -75,7 +75,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 ### 🚧 v1.4 Cash Sales + PT Packages (Phases 30-36) — IN PROGRESS
 
 - [x] **Phase 30: Foundations & Tech-Debt Bedrock** — INFRA-17/18/19/20/21/22/23 + DEBT-05 (8 reqs) — `LOCKED_AUDIT_EVENTS` 34→51, Resource/OWNER_ONLY extension, import-linter modules list, SVC001 walker scope, append-only `payments` AST guard, v1.3 mock `?status=` parity fix
-- [ ] **Phase 31: Trainers Module** — TRN-01..08 (8 reqs) — `trainers` table + CRUD + `is_active` deactivate/reactivate + Protocol slot resolver + admin-web `/trainers` page
+- [x] **Phase 31: Trainers Module** — TRN-01..08 (8 reqs) — `trainers` table + CRUD + `is_active` deactivate/reactivate + Protocol slot resolver + admin-web `/trainers` page
 - [ ] **Phase 32: Payment Ledger + Sale Flow + Refund** — PAY-01..10 + REF-01..08 (18 reqs) — `payments` append-only ledger + `record_payment`/`issue_refund` services + Protocol slots + `Idempotency-Key` header + `POST /memberships/{id}/refund` + frozen/renewed-source guards
 - [ ] **Phase 33: PT-Package Plans + Instances** — PT-01..13 (13 reqs) — `pt_package_plans` + `pt_packages` tables + sell/cancel/refund endpoints + status transitions + `expire_pt_packages` ARQ cron 06:25 MSK
 - [ ] **Phase 34: PT-Session Recording** — PT-14..22 (9 reqs) — `pt_sessions` table + race-safe decrement + auto-exhausted transition + cancel with balance restore + backdating windows

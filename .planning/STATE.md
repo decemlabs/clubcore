@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
-stopped_at: Phase 31 UI-SPEC approved
-last_updated: "2026-05-14T13:35:05.128Z"
-last_activity: 2026-05-14 -- Phase 31 planning complete
+stopped_at: Phase 31 complete — backend + admin-web shipped (4 commits + 2 SUMMARY.md); verifier 5/5 must-haves; 2 human-UAT items deferred
+last_updated: "2026-05-14T14:17:24.585Z"
+last_activity: 2026-05-14 -- Phase 31 execution started
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 4
-  percent: 67
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 30 — foundations-tech-debt-bedrock
+**Current focus:** Phase 31 — trainers-module
 
 ## Current Position
 
-Phase: 31
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-14 -- Phase 31 planning complete
+Phase: 31 (trainers-module) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 31
+Last activity: 2026-05-14 -- Phase 31 execution started
 
 ## v1.4 Milestone Plan
 
@@ -108,6 +108,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-14T13:15:59.382Z
-Stopped at: Phase 31 UI-SPEC approved
+Last session: 2026-05-14T14:17:24.580Z
+Stopped at: Phase 31 complete — backend + admin-web shipped (4 commits + 2 SUMMARY.md); verifier 5/5 must-haves; 2 human-UAT items deferred
 Resume: Start Phase 31 (Trainers Module — TRN-01..08). Run `/gsd-discuss-phase 31` to lock context.
