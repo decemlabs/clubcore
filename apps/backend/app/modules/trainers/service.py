@@ -79,7 +79,7 @@ async def create_trainer(
         actor_user_id=actor.id,
         resource_type="trainer",
         resource_id=trainer.id,
-        trainer_id=trainer.id,
+        trainer_id=str(trainer.id),
         full_name=trainer.full_name,
         phone=trainer.phone,  # required by TrainerCreatedPayload even when None
     )
@@ -130,7 +130,7 @@ async def update_trainer(
                 actor_user_id=actor.id,
                 resource_type="trainer",
                 resource_id=trainer.id,
-                trainer_id=trainer.id,
+                trainer_id=str(trainer.id),
             )
         else:
             await audit.emit(
@@ -139,7 +139,7 @@ async def update_trainer(
                 actor_user_id=actor.id,
                 resource_type="trainer",
                 resource_id=trainer.id,
-                trainer_id=trainer.id,
+                trainer_id=str(trainer.id),
             )
 
     if other_changed:
@@ -149,7 +149,7 @@ async def update_trainer(
             actor_user_id=actor.id,
             resource_type="trainer",
             resource_id=trainer.id,
-            trainer_id=trainer.id,
+            trainer_id=str(trainer.id),
             changed_fields=sorted(other_changed.keys()),
         )
 
