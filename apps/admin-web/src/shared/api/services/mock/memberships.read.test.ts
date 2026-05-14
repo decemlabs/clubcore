@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useSessionStore } from '@/shared/session/store'
 import { memberships } from './memberships'
-import { resetDB, loadDB } from './_db'
+import { resetDB, loadDB, saveDB } from './_db'
 import { isDomainError } from '@/shared/api/errors'
-import type { MembershipPlanId } from '@/entities/membership'
+import { todayMSK } from '@/shared/i18n/date'
+import type { Membership, MembershipId, MembershipPlanId } from '@/entities/membership'
 
 describe('mock/memberships RBAC + shape', () => {
   beforeEach(() => {
@@ -217,5 +218,86 @@ describe('mock/memberships RBAC + shape', () => {
     const active = await memberships.list({ page: 1, pageSize: 1000, status: 'active' })
     expect(active.items.every((m) => m.status === 'active')).toBe(true)
     expect(frozen.items.length + active.items.length).toBeLessThanOrEqual(all.total)
+  })
+
+  // Phase 30 DEBT-05 (v1.3 Phase 28 gap closure) — mock-parity for status×expiring combination.
+  // Note: the verbatim DEBT-05 REQ wording mentions the «Заморожен» pill (status=frozen,
+  // expiring=false) — that path already worked pre-fix via the early `if (query.status)`
+  // filter; test 2 is a regression-guard for that. The ACTUAL bug fixed is status+expiring=true
+  // (test 1) where the expiring branch hardcoded m.status === 'active'.
+  it('list applies query.status inside the expiring branch (DEBT-05)', async () => {
+    useSessionStore.setState({ role: 'owner' })
+    // Seeded DB (faker.seed=42) generates only active/expired/cancelled rows.
+    // Inject one frozen row inside the expiring window AND one active row inside the
+    // expiring window so the test discriminates between the buggy (hardcoded 'active')
+    // and fixed (query.status-respecting) implementations.
+    const db = loadDB()
+    const today = todayMSK()
+    const cutoff = new Date(today)
+    cutoff.setUTCDate(cutoff.getUTCDate() + 3) // within default 7-day window
+    const cutoffStr = cutoff.toISOString().slice(0, 10)
+    const sample = db.memberships[0]!
+    const frozenExpiringRow: Membership = {
+      ...sample,
+      id: 'debt05-frozen-expiring' as MembershipId,
+      status: 'frozen',
+      startDate: today,
+      endDate: cutoffStr,
+    }
+    const activeExpiringRow: Membership = {
+      ...sample,
+      id: 'debt05-active-expiring' as MembershipId,
+      status: 'active',
+      startDate: today,
+      endDate: cutoffStr,
+    }
+    db.memberships.push(frozenExpiringRow, activeExpiringRow)
+    saveDB(db)
+
+    const frozenExpiring = await memberships.list({
+      page: 1,
+      pageSize: 1000,
+      expiring: true,
+      status: 'frozen',
+    })
+    // Every returned membership has status='frozen' — the hardcoded 'active' bug is gone.
+    expect(frozenExpiring.items.length).toBeGreaterThan(0)
+    expect(frozenExpiring.items.every((m) => m.status === 'frozen')).toBe(true)
+    expect(frozenExpiring.items.some((m) => m.id === 'debt05-frozen-expiring')).toBe(true)
+    // Pre-fix the buggy branch would have returned the active-expiring row instead;
+    // assert the active-expiring injected row is NOT present when status=frozen requested.
+    expect(frozenExpiring.items.some((m) => m.id === 'debt05-active-expiring')).toBe(false)
+
+    // The default (no explicit status) still falls back to 'active' for back-compat.
+    const activeExpiring = await memberships.list({
+      page: 1,
+      pageSize: 1000,
+      expiring: true,
+    })
+    expect(activeExpiring.items.every((m) => m.status === 'active')).toBe(true)
+    expect(activeExpiring.items.some((m) => m.id === 'debt05-active-expiring')).toBe(true)
+  })
+
+  it('list({ status: "frozen", expiring: false }) returns only frozen memberships (DEBT-05)', async () => {
+    useSessionStore.setState({ role: 'owner' })
+    // Seeded DB has no frozen rows — inject one so the assertion is load-bearing.
+    const db = loadDB()
+    const sample = db.memberships[0]!
+    const frozenRow: Membership = {
+      ...sample,
+      id: 'debt05-frozen-pill' as MembershipId,
+      status: 'frozen',
+    }
+    db.memberships.push(frozenRow)
+    saveDB(db)
+
+    const frozen = await memberships.list({
+      page: 1,
+      pageSize: 1000,
+      status: 'frozen',
+      expiring: false,
+    })
+    expect(frozen.items.length).toBeGreaterThan(0)
+    expect(frozen.items.every((m) => m.status === 'frozen')).toBe(true)
   })
 })

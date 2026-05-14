@@ -49,8 +49,15 @@ export const memberships: MembershipsService = {
       const cutoff = new Date(todayStr)
       cutoff.setUTCDate(cutoff.getUTCDate() + (within - 1))
       const cutoffStr = cutoff.toISOString().slice(0, 10)
+      // DEBT-05: respect query.status across expiring branch (was hardcoded 'active').
+      // The verbatim REQ wording mentions the «Заморожен» pill no-op, but that path
+      // (status=frozen, expiring=false) already works via the early `if (query.status)`
+      // filter above. The actual bug is the status+expiring=true combination where the
+      // expiring branch hardcoded `m.status === 'active'` and overrode the user's status
+      // filter. The fix respects query.status here too. Phase 30 / v1.3 Phase 28 gap closure.
+      const wantedStatus = query.status ?? 'active'
       const items = all.filter(
-        (m) => m.status === 'active' && m.endDate >= todayStr && m.endDate <= cutoffStr,
+        (m) => m.status === wantedStatus && m.endDate >= todayStr && m.endDate <= cutoffStr,
       )
       return { items, total: items.length, page: 1, pageSize: Math.max(1, items.length) }
     }
