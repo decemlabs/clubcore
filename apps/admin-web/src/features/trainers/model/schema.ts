@@ -7,8 +7,14 @@ export const createTrainerSchema = z.object({
   fullName: z.string().min(1, 'Укажите ФИО').max(200),
   phone: z
     .string()
-    .regex(PHONE_REGEX, 'Введите телефон в формате +7XXXXXXXXXX')
-    .nullable()
+    .transform((v) => (v === '' ? undefined : v))
+    .pipe(
+      z
+        .string()
+        .regex(PHONE_REGEX, 'Введите телефон в формате +7XXXXXXXXXX')
+        .nullable()
+        .optional(),
+    )
     .optional(),
 })
 
