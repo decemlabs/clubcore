@@ -163,7 +163,14 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   2. Cross-phase smoke сценарий "freeze → renewal → expiring-soon" работает end-to-end: продаём membership → замораживаем на 5 дней → размораживаем → продлеваем → дожидаемся 06:15 cron → 7d/3d/1d DM приходят на Telegram sandbox; ни один шаг не падает.
   3. Backend test suite зелёный (≥600 tests), admin-web suite зелёный (≥190 tests), все CI gates (ruff + mypy strict + import-linter + eslint + drift-gate) зелёные.
   4. Verification report подшит в `.planning/milestones/v1.3-MILESTONE-AUDIT.md` (или эквивалентный артефакт от `/gsd-complete-milestone`); выявленные регрессии закрыты или явно перенесены в v1.4 deferred items.
-**Plans:** TBD
+**Plans:** 6 plans
+Plans:
+- [ ] 29-01-PLAN.md — Live stack setup recipe + verification-fixture seed script (D-29-01, D-29-02)
+- [ ] 29-02-PLAN.md — One-shot expiring-cron runner script (D-29-03)
+- [ ] 29-03-PLAN.md — Execute DEBT-04 scenarios 1-6 against live stack
+- [ ] 29-04-PLAN.md — Execute cross-phase smoke recipe (D-29-08 8-step)
+- [ ] 29-05-PLAN.md — Capture test-suite + CI-gate evidence
+- [ ] 29-06-PLAN.md — Finalize verification log + STATE.md + tear-down
 
 Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 
