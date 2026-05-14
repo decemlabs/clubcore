@@ -20,6 +20,7 @@ export const ru = {
       membershipPlans: 'Тарифы', // NEW Phase 22 D-22-4
       schedule: 'Расписание',
       staff: 'Сотрудники',
+      trainers: 'Тренеры', // Phase 31 D-31-19
       finance: 'Финансы',
       settings: 'Настройки',
     },
@@ -382,6 +383,72 @@ export const ru = {
     },
     errors: {
       mockNotImplemented: 'Управление сессиями недоступно в демо-режиме. Используйте VITE_API_MODE=http.',
+    },
+  },
+  trainers: {
+    heading: 'Тренеры',
+    actions: {
+      create: 'Добавить тренера',
+      edit: 'Редактировать тренера',
+      delete: 'Удалить тренера',
+    },
+    columns: {
+      fullName: 'ФИО',
+      phone: 'Телефон',
+      status: 'Статус',
+    },
+    status: {
+      active: 'Активен',
+      inactive: 'Неактивен',
+    },
+    filter: {
+      active: 'Активные',
+      inactive: 'Неактивные',
+      all: 'Все',
+    },
+    form: {
+      createHeading: 'Добавить тренера',
+      editHeading: 'Редактировать тренера',
+      fields: {
+        fullName: 'ФИО',
+        phone: 'Телефон',
+        isActive: 'Активный тренер',
+      },
+      saveCreate: 'Добавить тренера',
+      saveEdit: 'Сохранить изменения',
+      submitting: 'Сохраняется…',
+      cancel: 'Отмена',
+    },
+    dialog: {
+      deleteTitle: 'Удалить тренера?',
+      deleteBody: 'Тренер {fullName} будет удалён без возможности восстановления.',
+      deleteConfirm: 'Удалить',
+      deleteCancel: 'Не удалять',
+    },
+    empty: {
+      heading: 'Тренеров пока нет',
+      body: 'Добавьте первого тренера, нажав «Добавить тренера».',
+    },
+    noResults: {
+      heading: 'Нет тренеров',
+      body: 'Попробуйте изменить фильтр.',
+    },
+    errorState: {
+      heading: 'Не удалось загрузить тренеров',
+    },
+    toast: {
+      created: 'Тренер добавлен',
+      updated: 'Тренер сохранён',
+      deactivated: 'Тренер деактивирован',
+      reactivated: 'Тренер активирован',
+      deleted: 'Тренер удалён',
+    },
+    errors: {
+      phoneDuplicate: 'Тренер с таким телефоном уже существует',
+      phoneFormat: 'Введите телефон в формате +7XXXXXXXXXX',
+      fullNameRequired: 'Укажите ФИО',
+      trainerInUse:
+        'Тренер ведёт персональные тренировки и не может быть удалён. Деактивируйте тренера вместо удаления.',
     },
   },
 } as const

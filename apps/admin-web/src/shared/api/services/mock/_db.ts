@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker'
 import type { Client, ClientId } from '@/entities/client'
 import type { Membership, MembershipId, MembershipPlan, MembershipPlanId, MembershipStatus, FreezePeriod } from '@/entities/membership'
+import type { Trainer } from '@/entities/trainer'
 import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
 
 const STORAGE_KEY = 'sportzal:mock:v1'
@@ -13,6 +14,7 @@ export interface DB {
   clients: Client[]
   memberships: Membership[]
   plans: MembershipPlan[]
+  trainers: Trainer[]
   visits: Visit[]
 }
 
@@ -149,7 +151,7 @@ function seed(): DB {
   const visits: Visit[] = Array.from({ length: VISIT_COUNT }, () =>
     generateVisit(clients, memberships),
   )
-  const db: DB = { clients, memberships, plans, visits }
+  const db: DB = { clients, memberships, plans, trainers: [], visits }
   saveDB(db)
   return db
 }
@@ -173,6 +175,10 @@ export function loadDB(): DB {
       // (byClient, recent visits). It's a dev-mode mock store; seeding fresh
       // is simpler and correct.
       return seed()
+    }
+    // D-31-23: within-version migration — add trainers array if missing from older payload.
+    if (!Array.isArray(parsed.trainers)) {
+      parsed.trainers = []
     }
     return parsed as DB
   } catch {
