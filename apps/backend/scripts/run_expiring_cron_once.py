@@ -46,6 +46,18 @@ from app.core.config import get_settings
 from app.workers import WorkerSettings
 from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 
+# REG-29-04 (Phase 29 wave 3): SQLAlchemy resolves FK references lazily at
+# first flush. The cron callable inserts audit_log rows that FK into users
+# and clients, but neither models module is imported transitively from
+# send_expiring_notifications, so the FK target tables are unknown to
+# Base.metadata when the runner triggers commit. Eager-import the four
+# models touched by the cron + audit path so all tables are registered
+# before the session opens.
+from app.modules.auth import models as _auth_models  # noqa: F401 — eager FK reg
+from app.modules.clients import models as _client_models  # noqa: F401 — eager FK reg
+from app.modules.memberships import models as _memberships_models  # noqa: F401 — eager FK reg
+from app.modules.visits import models as _visits_models  # noqa: F401 — eager FK reg
+
 
 async def _run() -> int:
     # TM-29-02: refuse to run against a non-local DATABASE_URL.
