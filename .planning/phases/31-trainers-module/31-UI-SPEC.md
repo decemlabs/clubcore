@@ -1,10 +1,14 @@
 ---
 phase: 31
 slug: trainers-module
-status: draft
+status: approved
 shadcn_initialized: true
 preset: base-nova / neutral / cssVariables
 created: 2026-05-14
+reviewed_at: 2026-05-14
+review_flags:
+  - "D1 copywriting: 'Отмена' / 'Удалить' single-word labels — idiomatic RU admin UI; non-blocking"
+  - "D2 visuals: focal point implied (primary CTA 'Добавить тренера' top-right); add aria-label to icon-only Pencil/Trash2 buttons during execution per Russian dict keys 'trainers.actions.edit' / 'trainers.actions.delete'"
 ---
 
 # Phase 31 — UI Design Contract: Trainers Module
