@@ -4,14 +4,14 @@ milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
 stopped_at: Phase 30 context gathered
-last_updated: "2026-05-14T12:21:36.956Z"
-last_activity: 2026-05-14 -- Phase 30 planning complete
+last_updated: "2026-05-14T12:31:11.257Z"
+last_activity: 2026-05-14
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v1.4 — Cash Sales + PT Packages — roadmap locked (7 phases, 30..36, 69 requirements mapped). Next: run `/gsd-discuss-phase 30` to scope Phase 30 (Foundations & Tech-Debt Bedrock).
+**Current focus:** Phase 30 — foundations-tech-debt-bedrock
 
 ## Current Position
 
-Phase: 30 — Foundations & Tech-Debt Bedrock
-Plan: —
+Phase: 30 (foundations-tech-debt-bedrock) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-05-14 -- Phase 30 planning complete
+Last activity: 2026-05-14
 
 ## v1.4 Milestone Plan
 
@@ -71,6 +71,8 @@ v1.3 added 12 locked decisions covering status taxonomy guard, resolver defence-
 
 Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ modules` import-linter contract, Python package `app`, frontend integrity, inclusive `end_date`, `gym_date STORED + UNIQUE`, mandatory snapshot pricing, ARQ container `TZ=UTC` + `cron(unique=True, keep_result=60)`, cross-module Protocol callbacks via composition root, Telegram as separate long-polling worker, backend wire format camelCase via `BackendSchemaBase`, pagination `{items, total, page, pageSize}`).
 
+- [Phase ?]: D-30-01..D-30-04 implemented in Plan 30-01: 17 Pydantic v2 audit payload schemas with extra='forbid', registry AUDIT_PAYLOAD_SCHEMAS in audit_payloads.py, emit() validates after locked-set check, payment_row_hash pattern ^sha256:[0-9a-f]{64}$ locked
+
 ### Pending Todos
 
 - Run `/gsd-discuss-phase 30` to lock Phase 30 plan (Foundations & Tech-Debt Bedrock).
@@ -103,6 +105,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-14T11:46:53.754Z
+Last session: 2026-05-14T12:31:03.549Z
 Stopped at: Phase 30 context gathered
 Resume: Run `/gsd-discuss-phase 30` to begin Phase 30 (Foundations & Tech-Debt Bedrock).
