@@ -74,7 +74,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 
 ### 🚧 v1.4 Cash Sales + PT Packages (Phases 30-36) — IN PROGRESS
 
-- [ ] **Phase 30: Foundations & Tech-Debt Bedrock** — INFRA-17/18/19/20/21/22/23 + DEBT-05 (8 reqs) — `LOCKED_AUDIT_EVENTS` 34→51, Resource/OWNER_ONLY extension, import-linter modules list, SVC001 walker scope, append-only `payments` AST guard, v1.3 mock `?status=` parity fix
+- [x] **Phase 30: Foundations & Tech-Debt Bedrock** — INFRA-17/18/19/20/21/22/23 + DEBT-05 (8 reqs) — `LOCKED_AUDIT_EVENTS` 34→51, Resource/OWNER_ONLY extension, import-linter modules list, SVC001 walker scope, append-only `payments` AST guard, v1.3 mock `?status=` parity fix
 - [ ] **Phase 31: Trainers Module** — TRN-01..08 (8 reqs) — `trainers` table + CRUD + `is_active` deactivate/reactivate + Protocol slot resolver + admin-web `/trainers` page
 - [ ] **Phase 32: Payment Ledger + Sale Flow + Refund** — PAY-01..10 + REF-01..08 (18 reqs) — `payments` append-only ledger + `record_payment`/`issue_refund` services + Protocol slots + `Idempotency-Key` header + `POST /memberships/{id}/refund` + frozen/renewed-source guards
 - [ ] **Phase 33: PT-Package Plans + Instances** — PT-01..13 (13 reqs) — `pt_package_plans` + `pt_packages` tables + sell/cancel/refund endpoints + status transitions + `expire_pt_packages` ARQ cron 06:25 MSK
@@ -94,10 +94,10 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   3. `.importlinter` `modules-independent` контракт расширен на `trainers`, `payments`, `pt_packages`; три top-level контракта остаются неизменными по форме; `lint-imports` зелёный.
   4. SVC001 AST commit-gate walker покрывает `payments/service.py`, `trainers/service.py`, `pt_packages/service.py` (даже на заглушках); новый AST walker запрещает `UPDATE`/`DELETE` SQL против таблицы `payments` в любом service-файле, negative-test fixture проваливается на CI.
   5. v1.3 deferred gap закрыт — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` фильтрует по `query.status`; «Заморожен» pill на `/memberships` работает идентично в mock и http режимах; 1-2 mock-parity теста зафиксированы.
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed
 - [x] 30-01-PLAN.md — Audit bedrock: LOCKED_AUDIT_EVENTS 34→51 + audit_payloads.py Pydantic schemas + emit() validation hook (INFRA-17, INFRA-23) — Wave 1
 - [x] 30-02-PLAN.md — RBAC bedrock: backend Resource/OWNER_ONLY +5/+11 + admin-web can.ts/registry.ts byte-paritet + parity test (INFRA-18, INFRA-19) — Wave 2
-- [ ] 30-03-PLAN.md — Architectural bedrock: .importlinter modules-independent +2 + SVC001 walker scope +3 + new append-only AST walker + 5 fixtures + module placeholders (INFRA-20, INFRA-21, INFRA-22) — Wave 2
+- [x] 30-03-PLAN.md — Architectural bedrock: .importlinter modules-independent +2 + SVC001 walker scope +3 + new append-only AST walker + 5 fixtures + module placeholders (INFRA-20, INFRA-21, INFRA-22) — Wave 2
 - [x] 30-04-PLAN.md — DEBT-05 mock parity: mock/memberships.ts list() respects query.status inside expiring branch + 2 new vitest specs (DEBT-05) — Wave 1
 
 ### Phase 31: Trainers Module

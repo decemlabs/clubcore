@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
-stopped_at: Completed Plan 30-02 (RBAC bedrock — INFRA-18 + INFRA-19; atomic commit e8beda0)
-last_updated: "2026-05-14T12:44:42.796Z"
+stopped_at: Completed Plan 30-03 (Architectural bedrock — INFRA-20 + INFRA-21 + INFRA-22; commits be962d7 + 091c8ee)
+last_updated: "2026-05-14T12:51:39Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: 30 (foundations-tech-debt-bedrock) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
+Phase: 30 (foundations-tech-debt-bedrock) — COMPLETE (4/4 plans)
+Plan: — (next: Phase 31 Trainers Module)
+Status: Phase 30 complete; ready to start Phase 31
 Last activity: 2026-05-14
 
 ## v1.4 Milestone Plan
@@ -74,10 +74,11 @@ Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ module
 - [Phase ?]: D-30-01..D-30-04 implemented in Plan 30-01: 17 Pydantic v2 audit payload schemas with extra='forbid', registry AUDIT_PAYLOAD_SCHEMAS in audit_payloads.py, emit() validates after locked-set check, payment_row_hash pattern ^sha256:[0-9a-f]{64}$ locked
 - [Phase 30]: Plan 30-04 (DEBT-05): mock/memberships.list() expiring branch now respects query.status — closes v1.3 deferred mock-parity gap; in-code rationale comment documents bug-vs-verbatim-REQ semantic mismatch
 - [Phase ?]: INFRA-18/19 (Plan 30-02): RBAC matrix extended +5 Resources / OWNER_ONLY 15->26 / no new Action — '(LIST, TRAINERS)' expressed via (VIEW, TRAINERS) outside OWNER_ONLY; three-way parity green (e8beda0, atomic per D-30-09)
+- [Phase 30]: INFRA-20/21/22 (Plan 30-03): three architectural gates extended/added — .importlinter modules-independent +2 (payments, pt_packages); SVC001 walker scope 3→6 services; new test_payments_appendonly.py AST walker with import-tracking (_resolve_payment_binding) + 5 on-disk fixtures (4 violations caught: update/delete/on_conflict_do_update/session.delete; 1 clean-INSERT positive control); 6 module placeholders created; Alembic auto-discovery outcome MANUAL → UNCONDITIONAL Payment stub safe; BEFORE/AFTER versions count 10/10; alembic check reports no pending revisions (D-30-10 invariant preserved — Phase 32 PAY-01 owns 0012_payments.py). Commits be962d7 + 091c8ee.
 
 ### Pending Todos
 
-- Run `/gsd-discuss-phase 30` to lock Phase 30 plan (Foundations & Tech-Debt Bedrock).
+- Run `/gsd-discuss-phase 31` to lock Phase 31 plan (Trainers Module — TRN-01..08).
 
 ### Blockers/Concerns
 
@@ -107,6 +108,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-14T12:44:42.792Z
-Stopped at: Completed Plan 30-02 (RBAC bedrock — INFRA-18 + INFRA-19; atomic commit e8beda0)
-Resume: Continue Phase 30 with remaining plans 30-02 (RBAC bedrock) and 30-03 (Architectural bedrock).
+Last session: 2026-05-14T12:51:39Z
+Stopped at: Completed Plan 30-03 (Architectural bedrock — INFRA-20/21/22; commits be962d7 + 091c8ee). Phase 30 fully complete (4/4 plans).
+Resume: Start Phase 31 (Trainers Module — TRN-01..08). Run `/gsd-discuss-phase 31` to lock context.
