@@ -77,6 +77,24 @@ Locked event names (do NOT invent new ones — Phase 8 contract; Phase 15 lifts 
                                         # resource_id = membership.id; kind="expiring_1d";
                                         # channel="telegram")
 
+  ## v1.4 (Phase 30 lock — emitted in Phases 31/32/33/34 per INFRA-17 / D-30-02)
+  - trainer_created/_updated/_deactivated/_reactivated  → 'trainer'
+  - payment_recorded                                    → 'payment'
+    {payment_id, subject_kind, subject_id, amount_kopecks, method,
+     received_by_user_id, payment_row_hash}
+  - refund_issued                                       → 'payment'
+  - membership_refunded                                 → 'membership'
+  - pt_package_plan_{created,updated,archived}          → 'pt_package_plan'
+  - pt_package_{sold,cancelled,refunded,exhausted,expired} → 'pt_package'
+  - pt_session_{recorded,cancelled}                     → 'pt_session'
+
+Phase 30 also adds AUDIT_PAYLOAD_SCHEMAS registry (INFRA-23 / D-30-03) which
+validates payload kwargs for the 17 new v1.4 events via Pydantic v2 with
+`extra="forbid"`. Existing v1.1-v1.3 events keep free-form payload (D-30-02).
+NOTE: the logical event count grows 34 → 51 (17 new); the actual frozenset
+size grows 36 → 53 because v1.1 has two `session_revoked` variants (one for
+`session`, one for `auth_session` per Phase 23 D-23-10).
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -88,6 +106,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_models import AuditLog
+from app.core.audit_payloads import AUDIT_PAYLOAD_SCHEMAS
 
 
 class AuditEventNotLockedError(ValueError):
@@ -153,6 +172,29 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("expiring_notification_sent_7d", "membership"),
         ("expiring_notification_sent_3d", "membership"),
         ("expiring_notification_sent_1d", "membership"),
+        # v1.4 (Phase 30 lock — emitted in Phases 31/32/33/34 per INFRA-17 / B-03 / D-30-02)
+        # Trainers lifecycle (Phase 31 TRN-07):
+        ("trainer_created", "trainer"),
+        ("trainer_updated", "trainer"),
+        ("trainer_deactivated", "trainer"),
+        ("trainer_reactivated", "trainer"),
+        # Payments + refund (Phase 32 PAY-10 / REF-07):
+        ("payment_recorded", "payment"),
+        ("refund_issued", "payment"),
+        ("membership_refunded", "membership"),
+        # PT-package plans (Phase 33 PT-03):
+        ("pt_package_plan_created", "pt_package_plan"),
+        ("pt_package_plan_updated", "pt_package_plan"),
+        ("pt_package_plan_archived", "pt_package_plan"),
+        # PT-package instances (Phase 33 PT-13):
+        ("pt_package_sold", "pt_package"),
+        ("pt_package_cancelled", "pt_package"),
+        ("pt_package_refunded", "pt_package"),
+        ("pt_package_exhausted", "pt_package"),
+        ("pt_package_expired", "pt_package"),
+        # PT-sessions (Phase 34 PT-21):
+        ("pt_session_recorded", "pt_session"),
+        ("pt_session_cancelled", "pt_session"),
     }
 )
 
@@ -195,6 +237,12 @@ async def emit(
         AuditEventNotLockedError: when (event, resource_type) ∉ LOCKED_AUDIT_EVENTS
             (typo at the callsite or the taxonomy needs extending — fix one or
             the other; the AST gate also catches this at CI time).
+        pydantic.ValidationError: when `(event, resource_type)` is in
+            AUDIT_PAYLOAD_SCHEMAS (the 17 v1.4 events) AND `payload`
+            kwargs do not match the per-event Pydantic schema (extra
+            keys, missing required keys, wrong types). Phase 30 D-30-03
+            mirrors AuditEventNotLockedError hard-fail discipline — no
+            graceful degradation, no DEBUG-only assert.
     """
     if (event, resource_type) not in LOCKED_AUDIT_EVENTS:
         raise AuditEventNotLockedError(
@@ -202,6 +250,13 @@ async def emit(
             f"is not in LOCKED_AUDIT_EVENTS — extend the frozenset in "
             f"app.core.audit or fix the typo at the callsite."
         )
+    # Phase 30 INFRA-23 / D-30-03: validate payload shape against locked schema
+    # (only for the 17 v1.4 events; pre-v1.4 events keep free-form payload — D-30-02).
+    # pydantic.ValidationError propagates unchanged (D-09 hard-fail discipline,
+    # same shape as AuditEventNotLockedError above — no graceful degradation).
+    schema = AUDIT_PAYLOAD_SCHEMAS.get((event, resource_type))
+    if schema is not None:
+        schema.model_validate(payload)
     structlog.get_logger("audit").info(event, **payload)
     session.add(
         AuditLog(

@@ -162,7 +162,7 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 = 36 locked pairs.
+    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 = 53 locked pairs.
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:
@@ -172,10 +172,16 @@ def test_locked_audit_events_has_expected_count() -> None:
     Phase 24 (INFRA-15, D-24-18) added 6 v1.3 pairs pre-registered for Phases 25/26/27:
     `membership_frozen`, `membership_unfrozen`, `membership_renewed`,
     `expiring_notification_sent_{7d,3d,1d}`. See 15-03-SUMMARY.md / 24-01-SUMMARY.md.
+    Phase 30 (INFRA-17, B-03 / D-30-02) added 17 v1.4 pairs pre-registered for Phases
+    31/32/33/34: 4 trainer lifecycle + 3 payment/refund + 3 pt_package_plan lifecycle
+    + 5 pt_package instance lifecycle + 2 pt_session lifecycle. See 30-01-SUMMARY.md.
+    NOTE: the REQ INFRA-17 header gloss "34 → 51 entries" counts LOGICAL events; the
+    actual frozenset has 36 (v1.1-v1.3) + 17 (v1.4) = 53 entries because the v1.1
+    `session_revoked` event has two `(event, resource_type)` variants per D-23-10.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 36, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 36 (18 v1.1 + 12 v1.2 + 6 v1.3), "
-        f"got {len(LOCKED_AUDIT_EVENTS)}"
+    assert len(LOCKED_AUDIT_EVENTS) == 53, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 53 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4), got {len(LOCKED_AUDIT_EVENTS)}"
     )
 
 
