@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: planning
-last_updated: "2026-05-14T14:30:00.000Z"
-last_activity: 2026-05-14
+stopped_at: Phase 30 context gathered
+last_updated: "2026-05-14T11:46:53.758Z"
+last_activity: 2026-05-14 — Roadmap created (7 phases, 69 REQ-IDs mapped, 100% coverage)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Last activity: 2026-05-14 — Roadmap created (7 phases, 69 REQ-IDs mapped, 100%
 Full decisions log lives in PROJECT.md Key Decisions table.
 
 **v1.4 bedrock decisions (to be locked in Phase 30):**
+
 - B-01 — `payments` table append-only (no soft-delete, no UPDATE; AST-enforced)
 - B-02 — full-refund only in v1.4 (no pro-rata; defer to v1.5+)
 - B-03 — `LOCKED_AUDIT_EVENTS` pre-registered in Phase 30 before any callsite
@@ -101,6 +102,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-14T14:30:00Z
-Stopped at: v1.4 roadmap created (7 phases 30..36, 69 REQ-IDs mapped, 100% coverage validated, bedrock decisions B-04/B-07 confirmed)
+Last session: 2026-05-14T11:46:53.754Z
+Stopped at: Phase 30 context gathered
 Resume: Run `/gsd-discuss-phase 30` to begin Phase 30 (Foundations & Tech-Debt Bedrock).
