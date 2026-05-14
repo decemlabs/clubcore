@@ -15,6 +15,7 @@ from app.modules.memberships.router import (
 from app.modules.memberships.router import (
     router as plans_router,
 )
+from app.modules.trainers.router import router as trainers_router
 from app.modules.visits.router import router as visits_router
 
 v1 = APIRouter()
@@ -22,4 +23,5 @@ v1.include_router(auth_router, prefix="/auth", tags=["auth"])
 v1.include_router(clients_router, prefix="/clients", tags=["clients"])
 v1.include_router(plans_router, prefix="/membership-plans", tags=["membership-plans"])
 v1.include_router(memberships_router, prefix="/memberships", tags=["memberships"])
+v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])

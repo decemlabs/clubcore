@@ -296,6 +296,25 @@ class ClientNotLinkedError(NotFoundError):
     status_code = 404
 
 
+class TrainerNotFoundError(NotFoundError):
+    """Raised when GET/PATCH/DELETE references a non-existent or soft-deleted trainer."""
+
+    code = "trainer_not_found"
+    status_code = 404
+
+
+class TrainerInUseError(ConflictError):
+    """Raised on DELETE /trainers/{id} when FK fk_pt_sessions_trainer_id_trainers
+    rejects the delete (Phase 31 TRN-05, D-31-07).
+
+    Pre-emptive mapping for Phase 34 pt_sessions FK. Discriminated against IntegrityError
+    by service.py:_is_fk_violation checking pgcode == '23503'.
+    """
+
+    code = "trainer_in_use"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 

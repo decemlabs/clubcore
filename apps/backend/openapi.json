@@ -1143,6 +1143,37 @@
         "title": "PaginatedData[MembershipResponse]",
         "type": "object"
       },
+      "PaginatedData_TrainerResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrainerResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[TrainerResponse]",
+        "type": "object"
+      },
       "PaginatedData_VisitResponse_": {
         "properties": {
           "items": {
@@ -1295,6 +1326,18 @@
         "title": "ResponseEnvelope[PaginatedData[MembershipResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_TrainerResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_TrainerResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[TrainerResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_VisitResponse__": {
         "properties": {
           "data": {
@@ -1329,6 +1372,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[TelegramStatusResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_TrainerResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrainerResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[TrainerResponse]",
         "type": "object"
       },
       "ResponseEnvelope_VisitResponse_": {
@@ -1417,6 +1472,127 @@
           "code"
         ],
         "title": "TelegramVerifyRequest",
+        "type": "object"
+      },
+      "TrainerCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/trainers body. Required: fullName. Phone optional.",
+        "properties": {
+          "fullName": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Fullname",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{1,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "required": [
+          "fullName"
+        ],
+        "title": "TrainerCreateRequest",
+        "type": "object"
+      },
+      "TrainerResponse": {
+        "description": "Single trainer read DTO. `from_attributes=True` inherited via ContractModel.",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isActive": {
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fullName",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "TrainerResponse",
+        "type": "object"
+      },
+      "TrainerUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/trainers/{id} body.\n\nPATCH semantics: omit key to leave unchanged (D-01).\nis_active accepted on PATCH for deactivate/reactivate (D-31-11).",
+        "properties": {
+          "fullName": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fullname"
+          },
+          "isActive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isactive"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{1,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "title": "TrainerUpdateRequest",
         "type": "object"
       },
       "UserPublic": {
@@ -2907,6 +3083,250 @@
         "summary": "Unfreeze membership (reception+owner; 409 invalid_transition)",
         "tags": [
           "memberships"
+        ]
+      }
+    },
+    "/api/v1/trainers": {
+      "get": {
+        "description": "List alive trainers (TRN-04). VIEW permission required — reception allowed (D-31-09).",
+        "operationId": "list_trainers_api_v1_trainers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_TrainerResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List alive trainers with optional is_active filter and pagination",
+        "tags": [
+          "trainers"
+        ]
+      },
+      "post": {
+        "description": "Create a trainer (TRN-02). CREATE permission + CSRF required (RBAC-04 ordering).",
+        "operationId": "create_trainer_api_v1_trainers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainerCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TrainerResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)",
+        "tags": [
+          "trainers"
+        ]
+      }
+    },
+    "/api/v1/trainers/{trainer_id}": {
+      "delete": {
+        "description": "Hard-delete an alive trainer (TRN-05).\n\nOwner-only: (DELETE, TRAINERS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content.\nMaps IntegrityError pgcode=23503 → 409 trainer_in_use (pre-emptive D-31-07).",
+        "operationId": "delete_trainer_api_v1_trainers__trainer_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hard-delete a trainer (owner-only; 409 trainer_in_use if pt_sessions FK)",
+        "tags": [
+          "trainers"
+        ]
+      },
+      "get": {
+        "description": "Read one alive trainer (TRN-02). 404 for missing or soft-deleted ids.",
+        "operationId": "get_trainer_api_v1_trainers__trainer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TrainerResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a single alive trainer by id (404 if soft-deleted or missing)",
+        "tags": [
+          "trainers"
+        ]
+      },
+      "patch": {
+        "description": "Partial update of an alive trainer (TRN-03). EDIT + CSRF (RBAC-04 ordering).",
+        "operationId": "update_trainer_api_v1_trainers__trainer_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainerUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TrainerResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Partial update (PATCH semantics; handles deactivate/reactivate via isActive)",
+        "tags": [
+          "trainers"
         ]
       }
     },

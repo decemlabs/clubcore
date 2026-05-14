@@ -41,6 +41,7 @@ from app.core.database import db_lifespan
 from app.core.dependencies import (
     register_active_membership_resolver,
     register_client_by_telegram_resolver,
+    register_trainer_by_id_resolver,
     register_user_loader,
 )
 from app.core.exceptions import register_exception_handlers
@@ -131,6 +132,15 @@ def create_app() -> FastAPI:
     register_client_by_telegram_resolver(
         clients_service.resolve_client_by_telegram_user_id,
     )
+
+    # Phase 31 D-31-14: fourth composition-root carve-out — pt_sessions service
+    # (Phase 34) will validate trainer existence via this Protocol slot.
+    # Defensive: bot worker also registers (see telegram_bot.py). Idempotent.
+    from app.modules.trainers import (
+        service as trainers_service,
+    )
+
+    register_trainer_by_id_resolver(trainers_service.resolve_trainer_by_id)
 
     app.include_router(api)
     return app

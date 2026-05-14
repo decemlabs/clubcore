@@ -191,6 +191,44 @@ async def resolve_client_by_telegram_user_id(
     return await _client_by_telegram_resolver(session, telegram_user_id)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 31 D-31-13/D-31-14 — TrainerById resolver slot.
+#
+# Fourth composition-root carve-out after register_user_loader (Phase 5),
+# register_active_membership_resolver (Phase 17), and
+# register_client_by_telegram_resolver (Phase 19). Phase 34's pt_sessions
+# service needs to validate trainer existence + is_active status without
+# crossing the modules-independent importlinter contract.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TrainerById(Protocol):
+    """Structural type for alive Trainer lookup result (Phase 31 D-31-13).
+    Phase 34 pt_sessions service checks id + is_active."""
+
+    id: UUID
+    is_active: bool
+
+
+TrainerByIdResolver = Callable[[AsyncSession, UUID], Awaitable[TrainerById | None]]
+
+_trainer_by_id_resolver: TrainerByIdResolver | None = None
+
+
+def register_trainer_by_id_resolver(resolver: TrainerByIdResolver) -> None:
+    """Composition-root setter — called by app.main.create_app() AND
+    app.workers.telegram_bot.main() (defensive double-wiring per REG-29-03)."""
+    global _trainer_by_id_resolver
+    _trainer_by_id_resolver = resolver
+
+
+async def resolve_trainer_by_id(session: AsyncSession, trainer_id: UUID) -> TrainerById | None:
+    """Consumer entry point — Phase 34 pt_sessions service will call this."""
+    if _trainer_by_id_resolver is None:
+        return None
+    return await _trainer_by_id_resolver(session, trainer_id)
+
+
 async def get_current_user(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],

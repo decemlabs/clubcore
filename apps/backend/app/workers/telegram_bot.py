@@ -26,6 +26,7 @@ from app.core.database import db_lifespan_manager
 from app.core.dependencies import (
     register_active_membership_resolver,
     register_client_by_telegram_resolver,
+    register_trainer_by_id_resolver,
 )
 from app.core.logging import configure_logging
 from app.core.redis import redis_lifespan_manager
@@ -39,6 +40,7 @@ from app.integrations.telegram.handlers import (
 from app.modules.auth import telegram_service  # D-06 relaxation
 from app.modules.clients import service as clients_service  # REG-29-03 fix
 from app.modules.memberships import service as memberships_service  # REG-29-03 fix
+from app.modules.trainers import service as trainers_service  # Phase 31 D-31-14
 from app.modules.visits import service as visits_service  # D-10 relaxation
 
 # Sentinel matched against settings.telegram_bot_token; fresh-clone default
@@ -61,6 +63,10 @@ async def main() -> None:
     # resolver so the worker process matches the API process exactly.
     register_client_by_telegram_resolver(clients_service.resolve_client_by_telegram_user_id)
     register_active_membership_resolver(memberships_service.resolve_active_membership_by_client)
+    # Phase 31 D-31-14: defensive double-wiring for trainer resolver.
+    # Bot is not a consumer in v1.4 but must register to match API process exactly
+    # (per REG-29-03 lesson from Phase 29 verification).
+    register_trainer_by_id_resolver(trainers_service.resolve_trainer_by_id)
 
     if settings.telegram_bot_token.get_secret_value() == _PLACEHOLDER_TELEGRAM_BOT_TOKEN:
         log = structlog.get_logger("workers.telegram_bot")
