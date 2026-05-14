@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
-stopped_at: Completed Plan 30-04 (DEBT-05)
-last_updated: "2026-05-14T12:37:06.020Z"
+stopped_at: Completed Plan 30-02 (RBAC bedrock — INFRA-18 + INFRA-19; atomic commit e8beda0)
+last_updated: "2026-05-14T12:44:42.796Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 ## Current Position
 
 Phase: 30 (foundations-tech-debt-bedrock) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-05-14
 
@@ -73,6 +73,7 @@ Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ module
 
 - [Phase ?]: D-30-01..D-30-04 implemented in Plan 30-01: 17 Pydantic v2 audit payload schemas with extra='forbid', registry AUDIT_PAYLOAD_SCHEMAS in audit_payloads.py, emit() validates after locked-set check, payment_row_hash pattern ^sha256:[0-9a-f]{64}$ locked
 - [Phase 30]: Plan 30-04 (DEBT-05): mock/memberships.list() expiring branch now respects query.status — closes v1.3 deferred mock-parity gap; in-code rationale comment documents bug-vs-verbatim-REQ semantic mismatch
+- [Phase ?]: INFRA-18/19 (Plan 30-02): RBAC matrix extended +5 Resources / OWNER_ONLY 15->26 / no new Action — '(LIST, TRAINERS)' expressed via (VIEW, TRAINERS) outside OWNER_ONLY; three-way parity green (e8beda0, atomic per D-30-09)
 
 ### Pending Todos
 
@@ -106,6 +107,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-14T12:36:26.645Z
-Stopped at: Completed Plan 30-04 (DEBT-05)
+Last session: 2026-05-14T12:44:42.792Z
+Stopped at: Completed Plan 30-02 (RBAC bedrock — INFRA-18 + INFRA-19; atomic commit e8beda0)
 Resume: Continue Phase 30 with remaining plans 30-02 (RBAC bedrock) and 30-03 (Architectural bedrock).
