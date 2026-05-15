@@ -550,15 +550,26 @@ async def create_pt_package(
     # amount from the snapshot — client cannot supply it (D-33-17 invariant).
     # Recorder is caller-owns-txn: internally flushes + emits payment_recorded
     # audit but does NOT commit. We own the surrounding UoW.
-    payment = await get_payment_recorder()(
-        session,
-        subject_kind=PAYMENT_SUBJECT_KIND_PT_PACKAGE,
-        subject_id=pt_package.id,
-        amount_kopecks=pt_package.price_kopecks_snapshot,
-        method="cash",
-        received_by_user_id=actor.id,
-        audit_actor=actor,
-    )
+    #
+    # Wrap in IntegrityError translation (WR-03 from Phase 33 review): a FK
+    # violation (e.g. soft-deleted received_by_user_id) or CHECK violation
+    # (amount_kopecks <= 0) inside the recorder's flush would otherwise
+    # escape uncaught. The downstream audit emit + commit would then fail
+    # on the failed-transaction state and surface as a generic 500 instead
+    # of a typed conflict. Mirror the pattern at step 6 above.
+    try:
+        payment = await get_payment_recorder()(
+            session,
+            subject_kind=PAYMENT_SUBJECT_KIND_PT_PACKAGE,
+            subject_id=pt_package.id,
+            amount_kopecks=pt_package.price_kopecks_snapshot,
+            method="cash",
+            received_by_user_id=actor.id,
+            audit_actor=actor,
+        )
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ConflictError("payment_recording_failed") from exc
 
     # 8: emit subject-side audit BEFORE commit (Phase 16 D-14 co-transactional).
     # Payload matches the additively-extended PtPackageSoldPayload schema:
@@ -597,7 +608,11 @@ async def create_pt_package(
     await session.commit()
 
     # 10: refresh + return response (computed is_active derived from status).
-    await session.refresh(pt_package)
+    # Narrow attribute_names so the refresh does NOT eagerly reload future
+    # relationship attributes (e.g. Phase 34 `sessions` collection on
+    # PtPackage). Mirrors the cancel + refund orchestrators (WR-04 from
+    # Phase 33 review — was the outlier with an unscoped refresh).
+    await session.refresh(pt_package, attribute_names=["updated_at", "created_at"])
     return PtPackageResponse.model_validate(pt_package, from_attributes=True)
 
 
