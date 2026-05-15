@@ -118,8 +118,13 @@ async def test_membership_created_payload_shape(
     assert payload["client_id"] == client["id"]
     assert payload["plan_id"] == plan["id"]
     assert payload["end_date"] == membership["endDate"]
-    # Defensive: only the 3 documented keys (membership_id is in resource_id).
-    assert set(payload.keys()) == {"client_id", "plan_id", "end_date"}
+    # Phase 32 PAY-05: membership_created payload extended with payment_id field
+    # linking the sale-side payment row written in the same UoW (free-form
+    # payload — D-30-02 — no AUDIT_PAYLOAD_SCHEMAS entry to update).
+    assert "payment_id" in payload
+    UUID(payload["payment_id"])  # well-formed UUID string
+    # Defensive: only the 4 documented keys (membership_id is in resource_id).
+    assert set(payload.keys()) == {"client_id", "plan_id", "end_date", "payment_id"}
 
 
 async def test_audit_actor_user_id_matches_authenticated_user(
