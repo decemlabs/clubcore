@@ -46,22 +46,25 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.core.dependencies import CurrentUser, get_payment_recorder
+from app.core.dependencies import CurrentUser, get_payment_recorder, get_payment_refunder
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import PaginatedData
 from app.modules.pt_packages import repository
 from app.modules.pt_packages.constants import (
+    CANCELLATION_REASON_REFUNDED,
     PAYMENT_SUBJECT_KIND_PT_PACKAGE,
     PT_PACKAGE_STATUS_TRANSITIONS,
 )
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from app.modules.pt_packages.schemas import (
+    PtPackageCancelRequest,
     PtPackageCreateRequest,
     PtPackageListQuery,
     PtPackagePlanCreateRequest,
     PtPackagePlanListQuery,
     PtPackagePlanResponse,
     PtPackagePlanUpdateRequest,
+    PtPackageRefundRequest,
     PtPackageResponse,
 )
 
@@ -689,3 +692,213 @@ async def _expire_due_pt_packages(  # noqa: SVC001 caller-owns-txn
         )
 
     return len(rows)
+
+
+# ---------------------------------------------------------------------------
+# Plan 33-03 — Cancel + Refund terminal-lifecycle orchestrators
+# ---------------------------------------------------------------------------
+
+
+async def cancel_pt_package(
+    session: AsyncSession,
+    actor: CurrentUser,
+    pt_package_id: UUID,
+    data: PtPackageCancelRequest,
+) -> PtPackageResponse:
+    """Cancel a PT-package without refund (PT-08, owner-only at the router).
+
+    D-33-10 sequence (orchestrator owns the UoW — explicit ``await
+    session.commit()`` at end; SVC001 gate enforces):
+
+      1. Load instance — 404 ``pt_package_not_found`` if missing.
+      2. Capture ``prior_status`` BEFORE mutation (forensic audit field;
+         additively-extended PtPackageCancelledPayload requires it).
+      3. ``_assert_can_transition(target='cancelled')`` — 409
+         ``invalid_transition`` from the terminal ``cancelled`` source; legal
+         sources are ``active``, ``exhausted``, ``expired``.
+      4. Mutate via ``update_pt_package_status(status='cancelled',
+         cancellation_reason=<free-text reason>)`` — NOT the
+         ``CANCELLATION_REASON_REFUNDED`` sentinel; that sentinel is reserved
+         for ``refund_pt_package`` so an offline audit scan can discriminate
+         refund-driven cancellations from operator-driven ones via the
+         cancellation_reason column alone.
+      5. Flush — surfaces deferred constraint violations (none expected
+         for a pure status-mutation, but maintains parity with
+         ``cancel_membership``).
+      6. ``audit.emit('pt_package_cancelled', ...)`` with payload matching
+         PtPackageCancelledPayload extra='forbid' schema (4 keys:
+         ``pt_package_id``, ``client_id``, ``cancellation_reason``,
+         ``prior_status``).
+      7. Refresh ``updated_at`` so the response carries the fresh
+         server-side timestamp.
+      8. Commit (SVC001 gate).
+      9. Return ``PtPackageResponse``.
+
+    NO payment ledger touch (distinct from refund per D-33-10) — use case is
+    an operator-side correction of a sales error with manual cash handling
+    out-of-band.
+
+    UUID kwargs str-cast for JSONB serialisability (Phase 32-02 deviation #1
+    lesson — raw UUIDs fail the JSON encoder). Pydantic UUID fields on
+    PtPackageCancelledPayload accept str input.
+    """
+    # 1. Load
+    pt_package = await repository.get_pt_package(session, pt_package_id)
+    if pt_package is None:
+        raise PtPackageNotFoundError("pt_package_not_found")
+
+    # 2. Capture prior_status BEFORE mutation (audit forensic field).
+    prior_status = pt_package.status
+
+    # 3. FSM guard — 409 invalid_transition for cancelled source.
+    _assert_can_transition(pt_package, target="cancelled")
+
+    # 4. Mutate — free-text reason, NOT the 'refunded' sentinel.
+    await repository.update_pt_package_status(
+        session,
+        pt_package,
+        status="cancelled",
+        cancellation_reason=data.reason,
+    )
+
+    # 5. Flush — surfaces any deferred constraint violations.
+    await session.flush()
+
+    # 6. Emit subject-side audit BEFORE commit (Phase 16 D-14
+    # co-transactional). Payload matches PtPackageCancelledPayload
+    # extra='forbid' schema with the Plan 33-03 additive prior_status field.
+    await audit.emit(
+        session,
+        "pt_package_cancelled",  # LITERAL (INFRA-11 AST gate)
+        actor_user_id=actor.id,
+        resource_type="pt_package",  # LITERAL
+        resource_id=pt_package.id,
+        pt_package_id=str(pt_package.id),
+        client_id=str(pt_package.client_id),
+        cancellation_reason=data.reason,
+        prior_status=prior_status,
+    )
+
+    # 7. Refresh updated_at for the response (SA 2.0 expires attrs after flush).
+    await session.refresh(pt_package, attribute_names=["updated_at"])
+
+    # 8. Commit (SVC001 gate enforces explicit commit).
+    await session.commit()
+
+    # 9. Return response.
+    return PtPackageResponse.model_validate(pt_package, from_attributes=True)
+
+
+async def refund_pt_package(
+    session: AsyncSession,
+    actor: CurrentUser,
+    pt_package_id: UUID,
+    data: PtPackageRefundRequest,
+) -> PtPackageResponse:
+    """Refund a PT-package (REF-02 / PT-13, reception+owner per B-07).
+
+    D-33-11 sequence (orchestrator owns the UoW — explicit ``await
+    session.commit()`` at end; SVC001 gate enforces):
+
+      1. Load instance — 404 ``pt_package_not_found`` if missing.
+      2. ``_assert_can_transition(target='cancelled')`` — 409
+         ``invalid_transition`` from the terminal ``cancelled`` source;
+         legal sources are ``active``, ``exhausted``, ``expired``.
+      3. Call PaymentRefunder Protocol slot via ``get_payment_refunder()``
+         with ``subject_kind=PAYMENT_SUBJECT_KIND_PT_PACKAGE`` (locally-pinned
+         literal — NEVER ``from app.modules.payments import ...`` per
+         modules-independent contract). The refunder internally:
+           - Loads the ORIGINAL sale-side payment row by (subject_kind,
+             subject_id) via ``get_original_pt_package_payment``.
+           - INSERTs a negative-amount refund row with ``refund_of=
+             original.id`` and emits ``refund_issued`` payment-side audit.
+           - Raises ``OriginalPaymentNotFoundError`` (404
+             ``original_payment_not_found``) when no sale row exists.
+           - Raises ``AlreadyRefundedError`` (409 ``already_refunded``) on
+             ``uq_payments_refund_of_alive`` race.
+      4. Transition status to 'cancelled' via ``update_pt_package_status``;
+         set ``cancellation_reason = CANCELLATION_REASON_REFUNDED`` sentinel
+         (D-33-08 / mirrors Phase 32 D-32-08).
+      5. Flush — surfaces deferred constraint violations.
+      6. Emit ``pt_package_refunded`` audit row (subject-side); audit chain
+         ordering is ``payment_recorded`` (sale-time) → ``refund_issued``
+         (payment-side, inside ``issue_refund``) → ``pt_package_refunded``
+         (subject-side, emitted here).
+      7. Refresh ``updated_at`` for the response.
+      8. Commit (SVC001 gate).
+      9. Return ``PtPackageResponse``.
+
+    v1.4 has NO PT-package freeze guard (no freeze concept) and NO renewed-
+    source guard (no PT-package renewal). Only ``invalid_transition`` (FSM)
+    + ``already_refunded`` (DB race) + ``original_payment_not_found`` (data
+    integrity) surfaces are possible.
+
+    Modules-independent contract: this orchestrator does NOT import
+    ``app.modules.payments.*``; cross-module communication is exclusively
+    through the ``get_payment_refunder()`` Protocol slot in
+    ``app.core.dependencies``.
+
+    UUID kwargs str-cast for JSONB serialisability (Phase 32-02 deviation #1
+    lesson). Pydantic UUID validators on PtPackageRefundedPayload accept
+    both UUID and well-formed str input.
+    """
+    # 1. Load
+    pt_package = await repository.get_pt_package(session, pt_package_id)
+    if pt_package is None:
+        raise PtPackageNotFoundError("pt_package_not_found")
+
+    # 2. FSM guard — 409 invalid_transition for cancelled source. Fires
+    # BEFORE the refunder is invoked so the second-attempt case (already
+    # cancelled instance) surfaces as invalid_transition, NOT already_refunded
+    # (the DB partial UNIQUE remains the gate for the concurrent race; see
+    # REF-TEST-02).
+    _assert_can_transition(pt_package, target="cancelled")
+
+    # 3. Consume PaymentRefunder Protocol slot (defensive raise on unregistered;
+    # D-32-14). The refunder owns its own flush + IntegrityError catch +
+    # OriginalPaymentNotFoundError raise; this orchestrator never re-catches.
+    refund_payment = await get_payment_refunder()(
+        session,
+        subject_kind=PAYMENT_SUBJECT_KIND_PT_PACKAGE,
+        subject_id=pt_package_id,
+        refund_user_id=actor.id,
+        reason=data.reason,
+        audit_actor=actor,
+    )
+
+    # 4. Transition status + set cancellation_reason sentinel ('refunded').
+    await repository.update_pt_package_status(
+        session,
+        pt_package,
+        status="cancelled",
+        cancellation_reason=CANCELLATION_REASON_REFUNDED,
+    )
+
+    # 5. Flush — surfaces any deferred constraint violations.
+    await session.flush()
+
+    # 6. Emit subject-side audit (payment-side `refund_issued` already emitted
+    # inside `issue_refund`). LOCKED event name "pt_package_refunded" per
+    # audit.py:LOCKED_AUDIT_EVENTS. Payload matches PtPackageRefundedPayload
+    # extra='forbid' schema (4 keys: pt_package_id, client_id,
+    # refund_payment_id, reason).
+    await audit.emit(
+        session,
+        "pt_package_refunded",  # LITERAL (INFRA-11 AST gate)
+        actor_user_id=actor.id,
+        resource_type="pt_package",  # LITERAL
+        resource_id=pt_package.id,
+        pt_package_id=str(pt_package.id),
+        client_id=str(pt_package.client_id),
+        refund_payment_id=str(refund_payment.id),
+        reason=data.reason,
+    )
+
+    # 7. Refresh updated_at for the response.
+    await session.refresh(pt_package, attribute_names=["updated_at"])
+
+    # 8. Commit (SVC001 gate enforces explicit commit).
+    await session.commit()
+
+    # 9. Return response.
+    return PtPackageResponse.model_validate(pt_package, from_attributes=True)

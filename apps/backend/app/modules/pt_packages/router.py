@@ -51,12 +51,14 @@ from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.pt_packages import service
 from app.modules.pt_packages.schemas import (
+    PtPackageCancelRequest,
     PtPackageCreateRequest,
     PtPackageListQuery,
     PtPackagePlanCreateRequest,
     PtPackagePlanListQuery,
     PtPackagePlanResponse,
     PtPackagePlanUpdateRequest,
+    PtPackageRefundRequest,
     PtPackageResponse,
 )
 
@@ -333,3 +335,204 @@ async def get_pt_package(
     """
     pt_package = await service.get_pt_package_by_id(session, pt_package_id)
     return envelope(pt_package)
+
+
+# ---------------------------------------------------------------------------
+# Plan 33-03 — Cancel + Refund terminal-lifecycle endpoints.
+#
+# Both routes mirror the sale endpoint's two-phase Redis claim + replay
+# pattern so that Idempotency-Key reuse on the SAME route returns a verbatim
+# cached envelope (D-33-16 — operator UX consistency across the 3 mutating
+# PT-package endpoints). Different routes (cancel vs refund) hash to distinct
+# Redis keys because the request method + URL path are part of the key
+# derivation in ``verify_idempotency`` — same key on different routes does
+# NOT collide (T-33-03-10 mitigation).
+# ---------------------------------------------------------------------------
+
+
+@pt_packages_router.post(
+    "/{pt_package_id}/cancel",
+    response_model=ResponseEnvelope[PtPackageResponse],
+    status_code=status.HTTP_200_OK,
+    summary=(
+        "Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; "
+        "409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)"
+    ),
+)
+async def cancel_pt_package(
+    pt_package_id: UUID,
+    payload: PtPackageCancelRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CANCEL, Resource.PT_PACKAGES)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Cancel a PT-package without refund (PT-08 / D-33-10).
+
+    (CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception
+    receives 403 from the RBAC gate BEFORE any side effect.
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf →
+    verify_idempotency → get_db. Two-phase Redis claim + replay pattern
+    mirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay
+    returns the cached envelope WITHOUT a second audit emit.
+
+    Error surface (service layer):
+      - 404 pt_package_not_found  (missing instance).
+      - 409 invalid_transition    (cancelled source — FSM terminal).
+      - 422 (schema layer)        (extra field / empty reason / >200 chars).
+    """
+    incoming_body = await request.body()
+    incoming_hash = body_sha256(incoming_body)
+
+    # Idempotency replay branch — return cached envelope verbatim or surface
+    # 422 idempotency_key_reuse / 409 idempotency_in_flight per D-33-16.
+    stored = await load_idempotency_response(redis, idempotency_key)
+    if stored is not None:
+        if isinstance(stored, str):
+            raise ConflictError("idempotency_in_flight")
+        if stored["body_hash"] != incoming_hash:
+            raise ValidationAppError("idempotency_key_reuse")
+        return Response(
+            content=base64.b64decode(stored["body_b64"]),
+            status_code=stored["status_code"],
+            media_type="application/json",
+        )
+
+    # First call for this key — run the cancel orchestrator.
+    pt_package = await service.cancel_pt_package(session, actor, pt_package_id, payload)
+    response_envelope = envelope(pt_package)
+    body_bytes = json.dumps(
+        response_envelope.model_dump(mode="json", by_alias=True),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    envelope_json = json.dumps(
+        {
+            "status_code": status.HTTP_200_OK,
+            "body_hash": incoming_hash,
+            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    await redis.set(
+        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
+        envelope_json,
+        ex=IDEMPOTENCY_TTL_SECONDS,
+    )
+    return Response(
+        content=body_bytes,
+        status_code=status.HTTP_200_OK,
+        media_type="application/json",
+    )
+
+
+@pt_packages_router.post(
+    "/{pt_package_id}/refund",
+    response_model=ResponseEnvelope[PtPackageResponse],
+    status_code=status.HTTP_200_OK,
+    summary=(
+        "Refund a PT-package (reception+owner per B-07; "
+        "404 pt_package_not_found / original_payment_not_found; "
+        "409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)"
+    ),
+)
+async def refund_pt_package(
+    pt_package_id: UUID,
+    payload: PtPackageRefundRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.REFUND, Resource.PT_PACKAGES)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Refund a PT-package (REF-02 / PT-13 / D-33-11).
+
+    (REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can
+    both refund (uniform-reception RBAC). RBAC-04 ordering: auth →
+    require_permission → verify_csrf → verify_idempotency → get_db.
+
+    Subject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT
+    payments/router.py). Cross-module communication via the
+    ``get_payment_refunder()`` Protocol slot — service layer NEVER imports
+    ``app.modules.payments.*`` (modules-independent contract).
+
+    Error surface:
+      - 404 pt_package_not_found        (missing instance).
+      - 404 original_payment_not_found  (no sale payment row — should not
+                                        occur in v1.4 since PT-packages
+                                        are introduced in Phase 33 with sale
+                                        flow; defence-in-depth for parity
+                                        with memberships).
+      - 409 invalid_transition          (cancelled source — FSM terminal;
+                                        fires BEFORE the refunder so the
+                                        already-cancelled case never reaches
+                                        the DB partial UNIQUE).
+      - 409 already_refunded            (concurrent race on
+                                        uq_payments_refund_of_alive partial
+                                        UNIQUE — REF-TEST-02 exhaustive
+                                        race coverage).
+      - 422 (schema layer)              (extra field / empty reason /
+                                        >200 chars).
+
+    Idempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel
+    surfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for
+    operator UX consistency, beyond the DB partial UNIQUE which is the
+    load-bearing race defence on its own).
+    """
+    incoming_body = await request.body()
+    incoming_hash = body_sha256(incoming_body)
+
+    # Idempotency replay branch — return cached envelope verbatim.
+    stored = await load_idempotency_response(redis, idempotency_key)
+    if stored is not None:
+        if isinstance(stored, str):
+            raise ConflictError("idempotency_in_flight")
+        if stored["body_hash"] != incoming_hash:
+            raise ValidationAppError("idempotency_key_reuse")
+        return Response(
+            content=base64.b64decode(stored["body_b64"]),
+            status_code=stored["status_code"],
+            media_type="application/json",
+        )
+
+    # First call for this key — run the refund orchestrator. Concurrent
+    # callers race on the DB partial UNIQUE uq_payments_refund_of_alive;
+    # exactly one wins with 200 + the others surface 409 already_refunded
+    # via the refunder's discriminator path (REF-TEST-02).
+    pt_package = await service.refund_pt_package(session, actor, pt_package_id, payload)
+    response_envelope = envelope(pt_package)
+    body_bytes = json.dumps(
+        response_envelope.model_dump(mode="json", by_alias=True),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    envelope_json = json.dumps(
+        {
+            "status_code": status.HTTP_200_OK,
+            "body_hash": incoming_hash,
+            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    await redis.set(
+        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
+        envelope_json,
+        ex=IDEMPOTENCY_TTL_SECONDS,
+    )
+    return Response(
+        content=body_bytes,
+        status_code=status.HTTP_200_OK,
+        media_type="application/json",
+    )

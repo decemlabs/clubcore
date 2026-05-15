@@ -37,6 +37,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.payments import repository
 from app.modules.payments.constants import (
     SUBJECT_KIND_MEMBERSHIP,
+    SUBJECT_KIND_PT_PACKAGE,
     SUBJECT_KIND_REFUND,
 )
 from app.modules.payments.models import Payment
@@ -151,22 +152,25 @@ async def issue_refund(  # noqa: SVC001 caller-owns-txn — refund orchestrator 
     """Append a refund-side (negative-amount) Payment row (Phase 32 REF-02..04).
 
     Internally loads the ORIGINAL sale-side payment via
-    ``repository.get_original_membership_payment`` (D-32-14 — refunder takes
+    ``repository.get_original_membership_payment`` /
+    ``repository.get_original_pt_package_payment`` (D-32-14 — refunder takes
     subject_kind/subject_id, NOT original_payment_id, so cross-module callers
     never import ``payments.repository``). Inserts a negative-amount row with
     ``subject_kind='refund'`` and ``refund_of=original.id``; the partial
     UNIQUE ``uq_payments_refund_of_alive`` enforces at-most-one refund per
     sale. Caller owns the commit.
 
-    Phase 32 limits ``subject_kind`` to 'membership' — pt_package refunds
-    land in Phase 33.
+    Phase 33 extends ``subject_kind`` support to 'pt_package' (REF-02 / PT-13)
+    — replaces the Phase 32 NotImplementedError gate. Future kinds raise
+    NotImplementedError.
     """
     if subject_kind == SUBJECT_KIND_MEMBERSHIP:
         original = await repository.get_original_membership_payment(session, subject_id)
+    elif subject_kind == SUBJECT_KIND_PT_PACKAGE:
+        original = await repository.get_original_pt_package_payment(session, subject_id)
     else:
         raise NotImplementedError(
-            f"refund subject_kind={subject_kind!r} not supported in Phase 32 — "
-            "Phase 33 PT-package consumer extends this"
+            f"refund subject_kind={subject_kind!r} not supported"
         )
 
     if original is None:

@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.pagination import PaginatedData
 from app.modules.payments.constants import (
     SUBJECT_KIND_MEMBERSHIP,
+    SUBJECT_KIND_PT_PACKAGE,
     SUBJECT_KIND_REFUND,
 )
 from app.modules.payments.models import Payment
@@ -114,6 +115,35 @@ async def get_original_membership_payment(
         .where(
             Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP,
             Payment.subject_id == membership_id,
+            Payment.amount_kopecks > 0,
+        )
+        .order_by(Payment.received_at.asc())
+        .limit(1)
+    )
+    result: Payment | None = await session.scalar(stmt)
+    return result
+
+
+async def get_original_pt_package_payment(
+    session: AsyncSession,
+    pt_package_id: UUID,
+) -> Payment | None:
+    """Return the ORIGINAL sale payment for a PT-package (Phase 33 REF-02 / PT-13).
+
+    Mirrors ``get_original_membership_payment`` verbatim with
+    ``SUBJECT_KIND_PT_PACKAGE`` substituted for the membership literal.
+    Filters on ``subject_kind='pt_package' AND subject_id=:id AND
+    amount_kopecks > 0`` and orders by ``received_at ASC`` so the first
+    (chronologically earliest) sale row wins ties. Returns None when the
+    PT-package has no recorded sale (should not occur in v1.4 — pt_packages
+    are introduced in Phase 33 with the sale flow; the legacy fall-through
+    case exists only for parity with the membership sibling).
+    """
+    stmt: Select[tuple[Payment]] = (
+        select(Payment)
+        .where(
+            Payment.subject_kind == SUBJECT_KIND_PT_PACKAGE,
+            Payment.subject_id == pt_package_id,
             Payment.amount_kopecks > 0,
         )
         .order_by(Payment.received_at.asc())

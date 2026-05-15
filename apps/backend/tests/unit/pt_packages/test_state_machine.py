@@ -177,3 +177,101 @@ def test_pt_package_status_transitions_phase33_contents() -> None:
         "expired",
         "cancelled",
     }
+
+
+# ---------------------------------------------------------------------------
+# Plan 33-03 EXTENSION: thin-wrapper denial groups (W6 ownership).
+#
+# The 16-cell matrix above is already exhaustive on the central
+# ``_assert_can_transition`` guard. The wrapper-denial groups below pin the
+# behaviour of the three thin wrappers individually so a future refactor that
+# accidentally rewires a wrapper (e.g., ``_assert_can_expire`` delegating to
+# ``target='cancelled'`` instead of ``target='expired'``) is surfaced loudly
+# by per-wrapper coverage rather than masked by the central-guard tests.
+#
+# Each wrapper test asserts both the raise and the ``fields`` payload
+# discriminator (``{from_status, to_status}``) so the exact failure mode
+# is locked.
+# ---------------------------------------------------------------------------
+
+
+def test_assert_can_cancel_raises_from_cancelled() -> None:
+    """D-33-04: ``_assert_can_cancel`` only fails from the terminal source.
+
+    ``cancelled`` is the lone source where every target is disallowed; the
+    wrapper raises with ``to_status='cancelled'`` (self-loop) and the
+    discriminator payload matches the central-guard shape exactly.
+    """
+    pt_package = _stub_pt_package(status="cancelled")
+    with pytest.raises(InvalidTransitionError) as exc_info:
+        _assert_can_cancel(pt_package)
+    assert exc_info.value.code == "invalid_transition"
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.fields == {
+        "from_status": "cancelled",
+        "to_status": "cancelled",
+    }
+
+
+@pytest.mark.parametrize("from_status", ["exhausted", "expired", "cancelled"])
+def test_assert_can_expire_raises_from_non_active(from_status: str) -> None:
+    """D-33-04: ``_assert_can_expire`` is allowed ONLY from ``active`` source.
+
+    All three non-active source states (exhausted, expired, cancelled) must
+    surface ``invalid_transition`` — verifies the wrapper does not silently
+    permit expire-of-terminal nor expire-of-exhausted (which would corrupt the
+    pt_package_expired audit chain).
+    """
+    pt_package = _stub_pt_package(status=from_status)
+    with pytest.raises(InvalidTransitionError) as exc_info:
+        _assert_can_expire(pt_package)
+    assert exc_info.value.code == "invalid_transition"
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.fields == {
+        "from_status": from_status,
+        "to_status": "expired",
+    }
+
+
+@pytest.mark.parametrize("from_status", ["exhausted", "expired", "cancelled"])
+def test_assert_can_exhaust_raises_from_non_active(from_status: str) -> None:
+    """D-33-04: ``_assert_can_exhaust`` is allowed ONLY from ``active`` source.
+
+    Phase 34 PT-session decrement to zero is the only legal callsite; the
+    wrapper must refuse any other source so a sessions_remaining race that
+    leaves a non-active row cannot re-flip to exhausted twice.
+    """
+    pt_package = _stub_pt_package(status=from_status)
+    with pytest.raises(InvalidTransitionError) as exc_info:
+        _assert_can_exhaust(pt_package)
+    assert exc_info.value.code == "invalid_transition"
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.fields == {
+        "from_status": from_status,
+        "to_status": "exhausted",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Plan 33-03 EXTENSION: refund-of-{exhausted,expired} edge cases.
+#
+# The cancel + refund orchestrators (33-03) both call
+# ``_assert_can_transition(target='cancelled')``. The 16-cell matrix already
+# proves these transitions are allowed; the parametrized check below pins the
+# happy-path call shape per source to keep wrapper + central-guard agreement
+# explicit at the unit-test level (a regression that mis-rewires
+# ``_assert_can_cancel`` to target='expired' would otherwise only surface in
+# integration).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("from_status", ["active", "exhausted", "expired"])
+def test_assert_can_cancel_allows_legal_sources(from_status: str) -> None:
+    """D-33-04: ``_assert_can_cancel`` does NOT raise from any legal source.
+
+    Cancel + refund both require target='cancelled'; refund-of-exhausted /
+    refund-of-expired are explicit edge cases for the 33-03 refund flow
+    (D-33-11). The wrapper must be a no-op for all three sources.
+    """
+    pt_package = _stub_pt_package(status=from_status)
+    _assert_can_cancel(pt_package)  # no raise expected
