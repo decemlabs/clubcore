@@ -243,6 +243,7 @@ class MembershipResponse(ResponseData):
     status: MembershipStatus
     cancelled_at: datetime | None
     cancel_reason: str | None
+    cancellation_reason: str | None = None  # Phase 32 REF-01
     paid_at: datetime | None
     notes: str | None
     created_at: datetime

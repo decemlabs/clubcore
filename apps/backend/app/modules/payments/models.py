@@ -1,34 +1,116 @@
-"""Payments models stub (Phase 30 INFRA-22 / B-01).
+"""Payment ORM model (Phase 32 PAY-01 / B-01 INFRA-22).
 
-Minimal `Payment` declarative class exists in Phase 30 so the append-only
-AST walker (`tests/unit/test_payments_appendonly.py`) can resolve the
-`from app.modules.payments.models import Payment` import-tracking target.
-Substantive columns/constraints (UUIDv4 PK, signed amount_kopecks, CHECK
-on subject_kind, partial UNIQUE on refund_of) land in Phase 32 PAY-01
-(migration `0012_payments.py` per ROADMAP Phase 32 SC #1 / D-30-10).
+Append-only payment ledger row (B-01 INFRA-22). NO TimestampMixin (no
+created_at/updated_at), NO SoftDeleteMixin (no deleted_at) — received_at is
+the SINGLE temporal column per D-32-01..D-32-04. UPDATE/DELETE are banned by
+the AST gate `tests/unit/test_payments_appendonly.py`.
 
-D-30-10 invariant: this file MUST NOT cause Alembic autogenerate to emit
-a placeholder migration in Phase 30. Alembic auto-discovery outcome is
-MANUAL (see 30-03-SUMMARY.md): `apps/backend/alembic/env.py` lists ORM
-modules explicitly (`import app.modules.auth.models`, `clients.models`,
-`memberships.models`, `visits.models`); `app.modules.payments.models` is
-NOT in that list, so `Base.metadata` does NOT collect a `payments` table
-during `alembic upgrade` / `alembic check`. Strategy: UNCONDITIONAL
-declarative class is safe and house-style consistent.
+DB-level invariants (mirror migration 0012_payments):
+- CHECK ck_payments_amount_sign_matches_subject_kind: amount_kopecks sign
+  agrees with subject_kind ('refund' < 0; 'membership'/'pt_package' > 0).
+- CHECK ck_payments_subject_kind: subject_kind ∈ ('membership','pt_package','refund').
+- FK fk_payments_received_by_user_id_users ON DELETE RESTRICT.
+- FK fk_payments_refund_of_payments ON DELETE RESTRICT (self-ref for refund rows).
+- FK fk_payments_audit_log_id_audit_log ON DELETE SET NULL.
+- Partial UNIQUE uq_payments_refund_of_alive ON (refund_of) WHERE
+  refund_of IS NOT NULL — at most one refund per sale.
+- Composite index ix_payments_subject on (subject_kind, subject_id).
+- ix_payments_received_by_user_id; ix_payments_received_at DESC.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
+from uuid import UUID as UUIDType  # noqa: N811
+
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.core.database import Base, UUIDPkMixin
 
 
-class Payment(UUIDPkMixin, Base):
-    """Minimal stub. Real columns/constraints land in Phase 32 PAY-01.
+class Payment(Base, UUIDPkMixin):
+    """Append-only payment ledger row (B-01 INFRA-22).
 
-    UUIDPkMixin supplies the `id` primary-key column (D-15 / INFRA-02).
-    The substantive PAY-01 schema (amount_kopecks, subject_kind, method,
-    refund_of, payment_row_hash, audit columns) is added by ALTER in
-    Phase 32 — `0012_payments.py` — not by replacement of this class.
+    NO TimestampMixin (no created_at/updated_at), NO SoftDeleteMixin (no deleted_at).
+    `received_at` is the single temporal column (D-32-01..D-32-04).
     """
 
     __tablename__ = "payments"
+
+    subject_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        nullable=False,
+    )
+    amount_kopecks: Mapped[int] = mapped_column(Integer, nullable=False)  # signed
+    method: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'cash'"),
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    received_by_user_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="RESTRICT",
+            name="fk_payments_received_by_user_id_users",
+        ),
+        nullable=False,
+    )
+    refund_of: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "payments.id",
+            ondelete="RESTRICT",
+            name="fk_payments_refund_of_payments",
+        ),
+        nullable=True,
+    )
+    audit_log_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "audit_log.id",
+            ondelete="SET NULL",
+            name="fk_payments_audit_log_id_audit_log",
+        ),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(subject_kind = 'refund' AND amount_kopecks < 0) "
+            "OR (subject_kind IN ('membership','pt_package') AND amount_kopecks > 0)",
+            # NAMING_CONVENTION expands to ck_payments_amount_sign_matches_subject_kind
+            name="amount_sign_matches_subject_kind",
+        ),
+        CheckConstraint(
+            "subject_kind IN ('membership','pt_package','refund')",
+            # NAMING_CONVENTION expands to ck_payments_subject_kind
+            name="subject_kind",
+        ),
+        Index(
+            "uq_payments_refund_of_alive",
+            "refund_of",
+            unique=True,
+            postgresql_where=text("refund_of IS NOT NULL"),
+        ),
+        Index("ix_payments_subject", "subject_kind", "subject_id"),
+        Index("ix_payments_received_by_user_id", "received_by_user_id"),
+        Index("ix_payments_received_at", text("received_at DESC")),
+    )

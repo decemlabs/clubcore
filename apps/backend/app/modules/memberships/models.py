@@ -140,6 +140,10 @@ class Membership(Base, UUIDPkMixin, TimestampMixin):
         nullable=True,
     )
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 32 REF-01 / D-32-07 — sentinel 'refunded' set by refund_membership
+    # orchestrator (Plan 32-03). Coexists with cancel_reason; legacy cancelled
+    # rows are NULL (no backfill in 0012_payments).
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
