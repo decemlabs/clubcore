@@ -41,6 +41,7 @@ from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
     IDEMPOTENCY_REDIS_PREFIX,
     IDEMPOTENCY_TTL_SECONDS,
+    begin_idempotency,
     body_sha256,
     load_idempotency_response,
     verify_idempotency,
@@ -244,13 +245,20 @@ async def create_pt_package(
     incoming_body = await request.body()
     incoming_hash = body_sha256(incoming_body)
 
-    # Phase 32 PAY-09 / D-33-16 — replay branch first; if a completed envelope
-    # is cached for this key, return verbatim (matching body hash) OR raise
-    # 422 idempotency_key_reuse (mismatched body).
-    stored = await load_idempotency_response(redis, idempotency_key)
-    if stored is not None:
-        if isinstance(stored, str):
-            # Placeholder (in-flight) — concurrent caller still running.
+    # Phase 32 PAY-09 / D-33-16 — two-phase Redis claim + replay.
+    # SET NX claims the key with an in-flight placeholder so concurrent
+    # callers carrying the SAME Idempotency-Key cannot both pass the
+    # "no stored entry" gate and double-execute the orchestrator (CR-02
+    # from Phase 33 review — closes the gap where two concurrent /cancel
+    # requests would emit two pt_package_cancelled audit rows). The
+    # losing caller falls into the replay branch below and either gets
+    # the cached envelope (matching body) or 409 idempotency_in_flight
+    # (placeholder still set).
+    is_first = await begin_idempotency(redis, idempotency_key)
+    if not is_first:
+        stored = await load_idempotency_response(redis, idempotency_key)
+        if stored is None or isinstance(stored, str):
+            # Placeholder (in-flight) or evicted while we lost the race.
             raise ConflictError("idempotency_in_flight")
         if stored["body_hash"] != incoming_hash:
             raise ValidationAppError("idempotency_key_reuse")
@@ -260,10 +268,8 @@ async def create_pt_package(
             media_type="application/json",
         )
 
-    # First call for this key — run the sale orchestrator. We do NOT pre-claim
-    # the key with SET NX because the orchestrator's own commit failure path
-    # would leave a stale placeholder; instead, store the envelope after a
-    # successful run. Concurrent callers race on the partial UNIQUE
+    # We won the SET NX race — own the in-flight placeholder. Run the sale
+    # orchestrator. Concurrent callers also race on the partial UNIQUE
     # uq_pt_packages_active_per_client and exactly one wins with 201 — the
     # other surfaces 409 active_pt_package_already_exists (T-33-02-03).
     pt_package = await service.create_pt_package(session, actor, payload)
@@ -345,8 +351,9 @@ async def get_pt_package(
 # cached envelope (D-33-16 — operator UX consistency across the 3 mutating
 # PT-package endpoints). Different routes (cancel vs refund) hash to distinct
 # Redis keys because the request method + URL path are part of the key
-# derivation in ``verify_idempotency`` — same key on different routes does
-# NOT collide (T-33-03-10 mitigation).
+# derivation in ``verify_idempotency`` (CR-01 fix from Phase 33 review —
+# verify_idempotency now returns ``f"{method}:{path}:{header}"``) — same
+# header value on different routes does NOT collide (T-33-03-10 mitigation).
 # ---------------------------------------------------------------------------
 
 
@@ -390,11 +397,17 @@ async def cancel_pt_package(
     incoming_body = await request.body()
     incoming_hash = body_sha256(incoming_body)
 
-    # Idempotency replay branch — return cached envelope verbatim or surface
-    # 422 idempotency_key_reuse / 409 idempotency_in_flight per D-33-16.
-    stored = await load_idempotency_response(redis, idempotency_key)
-    if stored is not None:
-        if isinstance(stored, str):
+    # Two-phase Redis claim + replay — SET NX claims the in-flight placeholder
+    # so two concurrent /cancel requests with the same Idempotency-Key cannot
+    # both pass the "no stored entry" gate and both run the orchestrator (which
+    # would emit two pt_package_cancelled audit rows for the same instance —
+    # CR-02 from Phase 33 review). The losing caller falls into the replay
+    # branch and either gets the cached envelope (matching body) or 409
+    # idempotency_in_flight (placeholder still set).
+    is_first = await begin_idempotency(redis, idempotency_key)
+    if not is_first:
+        stored = await load_idempotency_response(redis, idempotency_key)
+        if stored is None or isinstance(stored, str):
             raise ConflictError("idempotency_in_flight")
         if stored["body_hash"] != incoming_hash:
             raise ValidationAppError("idempotency_key_reuse")
@@ -404,7 +417,8 @@ async def cancel_pt_package(
             media_type="application/json",
         )
 
-    # First call for this key — run the cancel orchestrator.
+    # We won the SET NX race — own the in-flight placeholder. Run the cancel
+    # orchestrator.
     pt_package = await service.cancel_pt_package(session, actor, pt_package_id, payload)
     response_envelope = envelope(pt_package)
     body_bytes = json.dumps(
@@ -493,10 +507,16 @@ async def refund_pt_package(
     incoming_body = await request.body()
     incoming_hash = body_sha256(incoming_body)
 
-    # Idempotency replay branch — return cached envelope verbatim.
-    stored = await load_idempotency_response(redis, idempotency_key)
-    if stored is not None:
-        if isinstance(stored, str):
+    # Two-phase Redis claim + replay — SET NX claims the in-flight placeholder
+    # so concurrent /refund requests with the same Idempotency-Key cannot both
+    # double-execute the orchestrator (CR-02 from Phase 33 review). DB partial
+    # UNIQUE uq_payments_refund_of_alive remains the load-bearing race defence
+    # for distinct keys hitting the same pt_package; this NX claim covers the
+    # operator-UX case where the same key is retried.
+    is_first = await begin_idempotency(redis, idempotency_key)
+    if not is_first:
+        stored = await load_idempotency_response(redis, idempotency_key)
+        if stored is None or isinstance(stored, str):
             raise ConflictError("idempotency_in_flight")
         if stored["body_hash"] != incoming_hash:
             raise ValidationAppError("idempotency_key_reuse")
@@ -506,10 +526,11 @@ async def refund_pt_package(
             media_type="application/json",
         )
 
-    # First call for this key — run the refund orchestrator. Concurrent
-    # callers race on the DB partial UNIQUE uq_payments_refund_of_alive;
-    # exactly one wins with 200 + the others surface 409 already_refunded
-    # via the refunder's discriminator path (REF-TEST-02).
+    # We won the SET NX race. Run the refund orchestrator. Concurrent callers
+    # carrying DIFFERENT Idempotency-Keys still race on the DB partial UNIQUE
+    # uq_payments_refund_of_alive; exactly one wins with 200 + the others
+    # surface 409 already_refunded via the refunder's discriminator path
+    # (REF-TEST-02).
     pt_package = await service.refund_pt_package(session, actor, pt_package_id, payload)
     response_envelope = envelope(pt_package)
     body_bytes = json.dumps(
