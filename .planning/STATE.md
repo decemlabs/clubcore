@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
 stopped_at: Phase 32 context gathered
-last_updated: "2026-05-15T11:27:07.574Z"
-last_activity: 2026-05-15 -- Phase 32 planning complete
+last_updated: "2026-05-15T11:27:57.055Z"
+last_activity: 2026-05-15 -- Phase 32 execution started
 progress:
   total_phases: 7
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 31 — trainers-module
+**Current focus:** Phase 32 — Payment Ledger + Sale Flow + Refund
 
 ## Current Position
 
-Phase: 31 (trainers-module) — EXECUTING
-Plan: 1 of 2
-Status: Ready to execute
-Last activity: 2026-05-15 -- Phase 32 planning complete
+Phase: 32 (Payment Ledger + Sale Flow + Refund) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 32
+Last activity: 2026-05-15 -- Phase 32 execution started
 
 ## v1.4 Milestone Plan
 
