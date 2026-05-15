@@ -18,7 +18,11 @@ from httpx import AsyncClient
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    # Phase 32 PAY-09: POST /api/v1/memberships now requires Idempotency-Key.
+    return {
+        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "Idempotency-Key": uuid4().hex,
+    }
 
 
 VALID_PLAN: dict[str, Any] = {

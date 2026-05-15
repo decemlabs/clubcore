@@ -12,7 +12,7 @@ where a refactor accidentally writes `reason=None` into the JSONB blob.
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -23,7 +23,11 @@ from app.modules.auth.models import User
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    # Phase 32 PAY-09: POST /api/v1/memberships now requires Idempotency-Key.
+    return {
+        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "Idempotency-Key": uuid4().hex,
+    }
 
 
 VALID_PLAN: dict[str, Any] = {
@@ -118,8 +122,13 @@ async def test_membership_created_payload_shape(
     assert payload["client_id"] == client["id"]
     assert payload["plan_id"] == plan["id"]
     assert payload["end_date"] == membership["endDate"]
-    # Defensive: only the 3 documented keys (membership_id is in resource_id).
-    assert set(payload.keys()) == {"client_id", "plan_id", "end_date"}
+    # Phase 32 PAY-05: membership_created payload extended with payment_id field
+    # linking the sale-side payment row written in the same UoW (free-form
+    # payload — D-30-02 — no AUDIT_PAYLOAD_SCHEMAS entry to update).
+    assert "payment_id" in payload
+    UUID(payload["payment_id"])  # well-formed UUID string
+    # Defensive: only the 4 documented keys (membership_id is in resource_id).
+    assert set(payload.keys()) == {"client_id", "plan_id", "end_date", "payment_id"}
 
 
 async def test_audit_actor_user_id_matches_authenticated_user(

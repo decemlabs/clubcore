@@ -52,6 +52,17 @@ EXPIRING_KINDS: tuple[str, ...] = (EXPIRING_KIND_7D, EXPIRING_KIND_3D, EXPIRING_
 # cancel_reason field.
 CANCELLATION_REASON_REFUNDED = "refunded"
 
+# Phase 32 D-32-09 / Plan 32-02 — subject-kind literal passed by the
+# create_membership orchestrator to the PaymentRecorder Protocol slot. The
+# importlinter `modules-independent` contract forbids
+# ``app.modules.memberships -> app.modules.payments``, so we cannot import
+# ``payments.constants.SUBJECT_KIND_MEMBERSHIP`` here. The literal must match
+# the migration 0012_payments CHECK constraint ck_payments_subject_kind value
+# 'membership'; payments.constants.SUBJECT_KIND_MEMBERSHIP is the same string.
+# Cross-module pinning is enforced by the runtime CHECK and by both modules
+# anchoring on the migration value.
+PAYMENT_SUBJECT_KIND_MEMBERSHIP = "membership"
+
 __all__ = [
     "CANCELLATION_REASON_REFUNDED",
     "EXPIRING_KINDS",
@@ -59,6 +70,7 @@ __all__ = [
     "EXPIRING_KIND_3D",
     "EXPIRING_KIND_7D",
     "MEMBERSHIP_STATUS_TRANSITIONS",
+    "PAYMENT_SUBJECT_KIND_MEMBERSHIP",
     "RENEWAL_STRATEGY_FROM_SOURCE_END_DATE",
     "RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE",
 ]

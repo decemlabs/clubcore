@@ -117,18 +117,23 @@ async def record_payment(  # noqa: SVC001 caller-owns-txn — sale orchestrator 
 
     row_hash = payment_row_hash(_payment_row_dict(payment))
 
+    # UUIDs in **payload kwargs land in JSONB unaltered; the JSON encoder
+    # rejects raw `UUID` instances ("Object of type UUID is not JSON
+    # serializable"). Cast to str so Postgres JSONB roundtrips cleanly.
+    # Pydantic UUID fields accept both UUID and well-formed str on
+    # validation, so PaymentRecordedPayload still passes.
     await audit.emit(
         session,
         "payment_recorded",
         actor_user_id=audit_actor.id,
         resource_type="payment",
         resource_id=payment.id,
-        payment_id=payment.id,
+        payment_id=str(payment.id),
         subject_kind=subject_kind,
-        subject_id=subject_id,
+        subject_id=str(subject_id),
         amount_kopecks=amount_kopecks,
         method=method,
-        received_by_user_id=received_by_user_id,
+        received_by_user_id=str(received_by_user_id),
         payment_row_hash=row_hash,
     )
     return payment
@@ -188,18 +193,20 @@ async def issue_refund(  # noqa: SVC001 caller-owns-txn — refund orchestrator 
 
     # `subject_kind` field of RefundIssuedPayload constrains to
     # ('membership','pt_package') — pass the ORIGINAL's kind, not 'refund'.
+    # Cast UUID kwargs to str — JSONB encoder rejects raw UUIDs (see
+    # record_payment above); Pydantic UUID fields still accept str input.
     await audit.emit(
         session,
         "refund_issued",
         actor_user_id=audit_actor.id,
         resource_type="payment",
         resource_id=refund_payment.id,
-        payment_id=refund_payment.id,
-        refund_of_payment_id=original.id,
+        payment_id=str(refund_payment.id),
+        refund_of_payment_id=str(original.id),
         amount_kopecks=refund_payment.amount_kopecks,
         subject_kind=original.subject_kind,
-        subject_id=subject_id,
-        received_by_user_id=refund_user_id,
+        subject_id=str(subject_id),
+        received_by_user_id=str(refund_user_id),
         reason=reason,
         payment_row_hash=original_hash,
     )

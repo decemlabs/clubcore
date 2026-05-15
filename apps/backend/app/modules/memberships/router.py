@@ -64,16 +64,29 @@ Service layer is the single mutation entry point — this router never imports t
 MembershipPlan ORM model (architectural boundary maintained transitively via service.py).
 """
 
+import base64
+import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
+from app.core.exceptions import ConflictError, ValidationAppError
+from app.core.idempotency import (
+    IDEMPOTENCY_REDIS_PREFIX,
+    IDEMPOTENCY_TTL_SECONDS,
+    begin_idempotency,
+    body_sha256,
+    load_idempotency_response,
+    verify_idempotency,
+)
 from app.core.pagination import PaginatedData
 from app.core.permissions import Action, Resource
+from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.memberships import service
 from app.modules.memberships.schemas import (
@@ -267,25 +280,96 @@ async def get_membership(
     "",
     response_model=ResponseEnvelope[MembershipResponse],
     status_code=status.HTTP_201_CREATED,
-    summary="Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive)",
+    summary=(
+        "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; "
+        "requires Idempotency-Key — Phase 32 PAY-09)"
+    ),
 )
 async def create_membership(
     payload: MembershipCreateRequest,
+    request: Request,
     actor: Annotated[
         CurrentUser,
         Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
     ],
     _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> ResponseEnvelope[MembershipResponse]:
-    """Sell a membership (MEM-EP-03). CREATE permission + CSRF required.
+) -> Response:
+    """Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.
 
     (CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.
     Service layer validates plan presence (404 plan_not_found) and active flag
     (409 plan_inactive) and computes start_date/end_date server-side (D-04).
+
+    Phase 32 PAY-09 idempotency contract (D-32-18..D-32-20):
+      - Header `Idempotency-Key` is required; missing or malformed → 422
+        (idempotency_key_required / idempotency_key_invalid_format).
+      - First call: SET NX claims the key with an in-flight placeholder, runs
+        the service, stores the response envelope under the same key, returns.
+      - Replay with identical key + identical body → 200 with the cached
+        envelope bytes (byte-identical to the original response). Status code
+        is also replayed from the stored envelope.
+      - Replay with identical key + different body → 422 idempotency_key_reuse;
+        no second sale is recorded.
+      - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
     """
+    # Read raw incoming body for hash comparison on replay. FastAPI already
+    # consumed it into `payload`, but `request.body()` is cached by Starlette
+    # so this is cheap and deterministic.
+    incoming_body = await request.body()
+    incoming_hash = body_sha256(incoming_body)
+
+    # Phase 32 PAY-09 — two-phase Redis claim + replay (D-32-18..D-32-20).
+    is_first = await begin_idempotency(redis, idempotency_key)
+    if not is_first:
+        stored = await load_idempotency_response(redis, idempotency_key)
+        if stored is None or isinstance(stored, str):
+            # placeholder (still in-flight) or evicted while we lost the race
+            raise ConflictError("idempotency_in_flight")
+        if stored["body_hash"] != incoming_hash:
+            raise ValidationAppError("idempotency_key_reuse")
+        return Response(
+            content=base64.b64decode(stored["body_b64"]),
+            status_code=stored["status_code"],
+            media_type="application/json",
+        )
+
     membership = await service.create_membership(session, actor, payload)
-    return envelope(membership)
+    response_envelope = envelope(membership)
+    body_bytes = json.dumps(
+        response_envelope.model_dump(mode="json", by_alias=True),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    # Store the replay envelope manually: body_hash is the REQUEST body hash
+    # (used for collision detection on replay), body_b64 is the RESPONSE body
+    # bytes (replayed verbatim on a matching-body retry). The exported
+    # store_idempotency_response helper conflates the two — see Phase 32-01
+    # idempotency.py — so build the dict by hand here to keep the contract
+    # honest (D-32-18..D-32-20).
+    envelope_json = json.dumps(
+        {
+            "status_code": status.HTTP_201_CREATED,
+            "body_hash": incoming_hash,
+            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    await redis.set(
+        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
+        envelope_json,
+        ex=IDEMPOTENCY_TTL_SECONDS,
+    )
+    return Response(
+        content=body_bytes,
+        status_code=status.HTTP_201_CREATED,
+        media_type="application/json",
+    )
 
 
 @memberships_router.post(

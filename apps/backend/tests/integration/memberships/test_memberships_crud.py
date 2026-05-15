@@ -25,7 +25,14 @@ from app.modules.memberships.models import Membership
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    # Phase 32 PAY-09: POST /api/v1/memberships now requires Idempotency-Key.
+    # Sub-routes (/cancel, /freeze, /renew) ignore the header — harmless to
+    # always include. uuid4().hex is per-call unique so replay collision is
+    # avoided across the test suite.
+    return {
+        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "Idempotency-Key": uuid4().hex,
+    }
 
 
 VALID_PLAN: dict[str, Any] = {

@@ -74,7 +74,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import audit
-from app.core.dependencies import CurrentUser
+from app.core.dependencies import CurrentUser, get_payment_recorder
 from app.core.exceptions import (
     AlreadyFrozenError,
     CannotRenewCancelledError,
@@ -94,6 +94,7 @@ from app.modules.memberships.constants import (
     EXPIRING_KIND_3D,
     EXPIRING_KIND_7D,
     MEMBERSHIP_STATUS_TRANSITIONS,
+    PAYMENT_SUBJECT_KIND_MEMBERSHIP,
     RENEWAL_STRATEGY_FROM_SOURCE_END_DATE,
     RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE,
 )
@@ -522,6 +523,22 @@ async def create_membership(
     )
     await session.flush()
 
+    # Phase 32 PAY-05: record payment in same UoW (mandatory snapshot symmetry).
+    # Server derives amount from snapshot — client cannot supply (D-32-16/17).
+    # Recorder is caller-owns-txn: internally flushes + emits payment_recorded
+    # audit row, but does NOT commit. This outer create_membership owns the UoW.
+    # If recorder Protocol slot is not registered, get_payment_recorder() raises
+    # RuntimeError defensively (D-32-14) — whole UoW rolls back on propagation.
+    payment = await get_payment_recorder()(
+        session,
+        subject_kind=PAYMENT_SUBJECT_KIND_MEMBERSHIP,
+        subject_id=membership.id,
+        amount_kopecks=membership.price_kopecks_snapshot,
+        method="cash",
+        received_by_user_id=actor.id,
+        audit_actor=actor,
+    )
+
     # 6: emit audit BEFORE commit (Phase 16 D-14 co-transactional contract).
     # MEM-AUDIT-01 payload: membership_id is in resource_id; payload carries
     # client_id, plan_id (str-cast for JSONB-serialisability — UUIDs are not
@@ -535,6 +552,7 @@ async def create_membership(
         client_id=str(membership.client_id),
         plan_id=str(membership.plan_id),
         end_date=membership.end_date.isoformat(),
+        payment_id=str(payment.id),  # Phase 32 PAY-05: link sale-side payment row (free-form payload — D-30-02)
     )
     # 7: commit the unit of work (SVC001 AST gate enforces explicit commit)
     await session.commit()
