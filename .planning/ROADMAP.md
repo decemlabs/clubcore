@@ -140,7 +140,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   3. `POST /api/v1/pt-packages` (reception+owner) продаёт пакет: snapshot из current plan, insert instance, вызов `payment_recorder` в той же UoW (symmetric к v1.2 membership sale); `POST /api/v1/pt-packages/{id}/cancel` (owner-only) переводит на `cancelled` без refund; `POST /api/v1/pt-packages/{id}/refund` (reception+owner per B-07) переиспользует `payment_refunder` Protocol slot; `PT_PACKAGE_STATUS_TRANSITIONS` константа + `_assert_can_transition` guard (mirrors v1.3 memberships) запрещают invalid moves с 409 `invalid_transition`.
   4. Protocol slot `register_active_pt_package_resolver` (тот же shape что v1.2 `ActiveMembership`) зарегистрирован в `app/main.py`; `GET /api/v1/pt-packages?client_id=...&status=active` доступен reception для PT-session form prefill; `GET /api/v1/pt-packages/{id}` возвращает instance со snapshot fields и `sessions_remaining`.
   5. Новый ARQ cron `expire_pt_packages` в 06:25 Europe/Moscow (контейнер `TZ=UTC` + `cron(hour=3, minute=25, unique=True, keep_result=60)`) переводит packages с `status='active' AND end_date IS NOT NULL AND end_date < today(Europe/Moscow)` в `expired`, идемпотентен (re-run в тот же день — no-op), эмитит один `pt_package_expired` per row; 5 audit events (`pt_package_sold`/`cancelled`/`refunded`/`exhausted`/`expired`) проходят `LOCKED_AUDIT_EVENTS` gate.
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 ### Phase 34: PT-Session Recording
 **Goal:** Reception фиксирует факт проведённой персональной тренировки с конкретным тренером; баланс пакета атомарно декрементируется DB-level race-safe SQL; при достижении нуля пакет автоматически переходит в `exhausted`; cancellation сессии восстанавливает баланс; PT-сессии независимы от visits (orthogonal events).
@@ -185,7 +185,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | 30. Foundations & Tech-Debt Bedrock | 4/4 | Complete    | 2026-05-14 |
 | 31. Trainers Module | 0/2 | In progress (planning complete) | — |
 | 32. Payment Ledger + Sale Flow + Refund | 3/3 | Complete   | 2026-05-15 |
-| 33. PT-Package Plans + Instances | 1/3 | In Progress|  |
+| 33. PT-Package Plans + Instances | 2/3 | In Progress|  |
 | 34. PT-Session Recording | 0/? | Not started | — |
 | 35. OpenAPI Drift Gate + admin-web Full Wiring | 0/? | Not started | — |
 | 36. Milestone Verification | 0/? | Not started | — |
