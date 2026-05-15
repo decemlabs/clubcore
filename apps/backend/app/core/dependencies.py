@@ -17,7 +17,7 @@ Phase 4 ships only the factory.
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import date
-from typing import Annotated, Protocol
+from typing import Annotated, Any, Protocol
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -227,6 +227,119 @@ async def resolve_trainer_by_id(session: AsyncSession, trainer_id: UUID) -> Trai
     if _trainer_by_id_resolver is None:
         return None
     return await _trainer_by_id_resolver(session, trainer_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 32 D-32-14 — PaymentRecorder + PaymentRefunder Protocol slots.
+#
+# Fifth + sixth composition-root carve-outs. The sale orchestrator
+# (memberships.service.create_membership, Plan 32-02) consumes
+# PaymentRecorder; the refund orchestrator (memberships.service.refund_membership,
+# Plan 32-03) consumes PaymentRefunder. Both are wired EXCLUSIVELY from
+# app.main.create_app() — NOT from app.workers.telegram_bot.main(), because
+# the bot is not a sale/refund participant in v1.4.
+#
+# Defensive-raise accessors (mirrors _user_loader defensive raise at line ~253;
+# NOT the silent-None pattern of _active_membership_resolver). A missing
+# registration is a misconfiguration, not a recoverable state — surfacing it
+# as RuntimeError at the consumer site fails the call instead of silently
+# proceeding without recording the payment.
+#
+# PaymentRefunder signature accepts (subject_kind, subject_id) NOT
+# original_payment_id (D-32-14 amended per PATTERNS.md §14). This keeps the
+# memberships orchestrator from importing payments.repository — the refunder
+# internally loads the original sale row via subject_kind/subject_id with
+# amount > 0 filter.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PaymentRecorder(Protocol):
+    """Structural type for the sale-side payment recorder (Phase 32 D-32-14).
+
+    Return type ``Any`` is intentional: the concrete return is
+    ``app.modules.payments.models.Payment``, but this Protocol lives in
+    ``app.core`` which is forbidden from importing ``app.modules.*``
+    (importlinter `core-not-depend-on-modules` contract). Callers in the
+    modules layer that need typed access cast the result locally.
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        *,
+        subject_kind: str,
+        subject_id: UUID,
+        amount_kopecks: int,
+        method: str = "cash",
+        received_by_user_id: UUID,
+        audit_actor: CurrentUser,
+    ) -> Any: ...
+
+
+class PaymentRefunder(Protocol):
+    """Structural type for the refund-side payment issuer (Phase 32 D-32-14).
+
+    Takes ``(subject_kind, subject_id)`` so cross-module callers
+    (memberships.service.refund_membership) never need to import
+    ``app.modules.payments.repository`` — preserves the
+    modules-independent importlinter contract. The refunder internally
+    loads the original sale-side row via subject_kind/subject_id with
+    amount > 0 filter.
+
+    Return type rationale matches :class:`PaymentRecorder` — ``Any``
+    because app.core may not name ``app.modules.payments.models.Payment``.
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        *,
+        subject_kind: str,
+        subject_id: UUID,
+        refund_user_id: UUID,
+        reason: str,
+        audit_actor: CurrentUser,
+    ) -> Any: ...
+
+
+_payment_recorder: PaymentRecorder | None = None
+_payment_refunder: PaymentRefunder | None = None
+
+
+def register_payment_recorder(recorder: PaymentRecorder) -> None:
+    """Composition-root setter — called by app.main.create_app() (NOT bot)."""
+    global _payment_recorder
+    _payment_recorder = recorder
+
+
+def register_payment_refunder(refunder: PaymentRefunder) -> None:
+    """Composition-root setter — called by app.main.create_app() (NOT bot)."""
+    global _payment_refunder
+    _payment_refunder = refunder
+
+
+def get_payment_recorder() -> PaymentRecorder:
+    """Defensive accessor (D-32-14) — raises if slot not registered.
+
+    Mirrors ``_user_loader`` defensive raise (line ~253), NOT
+    ``_active_membership_resolver`` silent-None (line ~117). The sale flow
+    cannot proceed without a recorder, so this branch is a hard failure.
+    """
+    if _payment_recorder is None:
+        raise RuntimeError("payment_recorder not registered")
+    return _payment_recorder
+
+
+def get_payment_refunder() -> PaymentRefunder:
+    """Defensive accessor (D-32-14) — raises if slot not registered.
+
+    Mirrors ``_user_loader`` defensive raise (line ~253), NOT
+    ``_active_membership_resolver`` silent-None (line ~117). The refund flow
+    cannot proceed without a refunder, so this branch is a hard failure.
+    """
+    if _payment_refunder is None:
+        raise RuntimeError("payment_refunder not registered")
+    return _payment_refunder
 
 
 async def get_current_user(

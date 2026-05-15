@@ -41,6 +41,8 @@ from app.core.database import db_lifespan
 from app.core.dependencies import (
     register_active_membership_resolver,
     register_client_by_telegram_resolver,
+    register_payment_recorder,
+    register_payment_refunder,
     register_trainer_by_id_resolver,
     register_user_loader,
 )
@@ -141,6 +143,20 @@ def create_app() -> FastAPI:
     )
 
     register_trainer_by_id_resolver(trainers_service.resolve_trainer_by_id)
+
+    # Phase 32 D-32-15: fifth + sixth composition-root carve-outs — sale flow
+    # (memberships.service.create_membership, Plan 32-02) consumes
+    # payment_recorder; refund flow (memberships.service.refund_membership,
+    # Plan 32-03) consumes payment_refunder. Exclusively wired here (NOT in
+    # telegram_bot.py — the bot is not a sale/refund participant in v1.4).
+    # Defensive raise on missing slot (D-32-14) surfaces misconfiguration as
+    # RuntimeError, not silent no-op.
+    from app.modules.payments import (
+        service as payments_service,
+    )
+
+    register_payment_recorder(payments_service.record_payment)
+    register_payment_refunder(payments_service.issue_refund)
 
     app.include_router(api)
     return app
