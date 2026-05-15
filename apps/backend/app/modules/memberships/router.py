@@ -97,6 +97,7 @@ from app.modules.memberships.schemas import (
     MembershipPlanListQuery,
     MembershipPlanResponse,
     MembershipPlanUpdateRequest,
+    MembershipRefundRequest,
     MembershipResponse,
 )
 
@@ -508,3 +509,53 @@ async def renew_membership(
     """
     new_membership = await service.renew_membership(session, actor, membership_id)
     return envelope(new_membership)
+
+
+@memberships_router.post(
+    "/{membership_id}/refund",
+    response_model=ResponseEnvelope[MembershipResponse],
+    status_code=status.HTTP_200_OK,
+    summary=(
+        "Refund a membership (reception+owner per B-07; "
+        "409 must_unfreeze_first / cannot_refund_renewed_source / "
+        "invalid_transition / already_refunded; "
+        "422 if amountKopecks supplied [REF-05])"
+    ),
+)
+async def refund_membership(
+    membership_id: UUID,
+    payload: MembershipRefundRequest,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.REFUND, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MembershipResponse]:
+    """Refund a membership (Phase 32 REF-01). REFUND permission + CSRF required.
+
+    (REFUND, MEMBERSHIPS) is NOT in OWNER_ONLY per B-07 — reception+owner can
+    both refund (H-13 AlertDialog mitigation handled at admin-web FE-13 in
+    Phase 35). NO Idempotency-Key dependency — refund flow uses DB partial
+    UNIQUE ``uq_payments_refund_of_alive`` for natural idempotency (D-32-20);
+    repeat POST → 409 ``already_refunded``.
+
+    Status-guard ordering (D-32-11 invariant — specific code wins):
+      1. status='frozen'                        → 409 must_unfreeze_first   (B-08)
+      2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)
+      3. generic _assert_can_transition         → 409 invalid_transition    (already cancelled / expired)
+
+    DB-side / refunder-side error mapping:
+      - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)
+      - no original sale row (legacy)    → 404 original_payment_not_found  (OriginalPaymentNotFoundError)
+
+    Schema-layer validation (REF-05):
+      - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')
+      - empty reason / reason >200 chars       → 422
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf.
+    """
+    membership = await service.refund_membership(
+        session, actor, membership_id, payload
+    )
+    return envelope(membership)
