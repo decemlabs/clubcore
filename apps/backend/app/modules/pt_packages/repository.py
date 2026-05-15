@@ -28,8 +28,9 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import Row, Select, and_, func, select, update
+from sqlalchemy import Row, Select, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import PaginatedData
@@ -195,15 +196,30 @@ async def find_active_for_client(
         ``ActivePtPackage`` Protocol slot wired in app/main.py (Phase 34
         PT-session sale consumes via core.dependencies.resolve_active_pt_package).
 
+    Live-window guard (WR-06 from Phase 33 review): a row whose
+    ``end_date < today`` is effectively-expired even if the cron has not
+    yet flipped its ``status`` to ``'expired'`` (the cron tick at 06:25
+    MSK can lag the actual end-of-day by ~30 hours worst-case). This
+    helper now refilters ``end_date >= today OR end_date IS NULL`` so
+    Phase 34's PT-session sale will not record a session against an
+    effectively-expired package. ``end_date IS NULL`` is the
+    ``validity_days IS NULL`` (бессрочный) class — never time-expires
+    (D-33-14).
+
     Single-row read; orders by created_at desc as a tiebreak in case the
     partial UNIQUE invariant is ever violated by a manual DB write (unlikely
     in v1.4 but mirrors memberships.find_active_for_client discipline).
     """
+    today = datetime.now(ZoneInfo("Europe/Moscow")).date()
     stmt = (
         select(PtPackage)
         .where(
             PtPackage.client_id == client_id,
             PtPackage.status == "active",
+            or_(
+                PtPackage.end_date.is_(None),
+                PtPackage.end_date >= today,
+            ),
         )
         .order_by(PtPackage.created_at.desc())
         .limit(1)
