@@ -30,6 +30,7 @@ Architectural boundary: app.core.audit_payloads MUST NOT import from
 app.modules.* (importlinter `core-not-depend-on-modules` contract).
 """
 
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -174,16 +175,29 @@ class PtPackagePlanArchivedPayload(BaseModel):
 
 
 class PtPackageSoldPayload(BaseModel):
-    """Payload schema for ("pt_package_sold", "pt_package") — PT-13."""
+    """Payload schema for ("pt_package_sold", "pt_package") — PT-13.
+
+    Phase 33 D-33-15 additive extension (Plan 33-02): the Phase 32-landed
+    7-key shape is extended to 10 keys by adding `plan_name_snapshot: str`,
+    `start_date: date`, `end_date: date | None`. The `payment_id` forensic
+    anchor is retained (Phase 32 PAY-05). LOCKED_AUDIT_EVENTS frozenset and
+    AUDIT_PAYLOAD_SCHEMAS registry are untouched — only the per-event
+    Pydantic model body grows. `end_date` is nullable because plans with
+    `validity_days IS NULL` produce instances with `end_date IS NULL`
+    (бессрочный package — D-33-14).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     pt_package_id: UUID
     client_id: UUID
     plan_id: UUID
+    plan_name_snapshot: str
     session_count_snapshot: int
     price_kopecks_snapshot: int
     validity_days_snapshot: int | None
+    start_date: date
+    end_date: date | None
     payment_id: UUID
 
 
@@ -209,12 +223,21 @@ class PtPackageRefundedPayload(BaseModel):
 
 
 class PtPackageExhaustedPayload(BaseModel):
-    """Payload schema for ("pt_package_exhausted", "pt_package") — PT-13."""
+    """Payload schema for ("pt_package_exhausted", "pt_package") — PT-13.
+
+    Phase 33 D-33-15 additive extension (Plan 33-02): adds
+    `exhausted_at: datetime` as schema bedrock for the Phase 34 callsite
+    (PT-session decrement orchestrator emits this event when
+    `sessions_remaining` reaches zero). Phase 33 itself does not emit this
+    event — it is pre-registered for Phase 34 consumption (mirrors the
+    Phase 30 INFRA-17 pre-registration pattern).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     pt_package_id: UUID
     client_id: UUID
+    exhausted_at: datetime
 
 
 class PtPackageExpiredPayload(BaseModel):

@@ -40,6 +40,7 @@ from app.core.config import get_settings
 from app.core.database import db_lifespan
 from app.core.dependencies import (
     register_active_membership_resolver,
+    register_active_pt_package_resolver,
     register_client_by_telegram_resolver,
     register_payment_recorder,
     register_payment_refunder,
@@ -157,6 +158,19 @@ def create_app() -> FastAPI:
 
     register_payment_recorder(payments_service.record_payment)
     register_payment_refunder(payments_service.issue_refund)
+
+    # Phase 33 D-33-12: seventh composition-root carve-out — pt_sessions
+    # service (Phase 34) will validate active-PT-package existence via this
+    # Protocol slot. Wired EXCLUSIVELY here (NOT in telegram_bot.py — the
+    # bot is not a PT-session participant in v1.4; mirrors D-32-14
+    # payment-recorder discipline). Silent-None accessor (D-33-12) — a
+    # missing slot is NOT a hard error like payment_recorder; absence is
+    # indistinguishable from "no active package" at the consumer site.
+    from app.modules.pt_packages import (
+        service as pt_packages_service,
+    )
+
+    register_active_pt_package_resolver(pt_packages_service.resolve_active_pt_package)
 
     app.include_router(api)
     return app

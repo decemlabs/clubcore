@@ -26,23 +26,38 @@ DELETE semantics:
     by flipping ``deleted_at = now(UTC)``.
 """
 
+import base64
+import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
+from app.core.exceptions import ConflictError, ValidationAppError
+from app.core.idempotency import (
+    IDEMPOTENCY_REDIS_PREFIX,
+    IDEMPOTENCY_TTL_SECONDS,
+    body_sha256,
+    load_idempotency_response,
+    verify_idempotency,
+)
 from app.core.pagination import PaginatedData
 from app.core.permissions import Action, Resource
+from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.pt_packages import service
 from app.modules.pt_packages.schemas import (
+    PtPackageCreateRequest,
+    PtPackageListQuery,
     PtPackagePlanCreateRequest,
     PtPackagePlanListQuery,
     PtPackagePlanResponse,
     PtPackagePlanUpdateRequest,
+    PtPackageResponse,
 )
 
 plans_router = APIRouter()
@@ -178,3 +193,143 @@ async def archive_plan(
 # ---------------------------------------------------------------------------
 
 pt_packages_router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Plan 33-02 endpoints — sale (POST), list (GET), detail (GET).
+# Plan 33-03 will append: POST /{id}/cancel + POST /{id}/refund.
+# ---------------------------------------------------------------------------
+
+
+@pt_packages_router.post(
+    "",
+    response_model=ResponseEnvelope[PtPackageResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary=(
+        "Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, "
+        "422 amount_mismatch, 409 active_pt_package_already_exists; "
+        "requires Idempotency-Key — D-33-16)"
+    ),
+)
+async def create_pt_package(
+    payload: PtPackageCreateRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.PT_PACKAGES)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Sell a PT-package (Phase 33 PT-07).
+
+    (CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.
+    Service layer:
+      - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).
+      - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).
+      - 409 active_pt_package_already_exists (defensive pre-check AND DB
+        partial UNIQUE race gate — D-33-09).
+      - Idempotency-Key required (D-33-16); same Redis namespace
+        ``sz:idem:{key}`` and TTL as Phase 32 PAY-09.
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf →
+    verify_idempotency. Two-phase Redis claim + replay block mirrors
+    ``memberships.router.create_membership``.
+    """
+    # Body hash for replay-collision detection on identical Idempotency-Key.
+    incoming_body = await request.body()
+    incoming_hash = body_sha256(incoming_body)
+
+    # Phase 32 PAY-09 / D-33-16 — replay branch first; if a completed envelope
+    # is cached for this key, return verbatim (matching body hash) OR raise
+    # 422 idempotency_key_reuse (mismatched body).
+    stored = await load_idempotency_response(redis, idempotency_key)
+    if stored is not None:
+        if isinstance(stored, str):
+            # Placeholder (in-flight) — concurrent caller still running.
+            raise ConflictError("idempotency_in_flight")
+        if stored["body_hash"] != incoming_hash:
+            raise ValidationAppError("idempotency_key_reuse")
+        return Response(
+            content=base64.b64decode(stored["body_b64"]),
+            status_code=stored["status_code"],
+            media_type="application/json",
+        )
+
+    # First call for this key — run the sale orchestrator. We do NOT pre-claim
+    # the key with SET NX because the orchestrator's own commit failure path
+    # would leave a stale placeholder; instead, store the envelope after a
+    # successful run. Concurrent callers race on the partial UNIQUE
+    # uq_pt_packages_active_per_client and exactly one wins with 201 — the
+    # other surfaces 409 active_pt_package_already_exists (T-33-02-03).
+    pt_package = await service.create_pt_package(session, actor, payload)
+    response_envelope = envelope(pt_package)
+    body_bytes = json.dumps(
+        response_envelope.model_dump(mode="json", by_alias=True),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    envelope_json = json.dumps(
+        {
+            "status_code": status.HTTP_201_CREATED,
+            "body_hash": incoming_hash,
+            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    await redis.set(
+        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
+        envelope_json,
+        ex=IDEMPOTENCY_TTL_SECONDS,
+    )
+    return Response(
+        content=body_bytes,
+        status_code=status.HTTP_201_CREATED,
+        media_type="application/json",
+    )
+
+
+@pt_packages_router.get(
+    "",
+    response_model=ResponseEnvelope[PaginatedData[PtPackageResponse]],
+    summary="List PT-packages (reception+owner; paginated; ?clientId / ?status filters)",
+)
+async def list_pt_packages(
+    query: Annotated[PtPackageListQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.VIEW, Resource.PT_PACKAGES)),
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PaginatedData[PtPackageResponse]]:
+    """Paginated PT-package list (D-33-06 read tier).
+
+    (VIEW, PT_PACKAGES) is NOT in OWNER_ONLY — reception sees the same list
+    as owner (B-07 / Phase 35 PT-session form prefill — FE-10..18).
+    """
+    page = await service.list_pt_packages(session, query)
+    return envelope(page)
+
+
+@pt_packages_router.get(
+    "/{pt_package_id}",
+    response_model=ResponseEnvelope[PtPackageResponse],
+    summary="Read a single PT-package (reception+owner; 404 pt_package_not_found)",
+)
+async def get_pt_package(
+    pt_package_id: UUID,
+    _actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.VIEW, Resource.PT_PACKAGES)),
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PtPackageResponse]:
+    """Read a single PT-package instance (D-33-06; D-33-10 ``is_active`` computed).
+
+    404 ``pt_package_not_found`` for missing ids.
+    """
+    pt_package = await service.get_pt_package_by_id(session, pt_package_id)
+    return envelope(pt_package)

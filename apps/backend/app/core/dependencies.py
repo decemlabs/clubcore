@@ -120,6 +120,81 @@ async def resolve_active_membership(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Phase 33 D-33-12 — ActivePtPackage resolver slot.
+#
+# Second active-subject slot pair (after Phase 17 ActiveMembership). Phase 34
+# pt_sessions service will call ``get_active_pt_package`` through this slot
+# to validate that the client owns a live PT-package before recording a
+# session. Like ActiveMembership, the consumer's failure mode for
+# "no resolver registered" cannot be distinguished from "no active package"
+# at the call site — silent-None semantics are the documented contract
+# (D-33-12; mirrors line 117). The defensive-raise pattern is reserved for
+# payment recorder/refunder (D-32-14) where a missing slot is hard
+# misconfiguration.
+#
+# Wired EXCLUSIVELY from ``app.main.create_app`` (NOT from
+# ``app.workers.telegram_bot.main`` — bot is not a PT-session participant
+# in v1.4; mirrors D-32-14 discipline).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ActivePtPackage(Protocol):
+    """Structural type for the active-PT-package row (Phase 33 D-33-12).
+
+    Per D-33-12: only the attributes Phase 34 pt_sessions service consumes
+    are declared (id, client_id, status, sessions_remaining, end_date).
+    The SA ``PtPackage`` ORM structurally satisfies this Protocol — no DTO
+    conversion at the resolver boundary (mirrors ``ActiveMembership``).
+    """
+
+    id: UUID
+    client_id: UUID
+    status: str
+    sessions_remaining: int
+    end_date: date | None
+
+
+ActivePtPackageResolver = Callable[[AsyncSession, UUID], Awaitable[ActivePtPackage | None]]
+"""Async callable: (session, client_id) -> ActivePtPackage | None.
+
+Returns None when the client has no active PT-package (the canonical case
+Phase 34 pt_sessions service treats as 'no package').
+"""
+
+_active_pt_package_resolver: ActivePtPackageResolver | None = None
+
+
+def register_active_pt_package_resolver(resolver: ActivePtPackageResolver) -> None:
+    """Composition-root setter — called once by ``app.main.create_app`` in Phase 33.
+
+    Sixth+ loader slot after register_user_loader (Phase 5),
+    register_active_membership_resolver (Phase 17),
+    register_client_by_telegram_resolver (Phase 19),
+    register_trainer_by_id_resolver (Phase 31),
+    register_payment_recorder + register_payment_refunder (Phase 32).
+    Idempotent: re-registering replaces the slot (mirrors WR-05 reasoning).
+    """
+    global _active_pt_package_resolver
+    _active_pt_package_resolver = resolver
+
+
+async def get_active_pt_package(
+    session: AsyncSession, client_id: UUID
+) -> ActivePtPackage | None:
+    """Consumer entry point — used by ``app.modules.pt_sessions.service`` in Phase 34.
+
+    Silent-None when the slot is unset (production code always registers in
+    ``create_app()``; tests can register a stub or rely on the default-None
+    behaviour). Mirrors ``resolve_active_membership`` (line 117) — D-33-12
+    explicit choice: "no active package" is an expected state, not a
+    misconfiguration.
+    """
+    if _active_pt_package_resolver is None:
+        return None
+    return await _active_pt_package_resolver(session, client_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Phase 19 D-02 — ClientByTelegram resolver slot.
 #
 # Third composition-root carve-out after `register_user_loader` (Phase 5 D-15)
