@@ -202,13 +202,25 @@ class PtPackageSoldPayload(BaseModel):
 
 
 class PtPackageCancelledPayload(BaseModel):
-    """Payload schema for ("pt_package_cancelled", "pt_package") — PT-13."""
+    """Payload schema for ("pt_package_cancelled", "pt_package") — PT-13.
+
+    Phase 33 D-33-10 / Plan 33-03 additive extension: ``prior_status`` (one of
+    ``'active'``, ``'exhausted'``, ``'expired'``) captures the source state
+    before the cancellation transition for forensic chain inspection. Resolves
+    the 33-PATTERNS.md:1112 mismatch flag — the original CONTEXT.md kwarg
+    ``reason`` is now the schema field ``cancellation_reason`` AND the new
+    ``prior_status`` field is added. LOCKED_AUDIT_EVENTS frozenset and
+    AUDIT_PAYLOAD_SCHEMAS registry are untouched — only the per-event
+    Pydantic model body grows (mirrors PtPackageSoldPayload additive
+    extension pattern from Plan 33-02).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     pt_package_id: UUID
     client_id: UUID
     cancellation_reason: str
+    prior_status: str
 
 
 class PtPackageRefundedPayload(BaseModel):
