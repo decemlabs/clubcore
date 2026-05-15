@@ -4,6 +4,10 @@ Mirrors tests/integration/memberships/conftest.py verbatim with role-specific
 email constants (so PT-package tests can run in parallel with memberships
 tests within the same session without collision on the auth fixtures'
 seeded emails).
+
+Plan 33-03 addition: ``db_session_real_commit`` fixture for REF-TEST-02
+(concurrent PT-package refund race) — mirrors the membership sibling
+verbatim, TRUNCATE list extended with pt_package_plans + pt_packages.
 """
 
 from __future__ import annotations
@@ -16,8 +20,14 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.permissions import Role
 from app.core.redis import get_redis
@@ -293,3 +303,42 @@ async def make_pt_package(
         return pt_package
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Plan 33-03 — D-13 sibling fixture for REF-TEST-02 race test only.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def db_session_real_commit() -> AsyncIterator[AsyncSession]:
+    """Real BEGIN/COMMIT per request — used ONLY by test_pt_package_refund_race.py.
+
+    The default ``db_session`` fixture wraps every test in a SAVEPOINT for
+    per-test isolation; concurrent INSERTs against the partial UNIQUE
+    ``uq_payments_refund_of_alive`` do NOT compose with nested savepoints
+    (rollback on IntegrityError masks second-+ failures and breaks the
+    serialisation guarantees REF-TEST-02 asserts). Mirrors the membership
+    sibling at ``tests/integration/memberships/conftest.py:307`` verbatim
+    with the TRUNCATE list extended for the PT-package tables (D-33-01 /
+    D-33-03).
+    """
+    settings = get_settings()
+    engine = create_async_engine(str(settings.database_url), pool_pre_ping=True)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with session_factory() as session:
+        yield session
+
+    # Cleanup: real-commit writes are NOT rolled back. TRUNCATE every table
+    # the REF-TEST-02 test seeds: users + clients + pt_package_plans +
+    # pt_packages + payments + audit_log. CASCADE handles the FK chain.
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "TRUNCATE users, clients, pt_package_plans, pt_packages, "
+                "payments, audit_log "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+    await engine.dispose()
