@@ -79,8 +79,8 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 - [x] **Phase 32: Payment Ledger + Sale Flow + Refund** — PAY-01..10 + REF-01..08 (18 reqs) — `payments` append-only ledger + `record_payment`/`issue_refund` services + Protocol slots + `Idempotency-Key` header + `POST /memberships/{id}/refund` + frozen/renewed-source guards (completed 2026-05-15)
 - [x] **Phase 33: PT-Package Plans + Instances** — PT-01..13 (13 reqs) — `pt_package_plans` + `pt_packages` tables + sell/cancel/refund endpoints + status transitions + `expire_pt_packages` ARQ cron 06:25 MSK (completed 2026-05-15)
 - [ ] **Phase 34: PT-Session Recording** — PT-14..22 (9 reqs) — `pt_sessions` table + race-safe decrement + auto-exhausted transition + cancel with balance restore + backdating windows
-- [ ] **Phase 35: OpenAPI Drift Gate + admin-web Full Wiring** — FE-10..18 (9 reqs) — byte-stable regen of `openapi.json` + `schema.d.ts` + sale-with-payment + refund AlertDialog + PT-session UI + `/trainers` + `PaymentBadge` + `PtPackageStatusBadge` + locked Russian i18n + three-way RBAC parity
-- [ ] **Phase 36: Milestone Verification** — VER-01..04 (4 reqs) — 7+ operator scenarios against live stack + race tests (REF/PTS/PAY/AUDIT) + 6 CI gates green + operator sign-off in `v1.4-VERIFICATION-LOG.md`
+- [ ] **Phase 35: OpenAPI Drift Gate (backend-only API handoff)** — FE-10 (1 req) — byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all v1.4 typed paths; CI drift-gate green. *FE-11..18 descoped to v2.0 — design team owns production frontends*
+- [ ] **Phase 36: Milestone Verification (backend-only)** — VER-01..04 (4 reqs) — operator API-contract scenarios via curl/Postman against live backend + race tests (REF/PTS/PAY/AUDIT) + 4 backend CI gates green + operator sign-off in `v1.4-VERIFICATION-LOG.md`. *admin-web smoke removed — `apps/admin-web` is frozen mock-reference, not production target*
 
 ## Phase Details
 
@@ -154,28 +154,28 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   5. PT-sessions полностью независимы от `visits` таблицы (Q3 default — запись session НЕ создаёт visit row, и наоборот); `pt_session_recorded` + `pt_session_cancelled` audit events проходят `LOCKED_AUDIT_EVENTS` gate; Postgres integration test PTS-TEST-01 проверяет 2 concurrent recordings против пакета с `sessions_remaining=1` → ровно один успех, другой 409.
 **Plans:** TBD
 
-### Phase 35: OpenAPI Drift Gate + admin-web Full Wiring
-**Goal:** Backend контракт регенерирован байт-стабильно с типизированными путями для всех v1.4 endpoints; admin-web на `VITE_API_MODE=http` показывает обновлённый sale flow с записью оплаты, refund AlertDialog с H-13 mitigation, `/trainers` страницу, UI записи PT-сессии, и детали PT-пакета с балансом + историей; mock services синхронизированы для оффлайн-разработки.
-**Depends on:** Phases 31, 32, 33, 34 (все backend endpoints + новые resources/permissions/status enums должны существовать перед codegen + UI wiring)
-**Requirements:** FE-10, FE-11, FE-12, FE-13, FE-14, FE-15, FE-16, FE-17, FE-18
+### Phase 35: OpenAPI Drift Gate (backend-only API handoff)
+**Goal:** Backend контракт регенерирован байт-стабильно: `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` экспонируют все типизированные v1.4 paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints). Это передача API-контракта внешней дизайн-команде, которая разрабатывает production admin + client apps отдельно от этого репозитория.
+**Depends on:** Phases 31, 32, 33, 34 (все backend endpoints + новые Resource значения должны существовать перед codegen)
+**Requirements:** FE-10 (FE-11..18 descoped to v2.0 Frontend Integration milestone per pivot 2026-05-15)
+**Scope change:** `apps/admin-web` остаётся frozen-as-of-v1.3 как mock-mode contract reference; никаких новых routes / mutations / shared components / Russian i18n strings в этом phase. UI hint: **no**.
 **Success Criteria** (what must be TRUE):
   1. Atomic single-commit регенерация: `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` экспонируют все типизированные v1.4 paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints на memberships и pt-packages); CI `git diff --exit-code` зелёный на оба артефакта; mirrors v1.2 Phase 21 + v1.3 Phase 28 pattern.
-  2. Новые роуты: `/trainers` (owner-only `beforeLoad`), `/pt-package-plans` (owner-only), `/pt-packages` (list + `$pt_packageId` detail), `/clients/$clientId` расширен с payments-history block + active-pt-package block; sale-form на `/memberships` И `/pt-packages` включает "Получено наличными" mandatory amount input (defaulted к `plan.price_kopecks`, server-validated equality).
-  3. Refund AlertDialog на `/memberships/$membershipId` и `/pt-packages/$pt_packageId` показывает client full name + plan name + `formatMoney(amount)` + sale date + free-text reason input (≤200 chars required); confirm button disabled до checkbox "Понимаю, что возврат необратим" (H-13 mitigation per B-07); PT-session UI panel на pt-package detail показывает trainer-dropdown (loads `?active=true`), datetime picker (defaulted now, ≤7d backdating для reception), notes textarea, session history с `(уволен)` suffix на inactive-trainer names.
-  4. Новые shared компоненты: `PaymentBadge` (sale/refund tint через `bg-success`/`bg-warning` семантические токены) + `PtPackageStatusBadge` (4-variant discriminated union active/exhausted/expired/cancelled); 10 новых TanStack Query mutation hooks (`usePtPackageSell`/`Cancel`/`Refund`, `useMembershipRefund`, `usePtSessionRecord`/`Cancel`, `useTrainerCreate`/`Update`/`Deactivate`/`Reactivate`) — optimistic где safe, refund non-optimistic + navigate-on-success.
-  5. Locked Russian i18n strings зафиксированы в `src/shared/i18n/ru.ts` для всех новых flows; three-way RBAC parity test расширен (backend `OWNER_ONLY` ↔ admin-web `can.ts` ↔ `registry.ts`) для новых resources и проходит на CI; raw Tailwind palette ESLint ban не нарушен; нет regression в существующих admin-web тестах.
+  2. `packages/api-client/src/schema.contract.test.ts` forward-guard расширен — пинит все v1.4 typed paths и operationIds, так что codegen-regression (openapi-typescript мажорная версия, prefix typo, operationId collision) ловится до того, как внешний фронтенд успел интегрироваться.
+  3. Никаких изменений внутри `apps/admin-web/` (frozen-as-of-v1.3); существующие 233 admin-web vitest specs продолжают проходить как canary против `schema.d.ts` совместимости.
+  4. `packages/api-client/README.md` (или эквивалент) обновлён с changelog v1.4 paths + auth setup pointer — дизайн-команда может потреблять артефакт автономно.
 **Plans:** TBD
-**UI hint**: yes
+**UI hint**: no
 
-### Phase 36: Milestone Verification
-**Goal:** Прогнать 7+ operator human-verification сценариев против live backend + admin-web стека, выполнить race-condition Postgres integration tests, зафиксировать 6/6 CI gate evidence и operator sign-off — gate перед закрытием v1.4 milestone (mirrors v1.3 Phase 29 discipline).
-**Depends on:** Phase 35 (нужен полный backend + admin-web стек на `VITE_API_MODE=http` для smoke-сценариев)
+### Phase 36: Milestone Verification (backend-only)
+**Goal:** Прогнать operator API-contract сценарии против live backend (curl / Postman / httpie), выполнить race-condition Postgres integration tests, зафиксировать 4/4 backend CI gate evidence + admin-web canary, и operator sign-off — gate перед закрытием v1.4 milestone. Adapted from v1.3 Phase 29 discipline за вычетом admin-web human UAT, т.к. production frontends разрабатываются дизайн-командой вне репо.
+**Depends on:** Phase 35 (нужен finalized OpenAPI artifact + live backend через `docker compose up`)
 **Requirements:** VER-01, VER-02, VER-03, VER-04
 **Success Criteria** (what must be TRUE):
-  1. 7+ operator human-verification scenarios прогнаны против live backend + admin-web: sale-with-payment golden path; refund of fresh sale; refund attempt on frozen membership (rejected 409 `must_unfreeze_first`); PT-package sale; PT-session recording с active trainer; PT-package exhaustion mid-flow; trainer deactivation; cross-phase smoke "sell membership → freeze → refund-attempt-rejected → unfreeze → refund-succeeds"; pass/fail зафиксирован в `.planning/milestones/v1.4-VERIFICATION-LOG.md`.
-  2. Race-condition Postgres integration tests все зелёные: REF-TEST-01 (concurrent refund), PTS-TEST-01 (concurrent PT-session decrement), PAY-TEST-01 (concurrent sale double-submit с одинаковым `Idempotency-Key`), AUDIT-TEST-01 (каждая state-mutating service-операция эмитит ожидаемое событие).
-  3. 6/6 CI gates зелёные: backend `ruff` + `mypy --strict` + `pytest` + OpenAPI drift; frontend `pnpm typecheck` + `pnpm lint` + `pnpm test` + api-client codegen drift; evidence captured как gate logs в `milestones/v1.4-VERIFICATION-LOG.md`.
-  4. Operator sign-off задокументирован в `.planning/milestones/v1.4-VERIFICATION-LOG.md` с verbatim DM / UI evidence per scenario; любые production-blocker regressions discovered fixed inline (v1.3 поймал 3 таких на этом gate); deferred items занесены в STATE.md перед milestone-close.
+  1. 7+ operator API-contract сценариев прогнаны против live backend через curl / Postman collection (НЕ admin-web UI): sale-with-payment golden path; refund of fresh sale; refund attempt on frozen membership (rejected 409 `must_unfreeze_first`); PT-package sale; PT-session recording с active trainer; PT-package exhaustion mid-flow; trainer deactivation + 409 на attempt to record session с inactive trainer; cross-phase smoke "sell membership → freeze → refund-attempt-rejected → unfreeze → refund-succeeds"; verbatim HTTP request/response evidence зафиксирован в `.planning/milestones/v1.4-VERIFICATION-LOG.md`.
+  2. Race-condition Postgres integration tests все зелёные: REF-TEST-01 (concurrent refund), REF-TEST-02 (concurrent PT-package refund), PTS-TEST-01 (concurrent PT-session decrement), PAY-TEST-01 (concurrent sale double-submit с одинаковым `Idempotency-Key`), AUDIT-TEST-01 (каждая state-mutating service-операция эмитит ожидаемое locked событие).
+  3. 4/4 backend CI gates зелёные: `ruff` + `mypy --strict` + `pytest` + OpenAPI drift; admin-web vitest specs запущены как canary (но не fail-blocker, т.к. frozen mock-reference); evidence captured как gate logs в `milestones/v1.4-VERIFICATION-LOG.md`.
+  4. Operator sign-off задокументирован в `.planning/milestones/v1.4-VERIFICATION-LOG.md` с verbatim HTTP evidence per scenario; любые production-blocker regressions discovered fixed inline (v1.3 поймал 3 таких на этом gate); deferred items занесены в STATE.md перед milestone-close; v1.5 API Handoff scope-handoff подготовлен (Postman collection finalized, auth setup runbook draft).
 **Plans:** TBD
 
 ## Progress
@@ -183,18 +183,18 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 30. Foundations & Tech-Debt Bedrock | 4/4 | Complete    | 2026-05-14 |
-| 31. Trainers Module | 0/2 | In progress (planning complete) | — |
+| 31. Trainers Module | 2/2 | Complete   | 2026-05-14 |
 | 32. Payment Ledger + Sale Flow + Refund | 3/3 | Complete   | 2026-05-15 |
 | 33. PT-Package Plans + Instances | 3/3 | Complete   | 2026-05-15 |
 | 34. PT-Session Recording | 0/? | Not started | — |
-| 35. OpenAPI Drift Gate + admin-web Full Wiring | 0/? | Not started | — |
-| 36. Milestone Verification | 0/? | Not started | — |
+| 35. OpenAPI Drift Gate (backend-only handoff) | 0/? | Not started | — |
+| 36. Milestone Verification (backend-only) | 0/? | Not started | — |
 
 ---
 
-*Roadmap last updated: 2026-05-14 — v1.4 milestone planning started*
+*Roadmap last updated: 2026-05-16 — Phase 35/36 descoped to backend-only per 2026-05-15 frontend pivot (FE-11..18 → v2.0 Frontend Integration)*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
 *v1.3 Coverage: 44/44 v1.3 requirements satisfied (1 mock-mode UX deferred to v1.4 — closed in Phase 30 DEBT-05)*
-*v1.4 Coverage: 0/69 v1.4 requirements satisfied (69 mapped to phases, planning stage)*
+*v1.4 Coverage: 47/61 v1.4 in-scope requirements satisfied (Phases 30-33 complete: 8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package; remaining: 9 PT-session + 1 FE-10 + 4 VER. FE-11..18 deferred to v2.0 Frontend Integration)*

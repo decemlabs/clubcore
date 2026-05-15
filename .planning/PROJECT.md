@@ -32,7 +32,7 @@ Cumulative shipped versions: v1.0 (Skeleton, 47/47), v1.1 (Auth + Clients, 70/70
 - **PT-пакет (новый тип услуги)** — новый kind плана `pt_package` с `session_count`; параллельно с месячными абонементами; клиент может иметь оба одновременно.
 - **Trainers catalog** — owner-only справочник тренеров (имя, телефон опционально, active/inactive); без расписания, зарплат, смен.
 - **PT session recording** — ресепшен фиксирует "клиент использовал 1 ПТ с тренером Y"; баланс пакета списывается; история занятий на карточке.
-- **Admin UI** — обновлённый sale flow с записью оплаты, refund-кнопка, `/trainers` страница, UI записи ПТ-занятия, детали ПТ-пакета с балансом и историей.
+- ~~**Admin UI** — обновлённый sale flow…~~ **DESCOPED 2026-05-15** — фронтенд-команда (внешний дизайнер) теперь самостоятельно разрабатывает админ-панель и клиентское приложение. v1.4 поставляется как backend-complete; FE-10..18 перенесены в v2.0 Frontend Integration milestone.
 - **Tech-debt carryover** — v1.3 deferred `mock/memberships.ts` `?status=` filter parity (one-liner).
 
 **Key context:**
@@ -45,13 +45,16 @@ Cumulative shipped versions: v1.0 (Skeleton, 47/47), v1.1 (Auth + Clients, 70/70
 
 ## Long-term MVP roadmap (post-v1.4)
 
+**Plan pivot 2026-05-15:** Дизайн-команда теперь сама разрабатывает оба фронтенда (admin + client). Backend становится единственным source of truth, фронтенды подключаются по контракту. Roadmap перестроен под backend-only delivery + API handoff.
+
 | Milestone | Focus |
 |---|---|
-| **v1.5 — Reports + Audit Log** | Дашборд собственника (выручка по дням/месяцам, активные/истекающие клиенты), `GET /api/v1/audit-log` + UI |
-| **v1.6 — Online Payments (ЮKassa)** | Когда зал будет готов принимать карты онлайн: ЮKassa intake + webhooks + чеки 54-ФЗ |
-| **v1.7 — UI polish** | Прицельная работа над админкой под ежедневную работу ресепшена (формы, скорость типовых сценариев, планшет/mobile) |
+| **v1.5 — API Handoff for Design Team** | OpenAPI doc site, экспорт `schema.d.ts` для внешних потребителей, Postman/curl коллекция, contract tests, auth setup runbook, sample integration flows. Цель — дизайнер-команда может разрабатывать оба фронтенда независимо от backend репо |
+| **v1.6 — Reports + Audit Log** | (был v1.5) Backend API для дашборда собственника: выручка по дням/месяцам, активные/истекающие клиенты, `GET /api/v1/audit-log`. UI потребляется внешней админкой через OpenAPI |
+| **v1.7 — Online Payments (ЮKassa)** | (был v1.6) ЮKassa intake + webhooks + чеки 54-ФЗ |
+| **v2.0 — Frontend Integration** | Дизайнер сдаёт production admin + client apps; интеграционные тесты на стыке (live backend + real frontends); миграция или сосуществование с `apps/admin-web` (mock reference) |
 
-После v1.5 зал может работать каждый день. v1.6 + v1.7 — расширение и шлифовка.
+После v1.5 фронтенд-команда может работать независимо. v1.6 / v1.7 наращивают backend контракт; v2.0 запускается, когда оба фронтенда готовы к интеграции.
 
 <details>
 <summary>Previous milestone scope (v1.3 — shipped 2026-05-14)</summary>
@@ -140,8 +143,8 @@ See `.planning/REQUIREMENTS.md` for the locked REQ-IDs. Themes:
 - **PT packages** — new `pt_package` plan kind with `session_count`; PT-membership instances; session-decrement on use
 - **Trainers** — owner-only lightweight catalog (no schedule, no payroll)
 - **PT session recording** — reception-driven session log linked to trainer + PT-package; balance accounting
-- **Admin-web wiring** — sale-with-payment flow, refund button, `/trainers` page, PT session UI, PT package detail page
-- **Tech-debt carryover** — v1.3 deferred `mock/memberships.ts` `?status=` filter parity
+- ~~**Admin-web wiring** — sale-with-payment flow…~~ **DESCOPED 2026-05-15** — FE-10..18 перенесены в v2.0 Frontend Integration milestone (внешний дизайнер сам разрабатывает оба фронтенда). Phase 35 пересобирается под OpenAPI byte-stable regen + `schema.d.ts` export только; Phase 36 переписывается под backend-only verification сценарии
+- **Tech-debt carryover** — v1.3 deferred `mock/memberships.ts` `?status=` filter parity (low-priority — `apps/admin-web` теперь mock reference, не production target)
 
 ### Out of Scope
 
@@ -149,7 +152,7 @@ See `.planning/REQUIREMENTS.md` for the locked REQ-IDs. Themes:
 
 - Multi-tenancy (ContextVar/`tenant_id`/RLS/`SET LOCAL`) — пет-проект на 1 зал; добавим только когда появится второй покупатель
 - **Stripe** — недоступен в РФ, не использовать никогда в этом проекте
-- `apps/client-web` — клиентский фронт появится только в Phase J, не раньше
+- **Production frontend code** (admin + client apps) — оба фронтенда разрабатываются дизайн-командой **отдельно от этого репозитория** (pivot 2026-05-15). Backend публикует контракт через OpenAPI / `schema.d.ts` / Postman collection (v1.5 API Handoff milestone) и интегрируется с готовыми фронтендами в v2.0 Frontend Integration milestone. `apps/admin-web` остаётся как mock-mode contract reference и не считается production target
 - Kubernetes / Terraform / production deploy — пока только dev docker-compose
 
 ## Context
@@ -177,7 +180,7 @@ See `.planning/REQUIREMENTS.md` for the locked REQ-IDs. Themes:
 - **Region**: РФ/СНГ — Stripe запрещён; платежи только ЮKassa; Telegram как первичный канал
 - **Tooling**: ruff + mypy strict + import-linter обязательны — архитектурные правила выполнимы локально через `uv run`
 - **Testing**: backend-тесты используют `httpx ASGITransport` (не реальный сетевой стек) и `pytest-asyncio`
-- **Frontend integrity**: `apps/admin-web` — это перенос `./frontend`; правки внутренней структуры или моков требуют явного решения
+- **Frontend integrity** (updated 2026-05-15): `apps/admin-web` остаётся frozen-as-of-v1.3 как **mock-mode contract reference** — показывает UX intent + детерминированные mock-данные (faker seed=42) для дизайнер-команды; не является production target. Production admin + client apps разрабатываются дизайн-командой **вне этого репозитория**; backend — единственный source of truth через OpenAPI / `schema.d.ts` / Postman collection (v1.5 API Handoff). Не редактировать внутреннюю структуру `apps/admin-web/` без явного решения
 - **Dev deps формат**: PEP 735 `[dependency-groups].dev` (мигрировано с `[tool.uv].dev-dependencies` в quick task 260501-ndi)
 
 ## Key Decisions
@@ -245,4 +248,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-14 — v1.4 (Cash Sales + PT Packages) milestone scoped*
+*Last updated: 2026-05-15 — Frontend pivot: design team now owns admin + client app development; v1.4 descoped to backend-only; v1.5 reshaped as API Handoff; v2.0 added as Frontend Integration milestone*

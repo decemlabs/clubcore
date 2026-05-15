@@ -32,9 +32,9 @@ Last activity: 2026-05-15 -- Phase 33 execution started
 
 ## v1.4 Milestone Plan
 
-**Phases:** 30 (Foundations & Tech-Debt) → 31 (Trainers) → 32 (Payments + Refund) → 33 (PT-Package Plans + Instances) → 34 (PT-Sessions) → 35 (OpenAPI + admin-web wiring) → 36 (Milestone Verification)
+**Phases:** 30 (Foundations & Tech-Debt) → 31 (Trainers) → 32 (Payments + Refund) → 33 (PT-Package Plans + Instances) → 34 (PT-Sessions) → 35 (OpenAPI backend-only handoff) → 36 (Backend-only Milestone Verification)
 **Cadence:** 6 feature phases + 1 verification phase (v1.3 cadence + 1 extra feature phase because PT-package plans/instances and PT-sessions cannot share one phase — sessions decrement instances and need them landed first).
-**Requirements:** 69 mapped (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 9 FE + 4 VER); 100% coverage validated.
+**Requirements:** 61 in-scope mapped (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 1 FE + 4 VER); 100% coverage validated. *FE-11..18 (8 reqs) deferred to v2.0 Frontend Integration milestone per 2026-05-15 frontend pivot — design team owns production admin + client apps externally.*
 
 ## v1.3 Milestone Summary (previous)
 

@@ -104,24 +104,29 @@
 - [ ] **PT-21**: 2 audit events: `pt_session_recorded`, `pt_session_cancelled`.
 - [ ] **PT-22**: Postgres integration test PTS-TEST-01: two concurrent `POST /pt-sessions` against a package with `sessions_remaining=1` → exactly one succeeds, other 409.
 
-### FE — Admin-web Wiring (Phase 35)
+### FE — Backend API Handoff (Phase 35)
 
-- [ ] **FE-10**: OpenAPI drift gate: single byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all new v1.4 typed paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints). CI `git diff --exit-code` enforces.
-- [ ] **FE-11**: New routes: `/trainers` (owner-only `beforeLoad`), `/pt-package-plans` (owner-only), `/pt-packages` (list + `$pt_packageId` detail), `/clients/$clientId` extended with payments-history block + active-pt-package block.
-- [ ] **FE-12**: Sale flow modification: `/memberships` sale form gets a "Получено наличными" section (mandatory cash-received amount input, defaulted to `plan.price_kopecks`; validated equal to plan price server-side). Same for `/pt-packages` sale.
-- [ ] **FE-13**: Refund button on `/memberships/$membershipId` and `/pt-packages/$pt_packageId` detail pages. Opens AlertDialog per REF-06.
-- [ ] **FE-14**: PT-session recording UI: panel on `/pt-packages/$pt_packageId` detail with trainer-dropdown (loads `?active=true`), datetime picker (defaulted to now, backdating ≤7d for reception), notes textarea. "Записать тренировку" button. Session history below with `(уволен)` suffix on inactive-trainer names.
-- [ ] **FE-15**: New shared `PaymentBadge` (sale/refund tint via `bg-success`/`bg-warning` tokens) and `PtPackageStatusBadge` (4-variant discriminated union: active/exhausted/expired/cancelled). Used on list pages, detail pages, and history blocks.
-- [ ] **FE-16**: TanStack Query mutation hooks: `usePtPackageSell`, `usePtPackageCancel`, `usePtPackageRefund`, `useMembershipRefund`, `usePtSessionRecord`, `usePtSessionCancel`, `useTrainerCreate/Update/Deactivate/Reactivate`. Optimistic where safe; refund non-optimistic + navigate-on-success.
-- [ ] **FE-17**: Locked Russian i18n strings for new flows (sale-with-payment labels, refund AlertDialog copy, PT-session form copy, trainers CRUD copy, status badge labels). Hard-coded in `src/shared/i18n/ru.ts`.
-- [ ] **FE-18**: Three-way RBAC parity test extended to assert byte-paritet between backend `OWNER_ONLY` + admin-web `can.ts` + `registry.ts` for the new resources.
+- [ ] **FE-10**: OpenAPI drift gate: single byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all new v1.4 typed paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints). CI `git diff --exit-code` enforces. `schema.contract.test.ts` forward-guard extended to pin v1.4 typed paths and operationIds. `packages/api-client/README.md` updated with v1.4 changelog + auth setup pointer for external design-team consumption.
 
-### VER — Milestone Verification (Phase 36)
+### FE — Descoped to v2.0 Frontend Integration milestone (pivot 2026-05-15)
 
-- [ ] **VER-01**: 7+ operator human-verification scenarios executed against live backend + admin-web stack (mirrors v1.3 Phase 29 sweep). Scenarios cover: sale-with-payment golden path; refund of fresh sale; refund attempt on frozen membership (must be rejected); PT-package sale; PT-session recording with active trainer; PT-package exhaustion mid-session-flow; trainer deactivation; cross-phase smoke (sell membership → freeze → refund-attempt-rejected → unfreeze → refund-succeeds).
-- [ ] **VER-02**: Race-condition Postgres integration tests REF-TEST-01 (concurrent refund) + PTS-TEST-01 (concurrent PT-session decrement) + PAY-TEST-01 (concurrent sale double-submit with same Idempotency-Key) + AUDIT-TEST-01 (every state-mutating service emits expected event).
-- [ ] **VER-03**: 6 CI gates green: backend `ruff` + `mypy --strict` + `pytest` + OpenAPI drift; frontend `pnpm typecheck` + `pnpm lint` + `pnpm test` + api-client codegen drift. Evidence captured as gate logs in `milestones/v1.4-VERIFICATION-LOG.md`.
-- [ ] **VER-04**: Operator sign-off documented in `.planning/milestones/v1.4-VERIFICATION-LOG.md` with verbatim DM / UI evidence per scenario. Any production-blocker regressions discovered are fixed inline (v1.3 caught 3 such regressions at this gate).
+The following requirements were originally Phase 35 admin-web wiring. **Removed from v1.4 scope** — design team now owns production admin + client apps externally to this repo; `apps/admin-web` remains frozen-as-of-v1.3 as mock-mode contract reference, not a production target. These requirements move to **v2.0 Frontend Integration** milestone and will be re-specified there once design-team frontends are ready for integration.
+
+- [DEFERRED→v2.0] **FE-11**: New routes: `/trainers` (owner-only `beforeLoad`), `/pt-package-plans` (owner-only), `/pt-packages` (list + `$pt_packageId` detail), `/clients/$clientId` extended with payments-history block + active-pt-package block.
+- [DEFERRED→v2.0] **FE-12**: Sale flow modification: `/memberships` sale form gets a "Получено наличными" section (mandatory cash-received amount input, defaulted to `plan.price_kopecks`; validated equal to plan price server-side). Same for `/pt-packages` sale.
+- [DEFERRED→v2.0] **FE-13**: Refund button on `/memberships/$membershipId` and `/pt-packages/$pt_packageId` detail pages. Opens AlertDialog per REF-06.
+- [DEFERRED→v2.0] **FE-14**: PT-session recording UI: panel on `/pt-packages/$pt_packageId` detail with trainer-dropdown (loads `?active=true`), datetime picker (defaulted to now, backdating ≤7d for reception), notes textarea. "Записать тренировку" button. Session history below with `(уволен)` suffix on inactive-trainer names.
+- [DEFERRED→v2.0] **FE-15**: New shared `PaymentBadge` (sale/refund tint via `bg-success`/`bg-warning` tokens) and `PtPackageStatusBadge` (4-variant discriminated union: active/exhausted/expired/cancelled). Used on list pages, detail pages, and history blocks.
+- [DEFERRED→v2.0] **FE-16**: TanStack Query mutation hooks: `usePtPackageSell`, `usePtPackageCancel`, `usePtPackageRefund`, `useMembershipRefund`, `usePtSessionRecord`, `usePtSessionCancel`, `useTrainerCreate/Update/Deactivate/Reactivate`. Optimistic where safe; refund non-optimistic + navigate-on-success.
+- [DEFERRED→v2.0] **FE-17**: Locked Russian i18n strings for new flows (sale-with-payment labels, refund AlertDialog copy, PT-session form copy, trainers CRUD copy, status badge labels). Hard-coded in `src/shared/i18n/ru.ts`.
+- [DEFERRED→v2.0] **FE-18**: Three-way RBAC parity test extended to assert byte-paritet between backend `OWNER_ONLY` + admin-web `can.ts` + `registry.ts` for the new resources. *Note: backend↔admin-web RBAC parity test already extended for v1.4 resources in Phase 30 INFRA-19 — the canary continues to run in CI even though admin-web is frozen mock-reference.*
+
+### VER — Milestone Verification (Phase 36, backend-only)
+
+- [ ] **VER-01**: 7+ operator API-contract scenarios executed via curl / Postman collection against live backend (`docker compose up`) — NOT through admin-web UI (production frontends are out of repo per 2026-05-15 pivot). Scenarios cover: sale-with-payment golden path; refund of fresh sale; refund attempt on frozen membership (must be rejected 409 `must_unfreeze_first`); PT-package sale; PT-session recording with active trainer; PT-package exhaustion mid-session-flow; trainer deactivation + 409 on attempt to record session with inactive trainer; cross-phase smoke (sell membership → freeze → refund-attempt-rejected → unfreeze → refund-succeeds). Verbatim HTTP request/response captured per scenario.
+- [ ] **VER-02**: Race-condition Postgres integration tests REF-TEST-01 (concurrent membership refund) + REF-TEST-02 (concurrent PT-package refund) + PTS-TEST-01 (concurrent PT-session decrement) + PAY-TEST-01 (concurrent sale double-submit with same `Idempotency-Key`) + AUDIT-TEST-01 (every state-mutating service emits expected locked event).
+- [ ] **VER-03**: 4 backend CI gates green: `ruff` + `mypy --strict` + `pytest` + OpenAPI drift. Admin-web vitest specs run as informational canary (frozen mock-reference, not a blocking gate). Evidence captured as gate logs in `milestones/v1.4-VERIFICATION-LOG.md`.
+- [ ] **VER-04**: Operator sign-off documented in `.planning/milestones/v1.4-VERIFICATION-LOG.md` with verbatim HTTP evidence per scenario. Any production-blocker regressions discovered are fixed inline (v1.3 caught 3 such regressions at this gate). v1.5 API Handoff scope-handoff prepared: Postman collection finalized, auth setup runbook drafted.
 
 ---
 
@@ -162,7 +167,7 @@ New for v1.4:
 
 ## Traceability
 
-Filled by `gsd-roadmapper` on 2026-05-14. Each REQ-ID maps to exactly one phase; 100% coverage validated (69/69).
+Filled by `gsd-roadmapper` on 2026-05-14; rescoped 2026-05-16 after 2026-05-15 frontend pivot. Each in-scope REQ-ID maps to exactly one phase; 100% coverage validated (61/61 in-scope; 8 deferred to v2.0 Frontend Integration).
 
 | Phase | REQ-IDs | Count |
 |-------|---------|-------|
@@ -171,16 +176,17 @@ Filled by `gsd-roadmapper` on 2026-05-14. Each REQ-ID maps to exactly one phase;
 | **Phase 32 — Payment Ledger + Sale Flow + Refund** | PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07, PAY-08, PAY-09, PAY-10, REF-01, REF-02, REF-03, REF-04, REF-05, REF-06, REF-07, REF-08 | 18 |
 | **Phase 33 — PT-Package Plans + Instances** | PT-01, PT-02, PT-03, PT-04, PT-05, PT-06, PT-07, PT-08, PT-09, PT-10, PT-11, PT-12, PT-13 | 13 |
 | **Phase 34 — PT-Session Recording** | PT-14, PT-15, PT-16, PT-17, PT-18, PT-19, PT-20, PT-21, PT-22 | 9 |
-| **Phase 35 — OpenAPI Drift Gate + admin-web Full Wiring** | FE-10, FE-11, FE-12, FE-13, FE-14, FE-15, FE-16, FE-17, FE-18 | 9 |
-| **Phase 36 — Milestone Verification** | VER-01, VER-02, VER-03, VER-04 | 4 |
-| **TOTAL** | | **69 / 69** |
+| **Phase 35 — OpenAPI Drift Gate (backend-only handoff)** | FE-10 | 1 |
+| **Phase 36 — Milestone Verification (backend-only)** | VER-01, VER-02, VER-03, VER-04 | 4 |
+| **TOTAL (v1.4 in-scope)** | | **61 / 61** |
+| **Deferred to v2.0 Frontend Integration** | FE-11, FE-12, FE-13, FE-14, FE-15, FE-16, FE-17, FE-18 | 8 |
 
-Coverage: 100% (every v1.4 REQ-ID mapped to exactly one phase). Dependency ordering validated:
+Coverage: 100% of v1.4 in-scope requirements mapped to exactly one phase (61/61). 8 requirements (FE-11..18) moved to v2.0 Frontend Integration milestone per 2026-05-15 pivot — design team owns production frontends externally. Dependency ordering validated:
 - Phase 31 (Trainers) lands before Phase 34 (PT-sessions FK target).
 - Phase 32 (Payments + payment_recorder Protocol slot) lands before Phase 33 (PT-package sale consumes recorder).
 - Phase 33 (PT-package instances + sessions_remaining counter) lands before Phase 34 (PT-session decrement target).
-- Phase 35 (OpenAPI + admin-web wiring) lands after all backend Phases 31..34.
-- Phase 36 (verification) gates on Phase 35 (full stack required for smoke).
+- Phase 35 (OpenAPI byte-stable regen) lands after all backend Phases 31..34.
+- Phase 36 (backend-only verification via curl/Postman + race tests) gates on Phase 35 (finalized OpenAPI artifact).
 
 REF-02 endpoint shape is defined in Phase 32 (RBAC + Protocol slot wiring) but the actual `POST /api/v1/pt-packages/{id}/refund` router lands in Phase 33 alongside the `pt_packages` module — this cross-phase coordination mirrors v1.3 Phase 24/25 audit-event pre-registration.
 
