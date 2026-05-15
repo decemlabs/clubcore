@@ -45,9 +45,14 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
 EXCLUDED_PREFIXES: tuple[str, ...] = ("/api/v1/auth/telegram/",)
 
 # D-18: __qualname__ prefix discriminator.
+# Phase 32 D-32-25 — payments.permissions.require_payments_view_for_subject is a
+# module-local factory mirroring require_permission shape. Reception is admitted
+# on /by-client and /by-membership scoped routes; the closure name remains _checker
+# so the qualname is `require_payments_view_for_subject.<locals>._checker`.
 _GATE_PREFIXES: tuple[str, ...] = (
     "require_permission.",
     "require_authenticated.",
+    "require_payments_view_for_subject.",
 )
 
 
@@ -132,8 +137,16 @@ def test_gate_prefixes_match_factory_names() -> None:
     from app.core.dependencies import require_authenticated, require_permission
     from app.core.permissions import Action, Resource
 
+    from app.modules.payments.permissions import require_payments_view_for_subject
+
     ra = require_authenticated()
     rp = require_permission(Action.DELETE, Resource.CLIENTS)
+    rpv = require_payments_view_for_subject()
     assert ra.__qualname__.startswith("require_authenticated."), ra.__qualname__
     assert rp.__qualname__.startswith("require_permission."), rp.__qualname__
-    assert _GATE_PREFIXES == ("require_permission.", "require_authenticated.")
+    assert rpv.__qualname__.startswith("require_payments_view_for_subject."), rpv.__qualname__
+    assert _GATE_PREFIXES == (
+        "require_permission.",
+        "require_authenticated.",
+        "require_payments_view_for_subject.",
+    )

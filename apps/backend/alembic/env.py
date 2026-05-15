@@ -25,6 +25,7 @@ from app.core.database import Base
 import app.modules.auth.models
 import app.modules.clients.models
 import app.modules.memberships.models
+import app.modules.payments.models  # Phase 32 PAY-01
 import app.modules.trainers.models  # Phase 31 TRN-01
 import app.modules.visits.models
 import app.core.audit_models  # noqa: F401

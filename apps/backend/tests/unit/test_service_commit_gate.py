@@ -120,32 +120,23 @@ def _check_function(
 ) -> str | None:
     """Return an offender message if `func` violates SVC001, else None.
 
-    Decision tree (D-03 / D-04 / D-05):
+    Decision tree (D-03 / D-04 / D-05 / D-32-10):
       1. Not a write path → pass.
       2. Has explicit `session.commit(...)` → pass.
-      3. Has SVC001 marker on private (`_`-prefixed) function → pass.
-      4. Has SVC001 marker on public function → FAIL (D-04: marker only valid
-         on private helpers; public service functions MUST commit themselves).
-      5. Otherwise → FAIL (Phase 12.1 bug class).
+      3. Has SVC001 ``caller-owns-txn`` marker → pass (Phase 32 D-32-10
+         extension: the marker is now valid on BOTH private helpers AND
+         public Protocol-slot service functions whose caller owns the
+         UoW — payments.service.record_payment / issue_refund are the
+         canonical examples). The marker is an opt-in for any function
+         that intentionally delegates the commit to its caller.
+      4. Otherwise → FAIL (Phase 12.1 bug class).
     """
     if not _function_is_write_path(func):
         return None
     if _function_has_commit(func):
         return None
-    has_marker = _function_has_svc001_marker(path, func)
-    is_private = func.name.startswith("_")
-    if has_marker:
-        if is_private:
-            return None
-        try:
-            rel = path.relative_to(_REPO_ROOT)
-        except ValueError:
-            rel = path
-        return (
-            f"{rel}:{func.lineno} — "
-            f"public function `{func.name}` carries `{_SVC001_MARKER}` but "
-            "public service functions MUST commit themselves (D-04)."
-        )
+    if _function_has_svc001_marker(path, func):
+        return None
     try:
         rel = path.relative_to(_REPO_ROOT)
     except ValueError:
@@ -318,21 +309,22 @@ def test_synthetic_private_helper_with_svc001_passes() -> None:
     assert _check_snippet(src, fake_filename="<private_optout>") is None
 
 
-def test_synthetic_public_function_with_svc001_is_rejected() -> None:
-    """A public function carrying the SVC001 marker MUST fail (D-04).
+def test_synthetic_public_function_with_svc001_passes() -> None:
+    """A public function carrying the SVC001 marker MUST pass (Phase 32 D-32-10).
 
-    Public service functions are the boundary callers (routers / ARQ workers /
-    bot handlers) trust to be transactionally complete. The marker is reserved
-    for private helpers that delegate the commit upward.
+    Phase 32 extends the opt-in to public Protocol-slot service functions whose
+    caller (sale-flow orchestrator / refund-flow orchestrator) owns the UoW.
+    The canonical examples are ``payments.service.record_payment`` and
+    ``payments.service.issue_refund``. The marker remains the explicit opt-in;
+    write paths without it still surface the Phase 12.1 bug class.
     """
     src = (
-        "async def create_thing(session):  # noqa: SVC001 caller-owns-txn\n"
-        "    session.add(thing)\n"
-        "    await audit.emit(session, 'x', actor_user_id=None, resource_type='y')\n"
+        "async def record_payment(session):  # noqa: SVC001 caller-owns-txn\n"
+        "    session.add(payment)\n"
+        "    await audit.emit(session, 'payment_recorded', "
+        "actor_user_id=None, resource_type='payment')\n"
     )
-    msg = _check_snippet(src, fake_filename="<public_optout>")
-    assert msg is not None
-    assert "public service functions MUST commit" in msg
+    assert _check_snippet(src, fake_filename="<public_optin_phase32>") is None
 
 
 def test_synthetic_read_only_function_passes_without_marker() -> None:

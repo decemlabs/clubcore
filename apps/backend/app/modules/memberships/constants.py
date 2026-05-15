@@ -46,7 +46,14 @@ EXPIRING_KIND_3D = "expiring_3d"
 EXPIRING_KIND_1D = "expiring_1d"
 EXPIRING_KINDS: tuple[str, ...] = (EXPIRING_KIND_7D, EXPIRING_KIND_3D, EXPIRING_KIND_1D)
 
+# Phase 32 D-32-08 — sentinel for memberships.cancellation_reason refund population.
+# Set by refund_membership orchestrator (Plan 32-03) on the cancelled row produced
+# when an active membership is refunded; coexists with the legacy free-text
+# cancel_reason field.
+CANCELLATION_REASON_REFUNDED = "refunded"
+
 __all__ = [
+    "CANCELLATION_REASON_REFUNDED",
     "EXPIRING_KINDS",
     "EXPIRING_KIND_1D",
     "EXPIRING_KIND_3D",
