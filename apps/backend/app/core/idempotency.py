@@ -61,11 +61,19 @@ async def verify_idempotency(
     request: Request,
     redis: Annotated[Redis, Depends(get_redis)],  # noqa: ARG001 — kept for parity / DI graph
 ) -> str:
-    """Validate the ``Idempotency-Key`` header; return the key string.
+    """Validate the ``Idempotency-Key`` header; return the route-bound key string.
 
     Failure modes:
       - Missing header → ``ValidationAppError("idempotency_key_required")``.
       - Pattern mismatch → ``ValidationAppError("idempotency_key_invalid_format")``.
+
+    Returns ``f"{method}:{path}:{header_value}"`` so the same client-supplied
+    header value reused across DIFFERENT endpoints (e.g. sale + cancel +
+    refund) cannot collide in the Redis namespace ``sz:idem:{...}``. This
+    is the route-binding invariant referenced by D-32-19 / D-33-16 — the
+    prior return of the bare header value allowed cross-route replay where
+    a sale envelope could be served as a refund response when bodies
+    happened to hash equal.
 
     The Redis dependency is included so the per-route Depends graph already
     has a Redis client at hand for the orchestrator step (begin / store /
@@ -76,7 +84,9 @@ async def verify_idempotency(
         raise ValidationAppError("idempotency_key_required")
     if not _IDEMPOTENCY_KEY_RE.match(key):
         raise ValidationAppError("idempotency_key_invalid_format")
-    return key
+    # Bind route+method so the same header value cannot replay across
+    # endpoints (D-32-19 / D-33-16 / CR-01 from Phase 33 review).
+    return f"{request.method}:{request.url.path}:{key}"
 
 
 async def begin_idempotency(redis: Redis, key: str) -> bool:

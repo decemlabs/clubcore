@@ -21,8 +21,17 @@ from app.core.idempotency import (
 )
 
 
-def _make_request(idempotency_key: str | None) -> Any:
-    """Return a stub Request with only ``headers.get('idempotency-key')`` exercised."""
+def _make_request(
+    idempotency_key: str | None,
+    *,
+    method: str = "POST",
+    path: str = "/api/v1/test",
+) -> Any:
+    """Return a stub Request with header + method + url.path exercised.
+
+    ``verify_idempotency`` returns ``f"{method}:{path}:{key}"`` (route-bound
+    namespace per CR-01 / D-33-16) so the stub must expose both.
+    """
     headers: dict[str, str] = {}
     if idempotency_key is not None:
         headers["idempotency-key"] = idempotency_key
@@ -31,9 +40,15 @@ def _make_request(idempotency_key: str | None) -> Any:
         def get(self, name: str, default: str | None = None) -> str | None:
             return headers.get(name.lower(), default)
 
+    class _URL:
+        def __init__(self, path_value: str) -> None:
+            self.path = path_value
+
     class _Request:
         def __init__(self) -> None:
             self.headers = _Headers()
+            self.method = method
+            self.url = _URL(path)
 
     return _Request()
 
@@ -76,11 +91,31 @@ async def test_invalid_format_with_bang() -> None:
 
 
 @pytest.mark.asyncio
-async def test_valid_format_returns_key() -> None:
-    request = _make_request("valid_key-123")
+async def test_valid_format_returns_route_bound_key() -> None:
+    """Returned key is ``f"{method}:{path}:{header}"`` (route-bound — CR-01)."""
+    request = _make_request("valid_key-123", method="POST", path="/api/v1/test")
     redis = AsyncMock()
     key = await verify_idempotency(request, redis)
-    assert key == "valid_key-123"
+    assert key == "POST:/api/v1/test:valid_key-123"
+
+
+@pytest.mark.asyncio
+async def test_route_binding_distinguishes_endpoints() -> None:
+    """Same header value on different routes returns distinct namespaced keys."""
+    redis = AsyncMock()
+    sale_req = _make_request(
+        "abc123", method="POST", path="/api/v1/pt-packages"
+    )
+    refund_req = _make_request(
+        "abc123",
+        method="POST",
+        path="/api/v1/pt-packages/00000000-0000-0000-0000-000000000001/refund",
+    )
+    sale_key = await verify_idempotency(sale_req, redis)
+    refund_key = await verify_idempotency(refund_req, redis)
+    assert sale_key != refund_key
+    assert sale_key.endswith(":abc123")
+    assert refund_key.endswith(":abc123")
 
 
 @pytest.mark.asyncio
@@ -94,10 +129,11 @@ async def test_too_long_is_invalid() -> None:
 
 @pytest.mark.asyncio
 async def test_max_length_128_is_valid() -> None:
-    request = _make_request("a" * 128)
+    request = _make_request("a" * 128, method="POST", path="/api/v1/test")
     redis = AsyncMock()
     key = await verify_idempotency(request, redis)
-    assert key == "a" * 128
+    # Route-bound: f"{method}:{path}:{header}" — header itself is preserved verbatim.
+    assert key == f"POST:/api/v1/test:{'a' * 128}"
 
 
 def test_pattern_matches_allowed_chars() -> None:
