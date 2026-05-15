@@ -94,6 +94,7 @@ from app.modules.memberships.constants import (
     EXPIRING_KIND_3D,
     EXPIRING_KIND_7D,
     MEMBERSHIP_STATUS_TRANSITIONS,
+    PAYMENT_SUBJECT_KIND_MEMBERSHIP,
     RENEWAL_STRATEGY_FROM_SOURCE_END_DATE,
     RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE,
 )
@@ -102,7 +103,6 @@ from app.modules.memberships.models import (
     MembershipFreezePeriod,
     MembershipNotification,
 )
-from app.modules.payments.constants import SUBJECT_KIND_MEMBERSHIP
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -531,7 +531,7 @@ async def create_membership(
     # RuntimeError defensively (D-32-14) — whole UoW rolls back on propagation.
     payment = await get_payment_recorder()(
         session,
-        subject_kind=SUBJECT_KIND_MEMBERSHIP,
+        subject_kind=PAYMENT_SUBJECT_KIND_MEMBERSHIP,
         subject_id=membership.id,
         amount_kopecks=membership.price_kopecks_snapshot,
         method="cash",
