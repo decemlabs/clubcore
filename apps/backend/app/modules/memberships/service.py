@@ -74,10 +74,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import audit
-from app.core.dependencies import CurrentUser, get_payment_recorder
+from app.core.dependencies import CurrentUser, get_payment_recorder, get_payment_refunder
 from app.core.exceptions import (
     AlreadyFrozenError,
     CannotRenewCancelledError,
+    ConflictError,
     FreezeLimitExceededError,
     InvalidTransitionError,
     MembershipNotFoundError,
@@ -90,6 +91,7 @@ from app.core.exceptions import (
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
 from app.modules.memberships.constants import (
+    CANCELLATION_REASON_REFUNDED,
     EXPIRING_KIND_1D,
     EXPIRING_KIND_3D,
     EXPIRING_KIND_7D,
@@ -115,6 +117,7 @@ from app.modules.memberships.schemas import (
     MembershipPlanListQuery,
     MembershipPlanResponse,
     MembershipPlanUpdateRequest,
+    MembershipRefundRequest,
     MembershipResponse,
 )
 
@@ -162,6 +165,34 @@ def _is_already_frozen_conflict(exc: IntegrityError) -> bool:
     if constraint == "uq_membership_freeze_periods_active_per_membership":
         return True
     return "uq_membership_freeze_periods_active_per_membership" in str(exc.orig)
+
+
+class MustUnfreezeFirstError(ConflictError):
+    """Raised on POST /memberships/{id}/refund when source status is 'frozen'.
+
+    Phase 32 REF-03 / B-08. The refund_membership orchestrator surfaces this
+    BEFORE the generic ``_assert_can_transition`` check so the operator UI
+    gets a specific, actionable error ("unfreeze before refund") rather than
+    the generic ``invalid_transition``. Status-guard ordering invariant (D-25
+    precedent / D-32-11): specific-code-wins ordering.
+    """
+
+    code = "must_unfreeze_first"
+    status_code = 409
+
+
+class CannotRefundRenewedSourceError(ConflictError):
+    """Raised on POST /memberships/{id}/refund when the membership has been
+    renewed (any row points back to it via ``previous_membership_id``).
+
+    Phase 32 REF-04 / B-09. Discriminated by ``repository.has_renewal_descendants``
+    EXISTS query. Refunding a renewed source would corrupt the renewal chain
+    audit history; operator must instead cancel-without-refund the descendant
+    first if a refund is truly needed.
+    """
+
+    code = "cannot_refund_renewed_source"
+    status_code = 409
 
 
 def _assert_can_transition(membership: Membership, *, target: str) -> None:
@@ -275,6 +306,8 @@ async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-o
         "status": membership.status,
         "cancelled_at": membership.cancelled_at,
         "cancel_reason": membership.cancel_reason,
+        # Phase 32 REF-01 — refund sentinel sourced from new column (D-32-07/08).
+        "cancellation_reason": membership.cancellation_reason,
         "paid_at": membership.paid_at,
         "notes": membership.notes,
         "created_at": membership.created_at,
@@ -646,6 +679,126 @@ async def cancel_membership(
     # period is closed above, so current_freeze_period resolves to None
     # (helper guards on membership.status == 'frozen', and after the cancel
     # mutation the status is now 'cancelled').
+    return await _build_membership_response(session, membership)
+
+
+# ===========================================================================
+# Phase 32 — Refund flow orchestrator (REF-01..REF-07, D-32-11)
+# ===========================================================================
+
+
+async def refund_membership(
+    session: AsyncSession,
+    actor: CurrentUser,
+    membership_id: UUID,
+    data: MembershipRefundRequest,
+) -> MembershipResponse:
+    """Refund a membership (Phase 32 REF-01). Reception+owner per B-07.
+
+    Owner of the UoW (explicit ``await session.commit()`` at end). Sequence
+    (D-32-11):
+      1. Load membership — 404 ``membership_not_found`` if missing.
+      2. Frozen guard — 409 ``must_unfreeze_first`` (B-08); fires BEFORE the
+         generic transition check so the specific code wins.
+      3. Renewed-source guard — 409 ``cannot_refund_renewed_source`` (B-09);
+         EXISTS query against ``previous_membership_id``.
+      4. Generic transition guard — ``_assert_can_transition(target='cancelled')``;
+         catches already-cancelled / expired source as 409 ``invalid_transition``.
+      5. Call PaymentRefunder Protocol slot via ``get_payment_refunder()``. The
+         refunder internally:
+           - Loads the ORIGINAL sale-side payment row by (subject_kind, subject_id).
+           - INSERTs a negative-amount refund row with ``refund_of=original.id``.
+           - Raises ``AlreadyRefundedError`` (409 ``already_refunded``) on
+             ``uq_payments_refund_of_alive`` race.
+           - Raises ``OriginalPaymentNotFoundError`` (404
+             ``original_payment_not_found``) for legacy memberships with no
+             recorded sale.
+           - Emits ``refund_issued`` audit row (payment-side).
+         Cross-module discipline preserved: the orchestrator does NOT import
+         ``app.modules.payments.repository`` or ``app.modules.payments.models``;
+         only the Protocol slot is used.
+      6. Transition status to 'cancelled' via ``update_membership_status``;
+         set ``cancellation_reason = CANCELLATION_REASON_REFUNDED`` sentinel
+         (D-32-08); set ``cancelled_at = now(UTC)``.
+      7. Flush — surfaces any deferred constraint violations.
+      8. Emit ``membership_refunded`` audit row (subject-side) per LOCKED
+         event name in audit.py:LOCKED_AUDIT_EVENTS (NOT ``payment_refunded``
+         — ROADMAP SC #5 terminology drift; locked literal wins per D-32-12).
+      9. Refresh ``updated_at`` for the response.
+     10. Commit (SVC001 gate enforces).
+     11. Return via ``_build_membership_response``.
+
+    UUID kwargs are str-cast for JSONB serialisability (Phase 32-02 deviation
+    #1 lesson — raw UUIDs fail JSON encoder). Pydantic UUID validators on
+    ``MembershipRefundedPayload`` accept both UUID and well-formed str input.
+    """
+    # 1. Load
+    membership = await repository.get_membership(session, membership_id)
+    if membership is None:
+        raise MembershipNotFoundError("membership_not_found")
+
+    # 2. Frozen guard — specific-first per D-32-11 (B-08). MUST fire BEFORE
+    # _assert_can_transition so operators get the actionable error.
+    if membership.status == "frozen":
+        raise MustUnfreezeFirstError("must_unfreeze_first")
+
+    # 3. Renewed-source guard (B-09 / REF-04).
+    if await repository.has_renewal_descendants(session, membership_id):
+        raise CannotRefundRenewedSourceError("cannot_refund_renewed_source")
+
+    # 4. Generic transition guard — catches already-cancelled / expired source.
+    _assert_can_transition(membership, target="cancelled")
+
+    # 5. Call refunder Protocol slot. Defensive-raise on missing registration
+    # (D-32-14). The refunder internally loads original payment + INSERTs
+    # negative-amount refund row + emits refund_issued audit. Raises
+    # AlreadyRefundedError (409) on uq_payments_refund_of_alive race;
+    # OriginalPaymentNotFoundError (404) if no sale row.
+    refund_payment = await get_payment_refunder()(
+        session,
+        subject_kind=PAYMENT_SUBJECT_KIND_MEMBERSHIP,
+        subject_id=membership_id,
+        refund_user_id=actor.id,
+        reason=data.reason,
+        audit_actor=actor,
+    )
+
+    # 6. Transition status + set cancellation_reason sentinel + cancelled_at.
+    await repository.update_membership_status(
+        session,
+        membership,
+        status="cancelled",
+        cancelled_at=datetime.now(tz=UTC),
+    )
+    membership.cancellation_reason = CANCELLATION_REASON_REFUNDED  # D-32-08
+
+    # 7. Flush — surfaces any deferred constraint violations.
+    await session.flush()
+
+    # 8. Audit emit subject-side (payment-side refund_issued emitted inside
+    # issue_refund). LOCKED event name "membership_refunded" per
+    # audit.py:LOCKED_AUDIT_EVENTS (line 184). UUID kwargs str-cast for JSONB
+    # (Phase 32-02 deviation #1 lesson).
+    await audit.emit(
+        session,
+        "membership_refunded",  # LITERAL — Phase 15 INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="membership",  # LITERAL
+        resource_id=membership.id,
+        membership_id=str(membership.id),
+        client_id=str(membership.client_id),
+        refund_payment_id=str(refund_payment.id),
+        reason=data.reason,
+    )
+
+    # 9. Refresh updated_at for the response.
+    await session.refresh(membership, attribute_names=["updated_at"])
+
+    # 10. Commit (SVC001 gate enforces explicit commit).
+    await session.commit()
+
+    # 11. Return via _build_membership_response (current_freeze_period
+    # resolves to None — status is now 'cancelled').
     return await _build_membership_response(session, membership)
 
 
@@ -1040,6 +1193,8 @@ async def list_memberships(
             "status": m.status,
             "cancelled_at": m.cancelled_at,
             "cancel_reason": m.cancel_reason,
+            # Phase 32 REF-01 — refund sentinel from cancellation_reason column.
+            "cancellation_reason": m.cancellation_reason,
             "paid_at": m.paid_at,
             "notes": m.notes,
             "created_at": m.created_at,

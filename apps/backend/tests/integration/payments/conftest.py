@@ -23,6 +23,7 @@ from app.modules.payments.models import Payment
 from tests.integration.memberships.conftest import (  # noqa: F401
     authed_client_owner,
     authed_client_reception,
+    db_session_real_commit,
     make_client,
     make_membership,
     make_plan,

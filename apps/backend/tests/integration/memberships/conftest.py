@@ -328,11 +328,14 @@ async def db_session_real_commit() -> AsyncIterator[AsyncSession]:
     # Cleanup: real-commit writes are NOT rolled back. TRUNCATE every table the
     # race test seeds: users + plans + clients + memberships +
     # membership_freeze_periods + audit_log. CASCADE handles the FK chain.
+    # Phase 32 Plan 32-03: payments table added so REF-TEST-01 race test
+    # (concurrent /refund) leaves no residue between tests.
     async with engine.begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE users, membership_plans, clients, memberships, "
-                "membership_freeze_periods, audit_log RESTART IDENTITY CASCADE"
+                "membership_freeze_periods, payments, audit_log "
+                "RESTART IDENTITY CASCADE"
             )
         )
     await engine.dispose()
