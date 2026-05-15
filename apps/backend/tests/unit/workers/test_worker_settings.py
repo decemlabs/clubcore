@@ -51,8 +51,11 @@ def test_worker_settings_cron_resolves_to_registered_function() -> None:
     Phase 27 (D-27-16): cron_jobs grew to 2 entries — 06:05 expire_memberships
     (kept at index 0) followed by 06:15 send_expiring_notifications. Order is
     preserved per plan 27-04 acceptance.
+
+    Phase 33 (D-33-13): cron_jobs grew to 3 entries — append expire_pt_packages
+    at 06:25 Europe/Moscow (index 2). Earlier indices preserved.
     """
-    assert len(WorkerSettings.cron_jobs) == 2
+    assert len(WorkerSettings.cron_jobs) == 3
     cron_entry = WorkerSettings.cron_jobs[0]
     assert cron_entry.coroutine.__name__ == "expire_memberships"
     assert cron_entry.coroutine is expire_memberships, (
@@ -82,9 +85,12 @@ def test_worker_settings_functions_registered() -> None:
     Phase 27 (D-27-16) extended the list to also include
     send_expiring_notifications; expire_memberships membership is asserted
     here, the new entry is asserted by Phase 27 tests.
+
+    Phase 33 (D-33-13) appended expire_pt_packages — its membership is
+    asserted by tests/unit/test_worker_cron_resolution.py.
     """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 2
+    assert len(WorkerSettings.functions) == 3
 
 
 def test_worker_settings_redis_settings_resolved() -> None:
