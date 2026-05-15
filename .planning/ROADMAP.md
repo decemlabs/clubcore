@@ -125,7 +125,10 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   3. `POST /api/v1/memberships/{id}/refund` (reception+owner per B-07) принимает `{reason: string}`, отвергает explicit `amount_kopecks` (B-02 full-only), возвращает 409 `must_unfreeze_first` для frozen membership (B-08), 409 `cannot_refund_renewed_source` если у membership есть descendant в `previous_membership_id` (B-09); атомарно: insert negative-amount payments row + transition membership на `cancelled` с `cancellation_reason='refunded'` + emit `refund_issued` + `payment_refunded` + `membership_refunded`.
   4. `Idempotency-Key` HTTP header требуется на `POST /api/v1/memberships` (sale) и forthcoming PT-package sale; Redis-cached `sz:idem:{key}` 1h, replay возвращает cached response; `GET /api/v1/payments` (owner-only с фильтрами `subject_kind`/`subject_id`/`received_by_user_id`/`received_from`/`received_to`) + `GET /api/v1/clients/{id}/payments` + `GET /api/v1/memberships/{id}/payments` (оба reception+owner) возвращают pagination envelope.
   5. Postgres integration test REF-TEST-01 проверяет: 2 concurrent `POST /refund` против одного membership → ровно один успешен (partial UNIQUE wins), второй 409; audit chain `payment_recorded` → `refund_issued` → `payment_refunded` → `membership_refunded` traceable через `payment_row_hash`.
-**Plans:** TBD
+**Plans:** 3 plans
+- [ ] 32-01-PLAN.md — Foundations: migration 0012 (payments + ALTER memberships) + payments module bodies + Protocol slots (defensive-raise) + audit_hash + idempotency + 3 GET endpoints (PAY-01..04, PAY-06..09, REF-02 contract) — Wave 1
+- [ ] 32-02-PLAN.md — Sale-flow integration: memberships.service.create_membership consumes payment_recorder with snapshot symmetry + Idempotency-Key on POST /memberships + audit chain tests (PAY-05, PAY-10) — Wave 2
+- [ ] 32-03-PLAN.md — Refund flow: POST /memberships/{id}/refund + refund_membership orchestrator + has_renewal_descendants helper + 409 mappings + REF-TEST-01 concurrent race + audit chain tests (REF-01, REF-03..08) — Wave 2
 
 ### Phase 33: PT-Package Plans + Instances
 **Goal:** Зал может продавать PT-пакеты как новый тариф рядом с месячными абонементами; каждый клиент имеет максимум один активный пакет; expired-by-date pакеты автоматически переходят в `expired` через daily ARQ cron; refund переиспользует payment ledger из Phase 32.
@@ -181,7 +184,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 |-------|----------------|--------|-----------|
 | 30. Foundations & Tech-Debt Bedrock | 4/4 | Complete    | 2026-05-14 |
 | 31. Trainers Module | 0/2 | In progress (planning complete) | — |
-| 32. Payment Ledger + Sale Flow + Refund | 0/? | Not started | — |
+| 32. Payment Ledger + Sale Flow + Refund | 0/3 | Not started (planning complete) | — |
 | 33. PT-Package Plans + Instances | 0/? | Not started | — |
 | 34. PT-Session Recording | 0/? | Not started | — |
 | 35. OpenAPI Drift Gate + admin-web Full Wiring | 0/? | Not started | — |
