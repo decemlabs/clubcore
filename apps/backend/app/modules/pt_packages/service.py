@@ -37,24 +37,32 @@ Constraint name literals (D-33 mirrors):
 Both defined in migrations 0013 / 0014 and __table_args__ in models.py.
 """
 
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.core.dependencies import CurrentUser
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.dependencies import CurrentUser, get_payment_recorder
+from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import PaginatedData
 from app.modules.pt_packages import repository
-from app.modules.pt_packages.constants import PT_PACKAGE_STATUS_TRANSITIONS
+from app.modules.pt_packages.constants import (
+    PAYMENT_SUBJECT_KIND_PT_PACKAGE,
+    PT_PACKAGE_STATUS_TRANSITIONS,
+)
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from app.modules.pt_packages.schemas import (
+    PtPackageCreateRequest,
+    PtPackageListQuery,
     PtPackagePlanCreateRequest,
     PtPackagePlanListQuery,
     PtPackagePlanResponse,
     PtPackagePlanUpdateRequest,
+    PtPackageResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -436,3 +444,248 @@ async def resolve_active_pt_package(
     error.
     """
     return await repository.find_active_for_client(session, client_id)
+
+
+# ---------------------------------------------------------------------------
+# Instance-side orchestrators (Plan 33-02 — sale + read APIs)
+# ---------------------------------------------------------------------------
+
+
+async def create_pt_package(
+    session: AsyncSession,
+    actor: CurrentUser,
+    data: PtPackageCreateRequest,
+) -> PtPackageResponse:
+    """Sell a PT-package (Phase 33 PT-07 / D-33-09 / D-33-17 / D-33-16).
+
+    Owns the UoW (await session.commit() at end). 10-step recipe:
+      1. Load plan via repository.get_plan_alive (404 pt_package_plan_not_found
+         when missing or archived — D-33-08 archive guard).
+      2. Server-enforced snapshot symmetry (D-33-17) — reject
+         ``amount_kopecks != plan.price_kopecks`` with 422 ``amount_mismatch``
+         BEFORE any side effect (no instance row, no payment row, no audit).
+      3. Defensive pre-flight: reject if client already has an active
+         PT-package (D-33-09). Partial UNIQUE
+         ``uq_pt_packages_active_per_client`` is the DB-final race gate;
+         pre-check is the friendly 409 path.
+      4. Server-compute dates (D-33-09 / mirrors memberships D-04):
+         ``start_date = now(Europe/Moscow)::date``;
+         ``end_date = start_date + plan.validity_days - 1`` (inclusive) when
+         ``plan.validity_days IS NOT NULL`` else NULL (бессрочный — D-33-14).
+      5. Insert pt_packages row with full snapshot suite + sessions_remaining
+         = plan.session_count + status='active' via repository.insert_pt_package.
+      6. ``await session.flush()`` — surfaces FK errors on client_id (e.g.
+         soft-deleted client) and the partial UNIQUE on active-per-client
+         (race-safe DB gate) which is translated to 409
+         ``active_pt_package_already_exists`` via
+         _is_active_pt_package_conflict.
+      7. Record payment in the same UoW via the ``get_payment_recorder()``
+         Protocol slot (modules-independent contract — NEVER direct payments
+         import). Server derives ``amount_kopecks`` from the snapshot — client
+         cannot supply it.
+      8. ``audit.emit('pt_package_sold', ...)`` with payload matching the
+         additively-extended PtPackageSoldPayload schema (10 keys: 9 D-33-15
+         verbatim keys + payment_id forensic anchor).
+      9. ``await session.commit()`` (SVC001 gate).
+      10. Return PtPackageResponse with computed ``is_active`` field.
+    """
+    # 1: load alive plan (404 pt_package_plan_not_found if archived/missing).
+    plan = await repository.get_plan_alive(session, data.plan_id)
+    if plan is None:
+        raise PtPackagePlanNotFoundError("pt_package_plan_not_found")
+
+    # 2: snapshot symmetry server-enforcement (D-33-17). Reject mismatched
+    # amounts BEFORE any mutation — no pt_packages row, no payments row,
+    # no audit emit. Fields payload discriminates the failure for
+    # admin-web (mirrors Phase 32 amount_mismatch shape).
+    if data.amount_kopecks != plan.price_kopecks:
+        raise ValidationAppError(
+            "amount_mismatch",
+            fields={
+                "expected": plan.price_kopecks,
+                "received": data.amount_kopecks,
+            },
+        )
+
+    # 3: defensive pre-flight on active-per-client invariant. DB partial
+    # UNIQUE is the final race gate (step 6); this is the friendly path
+    # that surfaces the 409 without bumping into IntegrityError.
+    existing = await repository.find_active_for_client(session, data.client_id)
+    if existing is not None:
+        raise ActivePtPackageAlreadyExistsError(
+            "active_pt_package_already_exists"
+        )
+
+    # 4: server-compute dates (Europe/Moscow business day; inclusive end).
+    start_date = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    end_date: date | None = (
+        start_date + timedelta(days=plan.validity_days - 1)
+        if plan.validity_days is not None
+        else None
+    )
+
+    # 5 + 6: insert with snapshot, flush to surface DB-final 409 race gate.
+    pt_package = await repository.insert_pt_package(
+        session,
+        data,
+        plan=plan,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_active_pt_package_conflict(exc):
+            raise ActivePtPackageAlreadyExistsError(
+                "active_pt_package_already_exists"
+            ) from exc
+        raise
+
+    # 7: record payment in the same UoW via Protocol slot (modules-independent
+    # contract — NEVER `from app.modules.payments import ...`). Server derives
+    # amount from the snapshot — client cannot supply it (D-33-17 invariant).
+    # Recorder is caller-owns-txn: internally flushes + emits payment_recorded
+    # audit but does NOT commit. We own the surrounding UoW.
+    payment = await get_payment_recorder()(
+        session,
+        subject_kind=PAYMENT_SUBJECT_KIND_PT_PACKAGE,
+        subject_id=pt_package.id,
+        amount_kopecks=pt_package.price_kopecks_snapshot,
+        method="cash",
+        received_by_user_id=actor.id,
+        audit_actor=actor,
+    )
+
+    # 8: emit subject-side audit BEFORE commit (Phase 16 D-14 co-transactional).
+    # Payload matches the additively-extended PtPackageSoldPayload schema:
+    # 9 D-33-15 verbatim keys + payment_id forensic anchor (10 total).
+    # `start_date` / `end_date` are passed as `date` objects — the schema
+    # accepts `date` and `date | None` (audit_payloads.py / Phase 33
+    # additive extension). UUIDs are JSONB-serialisable via Pydantic.
+    # Payload kwargs use str / ISO-string casts so the JSONB column stores
+    # natively-serialisable values (psycopg has no default adapter for UUID /
+    # date). Pydantic's PtPackageSoldPayload schema coerces ISO strings back
+    # to UUID / date during validate (D-30-03 extra='forbid' enforcement).
+    # Mirrors `memberships.service.create_membership` precedent.
+    await audit.emit(
+        session,
+        "pt_package_sold",  # LITERAL (INFRA-11 AST gate)
+        actor_user_id=actor.id,
+        resource_type="pt_package",  # LITERAL
+        resource_id=pt_package.id,
+        pt_package_id=str(pt_package.id),
+        client_id=str(pt_package.client_id),
+        plan_id=str(pt_package.plan_id),
+        plan_name_snapshot=pt_package.plan_name_snapshot,
+        session_count_snapshot=pt_package.session_count_snapshot,
+        price_kopecks_snapshot=pt_package.price_kopecks_snapshot,
+        validity_days_snapshot=pt_package.validity_days_snapshot,
+        start_date=pt_package.start_date.isoformat(),
+        end_date=(
+            pt_package.end_date.isoformat()
+            if pt_package.end_date is not None
+            else None
+        ),
+        payment_id=str(payment.id),
+    )
+
+    # 9: commit (SVC001 AST gate enforces explicit commit on orchestrator).
+    await session.commit()
+
+    # 10: refresh + return response (computed is_active derived from status).
+    await session.refresh(pt_package)
+    return PtPackageResponse.model_validate(pt_package, from_attributes=True)
+
+
+async def get_pt_package_by_id(
+    session: AsyncSession,
+    pt_package_id: UUID,
+) -> PtPackageResponse:
+    """Read a single PT-package instance (D-33-06 read tier; reception+owner).
+
+    Pure read — does NOT commit. Returns the full snapshot suite +
+    sessions_remaining + start/end_date + status + computed ``is_active``.
+    """
+    pt_package = await repository.get_pt_package(session, pt_package_id)
+    if pt_package is None:
+        raise PtPackageNotFoundError("pt_package_not_found")
+    return PtPackageResponse.model_validate(pt_package, from_attributes=True)
+
+
+async def list_pt_packages(
+    session: AsyncSession,
+    query: PtPackageListQuery,
+) -> PaginatedData[PtPackageResponse]:
+    """Paginated PT-package list with optional client_id + status filters.
+
+    Read tier — reception+owner (D-33-06). Returns envelope {items, total,
+    page, pageSize}.
+    """
+    page = await repository.list_pt_packages_paginated(session, query)
+    return PaginatedData.model_construct(
+        items=[
+            PtPackageResponse.model_validate(p, from_attributes=True)
+            for p in page.items
+        ],
+        total=page.total,
+        page=page.page,
+        page_size=page.page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ARQ cron helper (Plan 33-02 / D-33-13 / D-33-14)
+# ---------------------------------------------------------------------------
+
+
+async def _expire_due_pt_packages(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    today: date | None = None,
+) -> int:
+    """Bulk-flip overdue active PT-packages to expired (D-33-13).
+
+    Caller-owns-txn helper. The ARQ worker
+    (``app.workers.scheduled.expire_pt_packages.expire_pt_packages``) is the
+    transaction owner — this helper issues the bulk UPDATE + per-row audit
+    emit BUT does NOT commit. The ``# noqa: SVC001 caller-owns-txn`` marker
+    on the def line is the Phase 30 INFRA-21 walker contract.
+
+    Idempotency: ``WHERE status='active'`` predicate (in the repository
+    helper) makes same-day re-runs no-ops. NULL-end-date rows are excluded
+    by the SQL filter — бессрочные packages never expire by time
+    (D-33-14 contract).
+
+    Args:
+        session: AsyncSession in an active transaction (worker-owned).
+        today: Override the comparison date (tests pass a fixed date for
+            determinism). Production passes None → defaults to
+            ``now(Europe/Moscow)::date``.
+
+    Returns:
+        int — number of rows whose status flipped from 'active' to 'expired'
+        on this run.
+    """
+    if today is None:
+        today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+
+    rows = await repository.expire_due_pt_packages_bulk_returning(session, today)
+
+    for row in rows:
+        pt_package_id, client_id, row_end_date = row
+        # row_end_date is `date | None` at the type-system level but the
+        # SQL `end_date IS NOT NULL` predicate guarantees non-None here.
+        # Defensive isinstance check for mypy + future-proofing.
+        end_iso = row_end_date.isoformat() if isinstance(row_end_date, date) else ""
+        await audit.emit(
+            session,
+            "pt_package_expired",  # LITERAL (INFRA-11 AST gate)
+            actor_user_id=None,  # system-driven cron
+            resource_type="pt_package",  # LITERAL
+            resource_id=pt_package_id,
+            pt_package_id=str(pt_package_id),
+            client_id=str(client_id),
+            end_date=end_iso,  # PtPackageExpiredPayload expects ISO str
+        )
+
+    return len(rows)

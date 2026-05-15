@@ -29,7 +29,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 
 from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
@@ -198,7 +198,13 @@ class PtPackageListQuery(PageQuery):
 
 
 class PtPackageResponse(ResponseData):
-    """Outbound representation of a PtPackage instance (D-33-09)."""
+    """Outbound representation of a PtPackage instance (D-33-09).
+
+    `is_active` is a computed field (D-33-10 sale-response contract): True
+    iff `status == 'active'`. Convenience boolean for downstream consumers
+    (admin-web badge, Phase 35 FE-10..18) — never persisted; derived from
+    `status` on every response.
+    """
 
     id: UUID
     client_id: UUID
@@ -214,3 +220,9 @@ class PtPackageResponse(ResponseData):
     cancellation_reason: str | None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_active(self) -> bool:
+        """True iff this PT-package is currently in the active state (D-33-10)."""
+        return self.status == PtPackageStatus.ACTIVE
