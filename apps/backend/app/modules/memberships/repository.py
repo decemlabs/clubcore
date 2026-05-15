@@ -612,6 +612,30 @@ async def get_freeze_period_by_id(
     return await session.get(MembershipFreezePeriod, period_id)
 
 
+async def has_renewal_descendants(
+    session: AsyncSession, membership_id: UUID
+) -> bool:
+    """REF-04 / B-09: True iff ``membership_id`` is the ``previous_membership_id``
+    of any descendant. Used by ``refund_membership`` orchestrator (Plan 32-03)
+    to surface 409 ``cannot_refund_renewed_source`` before the refund flow
+    proceeds.
+
+    Memberships have no ``deleted_at`` column (per Phase 25/26 invariant);
+    any descendant row blocks refund of the source.
+
+    Single-row EXISTS-style read: ``SELECT memberships.id FROM memberships
+    WHERE previous_membership_id = :membership_id LIMIT 1``. Returns bool via
+    ``result is not None``.
+    """
+    stmt = (
+        select(Membership.id)
+        .where(Membership.previous_membership_id == membership_id)
+        .limit(1)
+    )
+    result = await session.scalar(stmt)
+    return result is not None
+
+
 async def compute_freeze_days_used(
     session: AsyncSession,
     membership_id: UUID,

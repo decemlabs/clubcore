@@ -221,6 +221,33 @@ class MembershipCancelRequest(BackendSchemaBase):
         return data
 
 
+# --- Refund request --------------------------------------------------------
+
+
+class MembershipRefundRequest(BackendSchemaBase):
+    """POST /api/v1/memberships/{id}/refund body (Phase 32 Plan 32-03 / REF-05/REF-06).
+
+    Mirrors ``app.modules.payments.schemas.MembershipRefundRequest`` (Plan
+    32-01) field-for-field but lives in ``memberships.schemas`` to preserve
+    the ``modules-independent`` importlinter contract — ``memberships`` cannot
+    import from ``payments.schemas``. Both schemas share the same wire shape
+    so admin-web (Phase 35 FE-13) sees one canonical contract.
+
+    ``reason`` is REQUIRED (REF-06 — non-empty 1..200 chars). Backend rejects
+    extra keys including ``amountKopecks`` because BackendSchemaBase sets
+    ``extra='forbid'`` (REF-05 server-derives-amount invariant).
+    """
+
+    reason: str = Field(
+        min_length=1,
+        max_length=200,
+        description=(
+            "Refund reason (REF-06). Backend rejects extra fields including "
+            "amountKopecks (REF-05)."
+        ),
+    )
+
+
 # --- Response --------------------------------------------------------------
 
 
