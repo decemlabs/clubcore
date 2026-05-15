@@ -306,6 +306,8 @@ async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-o
         "status": membership.status,
         "cancelled_at": membership.cancelled_at,
         "cancel_reason": membership.cancel_reason,
+        # Phase 32 REF-01 — refund sentinel sourced from new column (D-32-07/08).
+        "cancellation_reason": membership.cancellation_reason,
         "paid_at": membership.paid_at,
         "notes": membership.notes,
         "created_at": membership.created_at,
@@ -1191,6 +1193,8 @@ async def list_memberships(
             "status": m.status,
             "cancelled_at": m.cancelled_at,
             "cancel_reason": m.cancel_reason,
+            # Phase 32 REF-01 — refund sentinel from cancellation_reason column.
+            "cancellation_reason": m.cancellation_reason,
             "paid_at": m.paid_at,
             "notes": m.notes,
             "created_at": m.created_at,
