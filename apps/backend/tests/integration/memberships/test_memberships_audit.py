@@ -12,7 +12,7 @@ where a refactor accidentally writes `reason=None` into the JSONB blob.
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -23,7 +23,11 @@ from app.modules.auth.models import User
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    # Phase 32 PAY-09: POST /api/v1/memberships now requires Idempotency-Key.
+    return {
+        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "Idempotency-Key": uuid4().hex,
+    }
 
 
 VALID_PLAN: dict[str, Any] = {
