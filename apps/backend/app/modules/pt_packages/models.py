@@ -38,14 +38,13 @@ DB-level invariants (PtPackage, D-33-03):
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     Date,
-    DateTime,
     ForeignKey,
     Index,
     Integer,
