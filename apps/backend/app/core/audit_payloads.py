@@ -256,14 +256,18 @@ class PtPackageExpiredPayload(BaseModel):
     """Payload schema for ("pt_package_expired", "pt_package") — PT-13.
 
     `end_date` is the ISO date string (YYYY-MM-DD) on which the package
-    became expired (snapshot from `pt_packages.end_date` at expiry).
+    became expired (snapshot from `pt_packages.end_date` at expiry). The
+    pattern guard rejects empty / malformed strings at audit-emit time
+    rather than letting them silently land in JSONB (WR-02 from Phase 33
+    review — defence-in-depth alongside the cron's RuntimeError on a
+    non-date row).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     pt_package_id: UUID
     client_id: UUID
-    end_date: str
+    end_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 # ---------------------------------------------------------------------------

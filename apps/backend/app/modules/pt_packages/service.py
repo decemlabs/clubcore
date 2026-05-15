@@ -676,10 +676,19 @@ async def _expire_due_pt_packages(  # noqa: SVC001 caller-owns-txn
 
     for row in rows:
         pt_package_id, client_id, row_end_date = row
-        # row_end_date is `date | None` at the type-system level but the
-        # SQL `end_date IS NOT NULL` predicate guarantees non-None here.
-        # Defensive isinstance check for mypy + future-proofing.
-        end_iso = row_end_date.isoformat() if isinstance(row_end_date, date) else ""
+        # Invariant: repository SQL filters `end_date IS NOT NULL`. If a
+        # NULL ever reaches here, the SQL predicate has regressed and we
+        # MUST surface loudly rather than silently emit an audit row with
+        # `end_date=""` — empty strings pass PtPackageExpiredPayload's
+        # current `str` shape and would land in JSONB as a corruption
+        # vector for downstream BI / REF-07 audit consumers (WR-02 from
+        # Phase 33 review).
+        if not isinstance(row_end_date, date):
+            raise RuntimeError(
+                f"expire cron returned non-date end_date for pt_package "
+                f"{pt_package_id}; expire_due_pt_packages_bulk_returning "
+                "SQL filter (end_date IS NOT NULL) has regressed"
+            )
         await audit.emit(
             session,
             "pt_package_expired",  # LITERAL (INFRA-11 AST gate)
@@ -688,7 +697,7 @@ async def _expire_due_pt_packages(  # noqa: SVC001 caller-owns-txn
             resource_id=pt_package_id,
             pt_package_id=str(pt_package_id),
             client_id=str(client_id),
-            end_date=end_iso,  # PtPackageExpiredPayload expects ISO str
+            end_date=row_end_date.isoformat(),  # PtPackageExpiredPayload expects ISO str
         )
 
     return len(rows)
