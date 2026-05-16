@@ -197,6 +197,11 @@ async def test_concurrent_record_pt_session_decrement_at_db_layer(
     assert session_count == 1, (
         f"Expected exactly 1 pt_sessions row after race, got {session_count}"
     )
+    # Expire identity-map cache so the post-race re-read returns DB-truth
+    # values (the route handler committed on a different connection; without
+    # expire_all() SQLAlchemy returns the cached pre-race PtPackage instance
+    # with sessions_remaining=1 / status='active').
+    db_session_real_commit.expire_all()
     refreshed_pkg = await db_session_real_commit.scalar(
         select(PtPackage).where(PtPackage.id == pt_package_id)
     )
