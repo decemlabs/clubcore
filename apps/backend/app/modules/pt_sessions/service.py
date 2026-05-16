@@ -264,7 +264,7 @@ async def record_pt_session(
         trainer_id=str(data.trainer_id),
         trainer_name_snapshot=trainer.full_name,
         performed_at=data.performed_at.isoformat(),
-        performed_by_user_id=actor.id,
+        performed_by_user_id=str(actor.id),
         sessions_remaining_after=new_remaining,
     )
 
