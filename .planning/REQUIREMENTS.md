@@ -106,7 +106,7 @@
 
 ### FE — Backend API Handoff (Phase 35)
 
-- [ ] **FE-10**: OpenAPI drift gate: single byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all new v1.4 typed paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints). CI `git diff --exit-code` enforces. `schema.contract.test.ts` forward-guard extended to pin v1.4 typed paths and operationIds. `packages/api-client/README.md` updated with v1.4 changelog + auth setup pointer for external design-team consumption.
+- [x] **FE-10**: OpenAPI drift gate: single byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all new v1.4 typed paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints). CI `git diff --exit-code` enforces. `schema.contract.test.ts` forward-guard extended to pin v1.4 typed paths and operationIds. `packages/api-client/README.md` updated with v1.4 changelog + auth setup pointer for external design-team consumption.
 
 ### FE — Descoped to v2.0 Frontend Integration milestone (pivot 2026-05-15)
 
