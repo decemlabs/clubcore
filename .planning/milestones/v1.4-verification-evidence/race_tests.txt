@@ -1,0 +1,23 @@
+=== Phase 36 race-test sweep ===
+started: 2026-05-16T18:26:35Z
+command: uv run pytest -q -v <7 files>
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/andre/Workspace/Development/clubcore/apps/backend
+configfile: pyproject.toml
+plugins: asyncio-1.3.0, anyio-4.13.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 20 items
+
+tests/integration/payments/test_payments_refund_race.py .                [  5%]
+tests/integration/pt_packages/test_pt_package_refund_race.py .           [ 10%]
+tests/integration/pt_sessions/test_pt_session_record_race.py .           [ 15%]
+tests/integration/payments/test_idempotency.py .....                     [ 40%]
+tests/integration/payments/test_payments_audit_chain.py ....             [ 60%]
+tests/integration/payments/test_payments_refund_audit_chain.py ...       [ 75%]
+tests/integration/memberships/test_audit_writes.py .....                 [100%]
+
+============================== 20 passed in 3.56s ==============================
+
+ended: 2026-05-16T18:26:40Z
