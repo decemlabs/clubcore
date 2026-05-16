@@ -79,7 +79,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 - [x] **Phase 32: Payment Ledger + Sale Flow + Refund** — PAY-01..10 + REF-01..08 (18 reqs) — `payments` append-only ledger + `record_payment`/`issue_refund` services + Protocol slots + `Idempotency-Key` header + `POST /memberships/{id}/refund` + frozen/renewed-source guards (completed 2026-05-15)
 - [x] **Phase 33: PT-Package Plans + Instances** — PT-01..13 (13 reqs) — `pt_package_plans` + `pt_packages` tables + sell/cancel/refund endpoints + status transitions + `expire_pt_packages` ARQ cron 06:25 MSK (completed 2026-05-15)
 - [x] **Phase 34: PT-Session Recording** — PT-14..22 (9 reqs) — `pt_sessions` table + race-safe decrement + auto-exhausted transition + cancel with balance restore + backdating windows (completed 2026-05-16)
-- [ ] **Phase 35: OpenAPI Drift Gate (backend-only API handoff)** — FE-10 (1 req) — byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all v1.4 typed paths; CI drift-gate green. *FE-11..18 descoped to v2.0 — design team owns production frontends*
+- [x] **Phase 35: OpenAPI Drift Gate (backend-only API handoff)** — FE-10 (1 req) — byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing all v1.4 typed paths; CI drift-gate green. *FE-11..18 descoped to v2.0 — design team owns production frontends* (completed 2026-05-16)
 - [ ] **Phase 36: Milestone Verification (backend-only)** — VER-01..04 (4 reqs) — operator API-contract scenarios via curl/Postman against live backend + race tests (REF/PTS/PAY/AUDIT) + 4 backend CI gates green + operator sign-off in `v1.4-VERIFICATION-LOG.md`. *admin-web smoke removed — `apps/admin-web` is frozen mock-reference, not production target*
 
 ## Phase Details
@@ -167,9 +167,9 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   2. `packages/api-client/src/schema.contract.test.ts` forward-guard расширен — пинит все v1.4 typed paths и operationIds, так что codegen-regression (openapi-typescript мажорная версия, prefix typo, operationId collision) ловится до того, как внешний фронтенд успел интегрироваться.
   3. Никаких изменений внутри `apps/admin-web/` (frozen-as-of-v1.3); существующие 233 admin-web vitest specs продолжают проходить как canary против `schema.d.ts` совместимости.
   4. `packages/api-client/README.md` (или эквивалент) обновлён с changelog v1.4 paths + auth setup pointer — дизайн-команда может потреблять артефакт автономно.
-**Plans:** 2 plans
-- [ ] 35-01-PLAN.md — Atomic byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` (single commit, drift-gate green, admin-web canary 233 specs unchanged) (FE-10) — Wave 1
-- [ ] 35-02-PLAN.md — Forward-guard extension (`schema.contract.test.ts` pins every v1.4 path+method+body+2xx) + README `## v1.4 changelog` and `## Auth quick-start` sections for external design-team handoff (FE-10) — Wave 2
+**Plans:** 2/2 plans complete
+- [x] 35-01-PLAN.md — Atomic byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` (single commit, drift-gate green, admin-web canary 233 specs unchanged) (FE-10) — Wave 1
+- [x] 35-02-PLAN.md — Forward-guard extension (`schema.contract.test.ts` pins every v1.4 path+method+body+2xx) + README `## v1.4 changelog` and `## Auth quick-start` sections for external design-team handoff (FE-10) — Wave 2
 **UI hint**: no
 
 ### Phase 36: Milestone Verification (backend-only)
@@ -192,7 +192,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | 32. Payment Ledger + Sale Flow + Refund | 3/3 | Complete   | 2026-05-15 |
 | 33. PT-Package Plans + Instances | 3/3 | Complete   | 2026-05-15 |
 | 34. PT-Session Recording | 3/3 | Complete    | 2026-05-16 |
-| 35. OpenAPI Drift Gate (backend-only handoff) | 0/2 | Planning    | — |
+| 35. OpenAPI Drift Gate (backend-only handoff) | 2/2 | Complete   | 2026-05-16 |
 | 36. Milestone Verification (backend-only) | 0/? | Not started | — |
 
 ---

@@ -4,14 +4,14 @@ milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
 stopped_at: Phase 35 context gathered
-last_updated: "2026-05-16T16:42:33.345Z"
-last_activity: 2026-05-16 -- Phase 35 execution started
+last_updated: "2026-05-16T16:57:27.412Z"
+last_activity: 2026-05-16
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 17
-  completed_plans: 15
-  percent: 88
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 ## Current Position
 
 Phase: 35 (openapi-drift-gate-backend-only-api-handoff) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 35
-Last activity: 2026-05-16 -- Phase 35 execution started
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-05-16
 
 ## v1.4 Milestone Plan
 
@@ -75,6 +75,7 @@ Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ module
 - [Phase 30]: Plan 30-04 (DEBT-05): mock/memberships.list() expiring branch now respects query.status — closes v1.3 deferred mock-parity gap; in-code rationale comment documents bug-vs-verbatim-REQ semantic mismatch
 - [Phase ?]: INFRA-18/19 (Plan 30-02): RBAC matrix extended +5 Resources / OWNER_ONLY 15->26 / no new Action — '(LIST, TRAINERS)' expressed via (VIEW, TRAINERS) outside OWNER_ONLY; three-way parity green (e8beda0, atomic per D-30-09)
 - [Phase 30]: INFRA-20/21/22 (Plan 30-03): three architectural gates extended/added — .importlinter modules-independent +2 (payments, pt_packages); SVC001 walker scope 3→6 services; new test_payments_appendonly.py AST walker with import-tracking (_resolve_payment_binding) + 5 on-disk fixtures (4 violations caught: update/delete/on_conflict_do_update/session.delete; 1 clean-INSERT positive control); 6 module placeholders created; Alembic auto-discovery outcome MANUAL → UNCONDITIONAL Payment stub safe; BEFORE/AFTER versions count 10/10; alembic check reports no pending revisions (D-30-10 invariant preserved — Phase 32 PAY-01 owns 0012_payments.py). Commits be962d7 + 091c8ee.
+- [Phase ?]: Plan 35-02: Forward-guard extended with v1.4 surface block (36 AssertNonNever assertions); README extended with v1.4 changelog + Auth quick-start pointer sections
 
 ### Pending Todos
 
@@ -108,6 +109,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-16T16:21:48.747Z
+Last session: 2026-05-16T16:57:22.605Z
 Stopped at: Phase 35 context gathered
 Resume: Start Phase 31 (Trainers Module — TRN-01..08). Run `/gsd-discuss-phase 31` to lock context.

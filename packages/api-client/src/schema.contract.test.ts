@@ -77,6 +77,169 @@ type _PostRevokeSession = AssertNonNever<
 const _sessionsGetCheck: _GetSessions = true
 const _sessionsRevokeCheck: _PostRevokeSession = true
 
+// --- v1.4 surface (Phases 31-34, backend-only handoff) -----------------
+// operationIds intentionally NOT pinned — see 35-CONTEXT D-35-07. The
+// forward-guard checks paths + methods + body realisation + 2xx
+// reachability; operation-id naming is a v1.5 hygiene topic (Postman
+// collection + curated TS client method names land then).
+//
+// All v1.4 paths are LANDED (Phases 31-34 shipped); no HasPath<...>
+// conditional probes — every assertion is a hard AssertNonNever.
+
+// --- v1.4 trainers (Phase 31) ---
+type _TrainersListGet = AssertNonNever<paths['/api/v1/trainers']['get']>
+type _TrainersListPost = AssertNonNever<paths['/api/v1/trainers']['post']>
+type _TrainersItemGet = AssertNonNever<paths['/api/v1/trainers/{trainer_id}']['get']>
+type _TrainersItemPatch = AssertNonNever<paths['/api/v1/trainers/{trainer_id}']['patch']>
+type _TrainersItemDelete = AssertNonNever<paths['/api/v1/trainers/{trainer_id}']['delete']>
+type _TrainersCreateBody = AssertNonNever<paths['/api/v1/trainers']['post']['requestBody']>
+type _TrainersListOkRealised = AssertNonNever<paths['/api/v1/trainers']['get']['responses']['200']>
+
+// --- v1.4 payments (Phase 32) ---
+type _PaymentsListGet = AssertNonNever<paths['/api/v1/payments']['get']>
+type _PaymentsByClientGet = AssertNonNever<paths['/api/v1/payments/by-client/{client_id}']['get']>
+type _PaymentsByMembershipGet = AssertNonNever<
+  paths['/api/v1/payments/by-membership/{membership_id}']['get']
+>
+type _PaymentsListOkRealised = AssertNonNever<paths['/api/v1/payments']['get']['responses']['200']>
+
+// --- v1.4 membership refund (Phase 32) ---
+type _MembershipRefundPost = AssertNonNever<
+  paths['/api/v1/memberships/{membership_id}/refund']['post']
+>
+type _MembershipRefundBody = AssertNonNever<
+  paths['/api/v1/memberships/{membership_id}/refund']['post']['requestBody']
+>
+
+// --- v1.4 pt-package-plans (Phase 33) ---
+type _PtPlansListGet = AssertNonNever<paths['/api/v1/pt-package-plans']['get']>
+type _PtPlansListPost = AssertNonNever<paths['/api/v1/pt-package-plans']['post']>
+type _PtPlansItemGet = AssertNonNever<paths['/api/v1/pt-package-plans/{plan_id}']['get']>
+type _PtPlansItemPatch = AssertNonNever<paths['/api/v1/pt-package-plans/{plan_id}']['patch']>
+type _PtPlansItemDelete = AssertNonNever<paths['/api/v1/pt-package-plans/{plan_id}']['delete']>
+type _PtPlansCreateBody = AssertNonNever<paths['/api/v1/pt-package-plans']['post']['requestBody']>
+type _PtPlansListOkRealised = AssertNonNever<
+  paths['/api/v1/pt-package-plans']['get']['responses']['200']
+>
+
+// --- v1.4 pt-packages (Phase 33) ---
+type _PtPackagesListGet = AssertNonNever<paths['/api/v1/pt-packages']['get']>
+type _PtPackagesListPost = AssertNonNever<paths['/api/v1/pt-packages']['post']>
+type _PtPackagesItemGet = AssertNonNever<paths['/api/v1/pt-packages/{pt_package_id}']['get']>
+type _PtPackagesCancelPost = AssertNonNever<
+  paths['/api/v1/pt-packages/{pt_package_id}/cancel']['post']
+>
+type _PtPackagesRefundPost = AssertNonNever<
+  paths['/api/v1/pt-packages/{pt_package_id}/refund']['post']
+>
+type _PtPackagesCreateBody = AssertNonNever<paths['/api/v1/pt-packages']['post']['requestBody']>
+type _PtPackagesRefundBody = AssertNonNever<
+  paths['/api/v1/pt-packages/{pt_package_id}/refund']['post']['requestBody']
+>
+type _PtPackagesListOkRealised = AssertNonNever<
+  paths['/api/v1/pt-packages']['get']['responses']['200']
+>
+
+// --- v1.4 pt-sessions (Phase 34) ---
+// NOTE: /api/v1/pt-sessions exposes POST only (record); the list/history surface
+// lives at /api/v1/pt-packages/{pt_package_id}/sessions GET (D-34-08 subject-side
+// ownership). 2xx-reachability anchor for this module is the by-package list 200.
+type _PtSessionsItemGet = AssertNonNever<paths['/api/v1/pt-sessions/{pt_session_id}']['get']>
+type _PtSessionsRecordPost = AssertNonNever<paths['/api/v1/pt-sessions']['post']>
+type _PtSessionsCancelPost = AssertNonNever<
+  paths['/api/v1/pt-sessions/{pt_session_id}/cancel']['post']
+>
+type _PtSessionsByPackageGet = AssertNonNever<
+  paths['/api/v1/pt-packages/{pt_package_id}/sessions']['get']
+>
+type _PtSessionsCreateBody = AssertNonNever<paths['/api/v1/pt-sessions']['post']['requestBody']>
+type _PtSessionsCancelBody = AssertNonNever<
+  paths['/api/v1/pt-sessions/{pt_session_id}/cancel']['post']['requestBody']
+>
+type _PtSessionsRecordCreatedRealised = AssertNonNever<
+  paths['/api/v1/pt-sessions']['post']['responses']['201']
+>
+type _PtSessionsByPackageOkRealised = AssertNonNever<
+  paths['/api/v1/pt-packages/{pt_package_id}/sessions']['get']['responses']['200']
+>
+
+// Static checks for v1.4 surface — each must resolve to true at compile time.
+const _v14Checks: [
+  _TrainersListGet,
+  _TrainersListPost,
+  _TrainersItemGet,
+  _TrainersItemPatch,
+  _TrainersItemDelete,
+  _TrainersCreateBody,
+  _TrainersListOkRealised,
+  _PaymentsListGet,
+  _PaymentsByClientGet,
+  _PaymentsByMembershipGet,
+  _PaymentsListOkRealised,
+  _MembershipRefundPost,
+  _MembershipRefundBody,
+  _PtPlansListGet,
+  _PtPlansListPost,
+  _PtPlansItemGet,
+  _PtPlansItemPatch,
+  _PtPlansItemDelete,
+  _PtPlansCreateBody,
+  _PtPlansListOkRealised,
+  _PtPackagesListGet,
+  _PtPackagesListPost,
+  _PtPackagesItemGet,
+  _PtPackagesCancelPost,
+  _PtPackagesRefundPost,
+  _PtPackagesCreateBody,
+  _PtPackagesRefundBody,
+  _PtPackagesListOkRealised,
+  _PtSessionsItemGet,
+  _PtSessionsRecordPost,
+  _PtSessionsCancelPost,
+  _PtSessionsByPackageGet,
+  _PtSessionsCreateBody,
+  _PtSessionsCancelBody,
+  _PtSessionsRecordCreatedRealised,
+  _PtSessionsByPackageOkRealised,
+] = [
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -86,5 +249,9 @@ describe('schema.contract', () => {
     expect(_sessionsCheck).toBe(true)
     expect(_sessionsGetCheck).toBe(true)
     expect(_sessionsRevokeCheck).toBe(true)
+  })
+
+  it('compiles against the regenerated v1.4 typed paths surface (Phases 31-34, backend-only handoff)', () => {
+    expect(_v14Checks).toHaveLength(36)
   })
 })
