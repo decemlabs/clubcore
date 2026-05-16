@@ -74,7 +74,11 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset({
     # pt-packages / pt-sessions). Reception RETAINS: (VIEW, TRAINERS) for ?active=true
     # picker (TRN-04), (CREATE, PAYMENTS) for sale flow (PAY-04), (REFUND, MEMBERSHIPS)
     # uniform-reception (B-07), (CREATE, PT_PACKAGES) + (REFUND, PT_PACKAGES) (B-07/PT-07),
-    # (CREATE, PT_SESSIONS) (PT-15). 11 new entries → final OWNER_ONLY size = 26.
+    # (CREATE, PT_SESSIONS) (PT-15).
+    # Phase 34 D-34-09a removed `(CANCEL, PT_SESSIONS)` — B-12 grants reception a
+    # 24h cancel-window; the application layer raises `cancel_window_expired` 403
+    # from `pt_sessions.service.cancel_pt_session`, not RBAC. Final OWNER_ONLY size
+    # = 25 (was 26 after Phase 30 INFRA-19).
     (Action.CREATE, Resource.TRAINERS),
     (Action.EDIT, Resource.TRAINERS),
     (Action.DELETE, Resource.TRAINERS),
@@ -85,7 +89,6 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset({
     (Action.VIEW, Resource.PAYMENTS),
     (Action.CANCEL, Resource.PT_PACKAGES),
     (Action.DELETE, Resource.PT_PACKAGES),
-    (Action.CANCEL, Resource.PT_SESSIONS),
 })
 
 
