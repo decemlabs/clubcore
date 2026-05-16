@@ -850,6 +850,24 @@
         "title": "MembershipPlanUpdateRequest",
         "type": "object"
       },
+      "MembershipRefundRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/memberships/{id}/refund body (Phase 32 Plan 32-03 / REF-05/REF-06).\n\nMirrors ``app.modules.payments.schemas.MembershipRefundRequest`` (Plan\n32-01) field-for-field but lives in ``memberships.schemas`` to preserve\nthe ``modules-independent`` importlinter contract — ``memberships`` cannot\nimport from ``payments.schemas``. Both schemas share the same wire shape\nso admin-web (Phase 35 FE-13) sees one canonical contract.\n\n``reason`` is REQUIRED (REF-06 — non-empty 1..200 chars). Backend rejects\nextra keys including ``amountKopecks`` because BackendSchemaBase sets\n``extra='forbid'`` (REF-05 server-derives-amount invariant).",
+        "properties": {
+          "reason": {
+            "description": "Refund reason (REF-06). Backend rejects extra fields including amountKopecks (REF-05).",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "MembershipRefundRequest",
+        "type": "object"
+      },
       "MembershipResponse": {
         "description": "Outbound representation of a Membership (Phase 17 D-10).\n\nExposes ALL snapshot fields so the frontend (Phase 22) can render\nhistorical sales correctly even after the source plan is edited or\ndeleted.",
         "properties": {
@@ -863,6 +881,17 @@
               }
             ],
             "title": "Cancelreason"
+          },
+          "cancellationReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellationreason"
           },
           "cancelledAt": {
             "anyOf": [
@@ -1143,6 +1172,130 @@
         "title": "PaginatedData[MembershipResponse]",
         "type": "object"
       },
+      "PaginatedData_PaymentResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[PaymentResponse]",
+        "type": "object"
+      },
+      "PaginatedData_PtPackagePlanResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PtPackagePlanResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[PtPackagePlanResponse]",
+        "type": "object"
+      },
+      "PaginatedData_PtPackageResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PtPackageResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[PtPackageResponse]",
+        "type": "object"
+      },
+      "PaginatedData_PtSessionResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PtSessionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[PtSessionResponse]",
+        "type": "object"
+      },
       "PaginatedData_TrainerResponse_": {
         "properties": {
           "items": {
@@ -1203,6 +1356,598 @@
           "pageSize"
         ],
         "title": "PaginatedData[VisitResponse]",
+        "type": "object"
+      },
+      "PaymentResponse": {
+        "description": "Outbound representation of a Payment ledger row (Phase 32 PAY-08).\n\nMirrors the 9 DB columns minus implementation details (audit_log_id is\nsurfaced for forensic UI but `id` carries the same operational weight).",
+        "properties": {
+          "amountKopecks": {
+            "title": "Amountkopecks",
+            "type": "integer"
+          },
+          "auditLogId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auditlogid"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "receivedAt": {
+            "format": "date-time",
+            "title": "Receivedat",
+            "type": "string"
+          },
+          "receivedByUserId": {
+            "format": "uuid",
+            "title": "Receivedbyuserid",
+            "type": "string"
+          },
+          "refundOf": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refundof"
+          },
+          "subjectId": {
+            "format": "uuid",
+            "title": "Subjectid",
+            "type": "string"
+          },
+          "subjectKind": {
+            "title": "Subjectkind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subjectKind",
+          "subjectId",
+          "amountKopecks",
+          "method",
+          "receivedAt",
+          "receivedByUserId"
+        ],
+        "title": "PaymentResponse",
+        "type": "object"
+      },
+      "PtPackageCancelRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/pt-packages/{id}/cancel body (D-33-10).\n\n``reason`` is REQUIRED — cancel-without-refund is a free-text operator\nnote recording why the package was voided manually (distinct from refund,\nwhich sets the ``'refunded'`` sentinel automatically).",
+        "properties": {
+          "reason": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "PtPackageCancelRequest",
+        "type": "object"
+      },
+      "PtPackageCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/pt-packages body (D-33-09).\n\n``amount_kopecks`` is REQUIRED; the service validates\n``amount_kopecks == plan.price_kopecks`` server-side (snapshot symmetry,\nD-33-17). Disagreement → 422 ``amount_mismatch``.",
+        "properties": {
+          "amountKopecks": {
+            "maximum": 100000000000.0,
+            "minimum": 1.0,
+            "title": "Amountkopecks",
+            "type": "integer"
+          },
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "planId",
+          "amountKopecks"
+        ],
+        "title": "PtPackageCreateRequest",
+        "type": "object"
+      },
+      "PtPackageListSort": {
+        "description": "PT-package instance list sort modes.",
+        "enum": [
+          "created_at_desc",
+          "end_date_desc",
+          "start_date_desc"
+        ],
+        "title": "PtPackageListSort",
+        "type": "string"
+      },
+      "PtPackagePlanCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/pt-package-plans body (D-33-02).",
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "priceKopecks": {
+            "maximum": 100000000000.0,
+            "minimum": 1.0,
+            "title": "Pricekopecks",
+            "type": "integer"
+          },
+          "sessionCount": {
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Sessioncount",
+            "type": "integer"
+          },
+          "validityDays": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validitydays"
+          }
+        },
+        "required": [
+          "name",
+          "sessionCount",
+          "priceKopecks"
+        ],
+        "title": "PtPackagePlanCreateRequest",
+        "type": "object"
+      },
+      "PtPackagePlanResponse": {
+        "description": "Outbound representation of a PtPackagePlan.",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priceKopecks": {
+            "title": "Pricekopecks",
+            "type": "integer"
+          },
+          "sessionCount": {
+            "title": "Sessioncount",
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validityDays": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validitydays"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sessionCount",
+          "priceKopecks",
+          "validityDays",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "PtPackagePlanResponse",
+        "type": "object"
+      },
+      "PtPackagePlanSort": {
+        "description": "PT-package plan list sort modes (mirror MembershipPlanSort).",
+        "enum": [
+          "created_at_desc",
+          "name_asc"
+        ],
+        "title": "PtPackagePlanSort",
+        "type": "string"
+      },
+      "PtPackagePlanUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/pt-package-plans/{id} body (D-33-07).\n\nImmutable fields (session_count / price_kopecks / validity_days) are\nINCLUDED as Optional[int] so the service layer can return 409\n``field_immutable`` on a non-matching value (instead of stock 422 from\nextra='forbid' which would happen if we omitted them). Mutable fields\nare: name only.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "priceKopecks": {
+            "anyOf": [
+              {
+                "maximum": 100000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricekopecks"
+          },
+          "sessionCount": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessioncount"
+          },
+          "validityDays": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validitydays"
+          }
+        },
+        "title": "PtPackagePlanUpdateRequest",
+        "type": "object"
+      },
+      "PtPackageRefundRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/pt-packages/{id}/refund body (D-33-11 / REF-05).\n\nMirror ``MembershipRefundRequest``. ``reason`` is REQUIRED (1..200 chars).\nBackend rejects extra keys including ``amountKopecks`` via\nextra='forbid' (REF-05 server-derives-amount invariant).",
+        "properties": {
+          "reason": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "PtPackageRefundRequest",
+        "type": "object"
+      },
+      "PtPackageResponse": {
+        "description": "Outbound representation of a PtPackage instance (D-33-09).\n\n`is_active` is a computed field (D-33-10 sale-response contract): True\niff `status == 'active'`. Convenience boolean for downstream consumers\n(admin-web badge, Phase 35 FE-10..18) — never persisted; derived from\n`status` on every response.",
+        "properties": {
+          "cancellationReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellationreason"
+          },
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "endDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enddate"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isActive": {
+            "description": "True iff this PT-package is currently in the active state (D-33-10).",
+            "readOnly": true,
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          },
+          "planNameSnapshot": {
+            "title": "Plannamesnapshot",
+            "type": "string"
+          },
+          "priceKopecksSnapshot": {
+            "title": "Pricekopeckssnapshot",
+            "type": "integer"
+          },
+          "sessionCountSnapshot": {
+            "title": "Sessioncountsnapshot",
+            "type": "integer"
+          },
+          "sessionsRemaining": {
+            "title": "Sessionsremaining",
+            "type": "integer"
+          },
+          "startDate": {
+            "format": "date",
+            "title": "Startdate",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PtPackageStatus"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validityDaysSnapshot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validitydayssnapshot"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "planId",
+          "planNameSnapshot",
+          "sessionCountSnapshot",
+          "priceKopecksSnapshot",
+          "validityDaysSnapshot",
+          "sessionsRemaining",
+          "status",
+          "startDate",
+          "endDate",
+          "cancellationReason",
+          "createdAt",
+          "updatedAt",
+          "isActive"
+        ],
+        "title": "PtPackageResponse",
+        "type": "object"
+      },
+      "PtPackageStatus": {
+        "description": "PT-package lifecycle status (33-CONTEXT.md domain).\n\nValues byte-stable with migration 0014_pt_packages CHECK ck_pt_packages_status.",
+        "enum": [
+          "active",
+          "exhausted",
+          "expired",
+          "cancelled"
+        ],
+        "title": "PtPackageStatus",
+        "type": "string"
+      },
+      "PtSessionCancelRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/pt-sessions/{id}/cancel body (PT-18 / D-34-07).\n\n`extra='forbid'`. `cancel_reason` REQUIRED 1..200 (mirrors\nPtPackageCancelRequest 1..200 bounds; defence-in-depth for the DB\nCHECK ck_pt_sessions_cancel_reason_length).",
+        "properties": {
+          "cancelReason": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Cancelreason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cancelReason"
+        ],
+        "title": "PtSessionCancelRequest",
+        "type": "object"
+      },
+      "PtSessionCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/pt-sessions body (PT-15 / D-34-06).\n\n`extra='forbid'` (inherited) REJECTS unexpected fields with 422.\nServer-validates trainer existence/active via the TrainerById Protocol\nslot (Phase 31 + Phase 34 D-34-12a) and enforces the backdating window\n(B-11) AFTER schema parse.\n\n`client_id` is derived from the `pt_package` row server-side\n(D-34-13a) and is NOT accepted on the wire — sending it triggers a\n422 via `extra='forbid'`.",
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "performedAt": {
+            "format": "date-time",
+            "title": "Performedat",
+            "type": "string"
+          },
+          "ptPackageId": {
+            "format": "uuid",
+            "title": "Ptpackageid",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptPackageId",
+          "trainerId",
+          "performedAt"
+        ],
+        "title": "PtSessionCreateRequest",
+        "type": "object"
+      },
+      "PtSessionResponse": {
+        "description": "Outbound representation of a PtSession row (D-34-08).\n\nExposes the full PT-14 column set including `trainer_name_snapshot`\nfor historical UI rendering after the parent trainer is renamed or\ndeactivated (B-05).",
+        "properties": {
+          "cancelReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelreason"
+          },
+          "cancelledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelledat"
+          },
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "performedAt": {
+            "format": "date-time",
+            "title": "Performedat",
+            "type": "string"
+          },
+          "performedByUserId": {
+            "format": "uuid",
+            "title": "Performedbyuserid",
+            "type": "string"
+          },
+          "ptPackageId": {
+            "format": "uuid",
+            "title": "Ptpackageid",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          },
+          "trainerNameSnapshot": {
+            "title": "Trainernamesnapshot",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ptPackageId",
+          "trainerId",
+          "clientId",
+          "performedAt",
+          "performedByUserId",
+          "cancelledAt",
+          "cancelReason",
+          "trainerNameSnapshot",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "PtSessionResponse",
         "type": "object"
       },
       "ResponseEnvelope_ClientResponse_": {
@@ -1326,6 +2071,54 @@
         "title": "ResponseEnvelope[PaginatedData[MembershipResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_PaymentResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_PaymentResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[PaymentResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_PtPackagePlanResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_PtPackagePlanResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[PtPackagePlanResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_PtPackageResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_PtPackageResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[PtPackageResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_PtSessionResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_PtSessionResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[PtSessionResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_TrainerResponse__": {
         "properties": {
           "data": {
@@ -1348,6 +2141,42 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[VisitResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PtPackagePlanResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PtPackagePlanResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PtPackagePlanResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PtPackageResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PtPackageResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PtPackageResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PtSessionResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PtSessionResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PtSessionResponse]",
         "type": "object"
       },
       "ResponseEnvelope_TelegramStartResponse_": {
@@ -2816,7 +3645,7 @@
         ]
       },
       "post": {
-        "description": "Sell a membership (MEM-EP-03). CREATE permission + CSRF required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).",
+        "description": "Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).\n\nPhase 32 PAY-09 idempotency contract (D-32-18..D-32-20):\n  - Header `Idempotency-Key` is required; missing or malformed → 422\n    (idempotency_key_required / idempotency_key_invalid_format).\n  - First call: SET NX claims the key with an in-flight placeholder, runs\n    the service, stores the response envelope under the same key, returns.\n  - Replay with identical key + identical body → 200 with the cached\n    envelope bytes (byte-identical to the original response). Status code\n    is also replayed from the stored envelope.\n  - Replay with identical key + different body → 422 idempotency_key_reuse;\n    no second sale is recorded.\n  - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.",
         "operationId": "create_membership_api_v1_memberships_post",
         "requestBody": {
           "content": {
@@ -2850,7 +3679,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive)",
+        "summary": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)",
         "tags": [
           "memberships"
         ]
@@ -2998,6 +3827,60 @@
         ]
       }
     },
+    "/api/v1/memberships/{membership_id}/refund": {
+      "post": {
+        "description": "Refund a membership (Phase 32 REF-01). REFUND permission + CSRF required.\n\n(REFUND, MEMBERSHIPS) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (H-13 AlertDialog mitigation handled at admin-web FE-13 in\nPhase 35). NO Idempotency-Key dependency — refund flow uses DB partial\nUNIQUE ``uq_payments_refund_of_alive`` for natural idempotency (D-32-20);\nrepeat POST → 409 ``already_refunded``.\n\nStatus-guard ordering (D-32-11 invariant — specific code wins):\n  1. status='frozen'                        → 409 must_unfreeze_first   (B-08)\n  2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)\n  3. generic _assert_can_transition         → 409 invalid_transition    (already cancelled / expired)\n\nDB-side / refunder-side error mapping:\n  - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)\n  - no original sale row (legacy)    → 404 original_payment_not_found  (OriginalPaymentNotFoundError)\n\nSchema-layer validation (REF-05):\n  - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')\n  - empty reason / reason >200 chars       → 422\n\nRBAC-04 ordering: auth → require_permission → verify_csrf.",
+        "operationId": "refund_membership_api_v1_memberships__membership_id__refund_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipRefundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refund a membership (reception+owner per B-07; 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition / already_refunded; 422 if amountKopecks supplied [REF-05])",
+        "tags": [
+          "memberships"
+        ]
+      }
+    },
     "/api/v1/memberships/{membership_id}/renew": {
       "post": {
         "description": "Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.\n\nCreates a follow-up membership chained via ``previous_membership_id`` to\nthe source. Snapshots from the CURRENT plan (so price increases between\nsale and renewal apply — PROJECT.md). Returns 201 + new\n``MembershipResponse`` including ``previousMembershipId`` field.\n\nDate strategy:\n  - source 'active' / 'frozen' → start_date = source.end_date + 1 day\n  - source 'expired'           → start_date = today (Europe/Moscow)\n\nErrors:\n  - 404 membership_not_found  (source missing)\n  - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)\n  - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)\n  - 409 plan_archived          (source's plan soft-deleted by owner)",
@@ -3083,6 +3966,1031 @@
         "summary": "Unfreeze membership (reception+owner; 409 invalid_transition)",
         "tags": [
           "memberships"
+        ]
+      }
+    },
+    "/api/v1/payments": {
+      "get": {
+        "description": "List payments globally with filter parity (Phase 32 PAY-06).\n\nOwner-only because ``(VIEW, PAYMENTS)`` is in ``OWNER_ONLY``. Reception\non the global route receives 403 — they use the scoped ``/by-client`` and\n``/by-membership`` routes instead.",
+        "operationId": "list_payments_api_v1_payments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subjectKind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(membership|pt_package|refund)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subjectkind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subjectId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subjectid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "receivedByUserId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Receivedbyuserid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "receivedFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Receivedfrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "receivedTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Receivedto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PaymentResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List payments globally (owner-only; filters by subject + actor + date window)",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/payments/by-client/{client_id}": {
+      "get": {
+        "description": "List payments scoped to a client (Phase 32 PAY-07).\n\nReception is admitted because the client detail page (Phase 35 UI) needs\nthe customer's payment history. Includes refund rows whose\n``refund_of`` references this client's membership sales.",
+        "operationId": "list_payments_by_client_api_v1_payments_by_client__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PaymentResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List payments tied to a client's memberships (reception+owner; PAY-07)",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/payments/by-membership/{membership_id}": {
+      "get": {
+        "description": "List payments scoped to a single membership (Phase 32 PAY-07).\n\nReturns the sale row plus the refund row (if any) for the same\nmembership.",
+        "operationId": "list_payments_by_membership_api_v1_payments_by_membership__membership_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PaymentResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List payments tied to a single membership (reception+owner; PAY-07)",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/pt-package-plans": {
+      "get": {
+        "description": "List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.",
+        "operationId": "list_plans_api_v1_pt_package_plans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeArchived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Includearchived",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PtPackagePlanSort",
+              "default": "created_at_desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PtPackagePlanResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List PT-package plans (owner-only); paginated; ?includeArchived toggle",
+        "tags": [
+          "pt-package-plans"
+        ]
+      },
+      "post": {
+        "description": "Create a PT-package plan (PT-02). CREATE + CSRF required.",
+        "operationId": "create_plan_api_v1_pt_package_plans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtPackagePlanCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackagePlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)",
+        "tags": [
+          "pt-package-plans"
+        ]
+      }
+    },
+    "/api/v1/pt-package-plans/{plan_id}": {
+      "delete": {
+        "description": "Soft-delete a PT-package plan (PT-02 / D-33-08).\n\nOwner-only — reception → 403 from require_permission. Pre-flight checks\nfor any pt_packages row referencing this plan (409 plan_in_use) before\nflipping deleted_at. Returns 204 No Content on success.",
+        "operationId": "archive_plan_api_v1_pt_package_plans__plan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soft-delete a PT-package plan (owner-only); 409 plan_in_use if any pt_packages row references it (D-33-08)",
+        "tags": [
+          "pt-package-plans"
+        ]
+      },
+      "get": {
+        "description": "Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.",
+        "operationId": "get_plan_api_v1_pt_package_plans__plan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackagePlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch a single alive PT-package plan (owner-only)",
+        "tags": [
+          "pt-package-plans"
+        ]
+      },
+      "patch": {
+        "description": "Patch a PT-package plan (PT-02 / D-33-07). EDIT + CSRF required.\n\nOnly ``name`` is mutable post-creation. Mutating session_count /\nprice_kopecks / validity_days raises 409 ``field_immutable`` with\n``fields.field`` carrying the offending field name.",
+        "operationId": "update_plan_api_v1_pt_package_plans__plan_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtPackagePlanUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackagePlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch a PT-package plan (owner-only); session_count / price_kopecks / validity_days mutation -> 409 field_immutable (D-33-07)",
+        "tags": [
+          "pt-package-plans"
+        ]
+      }
+    },
+    "/api/v1/pt-packages": {
+      "get": {
+        "description": "Paginated PT-package list (D-33-06 read tier).\n\n(VIEW, PT_PACKAGES) is NOT in OWNER_ONLY — reception sees the same list\nas owner (B-07 / Phase 35 PT-session form prefill — FE-10..18).",
+        "operationId": "list_pt_packages_api_v1_pt_packages_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "clientId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Clientid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PtPackageStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PtPackageListSort",
+              "default": "created_at_desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PtPackageResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List PT-packages (reception+owner; paginated; ?clientId / ?status filters)",
+        "tags": [
+          "pt-packages"
+        ]
+      },
+      "post": {
+        "description": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``sz:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Two-phase Redis claim + replay block mirrors\n``memberships.router.create_membership``.",
+        "operationId": "create_pt_package_api_v1_pt_packages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtPackageCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackageResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)",
+        "tags": [
+          "pt-packages"
+        ]
+      }
+    },
+    "/api/v1/pt-packages/{pt_package_id}": {
+      "get": {
+        "description": "Read a single PT-package instance (D-33-06; D-33-10 ``is_active`` computed).\n\n404 ``pt_package_not_found`` for missing ids.",
+        "operationId": "get_pt_package_api_v1_pt_packages__pt_package_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackageResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a single PT-package (reception+owner; 404 pt_package_not_found)",
+        "tags": [
+          "pt-packages"
+        ]
+      }
+    },
+    "/api/v1/pt-packages/{pt_package_id}/cancel": {
+      "post": {
+        "description": "Cancel a PT-package without refund (PT-08 / D-33-10).\n\n(CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception\nreceives 403 from the RBAC gate BEFORE any side effect.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db. Two-phase Redis claim + replay pattern\nmirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay\nreturns the cached envelope WITHOUT a second audit emit.\n\nError surface (service layer):\n  - 404 pt_package_not_found  (missing instance).\n  - 409 invalid_transition    (cancelled source — FSM terminal).\n  - 422 (schema layer)        (extra field / empty reason / >200 chars).",
+        "operationId": "cancel_pt_package_api_v1_pt_packages__pt_package_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtPackageCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackageResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; 409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)",
+        "tags": [
+          "pt-packages"
+        ]
+      }
+    },
+    "/api/v1/pt-packages/{pt_package_id}/refund": {
+      "post": {
+        "description": "Refund a PT-package (REF-02 / PT-13 / D-33-11).\n\n(REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (uniform-reception RBAC). RBAC-04 ordering: auth →\nrequire_permission → verify_csrf → verify_idempotency → get_db.\n\nSubject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT\npayments/router.py). Cross-module communication via the\n``get_payment_refunder()`` Protocol slot — service layer NEVER imports\n``app.modules.payments.*`` (modules-independent contract).\n\nError surface:\n  - 404 pt_package_not_found        (missing instance).\n  - 404 original_payment_not_found  (no sale payment row — should not\n                                    occur in v1.4 since PT-packages\n                                    are introduced in Phase 33 with sale\n                                    flow; defence-in-depth for parity\n                                    with memberships).\n  - 409 invalid_transition          (cancelled source — FSM terminal;\n                                    fires BEFORE the refunder so the\n                                    already-cancelled case never reaches\n                                    the DB partial UNIQUE).\n  - 409 already_refunded            (concurrent race on\n                                    uq_payments_refund_of_alive partial\n                                    UNIQUE — REF-TEST-02 exhaustive\n                                    race coverage).\n  - 422 (schema layer)              (extra field / empty reason /\n                                    >200 chars).\n\nIdempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel\nsurfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for\noperator UX consistency, beyond the DB partial UNIQUE which is the\nload-bearing race defence on its own).",
+        "operationId": "refund_pt_package_api_v1_pt_packages__pt_package_id__refund_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtPackageRefundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtPackageResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refund a PT-package (reception+owner per B-07; 404 pt_package_not_found / original_payment_not_found; 409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)",
+        "tags": [
+          "pt-packages"
+        ]
+      }
+    },
+    "/api/v1/pt-packages/{pt_package_id}/sessions": {
+      "get": {
+        "description": "Paginated PT-session history for a package (PT-19 / D-34-08).\n\nSubject-side ownership (D-33-18): implementation lives in the\n`pt_sessions` module even though the URL path is rooted at\n`/pt-packages/{id}/sessions`. The `package_scoped_router` is\nmounted at `/api/v1/pt-packages` by `app.api.v1.router`.\n\nReturns the standard `{items, total, page, pageSize}` envelope ordered\n`performed_at DESC, created_at DESC, id DESC`. The `include_cancelled`\nquery param (camelCase `?includeCancelled`) defaults to `true`.\nReturns `items=[], total=0` for unknown `pt_package_id` (no 404 —\npackage-existence check is out of scope for list endpoints per\n`pt_packages` list precedent).",
+        "operationId": "list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Package Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeCancelled",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Includecancelled",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PtSessionResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List PT-sessions for a package (reception+owner; paginated; ?includeCancelled filter; performed_at DESC, created_at DESC)",
+        "tags": [
+          "pt-sessions"
+        ]
+      }
+    },
+    "/api/v1/pt-sessions": {
+      "post": {
+        "description": "Record a PT-session (PT-15 / PT-16 / PT-17).\n\n(CREATE, PT_SESSIONS) is NOT in OWNER_ONLY (Phase 30 INFRA-19) —\nreception + owner both receive 201 from the RBAC gate. The 7-day\nbackdating window (B-11) is enforced application-layer in\n``service.record_pt_session`` and surfaces as 422\n``performed_at_out_of_window`` for reception.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo pt_session_recorded audit rows AND decrement\nsessions_remaining twice). The losing caller falls into the replay\nbranch and either gets the cached envelope (matching body) or 409\n``idempotency_in_flight`` (placeholder still set).\n\nError surface (service layer):\n  - 404 pt_package_not_found / trainer_not_found.\n  - 409 pt_package_not_active (pre-decrement guard fires first).\n  - 409 pt_package_exhausted (race-loser at atomic UPDATE).\n  - 422 trainer_inactive / performed_at_in_future /\n    performed_at_out_of_window.\n  - 422 idempotency_key_reuse (same key, different body).",
+        "operationId": "record_pt_session_api_v1_pt_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtSessionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtSessionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record a PT-session (reception+owner; 404 pt_package_not_found / trainer_not_found; 409 pt_package_not_active / pt_package_exhausted; 422 trainer_inactive / performed_at_in_future / performed_at_out_of_window / idempotency_key_reuse; requires Idempotency-Key — D-34-10)",
+        "tags": [
+          "pt-sessions"
+        ]
+      }
+    },
+    "/api/v1/pt-sessions/{pt_session_id}": {
+      "get": {
+        "description": "Read a single PT-session row (PT-19 read tier).\n\nReception + owner both pass (single-zone CRM, T-34-M accepted). Returns\n404 `pt_session_not_found` if the id is unknown.",
+        "operationId": "get_pt_session_api_v1_pt_sessions__pt_session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtSessionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a single PT-session (reception+owner; 404 pt_session_not_found)",
+        "tags": [
+          "pt-sessions"
+        ]
+      }
+    },
+    "/api/v1/pt-sessions/{pt_session_id}/cancel": {
+      "post": {
+        "description": "Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).\n\n`(CANCEL, PT_SESSIONS)` is NOT in `OWNER_ONLY` (Plan 34-01 removed it) —\nreception + owner both pass the RBAC gate. The 24h cancel-window (B-12,\nmeasured from `pt_session.created_at`, NOT `performed_at` per D-34-07)\nis enforced application-layer in `service.cancel_pt_session` and surfaces\nas 403 `cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo `pt_session_cancelled` audit rows AND increment\n`sessions_remaining` twice).\n\nError surface (service layer):\n  - 404 pt_session_not_found.\n  - 409 already_cancelled.\n  - 403 cancel_window_expired (reception >24h since created_at).\n  - 422 idempotency_key_reuse (same key, different body).",
+        "operationId": "cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtSessionCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PtSessionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)",
+        "tags": [
+          "pt-sessions"
         ]
       }
     },

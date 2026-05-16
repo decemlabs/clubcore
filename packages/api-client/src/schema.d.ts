@@ -379,12 +379,26 @@ export interface paths {
         get: operations["list_memberships_api_v1_memberships_get"];
         put?: never;
         /**
-         * Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive)
-         * @description Sell a membership (MEM-EP-03). CREATE permission + CSRF required.
+         * Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)
+         * @description Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.
          *
          *     (CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.
          *     Service layer validates plan presence (404 plan_not_found) and active flag
          *     (409 plan_inactive) and computes start_date/end_date server-side (D-04).
+         *
+         *     Phase 32 PAY-09 idempotency contract (D-32-18..D-32-20):
+         *       - Header `Idempotency-Key` is required; missing or malformed → 422
+         *         (idempotency_key_required / idempotency_key_invalid_format).
+         *       - First call: SET NX claims the key with an in-flight placeholder, runs
+         *         the service, stores the response envelope under the same key, returns.
+         *       - Replay with identical key + identical body → 200 with the cached
+         *         envelope bytes (byte-identical to the original response). Status code
+         *         is also replayed from the stored envelope.
+         *       - Replay with identical key + different body → 422 idempotency_key_reuse;
+         *         no second sale is recorded.
+         *       - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
          */
         post: operations["create_membership_api_v1_memberships_post"];
         delete?: never;
@@ -477,6 +491,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memberships/{membership_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund a membership (reception+owner per B-07; 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition / already_refunded; 422 if amountKopecks supplied [REF-05])
+         * @description Refund a membership (Phase 32 REF-01). REFUND permission + CSRF required.
+         *
+         *     (REFUND, MEMBERSHIPS) is NOT in OWNER_ONLY per B-07 — reception+owner can
+         *     both refund (H-13 AlertDialog mitigation handled at admin-web FE-13 in
+         *     Phase 35). NO Idempotency-Key dependency — refund flow uses DB partial
+         *     UNIQUE ``uq_payments_refund_of_alive`` for natural idempotency (D-32-20);
+         *     repeat POST → 409 ``already_refunded``.
+         *
+         *     Status-guard ordering (D-32-11 invariant — specific code wins):
+         *       1. status='frozen'                        → 409 must_unfreeze_first   (B-08)
+         *       2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)
+         *       3. generic _assert_can_transition         → 409 invalid_transition    (already cancelled / expired)
+         *
+         *     DB-side / refunder-side error mapping:
+         *       - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)
+         *       - no original sale row (legacy)    → 404 original_payment_not_found  (OriginalPaymentNotFoundError)
+         *
+         *     Schema-layer validation (REF-05):
+         *       - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')
+         *       - empty reason / reason >200 chars       → 422
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf.
+         */
+        post: operations["refund_membership_api_v1_memberships__membership_id__refund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memberships/{membership_id}/renew": {
         parameters: {
             query?: never;
@@ -537,6 +592,483 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List payments globally (owner-only; filters by subject + actor + date window)
+         * @description List payments globally with filter parity (Phase 32 PAY-06).
+         *
+         *     Owner-only because ``(VIEW, PAYMENTS)`` is in ``OWNER_ONLY``. Reception
+         *     on the global route receives 403 — they use the scoped ``/by-client`` and
+         *     ``/by-membership`` routes instead.
+         */
+        get: operations["list_payments_api_v1_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/by-client/{client_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List payments tied to a client's memberships (reception+owner; PAY-07)
+         * @description List payments scoped to a client (Phase 32 PAY-07).
+         *
+         *     Reception is admitted because the client detail page (Phase 35 UI) needs
+         *     the customer's payment history. Includes refund rows whose
+         *     ``refund_of`` references this client's membership sales.
+         */
+        get: operations["list_payments_by_client_api_v1_payments_by_client__client_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/by-membership/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List payments tied to a single membership (reception+owner; PAY-07)
+         * @description List payments scoped to a single membership (Phase 32 PAY-07).
+         *
+         *     Returns the sale row plus the refund row (if any) for the same
+         *     membership.
+         */
+        get: operations["list_payments_by_membership_api_v1_payments_by_membership__membership_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-package-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List PT-package plans (owner-only); paginated; ?includeArchived toggle
+         * @description List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.
+         */
+        get: operations["list_plans_api_v1_pt_package_plans_get"];
+        put?: never;
+        /**
+         * Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)
+         * @description Create a PT-package plan (PT-02). CREATE + CSRF required.
+         */
+        post: operations["create_plan_api_v1_pt_package_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-package-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch a single alive PT-package plan (owner-only)
+         * @description Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.
+         */
+        get: operations["get_plan_api_v1_pt_package_plans__plan_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Soft-delete a PT-package plan (owner-only); 409 plan_in_use if any pt_packages row references it (D-33-08)
+         * @description Soft-delete a PT-package plan (PT-02 / D-33-08).
+         *
+         *     Owner-only — reception → 403 from require_permission. Pre-flight checks
+         *     for any pt_packages row referencing this plan (409 plan_in_use) before
+         *     flipping deleted_at. Returns 204 No Content on success.
+         */
+        delete: operations["archive_plan_api_v1_pt_package_plans__plan_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch a PT-package plan (owner-only); session_count / price_kopecks / validity_days mutation -> 409 field_immutable (D-33-07)
+         * @description Patch a PT-package plan (PT-02 / D-33-07). EDIT + CSRF required.
+         *
+         *     Only ``name`` is mutable post-creation. Mutating session_count /
+         *     price_kopecks / validity_days raises 409 ``field_immutable`` with
+         *     ``fields.field`` carrying the offending field name.
+         */
+        patch: operations["update_plan_api_v1_pt_package_plans__plan_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/pt-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List PT-packages (reception+owner; paginated; ?clientId / ?status filters)
+         * @description Paginated PT-package list (D-33-06 read tier).
+         *
+         *     (VIEW, PT_PACKAGES) is NOT in OWNER_ONLY — reception sees the same list
+         *     as owner (B-07 / Phase 35 PT-session form prefill — FE-10..18).
+         */
+        get: operations["list_pt_packages_api_v1_pt_packages_get"];
+        put?: never;
+        /**
+         * Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)
+         * @description Sell a PT-package (Phase 33 PT-07).
+         *
+         *     (CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.
+         *     Service layer:
+         *       - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).
+         *       - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).
+         *       - 409 active_pt_package_already_exists (defensive pre-check AND DB
+         *         partial UNIQUE race gate — D-33-09).
+         *       - Idempotency-Key required (D-33-16); same Redis namespace
+         *         ``sz:idem:{key}`` and TTL as Phase 32 PAY-09.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf →
+         *     verify_idempotency. Two-phase Redis claim + replay block mirrors
+         *     ``memberships.router.create_membership``.
+         */
+        post: operations["create_pt_package_api_v1_pt_packages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-packages/{pt_package_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a single PT-package (reception+owner; 404 pt_package_not_found)
+         * @description Read a single PT-package instance (D-33-06; D-33-10 ``is_active`` computed).
+         *
+         *     404 ``pt_package_not_found`` for missing ids.
+         */
+        get: operations["get_pt_package_api_v1_pt_packages__pt_package_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-packages/{pt_package_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; 409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)
+         * @description Cancel a PT-package without refund (PT-08 / D-33-10).
+         *
+         *     (CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception
+         *     receives 403 from the RBAC gate BEFORE any side effect.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf →
+         *     verify_idempotency → get_db. Two-phase Redis claim + replay pattern
+         *     mirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay
+         *     returns the cached envelope WITHOUT a second audit emit.
+         *
+         *     Error surface (service layer):
+         *       - 404 pt_package_not_found  (missing instance).
+         *       - 409 invalid_transition    (cancelled source — FSM terminal).
+         *       - 422 (schema layer)        (extra field / empty reason / >200 chars).
+         */
+        post: operations["cancel_pt_package_api_v1_pt_packages__pt_package_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-packages/{pt_package_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund a PT-package (reception+owner per B-07; 404 pt_package_not_found / original_payment_not_found; 409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)
+         * @description Refund a PT-package (REF-02 / PT-13 / D-33-11).
+         *
+         *     (REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can
+         *     both refund (uniform-reception RBAC). RBAC-04 ordering: auth →
+         *     require_permission → verify_csrf → verify_idempotency → get_db.
+         *
+         *     Subject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT
+         *     payments/router.py). Cross-module communication via the
+         *     ``get_payment_refunder()`` Protocol slot — service layer NEVER imports
+         *     ``app.modules.payments.*`` (modules-independent contract).
+         *
+         *     Error surface:
+         *       - 404 pt_package_not_found        (missing instance).
+         *       - 404 original_payment_not_found  (no sale payment row — should not
+         *                                         occur in v1.4 since PT-packages
+         *                                         are introduced in Phase 33 with sale
+         *                                         flow; defence-in-depth for parity
+         *                                         with memberships).
+         *       - 409 invalid_transition          (cancelled source — FSM terminal;
+         *                                         fires BEFORE the refunder so the
+         *                                         already-cancelled case never reaches
+         *                                         the DB partial UNIQUE).
+         *       - 409 already_refunded            (concurrent race on
+         *                                         uq_payments_refund_of_alive partial
+         *                                         UNIQUE — REF-TEST-02 exhaustive
+         *                                         race coverage).
+         *       - 422 (schema layer)              (extra field / empty reason /
+         *                                         >200 chars).
+         *
+         *     Idempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel
+         *     surfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for
+         *     operator UX consistency, beyond the DB partial UNIQUE which is the
+         *     load-bearing race defence on its own).
+         */
+        post: operations["refund_pt_package_api_v1_pt_packages__pt_package_id__refund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-packages/{pt_package_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List PT-sessions for a package (reception+owner; paginated; ?includeCancelled filter; performed_at DESC, created_at DESC)
+         * @description Paginated PT-session history for a package (PT-19 / D-34-08).
+         *
+         *     Subject-side ownership (D-33-18): implementation lives in the
+         *     `pt_sessions` module even though the URL path is rooted at
+         *     `/pt-packages/{id}/sessions`. The `package_scoped_router` is
+         *     mounted at `/api/v1/pt-packages` by `app.api.v1.router`.
+         *
+         *     Returns the standard `{items, total, page, pageSize}` envelope ordered
+         *     `performed_at DESC, created_at DESC, id DESC`. The `include_cancelled`
+         *     query param (camelCase `?includeCancelled`) defaults to `true`.
+         *     Returns `items=[], total=0` for unknown `pt_package_id` (no 404 —
+         *     package-existence check is out of scope for list endpoints per
+         *     `pt_packages` list precedent).
+         */
+        get: operations["list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a PT-session (reception+owner; 404 pt_package_not_found / trainer_not_found; 409 pt_package_not_active / pt_package_exhausted; 422 trainer_inactive / performed_at_in_future / performed_at_out_of_window / idempotency_key_reuse; requires Idempotency-Key — D-34-10)
+         * @description Record a PT-session (PT-15 / PT-16 / PT-17).
+         *
+         *     (CREATE, PT_SESSIONS) is NOT in OWNER_ONLY (Phase 30 INFRA-19) —
+         *     reception + owner both receive 201 from the RBAC gate. The 7-day
+         *     backdating window (B-11) is enforced application-layer in
+         *     ``service.record_pt_session`` and surfaces as 422
+         *     ``performed_at_out_of_window`` for reception.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf →
+         *     verify_idempotency → get_db.
+         *
+         *     Two-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX
+         *     claims the key with an in-flight placeholder so concurrent callers
+         *     carrying the SAME Idempotency-Key cannot both pass the "no stored
+         *     entry" gate and double-execute the orchestrator (which would emit
+         *     two pt_session_recorded audit rows AND decrement
+         *     sessions_remaining twice). The losing caller falls into the replay
+         *     branch and either gets the cached envelope (matching body) or 409
+         *     ``idempotency_in_flight`` (placeholder still set).
+         *
+         *     Error surface (service layer):
+         *       - 404 pt_package_not_found / trainer_not_found.
+         *       - 409 pt_package_not_active (pre-decrement guard fires first).
+         *       - 409 pt_package_exhausted (race-loser at atomic UPDATE).
+         *       - 422 trainer_inactive / performed_at_in_future /
+         *         performed_at_out_of_window.
+         *       - 422 idempotency_key_reuse (same key, different body).
+         */
+        post: operations["record_pt_session_api_v1_pt_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-sessions/{pt_session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a single PT-session (reception+owner; 404 pt_session_not_found)
+         * @description Read a single PT-session row (PT-19 read tier).
+         *
+         *     Reception + owner both pass (single-zone CRM, T-34-M accepted). Returns
+         *     404 `pt_session_not_found` if the id is unknown.
+         */
+        get: operations["get_pt_session_api_v1_pt_sessions__pt_session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pt-sessions/{pt_session_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)
+         * @description Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).
+         *
+         *     `(CANCEL, PT_SESSIONS)` is NOT in `OWNER_ONLY` (Plan 34-01 removed it) —
+         *     reception + owner both pass the RBAC gate. The 24h cancel-window (B-12,
+         *     measured from `pt_session.created_at`, NOT `performed_at` per D-34-07)
+         *     is enforced application-layer in `service.cancel_pt_session` and surfaces
+         *     as 403 `cancel_window_expired` for reception. Owner is anytime.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf →
+         *     verify_idempotency → get_db.
+         *
+         *     Two-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX
+         *     claims the key with an in-flight placeholder so concurrent callers
+         *     carrying the SAME Idempotency-Key cannot both pass the "no stored
+         *     entry" gate and double-execute the orchestrator (which would emit
+         *     two `pt_session_cancelled` audit rows AND increment
+         *     `sessions_remaining` twice).
+         *
+         *     Error surface (service layer):
+         *       - 404 pt_session_not_found.
+         *       - 409 already_cancelled.
+         *       - 403 cancel_window_expired (reception >24h since created_at).
+         *       - 422 idempotency_key_reuse (same key, different body).
+         */
+        post: operations["cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trainers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alive trainers with optional is_active filter and pagination
+         * @description List alive trainers (TRN-04). VIEW permission required — reception allowed (D-31-09).
+         */
+        get: operations["list_trainers_api_v1_trainers_get"];
+        put?: never;
+        /**
+         * Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)
+         * @description Create a trainer (TRN-02). CREATE permission + CSRF required (RBAC-04 ordering).
+         */
+        post: operations["create_trainer_api_v1_trainers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trainers/{trainer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single alive trainer by id (404 if soft-deleted or missing)
+         * @description Read one alive trainer (TRN-02). 404 for missing or soft-deleted ids.
+         */
+        get: operations["get_trainer_api_v1_trainers__trainer_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Hard-delete a trainer (owner-only; 409 trainer_in_use if pt_sessions FK)
+         * @description Hard-delete an alive trainer (TRN-05).
+         *
+         *     Owner-only: (DELETE, TRAINERS) is in OWNER_ONLY, so reception → 403 from
+         *     require_permission. CSRF required on the mutation. Returns 204 No Content.
+         *     Maps IntegrityError pgcode=23503 → 409 trainer_in_use (pre-emptive D-31-07).
+         */
+        delete: operations["delete_trainer_api_v1_trainers__trainer_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Partial update (PATCH semantics; handles deactivate/reactivate via isActive)
+         * @description Partial update of an alive trainer (TRN-03). EDIT + CSRF (RBAC-04 ordering).
+         */
+        patch: operations["update_trainer_api_v1_trainers__trainer_id__patch"];
         trace?: never;
     };
     "/api/v1/visits": {
@@ -993,6 +1525,27 @@ export interface components {
             priceKopecks?: number | null;
         };
         /**
+         * MembershipRefundRequest
+         * @description POST /api/v1/memberships/{id}/refund body (Phase 32 Plan 32-03 / REF-05/REF-06).
+         *
+         *     Mirrors ``app.modules.payments.schemas.MembershipRefundRequest`` (Plan
+         *     32-01) field-for-field but lives in ``memberships.schemas`` to preserve
+         *     the ``modules-independent`` importlinter contract — ``memberships`` cannot
+         *     import from ``payments.schemas``. Both schemas share the same wire shape
+         *     so admin-web (Phase 35 FE-13) sees one canonical contract.
+         *
+         *     ``reason`` is REQUIRED (REF-06 — non-empty 1..200 chars). Backend rejects
+         *     extra keys including ``amountKopecks`` because BackendSchemaBase sets
+         *     ``extra='forbid'`` (REF-05 server-derives-amount invariant).
+         */
+        MembershipRefundRequest: {
+            /**
+             * Reason
+             * @description Refund reason (REF-06). Backend rejects extra fields including amountKopecks (REF-05).
+             */
+            reason: string;
+        };
+        /**
          * MembershipResponse
          * @description Outbound representation of a Membership (Phase 17 D-10).
          *
@@ -1003,6 +1556,8 @@ export interface components {
         MembershipResponse: {
             /** Cancelreason */
             cancelReason: string | null;
+            /** Cancellationreason */
+            cancellationReason?: string | null;
             /** Cancelledat */
             cancelledAt: string | null;
             /**
@@ -1111,6 +1666,61 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[PaymentResponse] */
+        PaginatedData_PaymentResponse_: {
+            /** Items */
+            items: components["schemas"]["PaymentResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[PtPackagePlanResponse] */
+        PaginatedData_PtPackagePlanResponse_: {
+            /** Items */
+            items: components["schemas"]["PtPackagePlanResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[PtPackageResponse] */
+        PaginatedData_PtPackageResponse_: {
+            /** Items */
+            items: components["schemas"]["PtPackageResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[PtSessionResponse] */
+        PaginatedData_PtSessionResponse_: {
+            /** Items */
+            items: components["schemas"]["PtSessionResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[TrainerResponse] */
+        PaginatedData_TrainerResponse_: {
+            /** Items */
+            items: components["schemas"]["TrainerResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[VisitResponse] */
         PaginatedData_VisitResponse_: {
             /** Items */
@@ -1121,6 +1731,337 @@ export interface components {
             pageSize: number;
             /** Total */
             total: number;
+        };
+        /**
+         * PaymentResponse
+         * @description Outbound representation of a Payment ledger row (Phase 32 PAY-08).
+         *
+         *     Mirrors the 9 DB columns minus implementation details (audit_log_id is
+         *     surfaced for forensic UI but `id` carries the same operational weight).
+         */
+        PaymentResponse: {
+            /** Amountkopecks */
+            amountKopecks: number;
+            /** Auditlogid */
+            auditLogId?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Method */
+            method: string;
+            /**
+             * Receivedat
+             * Format: date-time
+             */
+            receivedAt: string;
+            /**
+             * Receivedbyuserid
+             * Format: uuid
+             */
+            receivedByUserId: string;
+            /** Refundof */
+            refundOf?: string | null;
+            /**
+             * Subjectid
+             * Format: uuid
+             */
+            subjectId: string;
+            /** Subjectkind */
+            subjectKind: string;
+        };
+        /**
+         * PtPackageCancelRequest
+         * @description POST /api/v1/pt-packages/{id}/cancel body (D-33-10).
+         *
+         *     ``reason`` is REQUIRED — cancel-without-refund is a free-text operator
+         *     note recording why the package was voided manually (distinct from refund,
+         *     which sets the ``'refunded'`` sentinel automatically).
+         */
+        PtPackageCancelRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * PtPackageCreateRequest
+         * @description POST /api/v1/pt-packages body (D-33-09).
+         *
+         *     ``amount_kopecks`` is REQUIRED; the service validates
+         *     ``amount_kopecks == plan.price_kopecks`` server-side (snapshot symmetry,
+         *     D-33-17). Disagreement → 422 ``amount_mismatch``.
+         */
+        PtPackageCreateRequest: {
+            /** Amountkopecks */
+            amountKopecks: number;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+        };
+        /**
+         * PtPackageListSort
+         * @description PT-package instance list sort modes.
+         * @enum {string}
+         */
+        PtPackageListSort: "created_at_desc" | "end_date_desc" | "start_date_desc";
+        /**
+         * PtPackagePlanCreateRequest
+         * @description POST /api/v1/pt-package-plans body (D-33-02).
+         */
+        PtPackagePlanCreateRequest: {
+            /** Name */
+            name: string;
+            /** Pricekopecks */
+            priceKopecks: number;
+            /** Sessioncount */
+            sessionCount: number;
+            /** Validitydays */
+            validityDays?: number | null;
+        };
+        /**
+         * PtPackagePlanResponse
+         * @description Outbound representation of a PtPackagePlan.
+         */
+        PtPackagePlanResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Pricekopecks */
+            priceKopecks: number;
+            /** Sessioncount */
+            sessionCount: number;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Validitydays */
+            validityDays: number | null;
+        };
+        /**
+         * PtPackagePlanSort
+         * @description PT-package plan list sort modes (mirror MembershipPlanSort).
+         * @enum {string}
+         */
+        PtPackagePlanSort: "created_at_desc" | "name_asc";
+        /**
+         * PtPackagePlanUpdateRequest
+         * @description PATCH /api/v1/pt-package-plans/{id} body (D-33-07).
+         *
+         *     Immutable fields (session_count / price_kopecks / validity_days) are
+         *     INCLUDED as Optional[int] so the service layer can return 409
+         *     ``field_immutable`` on a non-matching value (instead of stock 422 from
+         *     extra='forbid' which would happen if we omitted them). Mutable fields
+         *     are: name only.
+         */
+        PtPackagePlanUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Pricekopecks */
+            priceKopecks?: number | null;
+            /** Sessioncount */
+            sessionCount?: number | null;
+            /** Validitydays */
+            validityDays?: number | null;
+        };
+        /**
+         * PtPackageRefundRequest
+         * @description POST /api/v1/pt-packages/{id}/refund body (D-33-11 / REF-05).
+         *
+         *     Mirror ``MembershipRefundRequest``. ``reason`` is REQUIRED (1..200 chars).
+         *     Backend rejects extra keys including ``amountKopecks`` via
+         *     extra='forbid' (REF-05 server-derives-amount invariant).
+         */
+        PtPackageRefundRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * PtPackageResponse
+         * @description Outbound representation of a PtPackage instance (D-33-09).
+         *
+         *     `is_active` is a computed field (D-33-10 sale-response contract): True
+         *     iff `status == 'active'`. Convenience boolean for downstream consumers
+         *     (admin-web badge, Phase 35 FE-10..18) — never persisted; derived from
+         *     `status` on every response.
+         */
+        PtPackageResponse: {
+            /** Cancellationreason */
+            cancellationReason: string | null;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Enddate */
+            endDate: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Isactive
+             * @description True iff this PT-package is currently in the active state (D-33-10).
+             */
+            readonly isActive: boolean;
+            /**
+             * Planid
+             * Format: uuid
+             */
+            planId: string;
+            /** Plannamesnapshot */
+            planNameSnapshot: string;
+            /** Pricekopeckssnapshot */
+            priceKopecksSnapshot: number;
+            /** Sessioncountsnapshot */
+            sessionCountSnapshot: number;
+            /** Sessionsremaining */
+            sessionsRemaining: number;
+            /**
+             * Startdate
+             * Format: date
+             */
+            startDate: string;
+            status: components["schemas"]["PtPackageStatus"];
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Validitydayssnapshot */
+            validityDaysSnapshot: number | null;
+        };
+        /**
+         * PtPackageStatus
+         * @description PT-package lifecycle status (33-CONTEXT.md domain).
+         *
+         *     Values byte-stable with migration 0014_pt_packages CHECK ck_pt_packages_status.
+         * @enum {string}
+         */
+        PtPackageStatus: "active" | "exhausted" | "expired" | "cancelled";
+        /**
+         * PtSessionCancelRequest
+         * @description POST /api/v1/pt-sessions/{id}/cancel body (PT-18 / D-34-07).
+         *
+         *     `extra='forbid'`. `cancel_reason` REQUIRED 1..200 (mirrors
+         *     PtPackageCancelRequest 1..200 bounds; defence-in-depth for the DB
+         *     CHECK ck_pt_sessions_cancel_reason_length).
+         */
+        PtSessionCancelRequest: {
+            /** Cancelreason */
+            cancelReason: string;
+        };
+        /**
+         * PtSessionCreateRequest
+         * @description POST /api/v1/pt-sessions body (PT-15 / D-34-06).
+         *
+         *     `extra='forbid'` (inherited) REJECTS unexpected fields with 422.
+         *     Server-validates trainer existence/active via the TrainerById Protocol
+         *     slot (Phase 31 + Phase 34 D-34-12a) and enforces the backdating window
+         *     (B-11) AFTER schema parse.
+         *
+         *     `client_id` is derived from the `pt_package` row server-side
+         *     (D-34-13a) and is NOT accepted on the wire — sending it triggers a
+         *     422 via `extra='forbid'`.
+         */
+        PtSessionCreateRequest: {
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Performedat
+             * Format: date-time
+             */
+            performedAt: string;
+            /**
+             * Ptpackageid
+             * Format: uuid
+             */
+            ptPackageId: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * PtSessionResponse
+         * @description Outbound representation of a PtSession row (D-34-08).
+         *
+         *     Exposes the full PT-14 column set including `trainer_name_snapshot`
+         *     for historical UI rendering after the parent trainer is renamed or
+         *     deactivated (B-05).
+         */
+        PtSessionResponse: {
+            /** Cancelreason */
+            cancelReason: string | null;
+            /** Cancelledat */
+            cancelledAt: string | null;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notes */
+            notes: string | null;
+            /**
+             * Performedat
+             * Format: date-time
+             */
+            performedAt: string;
+            /**
+             * Performedbyuserid
+             * Format: uuid
+             */
+            performedByUserId: string;
+            /**
+             * Ptpackageid
+             * Format: uuid
+             */
+            ptPackageId: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+            /** Trainernamesnapshot */
+            trainerNameSnapshot: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
         };
         /** ResponseEnvelope[ClientResponse] */
         ResponseEnvelope_ClientResponse_: {
@@ -1163,9 +2104,41 @@ export interface components {
         ResponseEnvelope_PaginatedData_MembershipResponse__: {
             data: components["schemas"]["PaginatedData_MembershipResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[PaymentResponse]] */
+        ResponseEnvelope_PaginatedData_PaymentResponse__: {
+            data: components["schemas"]["PaginatedData_PaymentResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[PtPackagePlanResponse]] */
+        ResponseEnvelope_PaginatedData_PtPackagePlanResponse__: {
+            data: components["schemas"]["PaginatedData_PtPackagePlanResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[PtPackageResponse]] */
+        ResponseEnvelope_PaginatedData_PtPackageResponse__: {
+            data: components["schemas"]["PaginatedData_PtPackageResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[PtSessionResponse]] */
+        ResponseEnvelope_PaginatedData_PtSessionResponse__: {
+            data: components["schemas"]["PaginatedData_PtSessionResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[TrainerResponse]] */
+        ResponseEnvelope_PaginatedData_TrainerResponse__: {
+            data: components["schemas"]["PaginatedData_TrainerResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[VisitResponse]] */
         ResponseEnvelope_PaginatedData_VisitResponse__: {
             data: components["schemas"]["PaginatedData_VisitResponse_"];
+        };
+        /** ResponseEnvelope[PtPackagePlanResponse] */
+        ResponseEnvelope_PtPackagePlanResponse_: {
+            data: components["schemas"]["PtPackagePlanResponse"];
+        };
+        /** ResponseEnvelope[PtPackageResponse] */
+        ResponseEnvelope_PtPackageResponse_: {
+            data: components["schemas"]["PtPackageResponse"];
+        };
+        /** ResponseEnvelope[PtSessionResponse] */
+        ResponseEnvelope_PtSessionResponse_: {
+            data: components["schemas"]["PtSessionResponse"];
         };
         /** ResponseEnvelope[TelegramStartResponse] */
         ResponseEnvelope_TelegramStartResponse_: {
@@ -1174,6 +2147,10 @@ export interface components {
         /** ResponseEnvelope[TelegramStatusResponse] */
         ResponseEnvelope_TelegramStatusResponse_: {
             data: components["schemas"]["TelegramStatusResponse"];
+        };
+        /** ResponseEnvelope[TrainerResponse] */
+        ResponseEnvelope_TrainerResponse_: {
+            data: components["schemas"]["TrainerResponse"];
         };
         /** ResponseEnvelope[VisitResponse] */
         ResponseEnvelope_VisitResponse_: {
@@ -1221,6 +2198,58 @@ export interface components {
             code: string;
             /** Deeplinktoken */
             deepLinkToken: string;
+        };
+        /**
+         * TrainerCreateRequest
+         * @description POST /api/v1/trainers body. Required: fullName. Phone optional.
+         */
+        TrainerCreateRequest: {
+            /** Fullname */
+            fullName: string;
+            /** Phone */
+            phone?: string | null;
+        };
+        /**
+         * TrainerResponse
+         * @description Single trainer read DTO. `from_attributes=True` inherited via ContractModel.
+         */
+        TrainerResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Fullname */
+            fullName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isactive */
+            isActive: boolean;
+            /** Phone */
+            phone?: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * TrainerUpdateRequest
+         * @description PATCH /api/v1/trainers/{id} body.
+         *
+         *     PATCH semantics: omit key to leave unchanged (D-01).
+         *     is_active accepted on PATCH for deactivate/reactivate (D-31-11).
+         */
+        TrainerUpdateRequest: {
+            /** Fullname */
+            fullName?: string | null;
+            /** Isactive */
+            isActive?: boolean | null;
+            /** Phone */
+            phone?: string | null;
         };
         /**
          * UserPublic
@@ -2085,6 +3114,41 @@ export interface operations {
             };
         };
     };
+    refund_membership_api_v1_memberships__membership_id__refund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     renew_membership_api_v1_memberships__membership_id__renew_post: {
         parameters: {
             query?: never;
@@ -2134,6 +3198,737 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payments_api_v1_payments_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                subjectKind?: string | null;
+                subjectId?: string | null;
+                receivedByUserId?: string | null;
+                receivedFrom?: string | null;
+                receivedTo?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PaymentResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payments_by_client_api_v1_payments_by_client__client_id__get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PaymentResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payments_by_membership_api_v1_payments_by_membership__membership_id__get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PaymentResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plans_api_v1_pt_package_plans_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                includeArchived?: boolean;
+                sort?: components["schemas"]["PtPackagePlanSort"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PtPackagePlanResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_plan_api_v1_pt_package_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtPackagePlanCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackagePlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_api_v1_pt_package_plans__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackagePlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_plan_api_v1_pt_package_plans__plan_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_plan_api_v1_pt_package_plans__plan_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtPackagePlanUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackagePlanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pt_packages_api_v1_pt_packages_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                clientId?: string | null;
+                status?: components["schemas"]["PtPackageStatus"] | null;
+                sort?: components["schemas"]["PtPackageListSort"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PtPackageResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pt_package_api_v1_pt_packages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtPackageCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackageResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pt_package_api_v1_pt_packages__pt_package_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pt_package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackageResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_pt_package_api_v1_pt_packages__pt_package_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pt_package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtPackageCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackageResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refund_pt_package_api_v1_pt_packages__pt_package_id__refund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pt_package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtPackageRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtPackageResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                includeCancelled?: boolean;
+            };
+            header?: never;
+            path: {
+                pt_package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PtSessionResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_pt_session_api_v1_pt_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtSessionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtSessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pt_session_api_v1_pt_sessions__pt_session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pt_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtSessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pt_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PtSessionCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PtSessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trainers_api_v1_trainers_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                active?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_TrainerResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_trainer_api_v1_trainers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TrainerResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trainer_api_v1_trainers__trainer_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TrainerResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trainer_api_v1_trainers__trainer_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_trainer_api_v1_trainers__trainer_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TrainerResponse_"];
                 };
             };
             /** @description Validation Error */
