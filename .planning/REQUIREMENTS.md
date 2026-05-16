@@ -94,15 +94,15 @@
 
 #### PT-sessions (Phase 34)
 
-- [ ] **PT-14**: New `pt_sessions` table (Alembic 0015): `id`, `pt_package_id FK pt_packages ON DELETE RESTRICT`, `trainer_id FK trainers ON DELETE RESTRICT`, `client_id FK clients` (denormalised — avoids JOIN on client history), `performed_at TIMESTAMPTZ NOT NULL`, `performed_by_user_id UUIDv4 NOT NULL FK users`, `cancelled_at TIMESTAMPTZ NULL`, `cancel_reason TEXT NULL`, `trainer_name_snapshot TEXT NOT NULL` (B-05), `notes TEXT NULL` (≤ 500 chars). Composite indexes `(pt_package_id, performed_at DESC)` and `(trainer_id, performed_at DESC)`.
-- [ ] **PT-15**: `POST /api/v1/pt-sessions` (reception+owner) records a session. Body: `{pt_package_id, trainer_id, performed_at, notes?}`. Server validates: trainer exists+active (via Protocol slot), package active, performed_at within backdating window (B-11: reception 7d / owner unlimited).
-- [ ] **PT-16**: Race-safe decrement via single SQL: `UPDATE pt_packages SET sessions_remaining = sessions_remaining - 1 WHERE id=:id AND sessions_remaining > 0 AND status='active' RETURNING sessions_remaining`. 0-row RETURNING → 409 `pt_package_exhausted`. Defence-in-depth CHECK `sessions_remaining >= 0`.
-- [ ] **PT-17**: Auto-transition to `'exhausted'` synchronously when decrement returns `sessions_remaining = 0` (same UoW; emits `pt_package_exhausted` once).
-- [ ] **PT-18**: `POST /api/v1/pt-sessions/{id}/cancel` cancels a recorded session (reception within 24h of recording / owner anytime per B-12). Atomically: set `cancelled_at` + `cancel_reason`; increment `sessions_remaining` on parent package; if package was `exhausted`, transition back to `active`; emit `pt_session_cancelled`.
-- [ ] **PT-19**: `GET /api/v1/pt-packages/{id}/sessions` returns session history (incl. cancelled).
-- [ ] **PT-20**: PT-sessions are independent of `visits` table — recording a PT-session does NOT create a `visits` row, and a visit does not create a PT-session. Orthogonal events (Q3 default).
-- [ ] **PT-21**: 2 audit events: `pt_session_recorded`, `pt_session_cancelled`.
-- [ ] **PT-22**: Postgres integration test PTS-TEST-01: two concurrent `POST /pt-sessions` against a package with `sessions_remaining=1` → exactly one succeeds, other 409.
+- [x] **PT-14**: New `pt_sessions` table (Alembic 0015): `id`, `pt_package_id FK pt_packages ON DELETE RESTRICT`, `trainer_id FK trainers ON DELETE RESTRICT`, `client_id FK clients` (denormalised — avoids JOIN on client history), `performed_at TIMESTAMPTZ NOT NULL`, `performed_by_user_id UUIDv4 NOT NULL FK users`, `cancelled_at TIMESTAMPTZ NULL`, `cancel_reason TEXT NULL`, `trainer_name_snapshot TEXT NOT NULL` (B-05), `notes TEXT NULL` (≤ 500 chars). Composite indexes `(pt_package_id, performed_at DESC)` and `(trainer_id, performed_at DESC)`.
+- [x] **PT-15**: `POST /api/v1/pt-sessions` (reception+owner) records a session. Body: `{pt_package_id, trainer_id, performed_at, notes?}`. Server validates: trainer exists+active (via Protocol slot), package active, performed_at within backdating window (B-11: reception 7d / owner unlimited).
+- [x] **PT-16**: Race-safe decrement via single SQL: `UPDATE pt_packages SET sessions_remaining = sessions_remaining - 1 WHERE id=:id AND sessions_remaining > 0 AND status='active' RETURNING sessions_remaining`. 0-row RETURNING → 409 `pt_package_exhausted`. Defence-in-depth CHECK `sessions_remaining >= 0`.
+- [x] **PT-17**: Auto-transition to `'exhausted'` synchronously when decrement returns `sessions_remaining = 0` (same UoW; emits `pt_package_exhausted` once).
+- [x] **PT-18**: `POST /api/v1/pt-sessions/{id}/cancel` cancels a recorded session (reception within 24h of recording / owner anytime per B-12). Atomically: set `cancelled_at` + `cancel_reason`; increment `sessions_remaining` on parent package; if package was `exhausted`, transition back to `active`; emit `pt_session_cancelled`.
+- [x] **PT-19**: `GET /api/v1/pt-packages/{id}/sessions` returns session history (incl. cancelled).
+- [x] **PT-20**: PT-sessions are independent of `visits` table — recording a PT-session does NOT create a `visits` row, and a visit does not create a PT-session. Orthogonal events (Q3 default).
+- [x] **PT-21**: 2 audit events: `pt_session_recorded`, `pt_session_cancelled`.
+- [x] **PT-22**: Postgres integration test PTS-TEST-01: two concurrent `POST /pt-sessions` against a package with `sessions_remaining=1` → exactly one succeeds, other 409.
 
 ### FE — Backend API Handoff (Phase 35)
 

@@ -189,7 +189,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | 31. Trainers Module | 2/2 | Complete   | 2026-05-14 |
 | 32. Payment Ledger + Sale Flow + Refund | 3/3 | Complete   | 2026-05-15 |
 | 33. PT-Package Plans + Instances | 3/3 | Complete   | 2026-05-15 |
-| 34. PT-Session Recording | 3/3 | Complete   | 2026-05-16 |
+| 34. PT-Session Recording | 3/3 | Complete    | 2026-05-16 |
 | 35. OpenAPI Drift Gate (backend-only handoff) | 0/? | Not started | — |
 | 36. Milestone Verification (backend-only) | 0/? | Not started | — |
 
