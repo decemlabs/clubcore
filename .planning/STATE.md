@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
-status: ready_for_close
-stopped_at: "Phase 36 complete — v1.4 ready for /gsd-complete-milestone"
-last_updated: "2026-05-16T19:00:49.423Z"
-last_activity: 2026-05-16 -- Phase 36 marked complete, v1.4 milestone-close ready
+status: Awaiting next milestone
+stopped_at: Phase 36 complete — v1.4 ready for /gsd-complete-milestone
+last_updated: "2026-05-16T19:08:56.056Z"
+last_activity: 2026-05-16 — Milestone v1.4 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: 36 — COMPLETE
-Plan: 5 of 5
-Status: Phase 36 complete — v1.4 verification PASSED with operator sign-off (delegated to Claude Code orchestrator)
-Last activity: 2026-05-16T19:00:49.423Z -- Phase 36 marked complete, v1.4 milestone-close ready
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-16 — Milestone v1.4 completed and archived
 
 ## v1.4 Milestone Plan
 
@@ -99,17 +99,30 @@ None blocking Phase 30 start. Open watch-items inherited from v1.3:
 
 ## Deferred Items
 
-Items carried into v1.4 from v1.3 close:
+Items acknowledged at v1.4 milestone close on 2026-05-16:
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| verification_gap | Phase 28 — `apps/admin-web/src/shared/api/services/mock/memberships.ts` `list()` does not filter by `query.status` | resolved | v1.3 close | Closed by Phase 30 Plan 04 (commit dd69b21) — one-liner fix + 2 DEBT-05 vitest specs |
-| quick_task | `260501-ndi` orphan in `.planning/quick/` from v1.0 era | acknowledged | v1.3 close | Defer to `/gsd-cleanup` |
-| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
-| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | not exercised in Phase 29 sweep — re-evaluate if user-facing |
+| pytest_failures | DEFER-36-04-A — 44 pre-existing pytest failures in `apps/backend` (A/B verified vs commit `53335c7` Phase 35 close) | acknowledged | Phase 36-04 | Recommended Phase 36.1 hot-fix or v1.4.1 cleanup wave. Single-commit `pt_packages/service.py` UUID stringify (same class as REG-36-03) unlocks ~28 of 44. |
+| lint_format | DEFER-36-04-B — `ruff format --check` red on 123 files (pre-existing, out of D-36-12 plan gate scope; only `ruff check .` is the gate) | acknowledged | Phase 36-04 | Defer to follow-up format-cleanup cycle. |
+| verification_gap | Phase 31 `31-VERIFICATION.md` `human_needed` — 2 admin-web browser-level UI checks for `/trainers` (owner CRUD + reception redirect) | acknowledged | Phase 31 close (2026-05-14) | Out of v1.4 scope per 2026-05-15 pivot (admin-web frozen mock-reference); rolls to v2.0 Frontend Integration milestone. |
+| verification_gap | Phase 33 `33-VERIFICATION.md` `human_needed` — 6 items: PT-12 cron + REF-TEST-02 race + PT-07 sale orchestrator (3 closed by Phase 36 race-test sweep + scenario 04); CR-01/02/02b idempotency-key hardening (3 remain) | partial | Phase 33 close (2026-05-15) | 3 closed by Phase 36 verification; CR-01/02/02b deferred to v1.5 idempotency hardening cycle. |
+| quick_task | `260501-ndi` orphan in `.planning/quick/` from v1.0 era | acknowledged | v1.0 close, carried since | Defer to `/gsd-cleanup` (carried unchanged from v1.1/v1.2/v1.3 close). |
+| uat_gap | Phase 06 06-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | Admin-web UI flows; v2.0 Frontend Integration milestone scope. |
+| uat_gap | Phase 08 08-HUMAN-UAT.md (2 pending scenarios) | partial | v1.1 close | Admin-web UI flows; v2.0 Frontend Integration milestone scope. |
+| docs | Scenario 07 documented as HTTP 422 (actual) not 409 (CONTEXT.md-stated) — `TrainerInactiveError` extends `ValidationAppError` per source | acknowledged | Phase 36-02 | Source is authoritative; v1.5 may harmonize CONTEXT/SPEC/RFC if a unified error-envelope discipline lands. |
+| handoff | Newman CLI runner + curated Postman environments + pre-request login scripts | acknowledged | Phase 36-05 (CONTEXT.md `<deferred>`) | v1.5 API Handoff milestone — turns the auto-generated draft collection into an executable contract test. |
+| feature | `GET /api/v1/audit-log` read API (owner-only) + UI consumption | acknowledged | CONTEXT.md `<deferred>` | v1.6 Reports + Audit Log milestone. |
+| feature | End-of-day cash drawer reconciliation; pro-rata refunds; bot extensions for PT-packages | acknowledged | CONTEXT.md `<deferred>` (B-02/B-06 amendments) | v1.5+ scope per long-term roadmap. |
+| doc_debt | Stale `Phase 35 UI` / `FE-13 in Phase 35` doc-strings in `memberships/router.py` + `payments/router.py` (comments only, not contracts) | acknowledged | Phase 35 close | v1.5 cleanup wave. |
+| packaging | `@sportzal/api-client` package.json version bump (`0.0.0` → `0.1.0`); auto-publishing `openapi.json` to versioned URL; OpenAPI tag curation + operationId discipline | acknowledged | Phase 35 close | v1.5 publish prep. |
 
 ## Session Continuity
 
 Last session: 2026-05-16T19:00:49.423Z
 Stopped at: Phase 36 complete — v1.4 ready for /gsd-complete-milestone
 Resume: Run `/gsd-complete-milestone v1.4` to author `v1.4-MILESTONE-AUDIT.md` and archive Phases 30-36. Phase 36.1 hot-fix cycle (or v1.4.1 cleanup wave) should begin with the pt_packages UUID stringify single-commit fix to unlock ~28 of 44 DEFER-36-04-A pytest failures.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
