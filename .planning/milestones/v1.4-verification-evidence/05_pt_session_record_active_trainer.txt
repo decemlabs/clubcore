@@ -1,0 +1,46 @@
+=== scenario 05_pt_session_record_active_trainer ===
+started: 2026-05-16T18:45:56Z
++ cleanup prior verify_pt pt_packages/pt_sessions/payments
+DELETE 0
+DELETE 1
+DELETE 1
+CLIENT_ID=499fcbee-a6bb-5262-90c7-3c56bedc2edf PLAN_ID=c62325de-f5bd-5ee4-9a06-9b49be523f54 PLAN_PRICE=900000 TRAINER_ID=d9c4e10b-384d-51ba-88c5-dc2a5376cc29
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:56 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTU3LCJleHAiOjE3Nzg5NTgwNTd9.zAa7gD8OwG7PS9vAV6f30J6_VHfFMGmFRttbs90vTCM; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=X06vTMg6k2Kd7lVepnaQohcws_2jcTfZGtnsEcBFEu4; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=11002c4186c2ae9ffa71f661e55708188273171f7e324d5574f3ec5efb54aecb; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 35303002-bba6-4778-a4cf-11a41bd05690
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/pt-packages (sale)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:56 GMT
+server: uvicorn
+content-length: 477
+content-type: application/json
+x-request-id: 6dad1226-951e-4406-950a-6e0d0b88ce74
+
+{"data":{"id":"0d6911df-3095-48f3-8898-6c221b3fdc9a","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","planId":"c62325de-f5bd-5ee4-9a06-9b49be523f54","planNameSnapshot":"Verify PT-10","sessionCountSnapshot":10,"priceKopecksSnapshot":900000,"validityDaysSnapshot":null,"sessionsRemaining":10,"status":"active","startDate":"2026-05-16","endDate":null,"cancellationReason":null,"createdAt":"2026-05-16T18:45:57.245917Z","updatedAt":"2026-05-16T18:45:57.245917Z","isActive":true}}PKG_ID=0d6911df-3095-48f3-8898-6c221b3fdc9a
++ mut POST /api/v1/pt-sessions (record)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:56 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: eaf18ccc-9756-46a1-ae62-235dd449b11e
+
+{"data":{"id":"25cb0185-6052-4ea0-a76e-e50ca896ca5e","ptPackageId":"0d6911df-3095-48f3-8898-6c221b3fdc9a","trainerId":"d9c4e10b-384d-51ba-88c5-dc2a5376cc29","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","performedAt":"2026-05-16T18:45:57Z","performedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","cancelledAt":null,"cancelReason":null,"trainerNameSnapshot":"Trainer Alpha","notes":null,"createdAt":"2026-05-16T18:45:57.453331Z","updatedAt":"2026-05-16T18:45:57.453331Z"}}SESSION_ID=25cb0185-6052-4ea0-a76e-e50ca896ca5e TRAINER_NAME_SNAPSHOT=Trainer Alpha
++ get /api/v1/pt-packages/0d6911df-3095-48f3-8898-6c221b3fdc9a
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:56 GMT
+server: uvicorn
+content-length: 476
+content-type: application/json
+x-request-id: a8b582a1-9edf-4bbf-b07f-a0c19d81c4e3
+
+{"data":{"id":"0d6911df-3095-48f3-8898-6c221b3fdc9a","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","planId":"c62325de-f5bd-5ee4-9a06-9b49be523f54","planNameSnapshot":"Verify PT-10","sessionCountSnapshot":10,"priceKopecksSnapshot":900000,"validityDaysSnapshot":null,"sessionsRemaining":9,"status":"active","startDate":"2026-05-16","endDate":null,"cancellationReason":null,"createdAt":"2026-05-16T18:45:57.245917Z","updatedAt":"2026-05-16T18:45:57.453331Z","isActive":true}}ended: 2026-05-16T18:45:57Z
+result: PASS — PT-session 25cb0185-6052-4ea0-a76e-e50ca896ca5e recorded (201, trainerNameSnapshot="Trainer Alpha"); package sessionsRemaining decremented 10→9

@@ -1,0 +1,41 @@
+=== scenario 01_sale_with_payment ===
+started: 2026-05-16T18:45:50Z
++ cleanup prior verify_sale memberships/payments
+DELETE 0
+DELETE 1
+DELETE 1
+CLIENT_ID=aacc90fb-c26a-5e65-90d9-6104934c63b0
+PLAN_ID=62b834da-f114-5658-9d15-420723b7f409
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:49 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTUwLCJleHAiOjE3Nzg5NTgwNTB9.By4sc46DTE2jTP8hH5C13ZtsoqeWlwCeHZvOA7t-UjM; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=1v5L0m6z1HOa7Sf7AnBc-VoUxDe-KPvkf1JfVrsL59o; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=cf6d1932d3efff957c48d1da668189565be164f74a42cc8f1d5277336a003fbe; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 8f730223-3e52-4e09-a611-f45697cd7b6d
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/memberships
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:49 GMT
+server: uvicorn
+content-length: 619
+content-type: application/json
+x-request-id: 73243ab3-3ddd-4f29-a1fd-d005d2aa95a3
+
+{"data":{"id":"1bebd47a-758f-457a-bdb8-7176e5ad6758","clientId":"aacc90fb-c26a-5e65-90d9-6104934c63b0","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-14","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:45:50.749291Z","updatedAt":"2026-05-16T18:45:50.749291Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":0,"freezeDaysRemaining":14,"currentFreezePeriod":null,"previousMembershipId":null}}MEMBERSHIP_ID=1bebd47a-758f-457a-bdb8-7176e5ad6758
+MEMBERSHIP_STATUS=active
+MEMBERSHIP_PRICE=300000
+END_DATE=2026-06-14
++ get /api/v1/payments/by-membership/1bebd47a-758f-457a-bdb8-7176e5ad6758
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:50 GMT
+server: uvicorn
+content-length: 351
+content-type: application/json
+x-request-id: 81f0ebb9-b918-4a24-8c6e-5e7bee73a190
+
+{"data":{"items":[{"id":"9b9c4b1b-dc2b-4547-a414-7437d5b709d2","subjectKind":"membership","subjectId":"1bebd47a-758f-457a-bdb8-7176e5ad6758","amountKopecks":300000,"method":"cash","receivedAt":"2026-05-16T18:45:50.749291Z","receivedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","refundOf":null,"auditLogId":null}],"total":1,"page":1,"pageSize":50}}ended: 2026-05-16T18:45:51Z
+result: PASS — membership 1bebd47a-758f-457a-bdb8-7176e5ad6758 created (201, status=active, price=300000); 1 payment row(s) paired at 300000 kopecks

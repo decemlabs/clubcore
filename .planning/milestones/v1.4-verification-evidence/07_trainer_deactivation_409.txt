@@ -1,0 +1,75 @@
+=== scenario 07_trainer_deactivation_409 ===
+started: 2026-05-16T18:46:06Z
++ cleanup prior verify_pt pt_packages/pt_sessions/payments
+DELETE 5
+DELETE 1
+DELETE 1
+CLIENT_ID=499fcbee-a6bb-5262-90c7-3c56bedc2edf PLAN_ID=2c0e0095-4d0e-5940-b66f-1f8e29100346 TRAINER_BETA_ID=53988f34-965e-5e77-9052-2e0a9484cc3d
++ login_as owner (for PATCH /trainers)
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:05 GMT
+server: uvicorn
+content-length: 104
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NmZkMTI2YS1kNTU3LTUxNjItOGQ4Mi1iOWRkYzhkZTRhNjEiLCJyb2xlIjoib3duZXIiLCJ0eXAiOiJhY2Nlc3MiLCJpYXQiOjE3Nzg5NTcxNjYsImV4cCI6MTc3ODk1ODA2Nn0.qdDeJhgkIrRgXaclrGw8z-42noLbBnP2CLeOkt7FraQ; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=xwvyJ_LLcW_7hUnoeOxN5V1sSEnPuwW6Q7TBQ99Zfg4; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=1959d5476388d53c07c1f77b52b16b5012833dd3223ce41f6c832e257a701ed6; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 18dec30b-729e-44ea-b1a4-be626757a95a
+
+{"data":{"user":{"id":"86fd126a-d557-5162-8d82-b9ddc8de4a61","role":"owner","fullName":"Verify Owner"}}}+ mut PATCH /api/v1/trainers/53988f34-965e-5e77-9052-2e0a9484cc3d (isActive:false)
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:05 GMT
+server: uvicorn
+content-length: 194
+content-type: application/json
+x-request-id: 4a0ef032-7296-48e7-ab3a-badfd198f9cd
+
+{"data":{"id":"53988f34-965e-5e77-9052-2e0a9484cc3d","fullName":"Trainer Beta","phone":null,"isActive":false,"createdAt":"2026-05-16T18:42:45.007555Z","updatedAt":"2026-05-16T18:46:06.966406Z"}}+ login_as reception (for sale + record attempt)
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:07 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTY3LCJleHAiOjE3Nzg5NTgwNjd9.DL0siF6ce4UWRrGwvVl4RvORKY40uRiXiBc9laGqcKA; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=X-BvS6sGmkBfdDvMnyEcYkJyDF8BlYS06DSp69gfCKY; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=2a9ef527685dffdb3d4fe8f2c349d80c95df9dd8b41367346f0520275a5c5140; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 10e7b1a2-8322-49ed-a259-5decbf4a957a
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/pt-packages (sale)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:46:07 GMT
+server: uvicorn
+content-length: 474
+content-type: application/json
+x-request-id: f1c3fea1-4a58-4a9f-b188-59df40d47890
+
+{"data":{"id":"e2ddafac-0e27-4b3d-b61b-a14f2c867817","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","planId":"2c0e0095-4d0e-5940-b66f-1f8e29100346","planNameSnapshot":"Verify PT-5","sessionCountSnapshot":5,"priceKopecksSnapshot":500000,"validityDaysSnapshot":null,"sessionsRemaining":5,"status":"active","startDate":"2026-05-16","endDate":null,"cancellationReason":null,"createdAt":"2026-05-16T18:46:07.263874Z","updatedAt":"2026-05-16T18:46:07.263874Z","isActive":true}}+ mut POST /api/v1/pt-sessions (must be rejected: inactive trainer)
+HTTP/1.1 422 Unprocessable Entity
+date: Sat, 16 May 2026 18:46:07 GMT
+server: uvicorn
+content-length: 70
+content-type: application/json
+x-request-id: fe7dc1fb-4cc7-49c8-bc84-b169b0599238
+
+{"code":"trainer_inactive","message":"trainer_inactive","fields":null}+ login_as owner (for cleanup)
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:07 GMT
+server: uvicorn
+content-length: 104
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NmZkMTI2YS1kNTU3LTUxNjItOGQ4Mi1iOWRkYzhkZTRhNjEiLCJyb2xlIjoib3duZXIiLCJ0eXAiOiJhY2Nlc3MiLCJpYXQiOjE3Nzg5NTcxNjcsImV4cCI6MTc3ODk1ODA2N30.-lI18vsICg5vYzrfJaSti082ayUvdrY97znCakFlxFY; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=z_Havzck8RFAdMtQ_152yT_cEaHoIY-sOKHAjBcndXc; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=2dd96b564fcccb633036a8896cc11f40deb77f4550c7338e6b7df53e287f1003; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 628266e3-81e8-4ae6-8a51-44af8c6bd9b1
+
+{"data":{"user":{"id":"86fd126a-d557-5162-8d82-b9ddc8de4a61","role":"owner","fullName":"Verify Owner"}}}+ mut PATCH /api/v1/trainers/53988f34-965e-5e77-9052-2e0a9484cc3d (isActive:true — cleanup)
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:07 GMT
+server: uvicorn
+content-length: 193
+content-type: application/json
+x-request-id: 50032843-7ab1-49dc-97f5-0e71394cf053
+
+{"data":{"id":"53988f34-965e-5e77-9052-2e0a9484cc3d","fullName":"Trainer Beta","phone":null,"isActive":true,"createdAt":"2026-05-16T18:42:45.007555Z","updatedAt":"2026-05-16T18:46:07.753118Z"}}ended: 2026-05-16T18:46:07Z
+result: PASS — Trainer Beta deactivated; PT-session attempt rejected with HTTP 422 + error.code=trainer_inactive; trainer reactivated as cleanup
+NOTE: actual HTTP status is 422 (not 409 as CONTEXT.md preamble suggested) — matches apps/backend/app/modules/pt_sessions/service.py:114-120 TrainerInactiveError(ValidationAppError, status_code=422)

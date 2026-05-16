@@ -1,0 +1,53 @@
+=== scenario 03_refund_frozen_409 ===
+started: 2026-05-16T18:45:53Z
++ cleanup prior verify_smoke memberships/payments
+DELETE 1
+DELETE 2
+DELETE 1
+CLIENT_ID=5afe4460-ccf6-57d2-9694-4182ac4c8d0b PLAN_ID=22d8f32f-1940-587d-adb7-18463fb80719
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:52 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTUzLCJleHAiOjE3Nzg5NTgwNTN9.5NRhN1l-T_O-pJPFcqsyKmIMaOkT-XW-2eXmgEJPdOQ; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=tF9ZMHnv3NCcTmWs2WzqTME39RjwcvPpvbq8nk4WyXA; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=7b284c8ef273414377eb702675a1f7e6f197f222e2f8609652999e085591a78c; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: d1370e83-710d-4fc6-b167-abf2f6f9e350
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/memberships (sale)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:53 GMT
+server: uvicorn
+content-length: 615
+content-type: application/json
+x-request-id: 6ec28187-249e-4432-8928-96968021242f
+
+{"data":{"id":"f1b72521-b57c-4a45-83ee-63ffc8ce976a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"22d8f32f-1940-587d-adb7-18463fb80719","planNameSnapshot":"Verify Long 90d","durationDaysSnapshot":90,"priceKopecksSnapshot":750000,"startDate":"2026-05-16","endDate":"2026-08-13","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:45:53.934851Z","updatedAt":"2026-05-16T18:45:53.934851Z","freezeDaysLimitSnapshot":30,"freezeDaysUsed":0,"freezeDaysRemaining":30,"currentFreezePeriod":null,"previousMembershipId":null}}MEMBERSHIP_ID=f1b72521-b57c-4a45-83ee-63ffc8ce976a
++ mut POST /api/v1/memberships/f1b72521-b57c-4a45-83ee-63ffc8ce976a/freeze
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:53 GMT
+server: uvicorn
+content-length: 779
+content-type: application/json
+x-request-id: 37115efd-bed2-4cc8-be46-e3053a3a0140
+
+{"data":{"id":"f1b72521-b57c-4a45-83ee-63ffc8ce976a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"22d8f32f-1940-587d-adb7-18463fb80719","planNameSnapshot":"Verify Long 90d","durationDaysSnapshot":90,"priceKopecksSnapshot":750000,"startDate":"2026-05-16","endDate":"2026-08-13","status":"frozen","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:45:53.934851Z","updatedAt":"2026-05-16T18:45:54.115831Z","freezeDaysLimitSnapshot":30,"freezeDaysUsed":1,"freezeDaysRemaining":29,"currentFreezePeriod":{"id":"04db0dd4-9699-4701-badf-69a0a203e987","startedAt":"2026-05-16T18:45:54.117143Z","startedBy":"e78f56e9-6902-5caf-b6de-463834d48d90","endedAt":null,"endedBy":null},"previousMembershipId":null}}+ mut POST /api/v1/memberships/f1b72521-b57c-4a45-83ee-63ffc8ce976a/refund (must be rejected)
+HTTP/1.1 409 Conflict
+date: Sat, 16 May 2026 18:45:53 GMT
+server: uvicorn
+content-length: 76
+content-type: application/json
+x-request-id: 46d1ab28-19f5-414c-aa70-124de4704001
+
+{"code":"must_unfreeze_first","message":"must_unfreeze_first","fields":null}+ cleanup: mut POST /api/v1/memberships/f1b72521-b57c-4a45-83ee-63ffc8ce976a/unfreeze
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:53 GMT
+server: uvicorn
+content-length: 615
+content-type: application/json
+x-request-id: 7ad903ee-81f0-4ac6-838c-3d06fa8652f7
+
+{"data":{"id":"f1b72521-b57c-4a45-83ee-63ffc8ce976a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"22d8f32f-1940-587d-adb7-18463fb80719","planNameSnapshot":"Verify Long 90d","durationDaysSnapshot":90,"priceKopecksSnapshot":750000,"startDate":"2026-05-16","endDate":"2026-08-14","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:45:53.934851Z","updatedAt":"2026-05-16T18:45:54.476107Z","freezeDaysLimitSnapshot":30,"freezeDaysUsed":1,"freezeDaysRemaining":29,"currentFreezePeriod":null,"previousMembershipId":null}}ended: 2026-05-16T18:45:54Z
+result: PASS — frozen membership refund rejected with HTTP 409 + error.code=must_unfreeze_first (B-08)

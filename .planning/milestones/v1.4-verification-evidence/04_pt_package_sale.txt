@@ -1,0 +1,31 @@
+=== scenario 04_pt_package_sale ===
+started: 2026-05-16T18:45:55Z
++ cleanup prior verify_pt pt_packages/pt_sessions/payments
+DELETE 0
+DELETE 1
+DELETE 1
+CLIENT_ID=499fcbee-a6bb-5262-90c7-3c56bedc2edf PLAN_ID=2c0e0095-4d0e-5940-b66f-1f8e29100346 PLAN_PRICE=500000
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:54 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTU1LCJleHAiOjE3Nzg5NTgwNTV9.6bXWzClS5u4ySmvRIfHpuGy6IpYyHwmy-choyoMZ4Dw; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=pixMxmzNdaRcwRBELmTzs68qXadFwLYrdBOJhlTRw5s; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=61db5b7dd240f8239ff9c5dd30b46a138ec8a83964663904b848b148a9a16741; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 43804bf8-4133-4c6d-839e-62e7e81c10ce
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/pt-packages (sale)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:54 GMT
+server: uvicorn
+content-length: 474
+content-type: application/json
+x-request-id: deee5ee2-cc90-49f8-8af4-c4604a601e82
+
+{"data":{"id":"29b59665-767f-47b4-a077-f4c7b68904d4","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","planId":"2c0e0095-4d0e-5940-b66f-1f8e29100346","planNameSnapshot":"Verify PT-5","sessionCountSnapshot":5,"priceKopecksSnapshot":500000,"validityDaysSnapshot":null,"sessionsRemaining":5,"status":"active","startDate":"2026-05-16","endDate":null,"cancellationReason":null,"createdAt":"2026-05-16T18:45:55.760449Z","updatedAt":"2026-05-16T18:45:55.760449Z","isActive":true}}PKG_ID=29b59665-767f-47b4-a077-f4c7b68904d4 PKG_STATUS=active PKG_REMAINING=5
++ psql verify payment row for pt_package 29b59665-767f-47b4-a077-f4c7b68904d4
+PT_PAYMENT_AMT=500000
+ended: 2026-05-16T18:45:56Z
+result: PASS — PT-package 29b59665-767f-47b4-a077-f4c7b68904d4 created (201, status=active, sessionsRemaining=5); payment row recorded at 500000 kopecks

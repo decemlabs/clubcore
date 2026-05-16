@@ -1,0 +1,45 @@
+=== scenario 02_refund_of_fresh_sale ===
+started: 2026-05-16T18:45:51Z
++ cleanup prior verify_refund memberships/payments
+DELETE 0
+DELETE 2
+DELETE 1
+CLIENT_ID=9ccc9eca-9e61-5095-aecc-579dec705917 PLAN_ID=62b834da-f114-5658-9d15-420723b7f409
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:51 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTUyLCJleHAiOjE3Nzg5NTgwNTJ9.48Umq16-wHTC10Xf0YQWJq7WPepyzPeXsEWyUrEYojk; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=zsOcZM0ruPkERonIhF1ItYuEJnADOBjaPbe8yhrVzi4; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=cf372703f9a541d96d8de1902d8020808797aa1b542a82df7339847664949543; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: bef42e25-2923-4d61-b25a-52a0c0fc77ef
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/memberships (sale)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:51 GMT
+server: uvicorn
+content-length: 619
+content-type: application/json
+x-request-id: 902168f1-63de-496c-9966-69481c2c095d
+
+{"data":{"id":"5722a54f-b56c-4e24-865a-683dd9e2f37c","clientId":"9ccc9eca-9e61-5095-aecc-579dec705917","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-14","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:45:52.293063Z","updatedAt":"2026-05-16T18:45:52.293063Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":0,"freezeDaysRemaining":14,"currentFreezePeriod":null,"previousMembershipId":null}}MEMBERSHIP_ID=5722a54f-b56c-4e24-865a-683dd9e2f37c
++ mut POST /api/v1/memberships/5722a54f-b56c-4e24-865a-683dd9e2f37c/refund
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:51 GMT
+server: uvicorn
+content-length: 653
+content-type: application/json
+x-request-id: 7dc7fc89-ba74-4218-9236-69eed480b744
+
+{"data":{"id":"5722a54f-b56c-4e24-865a-683dd9e2f37c","clientId":"9ccc9eca-9e61-5095-aecc-579dec705917","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-14","status":"cancelled","cancelledAt":"2026-05-16T18:45:52.477461Z","cancelReason":null,"cancellationReason":"refunded","paidAt":null,"notes":null,"createdAt":"2026-05-16T18:45:52.293063Z","updatedAt":"2026-05-16T18:45:52.473896Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":0,"freezeDaysRemaining":14,"currentFreezePeriod":null,"previousMembershipId":null}}+ get /api/v1/payments/by-membership/5722a54f-b56c-4e24-865a-683dd9e2f37c
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:51 GMT
+server: uvicorn
+content-length: 680
+content-type: application/json
+x-request-id: e17274f6-99e9-456b-84ae-748292ddc1fa
+
+{"data":{"items":[{"id":"2409e76a-b6a9-4f7f-8072-1ccb773e4975","subjectKind":"refund","subjectId":"5722a54f-b56c-4e24-865a-683dd9e2f37c","amountKopecks":-300000,"method":"cash","receivedAt":"2026-05-16T18:45:52.473896Z","receivedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","refundOf":"ab737027-0361-40e0-9cab-1d147cf4cbf5","auditLogId":null},{"id":"ab737027-0361-40e0-9cab-1d147cf4cbf5","subjectKind":"membership","subjectId":"5722a54f-b56c-4e24-865a-683dd9e2f37c","amountKopecks":300000,"method":"cash","receivedAt":"2026-05-16T18:45:52.293063Z","receivedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","refundOf":null,"auditLogId":null}],"total":2,"page":1,"pageSize":50}}ended: 2026-05-16T18:45:52Z
+result: PASS — sale 201, refund 200 (status=cancelled, cancellationReason=refunded); 2 payment rows (1 refund row(s))

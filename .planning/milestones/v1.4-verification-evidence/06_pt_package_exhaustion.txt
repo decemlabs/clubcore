@@ -1,0 +1,85 @@
+=== scenario 06_pt_package_exhaustion ===
+started: 2026-05-16T18:45:58Z
++ cleanup prior verify_pt pt_packages/pt_sessions/payments
+DELETE 1
+DELETE 1
+DELETE 1
+CLIENT_ID=499fcbee-a6bb-5262-90c7-3c56bedc2edf PLAN_ID=2c0e0095-4d0e-5940-b66f-1f8e29100346 PLAN_PRICE=500000 TRAINER_ID=d9c4e10b-384d-51ba-88c5-dc2a5376cc29
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:45:57 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTU4LCJleHAiOjE3Nzg5NTgwNTh9.ll01KuDkGLELsLRy7Fu3I7hJplBxLq5qrxYRO96kpRw; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=QwJlznlS9XE_XqG1LehN3w1VGfUPUCC2RGThAd6c0s4; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=1b920e923424ce1fe152da1b56a0263b84f7e3cd66069b1af374e1e98c7933b0; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: a8d84b20-870c-4732-951c-bde787c69246
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ mut POST /api/v1/pt-packages (sale)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:58 GMT
+server: uvicorn
+content-length: 474
+content-type: application/json
+x-request-id: 3ff5a25e-f897-4b85-9417-4849bd7ad41a
+
+{"data":{"id":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","planId":"2c0e0095-4d0e-5940-b66f-1f8e29100346","planNameSnapshot":"Verify PT-5","sessionCountSnapshot":5,"priceKopecksSnapshot":500000,"validityDaysSnapshot":null,"sessionsRemaining":5,"status":"active","startDate":"2026-05-16","endDate":null,"cancellationReason":null,"createdAt":"2026-05-16T18:45:59.009241Z","updatedAt":"2026-05-16T18:45:59.009241Z","isActive":true}}PKG_ID=4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf
++ mut POST /api/v1/pt-sessions (record #1)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:58 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: bf27aa95-1efb-41d2-9b21-3622bc436e94
+
+{"data":{"id":"ccbc019a-5b65-4465-90ba-dd14bb20a25c","ptPackageId":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","trainerId":"d9c4e10b-384d-51ba-88c5-dc2a5376cc29","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","performedAt":"2026-05-16T18:45:59Z","performedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","cancelledAt":null,"cancelReason":null,"trainerNameSnapshot":"Trainer Alpha","notes":null,"createdAt":"2026-05-16T18:45:59.218238Z","updatedAt":"2026-05-16T18:45:59.218238Z"}}+ mut POST /api/v1/pt-sessions (record #2)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:45:59 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: 97c27cd8-ac4b-4f34-ab24-1597ced874e7
+
+{"data":{"id":"cdd79b6c-8782-446a-96e5-1c4d5a80ba6c","ptPackageId":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","trainerId":"d9c4e10b-384d-51ba-88c5-dc2a5376cc29","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","performedAt":"2026-05-16T18:46:00Z","performedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","cancelledAt":null,"cancelReason":null,"trainerNameSnapshot":"Trainer Alpha","notes":null,"createdAt":"2026-05-16T18:46:00.459568Z","updatedAt":"2026-05-16T18:46:00.459568Z"}}+ mut POST /api/v1/pt-sessions (record #3)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:46:00 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: be6ec0a2-c705-445c-8b48-4e59a9050d92
+
+{"data":{"id":"1706e626-1c5c-418f-a2da-a09fd8579404","ptPackageId":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","trainerId":"d9c4e10b-384d-51ba-88c5-dc2a5376cc29","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","performedAt":"2026-05-16T18:46:01Z","performedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","cancelledAt":null,"cancelReason":null,"trainerNameSnapshot":"Trainer Alpha","notes":null,"createdAt":"2026-05-16T18:46:01.694020Z","updatedAt":"2026-05-16T18:46:01.694020Z"}}+ mut POST /api/v1/pt-sessions (record #4)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:46:01 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: ac4d81c1-8e5f-4b03-911c-be96d2ce00ff
+
+{"data":{"id":"b56cdac6-5329-4138-aed1-098f7b3621b5","ptPackageId":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","trainerId":"d9c4e10b-384d-51ba-88c5-dc2a5376cc29","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","performedAt":"2026-05-16T18:46:02Z","performedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","cancelledAt":null,"cancelReason":null,"trainerNameSnapshot":"Trainer Alpha","notes":null,"createdAt":"2026-05-16T18:46:02.932466Z","updatedAt":"2026-05-16T18:46:02.932466Z"}}+ mut POST /api/v1/pt-sessions (record #5)
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:46:03 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: 3ee7d563-6110-4c55-9145-18e9e14ae86d
+
+{"data":{"id":"580f54e0-476f-4792-bfcf-875b8572a922","ptPackageId":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","trainerId":"d9c4e10b-384d-51ba-88c5-dc2a5376cc29","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","performedAt":"2026-05-16T18:46:04Z","performedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","cancelledAt":null,"cancelReason":null,"trainerNameSnapshot":"Trainer Alpha","notes":null,"createdAt":"2026-05-16T18:46:04.168827Z","updatedAt":"2026-05-16T18:46:04.168827Z"}}+ get /api/v1/pt-packages/4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:04 GMT
+server: uvicorn
+content-length: 478
+content-type: application/json
+x-request-id: 181c77ee-dacf-4970-99a1-697eecf62983
+
+{"data":{"id":"4cffb042-e0d6-4dd4-9e69-e2c8ee414cbf","clientId":"499fcbee-a6bb-5262-90c7-3c56bedc2edf","planId":"2c0e0095-4d0e-5940-b66f-1f8e29100346","planNameSnapshot":"Verify PT-5","sessionCountSnapshot":5,"priceKopecksSnapshot":500000,"validityDaysSnapshot":null,"sessionsRemaining":0,"status":"exhausted","startDate":"2026-05-16","endDate":null,"cancellationReason":null,"createdAt":"2026-05-16T18:45:59.009241Z","updatedAt":"2026-05-16T18:46:04.168827Z","isActive":false}}+ mut POST /api/v1/pt-sessions (6th attempt — must be rejected)
+HTTP/1.1 409 Conflict
+date: Sat, 16 May 2026 18:46:04 GMT
+server: uvicorn
+content-length: 80
+content-type: application/json
+x-request-id: b1d74a26-cc76-4f29-afc0-64ca0af963bf
+
+{"code":"pt_package_not_active","message":"pt_package_not_active","fields":null}ended: 2026-05-16T18:46:05Z
+result: PASS — 5 sessions recorded; package exhausted (status=exhausted, sessionsRemaining=0); 6th attempt rejected with 409 error.code=pt_package_not_active

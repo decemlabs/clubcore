@@ -1,0 +1,73 @@
+=== scenario 08_cross_phase_smoke ===
+started: 2026-05-16T18:46:08Z
++ cleanup prior verify_smoke memberships/payments
+DELETE 1
+DELETE 1
+DELETE 1
+CLIENT_ID=5afe4460-ccf6-57d2-9694-4182ac4c8d0b PLAN_ID=62b834da-f114-5658-9d15-420723b7f409
++ login_as reception
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:08 GMT
+server: uvicorn
+content-length: 112
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNzhmNTZlOS02OTAyLTVjYWYtYjZkZS00NjM4MzRkNDhkOTAiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc4OTU3MTY4LCJleHAiOjE3Nzg5NTgwNjh9.5mkiznNo-HHYkOpcpiGIhk2APVs6f5wFVAmlkKNPPPY; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=p471OirNbAI34sH0PHgPRE0DZd5nDQTUz-vTJmxiDO4; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=f1e3abb8d9db59c716ae3cad2bf7e9ecd74138f5e14fe8a8b04a5fd7cfbfef8d; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 165adf86-5f96-47a9-9edb-b47ab860a3bb
+
+{"data":{"user":{"id":"e78f56e9-6902-5caf-b6de-463834d48d90","role":"reception","fullName":"Verify Reception"}}}+ step1_sell: mut POST /api/v1/memberships
+HTTP/1.1 201 Created
+date: Sat, 16 May 2026 18:46:08 GMT
+server: uvicorn
+content-length: 619
+content-type: application/json
+x-request-id: 6dc7437c-13cc-4a26-8255-96fa6a54eb7d
+
+{"data":{"id":"8c04b050-ea1f-4178-9525-f2657a3d9a9a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-14","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:46:09.008153Z","updatedAt":"2026-05-16T18:46:09.008153Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":0,"freezeDaysRemaining":14,"currentFreezePeriod":null,"previousMembershipId":null}}step1_sell: PASS — MEMBERSHIP_ID=8c04b050-ea1f-4178-9525-f2657a3d9a9a status=active
++ step2_freeze: mut POST /api/v1/memberships/8c04b050-ea1f-4178-9525-f2657a3d9a9a/freeze
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:09 GMT
+server: uvicorn
+content-length: 783
+content-type: application/json
+x-request-id: a3a5b7f6-1c4d-4f58-9cf0-d4a64ae35ca0
+
+{"data":{"id":"8c04b050-ea1f-4178-9525-f2657a3d9a9a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-14","status":"frozen","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:46:09.008153Z","updatedAt":"2026-05-16T18:46:09.216417Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":1,"freezeDaysRemaining":13,"currentFreezePeriod":{"id":"9d92a1a5-daa9-467c-a801-923f70be6b7f","startedAt":"2026-05-16T18:46:09.217654Z","startedBy":"e78f56e9-6902-5caf-b6de-463834d48d90","endedAt":null,"endedBy":null},"previousMembershipId":null}}step2_freeze: PASS — status=frozen
++ step3_refund409: mut POST /api/v1/memberships/8c04b050-ea1f-4178-9525-f2657a3d9a9a/refund (must be rejected)
+HTTP/1.1 409 Conflict
+date: Sat, 16 May 2026 18:46:09 GMT
+server: uvicorn
+content-length: 76
+content-type: application/json
+x-request-id: c316d055-41d2-4ebb-bcff-b22c6627e843
+
+{"code":"must_unfreeze_first","message":"must_unfreeze_first","fields":null}step3_refund409: PASS — HTTP 409 + error.code=must_unfreeze_first (B-08)
++ step4_unfreeze: mut POST /api/v1/memberships/8c04b050-ea1f-4178-9525-f2657a3d9a9a/unfreeze
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:09 GMT
+server: uvicorn
+content-length: 619
+content-type: application/json
+x-request-id: 530a76c3-8800-4f80-8bbd-b893fcb68423
+
+{"data":{"id":"8c04b050-ea1f-4178-9525-f2657a3d9a9a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-15","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":null,"createdAt":"2026-05-16T18:46:09.008153Z","updatedAt":"2026-05-16T18:46:09.575002Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":1,"freezeDaysRemaining":13,"currentFreezePeriod":null,"previousMembershipId":null}}step4_unfreeze: PASS — status=active
++ step5_refund: mut POST /api/v1/memberships/8c04b050-ea1f-4178-9525-f2657a3d9a9a/refund
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:09 GMT
+server: uvicorn
+content-length: 653
+content-type: application/json
+x-request-id: 9917c8b2-dd0e-4615-9c40-0eaf122ad5ab
+
+{"data":{"id":"8c04b050-ea1f-4178-9525-f2657a3d9a9a","clientId":"5afe4460-ccf6-57d2-9694-4182ac4c8d0b","planId":"62b834da-f114-5658-9d15-420723b7f409","planNameSnapshot":"Verify Standard 30d","durationDaysSnapshot":30,"priceKopecksSnapshot":300000,"startDate":"2026-05-16","endDate":"2026-06-15","status":"cancelled","cancelledAt":"2026-05-16T18:46:09.758750Z","cancelReason":null,"cancellationReason":"refunded","paidAt":null,"notes":null,"createdAt":"2026-05-16T18:46:09.008153Z","updatedAt":"2026-05-16T18:46:09.756017Z","freezeDaysLimitSnapshot":14,"freezeDaysUsed":1,"freezeDaysRemaining":13,"currentFreezePeriod":null,"previousMembershipId":null}}+ step5_refund: verify paired payment rows via /api/v1/payments/by-membership
+HTTP/1.1 200 OK
+date: Sat, 16 May 2026 18:46:09 GMT
+server: uvicorn
+content-length: 680
+content-type: application/json
+x-request-id: 0174ee99-d4f0-46d1-b3e8-a5b3ba4e658a
+
+{"data":{"items":[{"id":"79352c2b-519a-4202-b783-c1aa93885e20","subjectKind":"refund","subjectId":"8c04b050-ea1f-4178-9525-f2657a3d9a9a","amountKopecks":-300000,"method":"cash","receivedAt":"2026-05-16T18:46:09.756017Z","receivedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","refundOf":"632917e3-8357-4d41-a057-83ad5c1ec1e1","auditLogId":null},{"id":"632917e3-8357-4d41-a057-83ad5c1ec1e1","subjectKind":"membership","subjectId":"8c04b050-ea1f-4178-9525-f2657a3d9a9a","amountKopecks":300000,"method":"cash","receivedAt":"2026-05-16T18:46:09.008153Z","receivedByUserId":"e78f56e9-6902-5caf-b6de-463834d48d90","refundOf":null,"auditLogId":null}],"total":2,"page":1,"pageSize":50}}step5_refund: PASS — status=cancelled, cancellationReason=refunded, 2 payment rows (1 refund row(s))
+ended: 2026-05-16T18:46:10Z
+result: PASS — all 5 steps (step1_sell, step2_freeze, step3_refund409, step4_unfreeze, step5_refund) completed end-to-end
