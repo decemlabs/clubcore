@@ -181,7 +181,12 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   2. Race-condition Postgres integration tests все зелёные: REF-TEST-01 (concurrent refund), REF-TEST-02 (concurrent PT-package refund), PTS-TEST-01 (concurrent PT-session decrement), PAY-TEST-01 (concurrent sale double-submit с одинаковым `Idempotency-Key`), AUDIT-TEST-01 (каждая state-mutating service-операция эмитит ожидаемое locked событие).
   3. 4/4 backend CI gates зелёные: `ruff` + `mypy --strict` + `pytest` + OpenAPI drift; admin-web vitest specs запущены как canary (но не fail-blocker, т.к. frozen mock-reference); evidence captured как gate logs в `milestones/v1.4-VERIFICATION-LOG.md`.
   4. Operator sign-off задокументирован в `.planning/milestones/v1.4-VERIFICATION-LOG.md` с verbatim HTTP evidence per scenario; любые production-blocker regressions discovered fixed inline (v1.3 поймал 3 таких на этом gate); deferred items занесены в STATE.md перед milestone-close; v1.5 API Handoff scope-handoff подготовлен (Postman collection finalized, auth setup runbook draft).
-**Plans:** TBD
+**Plans:** 5 plans
+- [ ] 36-01-PLAN.md — Wave 1: live-stack bring-up + seed_v1_4_verification_fixtures.py + verify/_lib.sh + 8 scenario stubs + _preflight.sh (no VER-XX; infrastructure for Wave 2)
+- [ ] 36-02-PLAN.md — Wave 2: execute 8 operator scenarios against live stack + populate human_verification: block (VER-01)
+- [ ] 36-03-PLAN.md — Wave 2: race-test sweep + populate race_tests: block (VER-02)
+- [ ] 36-04-PLAN.md — Wave 2: 4 backend CI gates + admin-web canary + GHA cross-link (VER-03)
+- [ ] 36-05-PLAN.md — Wave 3: finalize VERIFICATION-LOG.md + handoff drafts (Postman + auth runbook) + STATE.md (VER-04)
 
 ## Progress
 
