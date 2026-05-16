@@ -1,0 +1,144 @@
+=== admin-web canary (informational; blocking: false per D-36-13) ===
+started: 2026-05-16T18:43:09Z
+
+NOTE: workspace package name is 'sportzal-adminka' per apps/admin-web/package.json
+
+--- vitest ---
+No projects matched the filters "/Users/andre/Workspace/Development/clubcore" in "/Users/andre/Workspace/Development/clubcore"
+
+> sportzal-adminka@0.1.0 test /Users/andre/Workspace/Development/clubcore/apps/admin-web
+> vitest run
+
+
+ RUN  v2.1.9 /Users/andre/Workspace/Development/clubcore/apps/admin-web
+
+ ✓ src/shared/session/can.test.ts (9 tests) 8ms
+ ✓ src/shared/api/services/http/_clientsAdapter.test.ts (26 tests) 10ms
+ ✓ src/features/auth/api/redirect-on-session-expired.test.ts (6 tests) 9ms
+ ✓ src/features/clients/api/hooks.delete.test.tsx (3 tests) 83ms
+ ✓ src/features/auth/api/sessionsHooks.test.ts (3 tests) 183ms
+ ✓ src/shared/api/services/mock/clients.crud.test.ts (9 tests) 3297ms
+   ✓ mock/clients CRUD > paginates list results to {items,total,page,pageSize} shape 342ms
+   ✓ mock/clients CRUD > filters by q via case-insensitive substring on fullName + phone 480ms
+   ✓ mock/clients CRUD > rejects create with duplicate phone 413ms
+   ✓ mock/clients CRUD > updates a client (partial diff) 692ms
+   ✓ mock/clients CRUD > preserves split-by-space behavior on partial name update of a 4-token full name (mock-only contract) 495ms
+ ✓ src/shared/api/services/mock/visits.read.test.ts (12 tests) 3362ms
+   ✓ mock/visits read paths > ensure("view", "visits") is non-blocking for reception (visits is not owner-only) 409ms
+   ✓ mock/visits read paths > returns Visit shapes matching VisitResponse contract fields 337ms
+   ✓ mock/visits read paths > awaits delay() — resolves asynchronously (not synchronous) 654ms
+ ✓ src/shared/api/services/mock/trainers.crud.test.ts (11 tests) 4438ms
+   ✓ mock/trainers CRUD > create returns a new trainer with isActive=true and persists it 310ms
+   ✓ mock/trainers CRUD > create with duplicate phone throws DomainError code=validation_failed with field phone 442ms
+   ✓ mock/trainers CRUD > update isActive=false then list with active=false includes updated trainer 764ms
+   ✓ mock/trainers CRUD > get returns trainer by id 443ms
+   ✓ mock/trainers CRUD > delete removes trainer from list 797ms
+   ✓ mock/trainers CRUD > saveDB/loadDB roundtrip preserves trainers array 575ms
+ ✓ src/shared/api/services/mock/trainers.rbac.test.ts (5 tests) 2885ms
+   ✓ mock/trainers RBAC > reception can list trainers with active=true (VIEW is not OWNER_ONLY) 448ms
+   ✓ mock/trainers RBAC > reception update throws DomainError forbidden 442ms
+   ✓ mock/trainers RBAC > reception delete throws DomainError forbidden 441ms
+   ✓ mock/trainers RBAC > owner can successfully create, update, and delete trainers 1279ms
+ ✓ src/routes/_protected/rbac-redirect.test.tsx (4 tests) 8ms
+ ✓ src/features/memberships/api/hooks.renew.test.ts (4 tests) 130ms
+ ✓ src/features/memberships/api/hooks.freeze.test.ts (4 tests) 162ms
+ ✓ src/features/visits/components/RecentVisitsBlock.test.tsx (3 tests) 116ms
+ ✓ src/features/memberships/api/hooks.test.ts (5 tests) 310ms
+ ✓ src/features/visits/api/hooks.test.tsx (7 tests) 408ms
+stderr | src/routes/_protected/memberships_.$membershipId.test.tsx > MembershipDetailPage > owner sees Freeze + Renew sections for an active membership
+Warning: useRouter must be used inside a <RouterProvider> component!
+
+stderr | src/routes/_protected/memberships_.$membershipId.test.tsx > MembershipDetailPage > reception also sees Freeze + Renew (CREATE MEMBERSHIPS is not owner-only)
+Warning: useRouter must be used inside a <RouterProvider> component!
+
+stderr | src/routes/_protected/memberships_.$membershipId.test.tsx > MembershipDetailPage > frozen membership shows Снять заморозку instead of Заморозить
+Warning: useRouter must be used inside a <RouterProvider> component!
+
+stderr | src/routes/_protected/memberships_.$membershipId.test.tsx > MembershipDetailPage > disabled freeze button when freezeDaysRemaining=0 (tooltip text in DOM)
+Warning: useRouter must be used inside a <RouterProvider> component!
+
+ ✓ src/routes/_protected/memberships_.$membershipId.test.tsx (5 tests) 145ms
+ ✓ src/features/auth/components/SessionsList.test.tsx (5 tests) 229ms
+ ✓ src/features/memberships/components/MembershipsBlock.test.tsx (4 tests) 63ms
+ ✓ src/shared/ui/components-json.test.ts (5 tests) 4ms
+ ✓ src/features/trainers/__tests__/trainers.filter.test.tsx (4 tests) 182ms
+ ✓ src/shared/theme/theme-bootstrap.test.ts (5 tests) 5ms
+ ✓ src/features/memberships/components/MembershipsListPage.frozen.test.tsx (4 tests) 206ms
+ ✓ src/shared/session/store.test.ts (3 tests) 5ms
+ ✓ src/features/clients/components/ClientsTable.rbac.test.tsx (7 tests) 274ms
+ ✓ src/routes/_protected/profile.test.tsx (3 tests) 4ms
+ ✓ src/features/clients/api/keys.test.ts (5 tests) 6ms
+ ✓ src/shared/i18n/date.test.ts (9 tests) 25ms
+ ✓ src/features/memberships/components/MembershipsListPage.within.test.tsx (4 tests) 476ms
+ ✓ src/shared/api/services/session-swap.test.ts (4 tests) 4ms
+ ✓ src/features/auth/components/LogoutAllDialog.test.tsx (3 tests) 205ms
+ ✓ src/shared/ui/app-shell/ProfileMenu.test.tsx (2 tests) 227ms
+ ✓ src/shared/lib/money.test.ts (4 tests) 3ms
+ ✓ src/features/trainers/__tests__/trainers.rbac.test.tsx (3 tests) 4ms
+ ✓ src/shared/i18n/plural.test.ts (3 tests) 5ms
+ ✓ src/shared/api/services/mock/memberships.expiring.test.ts (5 tests) 1774ms
+   ✓ mock/memberships.list — DEBT-02 expiring + within parity > with expiring=true and no `within` defaults to the legacy 7-day window (FE-08 D-2 non-regression) 441ms
+   ✓ mock/memberships.list — DEBT-02 expiring + within parity > within=14 result set is a superset of within=7 (wider window cannot have fewer items) 427ms
+   ✓ mock/memberships.list — DEBT-02 expiring + within parity > with expiring=false ignores `within` (no date predicate added) 506ms
+ ✓ src/shared/api/services/http/_envelope.test.ts (4 tests) 3ms
+ ✓ src/features/trainers/__tests__/trainers.crud.test.tsx (9 tests) 1084ms
+ ✓ src/shared/api/services/mock/memberships.renew.test.ts (8 tests) 1913ms
+   ✓ mock/memberships renew parity > renew creates a new membership with previousMembershipId pointing to source 323ms
+ ✓ src/shared/api/services/mock/clients.rbac.test.ts (3 tests) 853ms
+   ✓ mock/clients RBAC > forbids reception from deleting a client (DomainError forbidden) 318ms
+ ✓ src/features/visits/components/CheckInPage.test.tsx (7 tests) 1748ms
+   ✓ CheckInPage > FE-08(a): renders disambiguation list with matching clients 360ms
+   ✓ CheckInPage > FE-08(b): disables button and shows badge when client already checked in today 303ms
+ ✓ src/shared/api/services/mock/memberships.freeze.test.ts (9 tests) 2104ms
+   ✓ mock/memberships freeze parity > freeze transitions active → frozen and sets currentFreezePeriod 303ms
+   ✓ mock/memberships freeze parity > freeze throws freeze_limit_exceeded when freezeDaysRemaining === 0 305ms
+   ✓ mock/memberships freeze parity > reception can freeze (CREATE MEMBERSHIPS is not owner-only) 303ms
+ ✓ src/features/clients/api/hooks.test.ts (4 tests) 2ms
+ ✓ src/features/auth/components/LoginPage.test.tsx (4 tests) 83ms
+ ✓ src/features/memberships/components/StatusBadge.test.tsx (4 tests) 21ms
+ ✓ src/features/auth/components/TelegramLoginTab.test.tsx (2 tests) 236ms
+ ✓ src/shared/api/services/mock/memberships.read.test.ts (18 tests) 4004ms
+   ✓ mock/memberships RBAC + shape > throws mock_not_implemented on updatePlan 300ms
+   ✓ mock/memberships RBAC + shape > list filters by status when query.status is provided (FE-11 mock parity) 564ms
+   ✓ mock/memberships RBAC + shape > list applies query.status inside the expiring branch (DEBT-05) 430ms
+
+ Test Files  46 passed (46)
+      Tests  270 passed (270)
+   Start at  21:43:10
+   Duration  11.17s (transform 2.91s, setup 13.48s, collect 139.06s, tests 31.31s, environment 29.01s, prepare 4.39s)
+
+vitest_exit: 0
+
+--- typecheck ---
+No projects matched the filters "/Users/andre/Workspace/Development/clubcore" in "/Users/andre/Workspace/Development/clubcore"
+
+> sportzal-adminka@0.1.0 typecheck /Users/andre/Workspace/Development/clubcore/apps/admin-web
+> tsc -b --noEmit
+
+typecheck_exit: 0
+
+--- lint ---
+No projects matched the filters "/Users/andre/Workspace/Development/clubcore" in "/Users/andre/Workspace/Development/clubcore"
+
+> sportzal-adminka@0.1.0 lint /Users/andre/Workspace/Development/clubcore/apps/admin-web
+> eslint .
+
+
+/Users/andre/Workspace/Development/clubcore/apps/admin-web/.codex/get-shit-done/bin/lib/state.cjs
+  843:3  warning  Unused eslint-disable directive (no problems were reported from 'no-constant-condition')
+
+/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/components/reui/data-grid/data-grid-table-virtual.tsx
+  359:9  warning  The 'virtualItems' conditional could make the dependencies of useEffect Hook (at line 388) change on every render. To fix this, wrap the initialization of 'virtualItems' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+✖ 2 problems (0 errors, 2 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
+lint_exit: 0
+
+=== GHA cross-link ===
+gh CLI auth check failed (keyring token invalid on this machine per D-36-10 fallback).
+Operator-paste fallback active. CI runs to be confirmed at:
+  https://github.com/<repo>/actions (filter: workflow=ci, branch=master)
+Local HEAD SHA: 10eb78d7359baa68d0737c696c1fe51f49eefd76
+
+ended: 2026-05-16T18:43:29Z

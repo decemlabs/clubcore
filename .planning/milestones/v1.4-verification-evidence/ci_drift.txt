@@ -1,0 +1,9 @@
+=== drift-gate openapi.json ===
+command: git diff --exit-code apps/backend/openapi.json
+started: 2026-05-16T18:42:46Z
+exit_code: 0
+
+=== drift-gate schema.d.ts ===
+command: git diff --exit-code packages/api-client/src/schema.d.ts
+exit_code: 0
+ended: 2026-05-16T18:42:46Z

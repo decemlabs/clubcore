@@ -1,0 +1,6 @@
+=== mypy --strict app ===
+command: cd apps/backend && uv run mypy --strict app
+started: 2026-05-16T18:36:16Z
+Success: no issues found in 105 source files
+exit_code: 0
+ended: 2026-05-16T18:36:17Z
