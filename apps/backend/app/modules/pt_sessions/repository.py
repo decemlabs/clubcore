@@ -25,13 +25,17 @@ Plan 34-01 lands this header + import surface only. Sale-side helpers
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.pagination import PaginatedData
 from app.modules.pt_sessions.models import PtSession
+from app.modules.pt_sessions.schemas import PtSessionListByPackageQuery
 
 
 async def atomic_decrement_pt_package(
@@ -162,3 +166,155 @@ async def insert_pt_session(
     )
     session.add(pt_session)
     return pt_session
+
+
+# ---------------------------------------------------------------------------
+# Cancel + read-side helpers (Plan 34-03 — PT-18 / PT-19).
+# ---------------------------------------------------------------------------
+
+
+async def get_pt_session(
+    session: AsyncSession,
+    pt_session_id: UUID,
+) -> PtSession | None:
+    """Return a single PtSession row by id, or None for missing.
+
+    ORM-side read on the local table — no cross-module SQL. Caller raises
+    404 ``pt_session_not_found`` on None (cancel + GET endpoints).
+    """
+    stmt: Select[tuple[PtSession]] = select(PtSession).where(
+        PtSession.id == pt_session_id,
+    )
+    result: PtSession | None = await session.scalar(stmt)
+    return result
+
+
+async def list_by_pt_package_paginated(
+    session: AsyncSession,
+    pt_package_id: UUID,
+    query: PtSessionListByPackageQuery,
+) -> PaginatedData[PtSession]:
+    """Paginated list of PtSession rows for a parent pt_package (PT-19).
+
+    Mirrors ``pt_packages.repository.list_pt_packages_paginated`` shape:
+    ``model_construct`` skips Pydantic validation against the generic
+    parameter (the SA ORM is not Pydantic-compatible; runtime
+    parametrisation would raise ``PydanticSchemaGenerationError``).
+
+    Ordering: ``performed_at DESC, created_at DESC, id DESC`` (D-34-08 —
+    latest-first; deterministic tiebreaker via id for paging stability).
+    Filter: ``include_cancelled=False`` → ``cancelled_at IS NULL`` only.
+    """
+    predicates: list[Any] = [PtSession.pt_package_id == pt_package_id]
+    if not query.include_cancelled:
+        predicates.append(PtSession.cancelled_at.is_(None))
+
+    total_stmt = select(func.count()).select_from(PtSession).where(*predicates)
+    total = await session.scalar(total_stmt) or 0
+
+    stmt: Select[tuple[PtSession]] = (
+        select(PtSession)
+        .where(*predicates)
+        .order_by(
+            PtSession.performed_at.desc(),
+            PtSession.created_at.desc(),
+            PtSession.id.desc(),
+        )
+        .offset((query.page - 1) * query.page_size)
+        .limit(query.page_size)
+    )
+    rows = (await session.scalars(stmt)).all()
+    return PaginatedData.model_construct(
+        items=list(rows),
+        total=total,
+        page=query.page,
+        page_size=query.page_size,
+    )
+
+
+async def mark_cancelled(
+    session: AsyncSession,
+    pt_session: PtSession,
+    *,
+    cancel_reason: str,
+) -> PtSession:
+    """In-place setter for ``cancelled_at`` + ``cancel_reason`` (PT-18).
+
+    Caller-owns-txn (D-03): mutates the loaded ORM instance but does NOT
+    flush or commit. The service layer flushes before audit emit so FK /
+    CHECK violations surface inside the same UoW.
+
+    The CHECK constraint ``cancel_reason IS NULL OR cancelled_at IS NOT
+    NULL`` (migration 0015) is satisfied here because both fields are set
+    together.
+    """
+    pt_session.cancelled_at = datetime.now(tz=UTC)
+    pt_session.cancel_reason = cancel_reason
+    return pt_session
+
+
+async def atomic_increment_pt_package(
+    session: AsyncSession,
+    pt_package_id: UUID,
+) -> int | None:
+    """Race-safe increment of ``pt_packages.sessions_remaining`` (PT-18).
+
+    Returns new ``sessions_remaining`` on success; ``None`` on 0-row
+    update — a HARD logic error (caller raises 500): the CHECK invariant
+    ``sessions_remaining <= session_count_snapshot`` from migration
+    0014_pt_packages would be breached, so the predicate
+    ``sessions_remaining < session_count_snapshot`` acts as defence-in-
+    depth at the application layer. By the time ``cancel_pt_session``
+    calls this, we have already observed a recordable session against
+    the package, so the ceiling is mathematically impossible to hit.
+
+    Raw ``sa.text()`` SQL referencing ``pt_packages`` by table name
+    avoids importing ``app.modules.pt_packages.models.PtPackage`` and
+    keeps the ``modules-independent`` importlinter contract green
+    (D-34-04a).
+    """
+    stmt = sa.text(
+        """
+        UPDATE pt_packages
+        SET sessions_remaining = sessions_remaining + 1,
+            updated_at = now()
+        WHERE id = :pt_package_id
+          AND sessions_remaining < session_count_snapshot
+        RETURNING sessions_remaining
+        """,  # noqa: TABLE_REF cross-module SQL per D-34-04a
+    )
+    result = await session.execute(stmt, {"pt_package_id": pt_package_id})
+    row = result.first()
+    return None if row is None else int(row[0])
+
+
+async def atomic_transition_exhausted_to_active(
+    session: AsyncSession,
+    pt_package_id: UUID,
+) -> bool:
+    """Flip ``status='exhausted' → 'active'`` for the parent pt_package (PT-18).
+
+    D-34-11a carve-out: this reverse transition is NOT in the global
+    ``PT_PACKAGE_STATUS_TRANSITIONS`` FSM (Phase 33 D-33-04 keeps the FSM
+    forward-only — ``exhausted → {cancelled}``). The locally-scoped
+    invariant "we just freed one balance unit from an exhausted package"
+    inside ``cancel_pt_session`` makes the reverse flip safe under the
+    predicate ``WHERE status='exhausted'``: a concurrent refund that
+    flipped the package to ``cancelled`` mid-tx silently no-ops this
+    UPDATE and the audit payload carries ``package_reactivated=False``
+    (correctness over intent — T-34-K mitigation).
+
+    Returns ``True`` iff exactly one row transitioned (used to set the
+    ``package_reactivated`` audit bool reflecting actual rowcount truth).
+    """
+    stmt = sa.text(
+        """
+        UPDATE pt_packages
+        SET status = 'active',
+            updated_at = now()
+        WHERE id = :pt_package_id AND status = 'exhausted'
+        RETURNING id
+        """,  # noqa: TABLE_REF cross-module SQL per D-34-04a
+    )
+    result = await session.execute(stmt, {"pt_package_id": pt_package_id})
+    return result.first() is not None

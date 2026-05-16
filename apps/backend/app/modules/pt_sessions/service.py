@@ -47,17 +47,17 @@ from app.core.exceptions import (
     NotFoundError,
     ValidationAppError,
 )
-from app.core.pagination import PaginatedData  # noqa: F401 — used by 34-03
+from app.core.pagination import PaginatedData
 from app.core.permissions import Role
 from app.modules.pt_sessions import repository
 from app.modules.pt_sessions.constants import (
     BACKDATING_WINDOW_DAYS_RECEPTION,
-    CANCEL_WINDOW_HOURS_RECEPTION,  # noqa: F401 — used by 34-03
+    CANCEL_WINDOW_HOURS_RECEPTION,
 )
 from app.modules.pt_sessions.schemas import (
-    PtSessionCancelRequest,  # noqa: F401 — used by 34-03
+    PtSessionCancelRequest,
     PtSessionCreateRequest,
-    PtSessionListByPackageQuery,  # noqa: F401 — used by 34-03
+    PtSessionListByPackageQuery,
     PtSessionResponse,
 )
 
@@ -291,3 +291,185 @@ async def record_pt_session(
     # Step 10 — Narrow refresh (WR-04 lesson) + response.
     await session.refresh(pt_session, attribute_names=["created_at", "updated_at"])
     return PtSessionResponse.model_validate(pt_session, from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Public orchestrators (Plan 34-03: cancel + read paths).
+# ---------------------------------------------------------------------------
+
+
+async def cancel_pt_session(
+    session: AsyncSession,
+    actor: CurrentUser,
+    pt_session_id: UUID,
+    data: PtSessionCancelRequest,
+) -> PtSessionResponse:
+    """Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).
+
+    10-step orchestrator (mirrors ``record_pt_session`` shape):
+
+      1. Load the session row — 404 ``pt_session_not_found`` / 409
+         ``already_cancelled``.
+      2. Cancel-window gate (D-34-07 / B-12): reception is denied 403
+         ``cancel_window_expired`` if ``now - pt_session.created_at >
+         24h`` — the window is measured from `created_at` (recording
+         time), NOT `performed_at` (training wall-clock) per D-34-07.
+         Owner is anytime.
+      3. Fetch parent pt_package metadata (forensic + reactivation
+         decision). Defensive 404 ``pt_package_not_found`` — should be
+         impossible due to FK RESTRICT, but guards against historical
+         data drift.
+      4. Mark session cancelled (sets ``cancelled_at`` + ``cancel_reason``
+         on the loaded ORM instance).
+      5. Atomic increment (D-34-04a raw text() — predicate-bounded by
+         ``session_count_snapshot`` ceiling). 0-row return is a HARD
+         CHECK invariant breach → RuntimeError → 500.
+      6. Conditional reverse-transition (D-34-11a): if
+         ``prior_status == 'exhausted'`` flip
+         ``exhausted → active`` via predicate-gated raw text() UPDATE
+         (NOT in PT_PACKAGE_STATUS_TRANSITIONS FSM — locally-scoped
+         carve-out). When ``prior_status`` is ``cancelled`` or
+         ``expired`` the balance is still incremented (data integrity)
+         but status stays terminal; ``package_reactivated`` stays False.
+      7. ``session.flush()`` to surface FK / CHECK errors BEFORE audit
+         emit.
+      8. ``audit.emit('pt_session_cancelled', ...)`` — payload matches
+         ``PtSessionCancelledPayload`` (extra='forbid') verbatim;
+         ``package_reactivated`` reflects actual rowcount truth (NOT
+         intent — T-34-K mitigation).
+      9. Narrow refresh on ``updated_at`` (WR-04 lesson).
+     10. ``await session.commit()`` (SVC001 caller-owns-txn gate) +
+         return ``PtSessionResponse``.
+    """
+    # Step 1 — Load + state guards.
+    pt_session = await repository.get_pt_session(session, pt_session_id)
+    if pt_session is None:
+        raise PtSessionNotFoundError("pt_session_not_found")
+    if pt_session.cancelled_at is not None:
+        raise PtSessionAlreadyCancelledError("already_cancelled")
+
+    # Step 2 — Cancel-window gate (D-34-07; B-12 from created_at, NOT performed_at).
+    if actor.role == Role.RECEPTION:
+        age = datetime.now(UTC) - pt_session.created_at
+        if age > timedelta(hours=CANCEL_WINDOW_HOURS_RECEPTION):
+            raise CancelWindowExpiredError("cancel_window_expired")
+
+    # Step 3 — Fetch parent package metadata (forensic + reactivation decision).
+    pkg = await repository.fetch_pt_package_metadata(
+        session,
+        pt_session.pt_package_id,
+    )
+    if pkg is None:
+        raise PtPackageNotFoundError("pt_package_not_found")
+    prior_status = pkg["status"]
+
+    # Step 4 — Mark cancelled (in-place ORM setter; no flush/commit).
+    await repository.mark_cancelled(
+        session,
+        pt_session,
+        cancel_reason=data.cancel_reason,
+    )
+
+    # Step 5 — Atomic increment (D-34-04a; raw text() with ceiling predicate).
+    new_remaining = await repository.atomic_increment_pt_package(
+        session,
+        pt_session.pt_package_id,
+    )
+    if new_remaining is None:
+        raise RuntimeError(
+            f"atomic_increment_pt_package returned 0 rows for "
+            f"{pt_session.pt_package_id}; CHECK sessions_remaining <= "
+            "session_count_snapshot invariant breached"
+        )
+
+    # Step 6 — Conditional reverse transition (D-34-11a).
+    # When prior_status is 'cancelled' or 'expired' the balance is still
+    # incremented above (data integrity / forensic correctness) but status
+    # stays terminal — package_reactivated stays False (D-34-CONTEXT
+    # §D-34-11 "What about cancelled / expired parent package?").
+    package_reactivated = False
+    if prior_status == "exhausted":
+        flipped = await repository.atomic_transition_exhausted_to_active(
+            session,
+            pt_session.pt_package_id,
+        )
+        # Use rowcount truth, not intent (T-34-K): if a concurrent refund
+        # flipped the package to 'cancelled' between Step 3 read and Step
+        # 6 update, the predicate WHERE status='exhausted' silently no-ops
+        # and the audit payload records the reality.
+        package_reactivated = flipped
+
+    # Step 7 — Flush (FK / CHECK surface before audit emit).
+    await session.flush()
+
+    # Step 8 — Emit pt_session_cancelled (LITERAL strings for INFRA-11 AST gate).
+    # Payload matches PtSessionCancelledPayload (extra='forbid') verbatim;
+    # str() casts on UUIDs for JSONB serialisability.
+    await audit.emit(
+        session,
+        "pt_session_cancelled",
+        actor_user_id=actor.id,
+        resource_type="pt_session",
+        resource_id=pt_session.id,
+        pt_session_id=str(pt_session.id),
+        pt_package_id=str(pt_session.pt_package_id),
+        client_id=str(pt_session.client_id),
+        cancel_reason=data.cancel_reason,
+        sessions_remaining_after=new_remaining,
+        package_reactivated=package_reactivated,
+    )
+
+    # Step 9 — Narrow refresh on updated_at (WR-04 lesson).
+    await session.refresh(pt_session, attribute_names=["updated_at"])
+
+    # Step 10 — Commit (SVC001 gate) + response.
+    await session.commit()
+    return PtSessionResponse.model_validate(pt_session, from_attributes=True)
+
+
+async def get_pt_session(
+    session: AsyncSession,
+    pt_session_id: UUID,
+) -> PtSessionResponse:
+    """Read a single PT-session row (PT-19 / read tier).
+
+    Pure read — does NOT commit. 404 ``pt_session_not_found`` if the id
+    is unknown. Reception+owner permission is enforced at the router
+    layer via ``require_permission(Action.VIEW, Resource.PT_SESSIONS)``.
+    """
+    pt_session = await repository.get_pt_session(session, pt_session_id)
+    if pt_session is None:
+        raise PtSessionNotFoundError("pt_session_not_found")
+    return PtSessionResponse.model_validate(pt_session, from_attributes=True)
+
+
+async def list_sessions_by_pt_package(
+    session: AsyncSession,
+    pt_package_id: UUID,
+    query: PtSessionListByPackageQuery,
+) -> PaginatedData[PtSessionResponse]:
+    """Paginated PT-session history for a parent pt_package (PT-19 / D-34-08).
+
+    Pure read — does NOT commit. Returns the standard
+    ``{items, total, page, pageSize}`` envelope. Reception+owner
+    permission is enforced at the router layer via
+    ``require_permission(Action.VIEW, Resource.PT_SESSIONS)``.
+
+    No 404 for unknown ``pt_package_id`` — returns ``items=[], total=0``
+    per the pt_packages list precedent (existence check is out of scope
+    for list endpoints).
+    """
+    page = await repository.list_by_pt_package_paginated(
+        session,
+        pt_package_id,
+        query,
+    )
+    return PaginatedData.model_construct(
+        items=[
+            PtSessionResponse.model_validate(s, from_attributes=True)
+            for s in page.items
+        ],
+        total=page.total,
+        page=page.page,
+        page_size=page.page_size,
+    )
