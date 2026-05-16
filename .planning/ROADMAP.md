@@ -152,7 +152,10 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
   3. Auto-transition пакета в `'exhausted'` синхронно в той же UoW когда decrement возвращает `sessions_remaining = 0`; эмитит один `pt_package_exhausted` once.
   4. `POST /api/v1/pt-sessions/{id}/cancel` (B-12: reception ≤24h после записи, owner anytime) атомарно: set `cancelled_at` + `cancel_reason`, increment `sessions_remaining` на parent package, если пакет был `exhausted` — переход обратно в `active`; эмитит `pt_session_cancelled`; `GET /api/v1/pt-packages/{id}/sessions` возвращает history (включая cancelled).
   5. PT-sessions полностью независимы от `visits` таблицы (Q3 default — запись session НЕ создаёт visit row, и наоборот); `pt_session_recorded` + `pt_session_cancelled` audit events проходят `LOCKED_AUDIT_EVENTS` gate; Postgres integration test PTS-TEST-01 проверяет 2 concurrent recordings против пакета с `sessions_remaining=1` → ровно один успех, другой 409.
-**Plans:** TBD
+**Plans:** 3 plans
+- [ ] 34-01-PLAN.md — Migration 0015_pt_sessions + module skeleton + cross-cutting amendments (TrainerById Protocol full_name extension, OWNER_ONLY removal of (CANCEL, PT_SESSIONS), .importlinter 12th module, admin-web byte-parity)
+- [ ] 34-02-PLAN.md — Record flow (POST /pt-sessions): race-safe decrement + auto-exhausted transition + Idempotency-Key + PTS-TEST-01 concurrency race
+- [ ] 34-03-PLAN.md — Cancel + Read flow (POST /pt-sessions/{id}/cancel + GET endpoints): cancel-window enforcement + predicate-gated exhausted→active reverse transition + paginated history
 
 ### Phase 35: OpenAPI Drift Gate (backend-only API handoff)
 **Goal:** Backend контракт регенерирован байт-стабильно: `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` экспонируют все типизированные v1.4 paths (payments, trainers, pt-package-plans, pt-packages, pt-sessions, refund endpoints). Это передача API-контракта внешней дизайн-команде, которая разрабатывает production admin + client apps отдельно от этого репозитория.
@@ -186,7 +189,7 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | 31. Trainers Module | 2/2 | Complete   | 2026-05-14 |
 | 32. Payment Ledger + Sale Flow + Refund | 3/3 | Complete   | 2026-05-15 |
 | 33. PT-Package Plans + Instances | 3/3 | Complete   | 2026-05-15 |
-| 34. PT-Session Recording | 0/? | Not started | — |
+| 34. PT-Session Recording | 0/3 | Not started | — |
 | 35. OpenAPI Drift Gate (backend-only handoff) | 0/? | Not started | — |
 | 36. Milestone Verification (backend-only) | 0/? | Not started | — |
 
