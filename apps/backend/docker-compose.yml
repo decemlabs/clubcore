@@ -35,7 +35,7 @@ services:
 
   arq-worker:
     build: .
-    command: uv run arq app.workers.WorkerSettings
+    command: arq app.workers.WorkerSettings
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
