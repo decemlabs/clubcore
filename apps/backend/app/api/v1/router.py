@@ -22,6 +22,12 @@ from app.modules.pt_packages.router import (
 from app.modules.pt_packages.router import (
     pt_packages_router,
 )
+from app.modules.pt_sessions.router import (
+    package_scoped_router as pt_sessions_package_scoped_router,
+)
+from app.modules.pt_sessions.router import (
+    pt_sessions_router,
+)
 from app.modules.trainers.router import router as trainers_router
 from app.modules.visits.router import router as visits_router
 
@@ -37,5 +43,11 @@ v1.include_router(
     tags=["pt-package-plans"],
 )
 v1.include_router(pt_packages_router, prefix="/pt-packages", tags=["pt-packages"])
+v1.include_router(pt_sessions_router, prefix="/pt-sessions", tags=["pt-sessions"])
+v1.include_router(
+    pt_sessions_package_scoped_router,
+    prefix="/pt-packages",
+    tags=["pt-sessions"],
+)
 v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])

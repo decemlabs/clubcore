@@ -25,6 +25,7 @@ modules =
     app.modules.notifications
     app.modules.payments
     app.modules.pt_packages
+    app.modules.pt_sessions
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules

@@ -178,9 +178,7 @@ def register_active_pt_package_resolver(resolver: ActivePtPackageResolver) -> No
     _active_pt_package_resolver = resolver
 
 
-async def get_active_pt_package(
-    session: AsyncSession, client_id: UUID
-) -> ActivePtPackage | None:
+async def get_active_pt_package(session: AsyncSession, client_id: UUID) -> ActivePtPackage | None:
     """Consumer entry point — used by ``app.modules.pt_sessions.service`` in Phase 34.
 
     Silent-None when the slot is unset (production code always registers in
@@ -223,9 +221,7 @@ class ClientByTelegram(Protocol):
     id: UUID
 
 
-ClientByTelegramResolver = Callable[
-    [AsyncSession, int], Awaitable[ClientByTelegram | None]
-]
+ClientByTelegramResolver = Callable[[AsyncSession, int], Awaitable[ClientByTelegram | None]]
 """Async callable: (session, telegram_user_id) -> ClientByTelegram | None.
 
 Returns None when no alive Client matches the given Telegram user id (the
@@ -279,10 +275,16 @@ async def resolve_client_by_telegram_user_id(
 
 class TrainerById(Protocol):
     """Structural type for alive Trainer lookup result (Phase 31 D-31-13).
-    Phase 34 pt_sessions service checks id + is_active."""
+
+    Phase 34 D-34-12a adds `full_name: str` for B-05 `trainer_name_snapshot`
+    capture. Trainer ORM satisfies structurally — zero resolver-wiring change
+    (the existing `register_trainer_by_id_resolver` returns the SA Trainer row
+    which already exposes `full_name: Mapped[str]` per Phase 31 model line 28).
+    """
 
     id: UUID
     is_active: bool
+    full_name: str  # Phase 34 D-34-12a — B-05 trainer_name_snapshot capture
 
 
 TrainerByIdResolver = Callable[[AsyncSession, UUID], Awaitable[TrainerById | None]]
