@@ -103,7 +103,7 @@ Items acknowledged at v1.4 milestone close on 2026-05-16:
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| pytest_failures | DEFER-36-04-A — 44 pre-existing pytest failures in `apps/backend` (A/B verified vs commit `53335c7` Phase 35 close) | acknowledged | Phase 36-04 | Recommended Phase 36.1 hot-fix or v1.4.1 cleanup wave. Single-commit `pt_packages/service.py` UUID stringify (same class as REG-36-03) unlocks ~28 of 44. |
+| pytest_failures | DEFER-36-04-A — was 44 pre-existing pytest failures; pre-v1.5 hot-fix (commit `118eb70`) cleared 33 of 44 via 4 mechanical fixes (pt_packages UUID stringify ×3, alembic env import, RBAC count assert refresh, test_revert_predicate column cleanup). Remaining 11 require deeper investigation. | partial-resolved | Phase 36-04 → Phase 36.1 pre-v1.5 hot-fix | **Remaining 11 failures** (recommended Phase 36.2 or v1.5 sub-cycle): (a) 7 pt_sessions MissingGreenlet — async/sync IO mismatch in test fixture or route handler greenlet context (DEFER-36-03-A original cluster); (b) 3 pt_packages test_pt_package_sale validation_error envelope drift — tests expect specific error codes per D-33-16/17 + D-32-10 but service returns generic Pydantic envelope; contract-vs-impl reconciliation needs proper design decision; (c) 1 test_revert_predicate logic bug — `uq_pt_packages_active_per_client` partial UNIQUE violation; test creates 2 active packages for same client; needs redesign with distinct clients. |
 | lint_format | DEFER-36-04-B — `ruff format --check` red on 123 files (pre-existing, out of D-36-12 plan gate scope; only `ruff check .` is the gate) | acknowledged | Phase 36-04 | Defer to follow-up format-cleanup cycle. |
 | verification_gap | Phase 31 `31-VERIFICATION.md` `human_needed` — 2 admin-web browser-level UI checks for `/trainers` (owner CRUD + reception redirect) | acknowledged | Phase 31 close (2026-05-14) | Out of v1.4 scope per 2026-05-15 pivot (admin-web frozen mock-reference); rolls to v2.0 Frontend Integration milestone. |
 | verification_gap | Phase 33 `33-VERIFICATION.md` `human_needed` — 6 items: PT-12 cron + REF-TEST-02 race + PT-07 sale orchestrator (3 closed by Phase 36 race-test sweep + scenario 04); CR-01/02/02b idempotency-key hardening (3 remain) | partial | Phase 33 close (2026-05-15) | 3 closed by Phase 36 verification; CR-01/02/02b deferred to v1.5 idempotency hardening cycle. |
@@ -119,9 +119,9 @@ Items acknowledged at v1.4 milestone close on 2026-05-16:
 
 ## Session Continuity
 
-Last session: 2026-05-16T19:00:49.423Z
-Stopped at: Phase 36 complete — v1.4 ready for /gsd-complete-milestone
-Resume: Run `/gsd-complete-milestone v1.4` to author `v1.4-MILESTONE-AUDIT.md` and archive Phases 30-36. Phase 36.1 hot-fix cycle (or v1.4.1 cleanup wave) should begin with the pt_packages UUID stringify single-commit fix to unlock ~28 of 44 DEFER-36-04-A pytest failures.
+Last session: 2026-05-16 — v1.4 milestone archived + tagged v1.4 locally + pre-v1.5 Phase 36.1 hot-fix landed (commit `118eb70`, 33 of 44 DEFER-36-04-A failures cleared; clean-DB pytest now 1060/11). Live docker stack torn down. Working tree clean.
+Stopped at: v1.4 archived + tagged + Phase 36.1 hot-fix complete; awaiting next milestone
+Resume: Start the v1.5 API Handoff milestone with `/gsd-new-milestone v1.5`. The 11 remaining DEFER-36-04-A failures (7 MissingGreenlet + 3 validation_error envelope drift + 1 test_revert_predicate partial-UNIQUE logic bug) are tracked in `## Deferred Items` for the v1.5 cycle to plan around. No git remote configured — `v1.4` tag is local only.
 
 ## Operator Next Steps
 
