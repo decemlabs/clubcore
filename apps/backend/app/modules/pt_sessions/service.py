@@ -34,16 +34,13 @@ hierarchy only. Public orchestrators are filled by 34-02 / 34-03:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta  # noqa: F401 — used by 34-02/34-03
-from uuid import UUID  # noqa: F401 — used by 34-02/34-03
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401 — used by 34-02/34-03
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import audit  # noqa: F401 — used by 34-02/34-03
-from app.core.dependencies import (  # noqa: F401 — used by 34-02/34-03
-    CurrentUser,
-    resolve_trainer_by_id,
-)
+from app.core import audit
+from app.core.dependencies import CurrentUser, resolve_trainer_by_id
 from app.core.exceptions import (
     ConflictError,
     ForbiddenError,
@@ -51,16 +48,16 @@ from app.core.exceptions import (
     ValidationAppError,
 )
 from app.core.pagination import PaginatedData  # noqa: F401 — used by 34-03
-from app.core.permissions import Role  # noqa: F401 — used by 34-02/34-03
-from app.modules.pt_sessions import repository  # noqa: F401 — used by 34-02/34-03
-from app.modules.pt_sessions.constants import (  # noqa: F401 — used by 34-02/34-03
+from app.core.permissions import Role
+from app.modules.pt_sessions import repository
+from app.modules.pt_sessions.constants import (
     BACKDATING_WINDOW_DAYS_RECEPTION,
-    CANCEL_WINDOW_HOURS_RECEPTION,
+    CANCEL_WINDOW_HOURS_RECEPTION,  # noqa: F401 — used by 34-03
 )
-from app.modules.pt_sessions.schemas import (  # noqa: F401 — used by 34-02/34-03
-    PtSessionCancelRequest,
+from app.modules.pt_sessions.schemas import (
+    PtSessionCancelRequest,  # noqa: F401 — used by 34-03
     PtSessionCreateRequest,
-    PtSessionListByPackageQuery,
+    PtSessionListByPackageQuery,  # noqa: F401 — used by 34-03
     PtSessionResponse,
 )
 
@@ -159,3 +156,138 @@ class CancelWindowExpiredError(ForbiddenError):
 
     code = "cancel_window_expired"
     status_code = 403
+
+
+# ---------------------------------------------------------------------------
+# Public orchestrators (Plan 34-02: record_pt_session).
+# ---------------------------------------------------------------------------
+
+
+async def record_pt_session(
+    session: AsyncSession,
+    actor: CurrentUser,
+    data: PtSessionCreateRequest,
+) -> PtSessionResponse:
+    """Record a PT-session (PT-15 / PT-16 / PT-17). Reception+owner.
+
+    10-step orchestrator (mirrors ``pt_packages.create_pt_package`` recipe):
+
+      1. Validate ``performed_at`` — both roles reject future-dated (422
+         ``performed_at_in_future``); reception >7d back → 422
+         ``performed_at_out_of_window`` (D-34-06 / B-11; owner unlimited).
+      2. Resolve trainer via ``TrainerById`` Protocol slot (D-34-12a) —
+         404 ``trainer_not_found`` / 422 ``trainer_inactive``. The
+         resolved object exposes ``full_name`` for B-05 snapshot capture.
+      3. Read pt_package metadata via raw text() SELECT
+         (``fetch_pt_package_metadata``, D-34-13a) — 404
+         ``pt_package_not_found`` / 409 ``pt_package_not_active``.
+      4. Race-safe atomic decrement (``atomic_decrement_pt_package``,
+         D-34-04a / PT-16) — ``None`` → 409 ``pt_package_exhausted``
+         (race-loser path; the DB row-lock + predicate is sole arbiter).
+      5. Insert pt_sessions row with
+         ``trainer_name_snapshot=trainer.full_name`` (B-05) and
+         ``client_id`` sourced from the parent package (NOT request body).
+      6. ``session.flush()`` to surface FK / CHECK errors BEFORE audit emit.
+      7. ``audit.emit('pt_session_recorded', ...)`` — payload matches
+         ``PtSessionRecordedPayload`` (extra='forbid') verbatim;
+         UUID/datetime cast to str/isoformat for JSONB serialisability.
+      8. If ``new_remaining == 0`` →
+         ``atomic_transition_to_exhausted`` + emit
+         ``pt_package_exhausted`` ONCE (D-34-05 / PT-17).
+      9. ``await session.commit()`` (SVC001 caller-owns-txn gate).
+     10. Narrow ``refresh`` on the row + return ``PtSessionResponse``.
+    """
+    # Step 1 — performed_at window guards (D-34-06).
+    now = datetime.now(UTC)
+    delta = now - data.performed_at
+    if delta.total_seconds() < 0:
+        raise PerformedAtInFutureError("performed_at_in_future")
+    if actor.role == Role.RECEPTION and delta > timedelta(
+        days=BACKDATING_WINDOW_DAYS_RECEPTION,
+    ):
+        raise PerformedAtOutOfWindowError("performed_at_out_of_window")
+
+    # Step 2 — Trainer via TrainerById Protocol slot (D-34-12a).
+    trainer = await resolve_trainer_by_id(session, data.trainer_id)
+    if trainer is None:
+        raise TrainerNotFoundError("trainer_not_found")
+    if not trainer.is_active:
+        raise TrainerInactiveError("trainer_inactive")
+
+    # Step 3 — pt_package metadata (D-34-13a raw SQL — id-as-input).
+    pkg = await repository.fetch_pt_package_metadata(session, data.pt_package_id)
+    if pkg is None:
+        raise PtPackageNotFoundError("pt_package_not_found")
+    if pkg["status"] != "active":
+        raise PtPackageNotActiveError("pt_package_not_active")
+
+    # Step 4 — Race-safe decrement (PT-16 / D-34-04a). 0-row = 409 exhausted.
+    new_remaining = await repository.atomic_decrement_pt_package(
+        session,
+        data.pt_package_id,
+    )
+    if new_remaining is None:
+        raise PtPackageExhaustedError("pt_package_exhausted")
+
+    # Steps 5 + 6 — Insert + flush (FK / CHECK surface before audit).
+    # asyncpg returns UUID for UUID columns; defence-in-depth coerce in case a
+    # different driver (or a test stub) returns a string. The narrow ternary
+    # keeps the type-narrowing visible to mypy.
+    client_id_raw = pkg["client_id"]
+    client_id = (
+        client_id_raw if isinstance(client_id_raw, UUID) else UUID(str(client_id_raw))
+    )
+    pt_session = await repository.insert_pt_session(
+        session,
+        pt_package_id=data.pt_package_id,
+        trainer_id=data.trainer_id,
+        client_id=client_id,
+        performed_at=data.performed_at,
+        performed_by_user_id=actor.id,
+        trainer_name_snapshot=trainer.full_name,
+        notes=data.notes,
+    )
+    await session.flush()
+
+    # Step 7 — Emit pt_session_recorded (LITERAL strings for INFRA-11 AST gate).
+    # str() / isoformat() casts ensure JSONB serialisability (Phase 32-02
+    # deviation #1 lesson).
+    await audit.emit(
+        session,
+        "pt_session_recorded",
+        actor_user_id=actor.id,
+        resource_type="pt_session",
+        resource_id=pt_session.id,
+        pt_session_id=str(pt_session.id),
+        pt_package_id=str(data.pt_package_id),
+        client_id=str(client_id),
+        trainer_id=str(data.trainer_id),
+        trainer_name_snapshot=trainer.full_name,
+        performed_at=data.performed_at.isoformat(),
+        performed_by_user_id=actor.id,
+        sessions_remaining_after=new_remaining,
+    )
+
+    # Step 8 — Conditional auto-exhausted transition (D-34-05 / PT-17).
+    if new_remaining == 0:
+        await repository.atomic_transition_to_exhausted(
+            session,
+            data.pt_package_id,
+        )
+        await audit.emit(
+            session,
+            "pt_package_exhausted",
+            actor_user_id=actor.id,
+            resource_type="pt_package",
+            resource_id=data.pt_package_id,
+            pt_package_id=str(data.pt_package_id),
+            client_id=str(client_id),
+            exhausted_at=datetime.now(UTC).isoformat(),
+        )
+
+    # Step 9 — Commit (SVC001 gate).
+    await session.commit()
+
+    # Step 10 — Narrow refresh (WR-04 lesson) + response.
+    await session.refresh(pt_session, attribute_names=["created_at", "updated_at"])
+    return PtSessionResponse.model_validate(pt_session, from_attributes=True)
