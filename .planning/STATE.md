@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Cash Sales + PT Packages
 status: executing
 stopped_at: Phase 35 context gathered
-last_updated: "2026-05-16T16:41:57.837Z"
-last_activity: 2026-05-16 -- Phase 35 planning complete
+last_updated: "2026-05-16T16:42:33.345Z"
+last_activity: 2026-05-16 -- Phase 35 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 34 — pt-session-recording
+**Current focus:** Phase 35 — openapi-drift-gate-backend-only-api-handoff
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-16 -- Phase 35 planning complete
+Phase: 35 (openapi-drift-gate-backend-only-api-handoff) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 35
+Last activity: 2026-05-16 -- Phase 35 execution started
 
 ## v1.4 Milestone Plan
 
