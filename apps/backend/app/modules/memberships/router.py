@@ -543,11 +543,13 @@ async def refund_membership(
     Status-guard ordering (D-32-11 invariant — specific code wins):
       1. status='frozen'                        → 409 must_unfreeze_first   (B-08)
       2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)
-      3. generic _assert_can_transition         → 409 invalid_transition    (already cancelled / expired)
+      3. generic _assert_can_transition         → 409 invalid_transition
+         (already cancelled / expired)
 
     DB-side / refunder-side error mapping:
       - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)
-      - no original sale row (legacy)    → 404 original_payment_not_found  (OriginalPaymentNotFoundError)
+      - no original sale row (legacy)    → 404 original_payment_not_found
+        (OriginalPaymentNotFoundError)
 
     Schema-layer validation (REF-05):
       - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')

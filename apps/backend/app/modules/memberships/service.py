@@ -585,7 +585,8 @@ async def create_membership(
         client_id=str(membership.client_id),
         plan_id=str(membership.plan_id),
         end_date=membership.end_date.isoformat(),
-        payment_id=str(payment.id),  # Phase 32 PAY-05: link sale-side payment row (free-form payload — D-30-02)
+        # Phase 32 PAY-05: link sale-side payment row (free-form payload — D-30-02)
+        payment_id=str(payment.id),
     )
     # 7: commit the unit of work (SVC001 AST gate enforces explicit commit)
     await session.commit()

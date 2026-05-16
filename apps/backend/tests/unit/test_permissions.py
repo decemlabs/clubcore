@@ -15,7 +15,7 @@ def test_owner_only_is_frozenset_instance() -> None:
 
 def test_owner_only_has_exactly_twenty_five_entries() -> None:
     # Mirrors apps/admin-web/src/shared/session/can.ts (25 entries: 9 v1.1 + 6 v1.2 INFRA-08 +
-    # 11 v1.4 INFRA-19 − 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`).
+    # 11 v1.4 INFRA-19 - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`).
     # Phase 6 TEST-06 / Phase 15 TESTS-08 / Phase 30 INFRA-19 add regex-based parity tests
     # against can.ts.
     assert len(OWNER_ONLY) == 25
@@ -103,7 +103,10 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check 25 locked entries (v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 − Phase 34 D-34-09a) — drift tripwire."""
+    """Spot-check 25 locked entries (drift tripwire).
+
+    Composition: v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 - Phase 34 D-34-09a.
+    """
     expected = frozenset({
         (Action.VIEW, Resource.FINANCE),
         (Action.VIEW, Resource.REPORTS),
@@ -121,7 +124,8 @@ def test_specific_owner_only_membership() -> None:
         (Action.DELETE, Resource.MEMBERSHIP_PLANS),
         (Action.CANCEL, Resource.MEMBERSHIPS),
         (Action.DELETE, Resource.MEMBERSHIPS),
-        # Phase 30 INFRA-19 — v1.4 owner-only pairs (Phase 34 D-34-09a removed (CANCEL, PT_SESSIONS))
+        # Phase 30 INFRA-19 - v1.4 owner-only pairs
+        # (Phase 34 D-34-09a removed (CANCEL, PT_SESSIONS))
         (Action.CREATE, Resource.TRAINERS),
         (Action.EDIT, Resource.TRAINERS),
         (Action.DELETE, Resource.TRAINERS),

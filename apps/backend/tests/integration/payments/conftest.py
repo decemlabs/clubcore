@@ -21,6 +21,7 @@ from app.modules.payments.models import Payment
 
 # Re-export memberships package fixtures (owner / reception clients, factories).
 from tests.integration.memberships.conftest import (  # noqa: F401
+    _client_app_overrides,
     authed_client_owner,
     authed_client_reception,
     db_session_real_commit,
@@ -31,7 +32,6 @@ from tests.integration.memberships.conftest import (  # noqa: F401
     redis_clean,
     seeded_owner,
     seeded_reception,
-    _client_app_overrides,
 )
 
 
@@ -74,4 +74,4 @@ async def make_payment(
 
 
 # Re-export datetime helper for tests.
-__all__ = ("make_payment", "UTC", "datetime")
+__all__ = ("UTC", "datetime", "make_payment")

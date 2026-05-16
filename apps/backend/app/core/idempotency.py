@@ -59,7 +59,7 @@ def body_sha256(payload: bytes) -> str:
 
 async def verify_idempotency(
     request: Request,
-    redis: Annotated[Redis, Depends(get_redis)],  # noqa: ARG001 — kept for parity / DI graph
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> str:
     """Validate the ``Idempotency-Key`` header; return the route-bound key string.
 

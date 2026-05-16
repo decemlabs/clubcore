@@ -71,7 +71,8 @@ def _include_object(
             "uq_membership_freeze_periods_active_per_membership",
             "uq_trainers_phone_alive",  # Phase 31: partial index, skip autogenerate drift
             "uq_pt_package_plans_name_alive",  # Phase 33: partial expression index
-            "uq_pt_packages_active_per_client",  # Phase 33: partial index on (client_id) WHERE status='active'
+            # Phase 33: partial index on (client_id) WHERE status='active'
+            "uq_pt_packages_active_per_client",
         )
     )
 

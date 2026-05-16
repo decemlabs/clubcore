@@ -136,7 +136,6 @@ def test_gate_prefixes_match_factory_names() -> None:
     """
     from app.core.dependencies import require_authenticated, require_permission
     from app.core.permissions import Action, Resource
-
     from app.modules.payments.permissions import require_payments_view_for_subject
 
     ra = require_authenticated()

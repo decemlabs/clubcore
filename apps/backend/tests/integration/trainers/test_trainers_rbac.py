@@ -8,8 +8,6 @@ RBAC-04 ordering: unauthenticated DELETE → 401, not 403 (auth fires before RBA
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient

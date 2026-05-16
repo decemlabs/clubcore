@@ -13,7 +13,6 @@ Marquee tests:
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
 import pytest
@@ -86,11 +85,11 @@ async def test_create_duplicate_phone_after_soft_delete_succeeds(
     db_session: AsyncSession,
 ) -> None:
     """Partial UNIQUE survives soft-delete: create with same phone after deleted_at is set."""
+    from datetime import UTC, datetime
+
     from sqlalchemy import update as sa_update
 
     from app.modules.trainers.models import Trainer
-
-    from datetime import datetime, UTC
 
     created = await _create(authed_client_owner, phone="+79992222222")
     trainer_id = UUID(created["id"])
@@ -179,9 +178,9 @@ async def test_list_active_false_filters(
     authed_client_owner: AsyncClient,
 ) -> None:
     """D-31-09: GET ?active=false returns only inactive trainers."""
-    active = await _create(authed_client_owner, phone="+79994444443", full_name="Активный2")
+    active = await _create(authed_client_owner, phone="+79994444443", full_name="Активный2")  # noqa: RUF001
     inactive = await _create(
-        authed_client_owner, phone="+79994444444", full_name="Неактивный2"
+        authed_client_owner, phone="+79994444444", full_name="Неактивный2"  # noqa: RUF001
     )
 
     # Deactivate the second trainer
