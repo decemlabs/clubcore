@@ -64,7 +64,6 @@ from app.modules.pt_sessions.schemas import (  # noqa: F401 — used by 34-02/34
     PtSessionResponse,
 )
 
-
 # ---------------------------------------------------------------------------
 # Error classes (D-34-18 catalogue).
 #

@@ -45,8 +45,8 @@ describe('can()', () => {
     expect(OWNER_ONLY.some((e) => e.resource === 'profile')).toBe(false)
   })
 
-  it('OWNER_ONLY has exactly 26 entries (Phase 30 INFRA-19)', () => {
-    expect(OWNER_ONLY).toHaveLength(26)
+  it('OWNER_ONLY has exactly 25 entries (Phase 34 D-34-09a removed cancel:pt-sessions)', () => {
+    expect(OWNER_ONLY).toHaveLength(25)
   })
 
   it('OWNER_ONLY covers Phase 30 INFRA-19 v1.4 owner-only pairs', () => {
@@ -62,17 +62,19 @@ describe('can()', () => {
     expect(pairs).toContain('view:payments')
     expect(pairs).toContain('cancel:pt-packages')
     expect(pairs).toContain('delete:pt-packages')
-    expect(pairs).toContain('cancel:pt-sessions')
   })
 
-  it('OWNER_ONLY does NOT include reception-retained Phase 30 rights', () => {
+  it('OWNER_ONLY does NOT include reception-retained Phase 30/34 rights', () => {
     const pairs = OWNER_ONLY.map((e) => `${e.action}:${e.resource}`)
     // reception RETAINS these per REQ INFRA-19 / B-07 / TRN-04 / PAY-04 / PT-07 / PT-15
+    // Phase 34 D-34-09a also grants reception 'cancel:pt-sessions' — 24h cancel
+    // window enforced server-side via `cancel_window_expired` 403, not RBAC.
     expect(pairs).not.toContain('view:trainers')
     expect(pairs).not.toContain('create:payments')
     expect(pairs).not.toContain('refund:memberships')
     expect(pairs).not.toContain('create:pt-packages')
     expect(pairs).not.toContain('refund:pt-packages')
     expect(pairs).not.toContain('create:pt-sessions')
+    expect(pairs).not.toContain('cancel:pt-sessions')
   })
 })

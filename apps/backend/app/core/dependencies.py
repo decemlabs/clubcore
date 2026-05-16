@@ -178,9 +178,7 @@ def register_active_pt_package_resolver(resolver: ActivePtPackageResolver) -> No
     _active_pt_package_resolver = resolver
 
 
-async def get_active_pt_package(
-    session: AsyncSession, client_id: UUID
-) -> ActivePtPackage | None:
+async def get_active_pt_package(session: AsyncSession, client_id: UUID) -> ActivePtPackage | None:
     """Consumer entry point — used by ``app.modules.pt_sessions.service`` in Phase 34.
 
     Silent-None when the slot is unset (production code always registers in
@@ -223,9 +221,7 @@ class ClientByTelegram(Protocol):
     id: UUID
 
 
-ClientByTelegramResolver = Callable[
-    [AsyncSession, int], Awaitable[ClientByTelegram | None]
-]
+ClientByTelegramResolver = Callable[[AsyncSession, int], Awaitable[ClientByTelegram | None]]
 """Async callable: (session, telegram_user_id) -> ClientByTelegram | None.
 
 Returns None when no alive Client matches the given Telegram user id (the
