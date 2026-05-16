@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Cash Sales + PT Packages
-status: executing
-stopped_at: Phase 36 context gathered
-last_updated: "2026-05-16T17:42:58.902Z"
-last_activity: 2026-05-16 -- Phase 36 planning complete
+status: ready_for_close
+stopped_at: "Phase 36 complete — v1.4 ready for /gsd-complete-milestone"
+last_updated: "2026-05-16T19:00:49.423Z"
+last_activity: 2026-05-16 -- Phase 36 marked complete, v1.4 milestone-close ready
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 22
-  completed_plans: 17
-  percent: 77
+  completed_plans: 22
+  percent: 100
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 35 — openapi-drift-gate-backend-only-api-handoff
+**Current focus:** Phase 36 — milestone-verification-backend-only — COMPLETE; ready for `/gsd-complete-milestone v1.4`
 
 ## Current Position
 
-Phase: 35 — COMPLETE
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-05-16 -- Phase 36 planning complete
+Phase: 36 — COMPLETE
+Plan: 5 of 5
+Status: Phase 36 complete — v1.4 verification PASSED with operator sign-off (delegated to Claude Code orchestrator)
+Last activity: 2026-05-16T19:00:49.423Z -- Phase 36 marked complete, v1.4 milestone-close ready
 
 ## v1.4 Milestone Plan
 
-**Phases:** 30 (Foundations & Tech-Debt) → 31 (Trainers) → 32 (Payments + Refund) → 33 (PT-Package Plans + Instances) → 34 (PT-Sessions) → 35 (OpenAPI backend-only handoff) → 36 (Backend-only Milestone Verification)
+**Phases:** 30 (Foundations & Tech-Debt) → 31 (Trainers) → 32 (Payments + Refund) → 33 (PT-Package Plans + Instances) → 34 (PT-Sessions) → 35 (OpenAPI backend-only handoff) → 36 (Backend-only Milestone Verification) — **all 7 phases complete (2026-05-16)**
 **Cadence:** 6 feature phases + 1 verification phase (v1.3 cadence + 1 extra feature phase because PT-package plans/instances and PT-sessions cannot share one phase — sessions decrement instances and need them landed first).
 **Requirements:** 61 in-scope mapped (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 1 FE + 4 VER); 100% coverage validated. *FE-11..18 (8 reqs) deferred to v2.0 Frontend Integration milestone per 2026-05-15 frontend pivot — design team owns production admin + client apps externally.*
 
@@ -76,6 +76,7 @@ Locked v1.0–v1.3 invariants still hold (modular monolith with `core ⊥ module
 - [Phase ?]: INFRA-18/19 (Plan 30-02): RBAC matrix extended +5 Resources / OWNER_ONLY 15->26 / no new Action — '(LIST, TRAINERS)' expressed via (VIEW, TRAINERS) outside OWNER_ONLY; three-way parity green (e8beda0, atomic per D-30-09)
 - [Phase 30]: INFRA-20/21/22 (Plan 30-03): three architectural gates extended/added — .importlinter modules-independent +2 (payments, pt_packages); SVC001 walker scope 3→6 services; new test_payments_appendonly.py AST walker with import-tracking (_resolve_payment_binding) + 5 on-disk fixtures (4 violations caught: update/delete/on_conflict_do_update/session.delete; 1 clean-INSERT positive control); 6 module placeholders created; Alembic auto-discovery outcome MANUAL → UNCONDITIONAL Payment stub safe; BEFORE/AFTER versions count 10/10; alembic check reports no pending revisions (D-30-10 invariant preserved — Phase 32 PAY-01 owns 0012_payments.py). Commits be962d7 + 091c8ee.
 - [Phase ?]: Plan 35-02: Forward-guard extended with v1.4 surface block (36 AssertNonNever assertions); README extended with v1.4 changelog + Auth quick-start pointer sections
+- [Phase 36]: VER-01..04 closed; 8/8 operator scenarios pass; 5 race-test logical groups green (20/20 individual tests); 4 backend CI gates + admin-web canary captured. 5 REG-36-XX regressions fixed inline (at D-36-17 hard cap of 5; healthy). 44 pre-existing pytest failures (DEFER-36-04-A) rolled forward to Phase 36.1 hot-fix / v1.4.1 cleanup wave — pt_packages UUID stringify is highest-leverage single fix (~28 of 44). Handoff drafts committed: `.planning/handoff/v1.4-postman.json` (55 endpoints, auto-derived) + `.planning/handoff/v1.4-auth-runbook.md` (145 lines, 5 sections). Operator sign-off delegated to Claude Code autonomous orchestrator per user instruction "сделай это сам" on 2026-05-16; recorded verbatim in `v1.4-VERIFICATION-LOG.md` sign_off block.
 
 ### Pending Todos
 
@@ -109,6 +110,6 @@ Items carried into v1.4 from v1.3 close:
 
 ## Session Continuity
 
-Last session: 2026-05-16T17:11:48.221Z
-Stopped at: Phase 36 context gathered
-Resume: Start Phase 31 (Trainers Module — TRN-01..08). Run `/gsd-discuss-phase 31` to lock context.
+Last session: 2026-05-16T19:00:49.423Z
+Stopped at: Phase 36 complete — v1.4 ready for /gsd-complete-milestone
+Resume: Run `/gsd-complete-milestone v1.4` to author `v1.4-MILESTONE-AUDIT.md` and archive Phases 30-36. Phase 36.1 hot-fix cycle (or v1.4.1 cleanup wave) should begin with the pt_packages UUID stringify single-commit fix to unlock ~28 of 44 DEFER-36-04-A pytest failures.
