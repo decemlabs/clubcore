@@ -248,4 +248,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-15 — Frontend pivot: design team now owns admin + client app development; v1.4 descoped to backend-only; v1.5 reshaped as API Handoff; v2.0 added as Frontend Integration milestone*
+*Last updated: 2026-05-16 — Phase 34 (PT-Session Recording) complete: pt_sessions table + race-safe atomic decrement + auto-exhausted transition + cancel/restore + B-11 backdating + B-12 cancel-window + PTS-TEST-01 race test. v1.4 progress: 56/61 in-scope reqs satisfied (Phases 30-34 done; remaining FE-10 + 4 VER in Phases 35-36).*
