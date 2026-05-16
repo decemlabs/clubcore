@@ -62,8 +62,8 @@ async def test_revert_flips_exhausted_only(db_session: AsyncSession) -> None:
     await db_session.execute(
         text(
             "INSERT INTO users (id, email, password_hash, role, full_name, "
-            "is_active, created_at, updated_at) VALUES "
-            "(:id, :email, :pw, 'owner', 'Test', true, now(), now())"
+            "created_at, updated_at) VALUES "
+            "(:id, :email, :pw, 'owner', 'Test', now(), now())"
         ),
         {
             "id": user_id,
@@ -86,9 +86,9 @@ async def test_revert_flips_exhausted_only(db_session: AsyncSession) -> None:
     await db_session.execute(
         text(
             "INSERT INTO pt_package_plans (id, name, session_count, "
-            "price_kopecks, validity_days, is_active, created_at, "
+            "price_kopecks, validity_days, created_at, "
             "updated_at) VALUES "
-            "(:id, :name, 10, 500000, 90, true, now(), now())"
+            "(:id, :name, 10, 500000, 90, now(), now())"
         ),
         {"id": plan_id, "name": f"REVERT-PRED-{plan_id.hex[:8]}"},
     )

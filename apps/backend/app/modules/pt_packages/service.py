@@ -320,7 +320,7 @@ async def create_pt_package_plan(
         actor_user_id=actor.id,
         resource_type="pt_package_plan",  # LITERAL
         resource_id=plan.id,
-        plan_id=plan.id,
+        plan_id=str(plan.id),
         name=plan.name,
         session_count=plan.session_count,
         price_kopecks=plan.price_kopecks,
@@ -376,7 +376,7 @@ async def update_pt_package_plan(
 
     # D-33-15: PtPackagePlanUpdatedPayload requires {plan_id, changed_fields}.
     payload: dict[str, Any] = {
-        "plan_id": plan.id,
+        "plan_id": str(plan.id),
         "changed_fields": sorted(changed.keys()),
     }
     await audit.emit(
@@ -423,7 +423,7 @@ async def archive_pt_package_plan(
         actor_user_id=actor.id,
         resource_type="pt_package_plan",  # LITERAL
         resource_id=plan.id,
-        plan_id=plan.id,
+        plan_id=str(plan.id),
     )
     await session.flush()
     await session.commit()

@@ -137,7 +137,10 @@ def test_action_values_match() -> None:
     )
 
 
-def test_owner_only_count_is_fifteen() -> None:
-    """Sanity belt — `OWNER_ONLY` is exactly 15 entries (9 v1.1 + 6 v1.2 INFRA-08)."""
-    assert len(OWNER_ONLY) == 15
-    assert len(_parse_owner_only_pairs()) == 15
+def test_owner_only_count_is_twenty_five() -> None:
+    """Sanity belt — `OWNER_ONLY` is exactly 25 entries.
+
+    Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a.
+    """
+    assert len(OWNER_ONLY) == 25
+    assert len(_parse_owner_only_pairs()) == 25
