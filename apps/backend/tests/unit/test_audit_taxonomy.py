@@ -162,7 +162,7 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 = 53 locked pairs.
+    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 = 58 locked pairs.
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:
@@ -175,13 +175,20 @@ def test_locked_audit_events_has_expected_count() -> None:
     Phase 30 (INFRA-17, B-03 / D-30-02) added 17 v1.4 pairs pre-registered for Phases
     31/32/33/34: 4 trainer lifecycle + 3 payment/refund + 3 pt_package_plan lifecycle
     + 5 pt_package instance lifecycle + 2 pt_session lifecycle. See 30-01-SUMMARY.md.
+    Phase 37 (INFRA-24 / C-06) added 5 v1.5 pairs pre-registered for Phase 38:
+    2 schedule_slot lifecycle (`slot_published`, `slot_cancelled`) +
+    3 booking lifecycle (`booking_created`, `booking_cancelled`, `booking_no_show`).
+    NOTE per C-06: `booking_completed` is NOT a separate event — completion is
+    carried by the existing `("pt_session_recorded", "pt_session")` event with
+    an optional `booking_id` field on `PtSessionRecordedPayload`.
+    See 37-01-SUMMARY.md.
     NOTE: the REQ INFRA-17 header gloss "34 → 51 entries" counts LOGICAL events; the
-    actual frozenset has 36 (v1.1-v1.3) + 17 (v1.4) = 53 entries because the v1.1
-    `session_revoked` event has two `(event, resource_type)` variants per D-23-10.
+    actual frozenset has 36 (v1.1-v1.3) + 17 (v1.4) + 5 (v1.5) = 58 entries because
+    the v1.1 `session_revoked` event has two `(event, resource_type)` variants per D-23-10.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 53, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 53 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4), got {len(LOCKED_AUDIT_EVENTS)}"
+    assert len(LOCKED_AUDIT_EVENTS) == 58, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 58 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5), got {len(LOCKED_AUDIT_EVENTS)}"
     )
 
 
@@ -198,4 +205,29 @@ def test_locked_audit_events_includes_v13_pairs() -> None:
     for pair in expected:
         assert pair in LOCKED_AUDIT_EVENTS, (
             f"Phase 24 INFRA-15: required pair {pair} missing from LOCKED_AUDIT_EVENTS"
+        )
+
+
+def test_locked_audit_events_includes_v15_pairs() -> None:
+    """INFRA-24 (Phase 37): the 5 v1.5 pairs are pre-registered for Phase 38 emit callsites.
+
+    Schedule slot lifecycle (Phase 38 SLOT-01 / SLOT-07 / SLOT-09):
+        `slot_published`, `slot_cancelled` under resource_type `schedule_slot`.
+    Booking lifecycle (Phase 38 BOOK-02 / BOOK-06; Phase 39 CRON-01 for no_show):
+        `booking_created`, `booking_cancelled`, `booking_no_show` under resource_type `booking`.
+
+    Per C-06: `booking_completed` is NOT a separate event — completion is signalled
+    by the existing `("pt_session_recorded", "pt_session")` event carrying the
+    optional `booking_id` field on `PtSessionRecordedPayload`.
+    """
+    expected = [
+        ("slot_published", "schedule_slot"),
+        ("slot_cancelled", "schedule_slot"),
+        ("booking_created", "booking"),
+        ("booking_cancelled", "booking"),
+        ("booking_no_show", "booking"),
+    ]
+    for pair in expected:
+        assert pair in LOCKED_AUDIT_EVENTS, (
+            f"Phase 37 INFRA-24: required pair {pair} missing from LOCKED_AUDIT_EVENTS"
         )
