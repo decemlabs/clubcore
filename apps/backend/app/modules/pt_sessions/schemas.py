@@ -47,6 +47,13 @@ class PtSessionCreateRequest(BackendSchemaBase):
     trainer_id: UUID
     performed_at: datetime  # ISO-8601 with offset; backdating window server-side
     notes: str | None = Field(default=None, max_length=500)
+    # Phase 38 PKG-04 / PKG-05 — optional link to the originating booking. When
+    # provided, the service validates booking.status='confirmed', pt_package_id
+    # match, and slot.trainer_id match (else 409 booking_not_confirmed /
+    # booking_mismatch) and atomically completes the booking via the Phase 37
+    # `register_booking_completer` Protocol slot in the same UoW. Defaults to
+    # None for walk-in PT-sessions (existing v1.4 flow unchanged).
+    booking_id: UUID | None = None
 
 
 class PtSessionCancelRequest(BackendSchemaBase):
@@ -88,5 +95,7 @@ class PtSessionResponse(ResponseData):
     cancel_reason: str | None
     trainer_name_snapshot: str
     notes: str | None
+    # Phase 38 PKG-04 — nullable parent booking reference. None for walk-ins.
+    booking_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
