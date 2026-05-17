@@ -43,6 +43,8 @@ from app.modules.bookings.models import Booking
 from app.modules.bookings.schemas import (
     BookingListQuery,
     BookingsForClientListQuery,
+    resolve_default_from_time,
+    resolve_default_to_time,
 )
 
 
@@ -156,6 +158,15 @@ async def get_booking_by_id_for_update_with_slot(
         .options(joinedload(Booking.slot))
         .where(Booking.id == booking_id)
         .with_for_update(of=Booking)
+        # populate_existing() forces SA to overwrite attributes on any in-
+        # identity-map row from the DB row returned by this SELECT. Without
+        # this, a prior raw `sa.text()` UPDATE (e.g., complete_booking flipping
+        # status='completed') leaves the cached ORM instance at the stale
+        # pre-UPDATE value, and the FSM gate in cancel_booking would
+        # incorrectly admit the transition (test_cancel_completed_booking_409
+        # regression). Same pattern is required for the cross-module UPDATE
+        # bypassing the ORM identity map.
+        .execution_options(populate_existing=True)
     )
     result: Booking | None = await session.scalar(stmt)
     return result
@@ -182,6 +193,16 @@ async def get_booking_with_relations(
             joinedload(Booking.pt_package),
         )
         .where(Booking.id == booking_id)
+        # See note on populate_existing in get_booking_by_id_for_update_with_slot:
+        # cross-module raw UPDATEs (create_booking flipping slot 'active'→'booked'
+        # via repository.update_slot_status_predicate_gated, complete_booking
+        # flipping booking 'confirmed'→'completed') bypass the ORM, so the
+        # identity-map cache for any pre-loaded slot / booking / pt_package
+        # ORM instance carries STALE attribute values. populate_existing()
+        # forces SA to overwrite attributes from the row this SELECT returned,
+        # so the BookingDetailResponse projection sees the current DB state
+        # (e.g., slot.status='booked' for a confirmed booking).
+        .execution_options(populate_existing=True)
     )
     result: Booking | None = await session.scalar(stmt)
     return result
@@ -202,13 +223,21 @@ def _apply_booking_list_filters(
     caller can reuse the predicate list for the COUNT statement (avoids
     rebuilding the WHERE clause twice).
 
+    Datetime defaults: when from_time/to_time arrive as None (FastAPI query
+    schema can't synthesize a datetime default — see schemas.py for the
+    lazy-resolution rationale mirroring plan 38-01 Deviation #1), this
+    helper applies the Moscow-relative ±30d default via
+    `resolve_default_from_time` / `resolve_default_to_time`.
+
     Trainer-id filter joins via Booking.slot relationship — preserves the
     modules-independent contract (no schedule.models import; SA resolves
     "TrainerAvailabilitySlot" via Base.registry at mapper-config time).
     """
+    effective_from = from_time if from_time is not None else resolve_default_from_time()
+    effective_to = to_time if to_time is not None else resolve_default_to_time()
     predicates: list[Any] = [
-        Booking.created_at >= from_time,
-        Booking.created_at < to_time,
+        Booking.created_at >= effective_from,
+        Booking.created_at < effective_to,
     ]
     if client_id is not None:
         predicates.append(Booking.client_id == client_id)

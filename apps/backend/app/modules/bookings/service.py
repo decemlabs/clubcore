@@ -39,7 +39,7 @@ Cross-module behaviours used in this module:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -52,12 +52,26 @@ from app.core.dependencies import (
     CurrentUser,
     get_active_pt_package,
     resolve_slot_by_id,
+    restore_booking_slot,
 )
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.pagination import PaginatedData
+from app.core.permissions import Role
 from app.modules.bookings import repository
-from app.modules.bookings.constants import BOOKING_STATUS_TRANSITIONS
+from app.modules.bookings.constants import (
+    BOOKING_STATUS_TRANSITIONS,
+    CANCEL_WINDOW_HOURS_RECEPTION,
+)
 from app.modules.bookings.models import Booking
-from app.modules.bookings.schemas import BookingCreateRequest, BookingResponse
+from app.modules.bookings.schemas import (
+    BookingCancelRequest,
+    BookingCreateRequest,
+    BookingDetailResponse,
+    BookingListQuery,
+    BookingResponse,
+    BookingsForClientListQuery,
+    SlotSnapshot,
+)
 
 # Business TZ pin (C-07 / D-38-12). Validity-window comparison MUST happen
 # in Moscow time — a slot at 01:00 Moscow is 22:00 UTC the previous day;
@@ -149,6 +163,22 @@ class InvalidBookingTransitionError(ConflictError):
     moves (D-38-10). Mirrors InvalidSlotTransitionError from schedule."""
 
     code = "invalid_transition"
+    status_code = 409
+
+
+class CancelWindowExpiredError(ConflictError):
+    """Raised by cancel_booking when reception attempts to cancel a booking
+    within CANCEL_WINDOW_HOURS_RECEPTION (24h per C-05 / D-38-16) of the
+    slot's `start_time`. Owner is anytime per D-38-09.
+
+    NOTE: status_code is **409** (not 403) per BOOK-06 REQUIREMENTS.md
+    explicit lock — the plan-checker pinned this discriminator (pt_sessions
+    uses 403 for the same window in B-12; BOOK-06 selected 409 because the
+    state is "slot too imminent for this role" rather than an actor-auth
+    issue per se). See plan 38-03 Task 2 <action> §"Error classes".
+    """
+
+    code = "cancel_window_expired"
     status_code = 409
 
 
@@ -420,3 +450,230 @@ async def create_booking(
     # instance for the response envelope).
     await session.refresh(booking, attribute_names=["created_at", "updated_at"])
     return BookingResponse.model_validate(booking, from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Public mutating orchestrator — cancel_booking (Phase 38 plan 38-03 / BOOK-06).
+# ---------------------------------------------------------------------------
+
+
+async def cancel_booking(
+    session: AsyncSession,
+    actor: CurrentUser,
+    booking_id: UUID,
+    data: BookingCancelRequest,
+) -> BookingResponse:
+    """Cancel a confirmed booking (Phase 38 BOOK-06 / D-38-09 / D-38-16).
+
+    Owns the UoW — `await session.commit()` at end (SVC001 gate).
+
+    Sequence:
+      1. Load booking + linked slot (row-lock on booking) via
+         `repository.get_booking_by_id_for_update_with_slot`. 404
+         `booking_not_found` for missing id.
+      2. FSM guard via `_assert_can_transition(target='cancelled')` —
+         409 `invalid_transition` for non-confirmed source
+         (cancelled / no_show / completed are terminal per
+         BOOKING_STATUS_TRANSITIONS).
+      3. 24h reception window (D-38-16): if `actor.role == RECEPTION` and
+         `booking.slot.start_time - datetime.now(UTC) < timedelta(hours=
+         CANCEL_WINDOW_HOURS_RECEPTION)` raise CancelWindowExpiredError.
+         **Compared against `slot.start_time`, NOT `created_at`** —
+         D-38-16 explicit (a booking made far in advance still locks 24h
+         before the slot fires). Owner is anytime per D-38-09.
+      4. Mutate booking in-place: status='cancelled', cancelled_at=now(UTC),
+         cancel_reason=data.reason.
+      5. Restore slot booked→active via the Phase 37 BookingSlotRestorer
+         Protocol slot (`restore_booking_slot`) — flips the linked slot's
+         status in the SAME UoW. Modules-independent contract preserved:
+         the consumer reaches schedule.service.restore_slot_to_active
+         via the composition-root slot, never via direct import.
+      6. session.flush() — surfaces FK / CHECK errors before audit emit.
+      7. audit.emit('booking_cancelled', ...) — payload matches
+         `BookingCancelledPayload` (4 keys: booking_id, slot_id,
+         cancelled_by_user_id, cancel_reason) verbatim with UUIDs
+         stringified per D-38-17 / Pitfall 13. NOTE: `client_id` is NOT
+         in BookingCancelledPayload (audit schema 4 keys, not 5) — see
+         audit_payloads.py:394.
+      8. (DM-queue side-effect: NO-OP stub in Phase 38; Phase 39 wires
+         the real Telegram send via NOTIFY-04.)
+      9. session.commit() (SVC001 gate).
+     10. Narrow refresh + return BookingResponse.
+    """
+    # Step 1 — Load with row lock + eager-loaded slot.
+    booking = await repository.get_booking_by_id_for_update_with_slot(
+        session, booking_id
+    )
+    if booking is None:
+        raise BookingNotFoundError("booking_not_found")
+
+    # Step 2 — FSM gate (consults BOOKING_STATUS_TRANSITIONS).
+    _assert_can_transition(booking, target="cancelled")
+
+    # Step 3 — 24h reception window (D-38-16; compare against slot.start_time).
+    now_utc = datetime.now(UTC)
+    if actor.role is Role.RECEPTION and (
+        booking.slot.start_time - now_utc
+        < timedelta(hours=CANCEL_WINDOW_HOURS_RECEPTION)
+    ):
+        raise CancelWindowExpiredError("cancel_window_expired")
+
+    # Step 4 — Mutate booking in-place (cancelled_at / cancel_reason).
+    booking.status = "cancelled"
+    booking.cancelled_at = now_utc
+    booking.cancel_reason = data.reason
+
+    # Step 5 — Restore linked slot booked→active in the same UoW via the
+    # Phase 37 BookingSlotRestorer Protocol slot. The schedule.service
+    # body (Phase 38 plan 38-01 replaced the stub) issues a predicate-
+    # gated raw UPDATE; defensive InvalidSlotTransitionError on 0-row
+    # propagates as a 409 if the slot is no longer 'booked' (which would
+    # be a programmer-error invariant breach — booking was confirmed so
+    # the slot MUST be booked).
+    await restore_booking_slot(session, booking.slot_id)
+
+    # Step 6 — Flush before audit emit so any FK / CHECK error surfaces
+    # before the audit row enrolls in the transaction.
+    await session.flush()
+
+    # Step 7 — Emit booking_cancelled (LITERAL strings for INFRA-11 AST gate).
+    # Payload matches BookingCancelledPayload (extra='forbid') verbatim:
+    # exactly 4 keys — booking_id, slot_id, cancelled_by_user_id, cancel_reason.
+    # NO `client_id` (it's NOT in the schema — audit_payloads.py:394).
+    await audit.emit(
+        session,
+        "booking_cancelled",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="booking",  # LITERAL
+        resource_id=booking.id,
+        booking_id=str(booking.id),
+        slot_id=str(booking.slot_id),
+        cancelled_by_user_id=str(actor.id),
+        cancel_reason=data.reason,
+    )
+
+    # Step 8 — DM-queue side-effect: NO-OP stub in Phase 38.
+    # TODO Phase 39 NOTIFY-04: queue booking_cancelled_by_(client|owner)
+    # DM via build_bot through a side-effect queue (ARQ).
+
+    # Step 9 — Commit (SVC001 gate).
+    await session.commit()
+
+    # Step 10 — Narrow refresh + response.
+    await session.refresh(
+        booking,
+        attribute_names=["updated_at"],
+    )
+    return BookingResponse.model_validate(booking, from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Read-only orchestrators (no commit, no audit) — list / get / per-client.
+# ---------------------------------------------------------------------------
+
+
+async def list_bookings(
+    session: AsyncSession,
+    query: BookingListQuery,
+) -> PaginatedData[BookingResponse]:
+    """Paginated booking list (Phase 38 plan 38-03 / BOOK-07).
+
+    Read-only — NO commit, NO audit. Delegates to
+    `repository.list_bookings_paginated`; maps Booking ORM rows to
+    BookingResponse via `from_attributes=True`.
+    """
+    page = await repository.list_bookings_paginated(session, query)
+    return PaginatedData.model_construct(
+        items=[
+            BookingResponse.model_validate(b, from_attributes=True)
+            for b in page.items
+        ],
+        total=page.total,
+        page=page.page,
+        page_size=page.page_size,
+    )
+
+
+async def list_bookings_for_client(
+    session: AsyncSession,
+    client_id: UUID,
+    query: BookingsForClientListQuery,
+) -> PaginatedData[BookingResponse]:
+    """Per-client paginated booking list (Phase 38 plan 38-03 / BOOK-08).
+
+    Read-only — NO commit, NO audit. Delegates to
+    `repository.list_bookings_for_client_paginated`; mounted under the
+    bookings router at /clients/{client_id}/bookings (NOT under
+    clients/router.py — keeps clients module dependency-leaf per
+    locked decision in plan 38-03 §Task 2).
+    """
+    page = await repository.list_bookings_for_client_paginated(
+        session, client_id, query
+    )
+    return PaginatedData.model_construct(
+        items=[
+            BookingResponse.model_validate(b, from_attributes=True)
+            for b in page.items
+        ],
+        total=page.total,
+        page=page.page,
+        page_size=page.page_size,
+    )
+
+
+async def get_booking(
+    session: AsyncSession,
+    booking_id: UUID,
+) -> BookingDetailResponse:
+    """Read a single booking with denormalized slot + pt_package (BOOK-09).
+
+    Uses `repository.get_booking_with_relations` which eager-loads via
+    `joinedload(Booking.slot) + joinedload(Booking.pt_package)` —
+    Pitfall 19 (N+1 prevention; total queries ≤ 2 enforced by the
+    integration test).
+
+    Projects the joined slot ORM into the LOCAL `SlotSnapshot` Pydantic
+    class (D-38-08 — schema-layer view; no cross-module schema import).
+    The pt_package dict is a minimal snapshot for display (id,
+    plan_name_snapshot, sessions_remaining, end_date) — kept dict-typed
+    to avoid pulling the pt_packages schema surface into the bookings
+    module.
+    """
+    booking = await repository.get_booking_with_relations(session, booking_id)
+    if booking is None:
+        raise BookingNotFoundError("booking_not_found")
+
+    slot_orm = booking.slot
+    slot_snapshot = SlotSnapshot(
+        id=slot_orm.id,
+        start_time=slot_orm.start_time,
+        end_time=slot_orm.end_time,
+        trainer_id=slot_orm.trainer_id,
+        status=slot_orm.status,
+    )
+
+    pkg = booking.pt_package
+    pt_package_payload = {
+        "id": str(pkg.id),
+        "plan_name_snapshot": pkg.plan_name_snapshot,
+        "sessions_remaining": pkg.sessions_remaining,
+        "end_date": pkg.end_date.isoformat() if pkg.end_date is not None else None,
+    }
+
+    return BookingDetailResponse.model_validate(
+        {
+            "id": booking.id,
+            "slot_id": booking.slot_id,
+            "client_id": booking.client_id,
+            "pt_package_id": booking.pt_package_id,
+            "status": booking.status,
+            "created_at": booking.created_at,
+            "created_by_user_id": booking.created_by_user_id,
+            "cancelled_at": booking.cancelled_at,
+            "cancel_reason": booking.cancel_reason,
+            "no_show_at": booking.no_show_at,
+            "completed_at": booking.completed_at,
+            "slot": slot_snapshot,
+            "pt_package": pt_package_payload,
+        }
+    )

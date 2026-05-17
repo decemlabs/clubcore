@@ -103,20 +103,25 @@ class BookingCancelRequest(BackendSchemaBase):
 # ---------------------------------------------------------------------------
 
 
-def _default_from_time() -> datetime:
+def resolve_default_from_time() -> datetime:
     """Default lower bound of the booking-list window — now - 30d (Moscow).
 
-    Computed PER REQUEST (BOOK-07 default). Bounded backward window prevents
-    full-history dump from a single GET (T-38-03-05 mitigation).
+    Resolved by the repository at request time when the query field is None.
+    FastAPI's query-schema generator cannot synthesize a default datetime
+    from a `Field(default_factory=...)` for query params — the wire type
+    therefore stays `datetime | None` and the repository calls this helper
+    when the field is unset (mirrors `schedule.schemas.resolve_default_from_time`
+    pattern landed by plan 38-01).
     """
     return datetime.now(MOSCOW_TZ) - timedelta(days=30)
 
 
-def _default_to_time() -> datetime:
+def resolve_default_to_time() -> datetime:
     """Default upper bound of the booking-list window — now + 30d (Moscow).
 
-    Computed PER REQUEST (BOOK-07 default). Bounded forward window completes
-    the symmetric ±30d default window described by BOOK-07.
+    Same lazy-resolution rationale as `resolve_default_from_time`. The
+    symmetric ±30d window bounds enumeration so an unconstrained list
+    cannot dump the full booking history (T-38-03-05 mitigation).
     """
     return datetime.now(MOSCOW_TZ) + timedelta(days=30)
 
@@ -128,7 +133,10 @@ class BookingListQuery(PageQuery):
       - `client_id` (optional) — narrow to one client.
       - `trainer_id` (optional) — narrow to one trainer via joinedload slot.
       - `from_time` / `to_time` — Moscow-relative ±30d default window
-        applied at request time via `Field(default_factory=...)`.
+        resolved by the repository at request time via
+        `resolve_default_from_time` / `resolve_default_to_time` when the
+        field is None. (FastAPI query-schema can't synthesize datetime
+        defaults — see plan 38-01 Deviation #1 for the precedent.)
       - `status` (optional) — filter by booking status; None = all statuses.
 
     Wire form: ?clientId=...&trainerId=...&fromTime=...&toTime=...&status=...
@@ -136,8 +144,8 @@ class BookingListQuery(PageQuery):
 
     client_id: UUID | None = None
     trainer_id: UUID | None = None
-    from_time: datetime = Field(default_factory=_default_from_time)
-    to_time: datetime = Field(default_factory=_default_to_time)
+    from_time: datetime | None = Field(default=None)
+    to_time: datetime | None = Field(default=None)
     status: BookingStatus | None = None
 
 
@@ -145,11 +153,12 @@ class BookingsForClientListQuery(PageQuery):
     """GET /api/v1/clients/{client_id}/bookings query parameters (BOOK-08).
 
     Same filter set as BookingListQuery MINUS `client_id` (taken from the
-    URL path). Default ±30d Moscow window mirrors BookingListQuery.
+    URL path). Default ±30d Moscow window — lazy-resolved by the
+    repository (same FastAPI-query-schema constraint as BookingListQuery).
     """
 
-    from_time: datetime = Field(default_factory=_default_from_time)
-    to_time: datetime = Field(default_factory=_default_to_time)
+    from_time: datetime | None = Field(default=None)
+    to_time: datetime | None = Field(default=None)
     status: BookingStatus | None = None
 
 
