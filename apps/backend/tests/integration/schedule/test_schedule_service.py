@@ -15,7 +15,6 @@ Covers:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
 
 import pytest
 from sqlalchemy import text
@@ -300,13 +299,23 @@ async def test_cancel_slot_active_to_cancelled(
 
 
 @pytest.mark.asyncio
-async def test_cancel_slot_booked_source_deferred_to_38_03(
+async def test_cancel_slot_booked_source_no_booking_raises_inconsistency(
     db_session: AsyncSession,
     seeded_owner: User,
     make_trainer,
 ) -> None:
-    """SLOT-09 / plan 38-01 scope — cancelling a `booked` slot raises
-    InvalidSlotTransitionError with explicit forward-link to plan 38-03."""
+    """SLOT-07 / plan 38-03 — cancelling a `booked` slot with NO paired
+    confirmed booking row raises InternalConsistencyError (500).
+
+    This test was the plan 38-01 forward-link guard
+    (`test_cancel_slot_booked_source_deferred_to_38_03`) — plan 38-03
+    replaced the InvalidSlotTransitionError(`deferred='plan 38-03'`)
+    branch with the real cascade. Seeding the slot as 'booked' WITHOUT
+    a paired confirmed booking row triggers the DB-invariant defensive
+    branch (slot=booked MUST imply confirmed booking exists per
+    create_booking UoW guarantee). The cascade-happy-path coverage now
+    lives in tests/integration/schedule/test_slot_cancel_cascade.py.
+    """
     trainer = await make_trainer()
     start, end = _future_window()
     slot = await service.publish_slot(
@@ -314,9 +323,8 @@ async def test_cancel_slot_booked_source_deferred_to_38_03(
         seeded_owner,
         SlotCreateRequest(trainer_id=trainer.id, start_time=start, end_time=end),
     )
-    # Simulate booked status (plan 38-02 will land the real booking flow that
-    # flips this; here we mutate directly via the SAVEPOINT session to exercise
-    # the cancel-path guard).
+    # Seed the inconsistent state: slot status='booked' WITHOUT a paired
+    # confirmed booking row (bypasses create_booking's atomic UoW).
     await db_session.execute(
         text(
             "UPDATE trainer_availability_slots SET status='booked' "
@@ -326,16 +334,15 @@ async def test_cancel_slot_booked_source_deferred_to_38_03(
     )
     await db_session.commit()
 
-    with pytest.raises(service.InvalidSlotTransitionError) as excinfo:
+    with pytest.raises(service.InternalConsistencyError) as excinfo:
         await service.cancel_slot(
             db_session,
             seeded_owner,
             slot.id,
             SlotCancelRequest(cancel_reason="operator change"),
         )
-    fields = excinfo.value.fields or {}
-    assert fields.get("from_status") == "booked"
-    assert "38-03" in str(fields.get("deferred", ""))
+    assert excinfo.value.code == "slot_booking_inconsistency"
+    assert excinfo.value.status_code == 500
 
 
 @pytest.mark.asyncio
