@@ -40,14 +40,19 @@ Cross-module behaviours used in this module:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import ModuleType
+from typing import TYPE_CHECKING
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
+import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core import audit
+from app.core.config import get_settings
 from app.core.dependencies import (
     CurrentUser,
     get_active_pt_package,
@@ -57,12 +62,19 @@ from app.core.dependencies import (
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.pagination import PaginatedData
 from app.core.permissions import Role
+from app.integrations.telegram import sender as telegram_sender
+from app.integrations.telegram.bot import build_bot
 from app.modules.bookings import repository
 from app.modules.bookings.constants import (
     BOOKING_STATUS_TRANSITIONS,
     CANCEL_WINDOW_HOURS_RECEPTION,
 )
 from app.modules.bookings.models import Booking
+from app.modules.bookings.notifications import (
+    BOOKING_CANCELLED_BY_CLIENT_DM,
+    BOOKING_CANCELLED_BY_OWNER_DM,
+    BOOKING_CONFIRMED_DM,
+)
 from app.modules.bookings.schemas import (
     BookingCancelRequest,
     BookingCreateRequest,
@@ -72,6 +84,11 @@ from app.modules.bookings.schemas import (
     BookingsForClientListQuery,
     SlotSnapshot,
 )
+
+if TYPE_CHECKING:
+    from telegram import Bot
+
+_log = structlog.get_logger("bookings.service")
 
 # Business TZ pin (C-07 / D-38-12). Validity-window comparison MUST happen
 # in Moscow time — a slot at 01:00 Moscow is 22:00 UTC the previous day;
@@ -228,6 +245,132 @@ def _is_slot_confirmed_conflict(exc: IntegrityError) -> bool:
     if constraint == "uq_bookings_slot_confirmed":
         return True
     return "uq_bookings_slot_confirmed" in str(exc.orig)
+
+
+# ---------------------------------------------------------------------------
+# Phase 39 NOTIFY-03/04 — Telegram DM dispatch helpers.
+# ---------------------------------------------------------------------------
+
+
+async def _load_booking_with_relationships(
+    session: AsyncSession,
+    booking_id: UUID,
+) -> Booking | None:
+    """Re-SELECT a booking with `client`, `slot`, `slot.trainer` eager-loaded.
+
+    Phase 39 NOTIFY-03/04 dispatch helper consumer. Called post-commit by
+    both `create_booking` / `cancel_booking` and (via function-local import)
+    by `schedule.cancel_slot` cascade. Pure read; no UoW concerns.
+
+    Uses `populate_existing()` so cross-module raw UPDATEs (slot status flips
+    via `update_slot_status_predicate_gated`) don't leave a stale identity-
+    map view of the slot when the same session is re-used.
+    """
+    import importlib
+
+    from sqlalchemy import select
+
+    # The nested `slot.trainer` chain requires a class-bound attribute on
+    # the inner step (SA 2.0 strict rejects string-keyed joinedload as of
+    # the version pinned for this project). We cannot statically
+    # `from app.modules.schedule.models import TrainerAvailabilitySlot`
+    # here — that would break the `modules-independent` import-linter
+    # contract. Resolve via `importlib.import_module` so the import is
+    # opaque to grimp's static-AST walker while still giving us the
+    # class-bound `trainer` attribute (mirrors the same indirection
+    # `schedule.cancel_slot` uses to reach bookings.service post-commit;
+    # see PATTERNS.md §5 Option A as adapted during plan 39-02).
+    _schedule_models = importlib.import_module("app.modules.schedule.models")
+    trainer_availability_slot_cls = _schedule_models.TrainerAvailabilitySlot
+
+    # NOTE: deliberately NO `populate_existing=True` here — the DM helper
+    # only needs `client.first_name`, `client.telegram_user_id`,
+    # `slot.start_time`, and `slot.trainer.full_name`. Status fields on the
+    # slot are immaterial to the DM, and forcing populate_existing would
+    # overwrite cached ORM instances elsewhere in the same session (e.g.
+    # the slot row a subsequent `create_booking` call resolves through the
+    # identity-map cache), changing behaviour observable from outside the
+    # helper. The Phase 38 serial-double-book test (test_bookings_create.py
+    # `test_create_booking_double_book_serial_409`) explicitly relies on
+    # the stale-cache path to surface as `slot_already_booked` via the
+    # 0-row UPDATE branch rather than the pre-INSERT `slot_not_available`
+    # guard.
+    stmt = (
+        select(Booking)
+        .options(
+            joinedload(Booking.client),
+            joinedload(Booking.slot).joinedload(
+                trainer_availability_slot_cls.trainer
+            ),
+        )
+        .where(Booking.id == booking_id)
+    )
+    result: Booking | None = await session.scalar(stmt)
+    return result
+
+
+async def _dispatch_booking_dm(
+    booking: Booking,
+    *,
+    template: str,
+    bot: Bot,
+    sender: ModuleType,
+) -> None:
+    """Fire-and-forget Telegram DM send (D-39-09 / D-39-10).
+
+    The booking instance MUST have `client` and `slot.trainer` joinedloaded
+    -- this helper does NOT refresh / re-fetch (that would extend the open
+    transaction). Callers MUST use `_load_booking_with_relationships` (or
+    equivalent eager-load) before invoking.
+
+    Contract:
+    - NEVER raises (D-39-09 fire-and-forget). The HTTP path is always green
+      regardless of DM outcome.
+    - Missing joinedload (None on `client` / `slot` / `slot.trainer`) ->
+      ERROR-log `booking_dm_missing_joinedload` and return.
+    - Unlinked client (`client.telegram_user_id is None`) -> INFO-log
+      `booking_dm_skipped_unlinked` and return; no sender call.
+    - `result.ok=False` -> WARNING-log `booking_dm_send_failed` with
+      `reason=("bot_blocked" if result.blocked else "transient")` and return.
+
+    `sender` is the `app.integrations.telegram.sender` module (D-39-19 — the
+    indirection lets tests monkeypatch a stub `SimpleNamespace` exposing
+    only `send_text_dm`). Helper takes no `session` argument and performs no
+    DB writes, so SVC001 caller-owns-txn does not apply (no noqa needed).
+    """
+    if (
+        booking.client is None
+        or booking.slot is None
+        or booking.slot.trainer is None
+    ):
+        _log.error(
+            "booking_dm_missing_joinedload",
+            booking_id=str(booking.id),
+        )
+        return
+
+    chat_id = booking.client.telegram_user_id
+    if chat_id is None:
+        _log.info("booking_dm_skipped_unlinked", booking_id=str(booking.id))
+        return
+
+    text_body = template.format(
+        client_name=booking.client.first_name,
+        trainer_name=booking.slot.trainer.full_name,
+        slot_start_msk=booking.slot.start_time.astimezone(MOSCOW_TZ).strftime(
+            "%d.%m.%Y %H:%M"
+        ),
+    )
+    result = await sender.send_text_dm(bot, chat_id, text_body)
+    if not result.ok:
+        reason = "bot_blocked" if result.blocked else "transient"
+        _log.warning(
+            "booking_dm_send_failed",
+            reason=reason,
+            booking_id=str(booking.id),
+            telegram_chat_id=chat_id,
+            error_msg=result.error,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +588,23 @@ async def create_booking(
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
 
+    # Step 9.5 — Phase 39 NOTIFY-03 — fire-and-forget DM (post-commit per
+    # D-39-10). Booking is fully durable here; the helper never raises so
+    # the HTTP path is unaffected by any DM-send outcome. Re-fetch with
+    # joinedload(client, slot.trainer) — `repository.insert_booking` returns
+    # a freshly-added ORM instance with relationships not eager-loaded.
+    booking_for_dm = await _load_booking_with_relationships(session, booking.id)
+    if booking_for_dm is not None:
+        dm_bot = build_bot(
+            token=get_settings().telegram_bot_token.get_secret_value(),
+        )
+        await _dispatch_booking_dm(
+            booking_for_dm,
+            template=BOOKING_CONFIRMED_DM,
+            bot=dm_bot,
+            sender=telegram_sender,
+        )
+
     # Step 10 — Narrow refresh + response (WR-04 lesson — populate the
     # server-generated created_at / updated_at into the loaded ORM
     # instance for the response envelope).
@@ -552,12 +712,38 @@ async def cancel_booking(
         cancel_reason=data.reason,
     )
 
-    # Step 8 — DM-queue side-effect: NO-OP stub in Phase 38.
-    # TODO Phase 39 NOTIFY-04: queue booking_cancelled_by_(client|owner)
-    # DM via build_bot through a side-effect queue (ARQ).
+    # Step 8 — DM dispatch is post-commit (see Step 9.5 below per D-39-10).
 
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
+
+    # Step 9.5 — Phase 39 NOTIFY-04 — fire-and-forget DM (post-commit per
+    # D-39-10). Actor-role discriminator (D-39-05): owner -> owner copy
+    # ("cancelled by venue"); reception -> client copy ("cancelled by
+    # request"). Any other role is defensive — INFO-log and skip. The
+    # helper never raises so the HTTP path is unaffected.
+    template: str | None
+    if actor.role is Role.OWNER:
+        template = BOOKING_CANCELLED_BY_OWNER_DM
+    elif actor.role is Role.RECEPTION:
+        template = BOOKING_CANCELLED_BY_CLIENT_DM
+    else:
+        _log.info("cancel_booking_dm_unexpected_role", role=str(actor.role))
+        template = None
+    if template is not None:
+        booking_for_dm = await _load_booking_with_relationships(
+            session, booking.id
+        )
+        if booking_for_dm is not None:
+            dm_bot = build_bot(
+                token=get_settings().telegram_bot_token.get_secret_value(),
+            )
+            await _dispatch_booking_dm(
+                booking_for_dm,
+                template=template,
+                bot=dm_bot,
+                sender=telegram_sender,
+            )
 
     # Step 10 — Narrow refresh + response.
     await session.refresh(
