@@ -95,6 +95,24 @@ NOTE: the logical event count grows 34 → 51 (17 new); the actual frozenset
 size grows 36 → 53 because v1.1 has two `session_revoked` variants (one for
 `session`, one for `auth_session` per Phase 23 D-23-10).
 
+  ## v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-24 / C-06)
+  - slot_published                      {slot_id, trainer_id, start_time, end_time,
+                                         created_by_user_id}                # 'schedule_slot'
+  - slot_cancelled                      {slot_id, trainer_id, cancelled_by_user_id,
+                                         cancel_reason, had_booking}        # 'schedule_slot'
+  - booking_created                     {booking_id, slot_id, client_id,
+                                         pt_package_id, created_by_user_id} # 'booking'
+  - booking_cancelled                   {booking_id, slot_id,
+                                         cancelled_by_user_id, cancel_reason} # 'booking'
+  - booking_no_show                     {booking_id, slot_id, client_id,
+                                         no_show_at}                        # 'booking' (ARQ)
+
+Phase 37 also extends `PtSessionRecordedPayload` with an optional
+`booking_id: UUID | None = None` field (C-06 / D-37-05): completion of a
+booking is signalled by the EXISTING `pt_session_recorded` event carrying
+the booking reference — there is no separate `booking_completed` event.
+The frozenset size grows 53 → 58.
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -195,6 +213,17 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # PT-sessions (Phase 34 PT-21):
         ("pt_session_recorded", "pt_session"),
         ("pt_session_cancelled", "pt_session"),
+        # v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-24 / C-06)
+        # Schedule slot lifecycle (Phase 38 SLOT-01 / SLOT-07 / SLOT-09):
+        ("slot_published", "schedule_slot"),
+        ("slot_cancelled", "schedule_slot"),
+        # Booking lifecycle (Phase 38 BOOK-02 / BOOK-06; Phase 39 CRON-01 for no_show):
+        # NOTE: booking_completed is NOT a separate event per C-06 — completion is
+        # carried by the existing ("pt_session_recorded", "pt_session") event with
+        # an optional booking_id field on PtSessionRecordedPayload.
+        ("booking_created", "booking"),
+        ("booking_cancelled", "booking"),
+        ("booking_no_show", "booking"),
     }
 )
 

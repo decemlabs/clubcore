@@ -282,6 +282,19 @@ class PtSessionRecordedPayload(BaseModel):
     recording time so historical UI integrity survives trainer rename /
     deactivation.
     `performed_at` is ISO-8601 datetime string with timezone offset.
+
+    Phase 37 INFRA-25 / C-06 / D-37-05 additive extension: appends
+    ``booking_id: UUID | None = None`` so the EXISTING `pt_session_recorded`
+    event can also carry the parent-booking reference for v1.5 PT-session
+    flows that originate from a confirmed booking. There is NO separate
+    `booking_completed` event (C-06): completion is signalled by emitting
+    `pt_session_recorded` with a non-None `booking_id`. Back-compat is
+    preserved: every existing v1.4 emit callsite (notably
+    ``app.modules.pt_sessions.service.record_pt_session``) continues to
+    validate without modification because the field defaults to ``None``.
+    LOCKED_AUDIT_EVENTS frozenset and AUDIT_PAYLOAD_SCHEMAS registry are
+    untouched — only the per-event Pydantic model body grows (mirrors the
+    Phase 33 D-33-15 PtPackageSoldPayload additive-extension precedent).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -294,6 +307,8 @@ class PtSessionRecordedPayload(BaseModel):
     performed_at: str
     performed_by_user_id: UUID
     sessions_remaining_after: int
+    # Phase 37 INFRA-25 / C-06 / D-37-05 — completion via existing event.
+    booking_id: UUID | None = None
 
 
 class PtSessionCancelledPayload(BaseModel):
@@ -311,6 +326,102 @@ class PtSessionCancelledPayload(BaseModel):
     cancel_reason: str
     sessions_remaining_after: int
     package_reactivated: bool
+
+
+# ---------------------------------------------------------------------------
+# v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-25 / C-06)
+# Schedule slot lifecycle payloads:
+# ---------------------------------------------------------------------------
+
+
+class SlotPublishedPayload(BaseModel):
+    """Payload schema for ("slot_published", "schedule_slot") — Phase 38 SLOT-01.
+
+    `start_time` / `end_time` are ISO-8601 datetime strings with timezone
+    offset (Europe/Moscow per project i18n convention; serialiser uses
+    `dt.isoformat()` at the emit callsite per P13).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slot_id: UUID
+    trainer_id: UUID
+    start_time: str
+    end_time: str
+    created_by_user_id: UUID
+
+
+class SlotCancelledPayload(BaseModel):
+    """Payload schema for ("slot_cancelled", "schedule_slot") — Phase 38 SLOT-07 / SLOT-09.
+
+    `had_booking` (SLOT-09) discriminates whether a confirmed booking was
+    attached to the slot at cancel time — drives downstream notification
+    flow in Phase 39 (CRON-01 reminders) and forensic chain inspection.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slot_id: UUID
+    trainer_id: UUID
+    cancelled_by_user_id: UUID
+    cancel_reason: str
+    had_booking: bool
+
+
+# ---------------------------------------------------------------------------
+# v1.5 Booking lifecycle payloads:
+# ---------------------------------------------------------------------------
+
+
+class BookingCreatedPayload(BaseModel):
+    """Payload schema for ("booking_created", "booking") — Phase 38 BOOK-02.
+
+    `pt_package_id` is the decrement anchor: completion (via the existing
+    `pt_session_recorded` event carrying `booking_id`) draws down sessions
+    from this package. The (slot_id, client_id, pt_package_id) triple is
+    the forensic chain for the booking.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    booking_id: UUID
+    slot_id: UUID
+    client_id: UUID
+    pt_package_id: UUID
+    created_by_user_id: UUID
+
+
+class BookingCancelledPayload(BaseModel):
+    """Payload schema for ("booking_cancelled", "booking") — Phase 38 BOOK-06.
+
+    `cancel_reason` captures operator-or-client intent; the 24h
+    Europe/Moscow cancellation-window math lives in service code
+    (Phase 38 plan, NOT this schema).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    booking_id: UUID
+    slot_id: UUID
+    cancelled_by_user_id: UUID
+    cancel_reason: str
+
+
+class BookingNoShowPayload(BaseModel):
+    """Payload schema for ("booking_no_show", "booking") — Phase 39 CRON-01.
+
+    Emitted by the ARQ `mark_no_show_bookings` cron when a booking's slot
+    has passed without a recorded `pt_session_recorded`. `no_show_at` is
+    the ISO-8601 datetime string (with TZ offset) at which the cron
+    classified the booking as no-show.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    booking_id: UUID
+    slot_id: UUID
+    client_id: UUID
+    no_show_at: str
 
 
 # ---------------------------------------------------------------------------
@@ -343,4 +454,10 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # PT-sessions (Phase 34 PT-21)
     ("pt_session_recorded", "pt_session"): PtSessionRecordedPayload,
     ("pt_session_cancelled", "pt_session"): PtSessionCancelledPayload,
+    # v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-25)
+    ("slot_published", "schedule_slot"): SlotPublishedPayload,
+    ("slot_cancelled", "schedule_slot"): SlotCancelledPayload,
+    ("booking_created", "booking"): BookingCreatedPayload,
+    ("booking_cancelled", "booking"): BookingCancelledPayload,
+    ("booking_no_show", "booking"): BookingNoShowPayload,
 }
