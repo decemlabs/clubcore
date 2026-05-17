@@ -16,7 +16,7 @@ Phase 4 ships only the factory.
 
 import secrets
 from collections.abc import Awaitable, Callable
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any, Protocol
 from uuid import UUID
 
@@ -417,6 +417,186 @@ def get_payment_refunder() -> PaymentRefunder:
     if _payment_refunder is None:
         raise RuntimeError("payment_refunder not registered")
     return _payment_refunder
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 37 INFRA-32 / D-37-06 — SlotById resolver slot (v1.5 schedule).
+#
+# Eighth composition-root carve-out (after register_user_loader Phase 5,
+# register_active_membership_resolver Phase 17, register_client_by_telegram_resolver
+# Phase 19, register_trainer_by_id_resolver Phase 31, register_payment_recorder +
+# register_payment_refunder Phase 32, register_active_pt_package_resolver
+# Phase 33). Phase 38 bookings.service.create_booking will call
+# ``resolve_slot_by_id`` through this slot to validate that the requested
+# schedule slot exists and is in the expected status before transitioning
+# it (Booking FSM dependency). The consumer's failure mode for
+# "no resolver registered" cannot be distinguished from "no such slot"
+# at the call site — silent-None semantics are the documented contract
+# (D-37-06; mirrors ActivePtPackageResolver at line 117).
+#
+# Wired from ``app.main.create_app`` AND from
+# ``app.workers.telegram_bot.main`` (defensive double-wiring per REG-29-03 —
+# the bot's Phase 40 /book handler consumes the resolver via
+# bookings.service).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class SlotById(Protocol):
+    """Structural type for the schedule-slot lookup result (Phase 37 D-37-06).
+
+    Per D-37-06: only the attributes Phase 38 bookings.service.create_booking
+    consumes are declared (id, status, trainer_id, start_time, end_time).
+    The SA ``ScheduleSlot`` ORM (Phase 38 deliverable) will structurally
+    satisfy this Protocol — no DTO conversion at the resolver boundary
+    (mirrors ``ActivePtPackage`` / ``ActiveMembership``).
+    """
+
+    id: UUID
+    status: str
+    trainer_id: UUID
+    start_time: datetime
+    end_time: datetime
+
+
+SlotByIdResolver = Callable[[AsyncSession, UUID], Awaitable[SlotById | None]]
+"""Async callable: (session, slot_id) -> SlotById | None.
+
+Returns None when the slot does not exist (the canonical case Phase 38
+bookings.service treats as 'unknown slot' — surfaces as a domain error
+to the /book handler).
+"""
+
+_slot_by_id_resolver: SlotByIdResolver | None = None
+
+
+def register_slot_by_id_resolver(resolver: SlotByIdResolver) -> None:
+    """Composition-root setter — called by app.main.create_app() AND
+    app.workers.telegram_bot.main() (defensive double-wiring per REG-29-03).
+
+    Eighth loader slot. Idempotent: re-registering replaces the slot
+    (mirrors WR-05 reasoning).
+    """
+    global _slot_by_id_resolver
+    _slot_by_id_resolver = resolver
+
+
+async def resolve_slot_by_id(session: AsyncSession, slot_id: UUID) -> SlotById | None:
+    """Consumer entry point — used by ``app.modules.bookings.service`` in Phase 38.
+
+    Silent-None when the slot is unset (D-37-06; mirrors
+    ``resolve_active_membership`` at line 117). Production wiring lives in
+    ``app.main.create_app()`` AND ``app.workers.telegram_bot.main()`` —
+    tests can register a stub or rely on the default-None behaviour.
+    """
+    if _slot_by_id_resolver is None:
+        return None
+    return await _slot_by_id_resolver(session, slot_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 37 INFRA-32 / D-37-06 — BookingSlotRestorer slot (v1.5 bookings).
+#
+# Ninth composition-root carve-out. Phase 38
+# bookings.service.cancel_booking will call ``restore_booking_slot``
+# through this slot to flip ``slot.status`` from "booked" back to "active"
+# inside the caller's UoW (no separate transaction). Side-effect-only
+# (Awaitable[None]) — no Protocol class needed.
+#
+# Silent-None per D-37-06 (CONTEXT.md `<code_context>` explicit choice;
+# deviates from ARCHITECTURE.md restore_slot_on_cancel defensive-raise —
+# CONTEXT.md is authoritative).
+#
+# Wired EXCLUSIVELY from ``app.main.create_app`` (NOT from
+# ``app.workers.telegram_bot.main`` — bot does not cancel bookings;
+# mirrors D-32-14 / D-33-12 discipline for API-only slots).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+BookingSlotRestorerCallable = Callable[[AsyncSession, UUID], Awaitable[None]]
+"""Async callable: (session, slot_id) -> None.
+
+Side-effect: flips the schedule slot's status from "booked" back to "active"
+inside the caller's UoW. No return value — the caller commits the outer
+transaction.
+"""
+
+_booking_slot_restorer: BookingSlotRestorerCallable | None = None
+
+
+def register_booking_slot_restorer(restorer: BookingSlotRestorerCallable) -> None:
+    """Composition-root setter — called once by ``app.main.create_app`` in Phase 37.
+
+    Ninth loader slot. Idempotent: re-registering replaces the slot
+    (mirrors WR-05 reasoning).
+    """
+    global _booking_slot_restorer
+    _booking_slot_restorer = restorer
+
+
+async def restore_booking_slot(session: AsyncSession, slot_id: UUID) -> None:
+    """Consumer entry point — used by ``app.modules.bookings.service`` in Phase 38.
+
+    Silent-None when the slot is unset (D-37-06; mirrors
+    ``resolve_active_membership`` at line 117). Returns None either way —
+    callers don't branch on the return value, the side-effect either
+    happened (registered + applied) or it didn't (unregistered) and the
+    test surface owns that contract.
+    """
+    if _booking_slot_restorer is None:
+        return None
+    return await _booking_slot_restorer(session, slot_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 37 INFRA-32 / D-37-06 / C-03 — BookingCompleter slot (v1.5 bookings).
+#
+# Tenth composition-root carve-out. Phase 38
+# pt_sessions.service.record_pt_session will call
+# ``complete_booking_by_pt_session`` through this slot when a recorded
+# PT-session carries a non-None ``booking_id`` — transitioning the linked
+# booking from "confirmed" to "completed" inside the caller's UoW
+# (C-03 / D-37-05 link between PT-session record and booking FSM).
+# Side-effect-only (Awaitable[None]) — no Protocol class needed.
+#
+# Silent-None per D-37-06 (CONTEXT.md `<code_context>` explicit choice).
+#
+# Wired EXCLUSIVELY from ``app.main.create_app`` (NOT from
+# ``app.workers.telegram_bot.main`` — bot does not record PT-sessions;
+# mirrors D-32-14 / D-33-12 discipline for API-only slots).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+BookingCompleterCallable = Callable[[AsyncSession, UUID], Awaitable[None]]
+"""Async callable: (session, booking_id) -> None.
+
+Side-effect: transitions the booking row from "confirmed" to "completed"
+inside the caller's UoW. No return value — the pt_sessions orchestrator
+commits the outer transaction.
+"""
+
+_booking_completer: BookingCompleterCallable | None = None
+
+
+def register_booking_completer(completer: BookingCompleterCallable) -> None:
+    """Composition-root setter — called once by ``app.main.create_app`` in Phase 37.
+
+    Tenth loader slot. Idempotent: re-registering replaces the slot
+    (mirrors WR-05 reasoning).
+    """
+    global _booking_completer
+    _booking_completer = completer
+
+
+async def complete_booking_by_pt_session(session: AsyncSession, booking_id: UUID) -> None:
+    """Consumer entry point — used by ``app.modules.pt_sessions.service`` in Phase 38.
+
+    Silent-None when the slot is unset (D-37-06; mirrors
+    ``resolve_active_membership`` at line 117). Returns None either way —
+    callers don't branch on the return value.
+    """
+    if _booking_completer is None:
+        return None
+    return await _booking_completer(session, booking_id)
 
 
 async def get_current_user(
