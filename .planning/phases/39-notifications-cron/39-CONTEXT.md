@@ -71,6 +71,19 @@ Phase 39 ships as **4 commit-sized plans** (mirroring v1.3 Phase 27 cadence — 
 | 2 | 39-02, 39-03 | Disjoint file sets (service.py vs models.py + workers/) |
 | 3 | 39-04 | Needs 39-03's table + ORM + serialized append to service.py after 39-02 |
 
+**Revision 2026-05-17:** the Wave-2 parallel claim above is WRONG and has been overridden by the corrected wave layout below. The original write missed that **plan 39-03's `_mark_no_show_bookings` helper edits `apps/backend/app/modules/bookings/service.py`** — the same file plan 39-02 modifies for `_dispatch_booking_dm` + the post-commit dispatch in `create_booking`/`cancel_booking`. Two plans cannot share `bookings/service.py` in the same wave; the orchestrator's same-wave file-overlap rule forces serial execution.
+
+Corrected wave layout (all serial):
+
+| Wave | Plans | Reason |
+|---|---|---|
+| 1 | 39-01 | Copy templates must exist before any consumer |
+| 2 | 39-02 | Adds `_dispatch_booking_dm` + post-commit DM dispatch (sole writer of `bookings/service.py` in this wave) |
+| 3 | 39-03 | Adds `_mark_no_show_bookings` to `bookings/service.py` (serial after 39-02 — same-file conflict) + Alembic 0020 + `BookingNotification` ORM + no-show worker + script + tests. Now also OWNS the conftest.py edit that extends `make_future_slot` to accept negative offsets (the factory itself lands in 39-02 Wave 2; 39-03 widens its contract in Wave 3) |
+| 4 | 39-04 | Reminder cron (serial after 39-03 — depends on `BookingNotification` ORM + 0020, AND appends `_send_booking_reminders` to `bookings/service.py` which is now safe because 39-02 + 39-03 have both committed) |
+
+Plan-set unchanged: still 4 commit-sized plans (39-01 / 39-02 / 39-03 / 39-04) covering the same 10 requirements. Only execution-wave parallelism is reduced — Phase 39 now runs as 4 serial waves instead of 3. The original "disjoint file sets" claim is preserved above for historical reference; this Revision block is the authoritative source of truth for any downstream agent reading the file.
+
 #### D-39-02 — Notifications copy lives in `app/modules/bookings/notifications.py`, NOT in `app/integrations/telegram/copy.py`
 REQUIREMENTS NOTIFY-01 explicitly locks the path `app/modules/bookings/notifications.py`. This **deviates from v1.3** where templates live in `app/integrations/telegram/copy.py` — the deviation is intentional and chosen at REQUIREMENTS lock time. Rationale (recorded here for downstream agents who may otherwise apply the v1.3 pattern):
 

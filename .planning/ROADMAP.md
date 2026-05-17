@@ -153,11 +153,13 @@ _Wave 4 (serial after all):_
 _Wave 1 (alone):_
 - [ ] 39-01-PLAN.md — notifications-module-and-copy: 4 locked Russian DM templates + `_BOT_BOOK_DENIED_DM` anti-oracle + 4 `render_*_dm` helpers + unit tests + owner copy-lock sign-off (NOTIFY-01, NOTIFY-02)
 
-_Wave 2 (parallel after 39-01 — disjoint files_modified):_
+_Wave 2 (serial after 39-01):_
 - [ ] 39-02-PLAN.md — send-on-create-and-cancel: `_dispatch_booking_dm` private helper + post-commit dispatch in `create_booking` / `cancel_booking` (actor.role discriminator) + per-cancelled-booking cascade in `schedule.cancel_slot` + integration tests (NOTIFY-03, NOTIFY-04)
+
+_Wave 3 (serial after 39-02 — same-file conflict on bookings/service.py per D-39-01 Revision 2026-05-17):_
 - [ ] 39-03-PLAN.md — no-show-cron-and-table: Alembic 0020_booking_notifications + `BookingNotification` ORM (no `telegram_chat_id` per D-39-03; ON DELETE RESTRICT per D-39-13) + `_mark_no_show_bookings` helper (SELECT FOR UPDATE OF b per D-39-07) + ARQ worker + `run_no_show_cron_once.py` + integration tests (NOTIFY-05, CRON-01, CRON-03, CRON-04)
 
-_Wave 3 (serial after 39-02 + 39-03 — same-file conflict on bookings/service.py + needs ORM + 0020):_
+_Wave 4 (serial after 39-03 — needs `BookingNotification` ORM + Alembic 0020 + same-file conflict on bookings/service.py):_
 - [ ] 39-04-PLAN.md — reminder-cron: `_send_booking_reminders` multi-session helper + ARQ worker + `WorkerSettings.cron_jobs` final D-39-16 order (reminders BEFORE no-show) + `run_booking_reminders_once.py` + integration tests (CRON-02, CRON-03, CRON-05)
 
 ### Phase 40: Telegram /book + OpenAPI Drift Gate + Milestone Verification
@@ -186,7 +188,7 @@ _Wave 3 (serial after 39-02 + 39-03 — same-file conflict on bookings/service.p
 
 ---
 
-*Roadmap last updated: 2026-05-17 — Phase 39 plans created (4 plans, 10 requirements covered: NOTIFY-01..05 + CRON-01..05) across 3 waves (39-01 → {39-02 ∥ 39-03} → 39-04). Phase 38 plans created previously (6 plans, 25 requirements: SLOT-01..09 + BOOK-01..10 + PKG-01..06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
+*Roadmap last updated: 2026-05-17 — Phase 39 plans created (4 plans, 10 requirements covered: NOTIFY-01..05 + CRON-01..05) across 4 serial waves (39-01 → 39-02 → 39-03 → 39-04) per the 2026-05-17 D-39-01 revision (the original 3-wave layout claimed disjoint files_modified for Wave 2 but missed that 39-02 + 39-03 both edit bookings/service.py — same-file conflict forces serial execution). Phase 38 plans created previously (6 plans, 25 requirements: SLOT-01..09 + BOOK-01..10 + PKG-01..06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
