@@ -4,8 +4,8 @@ milestone: v1.5
 milestone_name: Schedule + Bookings
 status: executing
 stopped_at: Phase 39 context gathered
-last_updated: "2026-05-17T19:13:01.618Z"
-last_activity: 2026-05-17 -- Phase 39 planning complete
+last_updated: "2026-05-17T19:14:18.840Z"
+last_activity: 2026-05-17 -- Phase 39 execution started
 progress:
   total_phases: 4
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 38 — Schedule Module + Booking Core
+**Current focus:** Phase 39 — notifications-cron
 
 ## Current Position
 
-Phase: 38 — COMPLETE
-Plan: 1 of 6
-Status: Ready to execute
-Last activity: 2026-05-17 -- Phase 39 planning complete
+Phase: 39 (notifications-cron) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 39
+Last activity: 2026-05-17 -- Phase 39 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
