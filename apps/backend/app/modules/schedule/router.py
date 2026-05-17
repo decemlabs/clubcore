@@ -1,8 +1,8 @@
 """Schedule module HTTP router — /trainer-slots surface (Phase 38 plan 38-01).
 
 RBAC mapping (Phase 37 INFRA-27 / D-37-02-03):
-- POST /trainer-slots               → (CREATE, SCHEDULE_SLOTS) owner-only
-- POST /trainer-slots/{id}/cancel   → (CANCEL, SCHEDULE_SLOTS) owner-only
+- POST  /trainer-slots               → (CREATE, SCHEDULE_SLOTS) owner-only
+- PATCH /trainer-slots/{id}/cancel   → (CANCEL, SCHEDULE_SLOTS) owner-only
 - GET  /trainer-slots               → (LIST,   SCHEDULE_SLOTS) reception+owner
 - GET  /trainer-slots/{id}          → (VIEW,   SCHEDULE_SLOTS) reception+owner
 
@@ -11,7 +11,7 @@ on every mutation endpoint. `tests/integration/test_route_introspection.py`
 enforces statically.
 
 Idempotency:
-- Both mutating endpoints (POST publish / POST cancel) require `Idempotency-Key`
+- Both mutating endpoints (POST publish / PATCH cancel) require `Idempotency-Key`
   per D-38-14 / Pitfall 14, using the verbatim two-phase Redis claim + replay
   block from `pt_sessions/router.py:116-157` (CR-02 from Phase 33 review).
 """
@@ -173,7 +173,7 @@ async def get_slot(
     return envelope(slot)
 
 
-@schedule_router.post(
+@schedule_router.patch(
     "/{slot_id}/cancel",
     response_model=ResponseEnvelope[SlotResponse],
     status_code=status.HTTP_200_OK,

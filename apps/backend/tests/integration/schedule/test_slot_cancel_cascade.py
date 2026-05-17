@@ -503,7 +503,7 @@ async def test_cancel_booked_slot_with_missing_booking_row_raises_500(
 
 
 # ---------------------------------------------------------------------------
-# 5b) HTTP-surface assertion — PATCH/POST /trainer-slots/{id}/cancel against
+# 5b) HTTP-surface assertion — PATCH /trainer-slots/{id}/cancel against
 #     the seeded-inconsistent slot returns HTTP 500 with the locked code.
 # ---------------------------------------------------------------------------
 
@@ -539,12 +539,12 @@ async def test_http_cancel_inconsistent_slot_returns_500_json(
     authed_client_owner: AsyncClient,
     http_inconsistent_slot: TrainerAvailabilitySlot,
 ) -> None:
-    """End-to-end: POST /api/v1/trainer-slots/{id}/cancel against a seeded
+    """End-to-end: PATCH /api/v1/trainer-slots/{id}/cancel against a seeded
     slot.status='booked' / no-booking state returns HTTP 500 with
     {code: 'slot_booking_inconsistency'} JSON envelope."""
     slot = http_inconsistent_slot
     csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
-    r = await authed_client_owner.post(
+    r = await authed_client_owner.patch(
         f"/api/v1/trainer-slots/{slot.id}/cancel",
         json={"cancelReason": "trying via HTTP"},
         headers={

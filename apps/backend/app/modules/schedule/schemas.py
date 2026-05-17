@@ -67,7 +67,7 @@ class SlotCreateRequest(BackendSchemaBase):
 
 
 class SlotCancelRequest(BackendSchemaBase):
-    """POST /api/v1/trainer-slots/{id}/cancel body (SLOT-09).
+    """PATCH /api/v1/trainer-slots/{id}/cancel body (SLOT-09).
 
     `cancel_reason` is REQUIRED — 1..200 chars; downstream notification flow
     (Phase 39 CRON-01) reuses the same length bound for the audit payload
