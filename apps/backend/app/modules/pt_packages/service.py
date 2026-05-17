@@ -42,6 +42,7 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -929,6 +930,29 @@ async def refund_pt_package(
     pt_package = await repository.get_pt_package(session, pt_package_id)
     if pt_package is None:
         raise PtPackageNotFoundError("pt_package_not_found")
+
+    # 1b. Phase 38 PKG-03 / C-09 / Pitfall 4 Option A / D-38-11 —
+    # block refund when at least one confirmed booking still references
+    # this pt_package. Cross-module reach via raw `sa.text()` preserves
+    # the modules-independent import-linter contract (no direct ORM import
+    # of the bookings module is allowed here). Operator must cancel
+    # outstanding bookings first — no automatic cascade per C-09.
+    #
+    # Ordering note: this fires BEFORE the FSM `_assert_can_transition`
+    # below so the friendly 409 `outstanding_bookings_exist` surfaces
+    # instead of stock `invalid_transition`. The FSM guard remains the
+    # second-line gate for cancelled / refunded sources (where no
+    # confirmed bookings can exist by definition, so this guard is a no-op
+    # in that branch and ordering does not introduce a regression).
+    result = await session.execute(
+        sa.text(
+            "SELECT count(*) FROM bookings "
+            "WHERE pt_package_id = :pkg_id AND status = 'confirmed'"
+        ),  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+        {"pkg_id": str(pt_package_id)},
+    )
+    if result.scalar_one() > 0:
+        raise OutstandingBookingsExistError("outstanding_bookings_exist")
 
     # 2. FSM guard — 409 invalid_transition for cancelled source. Fires
     # BEFORE the refunder is invoked so the second-attempt case (already
