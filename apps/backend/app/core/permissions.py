@@ -25,6 +25,7 @@ class Action(StrEnum):
     REFUND = "refund"
     CANCEL = "cancel"  # Phase 15 INFRA-08 — memberships cancel
     CHECK_IN = "check_in"  # Phase 15 INFRA-08 — visits check-in (value uses underscore)
+    LIST = "list"  # Phase 37 INFRA-26 / D-37-03a — semantic separation from VIEW for listings
 
 
 class Resource(StrEnum):
@@ -48,9 +49,11 @@ class Resource(StrEnum):
     PT_PACKAGE_PLANS = "pt-package-plans"  # Phase 30 INFRA-18 — kebab (mirrors MEMBERSHIP_PLANS)
     PT_PACKAGES = "pt-packages"  # Phase 30 INFRA-18 — kebab (multi-word)
     PT_SESSIONS = "pt-sessions"  # Phase 30 INFRA-18 — kebab (multi-word)
+    SCHEDULE_SLOTS = "schedule-slots"  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
+    BOOKINGS = "bookings"  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (26 entries after Phase 30 INFRA-19).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (29 entries after Phase 37 INFRA-27).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -90,6 +93,24 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         (Action.VIEW, Resource.PAYMENTS),
         (Action.CANCEL, Resource.PT_PACKAGES),
         (Action.DELETE, Resource.PT_PACKAGES),
+        # Phase 37 INFRA-27 note: Action.LIST has no OWNER_ONLY entries in v1.5 —
+        # reception sees all listings. Future phases may add (LIST, X) pairs.
+        # Phase 37 INFRA-27 — v1.5 owner-only pairs (schedule-slots).
+        # Reception RETAINS (NOT listed here): (VIEW, SCHEDULE_SLOTS), (LIST, SCHEDULE_SLOTS)
+        # for slot picker (SLOT-08), (CREATE, BOOKINGS) for booking flow (BOOK-02),
+        # (CANCEL, BOOKINGS) with 24h cancel-window enforced server-side via
+        # `cancel_window_expired` 403 (BOOK-06 / C-05 — mirrors Phase 34 D-34-09a
+        # PT-session pattern), (VIEW, BOOKINGS), (LIST, BOOKINGS) for booking lists.
+        # Slot publication is owner-only in v1.5 (no trainer self-service per anti-feature list).
+        # OVERRIDE D-37-03: CONTEXT.md reads "25 → 35" — that was a miscount that
+        # treated reception-retained pairs as restricted. The 6 reception-retained
+        # pairs above describe what reception SEES, not what is denied. Correct
+        # shipped delta is 25 → 29 (+4 SCHEDULE_SLOTS write pairs only).
+        # Final OWNER_ONLY size: 25 -> 29.
+        (Action.CREATE, Resource.SCHEDULE_SLOTS),
+        (Action.EDIT, Resource.SCHEDULE_SLOTS),
+        (Action.DELETE, Resource.SCHEDULE_SLOTS),
+        (Action.CANCEL, Resource.SCHEDULE_SLOTS),
     }
 )
 
