@@ -1,0 +1,166 @@
+# Milestone v1.5 — Schedule + Bookings (PT slots) — Requirements
+
+**Milestone goal:** Close the last empty business-module gap by giving Sportzal a minimal viable online PT-booking surface. A trainer publishes 1:1 availability windows; a client books an individual PT session via reception, owner, or Telegram bot `/book`; the booking lifecycle is race-safe at the DB layer and audit-traceable end-to-end. Group classes (capacity > 1) are explicitly out of scope — Sportzal operates an open-gym model for non-PT activity.
+
+**Scope locked:** 2026-05-17. Phase numbering continues from v1.4 (Phase 37+). Expected 4 phases (37 → 40).
+
+**Locked bedrock decisions** (to be recorded in PROJECT.md Key Decisions at Phase 37 close):
+
+- **C-01** — Two-module split: `app/modules/schedule/` (catalog: `trainer_availability_slots`) and `app/modules/bookings/` (transaction: `bookings`) — bridged exclusively via Protocol slots from `app/main.py` composition root (mirrors v1.4 `pt_packages` / `pt_sessions` split). `bookings` never directly imports from `schedule`.
+- **C-02** — Race guard: partial UNIQUE `(slot_id) WHERE status='confirmed'` on `bookings` — concurrent same-slot bookings lose at DB layer (mirrors v1.2 visits, v1.3 freeze, v1.4 pt_packages active).
+- **C-03** — Decrement-at-delivery preserved: booking does NOT debit `pt_packages.sessions_remaining`. The atomic decrement remains exclusively in `pt_sessions.service.record_pt_session`. Booking completion is a side effect of PT-session creation, set atomically via Protocol slot in the same UoW.
+- **C-04** — Booking FSM: `confirmed → cancelled / no_show / completed`. Central `BOOKING_STATUS_TRANSITIONS` constant + `_assert_can_transition` guard (mirrors v1.3 MEMBERSHIP_STATUS_TRANSITIONS + v1.4 PT_PACKAGE_STATUS_TRANSITIONS).
+- **C-05** — Cancellation window: reception ≤24h before slot.start; owner anytime (mirror of v1.4 B-12 for pt_sessions).
+- **C-06** — `LOCKED_AUDIT_EVENTS` pre-registered in Phase 37 before any callsite (51 → 56). 5 new events: `slot_published`, `slot_cancelled`, `booking_created`, `booking_cancelled`, `booking_no_show`. Note: `booking_completed` is **not** a separate event — completion is recorded via the existing `pt_session_recorded` event, which now carries a `booking_id` field (avoids double-emit for the same business action). `slot_cancelled` is the 5th event (slot lifecycle parity).
+- **C-07** — All slot timestamps are `TIMESTAMPTZ` (`DateTime(timezone=True)`). Business TZ is `Europe/Moscow`. Cancellation-window math uses `zoneinfo.ZoneInfo('Europe/Moscow')` against `slot.start_time AT TIME ZONE 'Europe/Moscow'`.
+- **C-08** — `trainer_id` becomes a nullable FK on `pt_packages` (Alembic ALTER). NULL = "package not bound to a specific trainer; bot asks client to pick". Non-NULL = "bot filters slots to this trainer". Backfilled NULL for pre-v1.5 packages.
+- **C-09** — PT-package refund with outstanding `confirmed` bookings → 409 `outstanding_bookings_exist` (mirror of v1.4 B-08 `must_unfreeze_first`). Operator cancels bookings first.
+- **C-10** — No-show is **cron-only** in v1.5 (no manual `POST /bookings/{id}/no_show` endpoint). Daily cron at 23:10 MSK marks `confirmed` bookings whose `slot.end_time < now()` as `no_show`. Idempotent.
+- **C-11** — 24h reminder DM is **IN v1.5**: ARQ cron at 06:35 MSK selects `confirmed` bookings with `slot.start_time` in `[now()+23h, now()+25h]` window and sends Telegram DM to linked client. New `booking_notifications` table with UNIQUE `(booking_id, kind)` for cron idempotency (mirror v1.3 `membership_notifications`).
+- **C-12** — Anti-oracle Telegram bot `/book` DM: a single locked Russian DM constant for ALL negative outcomes ("no active PT-package" / "no slots available" / "client not linked") — no information leak (mirror v1.2 D-20-9 + v1.3 D-27 owner-copy-lock pattern).
+- **C-13** — No new `Idempotency-Key` semantics: reuse `app/core/idempotency.py` with route-bound `_redis_key` (CR-01 discipline from Phase 33). `POST /bookings` requires the header.
+- **C-14** — `pt_sessions.booking_id` becomes a **nullable** FK (Alembic ALTER) → optionally links a recorded session back to the booking that scheduled it. When non-NULL, PT-session creation atomically marks the parent booking `completed` via `register_booking_completer` Protocol slot in the same UoW.
+- **C-15** — Slot buffer is **10 minutes hardcoded** for v1.5 (P2 differentiator). Slot publish rejects overlap with existing trainer's slot **or** start within 10 minutes of another existing slot for the same trainer. Configurable buffer deferred to v1.8 reports milestone.
+
+---
+
+## v1.5 Requirements
+
+### INFRA — Foundations & Bedrock (Phase 37)
+
+- [ ] **INFRA-24**: Extend `LOCKED_AUDIT_EVENTS` frozenset from 51 → 56 (5 new): `slot_published`, `slot_cancelled`, `booking_created`, `booking_cancelled`, `booking_no_show`. Pre-registered in this phase before any downstream callsite (mirrors v1.4 Phase 30 INFRA-17 + v1.3 Phase 24 INFRA-15 discipline). NOTE: `pt_session_recorded` payload schema is extended with an optional `booking_id` field — completion is signalled via that existing event, not a new one.
+- [ ] **INFRA-25**: Lock canonical Pydantic v2 payload schemas for the 5 new audit events in `app/core/audit_payloads.py`. All schemas use `extra='forbid'` and serialize UUIDs as `str(uuid)` (REG-36-03 lesson — payloads NEVER carry raw UUID objects). Registry entry per event. Emit-time validation hook rejects payload-key drift.
+- [ ] **INFRA-26**: Extend `Resource` enum with 2 new values: `SCHEDULE_SLOTS`, `BOOKINGS`. No new `Action` values (reuse existing `VIEW/CREATE/EDIT/DELETE/CANCEL/LIST/BOOK`). New `Action.BOOK` if existing `CREATE` is semantically ambiguous between "publish slot" (operator) and "create booking" (client) — decide at plan time.
+- [ ] **INFRA-27**: Extend `OWNER_ONLY` frozenset (currently 26 entries) with: `(EDIT, SCHEDULE_SLOTS)`, `(DELETE, SCHEDULE_SLOTS)`, `(CANCEL, SCHEDULE_SLOTS)`. Reception receives: `(VIEW, SCHEDULE_SLOTS)`, `(LIST, SCHEDULE_SLOTS)`, `(CREATE, BOOKINGS)`, `(CANCEL, BOOKINGS)` (≤24h window enforced in service per C-05), `(VIEW, BOOKINGS)`, `(LIST, BOOKINGS)`. Slot publication is owner-only in v1.5 (no trainer self-service per anti-feature list).
+- [ ] **INFRA-28**: Extend `.importlinter` `modules-independent` contract with `app.modules.schedule` and `app.modules.bookings`. Verify both modules are forbidden from importing each other and from importing existing modules (`memberships`, `visits`, `trainers`, `payments`, `pt_packages`, `pt_sessions`) except via Protocol slots in `core/dependencies.py`.
+- [ ] **INFRA-29**: Extend SVC001 AST commit-gate walker scope to `schedule/service.py` and `bookings/service.py`. Every state-mutating service method must explicitly `await session.commit()` (mirrors v1.4 INFRA-21).
+- [ ] **INFRA-30**: Lock `BOOKING_STATUS_TRANSITIONS` constant in `app/modules/bookings/constants.py` declaratively listing legal transitions (`confirmed → cancelled`, `confirmed → no_show`, `confirmed → completed`). Central `_assert_can_transition` guard rejects others with 409 `invalid_transition`. Unit-testable without booking-creation overhead.
+- [ ] **INFRA-31**: Lock `SLOT_STATUS_TRANSITIONS` constant in `app/modules/schedule/constants.py` for slot lifecycle (`active → cancelled`; `active → booked` set atomically inside booking-creation UoW; `booked → active` on booking-cancellation atomic restore). Central guard.
+- [ ] **INFRA-32**: Add 3 new Protocol slot types + register/get functions to `app/core/dependencies.py`: `SlotByIdResolver`, `BookingSlotRestorer`, `BookingCompleter`. Signatures match existing pattern (Protocol class + `register_*` + `get_*` accessor).
+- [ ] **INFRA-33**: Compose-root wiring in `app/main.py:create_app()` — register all 3 new Protocol slots in deterministic order **before** routers mount. **Defensive double-wiring** in `app/workers/telegram_bot.py:main()` for any slot the bot path may consume (`SlotByIdResolver` and existing `register_active_pt_package_resolver` if found missing — REG-29-03 lesson). Verified by a parity test asserting both call sites register identical slots.
+
+### DEBT — Tech-debt carryover (Phase 37)
+
+- [ ] **DEBT-06**: Add `register_active_pt_package_resolver` to `app/workers/telegram_bot.py:main()` if currently missing (confirmed missing during research). Without this the `/book` handler from Phase 40 would silently fail (REG-29-03 class of omission). Verified by a one-shot import + boot integration test.
+
+### SLOT — Trainer Availability Slots (Phase 38)
+
+- [ ] **SLOT-01**: New `trainer_availability_slots` table (Alembic 0016): `id UUIDv4 PK`, `trainer_id UUIDv4 NOT NULL FK trainers(id) ON DELETE RESTRICT`, `start_time TIMESTAMPTZ NOT NULL`, `end_time TIMESTAMPTZ NOT NULL CHECK (end_time > start_time)`, `status TEXT NOT NULL CHECK IN ('active','booked','cancelled') DEFAULT 'active'`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `created_by_user_id UUIDv4 NOT NULL FK users(id)`, `cancelled_at TIMESTAMPTZ NULL`, `cancel_reason TEXT NULL`. Indexes: `(trainer_id, start_time)` btree for discovery queries; `(status, start_time)` partial for active-slot discovery.
+- [ ] **SLOT-02**: Owner-only CRUD via `POST /api/v1/trainer-slots` (publish one-off slot), `GET /api/v1/trainer-slots?trainer_id=&from=&to=&status=` (paginated list with filters), `GET /api/v1/trainer-slots/{id}`, `PATCH /api/v1/trainer-slots/{id}/cancel`. CSRF required on mutations. NO `DELETE` — cancelled slots stay for audit + booking history (soft-decommission via status).
+- [ ] **SLOT-03**: Slot publish (`POST`) rejects with 409 `slot_overlap` when the new slot's `[start_time, end_time)` interval overlaps any **non-cancelled** existing slot for the same `trainer_id`. Overlap detection via `WHERE trainer_id = $1 AND status != 'cancelled' AND tstzrange(start_time, end_time, '[)') && tstzrange($new_start, $new_end, '[)')`.
+- [ ] **SLOT-04**: Slot publish enforces 10-minute buffer (C-15): rejects 409 `slot_too_close` when another non-cancelled slot for the same trainer starts or ends within 10 minutes of the candidate slot's edges.
+- [ ] **SLOT-05**: Slot publish rejects 409 `slot_in_past` when `start_time <= now() AT TIME ZONE 'Europe/Moscow'` — slots must be future.
+- [ ] **SLOT-06**: Slot publish rejects 409 `trainer_inactive` when the trainer is `is_active = false` (mirror Phase 31 trainer-inactive guard).
+- [ ] **SLOT-07**: `PATCH /api/v1/trainer-slots/{id}/cancel` (owner-only). If status is `active`, atomically flips to `cancelled` and records `cancelled_at` + `cancel_reason`. If status is `booked`, **atomically** flips to `cancelled` AND transitions the linked confirmed booking to `cancelled` (with `cancel_reason='slot_cancelled_by_owner'`) AND emits both `slot_cancelled` and `booking_cancelled` audit events in the same UoW AND queues client DM (Phase 40 NOTIFY-03).
+- [ ] **SLOT-08**: `GET /api/v1/trainer-slots` supports `?trainer_id=` (required for client-facing discovery) + `?from=&to=` ISO-date window (default: now → now+14d in Europe/Moscow) + `?status=` (default: active). Returns paginated `{items, total, page, pageSize}` slots. Reception+owner can list any trainer; the same endpoint feeds the Telegram bot `/book` discovery flow in Phase 40.
+- [ ] **SLOT-09**: 2 lifecycle audit events: `slot_published` (on POST success; payload `{slot_id, trainer_id, start_time, end_time, created_by_user_id}`), `slot_cancelled` (on PATCH success; payload `{slot_id, trainer_id, cancelled_by_user_id, cancel_reason, had_booking: bool}`).
+
+### BOOK — Booking Core (Phase 38)
+
+- [ ] **BOOK-01**: New `bookings` table (Alembic 0017): `id UUIDv4 PK`, `slot_id UUIDv4 NOT NULL FK trainer_availability_slots(id) ON DELETE RESTRICT`, `client_id UUIDv4 NOT NULL FK clients(id) ON DELETE RESTRICT`, `pt_package_id UUIDv4 NOT NULL FK pt_packages(id) ON DELETE RESTRICT`, `status TEXT NOT NULL CHECK IN ('confirmed','cancelled','no_show','completed') DEFAULT 'confirmed'`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `created_by_user_id UUIDv4 NOT NULL FK users(id)` (the operator who recorded the booking — reception user, owner, or the bot's system user), `cancelled_at TIMESTAMPTZ NULL`, `cancel_reason TEXT NULL`, `no_show_at TIMESTAMPTZ NULL`, `completed_at TIMESTAMPTZ NULL`. **Partial UNIQUE index** `(slot_id) WHERE status='confirmed'` — concurrent same-slot bookings lose at DB layer (C-02). Indexes: `(client_id, status)` for client-side history, `(slot_id, status)` for slot lookup.
+- [ ] **BOOK-02**: New endpoint `POST /api/v1/bookings` (reception + owner). Body: `{slot_id: UUID, client_id: UUID, pt_package_id: UUID}`. `Idempotency-Key` header required (PAY-09 reuse pattern with route-bound key per CR-01). Atomic UoW: (a) validate slot is `active` and future; (b) validate PT-package is `active` and belongs to `client_id` and `sessions_remaining > 0` (via existing `register_active_pt_package_resolver`); (c) validate `pt_package.trainer_id` is NULL OR equals `slot.trainer_id` (otherwise 409 `trainer_mismatch`); (d) UPDATE slot status `active → booked`; (e) INSERT booking row with `status='confirmed'`; (f) emit `booking_created` audit event; single `await session.commit()`. Returns `201` with full booking payload.
+- [ ] **BOOK-03**: `POST /bookings` returns 409 `slot_already_booked` when the partial UNIQUE catches a concurrent winner. Mapped from `IntegrityError` in the service layer (mirrors v1.3 freeze MEM-FRZ-TEST-03 pattern). Reception UI surfaces with refresh prompt.
+- [ ] **BOOK-04**: `POST /bookings` returns 409 `pt_package_exhausted` when `sessions_remaining = 0`, 409 `pt_package_not_active` when package status ≠ `active`, 409 `pt_package_expired_before_slot` when `pt_package.end_date < slot.start_time::date` (validity-window guard — booking a slot beyond the package's validity is rejected upfront).
+- [ ] **BOOK-05**: `POST /bookings` returns 409 `slot_not_available` when the slot status is `cancelled` or `booked` (already-booked race lost; cancelled).
+- [ ] **BOOK-06**: `POST /api/v1/bookings/{id}/cancel` (reception + owner). Body: `{reason: string max 200 chars}`. Reception enforced ≤24h window: rejected 409 `cancel_window_expired` when `(slot.start_time - now()) < 24h` in Europe/Moscow. Owner has no window. Atomic UoW: (a) transition booking `confirmed → cancelled`; (b) flip slot status `booked → active` (so the slot can be re-booked); (c) emit `booking_cancelled` audit; (d) queue client DM.
+- [ ] **BOOK-07**: `GET /api/v1/bookings?client_id=&trainer_id=&from=&to=&status=` (paginated, reception + owner). Default window: now-30d → now+30d.
+- [ ] **BOOK-08**: `GET /api/v1/clients/{id}/bookings` (paginated, reception + owner). All bookings for one client.
+- [ ] **BOOK-09**: `GET /api/v1/bookings/{id}` (reception + owner). Returns full booking + denormalized slot + trainer + pt_package snapshot for display.
+- [ ] **BOOK-10**: Race test `BOOK-TEST-01` (real Postgres, parallel asyncio.gather): two concurrent `POST /bookings` against the same slot → exactly one wins with 201, the other gets 409 `slot_already_booked`. Mirror PTS-TEST-01 + REF-TEST-01 from v1.4.
+
+### PKG — PT-Package Integration (Phase 38)
+
+- [ ] **PKG-01**: ALTER `pt_packages` ADD COLUMN `trainer_id UUIDv4 NULL FK trainers(id) ON DELETE RESTRICT` (Alembic 0018). Existing rows backfill NULL. Schema added at PT-package sale (`POST /pt-packages`) accepts `trainer_id` optional.
+- [ ] **PKG-02**: `POST /api/v1/pt-packages` (existing v1.4 endpoint) extended to accept optional `trainer_id`. When provided, validates trainer is active or 409 `trainer_inactive`. Reception sets it at sale time or leaves NULL.
+- [ ] **PKG-03**: `POST /api/v1/pt-packages/{id}/refund` (existing v1.4 endpoint) modified: rejects 409 `outstanding_bookings_exist` when `EXISTS (SELECT 1 FROM bookings WHERE pt_package_id = $1 AND status = 'confirmed')`. Operator cancels bookings first (cascade is intentionally NOT automatic per C-09). Error code added to `LOCKED_RESPONSE_CODES`/equivalent.
+- [ ] **PKG-04**: ALTER `pt_sessions` ADD COLUMN `booking_id UUIDv4 NULL FK bookings(id) ON DELETE RESTRICT` (Alembic 0019). Existing pt_sessions backfill NULL (pre-v1.5 sessions have no parent booking).
+- [ ] **PKG-05**: `POST /api/v1/pt-sessions` (existing v1.4 endpoint) extended to accept optional `booking_id`. When provided: (a) validates booking is `confirmed` and belongs to the same `pt_package_id` and same `trainer_id`; (b) on success, atomically transitions booking `confirmed → completed` via `register_booking_completer` Protocol slot in the same UoW as the existing race-safe session decrement; (c) `pt_session_recorded` audit payload now includes `booking_id` (extended schema per INFRA-25 / C-06).
+- [ ] **PKG-06**: PT-session cancel (existing v1.4 `POST /pt-sessions/{id}/cancel`) — when the cancelled session had a `booking_id`, the booking does NOT automatically revert from `completed` back to `confirmed` (operator decides — most likely creates a new booking). Booking stays `completed` but the audit chain shows pt_session_cancelled for traceability. Decision recorded as D-38-XX during plan-phase.
+
+### NOTIFY — Telegram Notifications (Phase 39)
+
+- [ ] **NOTIFY-01**: 4 locked Russian DM templates in `app/modules/bookings/notifications.py`: `BOOKING_CONFIRMED_DM`, `BOOKING_CANCELLED_BY_CLIENT_DM`, `BOOKING_CANCELLED_BY_OWNER_DM`, `BOOKING_REMINDER_24H_DM`. Each receives `{client_name, trainer_name, slot_start_msk}` placeholders. **Owner copy-lock sign-off** required at Phase 39 close (mirror v1.3 D-27-OWNER-COPY-LOCK).
+- [ ] **NOTIFY-02**: 1 anti-oracle DM constant `_BOT_BOOK_DENIED_DM` covering ALL negative outcomes of bot `/book` flow ("no active PT-package" / "no slots available" / "client not linked") — single locked Russian string with no information leak (C-12, mirror v1.2 D-20-9).
+- [ ] **NOTIFY-03**: Booking-confirmed DM sent on `POST /bookings` success (linked client) and on bot `/book` success. Send-through factory `build_bot` (reuse v1.3 pattern). Failures (403/blocked) logged WARNING + no row in idempotency table — retried on next applicable cron (booking confirmation is once-off, so failures simply log).
+- [ ] **NOTIFY-04**: Booking-cancelled DM sent on `POST /bookings/{id}/cancel` (client cancelled their own → none; reception cancels → `BOOKING_CANCELLED_BY_CLIENT_DM` to the client because reception is acting on client's behalf; owner cancels → `BOOKING_CANCELLED_BY_OWNER_DM`). Slot-cancelled cascade (SLOT-07) sends `BOOKING_CANCELLED_BY_OWNER_DM`.
+- [ ] **NOTIFY-05**: New `booking_notifications` table (Alembic 0020): `id UUIDv4 PK`, `booking_id UUIDv4 NOT NULL FK bookings(id) ON DELETE RESTRICT`, `kind TEXT NOT NULL CHECK IN ('reminder_24h')`, `sent_at TIMESTAMPTZ NOT NULL DEFAULT now()`. UNIQUE `(booking_id, kind)` for cron idempotency (mirror v1.3 `membership_notifications`).
+
+### CRON — Scheduled Jobs (Phase 39)
+
+- [ ] **CRON-01**: New ARQ cron `mark_no_show_bookings` scheduled at 23:10 Europe/Moscow (`hour=20, minute=10` UTC; `unique=True, keep_result=60`). Selects `bookings` with `status='confirmed' AND slot.end_time < now() AT TIME ZONE 'Europe/Moscow'` (with explicit `SELECT FOR UPDATE` to avoid race with concurrent PT-session recording flipping to `completed`). For each: transitions `confirmed → no_show`, sets `no_show_at`, emits `booking_no_show`. Idempotent — re-running picks zero rows after first success.
+- [ ] **CRON-02**: New ARQ cron `send_booking_reminders` scheduled at 06:35 Europe/Moscow (`hour=3, minute=35` UTC; `unique=True, keep_result=60`; ordered AFTER `expire_pt_packages` 06:25). Selects `bookings` with `status='confirmed' AND slot.start_time BETWEEN now()+23h AND now()+25h AND client.telegram_chat_id IS NOT NULL`, sends `BOOKING_REMINDER_24H_DM`, inserts `booking_notifications` idempotency row on successful send only (403/blocked → WARNING log + no row + retry next applicable window — same pattern as v1.3 expiring-soon).
+- [ ] **CRON-03**: Both new crons join the canonical `app.workers.WorkerSettings` with `on_startup` cron-resolution invariant + `on_job_start`/`on_job_end` structlog `job_id`/`job_name` contextvars (mirror v1.2 Pitfall 14 RequestIdMiddleware discipline).
+- [ ] **CRON-04**: One-shot operator runner `apps/backend/scripts/run_no_show_cron_once.py` for verification (mirror v1.3 `run_expiring_cron_once.py`). Eager-imports all ORM models at top of file (REG-29-04 lesson — avoid empty-ORM-registry first-tick zero-row).
+- [ ] **CRON-05**: One-shot runner `apps/backend/scripts/run_booking_reminders_once.py` symmetric to CRON-04.
+
+### BOT — Telegram /book (Phase 40)
+
+- [ ] **BOT-01**: New `/book` command handler in `apps/backend/app/workers/telegram_bot.py`. Stateless: `CommandHandler("book", book_handler)` + `CallbackQueryHandler(book_callback_handler, pattern=r"^BK:")`. NO `ConversationHandler` (preserves the existing `concurrent_updates=True` default; C-12 anti-oracle path).
+- [ ] **BOT-02**: `/book` flow: (a) resolve `client_id` from chat_id (via existing `register_client_by_telegram_resolver` — must be registered in `telegram_bot.py:main()` per DEBT-06); (b) fetch client's active PT-package (via `register_active_pt_package_resolver`); (c) if missing or `sessions_remaining = 0`, reply `_BOT_BOOK_DENIED_DM` (anti-oracle); (d) fetch top-5 future active slots filtered by `pt_package.trainer_id` (if non-NULL) within next 14 days via `register_slot_by_id_resolver`-equivalent or direct list call; (e) if zero slots, reply `_BOT_BOOK_DENIED_DM` (anti-oracle); (f) render InlineKeyboardMarkup with 5 buttons, each `callback_data = "BK:{slot_uuid}"` (39 bytes — within Telegram 64-byte limit; **unit test asserts** the byte length).
+- [ ] **BOT-03**: `book_callback_handler` parses `callback_data`, validates slot is still active (race window between message render and tap), calls `bookings_service.create_booking` (via `HandlerContext.bookings_service` — new context field). Success → edit message to confirmation DM (`BOOKING_CONFIRMED_DM`); race-loss / package-issue → edit to anti-oracle DM.
+- [ ] **BOT-04**: Redis `update_id` dedup via `sz:bot:update:{update_id}` SET-NX-EX TTL 1h (reuse v1.2 D-20 fail-open pattern).
+- [ ] **BOT-05**: `HandlerContext` extended with `bookings_service` field. Composition root (`app/main.py` and `app/workers/telegram_bot.py:main()`) constructs it with the wired service instance (defensive double-construction per REG-29-03 lesson).
+
+### HANDOFF — OpenAPI Drift Gate Refresh (Phase 40)
+
+- [ ] **HANDOFF-01**: Atomic byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing every v1.5 typed path: `/trainer-slots/*`, `/bookings/*`, `/clients/{id}/bookings`, extended `/pt-packages` (trainer_id field), extended `/pt-sessions` (booking_id field). CI `git diff --exit-code` gate green on both artifacts (mirror v1.4 Phase 35).
+- [ ] **HANDOFF-02**: `packages/api-client/src/schema.contract.test.ts` forward-guard extended with **compile-time `AssertNonNever<paths[...]['method']>` assertions** for new v1.5 paths (estimate 8–10 new assertions for the trainer-slots + bookings endpoints; running count grows from v1.4's 36).
+
+### VER — Milestone Verification Gate (Phase 40)
+
+- [ ] **VER-05**: 6 operator API-contract scenarios via curl against live `docker compose up` stack (mirror v1.4 Phase 36-02): (a) publish slot + list slots, (b) book slot via reception, (c) book slot concurrently → one wins / one 409, (d) cancel booking within 24h (reception fails, owner succeeds), (e) refund PT-package with outstanding bookings → 409, (f) PT-session recording with booking_id completes the booking. Verbatim HTTP transcripts captured.
+- [ ] **VER-06**: 2 Telegram bot operator scenarios: (a) `/book` happy path with active PT-package → InlineKeyboard rendered + tap → booking confirmed DM; (b) anti-oracle path: client without active PT-package / no slots → `_BOT_BOOK_DENIED_DM` only.
+- [ ] **VER-07**: ARQ cron operator scenarios (one-shot runners): (a) `run_no_show_cron_once.py` flips overdue confirmed bookings; (b) `run_booking_reminders_once.py` sends 24h reminders + idempotency row inserted; re-run sends 0 DMs.
+- [ ] **VER-08**: All 4 backend CI gates green (ruff, mypy strict, pytest, OpenAPI drift). Race tests `BOOK-TEST-01` + (if added) slot-publish-overlap race green. Operator sign-off recorded in `.planning/milestones/v1.5-VERIFICATION-LOG.md`.
+
+---
+
+## Future Requirements (deferred from v1.5)
+
+| Item | Where it lands | Reason |
+|---|---|---|
+| Group classes (capacity > 1) | TBD (v2.x or never) | Open-gym model for non-PT; not on roadmap |
+| Online payment at booking time | v1.7 ЮKassa milestone | Booking ≠ purchase in v1.5 |
+| Trainer Telegram DMs (trainer notified on booking) | v1.6 Email + Multi-user | Requires `telegram_chat_id` on trainers table; v1.6 multi-user surface owns it |
+| Email notification fallback (booking confirmed/cancelled/reminder) | v1.6 Email channel | Email channel itself lands in v1.6 |
+| Trainer self-service slot publication | v1.6 Multi-user admin | Requires trainer auth role; v1.6 multi-user owns it |
+| Recurring slot template (publish weekly schedule once) | v2.x | Acceptable to publish individually for single-zal scale |
+| Atomic reschedule endpoint (cancel-and-rebook) | v1.6 or v1.8 | Two API calls work for v1.5 |
+| Bot `/cancel_booking` command | v1.5.1 (quick task) or v1.6 | Reception can cancel; client uses Telegram to ask reception |
+| Waitlist when slot is unavailable | v2.x | Out of scope; capacity=1 makes waitlist edge-case |
+| iCal `.ics` calendar export | v1.8 Reports milestone | No booking-correctness dependency |
+| Configurable slot buffer (per trainer / per studio) | v1.8 Reports milestone | 10 min hardcoded for v1.5 |
+| Manual `POST /bookings/{id}/no_show` endpoint | v1.5.1 (if real need) | Cron-only sufficient for v1.5 |
+| No-show penalty (forfeit session) | TBD / v2.x | Industry-divided; not v1.5 scope per cron-only decision |
+
+## Out of Scope (explicit)
+
+<!-- Locked by user 2026-05-17 — do not re-introduce without explicit request -->
+
+- **Group classes / capacity > 1** — Sportzal is open-gym for non-PT activity. If group classes ever become a real product, they will be a separate later milestone, not a v1.5 sub-scope.
+- **Stripe / non-ЮKassa payment provider** — region constraint (РФ).
+- **Trainer payroll / commission per session** — out of scope until at least v1.8.
+- **Real-time WebSocket / SSE updates** — REST + polling sufficient at single-zal scale; v2.0 frontend can revisit.
+- **Production frontend code** — v2.0 milestone; design team owns externally.
+- **Backend feature flags** — not needed at single-zal pet-project scale.
+
+## Traceability
+
+<!-- Populated by gsd-roadmapper during Step 10 -->
+
+| REQ-ID | Phase |
+|---|---|
+| INFRA-24..33 | (pending roadmap) |
+| DEBT-06 | (pending roadmap) |
+| SLOT-01..09 | (pending roadmap) |
+| BOOK-01..10 | (pending roadmap) |
+| PKG-01..06 | (pending roadmap) |
+| NOTIFY-01..05 | (pending roadmap) |
+| CRON-01..05 | (pending roadmap) |
+| BOT-01..05 | (pending roadmap) |
+| HANDOFF-01..02 | (pending roadmap) |
+| VER-05..08 | (pending roadmap) |
+
+---
+
+*Total: 60 requirements across 10 categories. Phase numbering continues from v1.4 (Phase 37+). Expected ~4 phases (37 → 40). Group classes, online payment, and trainer DMs locked out of scope.*
