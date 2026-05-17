@@ -151,7 +151,7 @@ _Wave 4 (serial after all):_
 **Plans**: 4 plans
 
 _Wave 1 (alone):_
-- [ ] 39-01-PLAN.md — notifications-module-and-copy: 4 locked Russian DM templates + `_BOT_BOOK_DENIED_DM` anti-oracle + 4 `render_*_dm` helpers + unit tests + owner copy-lock sign-off (NOTIFY-01, NOTIFY-02)
+- [x] 39-01-PLAN.md — notifications-module-and-copy: 4 locked Russian DM templates + `_BOT_BOOK_DENIED_DM` anti-oracle + 4 `render_*_dm` helpers + unit tests + owner copy-lock sign-off (NOTIFY-01, NOTIFY-02)
 
 _Wave 2 (serial after 39-01):_
 - [ ] 39-02-PLAN.md — send-on-create-and-cancel: `_dispatch_booking_dm` private helper + post-commit dispatch in `create_booking` / `cancel_booking` (actor.role discriminator) + per-cancelled-booking cascade in `schedule.cancel_slot` + integration tests (NOTIFY-03, NOTIFY-04)
@@ -183,7 +183,7 @@ _Wave 4 (serial after 39-03 — needs `BookingNotification` ORM + Alembic 0020 +
 |-------|----------------|--------|-----------|
 | 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
 | 38. Schedule Module + Booking Core | 6/6 | Complete   | 2026-05-17 |
-| 39. Notifications + Cron | 0/4 | Planned     | - |
+| 39. Notifications + Cron | 1/4 | In Progress|  |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
 ---
