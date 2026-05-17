@@ -30,6 +30,14 @@ SLOT_STATUS_TRANSITIONS: Mapping[str, frozenset[str]] = MappingProxyType(
     }
 )
 
+# Phase 38 SLOT-04 / C-15 / D-38-07 — minimum gap (in minutes) between any two
+# non-cancelled slots for the same trainer. publish_slot uses this constant in
+# the buffer-check tstzrange query; reject 409 slot_too_close on violation.
+# Hardcoded 10 for v1.5; configurable buffer (per-trainer / per-zal) deferred
+# to v1.8 reports milestone alongside .ics export.
+SLOT_BUFFER_MINUTES = 10
+
 __all__ = [
+    "SLOT_BUFFER_MINUTES",
     "SLOT_STATUS_TRANSITIONS",
 ]

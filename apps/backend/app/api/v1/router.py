@@ -28,6 +28,7 @@ from app.modules.pt_sessions.router import (
 from app.modules.pt_sessions.router import (
     pt_sessions_router,
 )
+from app.modules.schedule.router import schedule_router
 from app.modules.trainers.router import router as trainers_router
 from app.modules.visits.router import router as visits_router
 
@@ -49,5 +50,6 @@ v1.include_router(
     prefix="/pt-packages",
     tags=["pt-sessions"],
 )
+v1.include_router(schedule_router, prefix="/trainer-slots", tags=["schedule"])
 v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])
