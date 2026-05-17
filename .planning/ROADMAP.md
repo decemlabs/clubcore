@@ -101,12 +101,17 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 **Depends on**: Phase 36 (v1.4 complete)
 **Requirements**: INFRA-24, INFRA-25, INFRA-26, INFRA-27, INFRA-28, INFRA-29, INFRA-30, INFRA-31, INFRA-32, INFRA-33, DEBT-06
 **Success Criteria** (what must be TRUE):
-  1. `LOCKED_AUDIT_EVENTS` frozenset contains exactly 56 entries and `test_audit_taxonomy.py` count assertion passes CI (INFRA-24/25)
+  1. `LOCKED_AUDIT_EVENTS` frozenset contains exactly 58 entries (live baseline 53 + 5 new v1.5 events; supersedes the original "56" target per pattern-mapper verification of HEAD) and `test_audit_taxonomy.py` count assertion passes CI (INFRA-24/25)
   2. `Resource.SCHEDULE_SLOTS` and `Resource.BOOKINGS` are importable from `app.core.permissions`; the RBAC parity test passes with the updated `OWNER_ONLY` frozenset (INFRA-26/27)
   3. `import-linter` `modules-independent` contract rejects any direct import between `app.modules.schedule` and `app.modules.bookings` or between those modules and existing business modules (INFRA-28)
   4. `BOOKING_STATUS_TRANSITIONS` and `SLOT_STATUS_TRANSITIONS` constants exist in their respective module `constants.py` files and a unit test asserts the complete legal transition set (INFRA-30/31)
   5. A startup integration test asserts all three new Protocol slots (`SlotByIdResolver`, `BookingSlotRestorer`, `BookingCompleter`) are non-None after `create_app()` returns; `register_active_pt_package_resolver` is also present in `telegram_bot.py:main()` (INFRA-32/33, DEBT-06)
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 37-01-PLAN.md — Audit taxonomy: extend LOCKED_AUDIT_EVENTS 53->58 + 5 Pydantic v2 payload schemas + PtSessionRecordedPayload.booking_id extension + count-assert refresh (INFRA-24, INFRA-25)
+- [ ] 37-02-PLAN.md — RBAC extension: Resource.SCHEDULE_SLOTS + Resource.BOOKINGS + Action.LIST + 4 OWNER_ONLY pairs + frontend registry.ts/can.ts byte-parity mirror + TEST-06 refresh (INFRA-26, INFRA-27)
+- [ ] 37-03-PLAN.md — FSM constants: schedule/constants.py:SLOT_STATUS_TRANSITIONS + bookings/constants.py:BOOKING_STATUS_TRANSITIONS (MappingProxyType) + unit tests (guard deferred to Phase 38 per v1.3/v1.4 precedent) (INFRA-30, INFRA-31)
+- [ ] 37-04-PLAN.md — Protocol slots + composition-root wiring: 3 new slots in dependencies.py + stub functions in schedule/service.py + bookings/service.py + main.py register chain + telegram_bot.py defensive double-wire (DEBT-06 + INFRA-33) + startup integration test + AST bot-subset-of-main parity test (INFRA-32, INFRA-33, DEBT-06)
+- [ ] 37-05-PLAN.md — Import-linter negative fixture (.importlinter contract already enumerates schedule+bookings on HEAD — no edit) + SVC001 walker scope extension for new service.py files (INFRA-28, INFRA-29)
 
 ### Phase 38: Schedule Module + Booking Core
 **Goal**: Trainer availability slots can be published and listed; clients can be booked into slots with race-safe DB enforcement; PT-package integration (trainer_id column, refund guard, validity-window guard) and all booking read/write endpoints are operational
@@ -150,14 +155,14 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 37. Foundations Bedrock | 0/TBD | Not started | - |
+| 37. Foundations Bedrock | 0/5 | Not started | - |
 | 38. Schedule Module + Booking Core | 0/TBD | Not started | - |
 | 39. Notifications + Cron | 0/TBD | Not started | - |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
 ---
 
-*Roadmap last updated: 2026-05-17 — v1.5 Schedule + Bookings (PT slots) roadmap created (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
+*Roadmap last updated: 2026-05-17 — Phase 37 plans created (5 plans, 11 requirements covered: INFRA-24..33 + DEBT-06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
