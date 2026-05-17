@@ -28,7 +28,6 @@ from app.core.audit_payloads import (
     SlotPublishedPayload,
 )
 
-
 # ---------------------------------------------------------------------------
 # SlotPublishedPayload — Phase 38 SLOT-01
 # ---------------------------------------------------------------------------
