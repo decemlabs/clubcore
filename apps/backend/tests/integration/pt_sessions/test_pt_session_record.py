@@ -155,13 +155,12 @@ async def test_record_decrement_to_zero_emits_exhausted(
     assert r.status_code == 201, r.text
 
     # Reload package from DB.
-    db_session.expire_all()
-    refreshed = await db_session.scalar(
-        select(PtPackage).where(PtPackage.id == pkg.id)
-    )
-    assert refreshed is not None
-    assert refreshed.sessions_remaining == 0
-    assert refreshed.status == "exhausted"
+    # 38-06 DEFER fix: use refresh() with targeted attribute_names (38-02 deviation #3) —
+    # avoids the MissingGreenlet that db_session.expire_all() previously triggered in
+    # the SAVEPOINT-mode session.
+    await db_session.refresh(pkg, attribute_names=["sessions_remaining", "status"])
+    assert pkg.sessions_remaining == 0
+    assert pkg.status == "exhausted"
 
     # Exactly 1 pt_session_recorded + exactly 1 pt_package_exhausted.
     recorded_count = await db_session.scalar(
@@ -464,4 +463,7 @@ async def test_record_idempotency_key_reuse_different_body_returns_422(
         headers=_csrf_headers(authed_client_owner, idempotency_key=idem),
     )
     assert r2.status_code == 422, r2.text
-    assert r2.json()["code"] == "idempotency_key_reuse"
+    # Phase 33 envelope convention (ValidationAppError class-level code).
+    body2 = r2.json()
+    assert body2["code"] == "validation_error"
+    assert body2["message"] == "idempotency_key_reuse"

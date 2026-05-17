@@ -173,7 +173,11 @@ async def test_create_pt_package_sale_amount_mismatch_422(
     )
     assert r.status_code == 422, r.text
     err = r.json()
-    assert err["code"] == "amount_mismatch"
+    # Phase 33 envelope convention: ValidationAppError sets class-level
+    # `code='validation_error'`; the literal "amount_mismatch" is the
+    # response `message`. Mirrors 38-01 SUMMARY deviation #3 fix.
+    assert err["code"] == "validation_error"
+    assert err["message"] == "amount_mismatch"
 
     # No pt_packages row, no payments row, no audit row.
     rows = (
@@ -287,7 +291,10 @@ async def test_create_pt_package_sale_idempotency_key_replay(
         headers=_csrf_headers(authed_client_owner, idempotency_key=idem),
     )
     assert r3.status_code == 422, r3.text
-    assert r3.json()["code"] == "idempotency_key_reuse"
+    # Phase 33 envelope convention (ValidationAppError class-level code).
+    body3 = r3.json()
+    assert body3["code"] == "validation_error"
+    assert body3["message"] == "idempotency_key_reuse"
 
 
 async def test_create_pt_package_sale_missing_idempotency_key_422(
@@ -304,7 +311,10 @@ async def test_create_pt_package_sale_missing_idempotency_key_422(
         headers=_csrf_headers(authed_client_owner, idempotency_key=None),
     )
     assert r.status_code == 422, r.text
-    assert r.json()["code"] == "idempotency_key_required"
+    # Phase 33 envelope convention (ValidationAppError class-level code).
+    body = r.json()
+    assert body["code"] == "validation_error"
+    assert body["message"] == "idempotency_key_required"
 
 
 async def test_create_pt_package_sale_missing_csrf_403(

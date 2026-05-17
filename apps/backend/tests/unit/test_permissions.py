@@ -13,12 +13,18 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_twenty_five_entries() -> None:
-    # Mirrors apps/admin-web/src/shared/session/can.ts (25 entries: 9 v1.1 + 6 v1.2 INFRA-08 +
-    # 11 v1.4 INFRA-19 - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`).
+def test_owner_only_has_exactly_twenty_nine_entries() -> None:
+    # Mirrors apps/admin-web/src/shared/session/can.ts.
+    # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
+    #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
+    #              + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
+    #                (CREATE / EDIT / DELETE / CANCEL).
+    # Phase 37 INFRA-27 explicitly documents the 25 -> 29 delta (see
+    # app/core/permissions.py:108 "Final OWNER_ONLY size: 25 -> 29").
     # Phase 6 TEST-06 / Phase 15 TESTS-08 / Phase 30 INFRA-19 add regex-based parity tests
-    # against can.ts.
-    assert len(OWNER_ONLY) == 25
+    # against can.ts (tests/integration/test_rbac_parity.py covers the cross-codebase
+    # mirror; this assertion is the structural-only drift tripwire).
+    assert len(OWNER_ONLY) == 29
 
 
 def test_role_value_set() -> None:
@@ -26,7 +32,9 @@ def test_role_value_set() -> None:
 
 
 def test_action_value_set() -> None:
-    # 5 v1.1 + 2 v1.2 INFRA-08 (cancel, check_in).
+    # 5 v1.1 + 2 v1.2 INFRA-08 (cancel, check_in) + 1 v1.5 Phase 37 INFRA-26/D-37-03a (list).
+    # Phase 37 added `LIST` as a semantic separation from `VIEW` for listings — see
+    # app/core/permissions.py:28.
     assert {a.value for a in Action} == {
         "view",
         "create",
@@ -35,14 +43,15 @@ def test_action_value_set() -> None:
         "refund",
         "cancel",
         "check_in",
+        "list",
     }
 
 
 def test_resource_value_set() -> None:
     # Verbatim from apps/admin-web/src/shared/session/registry.ts
-    # (20 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18).
-    # Note: OWNER_AREA / MEMBERSHIP_PLANS / PT_PACKAGE_PLANS / PT_PACKAGES / PT_SESSIONS
-    # Python identifiers map to hyphenated string values.
+    # (22 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18 + 2 v1.5 Phase 37 INFRA-26).
+    # Note: OWNER_AREA / MEMBERSHIP_PLANS / PT_PACKAGE_PLANS / PT_PACKAGES / PT_SESSIONS /
+    # SCHEDULE_SLOTS Python identifiers map to hyphenated string values.
     assert {r.value for r in Resource} == {
         "dashboard",
         "clients",
@@ -64,6 +73,8 @@ def test_resource_value_set() -> None:
         "pt-package-plans",  # Phase 30 INFRA-18
         "pt-packages",  # Phase 30 INFRA-18
         "pt-sessions",  # Phase 30 INFRA-18
+        "schedule-slots",  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
+        "bookings",  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
     }
 
 
@@ -103,9 +114,10 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check 25 locked entries (drift tripwire).
+    """Spot-check 29 locked entries (drift tripwire).
 
-    Composition: v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 - Phase 34 D-34-09a.
+    Composition: v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 - Phase 34 D-34-09a
+                 + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs.
     """
     expected = frozenset({
         (Action.VIEW, Resource.FINANCE),
@@ -136,6 +148,14 @@ def test_specific_owner_only_membership() -> None:
         (Action.VIEW, Resource.PAYMENTS),
         (Action.CANCEL, Resource.PT_PACKAGES),
         (Action.DELETE, Resource.PT_PACKAGES),
+        # Phase 37 INFRA-27 - v1.5 SCHEDULE_SLOTS owner-only writes
+        # (reception RETAINS VIEW + LIST on SCHEDULE_SLOTS for slot-picker per SLOT-08;
+        #  reception RETAINS all BOOKINGS pairs incl. CANCEL with 24h server-side window
+        #  per BOOK-06 / C-05).
+        (Action.CREATE, Resource.SCHEDULE_SLOTS),
+        (Action.EDIT, Resource.SCHEDULE_SLOTS),
+        (Action.DELETE, Resource.SCHEDULE_SLOTS),
+        (Action.CANCEL, Resource.SCHEDULE_SLOTS),
     })
     assert expected == OWNER_ONLY
 

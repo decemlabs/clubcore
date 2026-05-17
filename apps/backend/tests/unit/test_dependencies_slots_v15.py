@@ -133,25 +133,43 @@ async def test_booking_completer_silent_none_when_unregistered(
 
 
 # ---------------------------------------------------------------------------
-# Importability of the stub service functions (Phase 38 will replace them).
+# Importability of the real Phase 38 service implementations (Phase 37 stubs
+# were REPLACED by 38-01 + 38-02 — see 38-01-SUMMARY.md "Phase 37 stub bodies
+# replaced" + 38-02-SUMMARY.md "complete_booking real body replacing Phase 37 stub").
+#
+# The original Phase 37 tests asserted these returned None for any input — that
+# was the Phase 37 silent-stub contract. After Phase 38, the bodies are real
+# (predicate-gated raw UPDATEs + repository delegates) and require an active
+# AsyncSession to do useful work. The Phase 38 importability gate is therefore
+# weaker: confirm the functions are callable + async + remain importable from
+# the canonical paths the composition root references in app/main.py.
+#
+# The behavioural contracts of these functions are covered by the integration
+# suites in tests/integration/schedule/ and tests/integration/bookings/.
 # ---------------------------------------------------------------------------
 
 
-async def test_schedule_service_stubs_importable_and_return_none() -> None:
-    """schedule.service stubs (resolve_slot_by_id + restore_slot_to_active) return None."""
+def test_schedule_service_real_bodies_importable() -> None:
+    """Phase 38 schedule.service.resolve_slot_by_id + restore_slot_to_active are real bodies."""
+    from inspect import iscoroutinefunction
+
     from app.modules.schedule import service as schedule_service
 
-    sid = uuid4()
-    assert await schedule_service.resolve_slot_by_id(session=None, slot_id=sid) is None  # type: ignore[arg-type]
-    assert await schedule_service.restore_slot_to_active(session=None, slot_id=sid) is None  # type: ignore[arg-type]
+    # Must remain importable from the canonical paths app/main.py wires
+    # (see app/main.py:193-194 register_slot_by_id_resolver + register_booking_slot_restorer).
+    assert iscoroutinefunction(schedule_service.resolve_slot_by_id)
+    assert iscoroutinefunction(schedule_service.restore_slot_to_active)
 
 
-async def test_bookings_service_stub_importable_and_returns_none() -> None:
-    """bookings.service.complete_booking is an async None-returning stub."""
+def test_bookings_service_real_body_importable() -> None:
+    """Phase 38 bookings.service.complete_booking is a real predicate-gated body."""
+    from inspect import iscoroutinefunction
+
     from app.modules.bookings import service as bookings_service
 
-    bid = uuid4()
-    assert await bookings_service.complete_booking(session=None, booking_id=bid) is None  # type: ignore[arg-type]
+    # Must remain importable from the canonical path app/main.py wires
+    # (see app/main.py:195 register_booking_completer).
+    assert iscoroutinefunction(bookings_service.complete_booking)
 
 
 def test_resolver_callable_aliases_are_exported() -> None:
