@@ -1,569 +1,470 @@
-# Architecture — v1.4 Cash Sales + PT Packages
+# Architecture Research
 
-**Project:** Sportzal v1.4 (Cash Sales + PT Packages)
-**Researched:** 2026-05-14
-**Confidence:** HIGH (grounded in concrete v1.0–v1.3 patterns; all references verified against current codebase)
+**Domain:** PT-slot booking integration — modular monolith (Sportzal v1.5)
+**Researched:** 2026-05-17
+**Confidence:** HIGH (all decisions derived directly from reading the live codebase)
 
-This file answers: *how do v1.4's five business themes (payments, refund, trainers catalog, PT-package plan kind, PT session recording) plug into the existing modular-monolith without breaking the three import-linter contracts or the Locked-Audit-Events frozenset gate?*
+This file answers: *how do `app/modules/schedule/` and `app/modules/bookings/` plug into the existing v1.4 modular-monolith without breaking the three import-linter contracts, the `LOCKED_AUDIT_EVENTS` gate, or the SVC001/B-01 AST walkers?*
 
-## Module structure decisions
+---
 
-### 1. `payments/` — NEW module, owns ledger + refund
+## 1. Module Split Decision: Two Modules, Protocol Callbacks Between Them
 
-**Decision: create `app/modules/payments/`.**
+**Decision: keep `schedule` and `bookings` as two separate modules.**
 
-Rationale:
-- A payment is **not** a property of a membership — it is an independent ledger fact owned by the operator (who took the cash, when). v1.5 reports will need to read it without traversing memberships. v1.6 (ЮKassa) will swap the *source* of a payment row without touching memberships.
-- Putting it inside `memberships/` would make refund logic asymmetric the day PT-packages arrive (refund touches both `memberships` and PT-package state), and would force `memberships/` to grow finance-shaped concepts (`actor_received_by_user_id`, refund accounting) that it does not own.
-- The `modules-independent` contract forbids `memberships → payments` and `payments → memberships`. Both directions are needed at sale + refund time. The fix is the same Protocol pattern v1.1 / v1.2 / v1.3 used three times already: **`payments` exposes a Protocol slot that the composition root wires into `memberships.service`'s sale + cancel paths**, and **`memberships` exposes its existing slots to `payments` for refund coordination**.
+The `modules-independent` import-linter contract is the deciding constraint. `bookings.service` needs to check whether a slot is still `available` before creating a booking. If `bookings` imports `schedule` directly to do this, the contract breaks. The validated escape — used five times already in v1.1 through v1.4 — is a Protocol slot in `app/core/dependencies.py` registered from the composition root.
 
-Module shape (mirrors `clients/` and `memberships/`):
-```
-app/modules/payments/
-├── __init__.py
-├── router.py           — /api/v1/payments (list, get) + /refunds (POST refund)
-├── service.py          — record_payment(), issue_refund(), list_payments_for_client(), list_payments_for_membership()
-├── repository.py       — insert_payment, insert_refund, select_by_subject, etc.
-├── models.py           — Payment, Refund (or one Payment row with refund_of FK — see below)
-├── schemas.py          — Pydantic request/response (camelCase, ResponseEnvelope)
-├── permissions.py      — (optional, only if reception-specific checks beyond RBAC dependency)
-└── constants.py        — payment kinds, refund reasons enum, error codes
-```
+The alternative (fold both into a single `bookings` module) avoids one Protocol slot but merges two distinct business concepts: a trainer publishing availability windows (a catalog concern) and a client reserving one of those windows (a transaction concern). The `pt_packages` / `pt_sessions` split in v1.4 is the direct precedent: those two modules are equally entangled at the DB level yet remain separate because the bounded contexts differ. Follow the same discipline.
 
-### 2. `trainers/` — promote placeholder to a real module
+**Concrete contract consequence:** `bookings` NEVER imports from `schedule`. The runtime bridge is three new Protocol slots in `app/core/dependencies.py`:
 
-**Decision: create `app/modules/trainers/`.**
+| Slot | Consumer | Provider | Failure mode |
+|------|----------|----------|--------------|
+| `get_slot_by_id` | `bookings.service` (validate slot before booking) | `schedule.service.resolve_slot_by_id` | silent-None (mirrors `ActiveMembership`) |
+| `restore_slot_on_cancel` | `bookings.service` (flip slot `booked→available` on cancel) | `schedule.service.restore_slot_to_available` | defensive-raise (slot stranded = misconfiguration) |
+| `complete_booking` | `pt_sessions.service` (mark booking `completed` when PT-session recorded) | `bookings.service.complete_booking` | defensive-raise (mirrors `get_payment_recorder`) |
 
-Currently `app/modules/trainers/` is an empty placeholder (no files inside). Promote it to a real module with the standard shape. It is the smallest scope in v1.4 and the cleanest first phase.
+---
 
-Trainers cannot logically live anywhere else — it is a top-level catalog, owner-only, no overlap with clients (no auth, no Telegram, no payments). Single table, 4 CRUD endpoints, ~150 LOC service.
+## 2. Tables
 
-### 3. PT-packages — NEW module `pt_packages/` (NOT extension of `memberships`)
-
-**Decision: create `app/modules/pt_packages/` as a separate module.**
-
-This is the most consequential decision. Argument both ways:
-
-**For "extend `memberships`":**
-- 80% lifecycle overlap (sell → hold balance → cancel/refund).
-- Audit events and RBAC actions could be reused (`membership_*`).
-- Saves one module.
-
-**For "new module" (chosen):**
-- The *balance* model is fundamentally different: memberships hold a date (`end_date`), PT-packages hold a counter (`sessions_remaining` decremented per use). Putting both into one ORM table forces a nullable-pair schema (`end_date NULL XOR sessions_remaining NULL`) — exactly the kind of soft union that v1.3 audit-and-CHECK culture rejects.
-- The active-instance *resolver* is different: visits resolver currently returns `ActiveMembership` with `end_date` and `status`. PT-session recording needs `sessions_remaining > 0` instead. Trying to merge these into one Protocol creates an oracle (which kind?) at every caller. Two separate Protocol slots is cleaner.
-- The audit taxonomy is already separable. `pt_package_sold`, `pt_session_recorded`, `pt_package_refunded` are distinct verbs from `membership_*`.
-- v1.5 reports will likely treat revenue-from-memberships vs revenue-from-PT as separate metrics anyway — the schema separation makes that 1-line SQL instead of a discriminator scan.
-- The two share zero query patterns: memberships query by `(client_id, status, end_date DESC)`, PT-packages query by `(client_id, status, sessions_remaining > 0)`. No composite index serves both.
-
-PT-package module shape:
-```
-app/modules/pt_packages/
-├── __init__.py
-├── router.py           — /api/v1/pt-package-plans/* (owner CRUD) +
-│                          /api/v1/pt-packages/* (sell, cancel, list, get) +
-│                          /api/v1/pt-sessions/* (record, list, get, ?cancel)
-├── service.py
-├── repository.py
-├── models.py           — PtPackagePlan, PtPackage, PtSession
-├── schemas.py
-├── constants.py        — PT-package status transitions matrix + error codes
-```
-
-Why fold PT-sessions into the same module rather than a 4th `pt_sessions/`:
-- Sessions cannot exist without a parent PT-package; balance decrement is one transaction; the only cross-module reference is `trainer_id` (Protocol slot).
-- v1.2 lesson from `memberships/` containing both `membership_plans` and `memberships` (two ORM types, two routers, one service file): one module per *bounded context*, not per table.
-
-### Summary — new modules: 3
-| Module | Tables | Routers |
-|---|---|---|
-| `trainers` | `trainers` | 1 |
-| `payments` | `payments` (+ refund as a row or separate table — see below) | 1–2 |
-| `pt_packages` | `pt_package_plans`, `pt_packages`, `pt_sessions` | 3 |
-
-Module count goes from 4 (auth, clients, memberships, visits) → 7. Still well within "modular monolith" scope.
-
-## Database migration plan
-
-Existing migration chain ends at `0010_notifications.py`. v1.4 adds **migrations 0011 through 0015** in this order (each one self-contained; later ones reference earlier FKs):
-
-### 0011_trainers.py — Trainers catalog
-```sql
-CREATE TABLE trainers (
-  id UUID PRIMARY KEY,
-  full_name        VARCHAR(120) NOT NULL,
-  phone            VARCHAR(32)  NULL,       -- E.164 if present; nullable per scope
-  active           BOOLEAN NOT NULL DEFAULT true,
-  notes            TEXT NULL,
-  created_at, updated_at, deleted_at         -- standard mixins
-);
-CREATE UNIQUE INDEX uq_trainers_phone_alive
-  ON trainers (phone) WHERE deleted_at IS NULL AND phone IS NOT NULL;
--- Mirrors clients soft-delete partial-unique pattern (Phase 8).
-```
-
-### 0012_payments.py — Payment ledger + refund
-**One table, refunds are rows that point at parents** (chosen over two tables):
+### `trainer_availability_slots`
 
 ```sql
-CREATE TABLE payments (
-  id UUID PRIMARY KEY,
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
-  subject_kind VARCHAR(16) NOT NULL,        -- 'membership' | 'pt_package' | 'refund'
-  subject_id   UUID NOT NULL,               -- membership.id OR pt_package.id OR original payment.id
-  amount_kopecks BIGINT NOT NULL,            -- positive on sale; negative on refund row
-  method VARCHAR(16) NOT NULL DEFAULT 'cash', -- forward-compat enum: 'cash' | 'yookassa' (v1.6) | 'card_offline'
-  received_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  refund_of UUID NULL REFERENCES payments(id) ON DELETE RESTRICT,
-                                             -- set on refund rows; one-to-one logical link
-  refund_reason TEXT NULL,
-  created_at, updated_at                     -- (no soft-delete; ledger is append-only)
-  CONSTRAINT ck_payments_subject_kind CHECK (subject_kind IN ('membership','pt_package','refund')),
-  CONSTRAINT ck_payments_amount_sign  CHECK (
-    (subject_kind = 'refund' AND amount_kopecks < 0) OR
-    (subject_kind != 'refund' AND amount_kopecks > 0)
-  ),
-  CONSTRAINT ck_payments_refund_link CHECK (
-    (subject_kind = 'refund') = (refund_of IS NOT NULL)
-  )
+CREATE TABLE trainer_availability_slots (
+  id                  UUID PRIMARY KEY,              -- UUIDPkMixin
+  trainer_id          UUID NOT NULL REFERENCES trainers(id) ON DELETE RESTRICT,
+  start_time          TIMESTAMPTZ NOT NULL,
+  end_time            TIMESTAMPTZ NOT NULL,
+  status              VARCHAR(16) NOT NULL DEFAULT 'available',
+  recurrence_rule     TEXT NULL,                     -- RRULE string; NULL = one-off
+  created_by_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_at          TIMESTAMPTZ NOT NULL,          -- TimestampMixin
+  updated_at          TIMESTAMPTZ NOT NULL,
+  deleted_at          TIMESTAMPTZ NULL,              -- SoftDeleteMixin
+  CONSTRAINT ck_trainer_availability_slots_status
+    CHECK (status IN ('available','booked','cancelled'))
 );
-CREATE INDEX ix_payments_client_id_received_at ON payments (client_id, received_at DESC);
-CREATE INDEX ix_payments_subject_kind_subject_id ON payments (subject_kind, subject_id);
-CREATE UNIQUE INDEX uq_payments_refund_of ON payments (refund_of) WHERE refund_of IS NOT NULL;
--- one refund per original payment; reattempts must replace, not stack
+CREATE INDEX ix_trainer_availability_slots_trainer_id_start_time
+  ON trainer_availability_slots (trainer_id, start_time)
+  WHERE deleted_at IS NULL;
+CREATE INDEX ix_trainer_availability_slots_available
+  ON trainer_availability_slots (start_time)
+  WHERE status = 'available' AND deleted_at IS NULL;
 ```
 
-Rationale for one-table:
-- Refund is a payment in the bookkeeping sense (negative cash event). Two tables would split a query like "show me all the cash flow on this client" into a `UNION`.
-- The `subject_kind = 'refund'` + `refund_of` CHECK is the schema-level integrity, not app-layer.
-- Matches v1.3 lesson: discriminated unions guarded by CHECKs are clearer than parallel tables.
+**Soft-delete rationale:** `bookings.slot_id` is `ON DELETE RESTRICT`. A slot cannot be physically deleted while any booking points to it. Soft-delete lets the UI filter `WHERE deleted_at IS NULL` while preserving the FK anchor for audit reads. Mirrors `membership_plans` discipline.
 
-### 0013_pt_package_plans.py
+**Status transitions (declarative constant `SLOT_STATUS_TRANSITIONS`):**
+- `available → booked` — set atomically in the same UoW as the booking INSERT
+- `available → cancelled` — owner/reception cancels before any booking exists
+- `booked → available` — booking cancelled; slot restored for rebooking
+- `booked → completed` — terminal; set when associated booking completes
+
+**`recurrence_rule`:** Stores an RRULE string. `schedule.service.publish_slot` expands a recurring rule into individual `trainer_availability_slots` rows up to a configurable horizon (e.g. 60 days). The stored rule is display metadata, not live scheduling logic. This avoids a separate recurrence-expansion service and keeps the query model simple: every API consumer always reads individual slot rows.
+
+---
+
+### `bookings`
+
 ```sql
-CREATE TABLE pt_package_plans (
-  id UUID PRIMARY KEY,
-  name VARCHAR(120) NOT NULL,
-  session_count INTEGER NOT NULL,            -- e.g. 10 sessions
-  price_kopecks BIGINT NOT NULL,
-  validity_days INTEGER NULL,                -- optional expiry; NULL = never
-  active BOOLEAN NOT NULL DEFAULT true,
-  created_at, updated_at, deleted_at
-  CONSTRAINT ck_pt_package_plans_session_count_positive CHECK (session_count > 0),
-  CONSTRAINT ck_pt_package_plans_price_kopecks_nonneg   CHECK (price_kopecks >= 0),
-  CONSTRAINT ck_pt_package_plans_validity_days_positive CHECK (validity_days IS NULL OR validity_days > 0)
+CREATE TABLE bookings (
+  id                        UUID PRIMARY KEY,        -- UUIDPkMixin
+  slot_id                   UUID NOT NULL REFERENCES trainer_availability_slots(id) ON DELETE RESTRICT,
+  client_id                 UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
+  pt_package_id             UUID NOT NULL REFERENCES pt_packages(id) ON DELETE RESTRICT,
+  status                    VARCHAR(16) NOT NULL DEFAULT 'confirmed',
+  cancelled_at              TIMESTAMPTZ NULL,
+  cancel_reason             TEXT NULL,
+  no_show_at                TIMESTAMPTZ NULL,
+  completed_at              TIMESTAMPTZ NULL,
+  created_by_user_id        UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_at                TIMESTAMPTZ NOT NULL,    -- TimestampMixin
+  updated_at                TIMESTAMPTZ NOT NULL,
+  -- mandatory snapshot fields (v1.2 discipline: snapshot pricing)
+  trainer_name_snapshot     TEXT NOT NULL,
+  slot_start_time_snapshot  TIMESTAMPTZ NOT NULL,
+  slot_end_time_snapshot    TIMESTAMPTZ NOT NULL,
+  CONSTRAINT ck_bookings_status
+    CHECK (status IN ('confirmed','cancelled','no_show','completed')),
+  CONSTRAINT ck_bookings_cancel_reason_requires_cancelled_at
+    CHECK (cancel_reason IS NULL OR cancelled_at IS NOT NULL)
 );
-CREATE UNIQUE INDEX uq_pt_package_plans_name_alive
-  ON pt_package_plans (lower(name)) WHERE deleted_at IS NULL;
--- Mirrors uq_membership_plans_name_alive (Phase 16).
+-- Race guard: only one confirmed booking per slot
+CREATE UNIQUE INDEX uq_bookings_slot_confirmed
+  ON bookings (slot_id) WHERE status = 'confirmed';
 ```
 
-### 0014_pt_packages.py
+**Partial UNIQUE `(slot_id) WHERE status='confirmed'`** is the DB-level race guard for concurrent booking attempts. Two simultaneous POSTs for the same slot: one wins the INSERT, the other gets `IntegrityError`. The service catches the constraint name `uq_bookings_slot_confirmed` and translates to 409 `slot_already_booked`. This mirrors three prior patterns: `(membership_id) WHERE ended_at IS NULL` (v1.3 freeze), `(client_id) WHERE status='active'` for `pt_packages` (v1.4), and `(refund_of) WHERE refund_of IS NOT NULL` for payments (v1.4).
+
+**Snapshot fields:** captured at booking time from the slot row. `trainer_name_snapshot` ensures historical display integrity if the trainer is later renamed or deactivated. `slot_start/end_time_snapshot` ensures the booking summary remains accurate even if the slot row is soft-deleted. Mirrors `trainer_name_snapshot` in `pt_sessions` (v1.4 B-05).
+
+**No `pt_package` snapshot fields on `bookings`:** the FK to `pt_packages` is sufficient — `pt_packages` already carries its own full snapshot suite from Phase 33. No double-snapshot needed.
+
+---
+
+### `pt_sessions` — ALTER (new `booking_id` column)
+
 ```sql
-CREATE TABLE pt_packages (
-  id UUID PRIMARY KEY,
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
-  plan_id   UUID NOT NULL REFERENCES pt_package_plans(id) ON DELETE RESTRICT,
-  plan_name_snapshot     VARCHAR(120) NOT NULL,    -- mandatory snapshot pattern (v1.2 lesson)
-  session_count_snapshot INTEGER     NOT NULL,
-  price_kopecks_snapshot BIGINT      NOT NULL,
-  validity_days_snapshot INTEGER     NULL,
-  sessions_remaining     INTEGER     NOT NULL,     -- decremented per pt_session
-  start_date             DATE        NOT NULL,
-  end_date               DATE        NULL,         -- start + validity_days - 1; NULL if no expiry
-  status VARCHAR(16) NOT NULL DEFAULT 'active',
-  cancelled_at TIMESTAMPTZ NULL,
-  cancel_reason TEXT NULL,
-  paid_at TIMESTAMPTZ NULL,
-  notes TEXT NULL,
-  created_at, updated_at
-  CONSTRAINT ck_pt_packages_status CHECK (status IN ('active','exhausted','expired','cancelled')),
-  CONSTRAINT ck_pt_packages_sessions_remaining_nonneg CHECK (sessions_remaining >= 0),
-  CONSTRAINT ck_pt_packages_sessions_remaining_le_snapshot
-    CHECK (sessions_remaining <= session_count_snapshot)
-);
-CREATE INDEX ix_pt_packages_client_id_status_remaining
-  ON pt_packages (client_id, status, sessions_remaining DESC);
--- supports the active-PT-package resolver lookup
+ALTER TABLE pt_sessions
+  ADD COLUMN booking_id UUID NULL REFERENCES bookings(id) ON DELETE SET NULL;
 ```
 
-Status taxonomy (declarative constant, like `MEMBERSHIP_STATUS_TRANSITIONS`):
-```
-active → exhausted   (sessions_remaining hits 0)
-active → expired     (cron: end_date < today)
-active → cancelled   (operator refund)
-```
-No `frozen` for PT-packages in v1.4 (out of scope; PT-package freeze is a v1.5+ ask if at all).
+`ON DELETE SET NULL` rather than RESTRICT: a PT-session recorded as a walk-in (no booking) must still be allowed. `ON DELETE SET NULL` also means that if a booking row is ever cleaned up, historical sessions do not break. This is a non-destructive additive migration.
 
-### 0015_pt_sessions.py
-```sql
-CREATE TABLE pt_sessions (
-  id UUID PRIMARY KEY,
-  pt_package_id UUID NOT NULL REFERENCES pt_packages(id) ON DELETE RESTRICT,
-  client_id     UUID NOT NULL REFERENCES clients(id)     ON DELETE RESTRICT,
-                                            -- denormalised for fast client-history query (one JOIN avoided)
-  trainer_id    UUID NOT NULL REFERENCES trainers(id)    ON DELETE RESTRICT,
-  performed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  performed_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-                                            -- reception operator who logged the session
-  cancelled_at TIMESTAMPTZ NULL,             -- if reception mis-recorded; cancel restores balance
-  cancel_reason TEXT NULL,
-  notes TEXT NULL,
-  created_at, updated_at
-);
-CREATE INDEX ix_pt_sessions_client_id_performed_at ON pt_sessions (client_id, performed_at DESC);
-CREATE INDEX ix_pt_sessions_trainer_id_performed_at ON pt_sessions (trainer_id, performed_at DESC);
-CREATE INDEX ix_pt_sessions_pt_package_id ON pt_sessions (pt_package_id);
-```
+The `booking_id` field is added to `PtSessionCreateRequest` as `Optional[UUID]`. When non-NULL, `pt_sessions.service.record_pt_session` calls `complete_booking(session, booking_id)` via the Protocol slot after the atomic decrement succeeds, in the same UoW before `await session.commit()`.
 
-PT-session decrement is **two SQL statements in one UoW**: INSERT into `pt_sessions` + UPDATE `pt_packages SET sessions_remaining = sessions_remaining - 1 WHERE id = $1 AND sessions_remaining > 0` (returning-clause guarded — Postgres wins the race, not app-layer; this mirrors visits's DB-level `UNIQUE (client_id, gym_date)` discipline). Zero-decrement → 409 `pt_package_exhausted`.
+---
 
-### Out-of-band: status enum on `memberships` does **NOT** change
+## 3. Cross-Module Callbacks: Full Protocol Slot Inventory
 
-PT-packages live in a separate table → no need to extend `ck_memberships_status`. The `'pt_package'` discriminator never reaches the memberships taxonomy. This preserves Phase 17 / 24 status guard machinery intact.
+### Slots that already exist and are reused:
 
-## Cross-module callbacks (Protocol slots)
+| Slot | Function in `core/dependencies.py` | Used by | Already wired |
+|------|-------------------------------------|---------|---------------|
+| `get_active_pt_package` | `get_active_pt_package(session, client_id)` | `bookings.service` validates package before booking | Phase 33 — `app/main.py` only (not bot) |
+| `resolve_trainer_by_id` | `resolve_trainer_by_id(session, trainer_id)` | `schedule.service` validates trainer on slot publish | Phase 31 — `app/main.py` AND `telegram_bot.py` (double-wired) |
 
-Each callback lives in `app/core/dependencies.py` next to existing `register_user_loader` / `register_active_membership_resolver` / `register_client_by_telegram_resolver`. Each is registered exactly once in `app/main.py:create_app()` and re-registered in `app/workers/telegram_bot.py:main()` (the REG-29-03 lesson from v1.3 verification — both processes must register or one will silently fail).
+### New slots to add in `app/core/dependencies.py`:
 
-### Slot 4: `register_trainer_by_id_resolver` — consumed by PT-sessions
+**Slot: `SlotById` / `register_slot_resolver` / `get_slot_by_id`**
 
 ```python
-class TrainerRef(Protocol):
+class SlotById(Protocol):
     id: UUID
-    full_name: str
-    active: bool
-
-TrainerByIdResolver = Callable[[AsyncSession, UUID], Awaitable[TrainerRef | None]]
-```
-
-Used by `pt_packages.service.record_pt_session()` to validate `trainer_id` exists + is active. Production wiring: `trainers.service.resolve_trainer_by_id`. Without this, `pt_packages` would need to `from app.modules.trainers import ...` which violates `modules-independent`.
-
-### Slot 5: `register_payment_recorder` — consumed by memberships + pt_packages at sale time
-
-```python
-@dataclass
-class PaymentRecordRequest:
-    client_id: UUID
-    subject_kind: Literal['membership','pt_package']
-    subject_id: UUID
-    amount_kopecks: int
-    received_by_user_id: UUID
-
-PaymentRecorder = Callable[[AsyncSession, PaymentRecordRequest], Awaitable[UUID]]
-                  # returns the new payment.id
-```
-
-Used by `memberships.service.create_membership()` and `pt_packages.service.create_pt_package()` to atomically record the cash event in the same UoW as the sale. Production wiring: `payments.service.record_payment`. **Co-transactional discipline** (D-03 from Phase 8 audit): the caller owns the transaction; `record_payment` adds the row to the session and does not commit.
-
-### Slot 6: `register_payment_refunder` — consumed by memberships + pt_packages at cancel time
-
-```python
-PaymentRefunder = Callable[[AsyncSession, UUID, UUID, str | None], Awaitable[UUID]]
-                  # (session, subject_id, refunded_by_user_id, reason) -> refund_payment.id
-```
-
-Used by `memberships.service.cancel_membership()` (when initiated as a refund — see RBAC below) and `pt_packages.service.cancel_pt_package()` to insert the negative payment row. Looks up the original payment via `subject_kind + subject_id`, inserts the refund row, and (transactionally) cancels the parent.
-
-**Inverse direction (payments → memberships/pt_packages) is NOT needed:** the refund flow is initiated from the *subject*'s module (`memberships` or `pt_packages`), which calls `payments` to record. The refund endpoint surfaces *on the subject* (`POST /memberships/{id}/refund`, `POST /pt-packages/{id}/refund`) — not on payments. This matches reception's mental model ("refund this membership") and avoids `payments → memberships` dependency.
-
-### Slot 7: `register_active_pt_package_resolver` — consumed by pt_sessions logic + future reports
-
-```python
-class ActivePtPackage(Protocol):
-    id: UUID
-    client_id: UUID
-    sessions_remaining: int
     status: str
-    end_date: date | None
+    trainer_id: UUID
+    start_time: datetime
+    end_time: datetime
+    trainer_name_snapshot: str   # captured when slot is published
 
-ActivePtPackageResolver = Callable[[AsyncSession, UUID], Awaitable[ActivePtPackage | None]]
-                          # (session, client_id) -> first active package with sessions_remaining > 0
+SlotByIdResolver = Callable[[AsyncSession, UUID], Awaitable[SlotById | None]]
 ```
 
-Used by reception UI's "record PT-session" flow (find which package to decrement). Same pattern as `ActiveMembership` from Phase 17.
+- Consumer: `bookings.service.create_booking` — checks `slot.status == 'available'`
+- Failure mode: silent-None (mirrors `ActiveMembership`). Consumer raises 404 when None.
+- Wired from: `app/main.py` composition root AND `telegram_bot.py` (defensive double-wiring per REG-29-03 lesson — the bot's `/book` handler reaches `bookings.service` which calls this slot).
 
-### Composition-root wiring (`app/main.py`)
+**Slot: `BookingSlotRestorer` / `register_booking_slot_restorer` / `restore_slot_on_cancel`**
 
 ```python
-# After existing register_* calls in create_app():
-
-from app.modules.trainers import service as trainers_service
-from app.modules.payments import service as payments_service
-from app.modules.pt_packages import service as pt_packages_service
-
-register_trainer_by_id_resolver(trainers_service.resolve_trainer_by_id)
-register_payment_recorder(payments_service.record_payment)
-register_payment_refunder(payments_service.issue_refund)
-register_active_pt_package_resolver(pt_packages_service.resolve_active_pt_package_by_client)
+BookingSlotRestorer = Callable[[AsyncSession, UUID], Awaitable[None]]
+# (session, slot_id) -> None; flips slot status 'booked' → 'available'
 ```
 
-**Mirror in `app/workers/telegram_bot.py:main()` is NOT needed** in v1.4 — the bot does not record payments or PT-sessions. (Future v1.5+ Telegram self-PT-record would require the mirror.)
+- Consumer: `bookings.service.cancel_booking` — restores slot after booking cancel
+- Failure mode: defensive-raise. A missing restorer when cancelling a booking would permanently strand the slot in `booked` status.
+- Wired from: `app/main.py` composition root only (not bot — bot does not cancel bookings in v1.5).
 
-### Import-linter contracts: no changes needed
-
-The three existing contracts (`core ⊥ modules`, `modules-independent`, `integrations ⊥ modules`) hold without modification:
-- All new cross-module talk goes through `core/dependencies.py` Protocol slots, identical to v1.1/v1.2/v1.3.
-- `app/main.py` retains its single carve-out (it is outside `source_modules = app.core`).
-- The new modules `payments`, `trainers`, `pt_packages` are added to the `modules-independent` contract's modules list.
-
-Update needed in `apps/backend/.importlinter`:
-```ini
-[importlinter:contract:modules-independent]
-modules =
-    app.modules.auth
-    app.modules.clients
-    app.modules.memberships
-    app.modules.visits
-    app.modules.trainers     ; (was placeholder; now real)
-    app.modules.payments     ; NEW
-    app.modules.pt_packages  ; NEW
-    app.modules.schedule
-    app.modules.bookings
-    app.modules.billing
-    app.modules.notifications
-```
-
-## RBAC additions
-
-### New `Action` enum values (`app/core/permissions.py`)
-
-Existing: `VIEW, CREATE, EDIT, DELETE, REFUND, CANCEL, CHECK_IN`.
-
-**No new `Action` values needed.**
-- `REFUND` already exists (was previously paired with `FINANCE` for owner-only owner-view). Reuse it for `(REFUND, MEMBERSHIPS)` and `(REFUND, PT_PACKAGES)`.
-- Decrement of a PT-session is `(CREATE, PT_SESSIONS)`. Mis-record cancel is `(CANCEL, PT_SESSIONS)`.
-- Trainers CRUD uses standard `CREATE/EDIT/DELETE/VIEW`.
-
-### New `Resource` enum values
+**Slot: `BookingCompleter` / `register_booking_completer` / `complete_booking_by_pt_session`**
 
 ```python
-class Resource(StrEnum):
-    ...
-    TRAINERS         = "trainers"
-    PAYMENTS         = "payments"
-    PT_PACKAGE_PLANS = "pt-package-plans"   # kebab on wire
-    PT_PACKAGES      = "pt-packages"
-    PT_SESSIONS      = "pt-sessions"
+BookingCompleter = Callable[[AsyncSession, UUID], Awaitable[None]]
+# (session, booking_id) -> None; sets status='completed', completed_at=now()
 ```
 
-### `OWNER_ONLY` additions (must mirror byte-for-byte in `apps/admin-web/src/shared/session/can.ts`)
+- Consumer: `pt_sessions.service.record_pt_session` — when `booking_id` is provided
+- Failure mode: defensive-raise (mirrors `get_payment_recorder`). Recording a PT-session against a non-existent or wrongly-registered completer is a programmer error, not a recoverable state.
+- Wired from: `app/main.py` composition root only (not bot — bot does not record PT-sessions).
+
+---
+
+## 4. Composition Root Wiring (`app/main.py`)
+
+Additions follow the established pattern: local imports inside `create_app()` body, after existing Phase 33 pt_packages wiring, before `app.include_router(api)`.
 
 ```python
-# Trainers — owner-only catalog (mirrors membership-plans pattern from v1.2)
-(Action.VIEW,   Resource.TRAINERS),
-(Action.CREATE, Resource.TRAINERS),
-(Action.EDIT,   Resource.TRAINERS),
-(Action.DELETE, Resource.TRAINERS),
+# Phase 38 — schedule module Protocol slots
+from app.modules.schedule import service as schedule_service
+register_slot_resolver(schedule_service.resolve_slot_by_id)
+register_booking_slot_restorer(schedule_service.restore_slot_to_available)
 
-# PT-package plans — owner-only catalog (mirrors membership-plans)
-(Action.VIEW,   Resource.PT_PACKAGE_PLANS),
-(Action.CREATE, Resource.PT_PACKAGE_PLANS),
-(Action.EDIT,   Resource.PT_PACKAGE_PLANS),
-(Action.DELETE, Resource.PT_PACKAGE_PLANS),
-
-# Payments — reception writes (sale + refund), owner reads
-# Reception RETAINS (CREATE, PAYMENTS) — not listed here.
-# Reception RETAINS (REFUND, MEMBERSHIPS) and (REFUND, PT_PACKAGES) — per scope: reception can refund without owner approval
-(Action.VIEW, Resource.PAYMENTS),    # history is owner-only (finance-adjacent)
-
-# PT-packages instances — same shape as MEMBERSHIPS:
-# Reception RETAINS (CREATE, PT_PACKAGES) and (CREATE, PT_SESSIONS).
-(Action.CANCEL, Resource.PT_PACKAGES),
-(Action.DELETE, Resource.PT_PACKAGES),
-(Action.CANCEL, Resource.PT_SESSIONS),   # mis-record cancel = owner-only
+# Phase 39 — bookings module Protocol slot
+from app.modules.bookings import service as bookings_service
+register_booking_completer(bookings_service.complete_booking)
 ```
 
-**Open question deferred to discuss-phase:** the milestone goal text says "ресепшен сам без owner approval" for refund — so `(REFUND, MEMBERSHIPS)` is **NOT** in OWNER_ONLY. But `(VIEW, PAYMENTS)` is owner-only because viewing the full ledger is a finance surface. Confirm with operator.
+**Order rationale:** `schedule` slots must be registered before `bookings` slot because in tests that override the slot resolver via `create_app()`, the bookings stub may itself call `get_slot_by_id` — so the slot resolver must already be in place when `register_booking_completer` fires.
 
-`OWNER_ONLY` grows from 15 entries → ~26 entries.
-
-### Three-way RBAC parity gate
-
-Phase 6 TEST-06 asserts `apps/backend OWNER_ONLY` set-equals `apps/admin-web can.ts OWNER_ONLY` set-equals `packages/api-client` if it surfaces any. All new entries must land in **both** files in the same commit.
-
-## LOCKED_AUDIT_EVENTS additions
-
-Pre-register the full v1.4 frozenset extension in the foundations phase (mirrors v1.3 Phase 24 INFRA-15 / D-24-18 — register events BEFORE callsites land, so all subsequent phases pass CI from their first commit).
-
-Add to `apps/backend/app/core/audit.py` `LOCKED_AUDIT_EVENTS`:
+**Bot worker parity (REG-29-03 discipline):** `app/workers/telegram_bot.py:main()` must also register:
 
 ```python
-# v1.4 — Trainers (Phase X1)
-("trainer_created",       "trainer"),
-("trainer_updated",       "trainer"),
-("trainer_deactivated",   "trainer"),   # soft-delete (active=false) — chose "deactivated" over "deleted" to match domain language
-("trainer_reactivated",   "trainer"),   # owner toggle active=false → true
-
-# v1.4 — Payments (Phase X2)
-("payment_recorded",      "payment"),   # cash sale
-("refund_issued",         "payment"),   # negative-amount payment row inserted
-# NOTE: payment_recorded fires from BOTH memberships sale AND pt_packages sale —
-# `subject_kind` payload discriminates. Single audit verb, payload differentiates.
-
-# v1.4 — Memberships refund (Phase X2 — touches memberships state via refund)
-("membership_refunded",   "membership"),  # distinct from membership_cancelled:
-                                          # refund cancels + reverses payment.
-                                          # cancelled (existing) does NOT reverse payment.
-
-# v1.4 — PT-package plans (Phase X3)
-("pt_package_plan_created",   "pt_package_plan"),
-("pt_package_plan_updated",   "pt_package_plan"),
-("pt_package_plan_archived",  "pt_package_plan"),
-
-# v1.4 — PT-packages (Phase X3)
-("pt_package_sold",        "pt_package"),
-("pt_package_cancelled",   "pt_package"),
-("pt_package_refunded",    "pt_package"),
-("pt_package_exhausted",   "pt_package"),   # sessions_remaining hit 0 (state transition)
-("pt_package_expired",     "pt_package"),   # ARQ cron (if validity_days set)
-
-# v1.4 — PT-sessions (Phase X4)
-("pt_session_recorded",    "pt_session"),
-("pt_session_cancelled",   "pt_session"),   # mis-record reversal; restores balance
-
-# Total: 16 new entries → LOCKED_AUDIT_EVENTS goes from 34 → 50
+from app.modules.schedule import service as schedule_service
+register_slot_resolver(schedule_service.resolve_slot_by_id)
 ```
 
-Decision notes:
-- **`membership_refunded` ≠ `membership_cancelled`**: cancel (existing v1.2) is operator-initiated state change with no money implication. Refund (new v1.4) is cancel + reverse-payment. Two distinct verbs so audit grep yields clean revenue numbers.
-- **No `pt_package_freezing` events** — freeze is out of scope for v1.4.
-- **No `payment_voided`** — refund is the only reverse path; we never delete or "void" a row. The append-only ledger discipline is the audit guarantee.
-- Same AST literal-only gate (Phase 15 INFRA-11) applies — every `audit.emit("...", resource_type="...")` callsite must use string literals.
+The `/book` handler calls `bookings.service` via `HandlerContext.bookings_service`; `bookings.service.create_booking` internally calls `get_slot_by_id` from `core.dependencies`. Without this registration in the bot worker process, every bot `/book` attempt silently returns "slot not found". This is the exact failure mode of REG-29-03 (v1.3): `register_active_membership_resolver` missing in the bot worker made `/checkin` silently fail.
 
-## Frontend admin-web structure
+`register_booking_completer` is NOT registered in the bot worker — the bot does not record PT-sessions, so `complete_booking_by_pt_session` is never called in that process. Mirrors the D-32-14 payment-recorder discipline.
 
-Mirror module/route boundaries on the frontend to keep ESLint `import/no-restricted-paths` consistent.
+**ARQ worker `mark_no_show_bookings`:** add to both `WorkerSettings.functions` and `WorkerSettings.cron_jobs`. The existing `on_startup` cron-resolution invariant assertion (`assert all(c.coroutine.__name__ in function_names for c in cron_jobs)`) will catch any mismatch at worker boot — no separate guard needed.
 
-### New top-level routes (TanStack file-based)
-```
-src/routes/
-├── trainers.tsx                       — list (owner-only beforeLoad)
-├── trainers.$trainerId.tsx            — detail + edit (owner-only)
-├── pt-package-plans.tsx               — owner-only catalog (mirrors membership-plans)
-├── pt-package-plans.$planId.tsx
-├── pt-packages.tsx                    — list (reception + owner)
-├── pt-packages.$ptPackageId.tsx       — detail with balance + session history
-├── payments.tsx                       — owner-only history page
+---
+
+## 5. RBAC Additions
+
+### New `Resource` enum entries:
+
+```python
+SCHEDULE_SLOTS = "schedule-slots"   # kebab, mirrors MEMBERSHIP_PLANS / PT_PACKAGES
+BOOKINGS = "bookings"
 ```
 
-### Modified routes / flows
-- `/memberships` sale form (existing) — add "payment received" section: amount (pre-filled from snapshot price, editable for cash-discount cases) + "received by" (auto-set to current user). One TanStack mutation, two co-transactional inserts on backend.
-- `/memberships/$membershipId` detail — add **Refund button** (reception or owner per scope). Confirm dialog with reason field. Add **payments section** showing the original + any refund rows.
-- `/clients/$clientId` — extend Pattern α loader to fan into 5 ensureQueryData calls (clients, memberships, visits, pt-packages, payments). ESLint `no-restricted-paths` updated to allow `routes/clients` to import from `features/pt-packages` + `features/payments` per same Pattern α carve-out.
+Do NOT fold these under `TRAINERS` or `PT_PACKAGES`. Trainers is a catalog; slots and bookings have different access semantics (e.g., reception cannot publish slots but can create bookings).
 
-### New shared primitives
-- `PaymentBadge` (semantic colors via `bg-success` token for sale, `bg-warning` for refunded) — extends `StatusBadge` family.
-- `PtPackageStatusBadge` (4 variants: active / exhausted / expired / cancelled) — mirrors v1.3 `StatusBadge`.
+### `Action` enum: no new values needed
 
-### Mock services
-- `mock/trainers.ts`, `mock/payments.ts`, `mock/pt-packages.ts` — full parity with backend service contracts.
-- `mock/memberships.ts` — extend `createMembership` to optionally accept `payment` parameter, returning `{membership, payment}`. Wire to existing sale flow.
-- v1.3 deferred tech-debt: `mock/memberships.ts ?status=` filter parity — land in foundations phase.
+Map to existing:
+- Publish slot: `(Action.CREATE, Resource.SCHEDULE_SLOTS)` — owner-only
+- View/list slots: `(Action.VIEW, Resource.SCHEDULE_SLOTS)` — both roles (reception needs picker)
+- Cancel slot: `(Action.CANCEL, Resource.SCHEDULE_SLOTS)` — owner-only
+- Create booking: `(Action.CREATE, Resource.BOOKINGS)` — both roles
+- Cancel booking: `(Action.CANCEL, Resource.BOOKINGS)` — both roles, time-window enforced at service layer (reception ≤24h, owner anytime — identical to B-12 PT-sessions pattern; `(CANCEL, BOOKINGS)` is NOT in `OWNER_ONLY`)
+- View bookings: `(Action.VIEW, Resource.BOOKINGS)` — both roles
 
-### OpenAPI drift gate refresh
-Single atomic regen at end of v1.4 (mirrors Phase 28 + Phase 21): `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` byte-stable, CI `git diff --exit-code` on both. Adds typed paths for:
-- `/trainers/*`, `/payments/*`, `/pt-package-plans/*`, `/pt-packages/*`, `/pt-sessions/*`
-- Extended `MembershipResponse` if it carries `latestPaymentId` (decision deferred — recommend NO, fetch separately, keep `MembershipResponse` stable).
+### `OWNER_ONLY` additions:
 
-## Suggested phase build order
+```python
+(Action.CREATE, Resource.SCHEDULE_SLOTS),
+(Action.CANCEL, Resource.SCHEDULE_SLOTS),
+# (Action.VIEW, Resource.SCHEDULE_SLOTS) is NOT owner-only
+# (Action.CANCEL, Resource.BOOKINGS) is NOT owner-only — same as B-12 PT-sessions
+```
 
-**Recommended order (8 phases for milestone v1.4):**
+The `(CANCEL, BOOKINGS)` NOT being in `OWNER_ONLY` mirrors Phase 34 D-34-09a exactly: `(CANCEL, PT_SESSIONS)` was removed from `OWNER_ONLY` because reception has a 24h cancel window. The time gate is enforced in `bookings.service.cancel_booking` via `cancel_window_expired` 403, not via RBAC.
 
-### Phase 30 — Foundations (audit, RBAC, importlinter, deferred mock parity)
-- LOCKED_AUDIT_EVENTS extension (all 16 new pairs locked up-front per v1.3 lesson).
-- `Resource` enum values added.
-- `OWNER_ONLY` entries added (~11 new) — three-way parity assertion runs.
-- `.importlinter` modules-independent list extended.
-- v1.3 deferred mock-mode `?status=` filter parity closed.
-- No new tables yet; no new endpoints. Just the contract bedrock.
+**Three-way parity note:** admin-web is frozen at v1.3. The parity test (`tests/unit/test_rbac_parity.py`) that compares backend `OWNER_ONLY` to `apps/admin-web/src/shared/session/can.ts` must be updated: add a comment documenting that v1.5 RBAC entries have no admin-web mirror (admin-web frozen per 2026-05-15 pivot). The test itself should only assert against the admin-web resources that existed before the freeze. New v1.5 resources (`SCHEDULE_SLOTS`, `BOOKINGS`) are backend-only until v2.0 Frontend Integration.
 
-### Phase 31 — Trainers module
-- Migration 0011_trainers.
-- `app/modules/trainers/` full module: 4 CRUD endpoints owner-only + 1 `GET /trainers?active=true` for reception filter.
-- Protocol slot 4 (`register_trainer_by_id_resolver`) added.
-- Wired in `app/main.py` AND `app/workers/telegram_bot.py:main()` (defensive — REG-29-03 lesson, even though bot doesn't use it yet).
-- Frontend `/trainers` page + mock service.
-- Smallest scope → validates the "new module" template before bigger phases.
+---
 
-### Phase 32 — Payment ledger + Membership sale-with-payment + Membership refund
-- Migration 0012_payments.
-- `app/modules/payments/` module: list/get + internal `record_payment` / `issue_refund` functions.
-- Protocol slots 5 + 6 (`register_payment_recorder`, `register_payment_refunder`).
-- Modify `memberships.service.create_membership` to call payment recorder in same UoW.
-- New endpoint `POST /memberships/{id}/refund` (separate from cancel — refund cascades to payments).
-- Audit: `payment_recorded`, `refund_issued`, `membership_refunded` callsites land.
-- Frontend: sale form extension, refund button + dialog.
-- **Why before PT-packages:** PT-package sale-with-payment reuses the recorder slot. Wrong order = rework.
+## 6. import-linter Contract Changes
 
-### Phase 33 — PT-package plans + PT-package instances (no sessions yet)
-- Migrations 0013_pt_package_plans + 0014_pt_packages.
-- `app/modules/pt_packages/` — plans router + packages router (sell, list, get, cancel, refund). Reuses payment recorder + refunder slots from Phase 32.
-- Protocol slot 7 (`register_active_pt_package_resolver`) — registered but not yet consumed.
-- Audit: `pt_package_plan_*`, `pt_package_sold`, `pt_package_cancelled`, `pt_package_refunded`, `pt_package_expired` callsites.
-- Frontend: `/pt-package-plans` (owner) + `/pt-packages` list + detail (no session history yet).
-- ARQ cron `expire_pt_packages` at 06:25 MSK (10-min stagger after expiring-notifications; pattern from v1.2 D-cron-ordering).
+`schedule` and `bookings` are already listed in `.importlinter` under `[importlinter:contract:modules-independent]` (verified in the live `.importlinter` file). No additions are needed mechanically.
 
-### Phase 34 — PT-session recording
-- Migration 0015_pt_sessions.
-- `pt_packages.service.record_pt_session` + cancel — DB-level race-proof decrement (UPDATE ... WHERE sessions_remaining > 0 RETURNING ...).
-- Consumes Slot 4 (trainer resolver) + Slot 7 (active PT-package resolver).
-- New endpoints: `POST /pt-sessions` + `POST /pt-sessions/{id}/cancel` (owner-only) + `GET /pt-sessions?clientId=` + `GET /pt-sessions/{id}`.
-- Audit: `pt_session_recorded`, `pt_session_cancelled` callsites.
-- Frontend: "record PT-session" panel on PT-package detail; session history list.
+Confirm with `uv run lint-imports` after adding module content in Phases 38-39 to verify no accidental direct imports between `schedule` and `bookings`.
 
-### Phase 35 — OpenAPI drift gate refresh + admin-web full wiring sweep
-- Regenerate `openapi.json` + `schema.d.ts` (single atomic commit).
-- admin-web: full http-mode pass on all new routes; `VITE_API_MODE=http` validation; mock-parity tests.
-- New TanStack Query mutation hooks (sell-with-payment optimistic, refund non-optimistic + navigate, record-PT-session optimistic with rollback on decrement failure).
-- Three-way RBAC parity assertion re-run.
+No narrative exceptions are needed. The three Protocol slots (`get_slot_by_id`, `restore_slot_on_cancel`, `complete_booking_by_pt_session`) all live in `app.core.dependencies`, which `modules-independent` does not constrain (the contract's `source_modules` is `app.modules.*`, not `app.core`).
 
-### Phase 36 — Milestone verification (replicates Phase 29 v1.3 pattern)
-- Operator runs cross-phase human scenarios:
-  1. Sell membership with cash → see payment row on client card.
-  2. Refund the membership → ledger shows two rows, membership status flips to refunded/cancelled.
-  3. Sell PT-package → record 3 sessions with different trainers → balance ticks down.
-  4. Refund half-used PT-package → confirm partial-refund policy (deferred discuss-phase: full vs prorated).
-  5. Owner-only gate checks (reception → 403 on trainers CRUD, on PT-package plan CRUD).
-  6. Cron ordering: `expire_memberships 06:05` → `send_expiring_notifications 06:15` → `expire_pt_packages 06:25` all idempotent.
-- Live backend + Telegram sandbox.
-- Capture 6 CI gate evidence (no new gates added).
-- Operator sign-off in `milestones/v1.4-VERIFICATION-LOG.md`.
+---
 
-### Dependency-order rationale
-- **Trainers first** because PT-sessions reference trainers. (Cannot record a session without a trainer catalog.)
-- **Payments before PT-packages** because PT-package sale reuses the recorder slot; landing PT-packages first would force a second migration on the sale path.
-- **PT-package instances before PT-sessions** because sessions reference a package and decrement its counter; the instance schema and resolver must exist first.
-- **OpenAPI/admin-web sweep at the end**, not per-phase: one byte-stable regen avoids the per-phase drift-gate churn that bloated v1.2 / v1.3 phases.
-- **Foundations Phase 30 first** so all subsequent phases pass `LOCKED_AUDIT_EVENTS` + RBAC parity from their first commit (v1.3 INFRA-15 lesson).
+## 7. OpenAPI Surface
 
-## Open architectural questions for discuss-phase
+### New URL paths:
 
-1. **Refund — full or prorated?** For a 30-day membership cancelled on day 10, does the refund row equal full price or 2/3 of price? Scope text says "ресепшен возвращает деньги напрямую" — silent on amount. **Recommendation: full refund in v1.4** (matches "симуляция продажи без денег" → "симуляция возврата без денег"; pro-rata adds complexity that is not in scope; the operator can adjust the amount manually before confirming if the form allows an editable field). Confirm.
+```
+# Schedule module (trainer_availability_slots)
+POST   /api/v1/trainer-slots                        publish slot (owner-only)
+GET    /api/v1/trainer-slots                        list slots (both roles; ?trainer_id=, ?from=, ?to=, ?status=)
+GET    /api/v1/trainer-slots/{slot_id}              get slot detail (both roles)
+POST   /api/v1/trainer-slots/{slot_id}/cancel       cancel slot (owner-only)
 
-2. **Multiple payments per membership?** If a client pays half cash now + half later, is that two `payment_recorded` rows pointing at the same `subject_id` membership, or is the second one a separate type? **Recommendation: yes, allow multiple payment rows per `subject_id`** (the schema already supports it; no UNIQUE on `subject_id`). Sale flow inserts one row; future "add additional payment" UI is post-v1.4. Confirm operator wants this open or wants a UNIQUE constraint.
+# Bookings module
+POST   /api/v1/bookings                             create booking (both roles)
+GET    /api/v1/bookings                             list bookings (both roles; ?client_id=, ?trainer_id=, ?status=)
+GET    /api/v1/bookings/{booking_id}                get booking detail (both roles)
+POST   /api/v1/bookings/{booking_id}/cancel         cancel booking (both roles + 24h window)
+```
 
-3. **PT-session "cancel" or "delete"?** Phase 34 surface — when reception mis-records a session, is the row soft-cancelled (`cancelled_at` populated, balance restored) or hard-deleted? **Recommendation: soft-cancel** (audit trail, mirrors visits-style discipline). Owner-only per RBAC table above.
+### OpenAPI drift gate (Phase 40):
 
-4. **`(REFUND, MEMBERSHIPS)` / `(REFUND, PT_PACKAGES)` — reception or owner?** Milestone text is explicit: reception, without owner approval. But this is a notable departure from v1.2 where `(CANCEL, MEMBERSHIPS)` is owner-only. **Recommendation: confirm** — if reception can refund, can they also cancel-without-refund (i.e. avoid the payment reversal)? Or are cancel and refund now operationally the same action, with cancel-only being an owner-only escape hatch?
+Same byte-stable regen as Phase 35: `uv run python apps/backend/scripts/export_openapi.py && git diff --exit-code apps/backend/openapi.json`. `packages/api-client/src/schema.d.ts` regenerated. New `AssertNonNever` forward-guard assertions added to `packages/api-client/src/schema.contract.test.ts` for all new paths (v1.4 established 36 guards; v1.5 adds ~8 more for slot + booking paths).
 
-5. **Active-PT-package resolver tiebreak** — if a client has two active PT-packages (rare but possible if they buy two before exhausting the first), which one does the recorder decrement? **Recommendation: `start_date ASC, created_at DESC`** (same tiebreak as v1.3 memberships resolver — oldest live package consumed first, predictable FIFO). Confirm.
+---
 
-6. **Cron stagger for `expire_pt_packages`** — pick 06:25 MSK (10 min after expiring-notifications) for the same "no ordering races, all idempotent" rationale as v1.2 cron-ordering. Confirm no operator scheduling conflicts.
+## 8. Suggested Phase Decomposition
 
-7. **Telegram bot extension** — does v1.4 add any `/pt_packages` or `/payments` commands? **Recommendation: no.** Out of scope. Bot stays at `/start` + `/checkin`. Confirm.
+### Phase 37 — Foundations
 
-8. **Trainer phone E.164 validation** — reuse the `clients/` E.164 validator? **Recommendation: yes**, lift the helper to `app/core/` if not already there (clean opportunity surfaced by trainers module).
+**Goal:** extend shared contracts before any module code lands, so all subsequent phases pass CI from their first commit (v1.3 INFRA-15 / v1.4 Phase 30 lesson).
+
+Files modified (no new migrations):
+- `app/core/audit.py` — extend `LOCKED_AUDIT_EVENTS` with 5 new `(event, resource_type)` pairs:
+  - `("slot_published", "schedule_slot")`
+  - `("booking_created", "booking")`
+  - `("booking_cancelled", "booking")`
+  - `("booking_no_show", "booking")`
+  - `("booking_completed", "booking")`
+  - Count grows 53 → 58
+- `app/core/audit_payloads.py` — add 5 Pydantic schemas: `SlotPublishedPayload`, `BookingCreatedPayload`, `BookingCancelledPayload`, `BookingNoShowPayload`, `BookingCompletedPayload` (all with `model_config = ConfigDict(extra="forbid")`)
+- `app/core/permissions.py` — add `Resource.SCHEDULE_SLOTS`, `Resource.BOOKINGS`; extend `OWNER_ONLY` with `(CREATE, SCHEDULE_SLOTS)` + `(CANCEL, SCHEDULE_SLOTS)`
+- `app/core/dependencies.py` — add 3 new Protocol types + register/get functions: `SlotById` / `register_slot_resolver` / `get_slot_by_id`, `BookingSlotRestorer` / `register_booking_slot_restorer` / `restore_slot_on_cancel`, `BookingCompleter` / `register_booking_completer` / `complete_booking_by_pt_session`
+- `tests/unit/test_audit_taxonomy.py` — bump expected frozenset size from 53 to 58
+- `tests/unit/test_rbac_parity.py` — add comment documenting admin-web frozen at v1.3; new resources are backend-only
+
+---
+
+### Phase 38 — Schedule Module
+
+**Goal:** `trainer_availability_slots` table + slot CRUD (publish, list, cancel, get); register `resolve_slot_by_id` and `restore_slot_to_available` into composition root.
+
+Files created:
+- `app/modules/schedule/models.py` — `TrainerAvailabilitySlot` ORM (Base + UUIDPkMixin + TimestampMixin + SoftDeleteMixin)
+- `app/modules/schedule/schemas.py` — `SlotCreateRequest`, `SlotResponse`, `SlotListQuery` (camelCase via `BackendSchemaBase`)
+- `app/modules/schedule/repository.py` — `insert_slot`, `get_slot_by_id`, `list_slots`, `update_slot_status`
+- `app/modules/schedule/service.py` — `publish_slot`, `cancel_slot`, `get_slot`, `list_slots`, `resolve_slot_by_id`, `restore_slot_to_available`; `resolve_slot_by_id` is the concrete implementation for the Protocol slot
+- `app/modules/schedule/constants.py` — `SLOT_STATUS_TRANSITIONS` declarative map
+- `app/modules/schedule/router.py` — 4 endpoints, all with `Depends(require_permission(...))`
+- `alembic/versions/0016_trainer_availability_slots.py`
+
+Files modified:
+- `app/api/v1/router.py` — add `schedule_router` with prefix `"/trainer-slots"`, tags `["trainer-slots"]`
+- `app/main.py` — add `register_slot_resolver` + `register_booking_slot_restorer` calls (Phase 38 carve-out block)
+- `app/workers/telegram_bot.py` — add defensive `register_slot_resolver` (REG-29-03 pattern; bot will use it in Phase 40)
+
+Key invariants:
+- SVC001 commit-gate must pass: all write paths in `schedule.service` end with `await session.commit()`
+- `slot_published` audit event emitted on every successful `publish_slot`
+- `resolve_slot_by_id` satisfies the `SlotById` Protocol structurally (no DTO conversion)
+- `SLOT_STATUS_TRANSITIONS` is the single source of truth for allowed transitions (mirrors `MEMBERSHIP_STATUS_TRANSITIONS` and `PT_PACKAGE_STATUS_TRANSITIONS`)
+
+---
+
+### Phase 39 — Bookings Module
+
+**Goal:** `bookings` table + book/cancel flow + PT-package linkage + `pt_sessions` ALTER migration; register `complete_booking` into composition root; wire `pt_sessions.service` to call the completer.
+
+Files created:
+- `app/modules/bookings/models.py` — `Booking` ORM with partial UNIQUE `(slot_id) WHERE status='confirmed'`
+- `app/modules/bookings/schemas.py` — `BookingCreateRequest`, `BookingCancelRequest`, `BookingResponse`, `BookingListQuery`
+- `app/modules/bookings/repository.py` — `insert_booking`, `get_booking_by_id`, `list_bookings`, `update_booking_status`
+- `app/modules/bookings/service.py` — `create_booking`, `cancel_booking`, `complete_booking`, `get_booking`, `list_bookings`; `complete_booking` is the concrete implementation registered as the Protocol slot
+- `app/modules/bookings/constants.py` — `BOOKING_STATUS_TRANSITIONS`, `CANCEL_WINDOW_HOURS_RECEPTION = 24`
+- `app/modules/bookings/router.py` — 4 endpoints
+- `alembic/versions/0017_bookings.py` — creates `bookings` table
+- `alembic/versions/0018_pt_sessions_booking_id.py` — `ALTER TABLE pt_sessions ADD COLUMN booking_id UUID NULL REFERENCES bookings(id) ON DELETE SET NULL`
+
+Files modified:
+- `app/api/v1/router.py` — add `bookings_router` with prefix `"/bookings"`, tags `["bookings"]`
+- `app/main.py` — add `register_booking_completer(bookings_service.complete_booking)` (Phase 39 carve-out block)
+- `app/modules/pt_sessions/schemas.py` — add `booking_id: UUID | None = None` to `PtSessionCreateRequest`
+- `app/modules/pt_sessions/service.py` — in `record_pt_session`, after the atomic decrement succeeds: if `payload.booking_id is not None`, call `get_booking_completer()(session, payload.booking_id)` before `await session.commit()`
+- `app/modules/pt_sessions/models.py` — add `booking_id: Mapped[UUID | None]` column
+
+Key invariants:
+- Atomic slot transition: `bookings.service.create_booking` must INSERT booking AND UPDATE slot to `status='booked'` in a single UoW (single `await session.commit()` at the end) — no two-phase commit
+- `get_active_pt_package` Protocol slot consumed: validate `sessions_remaining > 0` before INSERT (no decrement at booking time — decrement remains on PT-session creation)
+- Partial UNIQUE race: `IntegrityError` on `uq_bookings_slot_confirmed` → caught by constraint-name discriminator → 409 `slot_already_booked`
+- `complete_booking` registered from `app/main.py` only (not bot worker)
+- SVC001 commit-gate passes for all `bookings.service` write paths
+- `create_booking` emits `("booking_created", "booking")`; `cancel_booking` emits `("booking_cancelled", "booking")`; `complete_booking` emits `("booking_completed", "booking")`
+
+---
+
+### Phase 40 — Telegram `/book` + no-show cron + OpenAPI drift refresh + Milestone Verification
+
+**Goal:** bot integration, automated no-show marking, byte-stable OpenAPI regen, operator sign-off.
+
+Files modified:
+- `app/integrations/telegram/handlers.py` — add `book_handler` function; extend `HandlerContext` NamedTuple with `bookings_service: ModuleType` field (mirrors `visits_service: ModuleType` pattern)
+- `app/workers/telegram_bot.py` — import `bookings_service`; add `HandlerContext.bookings_service=bookings_service`; register `/book` handler in `build_application` call
+- `app/workers/scheduled/mark_no_show_bookings.py` — new ARQ job: `SELECT bookings WHERE status='confirmed' AND slot.end_time < now() - interval '15 minutes'`; UPDATE to `status='no_show'`, emit `("booking_no_show", "booking")` per row; idempotent via the `WHERE status='confirmed'` predicate
+- `app/workers/__init__.py` — add `mark_no_show_bookings` to `WorkerSettings.functions` AND `WorkerSettings.cron_jobs` at 06:35 Europe/Moscow (10-min stagger after `expire_pt_packages` at 06:25)
+- `apps/backend/openapi.json` — regenerated byte-stably
+- `packages/api-client/src/schema.d.ts` — regenerated
+- `packages/api-client/src/schema.contract.test.ts` — new `AssertNonNever` forward-guards for all Phase 38-39 paths
+
+Key invariants:
+- Bot `/book` handler uses `type(exc).__name__` string-name dispatch for exceptions (integrations ⊥ modules forbids importing exception classes from `app.modules.bookings`)
+- No-show cron is idempotent: `WHERE status='confirmed'` is the SQL-level gate; `unique=True` in ARQ is defence-in-depth; mirrors `expire_memberships` pattern
+- `on_startup` cron-resolution `assert` catches `mark_no_show_bookings` missing from `functions` at worker boot
+
+---
+
+## Dependency Order Rationale
+
+**Foundations before modules:** audit events and Protocol slot registrations must exist before any callsite lands (v1.3 INFRA-15 / v1.4 Phase 30 lesson — ensures every subsequent phase passes CI from its first commit).
+
+**Schedule before Bookings:** `bookings.service.create_booking` consumes the `get_slot_by_id` Protocol slot; that slot's concrete implementation (`schedule.service.resolve_slot_by_id`) must exist before the bookings service can be tested end-to-end.
+
+**Bookings before Telegram `/book` and no-show cron:** the bot handler and the cron both call into `bookings.service`; the service and its table must exist first.
+
+**OpenAPI drift gate at Phase 40 end:** single atomic regen avoids per-phase drift-gate churn (v1.4 Phase 35 lesson). All new paths land in one regen commit.
+
+---
+
+## Component Boundaries: Integration Points With Existing Architecture
+
+| Existing Component | What Changes in v1.5 |
+|--------------------|----------------------|
+| `app/core/dependencies.py` | +3 Protocol types, +3 register functions, +3 get/accessor functions |
+| `app/core/audit.py` `LOCKED_AUDIT_EVENTS` | +5 `(event, resource_type)` pairs (53 → 58) |
+| `app/core/audit_payloads.py` | +5 Pydantic payload schemas; `AUDIT_PAYLOAD_SCHEMAS` registry +5 entries |
+| `app/core/permissions.py` | +2 `Resource` enum values; `OWNER_ONLY` +2 entries |
+| `app/main.py` | +2 import blocks, +3 `register_*` calls |
+| `app/workers/telegram_bot.py` | +1 import, +1 `register_slot_resolver` call, +1 `HandlerContext` field, +1 handler registration |
+| `app/workers/__init__.py` | +1 function in `functions`, +1 cron entry |
+| `app/modules/pt_sessions/service.py` | `record_pt_session` calls `complete_booking_by_pt_session` when `booking_id` non-NULL |
+| `app/modules/pt_sessions/models.py` | +`booking_id` column |
+| `app/modules/pt_sessions/schemas.py` | +`booking_id: UUID | None` on `PtSessionCreateRequest` |
+| `app/api/v1/router.py` | +2 router includes |
+
+---
+
+## Data Flow: Booking Creation (Happy Path)
+
+```
+POST /api/v1/bookings  { slotId, clientId, ptPackageId }
+    ↓
+bookings.router  →  require_permission(CREATE, BOOKINGS)
+    ↓
+bookings.service.create_booking(session, actor, payload)
+    │
+    ├─ 1. get_active_pt_package(session, clientId)       ← core.dependencies Protocol slot
+    │      None or sessions_remaining == 0  → 409
+    │
+    ├─ 2. get_slot_by_id(session, slotId)               ← core.dependencies Protocol slot
+    │      None → 404; status != 'available' → 409
+    │
+    ├─ 3. INSERT booking (status='confirmed',
+    │           slot_start_time_snapshot, slot_end_time_snapshot,
+    │           trainer_name_snapshot — all from slot row)
+    │    + UPDATE trainer_availability_slots SET status='booked' WHERE id=slotId
+    │      IntegrityError on uq_bookings_slot_confirmed → 409 slot_already_booked
+    │
+    ├─ 4. audit.emit("booking_created", "booking", ...)
+    │
+    └─ 5. await session.commit()   ← single commit owns both writes
+    ↓
+201 BookingResponse
+```
+
+## Data Flow: PT-Session Records a Booking Completion
+
+```
+POST /api/v1/pt-sessions  { ptPackageId, trainerId, performedAt, bookingId, ... }
+    ↓
+pt_sessions.service.record_pt_session(session, actor, payload)
+    │
+    ├─ ... existing v1.4 flow (validate trainer, validate package, atomic decrement)
+    │
+    ├─ if payload.booking_id is not None:
+    │      completer = get_booking_completer()           ← raises RuntimeError if unregistered
+    │      await completer(session, payload.booking_id)  ← bookings.service.complete_booking
+    │          UPDATE bookings SET status='completed', completed_at=now()
+    │              WHERE id=:id AND status='confirmed'
+    │          audit.emit("booking_completed", "booking", ...)
+    │          (no separate commit — caller owns txn per D-03)
+    │
+    └─ await session.commit()   ← single commit owns session + booking + decrement
+```
+
+---
 
 ## Sources
 
-- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — invariants, completed-milestone summaries, key-decisions table
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/.importlinter` — three contracts
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/main.py` — composition root, three Protocol registrations
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/dependencies.py` — Protocol slot patterns (lines 33–192)
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/permissions.py` — `Role`/`Action`/`Resource` enums, `OWNER_ONLY` frozenset
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/audit.py` — `LOCKED_AUDIT_EVENTS` frozenset + emit gate
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/memberships/router.py` + `models.py` + `service.py` — closest analog for plan + instance + lifecycle module
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/alembic/versions/` — 0001–0010 migration history
-- `/Users/andre/Workspace/Development/clubcore/apps/admin-web/src/shared/session/can.ts` — frontend RBAC mirror (parity contract)
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/workers/telegram_bot.py` — bot-process Protocol-registration mirror (REG-29-03 lesson)
+All findings are HIGH confidence — derived directly from reading live codebase files:
+
+- `apps/backend/app/core/dependencies.py` — Protocol slot pattern (7 existing slots)
+- `apps/backend/app/main.py` — composition root wiring order (9 register calls)
+- `apps/backend/app/core/audit.py` — `LOCKED_AUDIT_EVENTS` frozenset (53 pairs confirmed)
+- `apps/backend/app/core/audit_payloads.py` — `AUDIT_PAYLOAD_SCHEMAS` registry (17 schemas confirmed)
+- `apps/backend/app/core/permissions.py` — `OWNER_ONLY` frozenset (25 entries), `Resource`/`Action` enums
+- `apps/backend/app/.importlinter` — three contracts; `schedule` and `bookings` already listed in `modules-independent`
+- `apps/backend/app/workers/__init__.py` — `WorkerSettings`, cron-resolution invariant assertion
+- `apps/backend/app/workers/telegram_bot.py` — `HandlerContext` NamedTuple, REG-29-03 double-wiring
+- `apps/backend/app/integrations/telegram/handlers.py` — string-name dispatch pattern, `HandlerContext` usage
+- `apps/backend/app/modules/pt_sessions/models.py` — D-34-04a raw SQL cross-module pattern
+- `apps/backend/app/modules/pt_sessions/service.py` — `record_pt_session` structure
+- `apps/backend/app/modules/pt_packages/models.py` — partial UNIQUE pattern, snapshot field discipline
+- `.planning/PROJECT.md` — v1.5 goals, Key Decisions table, architectural constraints
+- `.planning/MILESTONES.md` — v1.4 Phase 30–36 foundations + verification patterns
