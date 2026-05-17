@@ -123,7 +123,21 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
   3. Two concurrent `POST /api/v1/bookings` requests for the same slot result in exactly one 201 and one 409 `slot_already_booked` (BOOK-02/03, BOOK-10); a single booking for a slot with `sessions_remaining = 0` returns 409 `pt_package_exhausted` (BOOK-04/05)
   4. `POST /api/v1/pt-packages/{id}/refund` returns 409 `outstanding_bookings_exist` when a confirmed booking against that package exists (PKG-03); `POST /api/v1/pt-sessions` with a `booking_id` atomically transitions the parent booking to `completed` in the same UoW as the session decrement (PKG-04/05)
   5. All booking and slot list endpoints (`GET /api/v1/bookings`, `GET /api/v1/trainer-slots`, `GET /api/v1/clients/{id}/bookings`) return paginated `{items, total, page, pageSize}` envelopes and honor their documented query filters (BOOK-07/08/09, SLOT-08)
-**Plans**: TBD
+**Plans**: 6 plans *(wave layout revised 2026-05-17 per plan-checker BLOCKER on 38-04 dependency_correctness — 38-04 moved from Wave 1 to Wave 3; see 38-CONTEXT.md §D-38-01 for rationale)*
+
+_Wave 1 (alone):_
+- [ ] 38-01-PLAN.md — schedule-module: Alembic 0016 + schedule/{models,repository,schemas,router}.py + real schedule/service.py publish/list/get/cancel (active-only) (SLOT-01..06, SLOT-08, SLOT-09)
+
+_Wave 2 (depends on 38-01):_
+- [ ] 38-02-PLAN.md — booking-core-create: Alembic 0017 (partial UNIQUE uq_bookings_slot_confirmed) + bookings/{models,repository,schemas,router}.py + real create_booking UoW + BOOK-TEST-01 race test (BOOK-01..05, BOOK-10)
+
+_Wave 3 (parallel after 38-02 — all three depend on bookings table + 0017 alembic revision; zero files_modified overlap):_
+- [ ] 38-03-PLAN.md — booking-cancel-and-list: cancel_booking (24h reception window) + slot-cancel booked->cancelled cascade + list/get endpoints (SLOT-07, BOOK-06..09)
+- [ ] 38-04-PLAN.md — pt-package-trainer-and-refund-guard: Alembic 0018 + trainer_id schema/service + refund outstanding-bookings guard (PKG-01, PKG-02, PKG-03)
+- [ ] 38-05-PLAN.md — pt-session-booking-completion: Alembic 0019 + booking_id schema/service + SELECT FOR UPDATE + completion via Protocol slot + PKG-06 no-revert (PKG-04, PKG-05, PKG-06)
+
+_Wave 4 (serial after all):_
+- [ ] 38-06-PLAN.md — svc001-and-importlinter-greens: CI gates + SVC001 + lint-imports + B-10 regression + optional DEFER-36-04-A sweep
 
 ### Phase 39: Notifications + Cron
 **Goal**: Clients receive Telegram DMs for booking confirmation and cancellation; overdue confirmed bookings are auto-marked no-show by cron at 23:10 MSK; 24-hour reminders are sent by cron at 06:35 MSK with idempotency enforcement
@@ -156,13 +170,13 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
-| 38. Schedule Module + Booking Core | 0/TBD | Not started | - |
+| 38. Schedule Module + Booking Core | 0/6 | Not started | - |
 | 39. Notifications + Cron | 0/TBD | Not started | - |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
 ---
 
-*Roadmap last updated: 2026-05-17 — Phase 37 plans created (5 plans, 11 requirements covered: INFRA-24..33 + DEBT-06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
+*Roadmap last updated: 2026-05-17 — Phase 38 plans created (6 plans, 25 requirements covered: SLOT-01..09 + BOOK-01..10 + PKG-01..06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*

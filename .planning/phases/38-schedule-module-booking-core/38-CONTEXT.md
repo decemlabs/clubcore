@@ -49,11 +49,13 @@ Phase 38 ships as **6 commit-sized plans** (mirroring v1.4 Phase 32/33 cadence).
 
 **Why 6 plans (not 4):** plans 38-04 + 38-05 touch existing v1.4 modules (`pt_packages`, `pt_sessions`) and have different test-surface ownership than the new module plans 38-01..38-03. Splitting keeps each commit reviewable and bisectable — mirrors v1.4 Phase 33 (3 plans for sale + refund) + Phase 34 (3 plans for session-record) discipline rather than v1.4 Phase 32's 3-plan condensed style.
 
-**Parallel-eligibility:** 38-04 / 38-05 are independent of 38-01..38-03 (different modules). 38-06 must be last (depends on all prior). Recommended wave layout for `/gsd-execute-phase`:
-- Wave 1 (parallel): 38-01, 38-04
-- Wave 2 (parallel after 38-01): 38-02
-- Wave 3 (parallel after 38-02 + 38-05 dep): 38-03, 38-05
-- Wave 4 (serial after all): 38-06
+**Parallel-eligibility (REVISED 2026-05-17 per plan-checker BLOCKER on 38-04 dependency_correctness — see 38-04 Task 1 'Decision' block for rationale):** 38-04 was originally placed in Wave 1 parallel with 38-01 on the assumption that pt_packages-module work was independent of the bookings table. The checker correctly identified that 38-04's Alembic 0018 migration has `down_revision = "0017_bookings"` (created by 38-02 in Wave 2), so 38-04 cannot `alembic upgrade head` until 38-02 lands. Additionally, 38-04 Task 3's refund-guard test seeds rows into the bookings table (via raw SQL — preserves modules-independent contract). Both reasons force 38-04 into Wave 3. Recommended wave layout for `/gsd-execute-phase`:
+- Wave 1 (alone): 38-01 *(was 38-01 + 38-04)*
+- Wave 2 (depends on 38-01): 38-02
+- Wave 3 (parallel after 38-02): 38-03, 38-04, 38-05 *(was 38-03 + 38-05; 38-04 moved here)*
+- Wave 4 (serial after all): 38-06 *(unchanged)*
+
+All three Wave-3 plans share the dependency on 38-02 having shipped the `bookings` table + 0017 alembic revision. They have zero `files_modified` overlap with each other (38-03 = bookings+schedule modules; 38-04 = pt_packages module; 38-05 = pt_sessions module + Alembic 0019) so parallel execution is safe.
 
 **Why this matters for `/gsd-plan-phase`:** the planner must respect the `bookings → schedule` Protocol slot direction (bookings consumes slot resolver + slot restorer; schedule provides them) when ordering 38-01 before 38-02. 38-05 depends on 38-02 + 38-03 (booking-completer slot consumes booking FSM transition which only exists after 38-02; safe to surface FSM via 38-02 alone, but the test that record_pt_session completes a booking needs both the booking-creation path and the completion-slot to be live).
 
