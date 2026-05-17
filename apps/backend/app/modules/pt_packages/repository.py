@@ -240,10 +240,15 @@ async def insert_pt_package(
 
     Snapshot fields are copied from the resolved ``plan`` ORM ref so subsequent
     plan edits / archives never propagate to this row.
+
+    Phase 38 PKG-01: ``data.trainer_id`` (optional) is persisted directly on
+    the new row. NULL means "any trainer" per C-08; the bookings module's
+    trainer-mismatch guard short-circuits on NULL.
     """
     pt_package = PtPackage(
         client_id=data.client_id,
         plan_id=plan.id,
+        trainer_id=data.trainer_id,
         plan_name_snapshot=plan.name,
         session_count_snapshot=plan.session_count,
         price_kopecks_snapshot=plan.price_kopecks,
