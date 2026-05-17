@@ -147,16 +147,24 @@ class PtPackagePlanListQuery(PageQuery):
 
 
 class PtPackageCreateRequest(BackendSchemaBase):
-    """POST /api/v1/pt-packages body (D-33-09).
+    """POST /api/v1/pt-packages body (D-33-09 / Phase 38 PKG-01).
 
     ``amount_kopecks`` is REQUIRED; the service validates
     ``amount_kopecks == plan.price_kopecks`` server-side (snapshot symmetry,
     D-33-17). Disagreement → 422 ``amount_mismatch``.
+
+    ``trainer_id`` is OPTIONAL (Phase 38 PKG-01 / C-08). When provided, the
+    service validates the trainer exists and is active via the
+    ``TrainerById`` Protocol slot — 404 ``trainer_not_found`` /
+    422 ``trainer_inactive``. When NULL, the pt_package is bookable against
+    any trainer's slot (the bookings trainer-mismatch guard short-circuits
+    per C-08).
     """
 
     client_id: UUID
     plan_id: UUID
     amount_kopecks: int = Field(ge=1, le=10**11)
+    trainer_id: UUID | None = None
 
 
 class PtPackageCancelRequest(BackendSchemaBase):
@@ -209,6 +217,7 @@ class PtPackageResponse(ResponseData):
     id: UUID
     client_id: UUID
     plan_id: UUID
+    trainer_id: UUID | None = None  # Phase 38 PKG-01 — optional trainer association
     plan_name_snapshot: str
     session_count_snapshot: int
     price_kopecks_snapshot: int

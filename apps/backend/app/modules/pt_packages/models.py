@@ -120,6 +120,19 @@ class PtPackage(Base, UUIDPkMixin, TimestampMixin):
         ),
         nullable=False,
     )
+    # Phase 38 PKG-01 / C-08 — optional trainer association (added in
+    # Alembic 0018). NULL = "any trainer" (booking trainer-mismatch guard
+    # short-circuits per C-08). FK ON DELETE RESTRICT — trainers are
+    # soft-deleted via is_active (Phase 31 TRN-04); never hard-deleted.
+    trainer_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "trainers.id",
+            ondelete="RESTRICT",
+            name="fk_pt_packages_trainer_id_trainers",
+        ),
+        nullable=True,
+    )
     plan_name_snapshot: Mapped[str] = mapped_column(String(120), nullable=False)
     session_count_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     price_kopecks_snapshot: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -169,4 +182,6 @@ class PtPackage(Base, UUIDPkMixin, TimestampMixin):
         Index("ix_pt_packages_client_id", "client_id"),
         Index("ix_pt_packages_status", "status"),
         Index("ix_pt_packages_plan_id", "plan_id"),
+        # Phase 38 PKG-01 — forensic lookup on trainer association (Alembic 0018).
+        Index("ix_pt_packages_trainer_id", "trainer_id"),
     )
