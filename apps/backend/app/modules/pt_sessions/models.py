@@ -96,6 +96,19 @@ class PtSession(Base, UUIDPkMixin, TimestampMixin):
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     trainer_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 38 PKG-04 / PKG-05 — link back to the originating booking (nullable
+    # because walk-in PT-sessions have no booking). ON DELETE RESTRICT mirrors
+    # the rest of the FK column set (bookings are never hard-deleted per
+    # D-38-04). See migration 0019_pt_sessions_booking_id for the DDL.
+    booking_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "bookings.id",
+            ondelete="RESTRICT",
+            name="fk_pt_sessions_booking_id_bookings",
+        ),
+        nullable=True,
+    )
 
     __table_args__ = (
         # NAMING_CONVENTION expands to ck_pt_sessions_cancel_reason_requires_cancelled_at
@@ -123,4 +136,7 @@ class PtSession(Base, UUIDPkMixin, TimestampMixin):
             "trainer_id",
             text("performed_at DESC"),
         ),
+        # Phase 38 PKG-04 — forensic lookup WHERE booking_id = ? (which session
+        # was delivered for this booking?). Mirrors migration 0019.
+        Index("ix_pt_sessions_booking_id", "booking_id"),
     )

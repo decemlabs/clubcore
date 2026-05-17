@@ -35,12 +35,17 @@ hierarchy only. Public orchestrators are filled by 34-02 / 34-03:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.core.dependencies import CurrentUser, resolve_trainer_by_id
+from app.core.dependencies import (
+    CurrentUser,
+    complete_booking_by_pt_session,
+    resolve_trainer_by_id,
+)
 from app.core.exceptions import (
     ConflictError,
     ForbiddenError,
@@ -158,6 +163,42 @@ class CancelWindowExpiredError(ForbiddenError):
     status_code = 403
 
 
+# Phase 38 PKG-04 / PKG-05 — booking validation error classes (mirror
+# bookings/service.py shape; surface as 4xx via the global exception handler).
+
+
+class BookingNotFoundError(NotFoundError):
+    """Raised by record_pt_session when the supplied booking_id does not
+    exist in the bookings table (Phase 38 PKG-04)."""
+
+    code = "booking_not_found"
+    status_code = 404
+
+
+class BookingNotConfirmedError(ConflictError):
+    """Raised by record_pt_session when the booking row's status is not
+    'confirmed' (cancelled, completed, no_show). Defence-in-depth ahead of
+    the predicate-gated UPDATE in bookings.service.complete_booking — the
+    pre-check provides a clearer error code than the FSM 409 invalid_transition
+    surface from complete_booking (Phase 38 PKG-05 / T-38-05-02)."""
+
+    code = "booking_not_confirmed"
+    status_code = 409
+
+
+class BookingMismatchError(ConflictError):
+    """Raised by record_pt_session when either
+    booking.pt_package_id != request.pt_package_id OR
+    slot.trainer_id != request.trainer_id (PKG-04 / T-38-05-03).
+    Server-side mismatch — caller's booking_id does not match the package
+    or trainer combination of the request. Surfaces as 409 (state-conflict)
+    not 422 (semantic-validation) because the booking row exists and is
+    confirmed; the conflict is cross-row, not field-shape."""
+
+    code = "booking_mismatch"
+    status_code = 409
+
+
 # ---------------------------------------------------------------------------
 # Public orchestrators (Plan 34-02: record_pt_session).
 # ---------------------------------------------------------------------------
@@ -214,6 +255,39 @@ async def record_pt_session(
     if not trainer.is_active:
         raise TrainerInactiveError("trainer_inactive")
 
+    # Phase 38 PKG-04 — booking validation (D-38-11 / D-38-19 / Pitfall 12).
+    # Lock order: booking → pt_package → pt_session insert. We MUST acquire
+    # the booking row-lock BEFORE the pt_package SELECT FOR UPDATE
+    # decrement below so all callers serialise on the same order — prevents
+    # AB/BA deadlocks if the future Phase 39 no-show cron ever holds the
+    # pt_package side of a lock (defensive: today the cron only touches
+    # bookings, but ordering discipline future-proofs T-38-05-05).
+    #
+    # The FOR UPDATE clause on the booking row is the load-bearing piece
+    # for D-38-19 / Pitfall 12: it blocks any concurrent UPDATE (notably
+    # the Phase 39 no-show cron's batch UPDATE bookings SET status='no_show')
+    # until this UoW commits. Postgres-only row-level lock; the cron's
+    # competing UPDATE waits, sees status='completed' after our commit, and
+    # the cron's WHERE status='confirmed' predicate filters us out.
+    booking_meta: dict[str, Any] | None = None
+    if data.booking_id is not None:
+        booking_meta = await repository.fetch_booking_metadata_for_update(
+            session,
+            data.booking_id,
+        )
+        if booking_meta is None:
+            raise BookingNotFoundError("booking_not_found")
+        if booking_meta["status"] != "confirmed":
+            raise BookingNotConfirmedError("booking_not_confirmed")
+        if booking_meta["pt_package_id"] != data.pt_package_id:
+            raise BookingMismatchError("booking_mismatch")
+        slot_trainer_id = await repository.fetch_slot_trainer_id(
+            session,
+            booking_meta["slot_id"],
+        )
+        if slot_trainer_id != data.trainer_id:
+            raise BookingMismatchError("booking_mismatch")
+
     # Step 3 — pt_package metadata (D-34-13a raw SQL — id-as-input).
     pkg = await repository.fetch_pt_package_metadata(session, data.pt_package_id)
     if pkg is None:
@@ -246,8 +320,24 @@ async def record_pt_session(
         performed_by_user_id=actor.id,
         trainer_name_snapshot=trainer.full_name,
         notes=data.notes,
+        # Phase 38 PKG-04 — carries the parent-booking FK when this session
+        # was delivered via the booking flow; NULL for walk-ins.
+        booking_id=data.booking_id,
     )
     await session.flush()
+
+    # Phase 38 PKG-05 — atomic booking completion via the Phase 37
+    # register_booking_completer Protocol slot. The slot consumer
+    # (bookings.service.complete_booking) issues a predicate-gated
+    # UPDATE bookings SET status='completed' WHERE id=:bid AND status='confirmed'
+    # inside this UoW (the booking row is already row-locked from
+    # fetch_booking_metadata_for_update above). 0-row UPDATE inside
+    # complete_booking surfaces as InvalidBookingTransitionError — defensive,
+    # since we just SELECT FOR UPDATE'd and validated status='confirmed' in
+    # the same UoW; the predicate gate is belt-and-braces against a future
+    # caller that drops our pre-check.
+    if data.booking_id is not None:
+        await complete_booking_by_pt_session(session, data.booking_id)
 
     # Step 7 — Emit pt_session_recorded (LITERAL strings for INFRA-11 AST gate).
     # str() / isoformat() casts ensure JSONB serialisability (Phase 32-02
@@ -266,6 +356,10 @@ async def record_pt_session(
         performed_at=data.performed_at.isoformat(),
         performed_by_user_id=str(actor.id),
         sessions_remaining_after=new_remaining,
+        # Phase 38 D-37-05 / D-38-17 — booking completion is observable via
+        # this event when booking_id is non-None (C-06 — no separate
+        # booking_completed event). UUID stringified per Pitfall 13.
+        booking_id=str(data.booking_id) if data.booking_id is not None else None,
     )
 
     # Step 8 — Conditional auto-exhausted transition (D-34-05 / PT-17).

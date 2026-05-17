@@ -138,6 +138,7 @@ async def insert_pt_session(
     performed_by_user_id: UUID,
     trainer_name_snapshot: str,
     notes: str | None,
+    booking_id: UUID | None = None,
 ) -> PtSession:
     """Construct + ``session.add()`` a new ``PtSession`` row.
 
@@ -163,6 +164,7 @@ async def insert_pt_session(
         performed_by_user_id=performed_by_user_id,
         trainer_name_snapshot=trainer_name_snapshot,
         notes=notes,
+        booking_id=booking_id,
     )
     session.add(pt_session)
     return pt_session
@@ -286,6 +288,81 @@ async def atomic_increment_pt_package(
     result = await session.execute(stmt, {"pt_package_id": pt_package_id})
     row = result.first()
     return None if row is None else int(row[0])
+
+
+async def fetch_booking_metadata_for_update(
+    session: AsyncSession,
+    booking_id: UUID,
+) -> dict[str, Any] | None:
+    """SELECT bookings metadata + acquire row-lock (Phase 38 D-38-11 / D-38-19).
+
+    The ``FOR UPDATE`` clause is the load-bearing piece for Pitfall 12 / D-38-19:
+    it acquires a Postgres row-level lock on the booking row that BLOCKS any
+    concurrent UPDATE (notably the future Phase 39 no-show cron's batch
+    ``UPDATE bookings SET status='no_show' WHERE status='confirmed' AND
+    slot.end_time < now()``) until the surrounding ``record_pt_session`` UoW
+    commits or rolls back. The cron cannot mis-classify a booking as no-show
+    while a delivery is being recorded for it — clean serialization, no
+    optimistic-retry loop required.
+
+    Cross-module raw ``sa.text()`` per D-34-04a / Phase 38 D-38-11 — pt_sessions
+    NEVER imports the bookings ORM (the modules-independent importlinter
+    contract). This is the only allowable place reading the ``bookings``
+    table from this module; writes go through the
+    ``register_booking_completer`` Protocol slot in
+    ``app.core.dependencies.complete_booking_by_pt_session``.
+
+    Returns a flat ``dict`` (``id``, ``status``, ``pt_package_id``, ``slot_id``)
+    for the caller's validation chain (status must be 'confirmed';
+    pt_package_id must match the request; slot.trainer_id must match the
+    session's trainer). ``None`` = row not found, caller raises 404
+    ``booking_not_found``.
+
+    Caller-owns-txn (D-03): no flush, no commit.
+    """
+    stmt = sa.text(
+        """
+        SELECT id, status, pt_package_id, slot_id
+        FROM bookings
+        WHERE id = :booking_id
+        FOR UPDATE
+        """,  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+    )
+    result = await session.execute(stmt, {"booking_id": booking_id})
+    row = result.mappings().first()
+    return dict(row) if row is not None else None
+
+
+async def fetch_slot_trainer_id(
+    session: AsyncSession,
+    slot_id: UUID,
+) -> UUID | None:
+    """SELECT trainer_availability_slots.trainer_id (Phase 38 D-38-11 / PKG-04).
+
+    Cross-module raw ``sa.text()`` per D-34-04a / Phase 38 D-38-11 — pt_sessions
+    NEVER imports the schedule ORM (modules-independent contract).
+    Used by ``record_pt_session`` to enforce that ``request.trainer_id`` matches
+    ``slot.trainer_id`` when a booking_id is provided (PKG-04 trainer-mismatch
+    guard); a mismatch raises 409 ``booking_mismatch``.
+
+    Returns ``None`` for missing slot id; caller treats as a data-integrity
+    edge case (booking.slot_id should always FK-point at a live slot row).
+
+    Caller-owns-txn (D-03): no flush, no commit.
+    """
+    stmt = sa.text(
+        "SELECT trainer_id FROM trainer_availability_slots WHERE id = :slot_id",  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+    )
+    result = await session.execute(stmt, {"slot_id": slot_id})
+    row = result.first()
+    if row is None:
+        return None
+    trainer_id_raw = row[0]
+    # Defence-in-depth coerce (asyncpg returns UUID natively, but a different
+    # driver or test stub could return a str).
+    if isinstance(trainer_id_raw, UUID):
+        return trainer_id_raw
+    return UUID(str(trainer_id_raw))
 
 
 async def atomic_transition_exhausted_to_active(
