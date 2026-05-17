@@ -1,0 +1,1 @@
+- [38-04 / pre-existing DB state] Database has stale `pt_sessions.booking_id` column from a prior run (likely 38-05 was executed against this same DB earlier). `alembic check` flags it as drift because plan 38-05 has not yet shipped its ORM column change. NOT caused by this plan; 38-05's executor (or a fresh DB) will reconcile.
