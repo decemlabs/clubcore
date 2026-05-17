@@ -1,0 +1,132 @@
+"""Startup integration test — create_app() wires every Protocol slot (INFRA-33).
+
+Phase 37 D-37-06 / DEBT-06: pins two contracts the bot worker has historically
+drifted from (REG-29-03 lesson + Phase 29 verification):
+
+  (A) After ``create_app()`` returns, EVERY module-private slot variable in
+      ``app.core.dependencies`` is non-None. Any future register_* added to
+      dependencies.py without a corresponding wire-up in create_app() fails
+      this test loudly.
+
+  (B) AST-walk parity: the set of ``register_*`` calls inside
+      ``app/workers/telegram_bot.py:main()`` is a SUBSET of the set inside
+      ``app/main.py:create_app()``. The bot worker is a separate process
+      from the FastAPI app — it never goes through ``create_app()``. Missing
+      double-wires silently mis-fire (e.g., DEBT-06: the v1.4
+      ``register_active_pt_package_resolver`` was missed in the bot at REG-29-03,
+      causing /book to always hit the no-active-package oracle-safe DM).
+
+The AST test additionally asserts:
+  - ``register_active_pt_package_resolver`` ∈ bot_calls  (DEBT-06 fix)
+  - ``register_slot_by_id_resolver``        ∈ bot_calls  (INFRA-33 defensive)
+  - ``register_booking_slot_restorer``      ∉ bot_calls  (API-only per D-37-06)
+  - ``register_booking_completer``          ∉ bot_calls  (API-only per D-37-06)
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+import app.core.dependencies as deps
+from app.main import create_app
+
+# tests/integration/test_app_wiring.py → parents[2] = apps/backend
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_MAIN_PY = _BACKEND_ROOT / "app" / "main.py"
+_BOT_PY = _BACKEND_ROOT / "app" / "workers" / "telegram_bot.py"
+
+
+def _register_call_names(path: Path) -> set[str]:
+    """Walk the module AST and return every ``register_*`` function-call name."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id.startswith("register_")
+        ):
+            names.add(node.func.id)
+    return names
+
+
+def test_create_app_registers_all_protocol_slots() -> None:
+    """After create_app(), all module-private slot variables are non-None.
+
+    Phase 37 INFRA-33 / D-37-06: deterministic registration order, all slots
+    wired BEFORE app.include_router(api). This test pins the contract — any
+    future register_* added to dependencies.py without a corresponding wire-up
+    in create_app() will fail here loudly.
+    """
+    create_app()
+
+    # Phase 4-34 slots (pre-existing — must not regress).
+    assert deps._user_loader is not None, "Phase 5 register_user_loader missing"
+    assert deps._active_membership_resolver is not None, (
+        "Phase 17 register_active_membership_resolver missing"
+    )
+    assert deps._client_by_telegram_resolver is not None, (
+        "Phase 19 register_client_by_telegram_resolver missing"
+    )
+    assert deps._trainer_by_id_resolver is not None, (
+        "Phase 31 register_trainer_by_id_resolver missing"
+    )
+    assert deps._payment_recorder is not None, "Phase 32 register_payment_recorder missing"
+    assert deps._payment_refunder is not None, "Phase 32 register_payment_refunder missing"
+    assert deps._active_pt_package_resolver is not None, (
+        "Phase 33 register_active_pt_package_resolver missing"
+    )
+
+    # Phase 37 INFRA-33 slots (new — D-37-06).
+    assert deps._slot_by_id_resolver is not None, (
+        "Phase 37 register_slot_by_id_resolver missing"
+    )
+    assert deps._booking_slot_restorer is not None, (
+        "Phase 37 register_booking_slot_restorer missing"
+    )
+    assert deps._booking_completer is not None, (
+        "Phase 37 register_booking_completer missing"
+    )
+
+
+def test_bot_main_register_set_is_subset_of_api_main_register_set() -> None:
+    """Parity test (INFRA-33 / D-37-06): bot wires a subset of slots create_app() wires.
+
+    AST-walk every ``register_*`` call in both modules; assert
+    ``bot_calls <= main_calls``. Membership assertions cover:
+      - DEBT-06: register_active_pt_package_resolver MUST be in the bot
+        (Phase 40 /book consumes it via bookings.service).
+      - INFRA-33: register_slot_by_id_resolver MUST be in the bot (defensive
+        double-wire for /book; D-37-06).
+      - register_booking_slot_restorer / register_booking_completer MUST NOT
+        be in the bot (API-only per D-37-06; mirrors D-32-14 / D-33-12
+        discipline for non-bot-participant slots).
+    """
+    main_calls = _register_call_names(_MAIN_PY)
+    bot_calls = _register_call_names(_BOT_PY)
+
+    assert bot_calls <= main_calls, (
+        f"bot_main_parity violation: bot wires register_* not in create_app(): "
+        f"{sorted(bot_calls - main_calls)}"
+    )
+
+    # DEBT-06: bot must wire active_pt_package_resolver (REG-29-03 omission fix).
+    assert "register_active_pt_package_resolver" in bot_calls, (
+        "DEBT-06 regression: bot worker missing register_active_pt_package_resolver"
+    )
+
+    # INFRA-33: bot must wire slot_by_id_resolver (defensive double-wire for /book).
+    assert "register_slot_by_id_resolver" in bot_calls, (
+        "INFRA-33 regression: bot worker missing register_slot_by_id_resolver"
+    )
+
+    # API-only slots must NOT leak into bot wiring.
+    assert "register_booking_slot_restorer" not in bot_calls, (
+        "D-37-06 violation: register_booking_slot_restorer is API-only (bot does "
+        "not cancel bookings)"
+    )
+    assert "register_booking_completer" not in bot_calls, (
+        "D-37-06 violation: register_booking_completer is API-only (bot does not "
+        "record PT-sessions)"
+    )

@@ -41,9 +41,12 @@ from app.core.database import db_lifespan
 from app.core.dependencies import (
     register_active_membership_resolver,
     register_active_pt_package_resolver,
+    register_booking_completer,
+    register_booking_slot_restorer,
     register_client_by_telegram_resolver,
     register_payment_recorder,
     register_payment_refunder,
+    register_slot_by_id_resolver,
     register_trainer_by_id_resolver,
     register_user_loader,
 )
@@ -171,6 +174,25 @@ def create_app() -> FastAPI:
     )
 
     register_active_pt_package_resolver(pt_packages_service.resolve_active_pt_package)
+
+    # Phase 37 INFRA-33 / D-37-06: eighth-tenth composition-root carve-outs —
+    # v1.5 schedule + bookings cross-module Protocol slots. Schedule slot
+    # resolver wired BOTH here AND in app/workers/telegram_bot.py (defensive
+    # double-wiring per REG-29-03 — the bot's Phase 40 /book handler consumes
+    # the resolver via bookings.service). BookingSlotRestorer and
+    # BookingCompleter wired EXCLUSIVELY here (bot is not a participant —
+    # mirrors D-32-14 / D-33-12 discipline). All three are silent-None
+    # accessors (D-37-06).
+    from app.modules.bookings import (
+        service as bookings_service,
+    )
+    from app.modules.schedule import (
+        service as schedule_service,
+    )
+
+    register_slot_by_id_resolver(schedule_service.resolve_slot_by_id)
+    register_booking_slot_restorer(schedule_service.restore_slot_to_active)
+    register_booking_completer(bookings_service.complete_booking)
 
     app.include_router(api)
     return app

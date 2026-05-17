@@ -25,7 +25,9 @@ from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
 from app.core.dependencies import (
     register_active_membership_resolver,
+    register_active_pt_package_resolver,
     register_client_by_telegram_resolver,
+    register_slot_by_id_resolver,
     register_trainer_by_id_resolver,
 )
 from app.core.logging import configure_logging
@@ -40,6 +42,8 @@ from app.integrations.telegram.handlers import (
 from app.modules.auth import telegram_service  # D-06 relaxation
 from app.modules.clients import service as clients_service  # REG-29-03 fix
 from app.modules.memberships import service as memberships_service  # REG-29-03 fix
+from app.modules.pt_packages import service as pt_packages_service  # Phase 37 DEBT-06
+from app.modules.schedule import service as schedule_service  # Phase 37 INFRA-33
 from app.modules.trainers import service as trainers_service  # Phase 31 D-31-14
 from app.modules.visits import service as visits_service  # D-10 relaxation
 
@@ -67,6 +71,14 @@ async def main() -> None:
     # Bot is not a consumer in v1.4 but must register to match API process exactly
     # (per REG-29-03 lesson from Phase 29 verification).
     register_trainer_by_id_resolver(trainers_service.resolve_trainer_by_id)
+    # Phase 37 DEBT-06 / D-37-06: missing v1.4 pt-package resolver — REG-29-03 omission
+    # fix. /book handler (Phase 40 BOT-02) consumes register_active_pt_package_resolver
+    # to gate on active-PT-package existence; without this the bot silently fails.
+    register_active_pt_package_resolver(pt_packages_service.resolve_active_pt_package)
+    # Phase 37 INFRA-33 / D-37-06: defensive double-wiring for v1.5 slot resolver.
+    # /book handler (Phase 40 BOT-02) consumes bookings.service which internally
+    # calls resolve_slot_by_id — must be registered in the bot process too.
+    register_slot_by_id_resolver(schedule_service.resolve_slot_by_id)
 
     if settings.telegram_bot_token.get_secret_value() == _PLACEHOLDER_TELEGRAM_BOT_TOKEN:
         log = structlog.get_logger("workers.telegram_bot")
