@@ -148,7 +148,17 @@ _Wave 4 (serial after all):_
   2. Running `run_no_show_cron_once.py` against a live stack with at least one overdue confirmed booking marks it `no_show` and emits `booking_no_show`; re-running the script processes zero rows (CRON-01/04)
   3. Running `run_booking_reminders_once.py` against a live stack sends `BOOKING_REMINDER_24H_DM` to linked clients with bookings in the 23h-25h window and inserts a `booking_notifications` idempotency row per send; re-running the script sends zero DMs (CRON-02/05, NOTIFY-05)
   4. Both new ARQ crons appear in `WorkerSettings.cron_jobs` with `unique=True, keep_result=60` and `on_job_start`/`on_job_end` structlog context vars fire on each cron tick (CRON-03)
-**Plans**: TBD
+**Plans**: 4 plans
+
+_Wave 1 (alone):_
+- [ ] 39-01-PLAN.md — notifications-module-and-copy: 4 locked Russian DM templates + `_BOT_BOOK_DENIED_DM` anti-oracle + 4 `render_*_dm` helpers + unit tests + owner copy-lock sign-off (NOTIFY-01, NOTIFY-02)
+
+_Wave 2 (parallel after 39-01 — disjoint files_modified):_
+- [ ] 39-02-PLAN.md — send-on-create-and-cancel: `_dispatch_booking_dm` private helper + post-commit dispatch in `create_booking` / `cancel_booking` (actor.role discriminator) + per-cancelled-booking cascade in `schedule.cancel_slot` + integration tests (NOTIFY-03, NOTIFY-04)
+- [ ] 39-03-PLAN.md — no-show-cron-and-table: Alembic 0020_booking_notifications + `BookingNotification` ORM (no `telegram_chat_id` per D-39-03; ON DELETE RESTRICT per D-39-13) + `_mark_no_show_bookings` helper (SELECT FOR UPDATE OF b per D-39-07) + ARQ worker + `run_no_show_cron_once.py` + integration tests (NOTIFY-05, CRON-01, CRON-03, CRON-04)
+
+_Wave 3 (serial after 39-02 + 39-03 — same-file conflict on bookings/service.py + needs ORM + 0020):_
+- [ ] 39-04-PLAN.md — reminder-cron: `_send_booking_reminders` multi-session helper + ARQ worker + `WorkerSettings.cron_jobs` final D-39-16 order (reminders BEFORE no-show) + `run_booking_reminders_once.py` + integration tests (CRON-02, CRON-03, CRON-05)
 
 ### Phase 40: Telegram /book + OpenAPI Drift Gate + Milestone Verification
 **Goal**: Clients can book PT slots directly via Telegram bot `/book` using an anti-oracle InlineKeyboard flow; OpenAPI artifact is byte-stably regenerated with all v1.5 paths; 6 operator scenarios + Telegram sandbox smoke + concurrent race test confirm the full milestone is production-ready
@@ -171,12 +181,12 @@ _Wave 4 (serial after all):_
 |-------|----------------|--------|-----------|
 | 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
 | 38. Schedule Module + Booking Core | 6/6 | Complete   | 2026-05-17 |
-| 39. Notifications + Cron | 0/TBD | Not started | - |
+| 39. Notifications + Cron | 0/4 | Planned     | - |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
 ---
 
-*Roadmap last updated: 2026-05-17 — Phase 38 plans created (6 plans, 25 requirements covered: SLOT-01..09 + BOOK-01..10 + PKG-01..06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
+*Roadmap last updated: 2026-05-17 — Phase 39 plans created (4 plans, 10 requirements covered: NOTIFY-01..05 + CRON-01..05) across 3 waves (39-01 → {39-02 ∥ 39-03} → 39-04). Phase 38 plans created previously (6 plans, 25 requirements: SLOT-01..09 + BOOK-01..10 + PKG-01..06). v1.5 Schedule + Bookings (PT slots) roadmap shipped 2026-05-17 (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
