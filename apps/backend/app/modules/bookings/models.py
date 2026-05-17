@@ -27,6 +27,7 @@ NO snapshot columns (D-38-08) — display payloads use joinedload(Booking.slot)
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
@@ -39,7 +40,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin, UUIDPkMixin
 
@@ -102,6 +103,37 @@ class Booking(Base, UUIDPkMixin, TimestampMixin):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    # Cross-module relationships (Phase 38 plan 38-03 / BOOK-09 — joinedload
+    # discipline per Pitfall 19 for the GET /bookings/{id} detail endpoint).
+    #
+    # STRING-KEYED relationships preserve the modules-independent import-linter
+    # contract: SQLAlchemy resolves "TrainerAvailabilitySlot" / "PtPackage"
+    # against the SHARED `Base.registry` at mapper-configuration time (all
+    # models register into the same Base metadata). NO `from app.modules.X`
+    # import is added to this file — import-linter's AST walker sees zero
+    # cross-module imports, while the ORM resolves the class lookups via
+    # registry-string discovery (independent of Python import order, but the
+    # target classes are guaranteed loaded by the time SA configures mappers
+    # because `alembic/env.py` and `app/main.py` both import all module
+    # `models` packages eagerly).
+    #
+    # `Mapped[Any]` keeps mypy strict happy without naming the cross-module
+    # type — the joinedload-fetched objects are consumed in the bookings
+    # service layer where they are projected into the local `SlotSnapshot`
+    # Pydantic class (D-38-08 / plan 38-03 §Task 1).
+    slot: Mapped[Any] = relationship(
+        "TrainerAvailabilitySlot",
+        foreign_keys=[slot_id],
+        lazy="select",
+        viewonly=True,
+    )
+    pt_package: Mapped[Any] = relationship(
+        "PtPackage",
+        foreign_keys=[pt_package_id],
+        lazy="select",
+        viewonly=True,
     )
 
     __table_args__ = (
