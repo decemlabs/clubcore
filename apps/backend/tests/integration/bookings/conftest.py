@@ -83,15 +83,13 @@ async def seeded_owner(
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> User:
-    user = await _seed_user(
+    return await _seed_user(
         db_session,
         role=Role.OWNER,
         email=OWNER_EMAIL,
         password=OWNER_PASSWORD,
         full_name="Bookings Owner",
     )
-    await db_session.refresh(user)
-    return user
 
 
 @pytest_asyncio.fixture
@@ -99,15 +97,13 @@ async def seeded_reception(
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> User:
-    user = await _seed_user(
+    return await _seed_user(
         db_session,
         role=Role.RECEPTION,
         email=RECEPTION_EMAIL,
         password=RECEPTION_PASSWORD,
         full_name="Bookings Reception",
     )
-    await db_session.refresh(user)
-    return user
 
 
 @pytest_asyncio.fixture

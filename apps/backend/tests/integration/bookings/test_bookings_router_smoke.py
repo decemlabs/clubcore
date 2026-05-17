@@ -23,14 +23,16 @@ from httpx import AsyncClient
 
 def test_schemas_import() -> None:
     """Smoke: BookingCreateRequest + BookingResponse importable; extra='forbid'."""
+    # extra='forbid' inherited from BackendSchemaBase.
+    from pydantic import ValidationError as _PydanticValidationError
+
     from app.modules.bookings.schemas import (
         BookingCreateRequest,
         BookingResponse,
         BookingStatus,
     )
 
-    # extra='forbid' inherited from BackendSchemaBase.
-    with pytest.raises(Exception):  # pydantic.ValidationError or subclass
+    with pytest.raises(_PydanticValidationError):
         BookingCreateRequest(
             slot_id=uuid4(),
             client_id=uuid4(),
