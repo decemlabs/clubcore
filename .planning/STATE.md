@@ -3,8 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Schedule + Bookings (PT slots)
 status: planning
-last_updated: "2026-05-17T11:05:40.194Z"
-last_activity: 2026-05-17
+stopped_at: Phase 37 context gathered
+last_updated: "2026-05-17T12:16:23.218Z"
+last_activity: 2026-05-17 — v1.5 roadmap created (57/57 requirements mapped; Phases 37-40)
 progress:
   total_phases: 4
   completed_phases: 0
@@ -44,6 +45,7 @@ Progress: [░░░░░░░░░░] 0%
 Full decisions log lives in PROJECT.md Key Decisions table.
 
 **v1.5 bedrock decisions (C-01..C-15, locked in REQUIREMENTS.md):**
+
 - C-01 — Two-module split: `schedule/` (catalog) + `bookings/` (transaction), Protocol-bridged
 - C-02 — Partial UNIQUE `(slot_id) WHERE status='confirmed'` on `bookings` — DB wins race
 - C-03 — Decrement-at-delivery preserved; booking does NOT debit `sessions_remaining`
@@ -54,6 +56,7 @@ Full decisions log lives in PROJECT.md Key Decisions table.
 - C-11 — 24h reminder cron at 06:35 MSK + `booking_notifications` idempotency table
 
 **Critical pre-emptions for Phase 37 (from PITFALLS.md):**
+
 - P3: Audit events AND payload schemas pre-registered before any callsite
 - P13: All `audit_payloads.py` UUID fields typed as `str`, not `UUID`
 - P1: Partial UNIQUE on `bookings` must be conditional (`WHERE status='confirmed'`)
@@ -82,6 +85,6 @@ Items carried forward from v1.4 milestone close on 2026-05-16:
 
 ## Session Continuity
 
-Last session: 2026-05-17 — v1.5 roadmap created (ROADMAP.md + STATE.md written; REQUIREMENTS.md traceability table updated)
-Stopped at: Ready to start Phase 37 planning
+Last session: 2026-05-17T12:16:23.211Z
+Stopped at: Phase 37 context gathered
 Resume: `/gsd-plan-phase 37`
