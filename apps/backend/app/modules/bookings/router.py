@@ -56,6 +56,14 @@ from app.modules.bookings.schemas import (
 )
 
 bookings_router = APIRouter()
+# Separate router mounted by `app.api.v1.router` at the `/clients` prefix so
+# the per-client list resolves at `GET /api/v1/clients/{client_id}/bookings`
+# per BOOK-08 locked contract. Mirrors the pt-sessions package-scoped pattern
+# (pt_sessions/router.py: package_scoped_router) — keeps the implementation
+# inside bookings/ while exposing it under the clients/ URL tree, so
+# clients/router.py remains dependency-leaf (no `from app.modules.bookings`
+# import). Closes Phase 38 verifier Gap #2.
+client_scoped_bookings_router = APIRouter()
 
 
 @bookings_router.post(
@@ -274,8 +282,8 @@ async def list_bookings(
     return envelope(page)
 
 
-@bookings_router.get(
-    "/clients/{client_id}/bookings",
+@client_scoped_bookings_router.get(
+    "/{client_id}/bookings",
     response_model=ResponseEnvelope[PaginatedData[BookingResponse]],
     summary=(
         "List bookings for a single client (reception+owner; paginated; "
@@ -293,16 +301,17 @@ async def list_bookings_for_client(
 ) -> ResponseEnvelope[PaginatedData[BookingResponse]]:
     """Paginated per-client booking list (Phase 38 BOOK-08).
 
-    Mounted here (NOT in clients/router.py) per plan 38-03 §Task 2 locked
-    decision — keeps clients/ a dependency-leaf module; matches v1.4
-    pt-packages / pt-sessions sub-route discipline.
+    Mount: `GET /api/v1/clients/{client_id}/bookings` (BOOK-08 locked
+    contract). The route is *declared* in bookings/router.py (this file) on
+    the `client_scoped_bookings_router`, then composed by
+    `app.api.v1.router` at the `/clients` prefix — mirroring the v1.4
+    pt-sessions package-scoped router precedent
+    (pt_sessions.router.package_scoped_router mounted at `/pt-packages`).
 
-    Mounting point: `/api/v1/bookings/clients/{client_id}/bookings`
-    (bookings_router is mounted at `/api/v1/bookings` by
-    `app.api.v1.router`). The URL path is rooted at the bookings tree so
-    the cross-module reach is purely router-internal (no
-    clients/router.py edit; clients module retains zero
-    `from app.modules.<other>` imports — lint-imports green).
+    This split keeps clients/ a dependency-leaf module — clients/router.py
+    contains zero `from app.modules.bookings` imports — while honouring
+    the REQUIREMENTS BOOK-08 URL contract. lint-imports stays green; the
+    bookings → clients edge lives only in the v1 composition root.
     """
     page = await service.list_bookings_for_client(session, client_id, query)
     return envelope(page)

@@ -9,8 +9,9 @@ Covers (per plan <behavior>):
   - GET /api/v1/bookings/{id} returns BookingDetailResponse with inline
     SlotSnapshot + pt_package dict (joinedload — Pitfall 19; query count
     ≤ 2 assertion).
-  - GET /api/v1/clients/{client_id}/bookings (mounted under bookings/router.py)
-    returns paginated envelope for that client only.
+  - GET /api/v1/clients/{client_id}/bookings (declared in bookings/router.py
+    on client_scoped_bookings_router, composed at the /clients prefix by
+    app.api.v1.router) returns paginated envelope for that client only.
   - clients/router.py NOT modified (preserves dependency-leaf module).
 """
 
@@ -360,10 +361,13 @@ async def test_list_bookings_for_client_returns_envelope(
 
 
 def test_clients_router_unchanged_no_bookings_import() -> None:
-    """Plan 38-03 locked-decision: clients/router.py remains a dependency-leaf
-    — NO `from app.modules.bookings` import landed there. The per-client
-    booking endpoint is mounted under bookings/router.py at the
-    `/clients/{client_id}/bookings` path instead.
+    """Plan 38-03 locked-decision (Phase 38 Gap #2 closure): clients/router.py
+    remains a dependency-leaf — NO `from app.modules.bookings` import landed
+    there. The per-client booking endpoint is declared in bookings/router.py
+    on `client_scoped_bookings_router` and composed at the `/clients` prefix
+    by `app.api.v1.router`, so the URL contract
+    (`/api/v1/clients/{client_id}/bookings` per BOOK-08) is honoured without
+    the clients module reaching into bookings.
 
     This guards against regressions where a future refactor decides to
     re-mount the endpoint under clients/router.py and silently breaks the
@@ -380,15 +384,22 @@ def test_clients_router_unchanged_no_bookings_import() -> None:
 
 
 def test_bookings_router_mounts_per_client_path() -> None:
-    """Plan 38-03 locked-decision: `/clients/{client_id}/bookings` path is
-    declared in bookings/router.py (NOT clients/router.py)."""
+    """Plan 38-03 locked-decision (Gap #2 closure): the per-client bookings
+    route is declared in bookings/router.py on `client_scoped_bookings_router`
+    at the internal path `"/{client_id}/bookings"` — the `/clients` prefix is
+    applied by the v1 composer so the public URL becomes
+    `/api/v1/clients/{client_id}/bookings` per BOOK-08."""
     repo_root = Path(__file__).resolve().parents[3]
     bookings_router_src = (
         repo_root / "app" / "modules" / "bookings" / "router.py"
     ).read_text(encoding="utf-8")
-    assert '"/clients/{client_id}/bookings"' in bookings_router_src, (
-        "/clients/{client_id}/bookings path string must live in "
-        "bookings/router.py per plan 38-03 lock"
+    assert "client_scoped_bookings_router = APIRouter()" in bookings_router_src, (
+        "client_scoped_bookings_router must be declared in bookings/router.py "
+        "(Phase 38 Gap #2 — per-client URL contract)"
+    )
+    assert '"/{client_id}/bookings"' in bookings_router_src, (
+        "/{client_id}/bookings internal path must live in bookings/router.py "
+        "on client_scoped_bookings_router (Phase 38 Gap #2)"
     )
 
 
@@ -408,10 +419,11 @@ async def test_get_clients_bookings_endpoint_reachable(
     make_slot,
     db_session: AsyncSession,
 ) -> None:
-    """HTTP-level smoke: GET /api/v1/bookings/clients/{client_id}/bookings
-    (mounted under bookings_router; bookings_router is mounted at
-    /api/v1/bookings) returns 200 + paginated envelope. Confirms the
-    locked-decision mount path is reachable end-to-end."""
+    """HTTP-level smoke: GET /api/v1/clients/{client_id}/bookings (BOOK-08
+    locked contract) returns 200 + paginated envelope. The handler is
+    declared in bookings/router.py on `client_scoped_bookings_router` and
+    composed by `app.api.v1.router` at the `/clients` prefix. Confirms the
+    URL contract is reachable end-to-end (Phase 38 Gap #2 closure)."""
     trainer = await make_trainer()
     client = await make_client()
     plan = await make_pt_package_plan()
@@ -432,10 +444,11 @@ async def test_get_clients_bookings_endpoint_reachable(
         ),
     )
 
-    # bookings_router is mounted under /api/v1/bookings; the per-client
-    # sub-route therefore resolves at /api/v1/bookings/clients/{id}/bookings.
+    # client_scoped_bookings_router is mounted by app.api.v1.router at the
+    # /clients prefix, so the route resolves at
+    # /api/v1/clients/{id}/bookings (BOOK-08 locked contract).
     r = await authed_client_owner.get(
-        f"/api/v1/bookings/clients/{client.id}/bookings"
+        f"/api/v1/clients/{client.id}/bookings"
     )
     assert r.status_code == 200, r.text
     body = r.json()

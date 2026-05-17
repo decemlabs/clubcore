@@ -8,7 +8,7 @@ business modules.
 from fastapi import APIRouter
 
 from app.modules.auth.router import router as auth_router
-from app.modules.bookings.router import bookings_router
+from app.modules.bookings.router import bookings_router, client_scoped_bookings_router
 from app.modules.clients.router import router as clients_router
 from app.modules.memberships.router import (
     memberships_router,
@@ -53,5 +53,14 @@ v1.include_router(
 )
 v1.include_router(schedule_router, prefix="/trainer-slots", tags=["schedule"])
 v1.include_router(bookings_router, prefix="/bookings", tags=["bookings"])
+# Per-client bookings — mounted under /clients per BOOK-08 locked contract;
+# implementation lives in bookings/router.py (client_scoped_bookings_router)
+# to keep clients/ dependency-leaf. Mirrors pt_sessions_package_scoped_router
+# composition pattern above. Resolves Phase 38 verifier Gap #2.
+v1.include_router(
+    client_scoped_bookings_router,
+    prefix="/clients",
+    tags=["bookings"],
+)
 v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])

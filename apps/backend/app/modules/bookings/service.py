@@ -602,10 +602,12 @@ async def list_bookings_for_client(
     """Per-client paginated booking list (Phase 38 plan 38-03 / BOOK-08).
 
     Read-only — NO commit, NO audit. Delegates to
-    `repository.list_bookings_for_client_paginated`; mounted under the
-    bookings router at /clients/{client_id}/bookings (NOT under
-    clients/router.py — keeps clients module dependency-leaf per
-    locked decision in plan 38-03 §Task 2).
+    `repository.list_bookings_for_client_paginated`; handler declared on
+    `client_scoped_bookings_router` in bookings/router.py and composed by
+    `app.api.v1.router` at the `/clients` prefix, so the public URL is
+    `GET /api/v1/clients/{client_id}/bookings` per BOOK-08. The split keeps
+    clients/router.py dependency-leaf (no `from app.modules.bookings`
+    import) — Phase 38 verifier Gap #2 closure.
     """
     page = await repository.list_bookings_for_client_paginated(
         session, client_id, query
