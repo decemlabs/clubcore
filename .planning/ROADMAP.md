@@ -126,18 +126,18 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 **Plans**: 6 plans *(wave layout revised 2026-05-17 per plan-checker BLOCKER on 38-04 dependency_correctness — 38-04 moved from Wave 1 to Wave 3; see 38-CONTEXT.md §D-38-01 for rationale)*
 
 _Wave 1 (alone):_
-- [ ] 38-01-PLAN.md — schedule-module: Alembic 0016 + schedule/{models,repository,schemas,router}.py + real schedule/service.py publish/list/get/cancel (active-only) (SLOT-01..06, SLOT-08, SLOT-09)
+- [x] 38-01-PLAN.md — schedule-module: Alembic 0016 + schedule/{models,repository,schemas,router}.py + real schedule/service.py publish/list/get/cancel (active-only) (SLOT-01..06, SLOT-08, SLOT-09)
 
 _Wave 2 (depends on 38-01):_
-- [ ] 38-02-PLAN.md — booking-core-create: Alembic 0017 (partial UNIQUE uq_bookings_slot_confirmed) + bookings/{models,repository,schemas,router}.py + real create_booking UoW + BOOK-TEST-01 race test (BOOK-01..05, BOOK-10)
+- [x] 38-02-PLAN.md — booking-core-create: Alembic 0017 (partial UNIQUE uq_bookings_slot_confirmed) + bookings/{models,repository,schemas,router}.py + real create_booking UoW + BOOK-TEST-01 race test (BOOK-01..05, BOOK-10)
 
 _Wave 3 (parallel after 38-02 — all three depend on bookings table + 0017 alembic revision; zero files_modified overlap):_
-- [ ] 38-03-PLAN.md — booking-cancel-and-list: cancel_booking (24h reception window) + slot-cancel booked->cancelled cascade + list/get endpoints (SLOT-07, BOOK-06..09)
-- [ ] 38-04-PLAN.md — pt-package-trainer-and-refund-guard: Alembic 0018 + trainer_id schema/service + refund outstanding-bookings guard (PKG-01, PKG-02, PKG-03)
-- [ ] 38-05-PLAN.md — pt-session-booking-completion: Alembic 0019 + booking_id schema/service + SELECT FOR UPDATE + completion via Protocol slot + PKG-06 no-revert (PKG-04, PKG-05, PKG-06)
+- [x] 38-03-PLAN.md — booking-cancel-and-list: cancel_booking (24h reception window) + slot-cancel booked->cancelled cascade + list/get endpoints (SLOT-07, BOOK-06..09)
+- [x] 38-04-PLAN.md — pt-package-trainer-and-refund-guard: Alembic 0018 + trainer_id schema/service + refund outstanding-bookings guard (PKG-01, PKG-02, PKG-03)
+- [x] 38-05-PLAN.md — pt-session-booking-completion: Alembic 0019 + booking_id schema/service + SELECT FOR UPDATE + completion via Protocol slot + PKG-06 no-revert (PKG-04, PKG-05, PKG-06)
 
 _Wave 4 (serial after all):_
-- [ ] 38-06-PLAN.md — svc001-and-importlinter-greens: CI gates + SVC001 + lint-imports + B-10 regression + optional DEFER-36-04-A sweep
+- [x] 38-06-PLAN.md — svc001-and-importlinter-greens: CI gates + SVC001 + lint-imports + B-10 regression + optional DEFER-36-04-A sweep
 
 ### Phase 39: Notifications + Cron
 **Goal**: Clients receive Telegram DMs for booking confirmation and cancellation; overdue confirmed bookings are auto-marked no-show by cron at 23:10 MSK; 24-hour reminders are sent by cron at 06:35 MSK with idempotency enforcement
@@ -170,7 +170,7 @@ _Wave 4 (serial after all):_
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
-| 38. Schedule Module + Booking Core | 0/6 | Not started | - |
+| 38. Schedule Module + Booking Core | 6/6 | Complete   | 2026-05-17 |
 | 39. Notifications + Cron | 0/TBD | Not started | - |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
