@@ -28,6 +28,7 @@ import app.modules.memberships.models
 import app.modules.payments.models  # Phase 32 PAY-01
 import app.modules.pt_packages.models  # Phase 33 PT-01 / PT-04
 import app.modules.pt_sessions.models  # Phase 34 PT-14 / 0015
+import app.modules.schedule.models  # Phase 38 SLOT-01 / 0016
 import app.modules.trainers.models  # Phase 31 TRN-01
 import app.modules.visits.models
 import app.core.audit_models  # noqa: F401
