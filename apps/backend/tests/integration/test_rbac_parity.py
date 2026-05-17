@@ -1,9 +1,10 @@
 """TEST-06: backend permissions ⇔ frontend can.ts/registry.ts parity (Phase 6 D-13, D-14, D-15).
 
-Three set-equalities (D-13; counts updated in Phase 15 INFRA-08/09):
-  1. OWNER_ONLY pairs (15 entries: 9 v1.1 + 6 v1.2) — backend frozenset == frontend can.ts array.
-  2. Resource StrEnum values (14 entries: 11 v1.1 + 3 v1.2) — backend == frontend Resource union.
-  3. Action StrEnum values (7 entries: 5 v1.1 + 2 v1.2) — backend == frontend Action union.
+Three set-equalities (D-13; counts updated through Phase 37 INFRA-27):
+  1. OWNER_ONLY pairs (29 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5) — backend frozenset
+     == frontend can.ts array.
+  2. Resource StrEnum values — backend == frontend Resource union.
+  3. Action StrEnum values — backend == frontend Action union.
 
 Static-file analysis only — no FastAPI app, no DB, no Redis. Locked at
 `tests/integration/` top-level (D-16) to signal "doesn't need infra".
@@ -137,10 +138,11 @@ def test_action_values_match() -> None:
     )
 
 
-def test_owner_only_count_is_twenty_five() -> None:
-    """Sanity belt — `OWNER_ONLY` is exactly 25 entries.
+def test_owner_only_count_is_twenty_nine() -> None:
+    """Sanity belt — `OWNER_ONLY` is exactly 29 entries.
 
-    Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a.
+    Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a
+    + 4 v1.5 INFRA-27 (CREATE|EDIT|DELETE|CANCEL on SCHEDULE_SLOTS).
     """
-    assert len(OWNER_ONLY) == 25
-    assert len(_parse_owner_only_pairs()) == 25
+    assert len(OWNER_ONLY) == 29
+    assert len(_parse_owner_only_pairs()) == 29

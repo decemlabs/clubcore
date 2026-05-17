@@ -19,6 +19,8 @@ export type Resource =
   | 'pt-package-plans' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_PACKAGE_PLANS.value
   | 'pt-packages' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_PACKAGES.value
   | 'pt-sessions' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_SESSIONS.value
+  | 'schedule-slots' // NEW Phase 37 INFRA-26 — kebab, mirror Resource.SCHEDULE_SLOTS.value
+  | 'bookings' // NEW Phase 37 INFRA-26 — mirror Resource.BOOKINGS.value
 
 export type Action =
   | 'view'
@@ -28,6 +30,7 @@ export type Action =
   | 'refund'
   | 'cancel' // NEW Phase 15 INFRA-09 — mirrors backend Action.CANCEL.value
   | 'check_in' // NEW Phase 15 INFRA-09 — underscore mirrors Action.CHECK_IN.value
+  | 'list' // NEW Phase 37 INFRA-26 / D-37-03a — mirrors backend Action.LIST.value
 
 export interface RouteEntry {
   path: string
