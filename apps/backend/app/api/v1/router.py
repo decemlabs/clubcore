@@ -8,6 +8,7 @@ business modules.
 from fastapi import APIRouter
 
 from app.modules.auth.router import router as auth_router
+from app.modules.bookings.router import bookings_router
 from app.modules.clients.router import router as clients_router
 from app.modules.memberships.router import (
     memberships_router,
@@ -51,5 +52,6 @@ v1.include_router(
     tags=["pt-sessions"],
 )
 v1.include_router(schedule_router, prefix="/trainer-slots", tags=["schedule"])
+v1.include_router(bookings_router, prefix="/bookings", tags=["bookings"])
 v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])
