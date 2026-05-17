@@ -32,11 +32,13 @@ Discipline invariants (Phase 30 walkers — all must remain green):
 from datetime import UTC, datetime
 from uuid import UUID
 
+import sqlalchemy as sa
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.dependencies import CurrentUser, resolve_trainer_by_id
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.pagination import PaginatedData
 from app.modules.schedule import repository
 from app.modules.schedule.constants import (
@@ -50,6 +52,8 @@ from app.modules.schedule.schemas import (
     SlotListQuery,
     SlotResponse,
 )
+
+_log = structlog.get_logger("schedule.service")
 
 # ---------------------------------------------------------------------------
 # Error classes (mirror pt_packages/service.py shape; class-level code +
@@ -105,11 +109,32 @@ class SlotTooCloseError(ConflictError):
 
 class InvalidSlotTransitionError(ConflictError):
     """Raised by cancel_slot / _assert_can_transition on disallowed slot
-    status moves (D-38-10). For plan 38-01: also raised when cancel_slot is
-    called against a `booked` slot (booked-cascade lands in plan 38-03)."""
+    status moves (D-38-10). Plan 38-03 replaced the booked-source guard
+    with a real cascade; this class now only fires for `cancelled` source
+    (terminal) and on the predicate-gated UPDATE 0-row branch in
+    restore_slot_to_active."""
 
     code = "invalid_transition"
     status_code = 409
+
+
+class InternalConsistencyError(AppError):
+    """Raised when a DB invariant breach is detected — slot.status='booked'
+    but NO confirmed booking row exists for that slot_id (plan 38-03 cascade
+    branch). 38-02's `create_booking` UoW guarantees these are paired in
+    the same transaction; the only ways to reach this state are corruption
+    or a future bug. Surfaces as HTTP 500 with code='slot_booking_inconsistency'
+    so an operator notices via 500 alert + structlog error event.
+
+    Locked per plan 38-03 checker fix — we DO NOT silently emit
+    `slot_cancelled` with `had_booking=False` when the booking row is
+    missing (that would mask the corruption); instead this 500 + structlog
+    error stops the request, rolls back the surrounding transaction, and
+    leaves the slot status unchanged so an operator can investigate.
+    """
+
+    code = "slot_booking_inconsistency"
+    status_code = 500
 
 
 # ---------------------------------------------------------------------------
@@ -334,60 +359,110 @@ async def cancel_slot(
     slot_id: UUID,
     data: SlotCancelRequest,
 ) -> SlotResponse:
-    """Cancel a slot (Phase 38 plan 38-01 SLOT-09 — active-only path).
+    """Cancel a slot (Phase 38 SLOT-07 / SLOT-09).
 
-    For plan 38-01: ONLY the `active → cancelled` transition is implemented.
-    Cancelling a `booked` slot requires the booked-cascade flow (must
-    atomically cancel the linked confirmed booking + emit both
-    `slot_cancelled` and `booking_cancelled`) which lands in plan 38-03.
-    Attempting to cancel a booked slot here raises InvalidSlotTransitionError
-    with an explicit forward-link message.
+    Two atomic paths, both end in a single `await session.commit()` (SVC001):
 
-    Sequence:
-      1. Load slot via repository.get_slot_by_id_for_update (row-lock against
-         a concurrent booking-flip racing the cancel) — 404 slot_not_found.
-      2. Guard against booked source — raise InvalidSlotTransitionError with
-         explicit "booked-slot cascade lands in plan 38-03" message.
-      3. _assert_can_transition(target='cancelled') — final FSM gate (covers
-         the cancelled-source-terminal case).
-      4. Mutate slot in-place: status='cancelled', cancelled_at=now(UTC),
-         cancel_reason=data.cancel_reason.
+    A) `active → cancelled` (Phase 38 plan 38-01 SLOT-09 — unchanged):
+       - FSM guard, slot in-place mutate, audit `slot_cancelled`
+         (had_booking=False), commit.
+
+    B) `booked → cancelled` cascade (Phase 38 plan 38-03 SLOT-07 — replaces
+       the 38-01 forward-link deferral guard):
+       - FSM guard (booked → cancelled IS allowed per SLOT_STATUS_TRANSITIONS).
+       - Cross-module raw `sa.text()` UPDATE on bookings flipping the linked
+         confirmed booking → cancelled with `noqa: TABLE_REF` marker per
+         D-38-11 (modules-independent contract preserved — NO
+         `from app.modules.bookings import ...`). Predicate WHERE
+         status='confirmed' enforces the FSM intent at the SQL layer.
+       - DB-invariant check (locked per plan 38-03 §Task 3 checker fix):
+         if the UPDATE returns 0 rows, this is a corruption — slot.status=
+         'booked' should ALWAYS imply a paired confirmed booking row
+         (create_booking creates them in a single UoW). RAISE
+         InternalConsistencyError → HTTP 500 with structlog error event
+         and ROLL BACK; do NOT silently emit `slot_cancelled` with
+         had_booking=False (that would mask the bug).
+       - Slot in-place mutate, flush, audit `slot_cancelled`
+         (had_booking=True), audit `booking_cancelled` (4-key
+         BookingCancelledPayload — actor=owner; cancel_reason=
+         'slot_cancelled_by_owner'), commit.
+
+    Sequence (combined):
+      1. Load slot via repository.get_slot_by_id_for_update — 404
+         slot_not_found.
+      2. _assert_can_transition(target='cancelled') — covers cancelled-
+         terminal source.
+      3. If status='booked': cross-module raw UPDATE on bookings →
+         InternalConsistencyError on 0-row (D-invariant).
+      4. Mutate slot in-place (status='cancelled', cancelled_at, cancel_reason).
       5. session.flush().
-      6. audit.emit('slot_cancelled', ...) with SlotCancelledPayload (6 keys;
-         had_booking=False because the active→cancelled path has no booking
-         link).
-      7. session.commit() (SVC001 gate).
-      8. Narrow refresh + return SlotResponse.
+      6. audit.emit('slot_cancelled', had_booking=bool).
+      7. If cascade happened: audit.emit('booking_cancelled', ...).
+      8. session.commit() (SVC001 gate — covers both audit emits + both
+         row updates atomically).
+      9. Narrow refresh + return SlotResponse.
     """
     # 1. Load with row lock.
     slot = await repository.get_slot_by_id_for_update(session, slot_id)
     if slot is None:
         raise SlotNotFoundError("slot_not_found")
 
-    # 2. Plan-38-01-scoped guard — booked source defers to plan 38-03.
-    if slot.status == "booked":
-        raise InvalidSlotTransitionError(
-            "invalid_transition",
-            fields={
-                "from_status": slot.status,
-                "to_status": "cancelled",
-                "deferred": "booked-slot cascade lands in plan 38-03",
-            },
-        )
-
-    # 3. FSM gate (catches cancelled-source-terminal).
+    # 2. FSM gate — covers cancelled-source (terminal). active→cancelled and
+    # booked→cancelled are both legal per SLOT_STATUS_TRANSITIONS (Phase 37).
     _assert_can_transition(slot, target="cancelled")
 
-    # 4. Mutate.
+    # 3. Plan 38-03 cascade — booked source flips the linked confirmed booking.
+    # Cross-module raw SQL (D-38-11) — Option A: predicate-gated UPDATE on
+    # bookings table. Predicate WHERE status='confirmed' enforces FSM intent;
+    # 0-row return is a DB-invariant violation (slot=booked + no confirmed
+    # booking) — raises InternalConsistencyError → HTTP 500.
+    cascaded_booking_id: UUID | None = None
+    if slot.status == "booked":
+        cascade_stmt = sa.text(
+            """
+            UPDATE bookings
+            SET status='cancelled',
+                cancelled_at=now(),
+                cancel_reason=:reason,
+                updated_at=now()
+            WHERE slot_id=:sid AND status='confirmed'
+            RETURNING id
+            """,  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+        )
+        # Option A per D-38-11 — preserve modules-independent; predicate
+        # WHERE status='confirmed' enforces FSM (confirmed → cancelled is
+        # the legal transition encoded in BOOKING_STATUS_TRANSITIONS).
+        result = await session.execute(
+            cascade_stmt,
+            {"sid": slot.id, "reason": "slot_cancelled_by_owner"},
+        )
+        cancelled_row = result.first()
+        if cancelled_row is None:
+            # DB-invariant breach (locked per plan 38-03 §Task 3 checker fix):
+            # slot.status='booked' MUST imply at least one bookings row with
+            # status='confirmed' (create_booking pairs them in the same UoW).
+            # The only ways to reach this state are corruption or a future
+            # bug. Surface as 500 + structlog error; transaction rolls back.
+            _log.error(
+                "slot_booking_inconsistency",
+                slot_id=str(slot.id),
+                slot_status=slot.status,
+                expected="bookings.status='confirmed' row",
+            )
+            raise InternalConsistencyError("slot_booking_inconsistency")
+        cascaded_booking_id = cancelled_row.id
+
+    # 4. Mutate slot in-place.
     slot.status = "cancelled"
     slot.cancelled_at = datetime.now(UTC)
     slot.cancel_reason = data.cancel_reason
 
-    # 5. Flush.
+    # 5. Flush — surfaces FK / CHECK errors before audit emits.
     await session.flush()
 
-    # 6. Audit emit — SlotCancelledPayload extra='forbid' (5 keys: slot_id,
-    # trainer_id, cancelled_by_user_id, cancel_reason, had_booking).
+    # 6. Audit emit — SlotCancelledPayload (5 keys: slot_id, trainer_id,
+    # cancelled_by_user_id, cancel_reason, had_booking).
+    had_booking = cascaded_booking_id is not None
     await audit.emit(
         session,
         "slot_cancelled",  # LITERAL — INFRA-11 AST gate
@@ -398,12 +473,29 @@ async def cancel_slot(
         trainer_id=str(slot.trainer_id),
         cancelled_by_user_id=str(actor.id),
         cancel_reason=data.cancel_reason,
-        had_booking=False,
+        had_booking=had_booking,
     )
 
-    # 7. Commit (SVC001 gate).
+    # 7. Booking-cascade audit (only if a booking row was flipped above).
+    # BookingCancelledPayload extra='forbid' = 4 keys: booking_id, slot_id,
+    # cancelled_by_user_id, cancel_reason. NO client_id (audit schema).
+    if cascaded_booking_id is not None:
+        await audit.emit(
+            session,
+            "booking_cancelled",  # LITERAL
+            actor_user_id=actor.id,
+            resource_type="booking",  # LITERAL
+            resource_id=cascaded_booking_id,
+            booking_id=str(cascaded_booking_id),
+            slot_id=str(slot.id),
+            cancelled_by_user_id=str(actor.id),
+            cancel_reason="slot_cancelled_by_owner",
+        )
+
+    # 8. Commit (SVC001 gate) — single atomic commit covers slot UPDATE +
+    # bookings UPDATE + both audit emits in one transaction.
     await session.commit()
 
-    # 8. Refresh + response.
+    # 9. Refresh + response.
     await session.refresh(slot, attribute_names=["updated_at"])
     return SlotResponse.model_validate(slot, from_attributes=True)

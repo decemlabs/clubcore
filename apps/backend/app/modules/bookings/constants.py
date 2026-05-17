@@ -32,6 +32,15 @@ BOOKING_STATUS_TRANSITIONS: Mapping[str, frozenset[str]] = MappingProxyType(
     }
 )
 
+# Phase 38 plan 38-03 / C-05 / BOOK-06 / D-38-16 — reception may only cancel a
+# booking when `slot.start_time - datetime.now(UTC) >= CANCEL_WINDOW_HOURS_RECEPTION`;
+# owner anytime. Mirrors `pt_sessions.constants.CANCEL_WINDOW_HOURS_RECEPTION`
+# shape (B-12). The window is measured against `slot.start_time` (NOT
+# `created_at` — D-38-16 explicit), so a booking made far in advance
+# automatically locks 24h before the slot fires.
+CANCEL_WINDOW_HOURS_RECEPTION = 24
+
 __all__ = [
     "BOOKING_STATUS_TRANSITIONS",
+    "CANCEL_WINDOW_HOURS_RECEPTION",
 ]

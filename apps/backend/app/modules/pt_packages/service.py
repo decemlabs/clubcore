@@ -42,11 +42,17 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.core.dependencies import CurrentUser, get_payment_recorder, get_payment_refunder
+from app.core.dependencies import (
+    CurrentUser,
+    get_payment_recorder,
+    get_payment_refunder,
+    resolve_trainer_by_id,
+)
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import PaginatedData
 from app.modules.pt_packages import repository
@@ -142,6 +148,46 @@ class InvalidTransitionError(ConflictError):
     """
 
     code = "invalid_transition"
+    status_code = 409
+
+
+# ---------------------------------------------------------------------------
+# Phase 38 PKG-01 / PKG-02 — trainer-binding error classes (mirror
+# pt_sessions.service shape so the wire codes are byte-stable across modules).
+# ---------------------------------------------------------------------------
+
+
+class TrainerNotFoundError(NotFoundError):
+    """Raised by create_pt_package when the TrainerById Protocol slot
+    resolves to None for ``data.trainer_id`` (Phase 38 PKG-01).
+
+    Mirrors ``pt_sessions.service.TrainerNotFoundError`` (404 status; Phase 34
+    D-34-12a)."""
+
+    code = "trainer_not_found"
+    status_code = 404
+
+
+class TrainerInactiveError(ValidationAppError):
+    """Raised by create_pt_package when the resolved trainer has
+    ``is_active=False`` (Phase 38 PKG-02).
+
+    422 (semantic-validation) not 409 (state-conflict) per Phase 31 / Phase 34
+    D-34-12a convention — mirrors ``pt_sessions.service.TrainerInactiveError``."""
+
+    code = "trainer_inactive"
+    status_code = 422
+
+
+class OutstandingBookingsExistError(ConflictError):
+    """Raised by refund_pt_package when at least one confirmed booking still
+    references this PT-package (Phase 38 PKG-03 / C-09 / D-38-11).
+
+    Pre-empts the FSM ``_assert_can_transition`` guard so the friendly 409
+    code surfaces instead of stock ``invalid_transition``. Operator must
+    cancel the outstanding bookings first (no automatic cascade per C-09)."""
+
+    code = "outstanding_bookings_exist"
     status_code = 409
 
 
@@ -510,6 +556,20 @@ async def create_pt_package(
             },
         )
 
+    # 2b: Phase 38 PKG-01 / PKG-02 — when trainer_id is provided, validate
+    # the trainer exists and is active via the TrainerById Protocol slot
+    # (modules-independent contract — NEVER `from app.modules.trainers ...`).
+    # Mirrors pt_sessions.service.record_pt_session:210-215 exactly so wire
+    # codes (trainer_not_found / trainer_inactive) and status (404 / 422)
+    # are byte-stable across modules. NULL trainer_id → "any trainer" path,
+    # no validation needed (C-08 / D-38-PATTERNS).
+    if data.trainer_id is not None:
+        trainer = await resolve_trainer_by_id(session, data.trainer_id)
+        if trainer is None:
+            raise TrainerNotFoundError("trainer_not_found")
+        if not trainer.is_active:
+            raise TrainerInactiveError("trainer_inactive")
+
     # 3: defensive pre-flight on active-per-client invariant. DB partial
     # UNIQUE is the final race gate (step 6); this is the friendly path
     # that surfaces the 409 without bumping into IntegrityError.
@@ -870,6 +930,29 @@ async def refund_pt_package(
     pt_package = await repository.get_pt_package(session, pt_package_id)
     if pt_package is None:
         raise PtPackageNotFoundError("pt_package_not_found")
+
+    # 1b. Phase 38 PKG-03 / C-09 / Pitfall 4 Option A / D-38-11 —
+    # block refund when at least one confirmed booking still references
+    # this pt_package. Cross-module reach via raw `sa.text()` preserves
+    # the modules-independent import-linter contract (no direct ORM import
+    # of the bookings module is allowed here). Operator must cancel
+    # outstanding bookings first — no automatic cascade per C-09.
+    #
+    # Ordering note: this fires BEFORE the FSM `_assert_can_transition`
+    # below so the friendly 409 `outstanding_bookings_exist` surfaces
+    # instead of stock `invalid_transition`. The FSM guard remains the
+    # second-line gate for cancelled / refunded sources (where no
+    # confirmed bookings can exist by definition, so this guard is a no-op
+    # in that branch and ordering does not introduce a regression).
+    result = await session.execute(
+        sa.text(
+            "SELECT count(*) FROM bookings "
+            "WHERE pt_package_id = :pkg_id AND status = 'confirmed'"
+        ),  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+        {"pkg_id": str(pt_package_id)},
+    )
+    if result.scalar_one() > 0:
+        raise OutstandingBookingsExistError("outstanding_bookings_exist")
 
     # 2. FSM guard — 409 invalid_transition for cancelled source. Fires
     # BEFORE the refunder is invoked so the second-attempt case (already
