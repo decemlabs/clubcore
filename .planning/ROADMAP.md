@@ -107,11 +107,11 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
   4. `BOOKING_STATUS_TRANSITIONS` and `SLOT_STATUS_TRANSITIONS` constants exist in their respective module `constants.py` files and a unit test asserts the complete legal transition set (INFRA-30/31)
   5. A startup integration test asserts all three new Protocol slots (`SlotByIdResolver`, `BookingSlotRestorer`, `BookingCompleter`) are non-None after `create_app()` returns; `register_active_pt_package_resolver` is also present in `telegram_bot.py:main()` (INFRA-32/33, DEBT-06)
 **Plans**: 5 plans
-- [ ] 37-01-PLAN.md — Audit taxonomy: extend LOCKED_AUDIT_EVENTS 53->58 + 5 Pydantic v2 payload schemas + PtSessionRecordedPayload.booking_id extension + count-assert refresh (INFRA-24, INFRA-25)
-- [ ] 37-02-PLAN.md — RBAC extension: Resource.SCHEDULE_SLOTS + Resource.BOOKINGS + Action.LIST + 4 OWNER_ONLY pairs + frontend registry.ts/can.ts byte-parity mirror + TEST-06 refresh (INFRA-26, INFRA-27)
-- [ ] 37-03-PLAN.md — FSM constants: schedule/constants.py:SLOT_STATUS_TRANSITIONS + bookings/constants.py:BOOKING_STATUS_TRANSITIONS (MappingProxyType) + unit tests (guard deferred to Phase 38 per v1.3/v1.4 precedent) (INFRA-30, INFRA-31)
-- [ ] 37-04-PLAN.md — Protocol slots + composition-root wiring: 3 new slots in dependencies.py + stub functions in schedule/service.py + bookings/service.py + main.py register chain + telegram_bot.py defensive double-wire (DEBT-06 + INFRA-33) + startup integration test + AST bot-subset-of-main parity test (INFRA-32, INFRA-33, DEBT-06)
-- [ ] 37-05-PLAN.md — Import-linter negative fixture (.importlinter contract already enumerates schedule+bookings on HEAD — no edit) + SVC001 walker scope extension for new service.py files (INFRA-28, INFRA-29)
+- [x] 37-01-PLAN.md — Audit taxonomy: extend LOCKED_AUDIT_EVENTS 53->58 + 5 Pydantic v2 payload schemas + PtSessionRecordedPayload.booking_id extension + count-assert refresh (INFRA-24, INFRA-25)
+- [x] 37-02-PLAN.md — RBAC extension: Resource.SCHEDULE_SLOTS + Resource.BOOKINGS + Action.LIST + 4 OWNER_ONLY pairs + frontend registry.ts/can.ts byte-parity mirror + TEST-06 refresh (INFRA-26, INFRA-27)
+- [x] 37-03-PLAN.md — FSM constants: schedule/constants.py:SLOT_STATUS_TRANSITIONS + bookings/constants.py:BOOKING_STATUS_TRANSITIONS (MappingProxyType) + unit tests (guard deferred to Phase 38 per v1.3/v1.4 precedent) (INFRA-30, INFRA-31)
+- [x] 37-04-PLAN.md — Protocol slots + composition-root wiring: 3 new slots in dependencies.py + stub functions in schedule/service.py + bookings/service.py + main.py register chain + telegram_bot.py defensive double-wire (DEBT-06 + INFRA-33) + startup integration test + AST bot-subset-of-main parity test (INFRA-32, INFRA-33, DEBT-06)
+- [x] 37-05-PLAN.md — Import-linter negative fixture (.importlinter contract already enumerates schedule+bookings on HEAD — no edit) + SVC001 walker scope extension for new service.py files (INFRA-28, INFRA-29)
 
 ### Phase 38: Schedule Module + Booking Core
 **Goal**: Trainer availability slots can be published and listed; clients can be booked into slots with race-safe DB enforcement; PT-package integration (trainer_id column, refund guard, validity-window guard) and all booking read/write endpoints are operational
@@ -155,7 +155,7 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 37. Foundations Bedrock | 0/5 | Not started | - |
+| 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
 | 38. Schedule Module + Booking Core | 0/TBD | Not started | - |
 | 39. Notifications + Cron | 0/TBD | Not started | - |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
