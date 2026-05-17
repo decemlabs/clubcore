@@ -28,6 +28,19 @@ Phase 19 additions:
    telegram_user_id without crossing the modules-independent importlinter contract.
    Local import of `app.modules.clients.service` is used to keep the import
    inside `create_app()` body (composition root carve-out, same pattern as Phase 17).
+
+Phase 38 additions:
+- The schedule + bookings module routers (`app.modules.schedule.router.schedule_router`
+   and `app.modules.bookings.router.bookings_router`) are mounted inside the v1
+   aggregator at `app/api/v1/router.py` alongside every other v1 business router.
+   The Phase 38 wiring intentionally does NOT add separate `app.include_router(...)`
+   calls in this file — the existing `app.include_router(api)` call at the end of
+   `create_app()` already brings in the v1 aggregator (and therefore /api/v1/trainer-slots
+   + /api/v1/bookings). See `apps/backend/app/api/v1/router.py:54-55` for the literal
+   `v1.include_router(schedule_router, prefix="/trainer-slots", ...)` and
+   `v1.include_router(bookings_router, prefix="/bookings", ...)` mounts. This file
+   still imports `bookings_service` and `schedule_service` (below) for the Phase 37
+   composition-root register_* calls that wire the cross-module Protocol slots.
 """
 
 from collections.abc import AsyncIterator
@@ -85,7 +98,15 @@ def create_app() -> FastAPI:
          (after register_user_loader, Phase 5 D-15).
       8. register_client_by_telegram_resolver(clients_service.resolve_client_by_telegram_user_id)
          fills the Phase 19 D-02 slot — third composition-root carve-out.
-      9. include_router(api) mounts /healthz at root + /api/v1/auth/*.
+      9. Phase 38 INFRA-32 / D-37-06: register_slot_by_id_resolver,
+         register_booking_slot_restorer, and register_booking_completer fill the
+         three v1.5 schedule + bookings cross-module Protocol slots. The schedule
+         and bookings module routers themselves (`schedule_router`,
+         `bookings_router`) are mounted in the v1 aggregator at
+         `app/api/v1/router.py` (Phase 38 module-router convention; see this
+         module's top-doc for the rationale).
+     10. include_router(api) mounts /healthz at root + /api/v1/* (including the
+         schedule + bookings routers via the v1 aggregator).
     """
     settings = get_settings()
     configure_logging(settings)

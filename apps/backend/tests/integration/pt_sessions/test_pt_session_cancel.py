@@ -134,7 +134,7 @@ async def test_cancel_pt_session_happy_path_reception_within_24h(
     assert data["cancelReason"] == "client_request"
 
     # sessions_remaining restored to 5 (was 4 after record).
-    db_session.expire_all()
+    # 38-06 DEFER fix: removed expire_all to avoid MissingGreenlet in SAVEPOINT-mode session
     remaining = await db_session.scalar(
         select(PtPackage.sessions_remaining).where(PtPackage.id == pkg.id)
     )
@@ -221,7 +221,7 @@ async def test_cancel_25h_old_as_owner_returns_200(
         headers=_csrf_headers(authed_client_owner, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 200, r.text
-    db_session.expire_all()
+    # 38-06 DEFER fix: removed expire_all to avoid MissingGreenlet in SAVEPOINT-mode session
     remaining = await db_session.scalar(
         select(PtPackage.sessions_remaining).where(PtPackage.id == pkg.id)
     )
@@ -267,13 +267,13 @@ async def test_cancel_session_of_exhausted_package_reactivates(
     assert r.status_code == 200, r.text
 
     # Package status flipped back to active; sessions_remaining=1.
-    db_session.expire_all()
-    refreshed = await db_session.scalar(
-        select(PtPackage).where(PtPackage.id == pkg.id)
-    )
-    assert refreshed is not None
-    assert refreshed.status == "active"
-    assert refreshed.sessions_remaining == 1
+    # 38-06 DEFER fix: use refresh() with targeted attribute_names instead of
+    # expire_all() — pattern established in 38-02 SUMMARY deviation #3. The
+    # cross-module raw UPDATE bypasses the ORM identity map; refresh forces
+    # SA to overwrite attributes from the underlying row.
+    await db_session.refresh(pkg, attribute_names=["status", "sessions_remaining"])
+    assert pkg.status == "active"
+    assert pkg.sessions_remaining == 1
 
     # Audit payload carries package_reactivated=True.
     rows = (
@@ -329,13 +329,10 @@ async def test_cancel_session_of_cancelled_package_keeps_cancelled(
     assert r.status_code == 200, r.text
 
     # Balance incremented; status UNCHANGED.
-    db_session.expire_all()
-    refreshed = await db_session.scalar(
-        select(PtPackage).where(PtPackage.id == pkg.id)
-    )
-    assert refreshed is not None
-    assert refreshed.status == "cancelled"  # terminal — stays
-    assert refreshed.sessions_remaining == 5
+    # 38-06 DEFER fix: use refresh() with targeted attribute_names (38-02 deviation #3).
+    await db_session.refresh(pkg, attribute_names=["status", "sessions_remaining"])
+    assert pkg.status == "cancelled"  # terminal — stays
+    assert pkg.sessions_remaining == 5
 
     # package_reactivated=False.
     rows = (
@@ -452,7 +449,7 @@ async def test_cancel_idempotency_replay_returns_cached_200(
     assert r2.json()["data"]["cancelledAt"] == cancelled_at_1
 
     # Single audit row (no double-emit).
-    db_session.expire_all()
+    # 38-06 DEFER fix: removed expire_all to avoid MissingGreenlet in SAVEPOINT-mode session
     audit_count = await db_session.scalar(
         select(func.count())
         .select_from(AuditLog)
