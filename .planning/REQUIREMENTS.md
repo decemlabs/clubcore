@@ -146,21 +146,68 @@
 
 ## Traceability
 
-<!-- Populated by gsd-roadmapper during Step 10 -->
+<!-- Populated by gsd-roadmapper 2026-05-17 -->
 
-| REQ-ID | Phase |
-|---|---|
-| INFRA-24..33 | (pending roadmap) |
-| DEBT-06 | (pending roadmap) |
-| SLOT-01..09 | (pending roadmap) |
-| BOOK-01..10 | (pending roadmap) |
-| PKG-01..06 | (pending roadmap) |
-| NOTIFY-01..05 | (pending roadmap) |
-| CRON-01..05 | (pending roadmap) |
-| BOT-01..05 | (pending roadmap) |
-| HANDOFF-01..02 | (pending roadmap) |
-| VER-05..08 | (pending roadmap) |
+| REQ-ID | Phase | Status |
+|---|---|---|
+| INFRA-24 | Phase 37 | Pending |
+| INFRA-25 | Phase 37 | Pending |
+| INFRA-26 | Phase 37 | Pending |
+| INFRA-27 | Phase 37 | Pending |
+| INFRA-28 | Phase 37 | Pending |
+| INFRA-29 | Phase 37 | Pending |
+| INFRA-30 | Phase 37 | Pending |
+| INFRA-31 | Phase 37 | Pending |
+| INFRA-32 | Phase 37 | Pending |
+| INFRA-33 | Phase 37 | Pending |
+| DEBT-06 | Phase 37 | Pending |
+| SLOT-01 | Phase 38 | Pending |
+| SLOT-02 | Phase 38 | Pending |
+| SLOT-03 | Phase 38 | Pending |
+| SLOT-04 | Phase 38 | Pending |
+| SLOT-05 | Phase 38 | Pending |
+| SLOT-06 | Phase 38 | Pending |
+| SLOT-07 | Phase 38 | Pending |
+| SLOT-08 | Phase 38 | Pending |
+| SLOT-09 | Phase 38 | Pending |
+| BOOK-01 | Phase 38 | Pending |
+| BOOK-02 | Phase 38 | Pending |
+| BOOK-03 | Phase 38 | Pending |
+| BOOK-04 | Phase 38 | Pending |
+| BOOK-05 | Phase 38 | Pending |
+| BOOK-06 | Phase 38 | Pending |
+| BOOK-07 | Phase 38 | Pending |
+| BOOK-08 | Phase 38 | Pending |
+| BOOK-09 | Phase 38 | Pending |
+| BOOK-10 | Phase 38 | Pending |
+| PKG-01 | Phase 38 | Pending |
+| PKG-02 | Phase 38 | Pending |
+| PKG-03 | Phase 38 | Pending |
+| PKG-04 | Phase 38 | Pending |
+| PKG-05 | Phase 38 | Pending |
+| PKG-06 | Phase 38 | Pending |
+| NOTIFY-01 | Phase 39 | Pending |
+| NOTIFY-02 | Phase 39 | Pending |
+| NOTIFY-03 | Phase 39 | Pending |
+| NOTIFY-04 | Phase 39 | Pending |
+| NOTIFY-05 | Phase 39 | Pending |
+| CRON-01 | Phase 39 | Pending |
+| CRON-02 | Phase 39 | Pending |
+| CRON-03 | Phase 39 | Pending |
+| CRON-04 | Phase 39 | Pending |
+| CRON-05 | Phase 39 | Pending |
+| BOT-01 | Phase 40 | Pending |
+| BOT-02 | Phase 40 | Pending |
+| BOT-03 | Phase 40 | Pending |
+| BOT-04 | Phase 40 | Pending |
+| BOT-05 | Phase 40 | Pending |
+| HANDOFF-01 | Phase 40 | Pending |
+| HANDOFF-02 | Phase 40 | Pending |
+| VER-05 | Phase 40 | Pending |
+| VER-06 | Phase 40 | Pending |
+| VER-07 | Phase 40 | Pending |
+| VER-08 | Phase 40 | Pending |
 
 ---
 
-*Total: 60 requirements across 10 categories. Phase numbering continues from v1.4 (Phase 37+). Expected ~4 phases (37 → 40). Group classes, online payment, and trainer DMs locked out of scope.*
+*Total: 57 requirements across 10 categories. Phase numbering continues from v1.4 (Phase 37+). 4 phases (37 → 40). Coverage: 57/57 — 100%. Group classes, online payment, and trainer DMs locked out of scope.*

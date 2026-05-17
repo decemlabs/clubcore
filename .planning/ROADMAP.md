@@ -7,6 +7,7 @@
 - ✅ **v1.2 Memberships + Visits** — Phases 15-23 (shipped 2026-05-08) — see [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Memberships Extras + Tech-Debt** — Phases 24-29 (shipped 2026-05-14) — see [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 Cash Sales + PT Packages** — Phases 30-36 (shipped 2026-05-16) — see [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
+- 🚧 **v1.5 Schedule + Bookings (PT slots)** — Phases 37-40 (in progress)
 
 ## Phases
 
@@ -89,9 +90,77 @@ Full details: [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 
 ---
 
-*Roadmap last updated: 2026-05-16 — v1.4 milestone archived (all 7 phases shipped; Phase 36 verification passed; details collapsed to milestones/v1.4-ROADMAP.md). Awaiting next milestone — see PROJECT.md "Next Milestone Goals".*
+### 🚧 v1.5 Schedule + Bookings (PT slots) (In Progress)
+
+**Milestone Goal:** Close the last empty business-module gap. Trainers publish 1:1 PT availability windows; clients book individual sessions via reception, owner, or Telegram bot `/book`; the booking lifecycle (`confirmed → cancelled / no_show / completed`) is race-safe at the DB layer and audit-traceable end-to-end. Group classes (capacity > 1) remain explicitly out of scope.
+
+## Phase Details (v1.5)
+
+### Phase 37: Foundations Bedrock
+**Goal**: All architectural contracts, RBAC permissions, audit taxonomy, FSM constants, and Protocol slot signatures for schedule + bookings are locked before any module service code is written
+**Depends on**: Phase 36 (v1.4 complete)
+**Requirements**: INFRA-24, INFRA-25, INFRA-26, INFRA-27, INFRA-28, INFRA-29, INFRA-30, INFRA-31, INFRA-32, INFRA-33, DEBT-06
+**Success Criteria** (what must be TRUE):
+  1. `LOCKED_AUDIT_EVENTS` frozenset contains exactly 56 entries and `test_audit_taxonomy.py` count assertion passes CI (INFRA-24/25)
+  2. `Resource.SCHEDULE_SLOTS` and `Resource.BOOKINGS` are importable from `app.core.permissions`; the RBAC parity test passes with the updated `OWNER_ONLY` frozenset (INFRA-26/27)
+  3. `import-linter` `modules-independent` contract rejects any direct import between `app.modules.schedule` and `app.modules.bookings` or between those modules and existing business modules (INFRA-28)
+  4. `BOOKING_STATUS_TRANSITIONS` and `SLOT_STATUS_TRANSITIONS` constants exist in their respective module `constants.py` files and a unit test asserts the complete legal transition set (INFRA-30/31)
+  5. A startup integration test asserts all three new Protocol slots (`SlotByIdResolver`, `BookingSlotRestorer`, `BookingCompleter`) are non-None after `create_app()` returns; `register_active_pt_package_resolver` is also present in `telegram_bot.py:main()` (INFRA-32/33, DEBT-06)
+**Plans**: TBD
+
+### Phase 38: Schedule Module + Booking Core
+**Goal**: Trainer availability slots can be published and listed; clients can be booked into slots with race-safe DB enforcement; PT-package integration (trainer_id column, refund guard, validity-window guard) and all booking read/write endpoints are operational
+**Depends on**: Phase 37
+**Requirements**: SLOT-01, SLOT-02, SLOT-03, SLOT-04, SLOT-05, SLOT-06, SLOT-07, SLOT-08, SLOT-09, BOOK-01, BOOK-02, BOOK-03, BOOK-04, BOOK-05, BOOK-06, BOOK-07, BOOK-08, BOOK-09, BOOK-10, PKG-01, PKG-02, PKG-03, PKG-04, PKG-05, PKG-06
+**Success Criteria** (what must be TRUE):
+  1. Owner can publish a slot (`POST /api/v1/trainer-slots`) and see it returned in `GET /api/v1/trainer-slots`; a second publish with an overlapping time range or within 10-minute buffer returns 409 `slot_overlap` or `slot_too_close` respectively (SLOT-01..06)
+  2. Owner can cancel a slot with an outstanding confirmed booking via `PATCH /api/v1/trainer-slots/{id}/cancel` — the booking atomically transitions to `cancelled` in the same DB transaction and both `slot_cancelled` and `booking_cancelled` audit events are emitted (SLOT-07/09, BOOK-06)
+  3. Two concurrent `POST /api/v1/bookings` requests for the same slot result in exactly one 201 and one 409 `slot_already_booked` (BOOK-02/03, BOOK-10); a single booking for a slot with `sessions_remaining = 0` returns 409 `pt_package_exhausted` (BOOK-04/05)
+  4. `POST /api/v1/pt-packages/{id}/refund` returns 409 `outstanding_bookings_exist` when a confirmed booking against that package exists (PKG-03); `POST /api/v1/pt-sessions` with a `booking_id` atomically transitions the parent booking to `completed` in the same UoW as the session decrement (PKG-04/05)
+  5. All booking and slot list endpoints (`GET /api/v1/bookings`, `GET /api/v1/trainer-slots`, `GET /api/v1/clients/{id}/bookings`) return paginated `{items, total, page, pageSize}` envelopes and honor their documented query filters (BOOK-07/08/09, SLOT-08)
+**Plans**: TBD
+
+### Phase 39: Notifications + Cron
+**Goal**: Clients receive Telegram DMs for booking confirmation and cancellation; overdue confirmed bookings are auto-marked no-show by cron at 23:10 MSK; 24-hour reminders are sent by cron at 06:35 MSK with idempotency enforcement
+**Depends on**: Phase 38
+**Requirements**: NOTIFY-01, NOTIFY-02, NOTIFY-03, NOTIFY-04, NOTIFY-05, CRON-01, CRON-02, CRON-03, CRON-04, CRON-05
+**Success Criteria** (what must be TRUE):
+  1. A linked client receives the correct locked Russian DM when a booking is created (`BOOKING_CONFIRMED_DM`) and a different DM depending on who cancelled (`BOOKING_CANCELLED_BY_CLIENT_DM` vs `BOOKING_CANCELLED_BY_OWNER_DM`); owner copy-lock sign-off is recorded in PROJECT.md (NOTIFY-01/03/04)
+  2. Running `run_no_show_cron_once.py` against a live stack with at least one overdue confirmed booking marks it `no_show` and emits `booking_no_show`; re-running the script processes zero rows (CRON-01/04)
+  3. Running `run_booking_reminders_once.py` against a live stack sends `BOOKING_REMINDER_24H_DM` to linked clients with bookings in the 23h-25h window and inserts a `booking_notifications` idempotency row per send; re-running the script sends zero DMs (CRON-02/05, NOTIFY-05)
+  4. Both new ARQ crons appear in `WorkerSettings.cron_jobs` with `unique=True, keep_result=60` and `on_job_start`/`on_job_end` structlog context vars fire on each cron tick (CRON-03)
+**Plans**: TBD
+
+### Phase 40: Telegram /book + OpenAPI Drift Gate + Milestone Verification
+**Goal**: Clients can book PT slots directly via Telegram bot `/book` using an anti-oracle InlineKeyboard flow; OpenAPI artifact is byte-stably regenerated with all v1.5 paths; 6 operator scenarios + Telegram sandbox smoke + concurrent race test confirm the full milestone is production-ready
+**Depends on**: Phase 39
+**Requirements**: BOT-01, BOT-02, BOT-03, BOT-04, BOT-05, HANDOFF-01, HANDOFF-02, VER-05, VER-06, VER-07, VER-08
+**Success Criteria** (what must be TRUE):
+  1. A Telegram-linked client with an active PT-package can send `/book`, receive an InlineKeyboard of up to 5 upcoming slots, tap one, and receive `BOOKING_CONFIRMED_DM`; a client without an active PT-package (or with no slots available) receives only `_BOT_BOOK_DENIED_DM` with no discriminating information (BOT-01..05)
+  2. `apps/backend/openapi.json` and `packages/api-client/src/schema.d.ts` are byte-stable after regen; `git diff --exit-code` on both artifacts passes in CI; `schema.contract.test.ts` forward-guard includes `AssertNonNever` assertions for all new v1.5 paths (HANDOFF-01/02)
+  3. All 6 operator curl scenarios pass against a live `docker compose up` stack: publish + list slot, book via reception, concurrent same-slot booking (one 201 / one 409), 24h cancel window (reception fails, owner succeeds), PT-package refund with outstanding booking (409), PT-session with `booking_id` completes the booking (VER-05)
+  4. All 4 backend CI gates (ruff, mypy strict, pytest including BOOK-TEST-01 race, OpenAPI drift) are green; operator sign-off recorded in `.planning/milestones/v1.5-VERIFICATION-LOG.md` (VER-08)
+**Plans**: TBD
+
+---
+
+## Progress
+
+**Execution Order:** 37 → 38 → 39 → 40
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 37. Foundations Bedrock | 0/TBD | Not started | - |
+| 38. Schedule Module + Booking Core | 0/TBD | Not started | - |
+| 39. Notifications + Cron | 0/TBD | Not started | - |
+| 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
+
+---
+
+*Roadmap last updated: 2026-05-17 — v1.5 Schedule + Bookings (PT slots) roadmap created (Phases 37-40, 57/57 requirements mapped). Prior milestones v1.0-v1.4 collapsed above.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
 *v1.3 Coverage: 44/44 v1.3 requirements satisfied (1 mock-mode UX deferred to v1.4 — closed in Phase 30 DEBT-05)*
-*v1.4 Coverage: 61/61 v1.4 in-scope requirements satisfied (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 1 FE-10 + 4 VER). FE-11..18 (8 reqs) descoped to v2.0 Frontend Integration milestone per the 2026-05-15 pivot. Phase 36 verification: 8/8 scenarios + 20/20 race + 4/4 CI gates passed; 5 inline REG fixes; 44 pre-existing pytest failures rolled forward as DEFER-36-04-A (recommended single-commit fix: `pt_packages/service.py` UUID stringify, unlocks ~28 of 44).*
+*v1.4 Coverage: 61/61 v1.4 in-scope requirements satisfied (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 1 FE-10 + 4 VER). FE-11..18 (8 reqs) descoped to v2.0 Frontend Integration milestone per the 2026-05-15 pivot.*
+*v1.5 Coverage: 57/57 v1.5 requirements mapped (11 INFRA/DEBT → Phase 37; 25 SLOT/BOOK/PKG → Phase 38; 10 NOTIFY/CRON → Phase 39; 11 BOT/HANDOFF/VER → Phase 40).*
