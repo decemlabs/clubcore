@@ -23,6 +23,7 @@ from app.core.database import Base
 
 # Register all ORM models with Base.metadata for autogenerate (TEST-08 / Phase 5 INFRA-03).
 import app.modules.auth.models
+import app.modules.bookings.models  # Phase 38 BOOK-01 / 0017
 import app.modules.clients.models
 import app.modules.memberships.models
 import app.modules.payments.models  # Phase 32 PAY-01
