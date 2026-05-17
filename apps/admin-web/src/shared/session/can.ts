@@ -41,6 +41,18 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   { action: 'view', resource: 'payments' },
   { action: 'cancel', resource: 'pt-packages' },
   { action: 'delete', resource: 'pt-packages' },
+  // Phase 37 INFRA-27 — v1.5 owner-only pairs (mirror permissions.py).
+  // Reception RETAINS (NOT in this array): {view, schedule-slots}, {list, schedule-slots},
+  // {create, bookings}, {cancel, bookings} (24h cancel-window enforced server-side via
+  // `cancel_window_expired` 403, not RBAC — mirror Phase 34 D-34-09a), {view, bookings},
+  // {list, bookings}. Slot publication is owner-only (no trainer self-service in v1.5).
+  // OVERRIDE D-37-03: CONTEXT.md said "25 → 35"; correct shipped delta is 25 → 29
+  // (+4 SCHEDULE_SLOTS write pairs only). The 6 reception-retained pairs above
+  // describe what reception SEES, not what is denied.
+  { action: 'create', resource: 'schedule-slots' },
+  { action: 'edit', resource: 'schedule-slots' },
+  { action: 'delete', resource: 'schedule-slots' },
+  { action: 'cancel', resource: 'schedule-slots' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {
