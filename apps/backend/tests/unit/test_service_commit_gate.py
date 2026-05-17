@@ -163,6 +163,19 @@ _AUTH_SERVICE = _BACKEND_APP / "modules" / "auth" / "service.py"
 _TRAINERS_SERVICE = _BACKEND_APP / "modules" / "trainers" / "service.py"
 _PAYMENTS_SERVICE = _BACKEND_APP / "modules" / "payments" / "service.py"
 _PT_PACKAGES_SERVICE = _BACKEND_APP / "modules" / "pt_packages" / "service.py"
+# Phase 34 — pt_sessions placeholder added retroactively in Phase 37 INFRA-29
+# (was missed from the Phase 30 INFRA-21 batch; the live service file already
+# exists from Phase 34 and is gate-clean by construction).
+_PT_SESSIONS_SERVICE = _BACKEND_APP / "modules" / "pt_sessions" / "service.py"
+# Phase 37 INFRA-29 — pre-register v1.5 service files so the live walker
+# enters bookings/schedule write paths from the first commit in Phase 38
+# (mirrors Phase 30 INFRA-21 placeholder pattern). The stub service.py
+# files shipped by plan 37-04 have zero write functions — they pass the
+# SVC001 gate trivially (test docstring at "Phase 30 INFRA-21 extends the
+# live scope to ... A zero-function service passes the gate trivially
+# (no functions -> no offenders).").
+_SCHEDULE_SERVICE = _BACKEND_APP / "modules" / "schedule" / "service.py"
+_BOOKINGS_SERVICE = _BACKEND_APP / "modules" / "bookings" / "service.py"
 _INSPECTED_SERVICES: tuple[Path, ...] = (
     _CLIENTS_SERVICE,
     _MEMBERSHIPS_SERVICE,
@@ -170,6 +183,9 @@ _INSPECTED_SERVICES: tuple[Path, ...] = (
     _TRAINERS_SERVICE,
     _PAYMENTS_SERVICE,
     _PT_PACKAGES_SERVICE,
+    _PT_SESSIONS_SERVICE,
+    _SCHEDULE_SERVICE,
+    _BOOKINGS_SERVICE,
 )
 
 
