@@ -198,6 +198,20 @@ Any post-merge edit to the 5 locked constants above requires a NEW `## Owner Cop
 - No new external dependencies, no Alembic migration, no schema or service-layer changes; this plan is a pure additive shipment.
 - The owner copy-lock is recorded — Phase 39 plan 39-02 can proceed without a pre-merge approval gate.
 
+## Self-Check: PASSED
+
+- [x] `apps/backend/app/modules/bookings/notifications.py` exists
+- [x] `apps/backend/tests/unit/test_booking_notifications_copy.py` exists
+- [x] `.planning/phases/39-notifications-cron/39-01-SUMMARY.md` exists
+- [x] Commit `78e1f09` (Task 1: feat) exists in git log
+- [x] Commit `c2701d5` (Task 2: test) exists in git log
+- [x] Commit `650847e` (Task 3 + SUMMARY: docs) exists in git log
+- [x] `ruff check` + `mypy --strict` green on the new module
+- [x] All 7 unit tests pass via `pytest tests/unit/test_booking_notifications_copy.py -xvs`
+- [x] 5 `Final[str]` constants present, 4 `render_*_dm` helpers present
+- [x] `OWNER-COPY-LOCK pending` count == 0; `OWNER-COPY-LOCK signed-off` count == 5
+- [x] `## Owner Copy-Lock Sign-off` block recorded with all 5 constants
+
 ---
 *Phase: 39-notifications-cron*
 *Plan: 01*
