@@ -54,8 +54,13 @@ def test_worker_settings_cron_resolves_to_registered_function() -> None:
 
     Phase 33 (D-33-13): cron_jobs grew to 3 entries — append expire_pt_packages
     at 06:25 Europe/Moscow (index 2). Earlier indices preserved.
+
+    Phase 39 (D-39-16): cron_jobs grew to 4 entries — append mark_no_show_bookings
+    at 20:10 UTC / 23:10 MSK (index 3). Earlier indices preserved. (Wave 4 will
+    insert send_booking_reminders at index 3 between expire_pt_packages and
+    mark_no_show_bookings, growing the list to 5.)
     """
-    assert len(WorkerSettings.cron_jobs) == 3
+    assert len(WorkerSettings.cron_jobs) == 4
     cron_entry = WorkerSettings.cron_jobs[0]
     assert cron_entry.coroutine.__name__ == "expire_memberships"
     assert cron_entry.coroutine is expire_memberships, (
@@ -88,9 +93,12 @@ def test_worker_settings_functions_registered() -> None:
 
     Phase 33 (D-33-13) appended expire_pt_packages — its membership is
     asserted by tests/unit/test_worker_cron_resolution.py.
+
+    Phase 39 (D-39-16) appended mark_no_show_bookings; Wave 4 will append
+    send_booking_reminders.
     """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 3
+    assert len(WorkerSettings.functions) == 4
 
 
 def test_worker_settings_redis_settings_resolved() -> None:
