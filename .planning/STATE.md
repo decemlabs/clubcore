@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
-status: planning
-last_updated: "2026-05-18T15:00:00.000Z"
-last_activity: 2026-05-18
+status: verifying
+stopped_at: Phase 41 context gathered
+last_updated: "2026-05-18T16:49:08.921Z"
+last_activity: 2026-05-18 — v1.6 ROADMAP.md created by gsd-roadmapper
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0  # unknown until /gsd-plan-phase runs for each phase
+  total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -51,12 +51,14 @@ Last activity: 2026-05-18 — v1.6 ROADMAP.md created by gsd-roadmapper
 **Execution order:** 41 → 42 → 43 → 44 → 45 → 46. The dependency graph forks after Phase 41 (Phases 42 and 43 are independent) and reconverges at Phase 44; plan-phase will resolve parallel-eligible plans within each phase.
 
 **Critical-invariant ordering preserved:**
+
 - INFRA bedrock (Phase 41) lands FIRST — cannot start any feature work without it
 - `test_password_reset_no_oracle.py` (RESET-06) lands in Phase 41 BEFORE any reset endpoint per Pitfall 1
 - Cross-channel `channel`-column migration (INFRA-* / NOTIFY-06) lands in Phase 41 BEFORE any NOTIFY-* phase
 - OpenAPI drift gate (HANDOFF-03..04) bundled with verification (VER-09..14) in Phase 46 as the serialization point AFTER all feature phases
 
 **Open conflicts (resolve at discuss-phase per scope):**
+
 1. Email provider (Yandex Cloud Postbox primary vs Unisender Go fallback) — Phase 42 discuss
 2. Reset-token storage (itsdangerous stateless vs DB `password_reset_tokens` table) — Phase 44 discuss
 3. `notifications` module status (placeholder vs resurrect) — Phase 45 discuss (synthesizer leans placeholder)
@@ -96,6 +98,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T15:00:00.000Z
-Stopped at: v1.6 ROADMAP.md created — 6 phases (41-46), 48/48 reqs mapped
+Last session: 2026-05-18T16:49:08.917Z
+Stopped at: Phase 41 context gathered
 Resume: `/gsd-discuss-phase 41`
