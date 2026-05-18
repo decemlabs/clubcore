@@ -76,6 +76,8 @@ def _include_object(
             "uq_pt_package_plans_name_alive",  # Phase 33: partial expression index
             # Phase 33: partial index on (client_id) WHERE status='active'
             "uq_pt_packages_active_per_client",
+            # Phase 41 INFRA-38: partial UNIQUE on lower(email) WHERE deleted_at IS NULL
+            "uq_users_email_active",
         )
     )
 
