@@ -12,15 +12,25 @@ Includes:
   - ``make_trainer`` / ``make_client`` / ``make_pt_package_plan`` /
     ``make_pt_package`` / ``make_slot`` factories for the service-layer
     create-booking integration test (plan 38-02 Task 3).
+  - Phase 39 NOTIFY-03/04 (plan 39-02 Task 2): ``fake_bot``,
+    ``sender_stub``, ``notifications_session_factory`` ported from
+    ``tests/integration/notifications/conftest.py``, plus
+    ``make_linked_client`` / ``make_unlinked_client`` /
+    ``make_active_trainer`` / ``make_future_slot`` / ``make_active_pt_package``
+    / ``make_confirmed_booking`` factories tailored for the DM-dispatch
+    integration tests.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -31,7 +41,9 @@ from app.core.database import get_db
 from app.core.permissions import Role
 from app.core.redis import get_redis
 from app.core.security import hash_password
+from app.integrations.telegram.sender import SendResult
 from app.modules.auth.models import User
+from app.modules.bookings.models import Booking
 from app.modules.clients.models import Client
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from app.modules.schedule.models import TrainerAvailabilitySlot
@@ -324,5 +336,324 @@ async def make_slot(
         await db_session.commit()
         await db_session.refresh(slot)
         return slot
+
+    return _make
+
+
+# ---------------------------------------------------------------------------
+# Phase 39 NOTIFY-03/04 (plan 39-02 Task 2) — Telegram DM dispatch test
+# fixtures. Mirror the patterns in tests/integration/notifications/conftest.py
+# (D-39-19 — sender-stub at module level, NOT bot-level).
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _RecordedCall:
+    """One captured invocation of ``send_text_dm`` (Phase 39 plan 39-02)."""
+
+    bot: object
+    chat_id: int
+    text: str
+
+
+@dataclass
+class _SenderStubState:
+    """Mutable per-call state controlling the sender_stub fixture.
+
+    Usage::
+
+        sender_module, sender_state = sender_stub
+        sender_state.queue(SendResult(ok=False, blocked=True))
+        await service.create_booking(...)
+        assert len(sender_state.calls) == 1
+    """
+
+    results_queue: list[SendResult] = field(default_factory=list)
+    default_result: SendResult = field(default_factory=lambda: SendResult(ok=True))
+    calls: list[_RecordedCall] = field(default_factory=list)
+
+    def queue(self, *results: SendResult) -> None:
+        """Push one or more SendResults that pop off in FIFO order."""
+        self.results_queue.extend(results)
+
+    def set_default(self, result: SendResult) -> None:
+        """Replace the default result returned once the queue drains."""
+        self.default_result = result
+
+
+def _fake_bot_factory() -> object:
+    """Sentinel ``bot=`` arg — the stub never reaches into it (only identity)."""
+    return object()
+
+
+fake_bot = pytest.fixture(_fake_bot_factory)
+
+
+def _sender_stub_factory() -> tuple[SimpleNamespace, _SenderStubState]:
+    """Module-typed Telegram sender stub + state-handle (D-39-19 pattern).
+
+    Returns ``(module, state)`` — tests monkeypatch
+    ``app.modules.bookings.service.telegram_sender`` to ``module`` (the
+    ``SimpleNamespace`` quacks like a ModuleType exposing ``send_text_dm``).
+    The state exposes ``.calls`` for assertions and ``.queue(...)`` to push
+    custom SendResults before the next send.
+    """
+    state = _SenderStubState()
+
+    async def send_text_dm(bot: object, chat_id: int, text: str) -> SendResult:
+        state.calls.append(_RecordedCall(bot=bot, chat_id=chat_id, text=text))
+        if state.results_queue:
+            return state.results_queue.pop(0)
+        return state.default_result
+
+    module = SimpleNamespace(send_text_dm=send_text_dm)
+    return module, state
+
+
+sender_stub = pytest.fixture(_sender_stub_factory)
+
+
+# ---------------------------------------------------------------------------
+# SAVEPOINT-mode session factory wrapper (mirrors the notifications conftest)
+# — optional in plan 39-02 (the sync-dispatch path doesn't use it) but kept
+# here so plan 39-04's cron-helper tests can land without re-porting.
+# ---------------------------------------------------------------------------
+
+
+class _SessionContext:
+    """Async context manager yielding the shared SAVEPOINT-mode session."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def __aenter__(self) -> AsyncSession:
+        return self._session
+
+    async def __aexit__(self, *args: Any) -> None:
+        # Teardown belongs to the outer db_session fixture (SAVEPOINT-roll
+        # at end of test). Do NOT close the session here.
+        return None
+
+
+class _SavepointSessionmaker:
+    """Callable returning ``_SessionContext`` — quacks like ``async_sessionmaker``."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def __call__(self) -> _SessionContext:
+        return _SessionContext(self._session)
+
+
+@pytest_asyncio.fixture
+async def notifications_session_factory(
+    db_session: AsyncSession,
+) -> _SavepointSessionmaker:
+    """``async_sessionmaker``-shaped factory bound to the SAVEPOINT-mode session."""
+    return _SavepointSessionmaker(db_session)
+
+
+# ---------------------------------------------------------------------------
+# Booking-domain factories for the DM-dispatch integration tests. These are
+# thin wrappers around the existing Phase 38 ``make_*`` factories with
+# defaults tuned for the DM happy path (linked client, future slot, active
+# package).
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def make_linked_client(
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> Callable[..., Awaitable[Client]]:
+    """Insert a Client with ``telegram_user_id`` set (DM happy path).
+
+    Per-call counter ensures unique phone + telegram_user_id across
+    multiple invocations in the same test.
+    """
+    _counter = {"i": 0}
+
+    async def _make(
+        *,
+        telegram_user_id: int = 100001,
+        first_name: str = "Иван",
+        last_name: str = "Петров",
+    ) -> Client:
+        _counter["i"] += 1
+        client = Client(
+            last_name=last_name,
+            first_name=first_name,
+            phone=f"+79051{_counter['i']:06d}",
+            telegram_user_id=telegram_user_id + _counter["i"] - 1,
+            created_by_user_id=seeded_owner.id,
+        )
+        db_session.add(client)
+        await db_session.commit()
+        await db_session.refresh(client)
+        return client
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_unlinked_client(
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> Callable[..., Awaitable[Client]]:
+    """Insert a Client with ``telegram_user_id IS NULL`` (DM-skip path)."""
+    _counter = {"i": 0}
+
+    async def _make(
+        *,
+        first_name: str = "Анна",
+        last_name: str = "Сидорова",
+    ) -> Client:
+        _counter["i"] += 1
+        client = Client(
+            last_name=last_name,
+            first_name=first_name,
+            phone=f"+79052{_counter['i']:06d}",
+            telegram_user_id=None,
+            created_by_user_id=seeded_owner.id,
+        )
+        db_session.add(client)
+        await db_session.commit()
+        await db_session.refresh(client)
+        return client
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_active_trainer(
+    db_session: AsyncSession,
+) -> Callable[..., Awaitable[Trainer]]:
+    """Insert an active Trainer with a known display name (used in DM body)."""
+    _counter = {"i": 0}
+
+    async def _make(*, full_name: str = "Пётр Сидоров") -> Trainer:
+        _counter["i"] += 1
+        trainer = Trainer(
+            full_name=full_name,
+            phone=None,
+            is_active=True,
+        )
+        db_session.add(trainer)
+        await db_session.commit()
+        await db_session.refresh(trainer)
+        return trainer
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_future_slot(
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> Callable[..., Awaitable[TrainerAvailabilitySlot]]:
+    """Insert an active TrainerAvailabilitySlot in the future (default +24h)."""
+    _counter = {"i": 0}
+
+    async def _make(
+        *,
+        trainer: Trainer,
+        start_offset: timedelta = timedelta(hours=25),
+        duration: timedelta = timedelta(hours=1),
+    ) -> TrainerAvailabilitySlot:
+        _counter["i"] += 1
+        start = datetime.now(tz=UTC) + start_offset + timedelta(minutes=_counter["i"])
+        slot = TrainerAvailabilitySlot(
+            trainer_id=trainer.id,
+            start_time=start,
+            end_time=start + duration,
+            status="active",
+            created_by_user_id=seeded_owner.id,
+        )
+        db_session.add(slot)
+        await db_session.commit()
+        await db_session.refresh(slot)
+        return slot
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_active_pt_package(
+    db_session: AsyncSession,
+) -> Callable[..., Awaitable[PtPackage]]:
+    """Insert an active PtPackage (with an auto-generated plan snapshot)."""
+    _counter = {"i": 0}
+
+    async def _make(
+        *,
+        client: Client,
+        trainer: Trainer | None = None,
+        sessions_remaining: int = 5,
+    ) -> PtPackage:
+        _counter["i"] += 1
+        plan = PtPackagePlan(
+            name=f"DMPlan-{_counter['i']}-{uuid4().hex[:4]}",
+            session_count=10,
+            price_kopecks=500000,
+            validity_days=90,
+        )
+        db_session.add(plan)
+        await db_session.commit()
+        await db_session.refresh(plan)
+
+        today = datetime.now(tz=UTC).date()
+        pt_package = PtPackage(
+            client_id=client.id,
+            plan_id=plan.id,
+            plan_name_snapshot=plan.name,
+            session_count_snapshot=plan.session_count,
+            price_kopecks_snapshot=plan.price_kopecks,
+            validity_days_snapshot=plan.validity_days,
+            sessions_remaining=sessions_remaining,
+            status="active",
+            start_date=today,
+            end_date=today + timedelta(days=89),
+        )
+        db_session.add(pt_package)
+        await db_session.commit()
+        await db_session.refresh(pt_package)
+        return pt_package
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_confirmed_booking(
+    db_session: AsyncSession,
+) -> Callable[..., Awaitable[Booking]]:
+    """Insert a confirmed Booking row + flip the linked slot to 'booked'.
+
+    Direct ORM inserts (bypasses HTTP / service-layer audit emits) so the
+    cancel-DM tests can craft a starting state without triggering a
+    confirmation-DM dispatch along the way.
+    """
+
+    async def _make(
+        *,
+        slot: TrainerAvailabilitySlot,
+        client: Client,
+        pt_package: PtPackage,
+        actor_user_id: UUID,
+    ) -> Booking:
+        booking = Booking(
+            slot_id=slot.id,
+            client_id=client.id,
+            pt_package_id=pt_package.id,
+            created_by_user_id=actor_user_id,
+            status="confirmed",
+        )
+        db_session.add(booking)
+        # Flip the slot to 'booked' so the cancel path's FSM gate
+        # (booked->cancelled) accepts the transition.
+        slot.status = "booked"
+        await db_session.commit()
+        await db_session.refresh(booking)
+        await db_session.refresh(slot)
+        return booking
 
     return _make

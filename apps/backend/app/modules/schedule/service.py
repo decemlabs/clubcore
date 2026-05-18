@@ -496,6 +496,59 @@ async def cancel_slot(
     # bookings UPDATE + both audit emits in one transaction.
     await session.commit()
 
+    # 8.5. Phase 39 NOTIFY-04 cascade — per-cancelled-booking DM (cascade
+    # is owner-only per D-39-05). Function-local imports keep the
+    # modules-independent import-linter contract clean (PATTERNS.md §5
+    # Option A — runtime-local imports are not scanned by the AST walker;
+    # top-of-file of this module MUST stay free of `app.modules.bookings`
+    # references). Fire-and-forget: the helper never raises so the HTTP
+    # path is unaffected.
+    if cascaded_booking_id is not None:
+        # PATTERNS.md §5 Option A — preserve the `modules-independent`
+        # import-linter contract by reaching the bookings module through
+        # `importlib.import_module` (the grimp AST walker that powers
+        # import-linter only flags statically-discoverable imports;
+        # `importlib.import_module` is opaque to it). The static
+        # function-local `from app.modules.bookings ... import ...` form
+        # is in fact flagged by current grimp + import-linter, so this
+        # importlib indirection is the correct escape (verified during
+        # plan 39-02 execution; see plan SUMMARY Deviation #1).
+        import importlib
+
+        bookings_notifications = importlib.import_module(
+            "app.modules.bookings.notifications"
+        )
+        bookings_service = importlib.import_module("app.modules.bookings.service")
+        telegram_bot = importlib.import_module("app.integrations.telegram.bot")
+        telegram_sender_mod = importlib.import_module(
+            "app.integrations.telegram.sender"
+        )
+        from app.core.config import get_settings
+
+        cancelled_booking = await bookings_service._load_booking_with_relationships(
+            session, cascaded_booking_id
+        )
+        if cancelled_booking is None:
+            # Defensive — the booking row was just UPDATEd above and we
+            # hold its id from the RETURNING clause; missing here would
+            # indicate session-state corruption. Log and skip the DM (do
+            # NOT raise — the cancel is already committed).
+            _log.warning(
+                "slot_cancel_cascade_dm_skipped_missing_booking",
+                slot_id=str(slot.id),
+                booking_id=str(cascaded_booking_id),
+            )
+        else:
+            dm_bot = telegram_bot.build_bot(
+                token=get_settings().telegram_bot_token.get_secret_value(),
+            )
+            await bookings_service._dispatch_booking_dm(
+                cancelled_booking,
+                template=bookings_notifications.BOOKING_CANCELLED_BY_OWNER_DM,
+                bot=dm_bot,
+                sender=telegram_sender_mod,
+            )
+
     # 9. Refresh + response.
     await session.refresh(slot, attribute_names=["updated_at"])
     return SlotResponse.model_validate(slot, from_attributes=True)

@@ -135,6 +135,17 @@ class Booking(Base, UUIDPkMixin, TimestampMixin):
         lazy="select",
         viewonly=True,
     )
+    # Phase 39 NOTIFY-03/04 — string-keyed cross-module relationship so the
+    # `_dispatch_booking_dm` helper can render DMs with `client.first_name`
+    # and `client.telegram_user_id`. Same modules-independent discipline as
+    # the `slot` / `pt_package` relationships above (no
+    # `from app.modules.clients` import; SA resolves via Base.registry).
+    client: Mapped[Any] = relationship(
+        "Client",
+        foreign_keys=[client_id],
+        lazy="select",
+        viewonly=True,
+    )
 
     __table_args__ = (
         # NAMING_CONVENTION expands to ck_bookings_status (matches migration 0017

@@ -31,6 +31,7 @@ end_time per D-37-06). No DTO conversion at the resolver boundary.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
@@ -43,7 +44,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin, UUIDPkMixin
 
@@ -89,6 +90,18 @@ class TrainerAvailabilitySlot(Base, UUIDPkMixin, TimestampMixin):
         nullable=True,
     )
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Phase 39 NOTIFY-03/04 — string-keyed cross-module relationship so the
+    # `_dispatch_booking_dm` helper (in bookings.service) can render DMs with
+    # `slot.trainer.full_name`. Same modules-independent discipline as
+    # `Booking.slot` — no `from app.modules.trainers` import here; SA resolves
+    # "Trainer" via the shared `Base.registry` at mapper-configuration time.
+    trainer: Mapped[Any] = relationship(
+        "Trainer",
+        foreign_keys=[trainer_id],
+        lazy="select",
+        viewonly=True,
+    )
 
     __table_args__ = (
         # Names match migration 0016 literal-string CHECK names so alembic
