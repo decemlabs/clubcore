@@ -875,6 +875,141 @@ async def create_booking(
 
 
 # ---------------------------------------------------------------------------
+# Public mutating orchestrator — create_booking_via_bot (Phase 40 D-40-04).
+# ---------------------------------------------------------------------------
+
+
+async def create_booking_via_bot(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    slot_id: UUID,
+    pt_package_id: UUID,
+) -> BookingResponse:
+    """Telegram /book self-service booking entry — Phase 40 D-40-04.
+
+    Mirrors ``create_booking``'s 10-step UoW exactly except:
+      - Takes no ``CurrentUser`` (no authenticated user on the bot path).
+      - Inserts the booking with ``created_by_user_id=None`` (Phase 40
+        D-40-05 / BLOCKER-4 — Alembic 0021 made the column NULLABLE).
+      - Emits ``booking_created`` with ``actor_user_id=None`` (raw None —
+        ``audit.emit`` signature is ``UUID | None``), ``actor_role="telegram_bot"``
+        (Literal — INFRA-11 AST gate), and payload
+        ``created_by_user_id=None`` (D-40-05).
+      - Returns the BookingResponse with ``trainer_full_name`` +
+        ``slot_start_time`` populated (Phase 40 BLOCKER-2 JOIN projection)
+        so the Phase 40 plan 40-03 callback handler can render the
+        confirmation DM directly without a secondary lookup.
+
+    Raises the same 7 domain error classes as ``create_booking``
+    (``SlotNotFoundError``, ``SlotNotAvailableError``,
+    ``SlotAlreadyBookedError``, ``TrainerMismatchError``,
+    ``PtPackageNotActiveError``, ``PtPackageExhaustedError``,
+    ``PtPackageExpiredBeforeSlotError``). The bot handler maps every
+    raised error class to ``_BOT_BOOK_DENIED_DM`` (Phase 40 C-12
+    anti-oracle — no failure-cause disclosure to the chat).
+
+    SVC001 caller-owns-txn: this function commits its own UoW.
+    """
+    now_utc = datetime.now(UTC)
+
+    # Step 1 — slot resolve + status guard (mirror create_booking lines).
+    slot = await resolve_slot_by_id(session, slot_id)
+    if slot is None:
+        raise SlotNotFoundError("slot_not_found")
+    if slot.status != "active":
+        raise SlotNotAvailableError("slot_not_available")
+    if slot.start_time <= now_utc:
+        raise SlotNotAvailableError("slot_not_available")
+
+    # Step 2 — active pt_package resolve + id-match + exhausted guard.
+    pt_package = await get_active_pt_package(session, client_id)
+    if pt_package is None:
+        raise PtPackageNotActiveError("pt_package_not_active")
+    if pt_package.id != pt_package_id:
+        # Defensive — bot resolved a different package id than the user's
+        # active package (id-spoofing protection mirrors Phase 38).
+        raise PtPackageNotActiveError("pt_package_not_active")
+    if pt_package.sessions_remaining <= 0:
+        raise PtPackageExhaustedError("pt_package_exhausted")
+
+    # Step 3 — Trainer-mismatch guard (PKG-02 / C-08).
+    pkg_trainer_id = getattr(pt_package, "trainer_id", None)
+    if pkg_trainer_id is not None and pkg_trainer_id != slot.trainer_id:
+        raise TrainerMismatchError("trainer_mismatch")
+
+    # Step 4 — Moscow-TZ validity-window guard (D-38-12 / Pitfall 18).
+    if (
+        pt_package.end_date is not None
+        and pt_package.end_date < slot.start_time.astimezone(MOSCOW_TZ).date()
+    ):
+        raise PtPackageExpiredBeforeSlotError("pt_package_expired_before_slot")
+
+    # Step 5 — Cross-module raw UPDATE flipping slot active→booked.
+    slot_flipped = await repository.update_slot_status_predicate_gated(
+        session,
+        slot_id,
+        from_status="active",
+        to_status="booked",
+    )
+    if not slot_flipped:
+        # Force a fresh read bypassing identity-map cache (mirror create_booking).
+        await session.refresh(slot, attribute_names=["status"])
+        if slot.status == "booked":
+            raise SlotAlreadyBookedError("slot_already_booked")
+        raise SlotNotAvailableError("slot_not_available")
+
+    # Step 6 — INSERT booking row with created_by_user_id=None
+    # (Phase 40 D-40-05 / BLOCKER-4 — Alembic 0021 made this column NULLABLE).
+    booking = await repository.insert_booking(
+        session,
+        slot_id=slot_id,
+        client_id=client_id,
+        pt_package_id=pt_package_id,
+        created_by_user_id=None,
+    )
+
+    # Step 7 — Flush + uq_bookings_slot_confirmed race translation.
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_slot_confirmed_conflict(exc):
+            raise SlotAlreadyBookedError("slot_already_booked") from exc
+        raise
+
+    # Step 8 — Emit booking_created (LITERAL strings; D-40-05 telegram_bot
+    # actor_role + raw None actor_user_id per WARNING-1 fix).
+    await audit.emit(
+        session,
+        "booking_created",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=None,  # RAW None (audit.emit signature is UUID | None)
+        resource_type="booking",  # LITERAL — INFRA-11 AST gate
+        resource_id=booking.id,
+        booking_id=str(booking.id),
+        slot_id=str(booking.slot_id),
+        client_id=str(booking.client_id),
+        pt_package_id=str(booking.pt_package_id),
+        created_by_user_id=None,  # payload-level; nullable per D-40-05
+        actor_role="telegram_bot",  # LITERAL — INFRA-11 AST gate / D-40-05
+    )
+
+    # Step 9 — Commit (SVC001 gate).
+    await session.commit()
+
+    # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2) so
+    # the returned BookingResponse carries trainer_full_name + slot_start_time.
+    # Plan 40-03's callback handler consumes these fields directly to render
+    # the confirmation DM without a secondary lookup.
+    reloaded = await repository.get_booking_by_id(session, booking.id)
+    if reloaded is None:
+        raise RuntimeError(
+            "create_booking_via_bot: just-inserted booking disappeared on reload"
+        )
+    return _booking_response_from_orm(reloaded)
+
+
+# ---------------------------------------------------------------------------
 # Public mutating orchestrator — cancel_booking (Phase 38 plan 38-03 / BOOK-06).
 # ---------------------------------------------------------------------------
 
