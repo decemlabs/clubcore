@@ -33,13 +33,19 @@ from app.core.security import decode_access_token
 class CurrentUser(Protocol):
     """Structural type for the authenticated user (D-24).
 
-    Phase 5's `app.modules.auth.models.User` will satisfy this protocol because it
-    declares `id: Mapped[UUID]` and `role: Mapped[Role]`. Nothing in `app.core` imports
-    the SA model — the Protocol is the boundary.
+    Phase 5's `app.core.models.User` satisfies this protocol because it
+    declares `id: Mapped[UUID]`, `role: Mapped[Role]`, and `email: Mapped[str]`.
+    Nothing in `app.core` imports the SA model — the Protocol is the boundary.
+
+    Phase 41 INFRA-39 / D-41-08 added ``email`` so ``get_current_user`` can
+    populate ``actor_context_var`` with the resolved actor's email; the
+    audit_log INSERT path reads it via ``get_current_actor()`` when the
+    explicit ``actor_email_snapshot`` kwarg is omitted.
     """
 
     id: UUID
     role: Role
+    email: str
 
 
 UserLoader = Callable[[AsyncSession, UUID], Awaitable[CurrentUser | None]]
@@ -772,6 +778,14 @@ async def get_current_user(
     user = await _user_loader(session, uid)
     if user is None:
         raise InvalidAccessToken("user_not_found")
+    # Phase 41 INFRA-39 / D-41-08 — populate the request-scoped actor
+    # ContextVar so audit.emit() can pick up the email snapshot without
+    # every callsite threading it explicitly. ActorContextMiddleware sets
+    # the baseline None and owns the try/finally reset envelope; this is
+    # the canonical write site for the authenticated identity.
+    from app.core.actor_context import set_actor
+
+    set_actor({"user_id": user.id, "email": user.email})
     return user
 
 

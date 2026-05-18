@@ -90,7 +90,11 @@ def create_app() -> FastAPI:
       1. configure_logging (must precede any structlog calls).
       2. Prod-mode assertion: cookie_secure must be True (Phase 4 D-25).
       3. FastAPI(lifespan=combined_lifespan) registers DB + Redis lifecycles.
-      4. register_middleware adds Timing then RequestId (REVERSED add order).
+      4. register_middleware adds Timing, ActorContext, then RequestId
+         (REVERSED add order — RequestId outermost, ActorContext middle,
+         Timing innermost). Phase 41 INFRA-39 / D-41-08 inserted
+         ActorContextMiddleware so audit.emit() reads actor_context_var
+         within the request lifetime envelope.
       5. register_exception_handlers attaches AppError → JSONResponse handler.
       6. register_user_loader(load_user_by_id) fills the Phase 4 D-24 slot.
       7. register_active_membership_resolver(resolve_active_membership_by_client)

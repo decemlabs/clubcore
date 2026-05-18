@@ -36,9 +36,16 @@ class AuditLog(Base, UUIDPkMixin):
 
     actor_user_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        # Phase 41 INFRA-39 / migration 0023 — FK flipped from RESTRICT to
+        # SET NULL so audit rows survive any future hard-delete of users
+        # with `actor_email_snapshot` preserved (D-41-08-10).
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,  # D-06: NULLABLE for actor-less events (login_failed, telegram_*)
     )
+    # Phase 41 INFRA-39 / D-41-08 — denormalised email captured at emit() time;
+    # populated via actor_context_var (app/core/actor_context.py). NULL whenever
+    # actor_user_id is NULL (D-41-10 system-emit rule).
+    actor_email_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     resource_type: Mapped[str] = mapped_column(Text, nullable=False)
     resource_id: Mapped[UUIDType | None] = mapped_column(

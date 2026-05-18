@@ -185,13 +185,18 @@ async def update_client(
     if "phone" in changed_previous:
         payload["previous_phone"] = changed_previous["phone"]
 
+    # The **payload splat carries dict[str, object] values and mypy cannot
+    # prove they are not the str|None type of the new actor_email_snapshot
+    # kwarg added in Phase 41 (D-41-08). The free-form pre-v1.4 payload
+    # contract (D-30-02) is what makes this loose; the safe assertion here
+    # is that `client_updated` never carries an `actor_email_snapshot` key.
     await audit.emit(
         session,
         "client_updated",
         actor_user_id=actor.id,
         resource_type="client",
         resource_id=client.id,
-        **payload,
+        **payload,  # type: ignore[arg-type]
     )
     # SA 2.0 expires the row's attributes after flush by default. Refresh the
     # ORM-managed `updated_at` (server-side `now()`) before Pydantic

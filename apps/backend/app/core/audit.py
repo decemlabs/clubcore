@@ -296,6 +296,7 @@ async def emit(
     actor_user_id: UUID | None,
     resource_type: str,
     resource_id: UUID | None = None,
+    actor_email_snapshot: str | None = None,
     **payload: Any,
 ) -> None:
     """Emit an audit event: structlog INFO + co-transactional DB INSERT (D-04).
@@ -309,6 +310,24 @@ async def emit(
     BEFORE structlog/DB writes. Hard fail (D-09): raises
     `AuditEventNotLockedError` (a `ValueError` subclass) on any non-locked pair.
 
+    Phase 41 INFRA-39 / D-41-08: ``actor_email_snapshot`` writes the
+    denormalised email column on ``audit_log``. When the kwarg is left at
+    the default ``None``, ``emit()`` reads ``actor_context_var`` (populated
+    by ``get_current_user`` on HTTP paths, by ``WorkerSettings.on_job_start``
+    on ARQ paths) and pulls the email field IF its ``user_id`` matches the
+    passed ``actor_user_id`` (defensive identity check — mismatch leaves the
+    snapshot None to avoid mis-attribution, T-41-07-02).
+
+    Override (D-41-08): callers performing batch reconciliation or
+    retroactive audits pass ``actor_email_snapshot="explicit@value"``
+    directly — the explicit value wins over the ContextVar lookup.
+
+    System emits (D-41-10): when ``actor_user_id`` is ``None`` (ARQ cron
+    without job-kwargs attribution, the anti-oracle unknown-email branch
+    of ``password_reset_requested``), the snapshot stays ``None`` —
+    population is conditional on a non-NULL ``actor_user_id``, matching
+    INFRA-39 spec.
+
     Args:
         session: AsyncSession in an active transaction.
         event: Locked event name (Phase 5 D-21, Phase 7 D-04, Phase 8 D-04,
@@ -321,7 +340,16 @@ async def emit(
             'membership_plan', 'visit'. MUST be a literal str at every callsite.
         resource_id: UUID of the resource (D-07). None when the event has no
             UUID identifier (non-UUID identifiers go in payload).
+        actor_email_snapshot: Phase 41 D-41-08 override. Default ``None``
+            triggers a lookup against ``actor_context_var``; an explicit
+            string wins over the ContextVar (batch/retro-emit path).
+            Persists to the ``audit_log.actor_email_snapshot`` column.
+            Example: ``await audit.emit(..., actor_user_id=uid,
+            actor_email_snapshot="batch-system@sportzal.local")``.
         **payload: Arbitrary JSONB-serialisable kwargs. Per-event shape per D-08.
+            NOTE D-41-09: ``actor_email_snapshot`` is a COLUMN on audit_log,
+            never a payload field — the 11 v1.6 Pydantic schemas use
+            ``extra='forbid'`` and would reject it inside payload.
 
     Raises:
         AuditEventNotLockedError: when (event, resource_type) ∉ LOCKED_AUDIT_EVENTS
@@ -347,11 +375,24 @@ async def emit(
     schema = AUDIT_PAYLOAD_SCHEMAS.get((event, resource_type))
     if schema is not None:
         schema.model_validate(payload)
+    # Phase 41 INFRA-39 / D-41-08: resolve actor_email_snapshot from the
+    # ContextVar when the caller did not pass an explicit value. Population
+    # is conditional on non-NULL actor_user_id (D-41-10 system-emit rule).
+    # Defensive identity match (T-41-07-02): only adopt the ContextVar's
+    # email when its user_id matches the passed actor_user_id; mismatch
+    # leaves the snapshot None rather than risking misattribution.
+    if actor_email_snapshot is None and actor_user_id is not None:
+        from app.core.actor_context import get_current_actor
+
+        identity = get_current_actor()
+        if identity is not None and identity["user_id"] == actor_user_id:
+            actor_email_snapshot = identity["email"]
     structlog.get_logger("audit").info(event, **payload)
     session.add(
         AuditLog(
             action=event,
             actor_user_id=actor_user_id,
+            actor_email_snapshot=actor_email_snapshot,
             resource_type=resource_type,
             resource_id=resource_id,
             payload=payload,
