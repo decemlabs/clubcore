@@ -14,7 +14,8 @@ DB-level invariants (BOOK-01 / D-38-02 / D-38-15 / Pitfall 6):
                          (D-38-02: every booking references a live package)
 - slot_id is NOT NULL FK to trainer_availability_slots.id ON DELETE RESTRICT
 - client_id is NOT NULL FK to clients.id ON DELETE RESTRICT
-- created_by_user_id is NOT NULL FK to users.id ON DELETE RESTRICT
+- created_by_user_id is NULLABLE FK to users.id ON DELETE RESTRICT (NULL =
+  self-service via bot — see audit_log.payload.actor_role; Phase 40 D-40-05)
 - Partial UNIQUE uq_bookings_slot_confirmed on (slot_id) WHERE status='confirmed'
   — one confirmed booking per slot (BOOK-01 / C-02 / D-38-15; service
   catches IntegrityError via _is_slot_confirmed_conflict discriminator).
@@ -83,14 +84,17 @@ class Booking(Base, UUIDPkMixin, TimestampMixin):
         server_default=text("'confirmed'"),
         nullable=False,
     )
-    created_by_user_id: Mapped[UUIDType] = mapped_column(
+    # Phase 40 D-40-05 / BLOCKER-4 — NULL = self-service via Telegram bot;
+    # the audit_log row's payload.actor_role discriminates 'telegram_bot' vs.
+    # 'reception' / 'owner'. Alembic 0021 relaxed the DB NOT NULL constraint.
+    created_by_user_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey(
             "users.id",
             ondelete="RESTRICT",
             name="fk_bookings_created_by_user_id_users",
         ),
-        nullable=False,
+        nullable=True,
     )
     cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

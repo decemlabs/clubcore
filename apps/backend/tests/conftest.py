@@ -170,10 +170,17 @@ class StubTelegramSender:
     `.text_calls` (for send_text_dm -- stranger / replay messages). Set
     `.next_result` to control the return value for the next send_otp_dm call.
     Default: ok=True for both functions.
+
+    Phase 40 WARNING-4 — ``.text_call_markups`` parallel-records the
+    ``reply_markup`` kwarg per ``send_text_dm`` invocation (None for the
+    pre-Phase-40 positional callers; populated for the /book keyboard
+    render). ``text_calls`` stays a 2-tuple list for back-compat with the
+    Phase 20+ /checkin tests that already index it.
     """
 
     calls: list[tuple[int, str]] = field(default_factory=list)
     text_calls: list[tuple[int, str]] = field(default_factory=list)
+    text_call_markups: list[Any] = field(default_factory=list)
     next_result: StubSenderResult = field(default_factory=StubSenderResult)
 
 
@@ -191,8 +198,17 @@ def stub_telegram_sender(monkeypatch: pytest.MonkeyPatch) -> StubTelegramSender:
         stub.calls.append((chat_id, code))
         return stub.next_result
 
-    async def _fake_send_text_dm(bot: Any, chat_id: int, text: str) -> StubSenderResult:
+    async def _fake_send_text_dm(
+        bot: Any,
+        chat_id: int,
+        text: str,
+        *,
+        reply_markup: Any = None,
+    ) -> StubSenderResult:
+        # Phase 40 WARNING-4 — accept the new keyword-only kwarg without
+        # breaking the existing 3-arg positional callers.
         stub.text_calls.append((chat_id, text))
+        stub.text_call_markups.append(reply_markup)
         return StubSenderResult(ok=True)
 
     monkeypatch.setattr(sender_mod, "send_otp_dm", _fake_send_otp_dm)

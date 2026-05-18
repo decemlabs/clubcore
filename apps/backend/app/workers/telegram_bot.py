@@ -36,6 +36,7 @@ from app.integrations.telegram import sender as telegram_sender
 from app.integrations.telegram.bot import build_application
 from app.integrations.telegram.handlers import (
     HandlerContext,
+    book_handler,
     checkin_handler,
     start_handler,
 )
@@ -111,7 +112,12 @@ async def main() -> None:
         )
         application = build_application(
             token=settings.telegram_bot_token.get_secret_value(),
-            handlers=[("start", start_handler), ("checkin", checkin_handler)],
+            handlers=[
+                ("start", start_handler),
+                ("checkin", checkin_handler),
+                # Phase 40 BOT-01 / BOT-02 — self-service booking command.
+                ("book", book_handler),
+            ],
             ctx=ctx,
         )
 

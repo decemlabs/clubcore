@@ -83,7 +83,14 @@ class SlotCancelRequest(BackendSchemaBase):
 
 
 class SlotResponse(ResponseData):
-    """Outbound representation of a TrainerAvailabilitySlot (SLOT-02 / SLOT-08)."""
+    """Outbound representation of a TrainerAvailabilitySlot (SLOT-02 / SLOT-08).
+
+    Phase 40 BLOCKER-2 extension: ``trainer_full_name`` is projected via JOIN
+    on the trainers table at the repository layer (D-38-08 pattern preserved —
+    no snapshot column on ``trainer_availability_slots``). The /book bot
+    handler (Phase 40 D-40-07) consumes this field directly to label the
+    InlineKeyboard buttons without a secondary lookup.
+    """
 
     id: UUID
     trainer_id: UUID
@@ -94,6 +101,7 @@ class SlotResponse(ResponseData):
     created_by_user_id: UUID
     cancelled_at: datetime | None
     cancel_reason: str | None
+    trainer_full_name: str  # Phase 40 D-40-07 / BLOCKER-2 — JOIN-projected
 
 
 # ---------------------------------------------------------------------------
