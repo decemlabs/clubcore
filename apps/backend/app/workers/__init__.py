@@ -42,8 +42,24 @@ WorkerSettings (Phase 18 ARQ-03):
   - `on_job_start(ctx)` clears + binds `job_id`/`job_name` on the
     structlog contextvars stack (Pitfall 14 — direct mirror of
     `RequestIdMiddleware` shape in `app/core/middleware.py:21-25`).
-  - `on_job_end(ctx)` clears contextvars (prevents leak across runs in
-    the same asyncio task — Pitfall 14 mitigation step 3).
+    Phase 41 INFRA-39 / D-41-08 ALSO sets the actor_context_var
+    baseline to None for the duration of this job, mirroring
+    ActorContextMiddleware's request-scoped envelope.
+  - `on_job_end(ctx)` clears contextvars + resets actor_context_var
+    (prevents leak across runs in the same asyncio task — Pitfall 14
+    mitigation step 3).
+
+ARQ ctx limitation (Phase 41 D-41-08 fallback):
+  ARQ 0.28's `run_job` only exposes `job_id / job_try / enqueue_time /
+  score` in ctx; the per-call `*args / **kwargs` flow directly to the
+  job coroutine without landing on ctx. Therefore on_job_start cannot
+  inspect job kwargs for `actor_user_id` / `actor_email_snapshot`.
+  Pattern: job bodies needing actor attribution call
+  `set_actor({"user_id": ..., "email": ...})` themselves near the top
+  of the job (a token is unnecessary because on_job_end resets the
+  contextvar to the prior frame). System cron jobs leave the contextvar
+  as None — actor_user_id=None at the emit() callsite triggers the
+  D-41-10 NULL/NULL row.
 """
 
 from __future__ import annotations
@@ -197,14 +213,34 @@ class WorkerSettings:
         Direct mirror of `RequestIdMiddleware` shape (clear THEN bind) so audit
         rows + summary log lines emitted during the job carry job_id/job_name
         the same way HTTP-side rows carry request_id/path/method.
+
+        Phase 41 INFRA-39 / D-41-08: also sets actor_context_var to None as
+        the job-scoped baseline. Job bodies that need actor attribution call
+        `set_actor(...)` themselves near the top — ARQ 0.28's ctx does not
+        surface job kwargs (see module-level docstring "ARQ ctx limitation").
+        The set-token is stashed on ctx so on_job_end can reset cleanly even
+        if the job body did not.
         """
+        # Local import avoids a top-level cycle (workers loads at module
+        # import time; app.core.actor_context is a tiny leaf module — safe
+        # either way, mirrors the audit.py defensive local-import pattern).
+        from app.core.actor_context import actor_context_var
+
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             job_id=str(ctx["job_id"]),
             job_name=ctx["function_name"],
         )
+        # Phase 41 D-41-08 — own the job-scoped contextvar envelope.
+        ctx["_actor_token"] = actor_context_var.set(None)
 
     @staticmethod
     async def on_job_end(ctx: dict[str, Any]) -> None:
-        """Clear contextvars (prevents leak across runs in the same asyncio task)."""
+        """Clear contextvars + reset actor_context_var (no leak across runs)."""
+        # Phase 41 D-41-08 — reset the actor envelope set in on_job_start.
+        from app.core.actor_context import actor_context_var
+
+        token = ctx.pop("_actor_token", None)
+        if token is not None:
+            actor_context_var.reset(token)
         structlog.contextvars.clear_contextvars()
