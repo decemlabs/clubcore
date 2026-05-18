@@ -124,17 +124,22 @@ Full details: [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
   6. `tests/integration/test_password_reset_no_oracle.py` exists and fails as expected against the not-yet-implemented endpoint (test-first lands before any reset endpoint code per Pitfall 1) — asserting the 4-case identical 202 + identical body + bounded timing contract is in the repo for future phases to satisfy.
 **Plans**: 11 plans (waves 1-3)
 Plans:
+**Wave 1**
 - [ ] 41-01-PLAN.md — INFRA-34 LOCKED_AUDIT_EVENTS 56→67 + synthetic-violation
-- [ ] 41-02-PLAN.md — INFRA-35 11 new Pydantic payload schemas (extra=forbid + audit_correlation_id)
 - [ ] 41-03-PLAN.md — INFRA-36 LOCKED_EMAIL_TEMPLATES frozenset + AST walker + 2 synthetic fixtures
 - [ ] 41-04-PLAN.md — INFRA-37 Resource.USERS + 4 OWNER_ONLY entries + three-way RBAC parity
 - [ ] 41-05-PLAN.md — INFRA-38 Alembic 0022 users.deleted_at + partial-UNIQUE on lower(email)
-- [ ] 41-06-PLAN.md — INFRA-39 Alembic 0023 audit_log.actor_email_snapshot + FK ON DELETE SET NULL
-- [ ] 41-07-PLAN.md — INFRA-39 actor_context_var + ActorContextMiddleware + ARQ on_job_start/end + audit.emit wiring
-- [ ] 41-08-PLAN.md — INFRA-38 Alembic 0024 cross-channel discriminator on membership_/booking_notifications
-- [ ] 41-09-PLAN.md — INFRA-38 Alembic 0025 password_reset_tokens unified table + ORM + eager-import
 - [ ] 41-10-PLAN.md — INFRA-40 User hoist+shim + EmailDispatcher/UserSessionInvalidator Protocol slots + .importlinter + SVC001 scope
 - [ ] 41-11-PLAN.md — RESET-06 test_password_reset_no_oracle.py (xfail-strict; 4-case identical 202 + body + 100ms timing)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 41-02-PLAN.md — INFRA-35 11 new Pydantic payload schemas (extra=forbid + audit_correlation_id)
+- [ ] 41-06-PLAN.md — INFRA-39 Alembic 0023 audit_log.actor_email_snapshot + FK ON DELETE SET NULL
+- [ ] 41-08-PLAN.md — INFRA-38 Alembic 0024 cross-channel discriminator on membership_/booking_notifications
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 41-07-PLAN.md — INFRA-39 actor_context_var + ActorContextMiddleware + ARQ on_job_start/end + audit.emit wiring
+- [ ] 41-09-PLAN.md — INFRA-38 Alembic 0025 password_reset_tokens unified table + ORM + eager-import
 
 ### Phase 42: Email Transport Layer + Email OTP Fallback
 **Goal**: Sportzal can send a transactional email asynchronously through a verified РФ-domiciled provider end-to-end, with circuit-breaker protection, bounce-webhook intake, and an immediate consumer (email-channel OTP fallback for `/auth/otp/request`) proving the slot wiring works.
