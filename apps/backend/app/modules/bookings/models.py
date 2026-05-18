@@ -37,6 +37,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
@@ -164,4 +165,74 @@ class Booking(Base, UUIDPkMixin, TimestampMixin):
         ),
         Index("ix_bookings_client_status", "client_id", "status"),
         Index("ix_bookings_slot_status", "slot_id", "status"),
+    )
+
+
+class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
+    """Idempotency record for 24h reminder Telegram DM (Phase 39 NOTIFY-05).
+
+    Composition: Base + UUIDPkMixin + TimestampMixin (NO SoftDeleteMixin —
+    rows are append-only; the (booking_id, kind) UNIQUE is the single source
+    of truth for cron idempotency per D-39-13).
+
+    DB-level invariants:
+    - kind IN ('reminder_24h') (CHECK ck_booking_notifications_kind).
+    - FK fk_booking_notifications_booking_id_bookings ON DELETE RESTRICT
+      to bookings.id (D-39-13 — deviation from v1.3 CASCADE; bookings
+      never hard-delete per Phase 38 D-38-04, so RESTRICT prevents silent
+      orphaning on accidental DBA-direct surgery).
+    - UNIQUE (booking_id, kind) (uq_booking_notifications_booking_kind) —
+      single source of truth for cron idempotency. Plan 39-04's service
+      helper `_send_booking_reminders` catches IntegrityError on this
+      constraint to skip race-duplicates (D-39-13).
+
+    NO `telegram_chat_id` snapshot column (D-39-03 — deviation from v1.3
+    MembershipNotification). The reminder cron resolves
+    `clients.telegram_user_id` at send time via JOIN, so the chat id is
+    always current (a client who re-links between booking + reminder uses
+    the new chat). Plan 39-04's cron consumer reads `c.telegram_user_id`
+    via the candidate SELECT — never via this side-table.
+
+    NO `Booking.notifications` back-relationship — cron reads via raw SQL
+    LEFT JOIN; write-once side-table semantics make a relationship
+    attribute load-bearing for nothing.
+    """
+
+    __tablename__ = "booking_notifications"
+
+    booking_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "bookings.id",
+            ondelete="RESTRICT",  # D-39-13 deviation from v1.3 CASCADE
+            name="fk_booking_notifications_booking_id_bookings",
+        ),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("now()"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('reminder_24h')",
+            # NAMING_CONVENTION expands to ck_booking_notifications_kind
+            # (matches migration 0020 op.f()-derived name).
+            name="kind",
+        ),
+        UniqueConstraint(
+            "booking_id",
+            "kind",
+            name="uq_booking_notifications_booking_kind",
+        ),
+        # Mirrors migration 0020 op.create_index() — required for
+        # `alembic check` to stay clean (drift detection treats migration-only
+        # indexes as drift).
+        Index(
+            "ix_booking_notifications_booking_id",
+            "booking_id",
+        ),
     )

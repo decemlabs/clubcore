@@ -551,7 +551,18 @@ async def make_future_slot(
     db_session: AsyncSession,
     seeded_owner: User,
 ) -> Callable[..., Awaitable[TrainerAvailabilitySlot]]:
-    """Insert an active TrainerAvailabilitySlot in the future (default +24h)."""
+    """Insert an active TrainerAvailabilitySlot (default +25h in the future).
+
+    Negative ``start_offset`` produces a past slot (used by the no-show cron
+    tests in plan 39-03). The factory inserts directly via ORM — it does NOT
+    call ``schedule.service.publish_slot``, so the Phase 38 future-only
+    publish-time guard is bypassed by design. The resulting slot row is NOT
+    validated by service-layer rules; the only DB-level invariants enforced
+    are ``status IN ('active','booked','cancelled')`` and
+    ``end_time > start_time`` (CHECK constraints from migration 0016).
+    Callers that pass a negative offset are responsible for understanding
+    they are crafting a cron-test fixture, not exercising the publish API.
+    """
     _counter = {"i": 0}
 
     async def _make(

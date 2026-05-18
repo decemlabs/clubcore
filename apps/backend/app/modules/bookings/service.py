@@ -374,6 +374,92 @@ async def _dispatch_booking_dm(
 
 
 # ---------------------------------------------------------------------------
+# Phase 39 CRON-01 — no-show batch helper (D-39-06 single-session, D-39-07
+# SELECT FOR UPDATE OF b; SVC001-exempt: worker owns commit).
+# ---------------------------------------------------------------------------
+
+
+async def _mark_no_show_bookings(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+) -> int:
+    """Mark overdue confirmed bookings as no_show + emit audit (Phase 39 CRON-01).
+
+    Single-session pattern (D-39-06 single-session for DB-only batch). Caller
+    (`mark_no_show_bookings` worker) owns the surrounding transaction; this
+    helper issues a SELECT FOR UPDATE + bulk UPDATE + per-row audit emit but
+    does NOT commit (SVC001 noqa on the def line — mirrors
+    `pt_packages._expire_due_pt_packages` and
+    `memberships._expire_due_memberships`).
+
+    Concurrency (D-39-07): `SELECT FOR UPDATE OF b` row-locks each candidate
+    booking, serializing against `pt_sessions.service.record_pt_session`'s
+    booking-completion path (D-38-19 — that path also takes the booking row
+    lock before flipping confirmed->completed). Whichever transaction commits
+    first wins; the loser sees the updated status and the
+    `WHERE status='confirmed'` guard in the bulk UPDATE makes the no-op safe.
+
+    Returns: count of rows newly flipped to no_show.
+    """
+    # Step 1 — Locked SELECT of candidates. Cross-module SQL: reads
+    # `trainer_availability_slots` for the JOIN — raw text(...) keeps the
+    # modules-independent import-linter contract green (mirror of Phase 38
+    # D-38-11 TABLE_REF discipline; D-34-04a precedent).
+    rows = await session.execute(
+        sa.text(  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+            "SELECT b.id, b.slot_id, b.client_id "
+            "FROM bookings b "
+            "JOIN trainer_availability_slots s ON s.id = b.slot_id "
+            "WHERE b.status = 'confirmed' "
+            "AND s.end_time < now() "
+            "FOR UPDATE OF b"
+        )
+    )
+    candidates = rows.fetchall()
+    if not candidates:
+        return 0
+
+    # Step 2 — Bulk UPDATE. The `status = 'confirmed'` guard in the WHERE
+    # clause is defensive (the FOR UPDATE already serializes); it makes the
+    # statement idempotent against any concurrent transaction that flipped
+    # one of the locked rows between Step 1 and here.
+    await session.execute(
+        sa.text(
+            "UPDATE bookings SET status = 'no_show', no_show_at = now() "
+            "WHERE id = ANY(:ids) AND status = 'confirmed'"
+        ),
+        {"ids": [c.id for c in candidates]},
+    )
+
+    # Step 3 — Per-row audit emit. Event name + resource_type MUST be string
+    # literals (INFRA-11 AST gate). Payload matches BookingNoShowPayload
+    # (extra='forbid') exactly: booking_id, slot_id, client_id, no_show_at.
+    # UUIDs stringified at callsite per Pitfall 13 / D-38-17: although the
+    # Pydantic v2 schema coerces both raw UUID and str (D-39-14), the
+    # downstream JSONB write needs JSON-serializable values; raw UUID
+    # objects are not json.dumps-able. Mirror the Phase 38 cancel_booking
+    # callsite shape at bookings/service.py:709-713 verbatim. `resource_id`
+    # is the typed FK column on AuditLog (PgUUID) — NOT in the JSONB
+    # payload — so it stays as a raw UUID.
+    no_show_at_iso = datetime.now(MOSCOW_TZ).isoformat()
+    for c in candidates:
+        await audit.emit(
+            session,
+            "booking_no_show",  # LITERAL — INFRA-11 AST gate
+            actor_user_id=None,  # system actor; audit_log.actor_user_id is nullable
+            resource_type="booking",  # LITERAL — INFRA-11 AST gate
+            resource_id=c.id,
+            booking_id=str(c.id),
+            slot_id=str(c.slot_id),
+            client_id=str(c.client_id),
+            no_show_at=no_show_at_iso,
+        )
+
+    # Caller owns commit (D-39-06 single-session; worker function commits
+    # after this helper returns).
+    return len(candidates)
+
+
+# ---------------------------------------------------------------------------
 # Phase 37 Protocol slot body (D-37-06 — preserve signature
 # `async def complete_booking(session: AsyncSession, booking_id: UUID) -> None`;
 # Phase 38 replaces the stub body with the predicate-gated raw UPDATE).
