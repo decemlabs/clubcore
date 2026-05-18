@@ -18,6 +18,8 @@ from app.integrations.telegram.handlers import (
     start_handler,
 )
 from app.modules.auth import telegram_service
+from app.modules.bookings import service as bookings_service
+from app.modules.schedule import service as schedule_service
 from app.modules.visits import service as visits_service
 
 pytestmark = pytest.mark.asyncio
@@ -40,6 +42,8 @@ async def test_worker_registers_start_and_checkin(
         sender=sender_mod,
         visits_service=visits_service,
         redis=fake_redis,
+        bookings_service=bookings_service,
+        schedule_service=schedule_service,
     )
     app = build_application(
         token="dummy:token",  # noqa: S106 — ptb does no network on construction

@@ -36,8 +36,10 @@ from app.integrations.telegram import sender as sender_mod
 from app.integrations.telegram.handlers import HandlerContext, checkin_handler
 from app.modules.auth import telegram_service
 from app.modules.auth.models import User
+from app.modules.bookings import service as bookings_service
 from app.modules.clients.models import Client
 from app.modules.memberships.models import Membership, MembershipPlan
+from app.modules.schedule import service as schedule_service
 from app.modules.visits import service as visits_service
 from tests.conftest import StubTelegramSender
 
@@ -80,6 +82,8 @@ def _build_ctx(db_session: AsyncSession, redis_client: Any) -> HandlerContext:
         sender=sender_mod,
         visits_service=visits_service,
         redis=redis_client,
+        bookings_service=bookings_service,
+        schedule_service=schedule_service,
     )
 
 
