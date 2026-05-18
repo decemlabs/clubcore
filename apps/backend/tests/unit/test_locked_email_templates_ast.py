@@ -1,0 +1,177 @@
+"""AST walker for `get_email_dispatcher()(template_id=...)` callsites
+— Phase 41 INFRA-36 / D-41-11 / D-41-13.
+
+Mirrors `test_audit_taxonomy.py` shape: static analysis over
+`apps/backend/app/**/*.py` that asserts every `get_email_dispatcher()(...)`
+callsite passes `template_id=<literal str>` resolving to a member of
+`LOCKED_EMAIL_TEMPLATES`.
+
+Target callsite shape is a DOUBLE Call:
+    get_email_dispatcher()(template_id="EMAIL_OTP_LOGIN", ...)
+    └──── inner Call ────┘└──── outer Call (the dispatch invocation) ────┘
+
+That is: an `ast.Call` whose `.func` is itself an `ast.Call` whose `.func`
+is `ast.Name(id='get_email_dispatcher')`. The Protocol slot declared in
+Phase 41 (D-41-24) makes `template_id` a keyword-only argument; the walker
+also accepts the first positional form for forward-compatibility.
+
+Two failure reasons:
+  (a) `template_id` is not a literal str (e.g. variable, f-string)
+  (b) literal value is not in `LOCKED_EMAIL_TEMPLATES`
+
+Synthetic-violation fixtures under
+`tests/unit/fixtures/email_ast_violations/` exercise both reasons.
+"""
+
+from __future__ import annotations
+
+import ast
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+from app.core.audit import LOCKED_EMAIL_TEMPLATES
+
+# parents[0]=unit, [1]=tests, [2]=backend, [3]=apps, [4]=repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_BACKEND_APP = _REPO_ROOT / "apps" / "backend" / "app"
+_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "email_ast_violations"
+
+
+def _resolve_str_literal(node: ast.expr | None) -> str | None:
+    """Return the literal str value if `node` is `ast.Constant(str)`, else None."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _is_get_email_dispatcher_call(node: ast.Call) -> bool:
+    """True if `node` is `get_email_dispatcher()(...)` — the outer Call of a
+    double-Call shape whose inner func is `Name(id='get_email_dispatcher')`.
+    """
+    inner = node.func
+    if not isinstance(inner, ast.Call):
+        return False
+    inner_func = inner.func
+    return isinstance(inner_func, ast.Name) and inner_func.id == "get_email_dispatcher"
+
+
+def _extract_template_id_arg(call: ast.Call) -> ast.expr | None:
+    """Return the AST node passed as `template_id` to a `get_email_dispatcher()(...)`
+    call — either the first positional or the `template_id=` keyword. None if missing.
+
+    Protocol slot declared in Phase 41 (D-41-24) makes `template_id` keyword-only,
+    but accepting the positional form as well is a cheap robustness measure that
+    matches the docstring contract ("first positional OR keyword `template_id=`").
+    """
+    for kw in call.keywords:
+        if kw.arg == "template_id":
+            return kw.value
+    if call.args:
+        return call.args[0]
+    return None
+
+
+def _iter_dispatcher_calls(tree: ast.AST) -> Iterator[tuple[int, ast.expr | None]]:
+    """Yield (lineno, template_id_arg_node | None) for every
+    `get_email_dispatcher()(...)` outer-Call in `tree`.
+    """
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not _is_get_email_dispatcher_call(node):
+            continue
+        yield node.lineno, _extract_template_id_arg(node)
+
+
+def _collect_violations(py_path: Path) -> list[str]:
+    """Parse one .py file, walk for `get_email_dispatcher()(...)` callsites,
+    return violation messages (each prefixed with `{relpath}:{lineno}`).
+    """
+    try:
+        source = py_path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(py_path))
+    except SyntaxError as exc:  # pragma: no cover — defensive
+        pytest.fail(f"Could not parse {py_path}: {exc}")
+
+    violations: list[str] = []
+    try:
+        rel = py_path.relative_to(_REPO_ROOT)
+    except ValueError:
+        rel = py_path
+    for lineno, arg_node in _iter_dispatcher_calls(tree):
+        prefix = f"{rel}:{lineno} — get_email_dispatcher()(template_id=...)"
+        if arg_node is None:
+            violations.append(f"{prefix} missing template_id argument")
+            continue
+        literal_value = _resolve_str_literal(arg_node)
+        if literal_value is None:
+            violations.append(
+                f"{prefix} is not a literal str (got {ast.dump(arg_node)})"
+            )
+            continue
+        if literal_value not in LOCKED_EMAIL_TEMPLATES:
+            violations.append(
+                f"{prefix} value {literal_value!r} is not in LOCKED_EMAIL_TEMPLATES"
+            )
+    return violations
+
+
+def test_real_callsites_pass() -> None:
+    """Phase 41: no `get_email_dispatcher()(...)` callsite exists in prod code
+    yet — Phase 42 ships the first. Walker therefore collects 0 violations
+    against the production tree.
+
+    When Phase 42 lands real callsites, this test continues to enforce the
+    literal-only + locked-frozenset contract on every one of them.
+    """
+    all_violations: list[str] = []
+    for py in sorted(_BACKEND_APP.rglob("*.py")):
+        all_violations.extend(_collect_violations(py))
+    assert not all_violations, (
+        "get_email_dispatcher()(template_id=...) callsite(s) violate the "
+        "LOCKED_EMAIL_TEMPLATES literal-only gate.\n"
+        "Either fix the literal at the callsite or extend LOCKED_EMAIL_TEMPLATES "
+        "in apps/backend/app/core/audit.py.\n"
+        "Offenders:\n  " + "\n  ".join(all_violations)
+    )
+
+
+def test_bogus_template_id_is_rejected() -> None:
+    """D-41-13: the synthetic-violation fixture uses literal 'BOGUS_NOT_LOCKED'
+    which is NOT in LOCKED_EMAIL_TEMPLATES. Walker MUST report a violation
+    that cites the bogus value.
+    """
+    fixture = _FIXTURE_DIR / "bogus_template_id.py"
+    violations = _collect_violations(fixture)
+    assert violations, (
+        f"Walker failed to flag any violation in {fixture}; "
+        "the gate is broken (silent-pass on a known-bad fixture)."
+    )
+    assert any("BOGUS_NOT_LOCKED" in v for v in violations), (
+        f"Walker flagged {fixture} but the message did not mention "
+        f"the bogus identifier 'BOGUS_NOT_LOCKED'. Violations: {violations}"
+    )
+    assert any("LOCKED_EMAIL_TEMPLATES" in v for v in violations), (
+        "Walker violation message must cite LOCKED_EMAIL_TEMPLATES so the "
+        f"failure points the developer at the frozenset. Got: {violations}"
+    )
+
+
+def test_non_literal_template_id_is_rejected() -> None:
+    """D-41-13: the synthetic-violation fixture passes `template_id=chosen_id`
+    where `chosen_id` is a variable, not a literal `ast.Constant(str)`.
+    Walker MUST reject because the gate is literal-only (mirrors the
+    audit.emit literal-only gate from Phase 15).
+    """
+    fixture = _FIXTURE_DIR / "raw_subject_string.py"
+    violations = _collect_violations(fixture)
+    assert violations, (
+        f"Walker failed to flag any violation in {fixture}; "
+        "the gate is broken (silent-pass on a non-literal template_id)."
+    )
+    assert any("not a literal" in v.lower() for v in violations), (
+        f"Walker flagged {fixture} but the message did not say "
+        f"'not a literal'. Violations: {violations}"
+    )
