@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
-stopped_at: Phase 41 context gathered
-last_updated: "2026-05-18T17:25:04.542Z"
-last_activity: 2026-05-18 -- Phase 41 planning complete
+stopped_at: Phase 41 Plan 01 complete — LOCKED_AUDIT_EVENTS extended 58 → 69
+last_updated: "2026-05-18T18:14:25.047Z"
+last_activity: 2026-05-18 -- Phase 41 Plan 01 complete (LOCKED_AUDIT_EVENTS v1.6)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 9
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v1.6 milestone — Phase 41 INFRA Bedrock + Anti-Oracle Scaffold (next: `/gsd-discuss-phase 41`)
+**Current focus:** Phase 41 — infra-bedrock-anti-oracle-scaffold
 
 ## Current Position
 
-Phase: 41 (not yet started — roadmap created, awaiting discuss-phase)
-Plan: —
-Status: Ready to execute
-Last activity: 2026-05-18 -- Phase 41 planning complete
+Phase: 41 (infra-bedrock-anti-oracle-scaffold) — EXECUTING
+Plan: 2 of 11
+Status: Executing Phase 41 (Plan 01 complete — LOCKED_AUDIT_EVENTS v1.6 locked)
+Last activity: 2026-05-18 -- Phase 41 Plan 01 complete (LOCKED_AUDIT_EVENTS 58 → 69)
 
 ## v1.6 Milestone Plan
 
@@ -74,6 +74,8 @@ Last activity: 2026-05-18 -- Phase 41 planning complete
 
 Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new decisions (D-37-01..D-40-18) — all archived in `.planning/milestones/v1.5-ROADMAP.md` and per-phase `*-CONTEXT.md` files. v1.6 decisions will land at each phase's discuss-phase as `D-41-NN..D-46-NN`.
 
+**Phase 41 Plan 01 (2026-05-18):** LOCKED_AUDIT_EVENTS extended 58 → 69 (+11 v1.6 pairs per D-41-19). Plan must_haves drift ("56 → 67") resolved in favour of D-41-19 source-of-truth — the codebase already had 58 pairs (Phase 20 D-20-10 + Phase 23 D-23-10 drift adds not in the planner's mental count); the 11-pair v1.6 delta is what INFRA-34 requires; final cardinality is 69. Synthetic-violation runtime test established as first such test in the codebase (prior tests were all AST-walker-based). See `41-01-SUMMARY.md`.
+
 ### Pending Todos
 
 - `/gsd-discuss-phase 41` — resolve open conflict #5 (`User` ORM ownership), draft Phase 41 plan structure for INFRA bedrock + anti-oracle scaffold
@@ -99,6 +101,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T16:49:08.917Z
+Last session: 2026-05-18T18:14:18.805Z
 Stopped at: Phase 41 context gathered
 Resume: `/gsd-discuss-phase 41`
