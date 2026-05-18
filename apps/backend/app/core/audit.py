@@ -224,6 +224,28 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("booking_created", "booking"),
         ("booking_cancelled", "booking"),
         ("booking_no_show", "booking"),
+        # v1.6 (Phase 41 lock — emitted in Phases 42/43/44/45 per INFRA-34 / D-41-19)
+        # Email transport (Phase 42 EMAIL-01 / EMAIL-04 / EMAIL-06):
+        # resource_type is the eventual `email_send_log` table — table itself
+        # lands in Phase 42 (migration 0026); pair is pre-registered here per
+        # INFRA-34 so the Phase 42 callsite ships green without AST-gate churn.
+        ("email_sent", "email_send_log"),
+        ("email_send_failed", "email_send_log"),
+        # Multi-user admin lifecycle (Phase 43 USERS-03..05 + Phase 44 RESET-03 / RESET-05):
+        ("user_invited", "user"),
+        ("user_invitation_accepted", "user"),
+        ("user_invitation_revoked", "user"),
+        ("user_deactivated", "user"),
+        ("user_reactivated", "user"),
+        ("user_soft_deleted", "user"),
+        # Password reset (Phase 44 RESET-01 / RESET-02):
+        # `password_reset_requested` is emitted in BOTH known-email and
+        # unknown-email branches per the anti-oracle contract (RESET-06);
+        # unknown-email branch passes resource_id=None.
+        ("password_reset_requested", "user"),
+        ("password_reset_completed", "user"),
+        # Payment receipt email (Phase 45 NOTIFY-12):
+        ("payment_receipt_emailed", "payment"),
     }
 )
 

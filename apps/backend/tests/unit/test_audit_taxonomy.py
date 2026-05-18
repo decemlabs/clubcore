@@ -162,7 +162,7 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 = 58 locked pairs.
+    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 11 v1.6 = 69 locked pairs.
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:
@@ -182,14 +182,62 @@ def test_locked_audit_events_has_expected_count() -> None:
     carried by the existing `("pt_session_recorded", "pt_session")` event with
     an optional `booking_id` field on `PtSessionRecordedPayload`.
     See 37-01-SUMMARY.md.
-    NOTE: the REQ INFRA-17 header gloss "34 → 51 entries" counts LOGICAL events; the
-    actual frozenset has 36 (v1.1-v1.3) + 17 (v1.4) + 5 (v1.5) = 58 entries because
-    the v1.1 `session_revoked` event has two `(event, resource_type)` variants per D-23-10.
+    Phase 41 (INFRA-34 / D-41-19) added 11 v1.6 pairs pre-registered for Phases
+    42/43/44/45: 2 email transport (`email_sent`, `email_send_failed` under
+    `email_send_log`) + 6 multi-user lifecycle (`user_invited`,
+    `user_invitation_accepted`, `user_invitation_revoked`, `user_deactivated`,
+    `user_reactivated`, `user_soft_deleted` under `user`) + 2 password reset
+    (`password_reset_requested`, `password_reset_completed` under `user`) + 1
+    payment receipt email (`payment_receipt_emailed` under `payment`). See
+    41-01-SUMMARY.md.
+    NOTE: the 41-01 plan header glosses "56 → 67" by counting only the v1.1-v1.5
+    pairs the planner had in mind (it omitted the Phase 20 D-20-10
+    `telegram_unknown_checkin` and Phase 23 D-23-10 `session_revoked`/`auth_session`
+    drift adds); the actual frozenset is 58 + 11 = 69. The 11-pair v1.6 delta is
+    what matters per INFRA-34, and `test_locked_audit_events_includes_v16_pairs`
+    asserts every required pair is present byte-for-byte.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 58, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 58 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5), got {len(LOCKED_AUDIT_EVENTS)}"
+    assert len(LOCKED_AUDIT_EVENTS) == 69, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 69 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 11 v1.6), "
+        f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
+
+
+def test_locked_audit_events_includes_v16_pairs() -> None:
+    """INFRA-34 (Phase 41 / D-41-19): the 11 v1.6 pairs are pre-registered for Phases 42/43/44/45.
+
+    Email transport (Phase 42 EMAIL-01 / EMAIL-04 / EMAIL-06):
+        `email_sent`, `email_send_failed` under resource_type `email_send_log`.
+    Multi-user admin lifecycle (Phase 43 USERS-03 / USERS-04 / USERS-05 +
+    Phase 44 RESET-03 / RESET-05):
+        `user_invited`, `user_invitation_accepted`, `user_invitation_revoked`,
+        `user_deactivated`, `user_reactivated`, `user_soft_deleted` under
+        resource_type `user`.
+    Password reset (Phase 44 RESET-01 / RESET-02):
+        `password_reset_requested` (emitted in BOTH known-email and unknown-email
+        branches per the RESET-06 anti-oracle contract; unknown branch passes
+        resource_id=None), `password_reset_completed` under resource_type `user`.
+    Payment receipt email (Phase 45 NOTIFY-12):
+        `payment_receipt_emailed` under resource_type `payment`.
+    """
+    expected = [
+        ("email_sent", "email_send_log"),
+        ("email_send_failed", "email_send_log"),
+        ("user_invited", "user"),
+        ("user_invitation_accepted", "user"),
+        ("user_invitation_revoked", "user"),
+        ("user_deactivated", "user"),
+        ("user_reactivated", "user"),
+        ("user_soft_deleted", "user"),
+        ("password_reset_requested", "user"),
+        ("password_reset_completed", "user"),
+        ("payment_receipt_emailed", "payment"),
+    ]
+    for pair in expected:
+        assert pair in LOCKED_AUDIT_EVENTS, (
+            f"Phase 41 INFRA-34: required pair {pair} missing from LOCKED_AUDIT_EVENTS"
+        )
 
 
 def test_locked_audit_events_includes_v13_pairs() -> None:
