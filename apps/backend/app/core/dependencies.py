@@ -17,7 +17,7 @@ Phase 4 ships only the factory.
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -597,6 +597,145 @@ async def complete_booking_by_pt_session(session: AsyncSession, booking_id: UUID
     if _booking_completer is None:
         return None
     return await _booking_completer(session, booking_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 41 INFRA-40 / D-41-24 — EmailDispatcher Protocol slot (v1.6 email).
+#
+# Eleventh composition-root carve-out. Phase 42 wires the real implementation
+# (enqueues ``dispatch_email`` ARQ task) in BOTH ``app.main.create_app()`` AND
+# ``app.workers.__init__.WorkerSettings.on_startup`` (REG-29-03 double-wire
+# parity — mirrors register_trainer_by_id_resolver / register_slot_by_id_resolver).
+# Phase 41 ships only the slot declaration; no callsite yet.
+#
+# Defensive-raise accessor (mirrors get_payment_recorder at line ~398;
+# NOT the silent-None pattern of resolve_active_membership at line 117) —
+# a missing email dispatcher in the email-issuing flow is a hard
+# misconfiguration, not an expected state.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class EmailDispatcher(Protocol):
+    """Structural type for the email-dispatch callable (Phase 41 D-41-24).
+
+    Signature locked at Phase 41 to accommodate Phase 42's eventual
+    ARQ-enqueueing implementation. ``template_id`` is a literal string
+    member of ``LOCKED_EMAIL_TEMPLATES`` (Phase 41 INFRA-36 / D-41-11) —
+    enforced statically at every callsite by the AST gate at
+    ``tests/unit/test_locked_email_templates_ast.py``.
+
+    ``audit_correlation_id`` carries the link to the triggering audit row
+    for asynchronous email-event correlation (D-41-20). It is nullable so
+    bootstrap / system-emitted email flows (no actor audit row) can pass
+    ``None`` without fabricating a synthetic audit id.
+    """
+
+    async def __call__(
+        self,
+        *,
+        template_id: str,
+        to: str,
+        audit_correlation_id: UUID | None,
+        **template_vars: Any,
+    ) -> None: ...
+
+
+_email_dispatcher: EmailDispatcher | None = None
+
+
+def register_email_dispatcher(impl: EmailDispatcher) -> None:
+    """Composition-root setter (Phase 41 D-41-24).
+
+    Phase 42 calls this from BOTH the FastAPI composition root
+    (``app.main.create_app``) AND ARQ ``WorkerSettings.on_startup``
+    (REG-29-03 double-wire parity). Idempotent: re-registering replaces
+    the slot (mirrors WR-05 reasoning; useful for tests that inject a
+    stub dispatcher via ``create_app(...)``).
+    """
+    global _email_dispatcher
+    _email_dispatcher = impl
+
+
+def get_email_dispatcher() -> EmailDispatcher:
+    """Defensive accessor (Phase 41 D-41-24) — raises if slot not registered.
+
+    Mirrors ``get_payment_recorder`` defensive-raise pattern (line ~398);
+    a missing email dispatcher in an email-issuing flow is a hard
+    misconfiguration, not a recoverable state.
+    """
+    if _email_dispatcher is None:
+        raise RuntimeError(
+            "EmailDispatcher slot not registered — register via "
+            "app.core.dependencies.register_email_dispatcher() in "
+            "app/main.py:create_app() AND app/workers/__init__.py "
+            "WorkerSettings.on_startup (REG-29-03 double-wire)."
+        )
+    return _email_dispatcher
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 41 INFRA-40 / D-41-25 — UserSessionInvalidator Protocol slot.
+#
+# Twelfth composition-root carve-out. Phase 43 wires
+# ``app.modules.auth.service.invalidate_all_families_for_user``. Returns
+# count of refresh-token families revoked, surfaced in the audit payload
+# ``sessions_revoked_count`` (Plan 02 UserDeactivatedPayload /
+# PasswordResetCompletedPayload). Phase 44 reuses the same slot from
+# password-reset/confirm.
+#
+# Defensive-raise accessor (mirrors get_payment_recorder at line ~398) —
+# a missing invalidator at the deactivation / password-reset call site is
+# a hard misconfiguration, not an expected state.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class UserSessionInvalidator(Protocol):
+    """Revoke every active refresh-token family for a user (Phase 41 D-41-25).
+
+    Phase 43 wires the real implementation (multi-user admin deactivate).
+    Phase 44 reuses the same slot from password-reset/confirm. Returns
+    the count of refresh-token families revoked so the calling
+    orchestrator can include ``sessions_revoked_count`` in its audit
+    payload (UserDeactivatedPayload / PasswordResetCompletedPayload).
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: UUID,
+        reason: Literal["deactivated", "password_reset", "soft_deleted"],
+    ) -> int: ...
+
+
+_user_session_invalidator: UserSessionInvalidator | None = None
+
+
+def register_user_session_invalidator(impl: UserSessionInvalidator) -> None:
+    """Composition-root setter (Phase 41 D-41-25).
+
+    Phase 43 calls this from ``app.main.create_app``. Idempotent:
+    re-registering replaces the slot (mirrors WR-05 reasoning; useful for
+    tests that inject a stub invalidator via ``create_app(...)``).
+    """
+    global _user_session_invalidator
+    _user_session_invalidator = impl
+
+
+def get_user_session_invalidator() -> UserSessionInvalidator:
+    """Defensive accessor (Phase 41 D-41-25) — raises if slot not registered.
+
+    Mirrors ``get_payment_recorder`` defensive-raise pattern (line ~398);
+    a missing invalidator in the deactivation / password-reset call site
+    is a hard misconfiguration, not a recoverable state.
+    """
+    if _user_session_invalidator is None:
+        raise RuntimeError(
+            "UserSessionInvalidator slot not registered — Phase 43 wires "
+            "auth.service.invalidate_all_families_for_user from "
+            "app/main.py:create_app()."
+        )
+    return _user_session_invalidator
 
 
 async def get_current_user(
