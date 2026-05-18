@@ -157,7 +157,7 @@ _Wave 2 (serial after 39-01):_
 - [x] 39-02-PLAN.md — send-on-create-and-cancel: `_dispatch_booking_dm` private helper + post-commit dispatch in `create_booking` / `cancel_booking` (actor.role discriminator) + per-cancelled-booking cascade in `schedule.cancel_slot` + integration tests (NOTIFY-03, NOTIFY-04)
 
 _Wave 3 (serial after 39-02 — same-file conflict on bookings/service.py per D-39-01 Revision 2026-05-17):_
-- [ ] 39-03-PLAN.md — no-show-cron-and-table: Alembic 0020_booking_notifications + `BookingNotification` ORM (no `telegram_chat_id` per D-39-03; ON DELETE RESTRICT per D-39-13) + `_mark_no_show_bookings` helper (SELECT FOR UPDATE OF b per D-39-07) + ARQ worker + `run_no_show_cron_once.py` + integration tests (NOTIFY-05, CRON-01, CRON-03, CRON-04)
+- [x] 39-03-PLAN.md — no-show-cron-and-table: Alembic 0020_booking_notifications + `BookingNotification` ORM (no `telegram_chat_id` per D-39-03; ON DELETE RESTRICT per D-39-13) + `_mark_no_show_bookings` helper (SELECT FOR UPDATE OF b per D-39-07) + ARQ worker + `run_no_show_cron_once.py` + integration tests (NOTIFY-05, CRON-01, CRON-03, CRON-04)
 
 _Wave 4 (serial after 39-03 — needs `BookingNotification` ORM + Alembic 0020 + same-file conflict on bookings/service.py):_
 - [ ] 39-04-PLAN.md — reminder-cron: `_send_booking_reminders` multi-session helper + ARQ worker + `WorkerSettings.cron_jobs` final D-39-16 order (reminders BEFORE no-show) + `run_booking_reminders_once.py` + integration tests (CRON-02, CRON-03, CRON-05)
@@ -183,7 +183,7 @@ _Wave 4 (serial after 39-03 — needs `BookingNotification` ORM + Alembic 0020 +
 |-------|----------------|--------|-----------|
 | 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
 | 38. Schedule Module + Booking Core | 6/6 | Complete   | 2026-05-17 |
-| 39. Notifications + Cron | 2/4 | In Progress|  |
+| 39. Notifications + Cron | 3/4 | In Progress|  |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
 ---
