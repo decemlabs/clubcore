@@ -1,4 +1,4 @@
-"""Auth ORM models — User / RefreshToken / OtpCode (Phase 5, D-03/D-04/D-06).
+"""Auth ORM models — User (shim) / RefreshToken / OtpCode (Phase 5, D-03/D-04/D-06).
 
 User does NOT compose SoftDeleteMixin (D-05). Operators are 1-2 people; hard-delete
 after data export is acceptable. ON DELETE RESTRICT on `clients.created_by_user_id`
@@ -6,58 +6,27 @@ after data export is acceptable. ON DELETE RESTRICT on `clients.created_by_user_
 
 OtpCode ships its FINAL Phase 7 shape now (D-03). Phase 7 only writes app code,
 no schema churn.
+
+Phase 41 INFRA-40 / D-41-01 — ``User`` was hoisted to ``app.core.models``;
+this module re-exports it as a one-milestone shim so every existing
+``from app.modules.auth.models import User`` callsite keeps working.
+v1.7 DEFER-41-shim removes this re-export — downstream callers should
+migrate to ``from app.core.models import User`` at their convenience.
 """
 
 from datetime import datetime
 from uuid import UUID as UUIDType  # noqa: N811
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, Text
-from sqlalchemy import Enum as SAEnum
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base, TimestampMixin, UUIDPkMixin
-from app.core.permissions import Role
 
-
-class User(Base, UUIDPkMixin, TimestampMixin):
-    """Operator user (D-06). 1-2 rows total — `full_name` is a single column (D-01).
-
-    `password_hash` is NOT NULL (D-02): Phase 5 only mints email/password users.
-    `telegram_chat_id` is BIGINT NULL UNIQUE from day one (D-02) so Phase 7's bind
-    flow is a plain `UPDATE users SET telegram_chat_id = ... WHERE id = ...`.
-    `role` is TEXT + CHECK constraint (D-07), NOT a native PG enum.
-    """
-
-    __tablename__ = "users"
-
-    email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    role: Mapped[Role] = mapped_column(
-        SAEnum(
-            Role,
-            native_enum=False,
-            length=16,
-            validate_strings=True,
-            values_callable=lambda enum_cls: [e.value for e in enum_cls],
-        ),
-        nullable=False,
-    )
-    full_name: Mapped[str] = mapped_column(Text, nullable=False)
-    telegram_chat_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        nullable=True,
-        unique=True,
-    )
-    telegram_username: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-        unique=True,
-    )
-
-    __table_args__ = (
-        CheckConstraint("role IN ('owner', 'reception')", name="role"),
-    )
+# Phase 41 INFRA-40 / D-41-01 — one-milestone shim. v1.7 DEFER-41-shim
+# removes this re-export; downstream callers should migrate to
+# `from app.core.models import User` at their convenience.
+from app.core.models import User  # noqa: F401 — public re-export
 
 
 class RefreshToken(Base, UUIDPkMixin, TimestampMixin):
