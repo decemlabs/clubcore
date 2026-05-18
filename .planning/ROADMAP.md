@@ -152,7 +152,19 @@ Plans:
   4. When the provider returns 5xx for 5 consecutive calls, the Redis circuit breaker opens (`sz:email:circuit:{provider}` TTL 5m), subsequent `dispatch_email` jobs short-circuit to `EmailSendResult.transient_error` without touching the provider, and the 06:15 → 06:35 cron window completes within budget.
   5. `infra/dns/sportzal.ru.zone` documents SPF/DKIM/DMARC records for the dedicated email subdomain with `p=none` initial policy and DMARC `rua` reports addressed to the owner; the Pydantic `EmailProviderSettings` validator fails fast at boot if `from_domain` is empty in non-sandbox mode AND the boot-time `/domains` probe asserts domain verification.
   6. `POST /api/v1/_internal/email/webhook` rejects unsigned bodies in O(1) time via `hmac.compare_digest` BEFORE body parsing; valid signed bounce/complaint payloads append to `email_send_log` with classification.
-**Plans**: TBD
+**Plans**: 11 plans (waves 1-4)
+Plans:
+- [ ] 42-01-PLAN.md — EMAIL-01/07 EmailEnvelope + EmailSendResult types + EmailSendLog ORM + Alembic 0026 + env.py registration
+- [ ] 42-02-PLAN.md — EMAIL-02 EmailProviderSettings Pydantic block + fail-fast validator
+- [ ] 42-03-PLAN.md — AUTH-EM-01 Alembic 0027 otp_codes.channel discriminator + ORM column + partial-UNIQUE recreate
+- [ ] 42-04-PLAN.md — AUTH-EM-02 Alembic 0028 users.email_verified + ORM column + bootstrap-runbook docstring
+- [ ] 42-05-PLAN.md — AUTH-EM-03 app/modules/auth/email_templates.py with EMAIL_OTP_LOGIN (Jinja2 SandboxedEnvironment) + jinja2 dep pin
+- [ ] 42-06-PLAN.md — EMAIL-05 infra/dns/sportzal.ru.zone SPF/DKIM/DMARC operator runbook (p=none baseline)
+- [ ] 42-07-PLAN.md — EMAIL-01/02 EmailClient aioboto3 adapter + SandboxEmailClient stub + build_email_client factory + boot-time /domains probe
+- [ ] 42-08-PLAN.md — EMAIL-03/06 enqueue_email_dispatch + _resolve_template walker + Redis circuit breaker + ARQ dispatch_email task
+- [ ] 42-09-PLAN.md — EMAIL-03/04 + AUTH-EM-02/03 REG-29-03 double-wire + OtpRequestBody channel discriminator + /auth/otp/request route + request_otp_email anti-oracle service
+- [ ] 42-10-PLAN.md — EMAIL-07 POST /api/v1/_internal/email/webhook HMAC-before-parse bounce/complaint handler
+- [ ] 42-11-PLAN.md — AUTH-EM-04 + REG-29-03/04 tests: test_otp_email_anti_oracle + test_app_wiring extension + test_workers_eager_import extension + test_locked_email_templates_ast real-callsite assertion
 
 ### Phase 43: Multi-User Admin Module
 **Goal**: Owner can onboard, deactivate, soft-delete, and re-onboard reception operators end-to-end via API without any direct DB-poking — and any operator action carries denormalised audit traceability that survives that operator being fired.
