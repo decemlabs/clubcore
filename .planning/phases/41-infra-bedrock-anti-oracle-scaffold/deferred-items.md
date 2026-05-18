@@ -1,44 +1,29 @@
-# Phase 41 Deferred Items
+# Phase 41 deferred items
 
-Tracks issues discovered during Phase 41 execution that are out of scope for
-the current plan's deviation rules (Rule SCOPE BOUNDARY — only fixes for the
-current task's direct effects are in scope; pre-existing failures and
-unrelated drift live here).
+Items discovered during plan 41-09 execution that are out-of-scope per
+SCOPE BOUNDARY (issues NOT directly caused by current task's changes).
 
-## Pre-existing tests/unit/test_permissions.py failures (discovered 2026-05-18, Plan 41-10)
+## alembic check pre-existing drift (NOT from 41-09)
 
-Four assertions in `apps/backend/tests/unit/test_permissions.py` already fail
-on `master` before Plan 41-10 was executed:
+After 0025 landed and the new ORM module was registered in env.py, `alembic
+check` still reports drift from earlier plans:
 
-- `test_owner_only_has_exactly_twenty_nine_entries` — expects `len(OWNER_ONLY) == 29`, actual is 33.
-- `test_action_value_set` — drift on the action enumeration assertion.
-- `test_resource_value_set` — drift on the resource enumeration assertion, includes the new `Resource.USERS` values.
-- `test_specific_owner_only_membership` — drift on the OWNER_ONLY contents check.
+1. `users.email` UNIQUE constraint — ORM model `app/core/models.py:33`
+   still declares `unique=True` on `email`, but migration 0022 dropped
+   `uq_users_email` and replaced it with the partial-UNIQUE
+   `uq_users_email_active`. Plan 41-05 SUMMARY notes this as documented
+   drift; Phase 43 USERS module owns the final `User` ORM mapping per
+   D-41-07. Resolution: remove `unique=True` from `User.email` in Phase 43
+   or sooner if it surfaces during a touch.
+2. `users.deleted_at` column — ORM does NOT declare this column; migration
+   0022 added it. Same lineage — Phase 43 owns the ORM mapping (D-41-07).
+3. `booking_notifications.channel` + `membership_notifications.channel`
+   columns + the recreated `(subject_id, kind, channel)` UNIQUE — ORM
+   models in `app/modules/bookings/models.py` and
+   `app/modules/memberships/models.py` were NOT updated when migration 0024
+   (Plan 41-08) landed. Plan 41-08 SUMMARY explicitly defers the ORM-side
+   addition to Phase 45 (NOTIFY-* phase that actually reads the column).
 
-These look like a v1.6 INFRA carve-out forgot to update the matching unit
-test when adding the `USERS` resource to `app.core.permissions`. Resolution
-belongs in a dedicated permissions-test refresh plan (likely Phase 41 Plan
-41-11 INFRA-39 or a follow-up plan that owns the OWNER_ONLY surface),
-**not** in Plan 41-10 — Plan 41-10 only hoists `User`, declares 2 new
-Protocol slots, extends `.importlinter`, and extends the SVC001 walker scope.
-
-Verified pre-existing via `git stash` round-trip: with the stash applied
-(no Plan 41-10 edits), all 4 still fail identically.
-
-## Mypy strict re-export warning on auth.models User shim (discovered 2026-05-18, Plan 41-11)
-
-Mypy strict reports `Module "app.modules.auth.models" does not explicitly
-export attribute "User"  [attr-defined]` for every callsite that imports
-``User`` through the Plan-41-10 shim. This is a single missing
-``__all__`` (or `User as User`) declaration in
-``app/modules/auth/models.py`` — adding it would silence ~25 existing
-errors plus the one introduced by `test_password_reset_no_oracle.py`.
-
-Plan 41-11 explicitly chose the shim import path (D-41-01 / D-41-02 +
-plan-checker revision) so this test stays stable across the Plan-10/11
-wave race; it does not own the shim file itself. The fix belongs in a
-shim-hardening follow-up (or rolled into Plan 41-10's SUMMARY's
-deferred-items if anyone wants a one-line `__all__ = ["User", ...]`
-amendment). Resolution before v1.7 DEFER-41-shim removal is desirable
-but not blocking — every other shim consumer in the codebase reports
-the same error.
+These are tracked here so they don't get repeatedly re-discovered. Plan
+41-09 is responsible only for the `password_reset_tokens` schema/ORM
+parity — that piece is clean after env.py registration.
