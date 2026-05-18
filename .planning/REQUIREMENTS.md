@@ -48,16 +48,16 @@ New `app/modules/users/` module. Owner-only operator onboarding + lifecycle.
 - [ ] **USERS-06**: `/auth/refresh` hot path extended to join `users.is_active = true` AND `users.deleted_at IS NULL` — a deactivated/deleted operator immediately loses session on next refresh attempt (PITFALLS `/refresh` traceability fix). Returns 401 `account_inactive` with no oracle leakage (same response shape as `invalid_session`).
 - [ ] **USERS-07**: Multi-user audit traceability — every `audit.emit(...)` invoked from the users module captures `actor_email_snapshot` at write time (per INFRA-39 schema). `audit_payloads.py` user-module payloads include `actor_display_name` (computed once at audit-write time; defaults to first-name + last-initial for privacy — final formatting resolved at discuss-phase). 3-way RBAC parity test extended.
 
-### Email OTP fallback — AUTH-EM-01..04 (Phase 44 or parallel with Phase 42)
+### Email OTP fallback — AUTH-EM-01..04 (Phase 42)
 
-Email as second-channel OTP delivery for `/auth/otp/request` when user lacks Telegram or Telegram is blocked.
+Email as second-channel OTP delivery for `/auth/otp/request` when user lacks Telegram or Telegram is blocked. Bundled with the email-transport phase (Phase 42) because both are email-channel mechanics with a shared `LOCKED_EMAIL_TEMPLATES` AST surface — first locked email template (`EMAIL_OTP_LOGIN`) exercises the dispatcher slot end-to-end and gates the rest of the email feature work.
 
 - [ ] **AUTH-EM-01**: Extend `otp_codes` table with `channel TEXT NOT NULL DEFAULT 'telegram' CHECK channel IN ('telegram','email')`. Drop existing UNIQUE on `(user_id) WHERE consumed_at IS NULL`; recreate as partial UNIQUE `(user_id, channel) WHERE consumed_at IS NULL` (so user can have one active Telegram OTP AND one active email OTP simultaneously, e.g. when retrying via the other channel). Migration is zero-row (existing rows inherit `channel='telegram'`).
 - [ ] **AUTH-EM-02**: Extend `POST /api/v1/auth/otp/request` body schema with `channel: 'telegram' | 'email'` (default: `'telegram'` for backwards compat). When `channel='email'`: requires user with verified email, returns same anti-oracle shape, enqueues email via `EmailDispatcher` slot, TTL **10 minutes** (Telegram × 2 to absorb provider lag per FEATURES SLO), 60-second resend cooldown, max 5 attempts per code. Second OTP request invalidates first (RFC 6238 single-active discipline).
 - [ ] **AUTH-EM-03**: Locked Russian email template `EMAIL_OTP_LOGIN` (subject + html + text triplet) in `app/modules/auth/email_templates.py`. Owner sign-off enumerated by constant name (D-27-OWNER-COPY-LOCK pattern; template-id in `LOCKED_EMAIL_TEMPLATES`). Body contains 6-digit code; subject `"Код входа в Sportzal"` (locked); no other PII.
 - [ ] **AUTH-EM-04**: Integration test `test_otp_email_anti_oracle.py` asserts: (a) user with NO Telegram + verified email gets `channel='email'` OTP; (b) user with Telegram + email, default `channel='telegram'` works unchanged; (c) `channel='email'` request for user without verified email returns the **same** 202 response shape as a successful request (no oracle); (d) constant-time floor enforced.
 
-### Invitation + Password-reset flow — RESET-01..06 (Phase 44)
+### Invitation + Password-reset flow — RESET-01..06 (Phase 44; RESET-06 lands in Phase 41)
 
 Token mechanism (DB table vs itsdangerous-stateless signed token — open conflict #2) and exact endpoint paths resolved at discuss-phase. All requirements below hold regardless of which mechanism wins.
 
@@ -68,9 +68,9 @@ Token mechanism (DB table vs itsdangerous-stateless signed token — open confli
 - [ ] **RESET-05**: `POST /api/v1/users/invitations/{id}/revoke` (owner-only, CSRF) — explicitly revokes an outstanding invitation (sets `revoked_at` or invalidates signed token via `password_changed_at` bump). Emits `user_invitation_revoked` audit event. Already-consumed tokens cannot be revoked (409 `invitation_already_accepted`).
 - [ ] **RESET-06**: Integration test `test_password_reset_no_oracle.py` lands in Phase 41 (BEFORE first reset-flow endpoint per PITFALLS preventative discipline). Test asserts 4 cases (existing-active / existing-deactivated / owner-account / non-existent) produce identical 202 + identical response body + bounded-equal timing (within 100ms tolerance). Audit log asserts `password_reset_requested` emitted in all 4 cases. Updated each time RESET-* lands.
 
-### Email mirror of expiring + booking + payment-receipt — NOTIFY-06..14 (Phase 45 + parallel Phase 46)
+### Email mirror of expiring + booking + payment-receipt — NOTIFY-06..14 (Phase 45)
 
-Email-channel fan-out for existing v1.3/v1.4/v1.5 Telegram flows. Uses `EmailDispatcher` slot from EMAIL-* group.
+Email-channel fan-out for existing v1.3/v1.4/v1.5 Telegram flows. Uses `EmailDispatcher` slot from EMAIL-* group. All 9 requirements clustered into a single phase per coarse granularity — they share the channel-discriminator migration (NOTIFY-06), the locked Russian copy AST gate, the eager-import discipline, and the common `EmailDispatcher` slot consumer pattern.
 
 - [ ] **NOTIFY-06**: Cross-channel idempotency taxonomy migration — Alembic `0024_notification_channel_discriminator` adds `channel TEXT NOT NULL DEFAULT 'telegram' CHECK channel IN ('telegram','email')` to `membership_notifications` AND `booking_notifications`. Drops existing UNIQUE; recreates as `(subject_id, kind, channel)`. Backfill `channel='telegram'` for existing rows (zero-row migration in dev; idempotent in production since data is reproducible by next cron tick).
 - [ ] **NOTIFY-07**: Extend `app/workers/scheduled/send_expiring_notifications.py` (06:15 Europe/Moscow cron) — for each affected membership: Telegram-first attempt as today; on `SendResult.blocked` AND `client.email IS NOT NULL` AND opt-in flag set (or simple "fallback" policy resolved at discuss-phase), enqueue email via `EmailDispatcher` slot. `membership_notifications` idempotency row inserted on successful send only (preserves v1.3 NTF-05 invariant per channel).
@@ -82,12 +82,14 @@ Email-channel fan-out for existing v1.3/v1.4/v1.5 Telegram flows. Uses `EmailDis
 - [ ] **NOTIFY-13**: New LOCKED audit event `payment_receipt_emailed` (already pre-registered in INFRA-34). Pydantic payload includes `payment_id`, `channel='email'`, `audit_correlation_id` linking to the original `payment_recorded` / `refund_issued` audit row. Read-side query for owner ops dashboard: "did we send a receipt for payment X?" trivially answerable.
 - [ ] **NOTIFY-14**: Eager-import discipline (REG-29-04 mirror) — new ORM models (`email_send_log`, `payment_receipts`, any new `password_reset_tokens`) MUST be imported in `app/workers/__init__.py` so cron one-shot scripts can see them at boot time. Boot-time invariant logs `Base.metadata.tables.keys()` count. `tests/test_workers_eager_import.py` AST introspection verifies.
 
-### OpenAPI drift gate refresh — HANDOFF-03..04 (Phase 47)
+### OpenAPI drift gate refresh — HANDOFF-03..04 (Phase 46)
+
+Bundled with milestone verification (VER-09..14) in Phase 46 as the serialization point — mirrors v1.5 Phase 40 shape where handoff and verification ship together as the final gate.
 
 - [ ] **HANDOFF-03**: Atomic byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` exposing every new v1.6 path: `/api/v1/users` (GET/POST), `/api/v1/users/{id}/deactivate`, `/api/v1/users/{id}/reactivate`, `/api/v1/users/{id}` (DELETE), `/api/v1/users/invitations/accept`, `/api/v1/users/invitations/{id}/revoke`, `/api/v1/auth/password-reset/request`, `/api/v1/auth/password-reset/confirm`, `/api/v1/_internal/email/webhook`. `otp/request` updated to surface the `channel` parameter. CI `git diff --exit-code` gate green on both artifacts.
 - [ ] **HANDOFF-04**: Extend `packages/api-client/src/schema.contract.test.ts` with `AssertNonNever` compile-time forward-guards for every new v1.6 path (path + method + request-body realisation + 2xx-response realisation). Count grows from 61 → ~73. README v1.6 changelog section added under `apps/backend/README.md` documenting all new endpoints. Postman handoff updated for any external design-team consumer.
 
-### Milestone verification — VER-09..14 (Phase 48 — milestone-verification gate)
+### Milestone verification — VER-09..14 (Phase 46)
 
 Backend-only operator-runbook discipline (mirrors v1.3 Phase 29 + v1.4 Phase 36 + v1.5 Phase 40 — but explicitly budget time for runbook scaffolding hardening per DEFER-40-01 lesson).
 
@@ -131,18 +133,60 @@ Documented anti-features (per FEATURES.md 11-item list) — explicit non-goals f
 
 ## Traceability
 
-Will be populated by `gsd-roadmapper` when `ROADMAP.md` is created. Maps each REQ-ID to exactly one phase. 100% coverage validation gate before commit.
+Populated by `gsd-roadmapper` 2026-05-18. 6 phases (41-46), 48/48 v1.6 requirements mapped — 100% coverage, no orphans, no duplicates.
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| INFRA-34..40 | TBD (expected: Phase 41) | Active |
-| EMAIL-01..07 | TBD (expected: Phase 42) | Active |
-| USERS-01..07 | TBD (expected: Phase 43) | Active |
-| AUTH-EM-01..04 | TBD | Active |
-| RESET-01..06 | TBD (expected: Phase 44) | Active |
-| NOTIFY-06..14 | TBD (expected: Phase 45 / 46) | Active |
-| HANDOFF-03..04 | TBD (expected: Phase 47) | Active |
-| VER-09..14 | TBD (expected: Phase 48) | Active |
+| INFRA-34 | Phase 41 | Active |
+| INFRA-35 | Phase 41 | Active |
+| INFRA-36 | Phase 41 | Active |
+| INFRA-37 | Phase 41 | Active |
+| INFRA-38 | Phase 41 | Active |
+| INFRA-39 | Phase 41 | Active |
+| INFRA-40 | Phase 41 | Active |
+| EMAIL-01 | Phase 42 | Active |
+| EMAIL-02 | Phase 42 | Active |
+| EMAIL-03 | Phase 42 | Active |
+| EMAIL-04 | Phase 42 | Active |
+| EMAIL-05 | Phase 42 | Active |
+| EMAIL-06 | Phase 42 | Active |
+| EMAIL-07 | Phase 42 | Active |
+| AUTH-EM-01 | Phase 42 | Active |
+| AUTH-EM-02 | Phase 42 | Active |
+| AUTH-EM-03 | Phase 42 | Active |
+| AUTH-EM-04 | Phase 42 | Active |
+| USERS-01 | Phase 43 | Active |
+| USERS-02 | Phase 43 | Active |
+| USERS-03 | Phase 43 | Active |
+| USERS-04 | Phase 43 | Active |
+| USERS-05 | Phase 43 | Active |
+| USERS-06 | Phase 43 | Active |
+| USERS-07 | Phase 43 | Active |
+| RESET-01 | Phase 44 | Active |
+| RESET-02 | Phase 44 | Active |
+| RESET-03 | Phase 44 | Active |
+| RESET-04 | Phase 44 | Active |
+| RESET-05 | Phase 44 | Active |
+| RESET-06 | Phase 41 | Active |
+| NOTIFY-06 | Phase 45 | Active |
+| NOTIFY-07 | Phase 45 | Active |
+| NOTIFY-08 | Phase 45 | Active |
+| NOTIFY-09 | Phase 45 | Active |
+| NOTIFY-10 | Phase 45 | Active |
+| NOTIFY-11 | Phase 45 | Active |
+| NOTIFY-12 | Phase 45 | Active |
+| NOTIFY-13 | Phase 45 | Active |
+| NOTIFY-14 | Phase 45 | Active |
+| HANDOFF-03 | Phase 46 | Active |
+| HANDOFF-04 | Phase 46 | Active |
+| VER-09 | Phase 46 | Active |
+| VER-10 | Phase 46 | Active |
+| VER-11 | Phase 46 | Active |
+| VER-12 | Phase 46 | Active |
+| VER-13 | Phase 46 | Active |
+| VER-14 | Phase 46 | Active |
+
+**Coverage summary:** Phase 41 = 8 reqs (INFRA-34..40 + RESET-06); Phase 42 = 11 reqs (EMAIL-01..07 + AUTH-EM-01..04); Phase 43 = 7 reqs (USERS-01..07); Phase 44 = 5 reqs (RESET-01..05); Phase 45 = 9 reqs (NOTIFY-06..14); Phase 46 = 8 reqs (HANDOFF-03..04 + VER-09..14). Total = 48 ✓
 
 ---
 
@@ -150,15 +194,15 @@ Will be populated by `gsd-roadmapper` when `ROADMAP.md` is created. Maps each RE
 
 Carried verbatim from `research/SUMMARY.md` — each phase's discuss-phase resolves the conflicts in its scope before plan-phase runs.
 
-1. **Email provider choice** (EMAIL-01 + EMAIL-02 scope) — Yandex Cloud Postbox primary vs Unisender Go fallback vs other. Resolved at discuss-phase for the email-transport phase.
-2. **Reset-token storage** (RESET-* scope) — itsdangerous stateless signed tokens vs DB `password_reset_tokens` table. Both preserve anti-oracle.
-3. **`notifications` module status** — keep as placeholder (per D-39-02) vs resurrect as channel-multiplexer. Synthesizer leans toward placeholder.
-4. **Template engine** (EMAIL-* + NOTIFY-* scope) — Jinja2 SandboxedEnvironment vs `Final[str]` f-string templates per D-39-04.
-5. **`User` ORM ownership** (INFRA-* + USERS-* scope) — hoist to `app/core/models.py` vs `UserLookup` Protocol slot.
-6. **Phase numbering** — PITFALLS 5 phases vs ARCHITECTURE 8 phases. Roadmapper decides phase count.
-7. **Email verification flow for owner-added accounts** — trust owner-entered addresses vs click-to-verify (industry best practice).
+1. **Email provider choice** (EMAIL-01 + EMAIL-02 scope) — Yandex Cloud Postbox primary vs Unisender Go fallback vs other. Resolved at Phase 42 discuss-phase.
+2. **Reset-token storage** (RESET-* scope) — itsdangerous stateless signed tokens vs DB `password_reset_tokens` table. Both preserve anti-oracle. Resolved at Phase 44 discuss-phase (initial scaffolding decision may need flagging at Phase 41 if a token-table migration is required).
+3. **`notifications` module status** — keep as placeholder (per D-39-02) vs resurrect as channel-multiplexer. Synthesizer leans toward placeholder. Resolved at Phase 45 discuss-phase.
+4. **Template engine** (EMAIL-* + NOTIFY-* scope) — Jinja2 SandboxedEnvironment vs `Final[str]` f-string templates per D-39-04. Resolved at Phase 42 discuss-phase (binds first; Phase 45 inherits).
+5. **`User` ORM ownership** (INFRA-* + USERS-* scope) — hoist to `app/core/models.py` vs `UserLookup` Protocol slot. Resolved at Phase 41 discuss-phase.
+6. **Phase numbering** — PITFALLS 5 phases vs ARCHITECTURE 8 phases. RESOLVED by roadmapper 2026-05-18: 6 phases (41-46), coarse granularity compression with dependency-graph fidelity.
+7. **Email verification flow for owner-added accounts** — trust owner-entered addresses vs click-to-verify (industry best practice). Resolved at Phase 43 discuss-phase.
 
 ---
 
 *Total: 48 requirements across 8 categories. Continues phase numbering from v1.5 (last phase: 40 → next phase: 41).*
-*Created: 2026-05-18. Locked at milestone-open time. Modifications require explicit Decision row + commit per `/gsd-evolution` discipline.*
+*Created: 2026-05-18. Locked at milestone-open time. Traceability table populated by roadmapper 2026-05-18 — 6 phases (41-46), 48/48 mapped. Modifications require explicit Decision row + commit per `/gsd-evolution` discipline.*
