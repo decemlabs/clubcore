@@ -74,6 +74,24 @@ from arq.cron import cron
 
 from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
+
+# ORM eager-imports (REG-29-04 / D-41-29 — REG-29-04 mirror).
+# ----------------------------------------------------------------
+# Cron one-shot scripts (`app/workers/scheduled/<job>.py`) and ad-hoc
+# `arq` invocations boot via this package's __init__; if any ORM model
+# is only reachable through a `from app.modules.X.models import ...`
+# inside a deeply-nested service, `Base.metadata.tables` is missing
+# that table at worker boot time and the first SELECT raises a
+# "no such table" error from SQLAlchemy's reflection layer (the v1.3
+# expiring-notifications regression that birthed REG-29-04).
+#
+# Rule: every ORM table added in v1.6+ that the worker namespace might
+# touch — directly OR indirectly through a cron job — gets an eager
+# import here so the module-load side effect registers the table on
+# `Base.metadata` before any worker code runs.
+from app.modules.auth.password_reset_token_model import (  # noqa: F401
+    PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
+)
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
 from app.workers.scheduled.mark_no_show_bookings import mark_no_show_bookings
