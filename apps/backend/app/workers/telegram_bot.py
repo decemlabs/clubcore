@@ -40,6 +40,7 @@ from app.integrations.telegram.handlers import (
     start_handler,
 )
 from app.modules.auth import telegram_service  # D-06 relaxation
+from app.modules.bookings import service as bookings_service  # Phase 40 D-40-04
 from app.modules.clients import service as clients_service  # REG-29-03 fix
 from app.modules.memberships import service as memberships_service  # REG-29-03 fix
 from app.modules.pt_packages import service as pt_packages_service  # Phase 37 DEBT-06
@@ -102,6 +103,11 @@ async def main() -> None:
             sender=telegram_sender,
             visits_service=visits_service,
             redis=redis,
+            # Phase 40 D-40-04 / D-40-06: positional order matches NamedTuple
+            # field order in handlers.py:HandlerContext (bookings_service +
+            # schedule_service appended at END).
+            bookings_service=bookings_service,
+            schedule_service=schedule_service,
         )
         application = build_application(
             token=settings.telegram_bot_token.get_secret_value(),
