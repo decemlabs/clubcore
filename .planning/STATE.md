@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Phase 41 context gathered
-last_updated: "2026-05-18T18:20:31.578Z"
+last_updated: "2026-05-18T18:25:56.453Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 2
-  percent: 18
+  completed_plans: 3
+  percent: 27
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 41 (infra-bedrock-anti-oracle-scaffold) — EXECUTING
-Plan: 3 of 11
+Plan: 4 of 11
 Status: Ready to execute
 Last activity: 2026-05-18
 
@@ -77,6 +77,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 **Phase 41 Plan 01 (2026-05-18):** LOCKED_AUDIT_EVENTS extended 58 → 69 (+11 v1.6 pairs per D-41-19). Plan must_haves drift ("56 → 67") resolved in favour of D-41-19 source-of-truth — the codebase already had 58 pairs (Phase 20 D-20-10 + Phase 23 D-23-10 drift adds not in the planner's mental count); the 11-pair v1.6 delta is what INFRA-34 requires; final cardinality is 69. Synthetic-violation runtime test established as first such test in the codebase (prior tests were all AST-walker-based). See `41-01-SUMMARY.md`.
 
 - [Phase ?]: Plan 41-03: LOCKED_EMAIL_TEMPLATES frozenset (15 v1.6 template identifiers) + AST walker enforcing literal-only template_id at every get_email_dispatcher() callsite (D-41-11/12/13)
+- [Phase ?]: Plan 41-04: Action.UPDATE added to backend Action StrEnum (D-41-22 verb). OWNER_ONLY 29 -> 33 with 4 USERS pairs. Three-way RBAC parity green at 33.
 
 ### Pending Todos
 
@@ -103,6 +104,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T18:20:18.327Z
+Last session: 2026-05-18T18:25:50.310Z
 Stopped at: Phase 41 context gathered
 Resume: `/gsd-discuss-phase 41`
