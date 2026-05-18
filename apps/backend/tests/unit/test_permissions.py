@@ -13,18 +13,17 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_twenty_nine_entries() -> None:
+def test_owner_only_has_exactly_thirty_three_entries() -> None:
     # Mirrors apps/admin-web/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
     #              + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
     #                (CREATE / EDIT / DELETE / CANCEL).
-    # Phase 37 INFRA-27 explicitly documents the 25 -> 29 delta (see
-    # app/core/permissions.py:108 "Final OWNER_ONLY size: 25 -> 29").
-    # Phase 6 TEST-06 / Phase 15 TESTS-08 / Phase 30 INFRA-19 add regex-based parity tests
-    # against can.ts (tests/integration/test_rbac_parity.py covers the cross-codebase
-    # mirror; this assertion is the structural-only drift tripwire).
-    assert len(OWNER_ONLY) == 29
+    #              + 4 v1.6 Phase 41 INFRA-37 / D-41-21 USERS write pairs
+    #                (CREATE / UPDATE / DELETE / LIST).
+    # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
+    # this assertion is the structural-only drift tripwire.
+    assert len(OWNER_ONLY) == 33
 
 
 def test_role_value_set() -> None:
@@ -32,9 +31,8 @@ def test_role_value_set() -> None:
 
 
 def test_action_value_set() -> None:
-    # 5 v1.1 + 2 v1.2 INFRA-08 (cancel, check_in) + 1 v1.5 Phase 37 INFRA-26/D-37-03a (list).
-    # Phase 37 added `LIST` as a semantic separation from `VIEW` for listings — see
-    # app/core/permissions.py:28.
+    # 5 v1.1 + 2 v1.2 INFRA-08 (cancel, check_in) + 1 v1.5 Phase 37 INFRA-26/D-37-03a (list)
+    # + 1 v1.6 Phase 41 INFRA-37 (update — semantic separation from EDIT for USERS module).
     assert {a.value for a in Action} == {
         "view",
         "create",
@@ -44,6 +42,7 @@ def test_action_value_set() -> None:
         "cancel",
         "check_in",
         "list",
+        "update",
     }
 
 
@@ -75,6 +74,7 @@ def test_resource_value_set() -> None:
         "pt-sessions",  # Phase 30 INFRA-18
         "schedule-slots",  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
         "bookings",  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
+        "users",  # Phase 41 INFRA-37 / D-41-21 — v1.6 multi-user admin resource
     }
 
 
@@ -114,10 +114,11 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check 29 locked entries (drift tripwire).
+    """Spot-check 33 locked entries (drift tripwire).
 
     Composition: v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 - Phase 34 D-34-09a
-                 + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs.
+                 + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
+                 + 4 v1.6 Phase 41 INFRA-37 USERS write pairs.
     """
     expected = frozenset({
         (Action.VIEW, Resource.FINANCE),
@@ -156,6 +157,14 @@ def test_specific_owner_only_membership() -> None:
         (Action.EDIT, Resource.SCHEDULE_SLOTS),
         (Action.DELETE, Resource.SCHEDULE_SLOTS),
         (Action.CANCEL, Resource.SCHEDULE_SLOTS),
+        # Phase 41 INFRA-37 / D-41-21 - v1.6 USERS owner-only writes
+        # (reception holds ZERO USERS permissions in v1.6 per CONTEXT.md D-41-23;
+        #  deactivate / reactivate / invitation-revoke map to Action.UPDATE;
+        #  soft-delete maps to Action.DELETE per D-41-22).
+        (Action.CREATE, Resource.USERS),
+        (Action.UPDATE, Resource.USERS),
+        (Action.DELETE, Resource.USERS),
+        (Action.LIST, Resource.USERS),
     })
     assert expected == OWNER_ONLY
 
