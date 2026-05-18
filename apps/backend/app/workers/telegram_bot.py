@@ -18,8 +18,10 @@ from __future__ import annotations
 import asyncio
 import signal
 from contextlib import AsyncExitStack, suppress
+from typing import Any
 
 import structlog
+from telegram.ext import CallbackQueryHandler
 
 from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
@@ -36,6 +38,7 @@ from app.integrations.telegram import sender as telegram_sender
 from app.integrations.telegram.bot import build_application
 from app.integrations.telegram.handlers import (
     HandlerContext,
+    book_callback_handler,
     book_handler,
     checkin_handler,
     start_handler,
@@ -119,6 +122,23 @@ async def main() -> None:
                 ("book", book_handler),
             ],
             ctx=ctx,
+        )
+
+        # Phase 40 BOT-03 / D-40-09 — register the /book CallbackQueryHandler
+        # post-build_application. The factory's `handlers=` arg accepts only
+        # CommandHandler tuples; the callback handler attaches via the
+        # standard PTB `application.add_handler` path so build_application's
+        # public signature stays stable (D-40-02 narrative addendum).
+        # The strict UUID regex re-validates callback_data shape — bad data
+        # never reaches book_callback_handler (D-40-09 anti-oracle invariant).
+        async def _book_callback_adapter(update: Any, context: Any) -> None:
+            await book_callback_handler(update, context, ctx)
+
+        application.add_handler(
+            CallbackQueryHandler(
+                callback=_book_callback_adapter,
+                pattern=r"^BK:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            )
         )
 
         await application.initialize()
