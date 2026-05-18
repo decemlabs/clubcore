@@ -1,470 +1,455 @@
-# Architecture Research
+# Architecture Research — v1.6 Email Channel + Multi-User Admin
 
-**Domain:** PT-slot booking integration — modular monolith (Sportzal v1.5)
-**Researched:** 2026-05-17
-**Confidence:** HIGH (all decisions derived directly from reading the live codebase)
-
-This file answers: *how do `app/modules/schedule/` and `app/modules/bookings/` plug into the existing v1.4 modular-monolith without breaking the three import-linter contracts, the `LOCKED_AUDIT_EVENTS` gate, or the SVC001/B-01 AST walkers?*
+**Domain:** Modular-monolith extension (FastAPI / SQLAlchemy 2.0 async / ARQ)
+**Researched:** 2026-05-18
+**Confidence:** HIGH — entirely grounded in the existing v1.0–v1.5 codebase patterns; no speculative external research required.
 
 ---
 
-## 1. Module Split Decision: Two Modules, Protocol Callbacks Between Them
+## TL;DR — Five Architectural Decisions
 
-**Decision: keep `schedule` and `bookings` as two separate modules.**
-
-The `modules-independent` import-linter contract is the deciding constraint. `bookings.service` needs to check whether a slot is still `available` before creating a booking. If `bookings` imports `schedule` directly to do this, the contract breaks. The validated escape — used five times already in v1.1 through v1.4 — is a Protocol slot in `app/core/dependencies.py` registered from the composition root.
-
-The alternative (fold both into a single `bookings` module) avoids one Protocol slot but merges two distinct business concepts: a trainer publishing availability windows (a catalog concern) and a client reserving one of those windows (a transaction concern). The `pt_packages` / `pt_sessions` split in v1.4 is the direct precedent: those two modules are equally entangled at the DB level yet remain separate because the bounded contexts differ. Follow the same discipline.
-
-**Concrete contract consequence:** `bookings` NEVER imports from `schedule`. The runtime bridge is three new Protocol slots in `app/core/dependencies.py`:
-
-| Slot | Consumer | Provider | Failure mode |
-|------|----------|----------|--------------|
-| `get_slot_by_id` | `bookings.service` (validate slot before booking) | `schedule.service.resolve_slot_by_id` | silent-None (mirrors `ActiveMembership`) |
-| `restore_slot_on_cancel` | `bookings.service` (flip slot `booked→available` on cancel) | `schedule.service.restore_slot_to_available` | defensive-raise (slot stranded = misconfiguration) |
-| `complete_booking` | `pt_sessions.service` (mark booking `completed` when PT-session recorded) | `bookings.service.complete_booking` | defensive-raise (mirrors `get_payment_recorder`) |
+1. **Email transport** lives in `app/integrations/email/` (mirrors `app/integrations/telegram/`). Single thin outbound boundary `send_email(...)` returns a typed `EmailSendResult` (mirror of `SendResult` in `app/integrations/telegram/sender.py:17`). **No new import-linter contract needed** — `integrations-not-depend-on-modules` already covers this.
+2. **Email send is always async via ARQ**, never inline in the request handler. A new task `dispatch_email` is added to `WorkerSettings.functions`; the existing `arq-worker` container runs it. **No 6th docker-compose service.**
+3. **`app/modules/notifications/` stays a placeholder.** Per-domain template ownership wins (the v1.5 D-39-02 precedent: `app/modules/bookings/notifications.py` owns booking DM copy). Email templates for each domain live next to their Telegram counterparts (`app/modules/{auth,memberships,bookings,payments}/email_templates.py`). The `integrations/email/` layer is **channel-agnostic transport only** — it knows nothing about Russian copy or business events.
+4. **New `app/modules/users/` module** (not an extension of `auth`). Auth keeps login/refresh/OTP/sessions; users gets CRUD + invitation + reset-password. **One new edge in `modules-independent` contract** (users joins the list); cross-module wiring via composition-root Protocol slots only.
+5. **Reset-password tokens** live in a new DB table `password_reset_tokens` (NOT Redis). Mirrors the `refresh_tokens` discipline: hash-at-rest, server-side single-use, with auditability. Single-use enforcement is a partial unique on `(user_id, purpose) WHERE consumed_at IS NULL`. (Note: the STACK research recommends `itsdangerous`-signed stateless tokens — this is an open question for the spec phase; both approaches preserve the audit invariant.) Redis is wrong here because we need post-mortem auditability for any password-reset abuse.
 
 ---
 
-## 2. Tables
+## Standard Architecture (Existing — confirmed via inspection)
 
-### `trainer_availability_slots`
+```
+                                  ┌─────────────────────────────────────┐
+                                  │       app/api/v1/router.py          │
+                                  │       (HTTP entry — FastAPI)        │
+                                  └──────────────────┬──────────────────┘
+                                                     │
+                            ┌────────────────────────┼────────────────────────┐
+                            │                        │                        │
+                            ▼                        ▼                        ▼
+        ┌────────────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+        │  app/modules/<domain>/      │  │  app/core/            │  │  app/api/v1/          │
+        │  router / service / models  │◄─┤  dependencies.py      │◄─┤  endpoint glue        │
+        │  schemas / repository       │  │  (Protocol slots —    │  │                       │
+        │                             │  │  register_*)          │  │                       │
+        └─────────────────────────────┘  └───────────────────────┘  └───────────────────────┘
+                                                     │
+                                                     ▼
+                                         ┌───────────────────────┐
+                                         │  app/main.py          │
+                                         │  create_app()         │
+                                         │  ─── composition ───  │
+                                         │  register_user_loader │
+                                         │  register_*resolver*  │
+                                         │  register_payment_*   │
+                                         │  register_booking_*   │
+                                         └──────────┬────────────┘
+                                                    │
+                                                    ▼
+                        ┌─────────────────────────────────────────────────────────┐
+                        │  app/integrations/  (transport — channel-specific)      │
+                        │   telegram/  email/  (← currently placeholder)          │
+                        └───────────────────┬─────────────────────────────────────┘
+                                            │
+                                            ▼
+                        ┌─────────────────────────────────────────────────────────┐
+                        │  app/workers/  (separate processes)                     │
+                        │   telegram_bot.py  (4th compose service — long-polling) │
+                        │   __init__.py:WorkerSettings  (5th compose service —    │
+                        │                                 ARQ scheduled jobs)     │
+                        └─────────────────────────────────────────────────────────┘
+```
+
+**import-linter contracts:**
+
+1. `core-not-depend-on-modules` — `app.core` ⊥ `app.modules.*`
+2. `modules-independent` — listed modules cannot import each other (currently 12 modules: auth, clients, memberships, visits, trainers, schedule, bookings, billing, notifications, payments, pt_packages, pt_sessions)
+3. `integrations-not-depend-on-modules` — `app.integrations` ⊥ `app.modules.*`
+
+Documented narrative exceptions:
+- **D-06** (Phase 7) — `app/workers/telegram_bot.py` may import `app.modules.auth.telegram_service`
+- **D-09** (Phase 18) — each `app/workers/scheduled/<job>.py` may import ONE owning module's service
+- **D-10** (Phase 20) — workers may consume cross-module slots via `HandlerContext`
+- **D-39-02** (Phase 39) — `app/modules/bookings/notifications.py` may be imported by both bookings/workers AND the telegram bot worker (locked DM copy lives in the owning module, not in `integrations/telegram/copy.py`)
+
+---
+
+## Recommended v1.6 Structure (Additions in **bold**)
+
+```
+apps/backend/app/
+├── core/
+│   ├── audit.py                              # LOCKED_AUDIT_EVENTS 56 → 56 + ~11 (add up-front per v1.3 INFRA-15 lesson)
+│   ├── audit_payloads.py                     # extra='forbid' Pydantic registry (extend per new event)
+│   └── dependencies.py                       # + register_email_dispatcher, + register_user_session_invalidator (Protocol slots)
+├── integrations/
+│   ├── telegram/                             # unchanged
+│   └── email/                                # ALREADY EXISTS as placeholder
+│       ├── __init__.py                       # module docstring (mirror telegram/__init__.py shape)
+│       ├── client.py                         # **REPLACE placeholder** → async provider adapter (see STACK.md for provider)
+│       ├── factory.py                        # **NEW** — `build_email_client(*, api_key, from_addr)` mirrors `telegram/bot.py:build_bot`
+│       └── templates/                        # **KEEP EMPTY.** No business copy here (D-39-02 lesson — copy lives in modules).
+├── modules/
+│   ├── auth/                                 # **EXTEND** (not split)
+│   │   ├── service.py                        # + `invalidate_all_families_for_user(user_id)` — exported via Protocol slot
+│   │   ├── email_templates.py                # **NEW** — locked Russian email copy for OTP-fallback (when Telegram blocked)
+│   │   ├── password_reset_service.py         # **NEW** — issue + consume reset token + audit chain
+│   │   ├── password_reset_email_templates.py # **NEW** — locked Russian copy for reset-link email
+│   │   └── models.py                         # + `PasswordResetToken` ORM model (or — per STACK.md — skip table if itsdangerous-stateless)
+│   ├── users/                                # **NEW MODULE** — owner-managed admin onboarding
+│   │   ├── __init__.py
+│   │   ├── router.py                         # POST /api/v1/users, PATCH /api/v1/users/{id}, DELETE, GET
+│   │   ├── service.py                        # create_user, deactivate_user, soft_delete_user, list_users, send_invitation_email
+│   │   ├── invitation_service.py             # invitation-token issuance + consumption
+│   │   ├── email_templates.py                # **NEW** — locked Russian copy: USER_INVITATION_EMAIL_*
+│   │   ├── repository.py                     # User CRUD (does NOT touch refresh_tokens — auth's domain via slot)
+│   │   ├── schemas.py
+│   │   ├── permissions.py                    # owner-only via existing `require_permission` + new (CREATE, USERS) etc.
+│   │   └── constants.py                      # USER_STATUS_TRANSITIONS (active ↔ deactivated; → soft-deleted absorbing)
+│   ├── memberships/
+│   │   └── email_templates.py                # **NEW** — locked Russian email copy for EXPIRING_{7D,3D,1D} email variant
+│   ├── bookings/
+│   │   └── email_templates.py                # **NEW** — locked Russian email copy for booking confirm + reminder
+│   ├── payments/
+│   │   └── email_templates.py                # **NEW** — locked Russian email copy for cash payment receipt
+│   └── notifications/                        # **STAYS A PLACEHOLDER.** Per-domain template ownership is the rule.
+├── workers/
+│   ├── __init__.py                           # + `dispatch_email` in `WorkerSettings.functions`
+│   ├── scheduled/
+│   │   ├── send_expiring_notifications.py    # **EXTEND** — after Telegram-DM branch, enqueue email fallback if user has email + Telegram blocked
+│   │   └── send_booking_reminders.py         # **EXTEND** — same dual-channel pattern
+│   ├── tasks/
+│   │   └── dispatch_email.py                 # **NEW** — ARQ task; consumes `EmailEnvelope`; calls integrations/email/client.send_email
+│   └── telegram_bot.py                       # unchanged
+└── main.py                                   # + register_email_dispatcher
+                                              # + register_user_session_invalidator
+                                              # Double-wire to BOTH create_app() AND WorkerSettings.on_startup (v1.3 REG-29-03 lesson)
+```
+
+**Why this shape:**
+- **`integrations/email/` parallels `integrations/telegram/` exactly** — D-39-02 confirmed channels are transport-only; business copy lives in modules. No cycle risk because `integrations` cannot import `modules` per contract 3.
+- **No new `notifications` module.** v1.3 Phase 27 (`send_expiring_notifications`) and v1.5 Phase 39 (booking DMs) both prove per-domain template ownership is the working pattern. (Note: the FEATURES research suggests creating one — this is an open conflict resolved in favour of the v1.5 D-39-02 precedent.)
+- **`users` is a new module, not an `auth` extension.** Auth's responsibility is "credential verification + session lifecycle." Users' responsibility is "operator roster + invitation + role assignment." These are different lifecycles.
+
+---
+
+## New Protocol Slots (composition-root registrations in `app/main.py`)
+
+```python
+# In app/core/dependencies.py — add new Protocol slots:
+
+class EmailDispatcher(Protocol):
+    """Enqueue an email-send for async fanout via ARQ.
+
+    Implementation lives in app.workers.tasks.dispatch_email (queue helper).
+    Synchronous return: just schedules the job; returns immediately.
+    """
+    async def __call__(
+        self,
+        *,
+        to: str,
+        subject: str,
+        html: str,
+        text: str,
+        audit_correlation_id: str,
+    ) -> None: ...
+
+
+class UserSessionInvalidator(Protocol):
+    """Invalidate all refresh-token families for a user.
+
+    Used by users.service.deactivate_user — must kill all active sessions.
+    Reaches into auth.service.invalidate_all_families_for_user via this slot
+    so users module never imports auth.
+    """
+    async def __call__(
+        self, session: AsyncSession, *, user_id: UUID, actor_user_id: UUID, reason: str,
+    ) -> None: ...
+```
+
+**Composition-root wiring in `app/main.py:create_app()`** AND **`app/workers/__init__.py:WorkerSettings.on_startup`** (double-wire per REG-29-03 lesson):
+
+```python
+from app.workers.tasks.dispatch_email import enqueue_email_dispatch
+register_email_dispatcher(enqueue_email_dispatch)
+
+from app.modules.auth.service import invalidate_all_families_for_user
+register_user_session_invalidator(invalidate_all_families_for_user)
+```
+
+**Key invariant:** `users.service` never has `import app.modules.auth` anywhere. It calls `get_user_session_invalidator()(session, user_id=...)` exactly as `memberships.service` calls `get_payment_recorder()` today (proven pattern from v1.4 Phase 32).
+
+---
+
+## import-linter Impact
+
+### Contract 2 (`modules-independent`) — ONE mechanical addition
+
+Add `app.modules.users` to the `modules` list in `.importlinter`. The contract is `type = independence`, so users automatically becomes mutually-forbidden with all other 12 listed modules. **No exceptions needed** — all cross-module interactions go through the composition-root slots.
+
+### Contract 3 (`integrations-not-depend-on-modules`) — NO change
+
+`app/integrations/email/` only imports stdlib + chosen provider SDK + `app.core.config`. The ARQ task (`app/workers/tasks/dispatch_email.py`) is the gluing layer — and workers are NOT in any forbidden-imports contract.
+
+### Documented narrative exceptions
+
+- **D-41-01** — `send_expiring_notifications.py` extension to call email-fallback branch via composition-root `email_dispatcher` slot (no new module import).
+- **D-41-02** — `send_booking_reminders.py` extension, same reasoning.
+- **D-41-03** — `app/workers/tasks/dispatch_email.py` must NOT import any `app.modules.*` — by design. Receives pre-rendered `EmailEnvelope` (HTML/text already substituted by the calling service before enqueue). **Modules render templates; workers transport bytes.**
+
+---
+
+## Email-Sending Path — Data Flow
+
+### Sync request paths (signup invitation, password reset request)
+
+```
+1. Owner: POST /api/v1/users   (admin-web HTTP)
+            │
+            ▼
+2. app/modules/users/router.py → users.service.create_user(...)
+            │
+            ▼
+3. users.service:
+   - INSERT into users (status='pending_invitation')
+   - INSERT into password_reset_tokens (purpose='invitation', user_id, token_hash, expires_at, consumed_at=NULL)
+     [OR — per STACK.md — issue itsdangerous-signed token, no DB row]
+   - audit.emit("user_invited", actor_user_id=current_owner.id, resource_type="user", ...)
+   - await session.commit()  # SVC001 commit-gate
+   - get_email_dispatcher()(  # ← composition-root slot
+        to=new_user.email,
+        subject=...,           # from app/modules/users/email_templates.py
+        html=...,
+        text=...,
+        audit_correlation_id=<UUID of users.user_invited audit row>,
+     )
+            │
+            ▼
+4. dispatch_email.enqueue_email_dispatch:
+   - arq.create_pool().enqueue_job("dispatch_email", EmailEnvelope(...))
+            │
+            ▼
+5. ARQ worker picks up job → app/workers/tasks/dispatch_email.py:
+   - get email client from worker ctx (built by on_startup)
+   - await integrations.email.client.send_email(...)
+   - On EmailSendResult.ok → audit.emit("email_sent", resource_type="email", correlation_id=...)
+   - On EmailSendResult.blocked → audit.emit("email_send_failed", ...)
+            │
+            ▼
+6. HTTP response to owner returns 201 created (does NOT block on email send)
+```
+
+**Why async even for "request-time" emails:** Blocking the HTTP request on a third-party API call costs us a request worker for the duration AND couples our 200-OK semantics to the email provider's uptime. The ARQ-task pattern means email-provider-down is a delivery delay (retried via ARQ's `max_tries`), not a 500.
+
+### Async / scheduled paths (expiring-soon, booking reminder)
+
+Mirror v1.3 Phase 27 and v1.5 Phase 39 exactly. The cron job already enumerates affected rows; we add a per-row Telegram-first attempt; on `SendResult.blocked` AND the user has `email_verified=True`, enqueue the email dispatch.
+
+---
+
+## Idempotency Table Shape (Decision)
+
+**Recommendation: extend existing per-domain tables with a `channel` column rather than create a new `email_notifications` table.**
+
+Current state:
+- `membership_notifications` — `UNIQUE (membership_id, kind)` where `kind ∈ {expiring_7d, expiring_3d, expiring_1d}`
+- `booking_notifications` — `UNIQUE (booking_id, kind)` where `kind ∈ {reminder_24h}`
+
+**Proposed extension:**
+- Add `channel TEXT NOT NULL DEFAULT 'telegram'` column with CHECK `channel IN ('telegram','email')`
+- Change UNIQUE to `(membership_id, kind, channel)` — a 7-day expiry can fire once on Telegram AND once on email
+- Backfill existing rows to `channel='telegram'` (zero-row migration since data is reproducible by next cron run)
+
+**Why per-domain not per-channel:**
+- Audit-correlation is naturally per-business-event ("did we tell client X about their expiring membership Y?", not "what's in our email log?")
+- Mirrors v1.5 D-39-02 module-ownership decision
+- New event tracking added without inventing a new table — every existing query pattern keeps working with an added `WHERE channel='telegram'` filter
+
+**Exception:** owner-targeted ops emails (user-invitation, password-reset) are NOT business-event-keyed — they belong on the token row itself (`sent_at` populated by worker on success), OR in a separate generic `email_send_attempts` table per STACK.md.
+
+---
+
+## Multi-User Admin Module — Detailed Shape
+
+### `app/modules/users/` — directory layout
+
+```
+users/
+├── __init__.py
+├── router.py                  # POST /users, PATCH /users/{id}, DELETE /users/{id}, GET /users
+├── service.py                 # business logic; calls Protocol slots only
+├── invitation_service.py      # invitation-token issuance + acceptance
+├── repository.py              # User CRUD; partial unique on email WHERE deleted_at IS NULL
+├── schemas.py                 # camelCase aliasing
+├── models.py                  # IMPORTANT: do NOT redefine `User` — see "who owns the table" below
+├── permissions.py             # local actions if needed
+├── constants.py               # USER_STATUS_TRANSITIONS, locked role-set
+├── email_templates.py         # locked Russian copy
+└── _negative_importlinter_fixture.py
+```
+
+### Critical: who owns the `users` table?
+
+**Two viable paths (resolve in spec phase):**
+
+**Path A (cleaner) — hoist `User` ORM from `auth/models.py` to `app/core/models.py`:**
+- Pro: Eliminates the cross-module-import question entirely.
+- Con: No direct ORM-hoist precedent; touches all 729 tests' imports.
+- Mirrors v1.2 Phase 15 hoist of `escape_like_pattern` (but that was a function, not an ORM model).
+
+**Path B (lighter) — leave `User` in `auth/models.py`; `users` accesses via `UserLookup` Protocol slot:**
+- Pro: No mass test rewrites; smaller blast radius.
+- Con: One extra Protocol slot for trivial reads.
+- Mirrors existing `register_user_loader` pattern.
+
+### RBAC additions
+
+- `Resource.USERS` — new
+- `OWNER_ONLY` frozenset adds: `(CREATE, USERS)`, `(UPDATE, USERS)`, `(DELETE, USERS)`, `(LIST, USERS)` — all four owner-locked
+- Three-way byte-parity test (backend `RBAC` ↔ admin-web `can.ts` ↔ `registry.ts`) extended
+
+### Audit events (extend LOCKED_AUDIT_EVENTS frozenset 56 → ~67)
+
+New `(event, resource_type)` pairs (final set TBD in Phase 41 — could narrow to ~7-8 per FEATURES.md):
+- `("user_invited", "user")`
+- `("user_invitation_accepted", "user")`
+- `("user_invitation_expired", "user")` / `("user_invitation_revoked", "user")`
+- `("user_deactivated", "user")`
+- `("user_reactivated", "user")`
+- `("user_soft_deleted", "user")`
+- `("password_reset_requested", "user")` — emitted on BOTH branches (known + unknown email) per anti-oracle invariant
+- `("password_reset_completed", "user")`
+- `("email_sent", "email")` — generic; correlation_id points to triggering audit row
+- `("email_send_failed", "email")` — transient/blocked classification in payload
+
+Each pair gets a corresponding Pydantic model in `app/core/audit_payloads.py` with `extra='forbid'`. Add to `LOCKED_AUDIT_EVENTS` in **Phase 41 INFRA up-front** before any callsite lands.
+
+---
+
+## Reset-Password Token Storage (Decision — TWO PATHS)
+
+**Path A (this researcher's recommendation): DB table `password_reset_tokens`.**
 
 ```sql
-CREATE TABLE trainer_availability_slots (
-  id                  UUID PRIMARY KEY,              -- UUIDPkMixin
-  trainer_id          UUID NOT NULL REFERENCES trainers(id) ON DELETE RESTRICT,
-  start_time          TIMESTAMPTZ NOT NULL,
-  end_time            TIMESTAMPTZ NOT NULL,
-  status              VARCHAR(16) NOT NULL DEFAULT 'available',
-  recurrence_rule     TEXT NULL,                     -- RRULE string; NULL = one-off
-  created_by_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_at          TIMESTAMPTZ NOT NULL,          -- TimestampMixin
-  updated_at          TIMESTAMPTZ NOT NULL,
-  deleted_at          TIMESTAMPTZ NULL,              -- SoftDeleteMixin
-  CONSTRAINT ck_trainer_availability_slots_status
-    CHECK (status IN ('available','booked','cancelled'))
+CREATE TABLE password_reset_tokens (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL,
+    purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('reset','invitation')),
+    issued_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NULL,
+    sent_at TIMESTAMPTZ NULL,
+    audit_correlation_id UUID NULL REFERENCES audit_log(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_trainer_availability_slots_trainer_id_start_time
-  ON trainer_availability_slots (trainer_id, start_time)
-  WHERE deleted_at IS NULL;
-CREATE INDEX ix_trainer_availability_slots_available
-  ON trainer_availability_slots (start_time)
-  WHERE status = 'available' AND deleted_at IS NULL;
+CREATE UNIQUE INDEX uq_password_reset_tokens_user_id_active
+    ON password_reset_tokens(user_id, purpose) WHERE consumed_at IS NULL;
 ```
 
-**Soft-delete rationale:** `bookings.slot_id` is `ON DELETE RESTRICT`. A slot cannot be physically deleted while any booking points to it. Soft-delete lets the UI filter `WHERE deleted_at IS NULL` while preserving the FK anchor for audit reads. Mirrors `membership_plans` discipline.
+Single-use partial unique mirrors `membership_freeze_periods` discipline. Auditable forever.
 
-**Status transitions (declarative constant `SLOT_STATUS_TRANSITIONS`):**
-- `available → booked` — set atomically in the same UoW as the booking INSERT
-- `available → cancelled` — owner/reception cancels before any booking exists
-- `booked → available` — booking cancelled; slot restored for rebooking
-- `booked → completed` — terminal; set when associated booking completes
+**Path B (STACK.md researcher's recommendation): itsdangerous stateless signed tokens.**
 
-**`recurrence_rule`:** Stores an RRULE string. `schedule.service.publish_slot` expands a recurring rule into individual `trainer_availability_slots` rows up to a configurable horizon (e.g. 60 days). The stored rule is display metadata, not live scheduling logic. This avoids a separate recurrence-expansion service and keeps the query model simple: every API consumer always reads individual slot rows.
+Embed `password_changed_at` in the signed payload; single-use enforced because any password change bumps that timestamp and invalidates older signed tokens. No DB row, no cleanup cron.
+
+**Resolution:** Spec phase decides. Path B is simpler infra but loses immutable audit-trail of token issuance. Path A is heavier but matches `refresh_tokens` discipline byte-for-byte. **Both preserve the anti-oracle invariant.**
 
 ---
 
-### `bookings`
+## Deployment Shape (Decision)
 
-```sql
-CREATE TABLE bookings (
-  id                        UUID PRIMARY KEY,        -- UUIDPkMixin
-  slot_id                   UUID NOT NULL REFERENCES trainer_availability_slots(id) ON DELETE RESTRICT,
-  client_id                 UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
-  pt_package_id             UUID NOT NULL REFERENCES pt_packages(id) ON DELETE RESTRICT,
-  status                    VARCHAR(16) NOT NULL DEFAULT 'confirmed',
-  cancelled_at              TIMESTAMPTZ NULL,
-  cancel_reason             TEXT NULL,
-  no_show_at                TIMESTAMPTZ NULL,
-  completed_at              TIMESTAMPTZ NULL,
-  created_by_user_id        UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_at                TIMESTAMPTZ NOT NULL,    -- TimestampMixin
-  updated_at                TIMESTAMPTZ NOT NULL,
-  -- mandatory snapshot fields (v1.2 discipline: snapshot pricing)
-  trainer_name_snapshot     TEXT NOT NULL,
-  slot_start_time_snapshot  TIMESTAMPTZ NOT NULL,
-  slot_end_time_snapshot    TIMESTAMPTZ NOT NULL,
-  CONSTRAINT ck_bookings_status
-    CHECK (status IN ('confirmed','cancelled','no_show','completed')),
-  CONSTRAINT ck_bookings_cancel_reason_requires_cancelled_at
-    CHECK (cancel_reason IS NULL OR cancelled_at IS NOT NULL)
-);
--- Race guard: only one confirmed booking per slot
-CREATE UNIQUE INDEX uq_bookings_slot_confirmed
-  ON bookings (slot_id) WHERE status = 'confirmed';
-```
+**Recommendation: NO 6th docker-compose service. Email-fanout runs inside the existing ARQ worker (5th service).**
 
-**Partial UNIQUE `(slot_id) WHERE status='confirmed'`** is the DB-level race guard for concurrent booking attempts. Two simultaneous POSTs for the same slot: one wins the INSERT, the other gets `IntegrityError`. The service catches the constraint name `uq_bookings_slot_confirmed` and translates to 409 `slot_already_booked`. This mirrors three prior patterns: `(membership_id) WHERE ended_at IS NULL` (v1.3 freeze), `(client_id) WHERE status='active'` for `pt_packages` (v1.4), and `(refund_of) WHERE refund_of IS NOT NULL` for payments (v1.4).
+- New ARQ task `dispatch_email` registered in `app/workers/__init__.py:WorkerSettings.functions`
+- Existing `arq-worker` container also runs it
+- On startup, `WorkerSettings.on_startup` builds the email client via `app/integrations/email/factory.py:build_email_client(...)` and stashes in `ctx['email_client']` — mirror of how the DB engine is stashed
+- ARQ's `max_tries` + retry-with-backoff handles transient provider failures for free
 
-**Snapshot fields:** captured at booking time from the slot row. `trainer_name_snapshot` ensures historical display integrity if the trainer is later renamed or deactivated. `slot_start/end_time_snapshot` ensures the booking summary remains accurate even if the slot row is soft-deleted. Mirrors `trainer_name_snapshot` in `pt_sessions` (v1.4 B-05).
-
-**No `pt_package` snapshot fields on `bookings`:** the FK to `pt_packages` is sufficient — `pt_packages` already carries its own full snapshot suite from Phase 33. No double-snapshot needed.
+**Why not a 6th service:** Email is not long-polling. Sending is one-shot HTTPS calls. A separate service adds operational complexity. ARQ already does fire-and-forget with retries.
 
 ---
 
-### `pt_sessions` — ALTER (new `booking_id` column)
+## Architectural Patterns to Follow
 
-```sql
-ALTER TABLE pt_sessions
-  ADD COLUMN booking_id UUID NULL REFERENCES bookings(id) ON DELETE SET NULL;
-```
+### Pattern 1: Module-owned locked-copy templates
 
-`ON DELETE SET NULL` rather than RESTRICT: a PT-session recorded as a walk-in (no booking) must still be allowed. `ON DELETE SET NULL` also means that if a booking row is ever cleaned up, historical sessions do not break. This is a non-destructive additive migration.
+Locked Russian email subject/html/text strings live in `app/modules/<domain>/email_templates.py`. Single source of truth per business event (matches D-39-02 lesson). Owner sign-off lives next to the code that triggers it.
 
-The `booking_id` field is added to `PtSessionCreateRequest` as `Optional[UUID]`. When non-NULL, `pt_sessions.service.record_pt_session` calls `complete_booking(session, booking_id)` via the Protocol slot after the atomic decrement succeeds, in the same UoW before `await session.commit()`.
+### Pattern 2: Pre-rendered envelopes cross the integration boundary
 
----
+The ARQ `dispatch_email` task receives an already-rendered `EmailEnvelope(to, subject, html, text, audit_correlation_id)` and is forbidden from importing anything in `app.modules.*`. Substitution happens at the calling service. Worker stays generic.
 
-## 3. Cross-Module Callbacks: Full Protocol Slot Inventory
+### Pattern 3: Audit-correlation via `audit_correlation_id` foreign key
 
-### Slots that already exist and are reused:
+Every email-send audit row carries an FK to the **business** audit row that triggered it. Mirrors `payment_row_hash` SHA-256 traceability locked in v1.4 Phase 32.
 
-| Slot | Function in `core/dependencies.py` | Used by | Already wired |
-|------|-------------------------------------|---------|---------------|
-| `get_active_pt_package` | `get_active_pt_package(session, client_id)` | `bookings.service` validates package before booking | Phase 33 — `app/main.py` only (not bot) |
-| `resolve_trainer_by_id` | `resolve_trainer_by_id(session, trainer_id)` | `schedule.service` validates trainer on slot publish | Phase 31 — `app/main.py` AND `telegram_bot.py` (double-wired) |
+### Pattern 4: SVC001 commit-gate applies to new users.service
 
-### New slots to add in `app/core/dependencies.py`:
+The AST commit-gate walker (currently scope=6 services) extends to 7. Add `app/modules/users/service.py` to the tracked-services list.
 
-**Slot: `SlotById` / `register_slot_resolver` / `get_slot_by_id`**
+### Pattern 5: Double-wire Protocol slot registrations
 
-```python
-class SlotById(Protocol):
-    id: UUID
-    status: str
-    trainer_id: UUID
-    start_time: datetime
-    end_time: datetime
-    trainer_name_snapshot: str   # captured when slot is published
+Per v1.3 REG-29-03 lesson: any new resolver/dispatcher slot must be registered in BOTH `app/main.py:create_app()` AND `app/workers/__init__.py:WorkerSettings.on_startup`. ARQ worker is a separate process; it does NOT see registrations from `create_app()`.
 
-SlotByIdResolver = Callable[[AsyncSession, UUID], Awaitable[SlotById | None]]
-```
+### Anti-Pattern to AVOID: a "real" notifications module
 
-- Consumer: `bookings.service.create_booking` — checks `slot.status == 'available'`
-- Failure mode: silent-None (mirrors `ActiveMembership`). Consumer raises 404 when None.
-- Wired from: `app/main.py` composition root AND `telegram_bot.py` (defensive double-wiring per REG-29-03 lesson — the bot's `/book` handler reaches `bookings.service` which calls this slot).
-
-**Slot: `BookingSlotRestorer` / `register_booking_slot_restorer` / `restore_slot_on_cancel`**
-
-```python
-BookingSlotRestorer = Callable[[AsyncSession, UUID], Awaitable[None]]
-# (session, slot_id) -> None; flips slot status 'booked' → 'available'
-```
-
-- Consumer: `bookings.service.cancel_booking` — restores slot after booking cancel
-- Failure mode: defensive-raise. A missing restorer when cancelling a booking would permanently strand the slot in `booked` status.
-- Wired from: `app/main.py` composition root only (not bot — bot does not cancel bookings in v1.5).
-
-**Slot: `BookingCompleter` / `register_booking_completer` / `complete_booking_by_pt_session`**
-
-```python
-BookingCompleter = Callable[[AsyncSession, UUID], Awaitable[None]]
-# (session, booking_id) -> None; sets status='completed', completed_at=now()
-```
-
-- Consumer: `pt_sessions.service.record_pt_session` — when `booking_id` is provided
-- Failure mode: defensive-raise (mirrors `get_payment_recorder`). Recording a PT-session against a non-existent or wrongly-registered completer is a programmer error, not a recoverable state.
-- Wired from: `app/main.py` composition root only (not bot — bot does not record PT-sessions).
+D-39-02 (Phase 39) is the canonical rejection. Resurrecting `app/modules/notifications/` as a channel-multiplexer would create cross-module fan-in and tempt ad-hoc magic-string event names, breaking the AST LOCKED-events gate.
 
 ---
 
-## 4. Composition Root Wiring (`app/main.py`)
+## Build Order for v1.6 Phases (suggested)
 
-Additions follow the established pattern: local imports inside `create_app()` body, after existing Phase 33 pt_packages wiring, before `app.include_router(api)`.
+Mirrors v1.3 (Phase 24 INFRA bedrock → 25/26/27 feature phases → 28 OpenAPI drift → 29 verification) and v1.5 (Phase 37 INFRA bedrock → 38/39/40 feature phases).
 
-```python
-# Phase 38 — schedule module Protocol slots
-from app.modules.schedule import service as schedule_service
-register_slot_resolver(schedule_service.resolve_slot_by_id)
-register_booking_slot_restorer(schedule_service.restore_slot_to_available)
+| Phase | Theme | Why this order |
+|---|---|---|
+| **Phase 41 — Foundations bedrock** | Extend `LOCKED_AUDIT_EVENTS` 56 → ~67 up-front; hoist `User` ORM (or add `UserLookup` slot); extend `Action`/`Resource`/`OWNER_ONLY` for `Resource.USERS`; declare new Protocol slots; add `app.modules.users` to `.importlinter`; extend SVC001 commit-gate; resolve reset-token-store decision (Path A vs B) | Up-front infrastructure prevents per-phase churn (v1.3 INFRA-15 lesson). |
+| **Phase 42 — Email integration layer** | Replace `app/integrations/email/client.py` placeholder with real provider adapter; add `factory.py`; add `app/workers/tasks/dispatch_email.py` ARQ task; wire dispatcher slot double-wired; LOCKED audit pair `email_sent`/`email_send_failed` first callsites; DNS/SPF/DKIM/DMARC owner-runbook | Transport must exist before any module can call it. |
+| **Phase 43 — Users module (CRUD + RBAC)** | New `app/modules/users/`; users-table schema additions; `UserSessionInvalidator` slot wired; audit events | Depends on Phase 41. Independent of email. |
+| **Phase 44 — Invitation + password-reset flow** | `password_reset_tokens` table (or itsdangerous stateless); `password_reset_service.py`; `invitation_service.py`; endpoints; locked Russian email copy with owner sign-off (D-27 lineage); cron expiry job | Depends on Phase 42 + 43. |
+| **Phase 45 — Email fallback for expiring/booking notifications** | Extend `send_expiring_notifications.py` and `send_booking_reminders.py`; extend idempotency tables with `channel` column; locked email copy | Depends on Phases 41 + 42. Mirrors v1.3 Phase 27. |
+| **Phase 46 — Payment-receipt email** | `payments/service.py` hook on `record_payment` success; locked email copy; LOCKED `payment_receipt_emailed` event | Standalone — only depends on Phase 42. Can be parallel with Phase 45. |
+| **Phase 47 — OpenAPI drift gate refresh** | Atomic byte-stable regen + `AssertNonNever` forward-guards (61 → ~73) | After all feature phases land. Mirrors v1.3 Phase 28 + v1.5 Phase 36. |
+| **Phase 48 — Milestone verification** | Operator scenarios via curl + sandbox email; race tests; CI gates | Mirrors v1.3 Phase 29 + v1.4 Phase 36 + v1.5 Phase 40 verification discipline. |
 
-# Phase 39 — bookings module Protocol slot
-from app.modules.bookings import service as bookings_service
-register_booking_completer(bookings_service.complete_booking)
-```
-
-**Order rationale:** `schedule` slots must be registered before `bookings` slot because in tests that override the slot resolver via `create_app()`, the bookings stub may itself call `get_slot_by_id` — so the slot resolver must already be in place when `register_booking_completer` fires.
-
-**Bot worker parity (REG-29-03 discipline):** `app/workers/telegram_bot.py:main()` must also register:
-
-```python
-from app.modules.schedule import service as schedule_service
-register_slot_resolver(schedule_service.resolve_slot_by_id)
-```
-
-The `/book` handler calls `bookings.service` via `HandlerContext.bookings_service`; `bookings.service.create_booking` internally calls `get_slot_by_id` from `core.dependencies`. Without this registration in the bot worker process, every bot `/book` attempt silently returns "slot not found". This is the exact failure mode of REG-29-03 (v1.3): `register_active_membership_resolver` missing in the bot worker made `/checkin` silently fail.
-
-`register_booking_completer` is NOT registered in the bot worker — the bot does not record PT-sessions, so `complete_booking_by_pt_session` is never called in that process. Mirrors the D-32-14 payment-recorder discipline.
-
-**ARQ worker `mark_no_show_bookings`:** add to both `WorkerSettings.functions` and `WorkerSettings.cron_jobs`. The existing `on_startup` cron-resolution invariant assertion (`assert all(c.coroutine.__name__ in function_names for c in cron_jobs)`) will catch any mismatch at worker boot — no separate guard needed.
+**Critical ordering invariant:** Phase 41 unblocks Phases 42 + 43 in parallel. Phase 44 has hard dependencies on both. Phases 45 + 46 are then parallel. Phase 47 is a serialization point. Phase 48 is the gate.
 
 ---
 
-## 5. RBAC Additions
+## Open Questions to Resolve in Spec Phase
 
-### New `Resource` enum entries:
-
-```python
-SCHEDULE_SLOTS = "schedule-slots"   # kebab, mirrors MEMBERSHIP_PLANS / PT_PACKAGES
-BOOKINGS = "bookings"
-```
-
-Do NOT fold these under `TRAINERS` or `PT_PACKAGES`. Trainers is a catalog; slots and bookings have different access semantics (e.g., reception cannot publish slots but can create bookings).
-
-### `Action` enum: no new values needed
-
-Map to existing:
-- Publish slot: `(Action.CREATE, Resource.SCHEDULE_SLOTS)` — owner-only
-- View/list slots: `(Action.VIEW, Resource.SCHEDULE_SLOTS)` — both roles (reception needs picker)
-- Cancel slot: `(Action.CANCEL, Resource.SCHEDULE_SLOTS)` — owner-only
-- Create booking: `(Action.CREATE, Resource.BOOKINGS)` — both roles
-- Cancel booking: `(Action.CANCEL, Resource.BOOKINGS)` — both roles, time-window enforced at service layer (reception ≤24h, owner anytime — identical to B-12 PT-sessions pattern; `(CANCEL, BOOKINGS)` is NOT in `OWNER_ONLY`)
-- View bookings: `(Action.VIEW, Resource.BOOKINGS)` — both roles
-
-### `OWNER_ONLY` additions:
-
-```python
-(Action.CREATE, Resource.SCHEDULE_SLOTS),
-(Action.CANCEL, Resource.SCHEDULE_SLOTS),
-# (Action.VIEW, Resource.SCHEDULE_SLOTS) is NOT owner-only
-# (Action.CANCEL, Resource.BOOKINGS) is NOT owner-only — same as B-12 PT-sessions
-```
-
-The `(CANCEL, BOOKINGS)` NOT being in `OWNER_ONLY` mirrors Phase 34 D-34-09a exactly: `(CANCEL, PT_SESSIONS)` was removed from `OWNER_ONLY` because reception has a 24h cancel window. The time gate is enforced in `bookings.service.cancel_booking` via `cancel_window_expired` 403, not via RBAC.
-
-**Three-way parity note:** admin-web is frozen at v1.3. The parity test (`tests/unit/test_rbac_parity.py`) that compares backend `OWNER_ONLY` to `apps/admin-web/src/shared/session/can.ts` must be updated: add a comment documenting that v1.5 RBAC entries have no admin-web mirror (admin-web frozen per 2026-05-15 pivot). The test itself should only assert against the admin-web resources that existed before the freeze. New v1.5 resources (`SCHEDULE_SLOTS`, `BOOKINGS`) are backend-only until v2.0 Frontend Integration.
+1. **Email provider selection** — owned by STACK.md (recommendation: Yandex Cloud Postbox primary, Unisender Go fallback).
+2. **Email rendering library** — STACK.md recommends Jinja2 SandboxedEnvironment; this researcher leans toward f-string-locked templates per D-39-04 anti-magic. Spec phase decides.
+3. **Reset-token store** — Path A (DB table) vs Path B (itsdangerous stateless). Both preserve anti-oracle.
+4. **`User` ORM hoist** — Path A (hoist to core) vs Path B (UserLookup Protocol slot).
+5. **Email verification flow for owner-added operator accounts** — trust owner-entered addresses, or click-to-verify? Recommendation: trust (single zal, owner knows their staff).
+6. **Bounce/complaint webhook handling** — Recommendation: defer to v1.7. v1.6 records send-attempt outcomes only.
+7. **`actor_display_name` formatting** in email copy (multi-user audit) — full name vs first-name-last-initial.
 
 ---
 
-## 6. import-linter Contract Changes
+## Confidence Assessment
 
-`schedule` and `bookings` are already listed in `.importlinter` under `[importlinter:contract:modules-independent]` (verified in the live `.importlinter` file). No additions are needed mechanically.
-
-Confirm with `uv run lint-imports` after adding module content in Phases 38-39 to verify no accidental direct imports between `schedule` and `bookings`.
-
-No narrative exceptions are needed. The three Protocol slots (`get_slot_by_id`, `restore_slot_on_cancel`, `complete_booking_by_pt_session`) all live in `app.core.dependencies`, which `modules-independent` does not constrain (the contract's `source_modules` is `app.modules.*`, not `app.core`).
-
----
-
-## 7. OpenAPI Surface
-
-### New URL paths:
-
-```
-# Schedule module (trainer_availability_slots)
-POST   /api/v1/trainer-slots                        publish slot (owner-only)
-GET    /api/v1/trainer-slots                        list slots (both roles; ?trainer_id=, ?from=, ?to=, ?status=)
-GET    /api/v1/trainer-slots/{slot_id}              get slot detail (both roles)
-POST   /api/v1/trainer-slots/{slot_id}/cancel       cancel slot (owner-only)
-
-# Bookings module
-POST   /api/v1/bookings                             create booking (both roles)
-GET    /api/v1/bookings                             list bookings (both roles; ?client_id=, ?trainer_id=, ?status=)
-GET    /api/v1/bookings/{booking_id}                get booking detail (both roles)
-POST   /api/v1/bookings/{booking_id}/cancel         cancel booking (both roles + 24h window)
-```
-
-### OpenAPI drift gate (Phase 40):
-
-Same byte-stable regen as Phase 35: `uv run python apps/backend/scripts/export_openapi.py && git diff --exit-code apps/backend/openapi.json`. `packages/api-client/src/schema.d.ts` regenerated. New `AssertNonNever` forward-guard assertions added to `packages/api-client/src/schema.contract.test.ts` for all new paths (v1.4 established 36 guards; v1.5 adds ~8 more for slot + booking paths).
+| Area | Confidence | Rationale |
+|---|---|---|
+| Module placement (integrations/email mirror integrations/telegram) | HIGH | Direct precedent — `app/integrations/email/` already exists as placeholder; D-39-02 |
+| Per-domain template ownership | HIGH | v1.5 Phase 39 D-39-02 |
+| Async-via-ARQ for email send (no 6th docker service) | HIGH | Pattern matches v1.3 Phase 27 expiring-soon DM dispatch and v1.5 Phase 39/40 booking reminder |
+| New `users` module vs auth extension | HIGH | Auth module size already at upper bound; separation matches v1.4 splitting payments from memberships |
+| `User` model hoist vs `UserLookup` slot | MEDIUM | Both viable. Hoist is cleaner; slot is lower-risk. |
+| Reset-token DB table vs itsdangerous stateless | MEDIUM | DB matches `refresh_tokens` discipline; itsdangerous is simpler infra. Spec phase resolves. |
+| Idempotency table extension via `channel` column | HIGH | Minimum-invasive; backfill is trivial; matches v1.5 `booking_notifications` shape |
+| import-linter contracts preserved | HIGH | No new contract needed; only one mechanical change (add `users` to `modules-independent`); narrative D-41-XX exceptions documented |
 
 ---
 
-## 8. Suggested Phase Decomposition
+## Roadmap Implications (Summary for SUMMARY.md)
 
-### Phase 37 — Foundations
-
-**Goal:** extend shared contracts before any module code lands, so all subsequent phases pass CI from their first commit (v1.3 INFRA-15 / v1.4 Phase 30 lesson).
-
-Files modified (no new migrations):
-- `app/core/audit.py` — extend `LOCKED_AUDIT_EVENTS` with 5 new `(event, resource_type)` pairs:
-  - `("slot_published", "schedule_slot")`
-  - `("booking_created", "booking")`
-  - `("booking_cancelled", "booking")`
-  - `("booking_no_show", "booking")`
-  - `("booking_completed", "booking")`
-  - Count grows 53 → 58
-- `app/core/audit_payloads.py` — add 5 Pydantic schemas: `SlotPublishedPayload`, `BookingCreatedPayload`, `BookingCancelledPayload`, `BookingNoShowPayload`, `BookingCompletedPayload` (all with `model_config = ConfigDict(extra="forbid")`)
-- `app/core/permissions.py` — add `Resource.SCHEDULE_SLOTS`, `Resource.BOOKINGS`; extend `OWNER_ONLY` with `(CREATE, SCHEDULE_SLOTS)` + `(CANCEL, SCHEDULE_SLOTS)`
-- `app/core/dependencies.py` — add 3 new Protocol types + register/get functions: `SlotById` / `register_slot_resolver` / `get_slot_by_id`, `BookingSlotRestorer` / `register_booking_slot_restorer` / `restore_slot_on_cancel`, `BookingCompleter` / `register_booking_completer` / `complete_booking_by_pt_session`
-- `tests/unit/test_audit_taxonomy.py` — bump expected frozenset size from 53 to 58
-- `tests/unit/test_rbac_parity.py` — add comment documenting admin-web frozen at v1.3; new resources are backend-only
-
----
-
-### Phase 38 — Schedule Module
-
-**Goal:** `trainer_availability_slots` table + slot CRUD (publish, list, cancel, get); register `resolve_slot_by_id` and `restore_slot_to_available` into composition root.
-
-Files created:
-- `app/modules/schedule/models.py` — `TrainerAvailabilitySlot` ORM (Base + UUIDPkMixin + TimestampMixin + SoftDeleteMixin)
-- `app/modules/schedule/schemas.py` — `SlotCreateRequest`, `SlotResponse`, `SlotListQuery` (camelCase via `BackendSchemaBase`)
-- `app/modules/schedule/repository.py` — `insert_slot`, `get_slot_by_id`, `list_slots`, `update_slot_status`
-- `app/modules/schedule/service.py` — `publish_slot`, `cancel_slot`, `get_slot`, `list_slots`, `resolve_slot_by_id`, `restore_slot_to_available`; `resolve_slot_by_id` is the concrete implementation for the Protocol slot
-- `app/modules/schedule/constants.py` — `SLOT_STATUS_TRANSITIONS` declarative map
-- `app/modules/schedule/router.py` — 4 endpoints, all with `Depends(require_permission(...))`
-- `alembic/versions/0016_trainer_availability_slots.py`
-
-Files modified:
-- `app/api/v1/router.py` — add `schedule_router` with prefix `"/trainer-slots"`, tags `["trainer-slots"]`
-- `app/main.py` — add `register_slot_resolver` + `register_booking_slot_restorer` calls (Phase 38 carve-out block)
-- `app/workers/telegram_bot.py` — add defensive `register_slot_resolver` (REG-29-03 pattern; bot will use it in Phase 40)
-
-Key invariants:
-- SVC001 commit-gate must pass: all write paths in `schedule.service` end with `await session.commit()`
-- `slot_published` audit event emitted on every successful `publish_slot`
-- `resolve_slot_by_id` satisfies the `SlotById` Protocol structurally (no DTO conversion)
-- `SLOT_STATUS_TRANSITIONS` is the single source of truth for allowed transitions (mirrors `MEMBERSHIP_STATUS_TRANSITIONS` and `PT_PACKAGE_STATUS_TRANSITIONS`)
-
----
-
-### Phase 39 — Bookings Module
-
-**Goal:** `bookings` table + book/cancel flow + PT-package linkage + `pt_sessions` ALTER migration; register `complete_booking` into composition root; wire `pt_sessions.service` to call the completer.
-
-Files created:
-- `app/modules/bookings/models.py` — `Booking` ORM with partial UNIQUE `(slot_id) WHERE status='confirmed'`
-- `app/modules/bookings/schemas.py` — `BookingCreateRequest`, `BookingCancelRequest`, `BookingResponse`, `BookingListQuery`
-- `app/modules/bookings/repository.py` — `insert_booking`, `get_booking_by_id`, `list_bookings`, `update_booking_status`
-- `app/modules/bookings/service.py` — `create_booking`, `cancel_booking`, `complete_booking`, `get_booking`, `list_bookings`; `complete_booking` is the concrete implementation registered as the Protocol slot
-- `app/modules/bookings/constants.py` — `BOOKING_STATUS_TRANSITIONS`, `CANCEL_WINDOW_HOURS_RECEPTION = 24`
-- `app/modules/bookings/router.py` — 4 endpoints
-- `alembic/versions/0017_bookings.py` — creates `bookings` table
-- `alembic/versions/0018_pt_sessions_booking_id.py` — `ALTER TABLE pt_sessions ADD COLUMN booking_id UUID NULL REFERENCES bookings(id) ON DELETE SET NULL`
-
-Files modified:
-- `app/api/v1/router.py` — add `bookings_router` with prefix `"/bookings"`, tags `["bookings"]`
-- `app/main.py` — add `register_booking_completer(bookings_service.complete_booking)` (Phase 39 carve-out block)
-- `app/modules/pt_sessions/schemas.py` — add `booking_id: UUID | None = None` to `PtSessionCreateRequest`
-- `app/modules/pt_sessions/service.py` — in `record_pt_session`, after the atomic decrement succeeds: if `payload.booking_id is not None`, call `get_booking_completer()(session, payload.booking_id)` before `await session.commit()`
-- `app/modules/pt_sessions/models.py` — add `booking_id: Mapped[UUID | None]` column
-
-Key invariants:
-- Atomic slot transition: `bookings.service.create_booking` must INSERT booking AND UPDATE slot to `status='booked'` in a single UoW (single `await session.commit()` at the end) — no two-phase commit
-- `get_active_pt_package` Protocol slot consumed: validate `sessions_remaining > 0` before INSERT (no decrement at booking time — decrement remains on PT-session creation)
-- Partial UNIQUE race: `IntegrityError` on `uq_bookings_slot_confirmed` → caught by constraint-name discriminator → 409 `slot_already_booked`
-- `complete_booking` registered from `app/main.py` only (not bot worker)
-- SVC001 commit-gate passes for all `bookings.service` write paths
-- `create_booking` emits `("booking_created", "booking")`; `cancel_booking` emits `("booking_cancelled", "booking")`; `complete_booking` emits `("booking_completed", "booking")`
-
----
-
-### Phase 40 — Telegram `/book` + no-show cron + OpenAPI drift refresh + Milestone Verification
-
-**Goal:** bot integration, automated no-show marking, byte-stable OpenAPI regen, operator sign-off.
-
-Files modified:
-- `app/integrations/telegram/handlers.py` — add `book_handler` function; extend `HandlerContext` NamedTuple with `bookings_service: ModuleType` field (mirrors `visits_service: ModuleType` pattern)
-- `app/workers/telegram_bot.py` — import `bookings_service`; add `HandlerContext.bookings_service=bookings_service`; register `/book` handler in `build_application` call
-- `app/workers/scheduled/mark_no_show_bookings.py` — new ARQ job: `SELECT bookings WHERE status='confirmed' AND slot.end_time < now() - interval '15 minutes'`; UPDATE to `status='no_show'`, emit `("booking_no_show", "booking")` per row; idempotent via the `WHERE status='confirmed'` predicate
-- `app/workers/__init__.py` — add `mark_no_show_bookings` to `WorkerSettings.functions` AND `WorkerSettings.cron_jobs` at 06:35 Europe/Moscow (10-min stagger after `expire_pt_packages` at 06:25)
-- `apps/backend/openapi.json` — regenerated byte-stably
-- `packages/api-client/src/schema.d.ts` — regenerated
-- `packages/api-client/src/schema.contract.test.ts` — new `AssertNonNever` forward-guards for all Phase 38-39 paths
-
-Key invariants:
-- Bot `/book` handler uses `type(exc).__name__` string-name dispatch for exceptions (integrations ⊥ modules forbids importing exception classes from `app.modules.bookings`)
-- No-show cron is idempotent: `WHERE status='confirmed'` is the SQL-level gate; `unique=True` in ARQ is defence-in-depth; mirrors `expire_memberships` pattern
-- `on_startup` cron-resolution `assert` catches `mark_no_show_bookings` missing from `functions` at worker boot
-
----
-
-## Dependency Order Rationale
-
-**Foundations before modules:** audit events and Protocol slot registrations must exist before any callsite lands (v1.3 INFRA-15 / v1.4 Phase 30 lesson — ensures every subsequent phase passes CI from its first commit).
-
-**Schedule before Bookings:** `bookings.service.create_booking` consumes the `get_slot_by_id` Protocol slot; that slot's concrete implementation (`schedule.service.resolve_slot_by_id`) must exist before the bookings service can be tested end-to-end.
-
-**Bookings before Telegram `/book` and no-show cron:** the bot handler and the cron both call into `bookings.service`; the service and its table must exist first.
-
-**OpenAPI drift gate at Phase 40 end:** single atomic regen avoids per-phase drift-gate churn (v1.4 Phase 35 lesson). All new paths land in one regen commit.
-
----
-
-## Component Boundaries: Integration Points With Existing Architecture
-
-| Existing Component | What Changes in v1.5 |
-|--------------------|----------------------|
-| `app/core/dependencies.py` | +3 Protocol types, +3 register functions, +3 get/accessor functions |
-| `app/core/audit.py` `LOCKED_AUDIT_EVENTS` | +5 `(event, resource_type)` pairs (53 → 58) |
-| `app/core/audit_payloads.py` | +5 Pydantic payload schemas; `AUDIT_PAYLOAD_SCHEMAS` registry +5 entries |
-| `app/core/permissions.py` | +2 `Resource` enum values; `OWNER_ONLY` +2 entries |
-| `app/main.py` | +2 import blocks, +3 `register_*` calls |
-| `app/workers/telegram_bot.py` | +1 import, +1 `register_slot_resolver` call, +1 `HandlerContext` field, +1 handler registration |
-| `app/workers/__init__.py` | +1 function in `functions`, +1 cron entry |
-| `app/modules/pt_sessions/service.py` | `record_pt_session` calls `complete_booking_by_pt_session` when `booking_id` non-NULL |
-| `app/modules/pt_sessions/models.py` | +`booking_id` column |
-| `app/modules/pt_sessions/schemas.py` | +`booking_id: UUID | None` on `PtSessionCreateRequest` |
-| `app/api/v1/router.py` | +2 router includes |
-
----
-
-## Data Flow: Booking Creation (Happy Path)
-
-```
-POST /api/v1/bookings  { slotId, clientId, ptPackageId }
-    ↓
-bookings.router  →  require_permission(CREATE, BOOKINGS)
-    ↓
-bookings.service.create_booking(session, actor, payload)
-    │
-    ├─ 1. get_active_pt_package(session, clientId)       ← core.dependencies Protocol slot
-    │      None or sessions_remaining == 0  → 409
-    │
-    ├─ 2. get_slot_by_id(session, slotId)               ← core.dependencies Protocol slot
-    │      None → 404; status != 'available' → 409
-    │
-    ├─ 3. INSERT booking (status='confirmed',
-    │           slot_start_time_snapshot, slot_end_time_snapshot,
-    │           trainer_name_snapshot — all from slot row)
-    │    + UPDATE trainer_availability_slots SET status='booked' WHERE id=slotId
-    │      IntegrityError on uq_bookings_slot_confirmed → 409 slot_already_booked
-    │
-    ├─ 4. audit.emit("booking_created", "booking", ...)
-    │
-    └─ 5. await session.commit()   ← single commit owns both writes
-    ↓
-201 BookingResponse
-```
-
-## Data Flow: PT-Session Records a Booking Completion
-
-```
-POST /api/v1/pt-sessions  { ptPackageId, trainerId, performedAt, bookingId, ... }
-    ↓
-pt_sessions.service.record_pt_session(session, actor, payload)
-    │
-    ├─ ... existing v1.4 flow (validate trainer, validate package, atomic decrement)
-    │
-    ├─ if payload.booking_id is not None:
-    │      completer = get_booking_completer()           ← raises RuntimeError if unregistered
-    │      await completer(session, payload.booking_id)  ← bookings.service.complete_booking
-    │          UPDATE bookings SET status='completed', completed_at=now()
-    │              WHERE id=:id AND status='confirmed'
-    │          audit.emit("booking_completed", "booking", ...)
-    │          (no separate commit — caller owns txn per D-03)
-    │
-    └─ await session.commit()   ← single commit owns session + booking + decrement
-```
-
----
-
-## Sources
-
-All findings are HIGH confidence — derived directly from reading live codebase files:
-
-- `apps/backend/app/core/dependencies.py` — Protocol slot pattern (7 existing slots)
-- `apps/backend/app/main.py` — composition root wiring order (9 register calls)
-- `apps/backend/app/core/audit.py` — `LOCKED_AUDIT_EVENTS` frozenset (53 pairs confirmed)
-- `apps/backend/app/core/audit_payloads.py` — `AUDIT_PAYLOAD_SCHEMAS` registry (17 schemas confirmed)
-- `apps/backend/app/core/permissions.py` — `OWNER_ONLY` frozenset (25 entries), `Resource`/`Action` enums
-- `apps/backend/app/.importlinter` — three contracts; `schedule` and `bookings` already listed in `modules-independent`
-- `apps/backend/app/workers/__init__.py` — `WorkerSettings`, cron-resolution invariant assertion
-- `apps/backend/app/workers/telegram_bot.py` — `HandlerContext` NamedTuple, REG-29-03 double-wiring
-- `apps/backend/app/integrations/telegram/handlers.py` — string-name dispatch pattern, `HandlerContext` usage
-- `apps/backend/app/modules/pt_sessions/models.py` — D-34-04a raw SQL cross-module pattern
-- `apps/backend/app/modules/pt_sessions/service.py` — `record_pt_session` structure
-- `apps/backend/app/modules/pt_packages/models.py` — partial UNIQUE pattern, snapshot field discipline
-- `.planning/PROJECT.md` — v1.5 goals, Key Decisions table, architectural constraints
-- `.planning/MILESTONES.md` — v1.4 Phase 30–36 foundations + verification patterns
+**Phases:** 8 phases (41–48), suggested order above
+**Critical invariants preserved:** anti-oracle (no email leaks user-existence information; `password_reset_requested` emitted in both branches; constant-time response floor), audit-AST-gate (all ~11 new events added to LOCKED_AUDIT_EVENTS in Phase 41 up-front), SVC001 commit-gate (extended to `users/service.py` and `auth/password_reset_service.py`), `modules-independent` contract (one mechanical addition, zero new edges), Protocol-slot double-wiring (REG-29-03)
+**Risk flags for deeper research:** Phase 42 (provider selection + DNS/SPF/DKIM/DMARC owner-runbook) and Phase 44 (locked Russian email copy — needs owner sign-off mechanism mirrored from D-27-OWNER-COPY-LOCK)
+**Open conflicts surfaced for spec phase:**
+- FEATURES.md suggests creating a "real" `app/modules/notifications/`; ARCHITECTURE.md rejects (D-39-02 precedent)
+- STACK.md recommends itsdangerous stateless tokens; ARCHITECTURE.md recommends DB table — spec phase chooses

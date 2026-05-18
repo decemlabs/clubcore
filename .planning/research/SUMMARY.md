@@ -1,19 +1,21 @@
-# Project Research Summary
+# Project Research Summary — v1.6 Email Channel + Multi-User Admin
 
 **Project:** Sportzal
-**Domain:** PT-slot booking integrated into existing gym CRM (v1.5 Schedule + Bookings)
-**Researched:** 2026-05-17
-**Confidence:** HIGH — all 4 dimensions derived from live codebase archaeology + triangulated industry sources
+**Domain:** Single-gym operator CRM (РФ/СНГ); subsequent milestone bolted on top of a shipped Telegram-first system (v1.0–v1.5)
+**Researched:** 2026-05-18
+**Confidence:** HIGH on architecture + features (entirely grounded in v1.0–v1.5 patterns); MEDIUM on provider/sanctions snapshot (re-verify in Phase 41)
+
+> Scope reminder. v1.6 is a **subsequent** milestone, not greenfield. Existing Telegram flows, auth, payments, audit log (56 LOCKED events, 26-entry `OWNER_ONLY`), idempotency tables, and refresh-rotation families are out of research scope. This SUMMARY focuses strictly on the two new pillars: **(1) email as a parallel notification channel** and **(2) owner-managed multi-user admin**.
 
 ---
 
 ## Executive Summary
 
-Sportzal v1.5 closes the last empty business-module gap by adding a minimal viable PT-booking surface: trainers publish 1:1 availability windows, clients book individual slots, and a `confirmed → cancelled / no_show / completed` FSM tracks the lifecycle with race-safe DB enforcement. The domain is well-understood (industry standard: instant-confirm, 24h cancel window, manual no-show marking, session-debit at delivery rather than reservation), and every required capability composes cleanly from the v1.4 locked stack — no new backend runtime libraries are needed. The architectural pattern (two independent modules bridged by Protocol slots from the composition root) is identical to the `pt_packages` / `pt_sessions` split from v1.4 and already has five precedents in the codebase.
+v1.6 closes the last infra-pillar before v1.7 online payments by adding an email channel parallel to the existing Telegram channel (OTP fallback, expiring-soon mirror, payment receipt, booking confirm/remind, password-reset link, user invitation) and by replacing ad-hoc DB-poked operator accounts with an owner-managed multi-user admin surface (invite-token onboarding, soft-delete deactivation, password reset, multi-user audit traceability). The hardest mistakes will be the ones that quietly weaken an invariant the codebase already enforces — anti-oracle DM equality, AST `audit.emit` gate, partial-UNIQUE idempotency, locked-copy owner sign-off, refresh-family race tolerance — not anything provider-specific.
 
-The primary risk is infrastructure correctness at the start of Phase 37, not feature complexity. Three confirmed recurring incidents (REG-29-03 bot resolver double-wiring, REG-29-04 eager ORM import in cron runners, REG-36-03 UUID stringify in audit payloads) WILL happen again in v1.5 callsites unless the foundation plan pre-empts them explicitly. The `BOOKING_STATUS_TRANSITIONS` constant, all 5 `LOCKED_AUDIT_EVENTS` entries, all 5 `audit_payloads.py` payload schemas, the 3 new Protocol slot definitions, and `TIMESTAMPTZ` column types for slot times must ALL land in Phase 37 before any module service code is written — this is the single highest-leverage action in the entire milestone.
+The recommended approach mirrors v1.3 (expiring-soon DM) and v1.5 (booking notifications) shape: a thin `app/integrations/email/` transport layer (parallel to `integrations/telegram/`), per-domain locked Russian templates (`app/modules/<domain>/email_templates.py`, per the D-39-02 precedent), fire-and-forget ARQ dispatch (no 6th docker-compose service), `channel`-discriminator extension of the existing idempotency tables (`membership_notifications`, `booking_notifications`), and a new `app/modules/users/` module (not an extension of `auth`). Phase 41 must be an INFRA-bedrock phase (per the v1.3 INFRA-15 lesson): `LOCKED_AUDIT_EVENTS` extended up-front 56 → ~67; `Resource.USERS` + `OWNER_ONLY` extended; `LOCKED_EMAIL_TEMPLATES` AST gate introduced mirroring `LOCKED_AUDIT_EVENTS`; soft-delete partial-UNIQUE on `users.email`; audit `actor_email_snapshot` denormalisation.
 
-Feature scope is tightly bounded. P1 features (booking creation + FSM + race-safe UNIQUE + audit chain + Telegram confirmation DM + bot `/book`) are all low-to-medium complexity and directly supported by v1.4 patterns. The one genuine complexity bump is the cross-module `completed` callback (PT-session recording triggers booking completion via Protocol slot in the same transaction) and the 24h reminder cron (requires a new `booking_notifications` idempotency table). Both have direct v1.4 precedents. Group classes, online payment, trainer Telegram DMs, and recurring slot templates are explicitly out of scope and must not creep in.
+Key risks cluster around three axes: (a) **anti-oracle preservation** — `POST /auth/password-reset/request` must return identical 202 + identical body + bounded-equal timing for known/unknown/deactivated/owner email (mirrors v1.2 D-20-9 `/checkin` and v1.3 expiring-soon anti-oracles); (b) **cross-channel idempotency taxonomy** — extending existing `*_notifications` tables with `channel` column (Alembic `0024_notification_channel_discriminator`) rather than inventing a new `email_notifications` table; (c) **multi-user audit traceability** — explicit FK choice (`audit_log.actor_user_id ON DELETE SET NULL` + denormalised `actor_email_snapshot`) so soft-deleting a fired receptionist preserves history while allowing email re-claim via partial-UNIQUE `(lower(email)) WHERE deleted_at IS NULL`. Mitigations are codified up-front in Phase 41 INFRA before any feature code lands.
 
 ---
 
@@ -21,206 +23,209 @@ Feature scope is tightly bounded. P1 features (booking creation + FSM + race-saf
 
 ### Recommended Stack
 
-No new backend runtime dependencies. The full v1.5 feature set — slot modeling, race-safe booking, FSM, no-show cron, Telegram `/book` handler — composes from the already-locked v1.4 stack. The five candidate libraries evaluated were all rejected: `python-dateutil`/`rrule` (10 lines of `timedelta` covers 100% of single-gym weekly recurrence), `icalendar` (calendar export deferred to v1.8), `ConversationHandler` (stateless CommandHandler + InlineKeyboard callback covers the two-step `/book` flow without the `concurrent_updates=False` regression risk), and `python-statemachine`/`transitions` (the `BOOKING_STATUS_TRANSITIONS` dict constant pattern is proven at scale).
+A primary-and-fallback РФ-accessibility play: **Yandex Cloud Postbox** (SES-V2-API-compatible, ₽-billed, in-РФ datacentres → native deliverability to mail.ru/yandex.ru/rambler.ru, 2,000 free emails/month covers >3× expected v1.6 volume) accessed via the standard **aioboto3** async SDK. **Unisender Go** (РФ-domestic SDK `unisender-go-api`) is the documented fallback for the case Yandex Cloud credentials are unavailable. Stripe-billed providers (Resend, Mailgun) and SendPulse (RU-restricted) are disqualified by the existing project Out-of-Scope constraint and by Russian-recipient deliverability evidence. Template render via **Jinja2 SandboxedEnvironment** (industry standard, already transitive via FastAPI); reset/invite tokens via **itsdangerous URLSafeTimedSerializer** (stateless HMAC-SHA256, `salt=` per kind). See STACK.md for the full provider scorecard + version pins.
 
-**Core technologies reused without change:**
-- `SQLAlchemy 2.0 async + Alembic` — 3 migrations: `0016_trainer_availability_slots`, `0017_bookings`, `0018_pt_sessions_booking_id` (nullable ALTER)
-- `ARQ 0.28.0` — new `mark_no_show_bookings` cron, exact pattern of `expire_memberships`
-- `app/core/idempotency.py` (Phase 32, shipped) — `Depends(verify_idempotency)` on `POST /bookings`, route-bound key (CR-01 discipline)
-- `python-telegram-bot 22.7` — stateless `CommandHandler("book") + CallbackQueryHandler(pattern=r"^book:")`, no ConversationHandler
-- `app/core/dependencies.py` Protocol slots — 3 new slots added, same pattern as 7 existing ones
-- `stdlib zoneinfo.ZoneInfo("Europe/Moscow")` — all temporal logic, same as prior milestones
+**Core technologies:**
+- **Yandex Cloud Postbox** (primary) / **Unisender Go** (fallback): outbound transactional email — РФ-domiciled, ₽-billed, no sanctions exposure, in-region deliverability
+- **aioboto3 `>=13.0,<14`**: async SES-V2 client against Postbox endpoint — SDK portability if project ever migrates outside РФ
+- **Jinja2 `>=3.1.4,<4` (SandboxedEnvironment)**: render locked Russian templates (HTML + plain-text alt-parts) — industry-standard, sandboxed even for first-party templates per locked-copy discipline
+- **itsdangerous `>=2.2.0,<3` (URLSafeTimedSerializer)**: sign reset + invitation tokens — stateless, no DB cleanup cron, `salt=` per kind isolates blast radius
+- **moto[ses] (dev)**: SES mock for offline tests; **mailpit** (dev) as local SMTP catcher under `docker-compose.dev.yml` overlay only
 
 ### Expected Features
 
-**Definitely v1.5 (P1 — table stakes):**
-- `trainer_availability_slots` CRUD — one-off slots, `active`/`cancelled`/`booked` status, `TIMESTAMPTZ` start/end
-- Booking creation with three-check pre-flight (slot active, active PT-package, sessions_remaining > 0)
-- Booking FSM: `confirmed → cancelled / no_show / completed` with central `BOOKING_STATUS_TRANSITIONS` guard
-- Race-safe partial UNIQUE `(slot_id) WHERE status='confirmed'` — DB wins the race
-- `booking_id` optional FK on `pt_sessions`; `completed` transition triggered atomically on PT-session record
-- 5 new LOCKED audit events: `slot_published`, `booking_created`, `booking_cancelled`, `booking_no_show`, `booking_completed`
-- Booking cancellation: reception ≤24h before slot, owner anytime — mirror of B-12 PT-sessions
-- Slot-cancelled cascade: cancelling a slot transitions any linked `confirmed` booking to `cancelled` + DM
-- Telegram DM on booking confirmed (immediate) and booking cancelled
-- Telegram bot `/book`: slot discovery via InlineKeyboard + one-tap confirmation roundtrip
-- Anti-oracle bot DM: single constant for all negative outcomes (no PT-package / no slots / not linked)
+Single-gym CRM expectations are well-anchored — v1.6 is mirror work, not greenfield discovery. Eight P1 features form the launch set, all rated **M (2–4 day)** complexity since each adds a table + endpoint pair + locked Russian template + audit events but reuses existing machinery (ARQ cron loops, refresh-token-family revoke, audit emit, idempotency table pattern).
 
-**Include if cheap (P2 — differentiators):**
-- Buffer-time guard at slot publish: 10 min hardcoded (prevents back-to-back slot collisions for same trainer)
-- Manual no-show marking `POST /bookings/{id}/no_show` + no-show DM to client
-- 24h reminder DM via ARQ cron at 06:35 MSK + `booking_notifications` idempotency table (UNIQUE `(booking_id, kind)`) — mirrors `membership_notifications` from v1.3
-- `trainer_id` optional FK on `pt_packages` (enables bot trainer discovery; bot asks selection if NULL)
-- PT-package refund guard: block refund if outstanding `confirmed` bookings exist (409 `outstanding_bookings_exist`)
-- PT-package validity-window guard at booking: reject if `slot.start_time.date() > pt_package.end_date`
+**Must have (table stakes) — P1 for v1.6 launch:**
+- Email integration scaffold + DKIM/SPF/DMARC owner runbook — gate for everything else
+- Email OTP fallback for login (TTL 10min vs Telegram 5min to absorb provider lag)
+- Email expiring-soon (7+3+1) mirror — revenue retention from non-Telegram clients
+- Email payment-receipt (cash sale + refund) — operator habit; hooks into v1.4 commit paths
+- Email booking confirm + 24h reminder — parity with v1.5 Telegram flow
+- Multi-user admin invite-token flow (NEVER admin-set plaintext password — cardinal sin)
+- Password reset with **anti-oracle invariant** (same 202 for known/unknown/deactivated/owner; constant-time floor; `password_reset_requested` audit in BOTH branches)
+- Deactivate user + **atomic logout-all** (revoke all refresh-token families in same UoW; `/refresh` joins `users.is_active`)
+- Multi-user audit traceability (`actor_user_id ON DELETE SET NULL` + denormalised `actor_email_snapshot`)
+- OpenAPI drift gate refresh (forward-guards 61 → ~73)
 
-**Out of scope — do not add:**
-- Group classes / capacity > 1 (never for v1.5)
-- Online payment at booking (v1.7 ЮKassa)
-- Trainer Telegram DMs (v1.6 — no `telegram_chat_id` on trainers table yet)
-- Email notifications (v1.6)
-- Recurring slot template with `slot_templates` table (v2.x)
-- Trainer self-service slot publication (v2.x — no trainer auth role)
-- Auto-no-show cron (v1.5.1 — manual marking sufficient)
-- Atomic reschedule endpoint (v1.6)
-- Bot `/cancel_booking` command (v1.5.1)
-- Waitlist (v2.x)
-- iCal `.ics` export (v1.8)
+**Should have (P2, time-permitting):**
+- Dual-channel resolution (`clients.preferred_channel ∈ {auto, telegram, email, both}`) — admin-web edit only, no client-facing UI
+- Invite-link copy-paste fallback (URL returned in creation response so owner can paste into Telegram/WhatsApp if email bounces)
+- DMARC `rua` weekly reports to owner
+
+**Defer (v1.7+ / v2.0+):**
+- Owner weekly digest (bounces, deactivations, failed sends) — needs ≥1 month of `email_send_log` data
+- Marketing campaigns / mailing lists / preference centre — different product surface
+- Custom RBAC roles beyond owner/reception — enterprise scope creep
+- TOTP / WebAuthn — Telegram OTP + email OTP already provide step-up
+- Per-client email preference (client-facing) — ~100 clients/gym, admin-web edit suffices
+
+**Explicit anti-features (11 documented):** preference centre, marketing campaigns, MFA, custom RBAC, in-app inbox, plaintext password email, dual-email-per-user, app-layer bounce retry, multi-channel OTP race, self-service signup, client-facing preference page. See FEATURES.md for rationale per item.
 
 ### Architecture Approach
 
-Two independent modules (`app/modules/schedule/` and `app/modules/bookings/`) bridged by 3 new Protocol slots registered from the `app/main.py` composition root. The `modules-independent` import-linter contract remains intact — `bookings` never imports from `schedule`; cross-module access uses the Protocol slot pattern or raw `sa.text()` SQL (D-34-04a discipline). The `schedule` module owns the catalog concern (trainer publishes availability windows); the `bookings` module owns the transaction concern (client reserves a window). This mirrors the `pt_packages` / `pt_sessions` bounded-context split from v1.4 exactly.
+Modular monolith extension grounded in existing v1.0–v1.5 patterns. Email transport mirrors Telegram exactly: `app/integrations/email/` is channel-agnostic transport that knows nothing about Russian copy or business events; locked templates live next to their owning module (per the D-39-02 v1.5 precedent — booking DMs in `app/modules/bookings/notifications.py`, NOT in `integrations/telegram/copy.py`). Email send is **always async via ARQ**, never inline in the request handler — same discipline as v1.1 D-06 Telegram bot sends. **No 6th docker-compose service**: a new `dispatch_email` ARQ task lives inside the existing `arq-worker` container (5th service, unchanged).
 
-**Major components:**
-1. `app/modules/schedule/` — `TrainerAvailabilitySlot` ORM + CRUD service + `SLOT_STATUS_TRANSITIONS` constant + 4 REST endpoints; provides `resolve_slot_by_id` and `restore_slot_to_available` as concrete Protocol implementations
-2. `app/modules/bookings/` — `Booking` ORM with partial UNIQUE + `BOOKING_STATUS_TRANSITIONS` constant + `create_booking` (atomic slot-status flip + INSERT in single UoW) + `cancel_booking` + `complete_booking` (called by `pt_sessions.service` via Protocol slot) + 4 REST endpoints
-3. `app/core/dependencies.py` additions — `SlotByIdResolver`, `BookingSlotRestorer`, `BookingCompleter` Protocol types + register/get functions (3 new slots)
-4. `app/workers/scheduled/mark_no_show_bookings.py` — new ARQ cron at 23:10 MSK; idempotent `WHERE status='confirmed' AND slot_end_time < now()`; emits `booking_no_show` per row
-5. Telegram bot additions — `book_handler` + `book_callback_handler`; `HandlerContext` extended with `bookings_service`; `callback_data = "BK:{slot_uuid}"` (39 bytes, within 64-byte Telegram limit)
-6. `alembic/` — migrations `0016` (trainer_availability_slots with TIMESTAMPTZ), `0017` (bookings with partial UNIQUE), `0018` (pt_sessions ALTER ADD booking_id nullable)
+**Major components (additions in v1.6):**
+1. **`app/integrations/email/`** (transport) — `client.py` (provider adapter, replaces v1.0 placeholder), `factory.py` (`build_email_client`), `EmailProvider` Protocol. Forbidden from importing `app.modules.*` per existing contract 3.
+2. **`app/modules/users/`** (NEW module, NOT an `auth` extension) — owner-managed CRUD + invitation + soft-delete + deactivation; joins `modules-independent` contract list (mechanical addition); cross-module wiring via Protocol slots only. Auth's responsibility stays "credential verification + session lifecycle"; users gets "operator roster + invitation + role assignment."
+3. **`app/modules/auth/`** (EXTEND, not split) — new `password_reset_service.py` + `password_reset_email_templates.py`; adds `invalidate_all_families_for_user` exposed via `UserSessionInvalidator` Protocol slot (so `users.service` never imports `auth`).
+4. **Per-domain `email_templates.py`** in `memberships/`, `bookings/`, `payments/`, `users/`, `auth/` — locked Russian copy with owner sign-off per template (mirrors D-27-OWNER-COPY-LOCK).
+5. **`app/workers/tasks/dispatch_email.py`** (NEW ARQ task) — receives pre-rendered `EmailEnvelope` (substitution happens at calling service); workers transport bytes, modules render templates.
+6. **`app/modules/notifications/`** stays a placeholder — per-domain template ownership wins; resurrecting a "real" notifications module would create cross-module fan-in and tempt ad-hoc magic-string event names breaking the AST gate.
 
-**Key data flow — booking creation:**
-`POST /bookings` → `require_permission(CREATE, BOOKINGS)` → (1) `get_active_pt_package` Protocol slot, (2) `get_slot_by_id` Protocol slot, (3) INSERT booking + UPDATE slot to `booked` in single UoW + emit `booking_created` → `await session.commit()` → 201
-
-**Key data flow — booking completion:**
-`POST /pt-sessions` (with `booking_id`) → existing v1.4 atomic decrement + `SELECT FOR UPDATE` on booking row → `get_booking_completer()(session, booking_id)` → `UPDATE bookings SET status='completed' WHERE id=:id AND status='confirmed'` + emit `booking_completed` → single `await session.commit()`
+**New Protocol slots (composition-root registrations, double-wired per REG-29-03):**
+- `EmailDispatcher` — enqueue email-send via ARQ; register in BOTH `app/main.py:create_app()` AND `app/workers/__init__.py:WorkerSettings.on_startup`
+- `UserSessionInvalidator` — `users.service.deactivate_user` reaches into `auth.service` via this slot to revoke all refresh-token families
 
 ### Critical Pitfalls
 
-The following 5 pitfalls MUST be prevented in Phase 37 (foundations) before any callsite lands. All 20 pitfalls are documented in `PITFALLS.md`.
+System-specific (not generic "use SPF" advice); all framed against invariants the codebase already enforces:
 
-1. **Audit events not pre-registered before first callsite commit (P3 / INFRA-15 repeat)** — Extend `LOCKED_AUDIT_EVENTS` AND add all 5 `audit_payloads.py` schemas AND bump `test_audit_taxonomy.py` count in the first plan of Phase 37, before any service code lands. The AST gate passes silently if events are not pre-registered; the runtime `emit()` call fails on first POST — a hard-to-catch gap when unit tests mock `audit.emit`.
+1. **Email breaks anti-oracle invariant Telegram pays for** — natural reflex to use different templates per failure reason on email (because email "feels private") restores the oracle Telegram's locked DM equality refused. Prevention: `POST /auth/password-reset/request` always returns 202 + identical body + bounded-equal timing for all 4 cases (existing-active / existing-deactivated / owner-account / non-existent); `password_reset_requested` audit emitted in BOTH branches; integration test `test_password_reset_no_oracle.py` lands in Phase 41 BEFORE first reset-flow endpoint.
 
-2. **UUID stringify bug in audit callsites (P13 / REG-36-03 confirmed repeat)** — All `audit_payloads.py` schemas must type `id` fields as `str`, not `UUID`. Callsites must call `str(booking.id)` explicitly. This is a confirmed recurring bug from v1.4 pt_sessions. Pre-defining schemas in Phase 37 with correct types prevents introduction in Phases 38-39.
+2. **Cross-channel double-pings** — `membership_notifications` UNIQUE `(membership_id, kind)` was implicitly Telegram-only. Without explicit `channel` discriminator: same `kind='expiring_7d'` from Telegram + email cron causes UNIQUE violation OR a client receives both DM + email. Prevention: Alembic `0024_notification_channel_discriminator` adds `channel TEXT NOT NULL DEFAULT 'telegram' CHECK channel IN ('telegram','email')`; UNIQUE becomes `(subject_id, kind, channel)`; backfill is zero-row (reproducible by next cron tick).
 
-3. **Partial UNIQUE on bookings missing or unconditional (P1)** — Migration `0017` must create `UNIQUE INDEX uq_bookings_slot_confirmed ON bookings (slot_id) WHERE status='confirmed'`. An unconditional `UNIQUE(slot_id)` would forbid any rebooking after cancellation. A concurrent race test against real Postgres 16 (not a mock) must pass — same discipline as VIS-TEST-01.
+3. **Token replay / account hijack via email re-claim** — three failure modes: (a) reset-token replay race via post-commit consume marking (v1.1 Phase 12.1 SVC001 lesson — extend AST walker scope to `app/modules/auth/*.py`); (b) soft-deleted user `alice@gym.ru` re-invited reactivates the OLD row inheriting Alice's audit `actor_user_id` (cardinal sin — invite-accept MUST INSERT new row, never UPDATE existing); (c) token in URL path leaks via Referer/proxy/shoulder-surf. Prevention: soft-delete partial-UNIQUE `(lower(email)) WHERE deleted_at IS NULL` on `users` (mirrors `clients.phone` pattern); token in URL fragment `#token=...` or POST body; single-SQL atomic consume `UPDATE ... WHERE consumed_at IS NULL RETURNING`.
 
-4. **BOOKING_STATUS_TRANSITIONS constant not defined before service uses it (P8)** — Declare in `app/modules/bookings/constants.py` in Phase 37 before the bookings service is written. The `complete_booking` SQL path must include `WHERE status='confirmed'` predicate. Mirror of v1.3 Phase 24 / v1.4 Phase 30 discipline.
+4. **`actor_user_id` historical interpretation breaks under multi-user** — three sub-issues: (a) audit `actor_user_id` FK behaviour was never explicitly chosen (`RESTRICT` blocks soft-delete, `SET NULL` loses traceability); (b) `/refresh` hot path does NOT check `users.is_active` (deactivated operator gets fresh access token until cookie expires); (c) idempotency-via-actor would leak across operators. Prevention: explicit `ON DELETE SET NULL` + denormalised `actor_email_snapshot TEXT` on audit rows (migration `0023_audit_actor_snapshot` in Phase 41); `users.is_active` join on `/refresh`; deactivation revokes all families in same UoW.
 
-5. **TIMESTAMPTZ vs TIMESTAMP WITHOUT TIME ZONE for slot times (P6)** — Use `DateTime(timezone=True)` in the `TrainerAvailabilitySlot` ORM model. Bare `DateTime()` defaults to `TIMESTAMP WITHOUT TIME ZONE`, causing the no-show cron to fire 3 hours late (container TZ=UTC, slots entered in Moscow local time). Non-recoverable post-data-entry without a data migration.
+5. **Locked Russian copy lock breaks under email's richer surface** — email has subject + plain-body + HTML-body + footer + From: display-name; each is a locked-copy compromise point. Cyrillic subjects need RFC 2047 encoded-word; NBSP in money renders as `?` on Outlook for Windows; provider SDKs inconsistently double-encode UTF-8 display names. Prevention: `LOCKED_EMAIL_TEMPLATES` AST gate mirroring `LOCKED_AUDIT_EVENTS` (frozenset of `(subject_const, body_const, html_const)` triples; `email_mailer.send(...)` takes enum, not raw strings); RFC 2047 round-trip test on assembled wire form; per-template owner sign-off enumerated by constant identifier (not "all v1.6 templates").
 
-**Additional Phase 37 must-do:**
-- Register all Protocol slots BEFORE `include_router(api)` in `create_app()` + add startup integration test asserting all resolver slots non-None (P17)
-- Confirm B-10 test still passes: `POST /visits` for PT-package-only client → 409 (P20)
+6. **Provider 5xx + ARQ retry storm collides with 06:xx cron window** — single failing provider's compounded SDK + ARQ retries wedge the worker container, blocking the 06:15 → 06:25 → 06:35 cron chain. Prevention: provider SDK retries set to 0/1; ARQ `max_tries=2, timeout=20`; outbox+drainer pattern moves email out of cron path; per-provider Redis circuit breaker (TTL 5m, opened on 5xx).
+
+7. **ARQ cron eager-import regression class repeats (REG-29-04 mirror)** — new ORM tables (`email_outbox`, `password_reset_tokens`, `email_send_log`) added in modules the worker doesn't transitively import → cron returns `count=0` on first call. Prevention: explicit `from app.modules.<x> import models  # noqa: F401` in `app/workers/__init__.py` per new module; boot-time invariant logs `Base.metadata.tables.keys()` and asserts all cron-queried tables present; `tests/test_oneshot_scripts_eager_import.py` AST introspection.
+
+8. **Provider secret + domain + sandbox mode rotting at env boundary** — Resend `re_sandbox_*` silently allows sends only to verified addresses (works in dev, fails in prod); `EMAIL_FROM_DOMAIN` empty → production sends from `sandbox.resend.dev` → mail.ru DMARC reject. Prevention: Pydantic `EmailProviderSettings` validator fails at boot if `from_domain` empty in non-sandbox mode; boot-time probe to `/domains` endpoint asserts verified; webhook signing secret mandatory; HMAC verify before body parse.
+
+See PITFALLS.md for the full 16-pitfall taxonomy + per-pitfall recovery-cost table + "looks done but isn't" 20-item checklist.
+
+---
+
+## Open Conflicts (for Spec Phase to Resolve)
+
+The synthesizer surfaces these explicitly rather than pre-emptively choosing — the spec phase will decide. **All preserve the anti-oracle and audit-AST-gate invariants regardless of which path is chosen.**
+
+1. **Email provider choice** — STACK.md recommends **Yandex Cloud Postbox (primary) + Unisender Go (fallback)** based on РФ-accessibility + ₽-billing + in-region deliverability + SES-V2-API portability. Other research files are provider-agnostic. *Conflict severity: low — STACK.md is the owning surface for this decision.*
+
+2. **Reset-token storage** — STACK.md recommends `itsdangerous` stateless signed tokens (HMAC over `(user_id, password_changed_at, kind)` — single-use via `password_changed_at` equality check; no DB row, no cleanup cron). ARCHITECTURE.md recommends DB table `password_reset_tokens` (hash-at-rest, server-side single-use via partial-UNIQUE `(user_id, purpose) WHERE consumed_at IS NULL`; mirrors `refresh_tokens` discipline byte-for-byte; auditable forever via `audit_correlation_id`). PITFALLS.md is path-agnostic but leans toward the DB-table approach for the SVC001 commit-gate + atomic-consume `RETURNING` SQL invariant. *Both preserve anti-oracle. Spec phase decides on the trade-off: itsdangerous is simpler infra; DB-table matches existing v1.1 `refresh_tokens` discipline and gives immutable audit-trail.*
+
+3. **`notifications` module status** — FEATURES.md hints at extending a "real" `app/modules/notifications/`. ARCHITECTURE.md explicitly rejects this (D-39-02 precedent — v1.5 chose per-domain template ownership over a shared `integrations/telegram/copy.py`; same logic applies to email). *Synthesizer leans toward ARCHITECTURE.md's read here because D-39-02 is a load-bearing precedent that the AST-gate-on-locked-events depends on — but spec phase confirms.*
+
+4. **Template engine** — STACK.md recommends **Jinja2 SandboxedEnvironment** (industry standard, transitive via FastAPI, sandbox for defence-in-depth even on first-party templates). ARCHITECTURE.md leans toward **f-string-locked `Final[str]` templates** per D-39-04 anti-magic (matches existing v1.5 Telegram DM constants). PITFALLS.md is engine-agnostic but enumerates the locked-template-AST-gate requirement regardless of engine. *Trade-off: Jinja2 cleaner for HTML/text dual-part interpolation; f-strings cleaner for AST-grep-ability of locked copy.*
+
+5. **`User` ORM ownership** — ARCHITECTURE.md offers two paths: **Path A** hoist `User` from `auth/models.py` to `app/core/models.py` (cleaner; touches all 729 tests' imports; no direct ORM-hoist precedent — closest is v1.2 Phase 15 hoist of the `escape_like_pattern` function); **Path B** leave `User` in `auth/models.py`; new `users` module accesses via `UserLookup` Protocol slot (lower-risk; mirrors existing `register_user_loader` pattern; one extra slot for trivial reads). *Spec phase decides on the risk/cleanliness trade.*
+
+6. **Phase numbering of pitfalls roadmap** — PITFALLS.md uses Phase 41–45 (5 phases); ARCHITECTURE.md uses Phase 41–48 (8 phases). Both start at 41 (continued from v1.5 Phase 40). *Synthesizer deliberately does NOT prescribe phase count — that is the roadmapper's job downstream. The set of v1.6 work items is stable; how they cluster into phases is a roadmap decision.*
+
+7. **Email verification flow for owner-added operator accounts** — trust owner-entered addresses (single zal, owner knows their staff) vs click-to-verify (industry best practice). ARCHITECTURE.md leans toward **trust**; PITFALLS.md is neutral. *Spec phase decides; if "trust" wins, document explicitly as a Decision row.*
 
 ---
 
 ## Implications for Roadmap
 
-### Phase 37 — Foundations Bedrock
+The synthesizer does NOT prescribe phase count — that is the roadmapper's job downstream. Below is the **stable set of v1.6 work items** discovered across all four research files, ordered by dependency.
 
-**Rationale:** Every prior milestone (v1.3 Phase 24, v1.4 Phase 30) proved that pre-registering audit events and architectural contracts before callsites land eliminates an entire class of CI failures. No migrations, no new module code.
+### Critical invariants to preserve in EVERY phase
 
-**Delivers:**
-- `LOCKED_AUDIT_EVENTS` extended to N+5 entries (5 new pairs: slot/booking lifecycle)
-- 5 `audit_payloads.py` Pydantic schemas with `str`-typed UUID fields and `extra='forbid'`
-- `BOOKING_STATUS_TRANSITIONS` + `SLOT_STATUS_TRANSITIONS` constants
-- 3 new Protocol slot types + register/get functions in `app/core/dependencies.py`
-- `Resource.SCHEDULE_SLOTS` + `Resource.BOOKINGS` in `app/core/permissions.py`; `OWNER_ONLY` extended with slot publish/cancel pairs
-- Taxonomy test count bumped; RBAC parity test updated with admin-web frozen comment
-- Startup integration test: `create_app()` resolvers all non-None
-- B-10 regression test confirmed passing
+- **Anti-oracle**: `POST /auth/password-reset/request` always returns 202 + identical body + bounded-equal timing for `(existing-active, existing-deactivated, owner-account, non-existent)`; `password_reset_requested` audit emitted in BOTH branches; `test_password_reset_no_oracle.py` enforces.
+- **`LOCKED_AUDIT_EVENTS` extension up-front in the first phase** (v1.3 INFRA-15 lesson) — adding ~11 new event pairs after callsites land triggers AST-gate churn.
+- **`LOCKED_EMAIL_TEMPLATES` frozenset + AST gate** mirroring `LOCKED_AUDIT_EVENTS` shape; `email_mailer.send(...)` takes enum, not raw strings; synthetic-violation fixture lands first.
+- **Owner sign-off on every locked Russian email template** (D-27-OWNER-COPY-LOCK precedent) — sign-off row enumerates every constant identifier by name.
+- **Double-wire Protocol slots** in BOTH `app/main.py:create_app()` AND `WorkerSettings.on_startup` (REG-29-03 lesson).
+- **Cross-channel idempotency taxonomy**: `channel TEXT NOT NULL` column on `membership_notifications` + `booking_notifications` via Alembic `0024_notification_channel_discriminator`.
+- **Soft-delete partial-UNIQUE on `users.email`** (`WHERE deleted_at IS NULL`) — mirrors `clients.phone`; invite-accept MUST INSERT new row, never UPDATE existing.
+- **Audit `actor_user_id ON DELETE SET NULL` + denormalised `actor_email_snapshot`** (migration `0023_audit_actor_snapshot`).
+- **`/refresh` joins `users.is_active`** — deactivated operator immediately loses session.
+- **SVC001 AST commit-gate scope extension** — extends to `app/modules/users/service.py` + `app/modules/auth/password_reset_service.py` (Phase 12.1 lesson — NOT just `service.py`).
 
-**Avoids:** P3, P8, P13, P17, P20
+### Work items by dependency order
 
-**Research flag:** Standard patterns — no phase research needed. Mirrors v1.3 Phase 24 and v1.4 Phase 30 exactly.
+**A. INFRA bedrock (MUST be first):**
+- Resolve open conflicts (provider, token storage, template engine, `User` ORM ownership, email-verification policy)
+- Extend `LOCKED_AUDIT_EVENTS` 56 → ~67; register Pydantic models in `audit_payloads.py`
+- Introduce `LOCKED_EMAIL_TEMPLATES` AST gate + synthetic-violation fixture
+- Extend `Resource` enum with `USERS`; `OWNER_ONLY` 26 → 29 (CREATE/UPDATE/DELETE/LIST USERS); three-way parity test update
+- Declare `EmailDispatcher` + `UserSessionInvalidator` Protocol slots in `app/core/dependencies.py`
+- Add `app.modules.users` to `.importlinter` `modules-independent` list
+- Extend SVC001 AST commit-gate scope
+- Alembic `0023_audit_actor_snapshot` (`actor_email_snapshot TEXT` + FK `ON DELETE SET NULL`)
+- Alembic `0024_notification_channel_discriminator` (`channel` column + UNIQUE recreation)
+- Alembic migration: `users.deleted_at` + partial-UNIQUE `(lower(email)) WHERE deleted_at IS NULL`
+- Alembic `0025_password_reset_tokens` (conditional on conflict #2) OR itsdangerous secret hook
+- DNS/SPF/DKIM/DMARC owner runbook draft (dedicated subdomain `mail.sportzal.ru`)
+- Pydantic `EmailProviderSettings` with `sandbox_mode: bool`, boot-time `/domains` probe
+- Eager-import test discipline (`tests/test_workers_eager_import.py`)
 
----
+**B. Email transport layer (depends on A):**
+- Replace `app/integrations/email/client.py` placeholder with chosen-provider adapter
+- `app/integrations/email/factory.py:build_email_client(...)` (mirror `telegram/bot.py:build_bot`)
+- `app/workers/tasks/dispatch_email.py` ARQ task (consumes pre-rendered `EmailEnvelope`; forbidden from `app.modules.*` import)
+- `EmailDispatcher` slot double-wired
+- First `email_sent` / `email_send_failed_*` audit callsites
+- Outbox+drainer pattern + per-provider Redis circuit breaker + `asyncio.Semaphore(5)` rate-limit
+- Bounce/complaint webhook handler with HMAC signature verification (timing-safe `hmac.compare_digest`)
 
-### Phase 38 — Schedule Module + Booking Core
+**C. Multi-user admin (depends on A; independent of B):**
+- New `app/modules/users/` (router, service, repository, schemas, permissions, constants, `email_templates.py`)
+- `users.service`: `create_user`, `deactivate_user`, `soft_delete_user`, `list_users`, `send_invitation_email`
+- `auth.service.invalidate_all_families_for_user` exposed via `UserSessionInvalidator` slot
+- `/auth/refresh` `users.is_active` join
+- Multi-user audit verification + `actor_display_name` in receipt-render path
 
-**Rationale:** `bookings.service.create_booking` consumes `get_slot_by_id`; the concrete implementation in `schedule.service` must exist first. Both modules land in this phase to keep the atomic create transaction (slot flip + booking INSERT) testable end-to-end.
+**D. Invitation + password-reset flow (depends on B + C):**
+- `app/modules/auth/password_reset_service.py` (anti-oracle `request` + atomic-consume `confirm` with `RETURNING` SQL)
+- `app/modules/users/invitation_service.py` (MUST INSERT new user row, never UPDATE existing)
+- Locked Russian email copy with owner sign-off: `USER_INVITATION_EMAIL_*` + `PASSWORD_RESET_EMAIL_*`
+- Token TTL: invitation 7 days; reset 1h (OWASP 2025 floor)
+- Token in URL fragment `#token=...` or POST body — NEVER URL path
+- Rate-limit `/auth/password-reset/request` 5/15min per IP + 1/min, 5/hour per email; same generic 202
 
-**Delivers:**
-- Migration `0016_trainer_availability_slots` (TIMESTAMPTZ, partial index on available status, soft-delete, buffer-time guard in service)
-- `app/modules/schedule/` fully implemented (models, schemas, repository, service, constants, router — 4 endpoints)
-- `register_slot_resolver` + `register_booking_slot_restorer` wired in `app/main.py` AND `app/workers/telegram_bot.py` (REG-29-03 double-wiring — including confirmation that `register_active_pt_package_resolver` is also present in bot worker)
-- Migration `0017_bookings` (partial UNIQUE `uq_bookings_slot_confirmed`, snapshot fields, `pt_package_id NOT NULL FK`)
-- `app/modules/bookings/` fully implemented (models, schemas, repository, service, constants, router — 4 endpoints)
-- `POST /bookings` with `Depends(verify_idempotency)` route-bound (CR-01 discipline)
-- Atomic create: booking INSERT + slot status flip `available → booked` in single UoW
-- Booking cancellation with `datetime.now(UTC)` 24h window (no naive datetime)
-- PT-package refund guard: raw-SQL count of outstanding bookings → 409 Option A
-- PT-package validity-window guard at booking creation
-- Concurrent race test: two simultaneous `POST /bookings` for same slot — only one wins
+**E. Email fallback for expiring/booking notifications (depends on B):**
+- Extend `send_expiring_notifications` (06:15 MSK) — email fallback if `client.email IS NOT NULL`
+- Extend `send_booking_reminders` (06:35 MSK) — same dual-channel pattern
+- 6 expiring templates `EMAIL_EXPIRING_{7D,3D,1D}_VARIANT_{A,B}` (anti-oracle A/B via `client_id.bytes[0] & 1`) + 4 booking templates
+- Owner sign-off per template constant
 
-**Avoids:** P1, P2, P4, P5 (partial), P6, P7, P14, P18, P19
+**F. Email OTP fallback for login (depends on B; can parallel E):**
+- Extend `otp_codes` with `channel TEXT NOT NULL DEFAULT 'telegram'` + UNIQUE `(user_id, channel) WHERE consumed_at IS NULL`
+- Email OTP TTL **10 minutes** (Telegram × 2 for provider lag); resend 60s cooldown; second OTP invalidates first
+- Locked Russian template `EMAIL_OTP_LOGIN`
 
-**Research flag:** Standard patterns — no phase research needed.
+**G. Email payment-receipt (depends on B; can parallel E + F):**
+- Hook into v1.4 `record_payment` + `issue_refund` commit paths
+- `payment_receipts` idempotency table UNIQUE `(payment_id, channel)`
+- Locked templates `EMAIL_PAYMENT_RECEIPT_SALE` + `EMAIL_PAYMENT_RECEIPT_REFUND` (NBSP as `&nbsp;` in HTML, literal U+00A0 in plain-text)
+- `actor_display_name` derived from `users.full_name` in receipt body ("Принял: Анна П.")
+- LOCKED audit event `payment_receipt_emailed`
 
----
+**H. OpenAPI drift gate refresh (serialization point — depends on B–G):**
+- Atomic byte-stable regen of `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts`
+- `AssertNonNever` forward-guards 61 → ~73
+- README v1.6 changelog
 
-### Phase 39 — Bookings Completion + PT-Sessions Wiring + No-Show Cron
+**I. Milestone verification phase (gate — depends on all above):**
+- Operator scenarios via curl + sandbox email
+- Race tests (token replay, soft-delete + re-invite, deactivate + `/refresh` 401)
+- Anti-oracle integration test `test_password_reset_no_oracle.py` (4 cases × identical body × bounded timing)
+- RFC 2047 round-trip test + NBSP HTML snapshot + footer assertion
+- Probe-send to one yandex.ru + one mail.ru recipient; Authentication-Results header inspection
+- Eager-import live-Postgres verification (REG-29-04 mirror)
+- 6 CI gates green
+- Owner sign-off enumerated by constant name
 
-**Rationale:** The `complete_booking` Protocol slot and the `booking_id` FK on `pt_sessions` form a single cross-module transaction and must land together. No-show cron and 24h reminder cron land here alongside PT-session wiring to avoid splitting ARQ job additions.
+### Research flags
 
-**Delivers:**
-- Migration `0018_pt_sessions_booking_id` (nullable `booking_id UUID NULL REFERENCES bookings(id) ON DELETE SET NULL`)
-- `pt_sessions.service` modified: `SELECT FOR UPDATE` on booking row, then call `get_booking_completer()` in same UoW before commit
-- `register_booking_completer` wired in `app/main.py` only (not bot worker)
-- Guard: `record_pt_session` rejects `booking_id` where `booking.status != 'confirmed'` → 409
-- Guard: `cancel_booking` rejects if existing `pt_sessions` row references this booking → 409
-- `app/workers/scheduled/mark_no_show_bookings.py` — ARQ cron at 23:10 MSK; mirrors `expire_memberships`
-- `scripts/run_no_show_cron_once.py` — one-shot runner with eager mapper import (REG-29-04 prevention)
-- `booking_notifications` table with UNIQUE `(booking_id, kind)` + 24h reminder cron at 06:35 MSK
-- No-show DM to client at manual `POST /bookings/{id}/no_show`
+**Phases likely needing deeper `/gsd-research-phase`:**
+- **INFRA bedrock (A):** provider runbook re-verification (sanctions/payment landscape moves fast); resolution of open conflicts #2/#4/#5 with explicit Decision rows; DNS/DMARC subdomain layout
+- **Invitation + password-reset (D):** locked Russian email copy with owner sign-off mechanism (D-27 lineage); rate-limit calibration; URL-fragment SPA flow design (admin-web frozen — backend-only)
+- **Bounce/complaint webhook (within B):** per-provider signature scheme; `email_send_log` schema; reputation decay handling
 
-**Avoids:** P5 (causality inversion — SELECT FOR UPDATE + same-UoW commit), P11, P12
-
-**Research flag:** Standard patterns — no phase research needed.
-
----
-
-### Phase 40 — Telegram /book Bot + OpenAPI Drift Refresh + Milestone Verification
-
-**Rationale:** Bot integration depends on full bookings service (Phases 38-39). Single-phase OpenAPI regen avoids per-phase drift-gate churn (v1.4 Phase 35 lesson). Verification is the terminal gate.
-
-**Delivers:**
-- `book_handler` + `book_callback_handler` in `app/integrations/telegram/handlers.py`
-- `HandlerContext` extended with `bookings_service: ModuleType`
-- `callback_data = "BK:{slot_uuid}"` (39 bytes); unit test asserting ≤ 64 bytes for all keyboard builders
-- Single anti-oracle DM constant `_DM_NO_BOOKING_AVAILABLE`; owner sign-off `D-40-OWNER-COPY-LOCK` in PROJECT.md
-- `/book` wired in `build_application`; `register_slot_resolver` confirmed in `telegram_bot.py:main()`
-- `openapi.json` byte-stable regen + `schema.d.ts` regenerated + ~8 new `AssertNonNever` forward-guards
-- Milestone verification: operator scenarios, Telegram sandbox `/book` end-to-end, concurrent race test, 4 CI gates
-
-**Avoids:** P10 (REG-29-03 repeat — bot missing resolver), P15 (callback_data overflow), P16 (anti-oracle DM leak)
-
-**Research flag:** Standard patterns — no phase research needed.
-
----
-
-### Phase Ordering Rationale
-
-- **Foundations-first**: audit events + FSM constants + Protocol slot types + RBAC additions before any service code — eliminates the CI-failure-on-first-commit class of bugs (INFRA-15 / Phase 30 lesson)
-- **Schedule before Bookings close coupling**: `bookings.service` consumes `get_slot_by_id` from `schedule.service`; integration tests for booking creation cannot run without a real slot resolver
-- **PT-sessions wiring after bookings core**: the `complete_booking` Protocol slot registered from `app/main.py`; `pt_sessions.service` calls it; the slot must exist before the caller code is modified
-- **Bot and OpenAPI last**: terminal concerns that depend on all service code being stable; single-phase regen avoids multiple drift-gate commits
-
-### Research Flags
-
-**Phases needing deeper research during planning:** None. All patterns across all 4 phases are direct extensions of established v1.3/v1.4 precedents. Research was performed at this stage.
-
-**Standard patterns (no `/gsd-research-phase` needed):**
-- Phase 37: mirrors v1.3 Phase 24 (audit taxonomy) and v1.4 Phase 30 (RBAC + Protocol foundations)
-- Phase 38: mirrors v1.4 Phase 32-33 (idempotency + Protocol slots + partial UNIQUE)
-- Phase 39: mirrors v1.3 Phase 27 (ARQ cron + notification idempotency) and v1.4 Phase 34 (PT-session atomic decrement + cross-module callback)
-- Phase 40: mirrors v1.2 Phase 20 (Telegram bot + anti-oracle DMs) and v1.4 Phase 35 (OpenAPI drift gate)
-
----
-
-## Open Questions for REQUIREMENTS.md Step
-
-| # | Question | Default Recommendation | Must Resolve Before |
-|---|----------|----------------------|---------------------|
-| Q1 | `trainer_id` on `pt_packages` — required for bot or optional (bot asks if NULL)? | Optional; bot presents trainer picker inline if NULL | Phase 38 plan (affects pt_packages schema) |
-| Q2 | 24h cron reminder — P2 in v1.5 or defer to v1.5.1? | Include in Phase 39 (same pattern as v1.3 expiring-soon) | Phase 39 plan |
-| Q3 | `no_show` — terminal in v1.5, or allow `no_show → confirmed` reverse within N hours? | Terminal (Option C); document in `constants.py` with Key Decision reference | Phase 37 plan (FSM constant) |
-| Q4 | `slot_published` — fires on creation (slot goes active immediately) or on explicit publish action? | On creation; `slot_published` = `slot_created_as_active` | Phase 37 plan (taxonomy) |
-| Q5 | PT-package expires after booking confirmed — auto-cancel or leave `confirmed`? | Leave `confirmed`; 409 surfaces at PT-session time (matches "block-then-explain" pattern) | Phase 38 plan |
-| Q6 | Slot buffer — hardcoded 10 min or configurable? | Hardcoded 10 min for v1.5 | Phase 38 plan |
-| Q7 | Owner-copy lock for anti-oracle bot DM | `D-40-OWNER-COPY-LOCK` sign-off in PROJECT.md before Phase 40 merges | Before Phase 40 |
-| Q8 | `pt_package_id` on `bookings` — NOT NULL or nullable? | NOT NULL for v1.5 | Phase 38 plan (migration) |
+**Standard patterns (skip research):**
+- Multi-user admin module (C) — direct mirror of v1.1 `clients`
+- Email fallback for expiring/booking (E) — direct mirror of v1.3 Phase 27 + v1.5 Phase 39
+- OpenAPI drift gate refresh (H) — mechanical regen per v1.3 Phase 28 + v1.5 Phase 36
+- Verification phase (I) — mirror of v1.3 Phase 29 + v1.5 Phase 40 (apply DEFER-40-01 lessons to runbook scaffolding)
 
 ---
 
@@ -228,44 +233,57 @@ The following 5 pitfalls MUST be prevented in Phase 37 (foundations) before any 
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All decisions verified against live `pyproject.toml`; 5 candidate libraries evaluated and explicitly rejected |
-| Features | HIGH (P1) / MEDIUM (P2) | P1 table-stakes triangulated from 10+ industry sources; P2 differentiators are Sportzal-specific extrapolation |
-| Architecture | HIGH | All decisions derived from live codebase; 7 existing Protocol slots confirmed; import-linter contracts verified |
-| Pitfalls | HIGH | 17 of 20 are confirmed repeats of documented incidents (REG-29-03, REG-29-04, REG-36-03, INFRA-15, VIS-TEST-01, D-34-04a, CR-01) |
+| Stack | HIGH on primary recommendation; MEDIUM on fallback rationale | Provider/sanctions snapshot is 2026-05-18 — re-verify in INFRA bedrock. SDK pins + sandbox-mode hazards verified against official docs. |
+| Features | HIGH | All 8 P1 features mirror existing v1.0–v1.5 shapes. 11 anti-features explicitly excluded with rationale. |
+| Architecture | HIGH | Entirely grounded in v1.0–v1.5 patterns; no speculative external research. D-39-02 + D-06 + D-10 + REG-29-03 are load-bearing precedents. Two open paths flagged MEDIUM. |
+| Pitfalls | HIGH on system-specific; MEDIUM on Russian-locale + provider-deliverability | 16-pitfall taxonomy grounded in PROJECT.md + RETROSPECTIVE.md + MILESTONES.md regressions. |
 
-**Overall confidence:** HIGH
+**Overall confidence:** HIGH — every recommendation is anchored either in shipped v1.0–v1.5 invariants or in documented STACK rationale; medium-confidence axes are provider snapshot freshness (re-verify at spec time) and locale-specific deliverability quirks (probe in verification).
 
 ### Gaps to Address
 
-- **Audit event baseline count discrepancy:** ARCHITECTURE.md states 53 entries; PROJECT.md and PITFALLS.md state 51. Phase 36.1 hot-fix may have added entries. REQUIREMENTS.md must verify the exact current count before Phase 37 plan specifies the target. The delta is always +5 regardless of baseline.
-- **`register_active_pt_package_resolver` in bot worker confirmed missing:** PITFALLS.md line 842 confirms this is NOT currently present in `telegram_bot.py:main()`. Must be added in Phase 38 as part of the schedule resolver double-wiring — not deferred to Phase 40.
-- **Q1 (trainer_id on pt_packages):** If added, requires an Alembic migration in Phase 38. Must be locked before Phase 38 planning begins.
-- **Q3 (no_show reverse transition):** Option C (terminal) is simplest but may generate a support request for late-arriving clients. Document the limitation explicitly.
+- **Open conflicts #1–#7** — spec phase resolves each with explicit Decision row in PROJECT.md
+- **DMARC alignment for subdomain** — DNS spec must be finalized at INFRA bedrock; `mail.sportzal.ru` SPF/DKIM/DMARC committed to `infra/dns/sportzal.ru.zone`; `p=none` → `p=quarantine` after monitoring
+- **`actor_display_name` formatting** — full name vs first-name-last-initial — default to first-name-last-initial for privacy
+- **Bounce/complaint webhook receiver shape** — defer aggressive handling to v1.7 (passive logging in v1.6)
+- **Provider sandbox-mode prod-detection** — boot-time probe MUST be in place before first production deploy
+- **REG-29-04 mirror** — eager-import test discipline lands in INFRA bedrock; verification phase runs cron one-shot scripts against live Postgres (DEFER-40-01 lesson: budget ≥1 day for runbook scaffolding hardening)
 
 ---
 
 ## Sources
 
-### Primary (HIGH confidence — live codebase)
-- `apps/backend/app/core/dependencies.py` — 7 existing Protocol slots confirmed
-- `apps/backend/app/core/audit.py` — `LOCKED_AUDIT_EVENTS` confirmed at research time
-- `apps/backend/app/core/idempotency.py` — CR-01 route-binding confirmed shipped (Phase 32)
-- `apps/backend/app/workers/telegram_bot.py` — `register_active_pt_package_resolver` confirmed missing in bot worker (gap to close in Phase 38)
-- `apps/backend/app/.importlinter` — `schedule` and `bookings` already in `modules-independent`
-- `apps/backend/app/workers/__init__.py` — ARQ WorkerSettings + cron-resolution invariant confirmed
-- `apps/backend/app/modules/pt_sessions/service.py` — D-34-04a cross-module raw SQL pattern confirmed
-- `.planning/PROJECT.md` — v1.5 scope, B-10/B-12 invariants, Key Decisions table
-- `.planning/MILESTONES.md` — REG-29-03, REG-29-04, REG-36-03, INFRA-15 incident reports verbatim
+### Primary (HIGH confidence — system-grounded)
+- `.planning/PROJECT.md` — `LOCKED_AUDIT_EVENTS` frozenset, `OWNER_ONLY` RBAC, anti-oracle DM patterns (D-20-9), `D-27-OWNER-COPY-LOCK`, `D-39-02` per-domain template ownership, idempotency table shapes, refresh-rotation family race tolerance, Protocol-slot pattern, SVC001 AST commit gate, mandatory snapshot pricing, REG-29-01/03/04 + REG-36-01..05 + DEFER-40-01 regression classes
+- `apps/backend/app/modules/auth/models.py` — `users` table shape (no soft-delete partial-UNIQUE on email; `telegram_chat_id BIGINT NULL UNIQUE`)
+- `apps/backend/app/modules/bookings/notifications.py` — `_BOT_BOOK_DENIED_DM` (D-39-02 precedent)
 
-### Secondary (HIGH confidence — official docs)
-- Context7 `/python-telegram-bot/python-telegram-bot` — `ConversationHandler` `concurrent_updates=False` requirement confirmed; InlineKeyboard + CallbackQueryHandler as idiomatic pick-and-confirm pattern
-- Telegram Bot API — `callback_data` 64-byte hard limit confirmed
+### Primary (HIGH confidence — external)
+- Yandex Cloud Postbox service + pricing + quotas + SDK guide (official) — SES-V2 API compatibility, 2000 free emails/month, 152-ФЗ compliance
+- Amazon SES Regions (official) — confirms no РФ region
+- aioboto3 / Jinja2 SandboxedEnvironment / itsdangerous (PyPI + official docs) — version pins + API surface
+- OWASP Forgot Password Cheat Sheet + WSTG — anti-enumeration 202, constant-time, single-use, 1h TTL
+- RFC 2047 — encoded-word for Cyrillic Subject + From
+- Specops "Scripting new user onboarding" — anchors anti-feature "admin-set initial password mailed in plaintext"
+- Postmark "What is transactional email" — transactional/marketing boundary
+- moto[ses] docs — SES-V2 mocking
 
-### Tertiary (MEDIUM confidence — industry triangulation)
-- Mindbody, Goldie, SimplyBook.me, SchedulingKit, Trainerize, Bookafy, SuperSaaS — 24h cancel window, instant-confirm, manual no-show marking as industry norms for single-operator PT studios
-- Nuffield Health PT Terms — debit-at-delivery (not debit-at-reservation) model confirmed as industry standard
-- DialogHealth / SchedulingKit — 24h reminder reduces no-shows ~29% (supports P2 reminder cron in v1.5)
+### Secondary (MEDIUM confidence)
+- Unisender Go API ref + `unisender-go-api` PyPI — fallback SDK
+- Vaadata password-reset vulnerabilities — token-in-URL avoidance
+- Mailgun + Brevo SPF/DKIM/DMARC guides — owner runbook shape, dedicated subdomain
+- WSO2 invite-user flow + Auth0 B2B onboarding — invite-token industry standard
+- mxtoolbox mail.ru/yandex.ru SPF + Skysnag yandex DMARC — РФ-locale deliverability evidence
+
+### Tertiary (LOW confidence — re-verify at spec time)
+- Resend Python SDK module-level cache (verify via Context7)
+- AWS SES boto3 retry defaults (verify against current SDK)
+- Mailgun HMAC-SHA256 field-order (verify via Mailgun official helper)
+- Mailgun post-2022 РФ-recipient reputation claim — anecdotal
+- SendPulse РФ-restriction claim — single vendor source (Unisender comparison page)
 
 ---
-*Research completed: 2026-05-17*
-*Ready for roadmap: yes*
+
+*Research completed: 2026-05-18*
+*Ready for roadmap: yes (open conflicts surfaced; phase clustering deferred to roadmapper)*
+*Detailed dimensional research: `.planning/research/{STACK,FEATURES,ARCHITECTURE,PITFALLS}.md`*

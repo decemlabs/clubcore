@@ -1,329 +1,263 @@
-# Feature Research — v1.5 Schedule + Bookings (PT Slots)
+# Feature Research — v1.6 Email channel + Multi-user admin
 
-**Domain:** PT-slot booking for a single-zal gym CRM (Russian market)
-**Researched:** 2026-05-17
-**Confidence:** HIGH for table-stakes classification (triangulated from Mindbody, SimplyBook.me, SuperSaaS, Trainerize/ABC, Goldie, SchedulingKit, Bookafy industry materials). MEDIUM for implementation detail where single-source or Sportzal-specific extrapolation.
+**Domain:** Operator-facing CRM (single-gym pet-project, РФ/СНГ), two new pillars laid on top of an already-shipped Telegram-first system: **(1) email as a parallel notification channel** mirroring v1.1/v1.3/v1.4/v1.5 Telegram flows, **(2) owner-managed multi-user admin** (operator onboarding, deactivation, password reset, multi-actor audit traceability).
+**Researched:** 2026-05-18
+**Confidence:** HIGH (the patterns to mirror — locked Russian copy, anti-oracle, idempotency tables, mandatory snapshot — are all already in production; the open questions are about *what to send by email* and *how to onboard a second reception user*, not how to wire the plumbing)
 
-**Scope discipline:** ONLY v1.5 themes — trainer availability slots, bookings FSM, PT-package linkage, Telegram notifications, bot `/book`. Anything that drifts toward online payment (ЮKassa), group classes, trainer payroll, email notifications, or waitlist is an explicit anti-feature below.
-
-**Existing primitives this builds on (DO NOT re-research):**
-- `trainers` table with `id`, `full_name`, `is_active`, soft-delete pattern (v1.4 Phase 31).
-- `pt_packages` with `sessions_remaining`, `status ∈ {active,exhausted,expired,cancelled}`, partial UNIQUE `(client_id) WHERE status='active'`, `register_active_pt_package_resolver` Protocol slot (v1.4 Phase 33).
-- `pt_sessions` with atomic decrement, backdating windows B-11 (reception ≤7d / owner unlimited), cancel window B-12 (reception ≤24h / owner anytime), `trainer_name_snapshot NOT NULL` (v1.4 Phase 34).
-- `audit_log` + `LOCKED_AUDIT_EVENTS` 51-entry frozenset + `audit.emit` AST literal-string gate.
-- `clients.telegram_chat_id` linkage + `build_bot` factory + `HandlerContext` extension pattern (v1.1 / v1.2 / v1.3).
-- RBAC `(Action, Resource)` pairs through `OWNER_ONLY` frozenset and `Depends(require_permission)`.
-- B-10 invariant (locked): PT-package alone does NOT grant gym floor access. Recording a PT-session does NOT create a Visit row. These remain orthogonal.
+> Scope reminder. v1.6 is a **subsequent** milestone bolted onto a working system. Existing Telegram flows, auth, payments, audit log (56 LOCKED events) are **not** in scope to re-research. Everything below is constrained to the new surface only.
 
 ---
 
-## REQ-ID Category Prefixes for REQUIREMENTS.md
+## Feature Landscape
 
-| Prefix | User-Visible Category | Phases Likely Touched |
-|--------|----------------------|----------------------|
-| `SLOT` | Trainer availability slot lifecycle | Phase 37 (foundations + CRUD) |
-| `BOOK` | Booking FSM + creation / cancel / no-show | Phase 38 (booking service + FSM) |
-| `PKG` | PT-package linkage invariants | Phase 38 (pre-flight + guard rails) |
-| `NOTIFY` | Telegram notification flows | Phase 38–39 |
-| `BOT` | Telegram `/book` command | Phase 39 |
+### Table Stakes (Users Expect These)
 
----
+Features users assume exist in any modern operator CRM. Missing these = product feels incomplete or unsafe.
 
-## Category SLOT — Trainer Availability Slots
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **Email channel — OTP fallback for login** | When a reception user has no Telegram link (or Telegram is down), they still need a passwordless / second-factor path. Today email/password works but Telegram OTP doesn't have an email twin. | **M** | Mirror `app/modules/auth/otp_*` shape: `email_otp_codes` table or reuse `otp_codes` with `channel ∈ {telegram, email}`; same 6-digit / 5-min TTL / 5-attempt envelope; rate-limit 5/15min reused. Russian-locked template `EMAIL_OTP_LOGIN`. |
+| **Email channel — expiring-membership notice (7+3+1)** | v1.3 already sends Telegram DMs at T-7 / T-3 / T-1. Clients without a Telegram link get nothing today — silent churn. Email mirror closes the gap. | **M** | Extend `membership_notifications` UNIQUE key from `(membership_id, kind)` to `(membership_id, kind, channel)` so Telegram and email idempotency rows coexist without double-sending. Reuse 06:15 MSK cron loop; add a sibling pass that selects rows where `client.email IS NOT NULL` AND no Telegram link (or both, per D-XX). 6 locked Russian email templates `EMAIL_EXPIRING_{7D,3D,1D}_VARIANT_{A,B}` — anti-oracle A/B variant kept (`client_id.bytes[0] & 1`). |
+| **Email channel — payment receipt (cash sale + refund)** | After every cash sale (v1.4 `payments`), client expects a written record. РФ tax law doesn't *require* email receipts for cash yet (54-ФЗ kicks in only for online — v1.7), but operator-facing CRMs treat it as table stakes. Refunds especially must produce a receipt trail. | **M** | New `payment_receipts` idempotency table (UNIQUE `(payment_id, channel)`); fire-on-commit hook after `record_payment` / `issue_refund`; locked Russian templates `EMAIL_PAYMENT_RECEIPT_SALE` + `EMAIL_PAYMENT_RECEIPT_REFUND` carrying `formatMoney`-style ru-RU RUB rendering (NBSP-safe in HTML). **Dependency: v1.4 payments ledger (already shipped).** |
+| **Email channel — booking confirmation + 24h reminder** | v1.5 sends Telegram DMs for `BOOKING_CONFIRMED_DM` / `BOOKING_REMINDER_24H_DM`. Email mirror covers clients without Telegram. | **M** | Extend `booking_notifications` UNIQUE to `(booking_id, kind, channel)`. Reuse 06:35 MSK cron. 4 locked Russian email templates: `EMAIL_BOOKING_CONFIRMED`, `EMAIL_BOOKING_CANCELLED_BY_CLIENT`, `EMAIL_BOOKING_CANCELLED_BY_OWNER`, `EMAIL_BOOKING_REMINDER_24H`. |
+| **Multi-user admin — owner invites reception user (invite-token flow)** | A one-gym CRM that requires the solo owner to manually INSERT into `users` is a non-starter once the gym hires a second receptionist. Industry-standard pattern: owner clicks "Invite", system mails one-time invite link, invitee sets their own Argon2id password. | **M** | New `user_invitations` table (UUIDv4 token, `email`, `role`, `created_by_user_id`, `expires_at` 72h, `accepted_at NULL`, `revoked_at NULL`, UNIQUE on `(lower(email)) WHERE accepted_at IS NULL AND revoked_at IS NULL`); `POST /api/v1/users/invitations` (owner-only); `POST /api/v1/users/invitations/accept` (public, accepts token + password); 1 locked Russian email template `EMAIL_USER_INVITATION`. **Anti-pattern: admin-set initial password mailed in plaintext.** Sources unanimous — never email a password. |
+| **Multi-user admin — password reset (forgot-password)** | Reception loses access regularly (forgotten passwords, lost devices). Without self-service reset the owner becomes a permanent helpdesk. Reusing the invite-token mechanism is the cheapest correct path. | **M** | `password_reset_tokens` table (separate from `user_invitations` to keep semantics clean: invitation = no prior account, reset = existing account); token TTL 1h (shorter than invite — per OWASP 2025); single-use; `POST /api/v1/auth/password/reset/request` returns **the same 202 response for known + unknown email** (anti-oracle invariant — see quality gate); constant-time response (sleep-to-floor pattern, e.g. 500ms minimum) to defeat timing oracle. |
+| **Multi-user admin — deactivate user (owner-only, soft)** | The owner needs to revoke a fired receptionist *immediately* without losing audit history. Hard delete would orphan FK references (audit_log, payments.received_by_user_id). | **S** | `users.deactivated_at` nullable timestamp (or `is_active BOOL DEFAULT TRUE` mirroring v1.4 `trainers.is_active`); `POST /api/v1/users/{id}/deactivate` owner-only; deactivation cascades to `logout-all` for that user's families (revoke all refresh-token families); login attempts post-deactivation return 401 `invalid_credentials` (no oracle leak — same code as wrong password). |
+| **Multi-user admin — multi-actor audit trail (already-emitting actor surfaced)** | Today audit rows already carry `actor_user_id` from `request.state.user`. The work is making sure all 56 LOCKED events continue to carry the correct actor when the actor is no longer always the solo owner. | **S** | Verification + 1-2 callsite fixes max — most paths already pass actor through correctly via `require_permission` deps. New audit-event pairs: `user_invited`, `user_invitation_accepted`, `user_invitation_revoked`, `user_deactivated`, `user_reactivated`, `password_reset_requested`, `password_reset_completed`. Frozenset grows 56 → 63. |
+| **Email — bounce/complaint logging (passive)** | Sending blindly into a black hole is operationally unsafe; if `reception@badtypo.gym` bounces 100 emails before the owner notices, real receipts get lost in the noise. Need a minimal "we tried, here's what happened" log. | **S** | `email_send_log` append-only table (`id`, `to_email`, `template_kind`, `provider_message_id`, `status ∈ {sent, bounced, complained, deferred}`, `received_at`); webhook endpoint `/api/v1/_webhooks/email/{provider}` (provider-signed) that flips status on bounce/complaint events. **No retry orchestrator in v1.6** — manual operator action on a bounce. |
+| **Email — sender-domain authentication (SPF + DKIM + DMARC)** | Without SPF/DKIM, Gmail / Mail.ru / Yandex throw to spam ~70% of the time (Google now hard-rejects unauthenticated bulk mail). Setup is a **one-time DNS task**, not code, but it must be in the v1.6 spec as a hard launch gate. | **S** (config) | Configure SPF (single record, prefer ESP's include), DKIM (provider-generated CNAME/TXT in DNS), DMARC (start at `p=none` for monitoring → graduate to `p=quarantine`). Use a **dedicated sending subdomain** (e.g. `mail.sportzal.ru`) so reputation is isolated from the corporate domain. **Owner action**, not developer action — but verification runbook lands in v1.6 milestone close. |
+| **Email — plaintext + minimal-HTML dual-part** | Some Russian email clients (older corporate, Mail.ru web on slow connection) still degrade HTML; plaintext fallback prevents an unreadable receipt. | **S** | Every template ships as `(subject, plaintext_body, html_body)` tuple; HTML is "minimal-HTML" — no tracking pixels, no remote images, no JS, table-based layout for legacy Mail.ru rendering. Russian copy is **owner-locked** (same `D-27-OWNER-COPY-LOCK` pattern). |
 
-### Table Stakes
+### Differentiators (Competitive Advantage)
 
-| Feature | Why Expected | Complexity | Notes / v1.4 Dependency |
-|---------|--------------|------------|--------------------------|
-| **One-off slot creation** — `trainer_availability_slots` table with `(id, trainer_id FK, starts_at TIMESTAMPTZ, duration_minutes INT DEFAULT 60, status ∈ {active,cancelled}, created_by_user_id FK)` | Reception needs to publish trainer time. Slot is the atomic bookable unit. | LOW | References `trainers.id` (v1.4). Owner + reception can create. Status `active` on creation. |
-| **Per-slot configurable duration (default 60 min)** | Industry standard for PT is fixed 60 min; storing it per-slot is two schema lines and enables future 45/90min variants without migration. | LOW | Include the column with DEFAULT 60; keep UI simple (one value in v1.5). |
-| **Slot status: `active` / `cancelled` only** | Any confirmed booking against a slot must survive trainer sickness via cancellation. `draft`/`published` adds an approval hop with zero value at single-operator scale. | LOW | Reception/owner manage slots directly; no trainer self-service in v1.5. |
-| **Buffer-time creation guard (10 min)** | Prevents accidental back-to-back bookings with zero prep time. Industry standard (Mindbody, SuperSaaS both offer 10–15 min buffer). | LOW | Enforce at service layer on slot creation: reject if `new.starts_at < existing.starts_at + existing.duration_minutes + 10` for the same trainer. Hardcode 10 min v1.5. |
-| **Slot list endpoint** — `GET /api/v1/slots?trainer_id=&from=&to=&status=` | Reception must see available slots to create a booking. Bot must enumerate free slots. | LOW | Returns paginated `{ items, total, page, pageSize }`. Include `is_booked` computed field (true if a `confirmed` booking exists). |
-| **Slot-cancelled cascade to confirmed booking** | When a trainer is sick and reception cancels the slot, the linked booking must become `cancelled` and the client notified. Leaving an orphaned `confirmed` booking is a data integrity error. | LOW | Service-layer cascade: on `PATCH /slots/{id}` → `status:cancelled`, find linked `confirmed` booking → transition to `cancelled` → emit audit + Telegram DM. |
-
-### Differentiators
+Features that set Sportzal apart in the one-gym-CRM segment. The bar is low here — the segment is dominated by Excel + WhatsApp.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Bulk slot creation for a week** (same trainer, same time, N occurrences) | Reduces reception repetitive work. | MEDIUM | Requires loop in service or a `repeat_count` param. Adds retry-on-buffer-conflict logic. Defer to v1.5.1. |
+| **Dual-channel notification (Telegram preferred, email fallback)** | Most РФ gym CRMs (1С:Фитнес, Mobifitness) are SMS-first or email-only. Sportzal's value: Telegram-native for clients who use Telegram (~85% in RU 18-35), email for the rest, with the same locked Russian copy on both. Anti-oracle invariant preserved end-to-end. | **M** | Resolution rule: per-client preference defaults to "Telegram if linked, else email". Owner can override per-client (`clients.preferred_channel ∈ {auto, telegram, email, both}`). For OTP fallback specifically: `both` is risky (which OTP wins?) → restrict to `auto / telegram / email`. |
+| **Locked Russian copy + owner sign-off per template** | Every other CRM in this segment lets the operator (or worse, the developer) hand-edit notification templates and ships generic / typo-ridden copy. v1.3 and v1.5 already pay this cost — v1.6 just preserves it on the new channel. | **S** | Mirror `D-20-9` / `D-27-OWNER-COPY-LOCK` mechanism: each new template constant is owner-signed in a decision row before merge; modifying the constant requires a new sign-off. |
+| **Per-template anti-oracle A/B variant for membership/booking emails** | The expiring-membership Telegram flow already varies copy by `client_id.bytes[0] & 1` to defeat timing/content-based oracle leak in shared-screen scenarios. Extending the same invariant to email keeps the two channels behaviorally identical. | **S** | Same selector function reused; just doubles the template constant count for expiring + booking. Receipt and OTP templates do NOT need variants (no oracle surface). |
+| **Multi-user audit traceability surfaced in receipts** | Cash sale email receipts include "Принял: Анна П." (operator first-name + last-initial). Owner can audit at a glance from email archive without opening admin-web. | **S** | One JOIN in receipt-render path; field is `actor_display_name` derived from `users.full_name`. No new endpoint needed. |
+| **Invite-link copy-paste fallback (owner sees the link)** | Email deliverability is never 100%. Owner sees the invitation URL in admin-web immediately after creating it and can paste it into Telegram / SMS / WhatsApp if the email doesn't arrive. | **S** | `POST /api/v1/users/invitations` returns the `accept_url` in the response body **once** (creation-time only — never echoed again, since the URL is the secret). Stored audit row notes "url returned to owner". |
+| **`logout-all-on-deactivate` happens atomically** | Most competitor CRMs deactivate a user but leave their browser session live for hours until the JWT expires. Sportzal already has refresh-rotation families — deactivation revokes them in the same transaction. | **S** | Reuse v1.1 `revoke_family` machinery; just iterate all families for the user. Audit `user_deactivated` payload includes `families_revoked: N`. |
+| **DMARC `rua` reports surface to owner** | The owner gets a weekly summary email of who's been spoofing the gym's domain (basically "0 spoof attempts this week, you're safe"). Trivial config trick, but no other RU gym CRM bothers. | **S** | Configure `rua=mailto:owner@gym.ru` in the DMARC record. No code. |
 
-### Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Anti-Feature | Why Avoid | Milestone |
-|---|---|---|
-| **Recurring weekly pattern (rrule/template)** | Separate `slot_templates` table, cron-based expansion, complex "cancel this vs all future" semantics. Disproportionate to 5–10 slots/week at single-zal scale. | v2.x |
-| **Vacation / leave blocks on trainer calendar** | Absence of a slot IS unavailability. A separate entity adds schema + UI for zero additional value at this scale. Cancel individual slots for sick days. | v2.x |
-| **Draft / pending-review slot status** | No trainer self-service in v1.5; all slots are owner/reception-managed and go live as `active`. | v2.x |
-| **Trainer self-service slot publication** | Trainer auth / login role does not exist. Adding it doubles user-management surface. | v2.x |
-
----
-
-## Category BOOK — Booking FSM + Creation / Cancel / No-Show
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes / v1.4 Dependency |
-|---------|--------------|------------|--------------------------|
-| **`bookings` table** with `(id, slot_id FK, client_id FK, pt_package_id FK, status ∈ {confirmed,cancelled,no_show,completed}, created_by_user_id FK, cancelled_at NULL, cancel_reason NULL, no_show_at NULL)` | Core booking record. FSM traces the lifecycle. | MEDIUM | `pt_package_id` stored at creation (snapshot for audit traceability); decrement stays on PT-session creation (not here). |
-| **Race-safe partial UNIQUE `(slot_id) WHERE status='confirmed'`** | Prevents concurrent same-slot bookings. DB wins the race (app-layer check is informative only). | LOW | Mirrors v1.2 `UNIQUE(client_id, gym_date)` for visits and v1.3 freeze-period discipline exactly. |
-| **Booking creation pre-flight checks** | Users expect an explicit, discriminated error when conditions aren't met. | LOW | Three sequential checks: (1) slot `active` + not already `confirmed`; (2) client has active PT-package via `ActivePtPackageResolver`; (3) `sessions_remaining > 0`. Each returns 409 with discriminating code. |
-| **Instant-confirm booking** — `POST /bookings` creates a `confirmed` booking | No approval hop. Reception holds ground truth; request-approve queue adds latency with zero benefit in a 1-operator gym. Industry consensus: instant confirm is the standard for single-operator studios. | LOW | — |
-| **Booking cancellation: reception ≤ 24h before slot start, owner anytime** | Mirror of B-12 PT-session cancel window from v1.4. Industry standard 24h window (Goldie, Mindbody, SchedulingKit). | LOW | `confirmed → cancelled`. Does NOT debit PT-package (session not yet consumed). `cancelled_at` + `cancel_reason` stored. |
-| **Manual no-show marking** — `POST /bookings/{id}/no_show` (reception + owner) | After slot time passes with no PT-session recorded, staff marks it. Manual is the industry norm at single-trainer scale (Trainerize: "only trainer can mark as no-show"). | LOW | `confirmed → no_show`. Does NOT debit PT-package in v1.5. |
-| **`booking_id` optional FK on `pt_sessions`** | Links delivery (PT-session) to reservation (booking). Required for `completed` transition and audit traceability. | LOW | Alembic migration adds nullable `booking_id FK bookings.id ON DELETE SET NULL` to `pt_sessions`. |
-| **Booking `completed` transition on PT-session creation** | When a PT-session is recorded with a `booking_id`, the booking must transition `confirmed → completed` in the same transaction. Otherwise booking is never closed automatically and requires a separate manual step. | MEDIUM | Cross-module callback from `pt_sessions.service` to `bookings.service` via a Protocol slot registered in `app/main.py` composition root (mirrors `HandlerContext` / `ActiveMembership` pattern). |
-| **Guard: PT-session creation rejected against non-`confirmed` booking** | Prevents recording a session against a cancelled or already-completed booking. | LOW | 409 `booking_not_active` if `booking.status != 'confirmed'`. |
-| **Booking FSM central guard + `BOOKING_STATUS_TRANSITIONS` constant** | Mirrors `MEMBERSHIP_STATUS_TRANSITIONS` discipline from v1.3. One source of truth; invalid transitions return 409 `invalid_transition`. | LOW | Declare in `app/modules/bookings/constants.py`. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Two-step reschedule: cancel + rebook** (no atomic endpoint) | Covers the use case via two existing operations. Simple, no new FSM paths. | LOW | Expose as documented workflow in API; no dedicated `PATCH /bookings/{id}/slot_id` needed in v1.5. |
-| **No-show DM to client at marking time** | Client awareness. | LOW | Cheap once notification infrastructure is in place (see NOTIFY). Include as P2. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | Milestone |
-|---|---|---|
-| **Atomic reschedule endpoint** | Requires resolving concurrent-slot races in a single transaction; FSM complexity high; not needed for single-operator UX. | v1.6 |
-| **Auto-no-show cron** (flip `confirmed` → `no_show` N hours after slot with no PT-session) | Medium complexity (ARQ job + grace-period config + false-positive risk). Manual no-show is sufficient at single-zal scale. | v1.5.1 |
-| **Late-cancel session forfeit penalty** | Would require an exception to the debit-at-delivery invariant (B-12 pattern). Owner enforces this socially for now. | v2.x |
-| **Grace credit (no-penalty window within the 24h window)** | Adds policy complexity with no clear MVP benefit. 24h window is already a clear boundary. | v2.x |
-| **Online payment at booking** | ЮKassa in v1.7. PT-package is pre-purchased via cash. | v1.7 |
-| **Client self-booking via web portal** | Production frontend is built by design team separately; integrates in v2.0. | v2.0 |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **Email preference centre / unsubscribe management UI** | Modern email best practice; CAN-SPAM / GDPR-style framing. | All v1.6 email is **transactional** (CAN-SPAM doesn't apply; РФ ФЗ-152 transactional carve-out applies). A preference centre implies marketing campaigns (out of scope through v2.0). Building UI for "do you want to receive payment receipts? Y/N" is silly — if the answer is N, the client shouldn't be doing business with the gym. | **No unsubscribe link on transactional emails.** Plaintext footer line: "Это служебное письмо от тренажёрного зала Sportzal. Если вы получили его по ошибке, напишите owner@gym.ru." Single mailto, no API. |
+| **Marketing campaigns / mailing lists / scheduled blasts** | "We could just send a promo email to everyone with an expiring membership!" | This is a different product. Marketing email = subscription consent + suppression list + send-time optimization + unsubscribe link compliance + likely a separate ESP account (high-volume ESPs reject mixing transactional and marketing on same IP). Sportzal's volume is ~5-50 emails/day; ESPs for that volume don't even sell marketing tiers. | **Explicit out-of-scope.** Re-evaluate in v3+ (post-launch, post-multi-tenant). |
+| **Multi-factor auth with TOTP / hardware keys** | "Reception logs in from a shared front-desk PC, MFA is best practice." | Reception turnover is high; TOTP enrollment friction is real; the gym already has CCTV at front desk for physical access control. Email OTP fallback already covers the "lost phone" recovery path. Owner can enable later if pain becomes real. | Telegram OTP (already shipped) + email OTP (v1.6) already provide step-up auth on demand. Reception can be required to re-enter password every N hours via short access-token TTL (already 15min) — no new mechanism needed. |
+| **Per-user RBAC granularity / custom roles** | "What if the night reception shouldn't be able to issue refunds?" | Sportzal currently has 2 roles (owner / reception) and `OWNER_ONLY` is 26 entries. Custom roles = role designer UI = role-explosion management = enterprise SaaS scope. The gym has at most 3-5 operators ever. | Stay 2-role. If a refund-restriction comes up, add a third hard-coded role (`reception_no_refund`) and one frozenset row — but only when there's a real second receptionist asking for it. |
+| **In-app inbox / notification centre** | "Email is unreliable; let's show a bell icon in admin-web with notifications for operators." | Operators don't need to see expiring-membership notices in their inbox — those go to clients. The only operator-facing notification surface is the dashboard itself (v1.8 reports). Building an inbox is building a second UI for data that already has a UI. | Owner gets one weekly digest email (v1.7+) summarizing bounces / failed sends / deactivated users — that's it. |
+| **Admin-set initial password (mailed in plaintext)** | "Just generate `Welcome2026!` for new users and email it" — sounds simpler than invite-token flow. | Cardinal sin: passwords in email get archived, forwarded, indexed by spam filters, screenshot. Industry has moved away from this; OWASP/Specops/Auth0 all explicit. Also: forces password rotation on first login, doubling complexity. | **Invite-token flow only.** Owner clicks "Invite" → token-link emailed → invitee sets their own Argon2id password on accept. Never plaintext. |
+| **Email-based username (separate from login email)** | "Allow different login email vs notification email per user." | Two email fields means two enumeration surfaces, two verification flows, two reset paths. Real value: ~zero for a 3-5 operator gym. | **Single `users.email` column** serves login + notifications. Future: optional `clients.email` for client-side receipts is separate (clients ≠ users). |
+| **Bounce auto-retry with exponential backoff** | "Email failed, we should retry it like a webhook." | Bounces are usually permanent (typo, mailbox full, domain gone). Soft bounces (transient SMTP) are already retried by every modern ESP internally. Building our own retry loop in ARQ duplicates work and risks burn-through of sender reputation. | **No app-layer retry.** Trust ESP's internal retry; log bounce; surface to owner via weekly digest. |
+| **Multi-channel "any one of N" for OTP** | "If Telegram fails, automatically fall back to email — same OTP." | Two delivery channels for the *same* OTP doubles the attack surface (compromise either inbox) and creates UX confusion ("which 6-digit do I type?"). Race condition between channels also messy. | **One channel per request.** User picks Telegram OR email at login tab; system delivers via that channel only. If the chosen channel fails (Telegram blocked, email bounce), user re-tries with the other. |
+| **Self-service signup for reception users** | "Just put a /signup page so new receptionists can register themselves." | Sportzal is a single-tenant private CRM — there's no "the public" allowed in. Self-signup means anyone with the URL is in the audit log as a real actor. | Owner-only invitation, no public signup. |
+| **Client-side email preference per client** (different from operator preference centre — this is for clients) | "Some clients want both Telegram and email; some want only Telegram." | At ~100 clients/gym, manually setting per-client preferences in admin-web is feasible; building a client-facing preference page is not. | `clients.preferred_channel ∈ {auto, telegram, email, both}` editable from admin-web `/clients/{id}` only — no client-facing UI. Default `auto` (Telegram if linked, else email). |
 
 ---
 
-## Category PKG — PT-Package Linkage Invariants
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes / v1.4 Dependency |
-|---------|--------------|------------|--------------------------|
-| **Booking requires active PT-package with `sessions_remaining > 0`** | Package is the entitlement that authorises the session. No package = no booking. | LOW | Uses `register_active_pt_package_resolver` Protocol slot (v1.4 Phase 33). Discriminated 409 codes: `no_active_pt_package` / `pt_package_exhausted`. |
-| **Session debit remains on PT-session creation, NOT on booking** | Debit-at-delivery invariant from v1.4: sessions are consumed when the trainer renders service, not when the client reserves a slot. A booking is a reservation; a PT-session is consumption. A no-show booking should NOT silently forfeit a session. | LOW (architectural invariant already locked) | Booking stores `pt_package_id` for audit traceability; `sessions_remaining` is NOT touched. Decrement happens at `POST /pt-sessions` (v1.4 path, unchanged). |
-| **`sessions_remaining = 0` at PT-session recording time → 409, booking stays `confirmed`** | The package could be drained by other sessions between booking and delivery. The atomic decrement guard from v1.4 catches this. Reception must resolve (sell new package or cancel booking). | LOW | Inherited from v1.4 single-SQL atomic decrement; no new code. |
-| **Guard: PT-session creation against a `booking_id` where booking is not `confirmed`** | Prevents double-debiting or recording against a stale booking. | LOW | 409 `booking_not_active`. Checked before decrement. |
-| **PT-package expires/cancels after booking `confirmed` → booking stays `confirmed`, no auto-cascade** | Automatic cascade requires event listeners or a polling job, adding complexity. At single-zal scale, manual resolution (reception sees the 409 at PT-session time) is acceptable. | LOW | No cron / event-listener needed. The issue surfaces naturally when the PT-session is attempted. |
-| **B-10 invariant must not be broken: booking does NOT create a Visit row** | A PT booking is a session reservation, not a gym check-in. These are orthogonal. Reception must check-in via `POST /visits` separately if the client needs floor access. | LOW (invariant) | No code path from `bookings.service` → `visits.service`. Import-linter `modules-independent` contract enforces this. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | Milestone |
-|---|---|---|
-| **Session debit at booking creation** | Breaks debit-at-delivery invariant. A cancellation would require a re-credit flow. Adds refund-like complexity to booking cancellation. | Never (architectural decision) |
-| **Pre-authorisation hold ("reserve 1 session at booking, debit at completion")** | Requires a `sessions_reserved` counter alongside `sessions_remaining`. Doubles the counter logic. Overkill for single-zal. | v2.x if needed |
-| **Allow booking without any PT-package ("pay later")** | Breaks the entitlement model. Reception can collect cash and sell a package first (v1.4 flow), then book. | Never for v1.5 |
-
----
-
-## Category NOTIFY — Telegram Notification Flows
-
-**Channel constraint:** Telegram-only for v1.5. Email channel lands in v1.6. All templates follow v1.3 discipline: locked Russian copy, owner sign-off, no oracle leak.
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes / v1.4 Dependency |
-|---------|--------------|------------|--------------------------|
-| **Booking confirmation DM to client (immediate)** | Industry-wide standard: instant confirmation after booking (Mindbody, Goldie, SimplyBook.me all fire this). Reduces client uncertainty. | LOW | Sent at `POST /bookings` success. Template: trainer name, date, time, duration. Single locked Russian template. Uses `build_bot` + `client.telegram_chat_id`. |
-| **Booking cancellation DM to client (when staff cancels booking or parent slot)** | Client must know the session is off. Not notifying is a real-world complaint (missed trip to gym). | LOW | Sent from booking cancellation service path AND from slot-cancelled cascade. Template: trainer name, date, "contact reception to rebook". No oracle leak. |
-| **5 new LOCKED audit events** — `slot_published`, `booking_created`, `booking_cancelled`, `booking_no_show`, `booking_completed` | Audit chain completeness. `LOCKED_AUDIT_EVENTS` grows 51 → 56. AST gate enforces them from first commit. | LOW | Lock all 5 in Phase 37 foundations phase (mirrors v1.3 Phase 24 + v1.4 Phase 30 discipline of pre-locking before callsites land). |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **24h reminder DM to client** | Industry data: reminder sequences reduce no-shows by ~29% (DialogHealth). Single reminder is the minimum useful intervention. | MEDIUM | Requires `booking_notifications` idempotency table with UNIQUE `(booking_id, kind)` mirroring `membership_notifications` (v1.3). New ARQ cron at 06:35 MSK (ordered after existing 06:25 `expire_pt_packages` cron). Scans bookings where `slot.starts_at ∈ [now+23h, now+25h]` and no `reminder_24h` notification row exists. |
-| **No-show DM to client at marking time** | Client awareness; reduces "why did my package go missing" support. | LOW | Once confirmation DM infrastructure is in place, this is one extra template + emit from `mark_no_show` path. |
-| **1h reminder DM** | Marginal uplift over 24h reminder. | LOW (incremental) | Add `reminder_1h` kind to `booking_notifications`; same cron with different time window. P3 — include only if 24h reminder lands cleanly. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | Milestone |
-|---|---|---|
-| **Email notifications** | Email channel in v1.6. Sportzal constraint: Telegram-primary. | v1.6 |
-| **Trainer receives booking DM** | Requires `telegram_chat_id` column on `trainers` table — not present in v1.4. New schema migration not scoped to v1.5 trainers module. | v1.6 |
-| **Push notifications / in-app** | No client mobile app in scope. | v2.x |
-| **SMS fallback** | No SMS integration; Telegram is the primary channel for RU/CIS. | Not planned |
-
----
-
-## Category BOT — Telegram `/book` Command
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes / v1.4 Dependency |
-|---------|--------------|------------|--------------------------|
-| **`/book` lists trainer's next free slots via inline keyboard** | Clients expect Telegram self-service matching the `/checkin` pattern from v1.2. Without discovery, the command is unusable. | MEDIUM | Bot queries `GET /slots?trainer_id=&from=now&status=active&is_booked=false`, returns next 5–7 slots. Each inline button: `"14 мая 14:00 (60 мин)"`. Requires `trainer_id` association (see PKG-trainer note below). |
-| **Booking confirmation roundtrip** | Industry standard: one confirmation tap before committing (Telegram inline keyboard best practice; prevents accidental taps). | LOW | After slot tap: "Подтвердить запись к [Тренер] на [дата]? ✓ Да / ✗ Отмена". On confirm: call `POST /bookings` server-side, reply "Запись подтверждена!" with date and time. |
-| **Guard: no active PT-package or Telegram not linked** | Anti-oracle DM. Mirrors v1.2 `/checkin` `_DM_NO_MEMBERSHIP` discipline: same DM for "not linked", "no package", "package exhausted". | LOW | Use locked Russian DM constants; owner sign-off required. |
-| **`HandlerContext` extended with `slots_service` + `bookings_service`** | Bot worker must reach the booking domain without breaking `modules-independent` import-linter contract. | LOW | Mirrors D-10 pattern (v1.2): extend `HandlerContext` dataclass + register from `app/workers/telegram_bot.py:main()` + `app/main.py:create_app()`. |
-
-**PT-package trainer association note:** For `/book` to list a specific trainer's slots, the PT-package must carry a `trainer_id` (either set at sale time or the client selects trainer in the bot flow). For v1.5 simplicity: require `trainer_id` to be optionally captured on `pt_packages` at sale time. If NULL, bot asks client to choose trainer from a one-step inline keyboard before listing slots. This keeps the bot usable even when `trainer_id` is not pre-set.
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **`/cancel_booking` command** | Client self-cancel within the 24h window. | MEDIUM | Requires listing active bookings per client, another inline keyboard, and cancel-window enforcement. Useful but adds bot state complexity. Defer to v1.5.1. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | Milestone |
-|---|---|---|
-| **Free-text NLP date input** ("next Tuesday at 3pm") | Adds a parsing layer with no existing library in the stack. Inline keyboard covers the use case fully. | Never |
-| **Bot-initiated reschedule in one flow** | Cancel + rebook is two operations; making the bot compose them atomically adds stateful multi-step conversation handling. | v1.5.1 |
-| **Bot as the primary booking channel (bypassing reception)** | Reception mediates all bookings in v1.5. Bot is a convenience channel, not the primary path. | — |
-
----
-
-## Feature Dependencies on v1.4 Codebase
+## Feature Dependencies
 
 ```
-SLOT creation
-    ├──requires──> trainers table + trainer_id FK (v1.4 Phase 31)
-    ├──requires──> Resource.SLOTS added to RBAC
-    └──requires──> buffer-time validation (new, service-layer)
+EXISTING (already shipped — v1.1 through v1.5):
+    auth.users  ──provides──> actor_user_id for all audit emits
+    payments    ──provides──> payment row for receipt trigger (v1.4)
+    bookings    ──provides──> booking row for confirm/reminder (v1.5)
+    memberships ──provides──> expiring rows for 7+3+1 cron (v1.3)
+    audit_log   ──provides──> LOCKED_AUDIT_EVENTS frozenset (56 entries)
 
-BOOK creation
-    ├──requires──> SLOT (active + not already confirmed)
-    ├──requires──> register_active_pt_package_resolver Protocol slot (v1.4 Phase 33)
-    ├──requires──> sessions_remaining > 0 (v1.4 atomic decrement pattern)
-    └──requires──> partial UNIQUE (slot_id) WHERE status='confirmed'
-                   (new Alembic migration, mirrors v1.2 visits discipline)
+NEW in v1.6:
+    [email-integration]
+        └──requires──> ESP selection (Resend / SES / Mailgun — STACK.md decision)
+        └──requires──> sender-domain DNS (SPF/DKIM/DMARC — owner config gate)
+        └──requires──> email_send_log table (passive bounce tracking)
 
-BOOK → completed
-    ├──requires──> pt_sessions table (v1.4 Phase 34)
-    ├──requires──> booking_id FK added to pt_sessions
-                   (new Alembic migration, nullable ON DELETE SET NULL)
-    └──requires──> cross-module callback: pt_sessions service → bookings service
-                   via Protocol slot from app/main.py composition root
+    [email-otp-fallback]
+        └──requires──> [email-integration]
+        └──extends───> auth.otp_codes (add channel column, OR new email_otp_codes table)
 
-SLOT-cancelled cascade to BOOK
-    └──requires──> BOOK cancellation service path
+    [email-expiring-soon]
+        └──requires──> [email-integration]
+        └──extends───> membership_notifications (UNIQUE key gains channel column)
+        └──reuses────> 06:15 MSK cron (already shipped v1.3)
 
-NOTIFY booking confirmation / cancellation / no-show DM
-    ├──requires──> client.telegram_chat_id (v1.1)
-    ├──requires──> build_bot factory (v1.3)
-    └──requires──> LOCKED_AUDIT_EVENTS extended +5 (locked in Phase 37 foundations)
+    [email-payment-receipt]
+        └──requires──> [email-integration]
+        └──requires──> payment_receipts table (idempotency)
+        └──hooks-into> record_payment + issue_refund commit paths
 
-NOTIFY 24h reminder (differentiator)
-    ├──requires──> booking_notifications idempotency table
-    │              (new, UNIQUE(booking_id,kind), mirrors membership_notifications v1.3)
-    └──requires──> ARQ cron at 06:35 MSK (new, ordered after expire_pt_packages 06:25)
+    [email-booking-notifications]
+        └──requires──> [email-integration]
+        └──extends───> booking_notifications (UNIQUE key gains channel column)
+        └──reuses────> 06:35 MSK cron (already shipped v1.5)
 
-BOT /book
-    ├──requires──> client Telegram linkage (v1.1)
-    ├──requires──> HandlerContext extended: slots_service + bookings_service
-    │              (mirrors D-10 pattern v1.2)
-    ├──requires──> SLOT read API (free slots endpoint)
-    └──requires──> BOOK creation service
+    [multi-user-admin-invite]
+        └──requires──> user_invitations table
+        └──requires──> [email-integration] (for invite-link delivery)
+        └──extends───> LOCKED_AUDIT_EVENTS (+3: invited / accepted / revoked)
 
-B-10 invariant — must NOT break
-    No code path from bookings.service → visits.service
-    booking_completed != visit_checked_in (orthogonal tables)
-    import-linter modules-independent contract enforces physical separation
+    [multi-user-admin-deactivate]
+        └──requires──> users.is_active OR users.deactivated_at column
+        └──hooks-into> refresh_tokens revoke-family machinery (already shipped v1.1)
+        └──extends───> LOCKED_AUDIT_EVENTS (+2: deactivated / reactivated)
+
+    [multi-user-admin-password-reset]
+        └──requires──> password_reset_tokens table (separate from user_invitations)
+        └──requires──> [email-integration]
+        └──must-honour> ANTI-ORACLE INVARIANT (same 202 for known + unknown email)
+        └──extends───> LOCKED_AUDIT_EVENTS (+2: requested / completed)
+
+    [multi-user-audit-traceability]
+        └──reuses────> existing actor_user_id flow from require_permission
+        └──verifies──> all 56 existing emits already carry actor (mostly already true)
+        └──extends───> audit-row response projection to surface actor_display_name
 ```
+
+### Dependency Notes
+
+- **Every email feature requires the ESP integration + DNS auth first.** Phase ordering: integration scaffold (Phase 41) → DNS gate → individual templates layered on. STACK.md owns the ESP selection.
+- **`email_send_log` is a hard prerequisite for any production launch.** Without it, the owner has no way to diagnose "client says they didn't get the receipt" — and that question *will* come up on day one.
+- **Multi-user invite requires email integration.** The two pillars are not independent — the invite-link is delivered via the email channel. v1.6 must ship both or neither (the invite flow without email is meaningless; an email channel without operator multi-user is leaving owner cash on the table).
+- **Password reset MUST honour anti-oracle invariant.** Forgot-password endpoint returns 202 with body `{"status":"accepted"}` for *every* email, real or not — and waits a constant-time floor (500ms) before responding. **Stated as a quality gate** in the milestone spec.
+- **`booking_notifications` and `membership_notifications` UNIQUE-key extension** is a single Alembic migration step but it's a **breaking semantics change** for any in-flight idempotency rows. Migration plan: add `channel TEXT NOT NULL DEFAULT 'telegram'` then drop default — preserves existing rows as Telegram-channel and new email-channel rows coexist.
+- **Phase 41 must be the email-integration scaffold**, not a feature-bearing phase. (Same shape as v1.0 Phase A skeleton.) Without it the rest of v1.6 has no commit-floor.
 
 ---
 
-## MVP Feature Prioritization Matrix
+## MVP Definition
+
+### Launch With (v1.6)
+
+Minimum viable product — what's needed to ship v1.6 against the milestone goal "close last infra-pillar before online payments".
+
+- [ ] **Email integration scaffold** — ESP wired (STACK.md owns provider choice), `email_send_log` table, send-from helper, DKIM/SPF/DMARC owner runbook — *why essential: every other v1.6 feature requires this*
+- [ ] **Email OTP fallback for login** — login tab #3 alongside email/password + Telegram OTP — *why essential: closes auth gap for clients without Telegram and is the simplest end-to-end test of the email send path*
+- [ ] **Email expiring-soon (7+3+1) mirror** — same selector as Telegram cron, channel-aware idempotency — *why essential: the operator-facing payoff for adding email at all — revenue retention from non-Telegram clients*
+- [ ] **Email payment-receipt (sale + refund)** — hook into v1.4 commit paths — *why essential: the operator-facing artefact most users will ask for first*
+- [ ] **Email booking confirmed + 24h reminder** — channel-aware extension of v1.5 templates — *why essential: parity with Telegram booking flow*
+- [ ] **Multi-user admin — owner invites reception (invite-token flow)** — `POST /api/v1/users/invitations` + accept endpoint + locked Russian template — *why essential: the operator-onboarding gap is the headline of the milestone*
+- [ ] **Multi-user admin — password reset (anti-oracle)** — request + complete endpoints, 1h TTL, constant-time response — *why essential: without it, the owner becomes a permanent helpdesk for forgotten passwords*
+- [ ] **Multi-user admin — deactivate user + atomic logout-all** — owner-only PATCH/DELETE, families revoked in same UoW — *why essential: the "fired receptionist still has session" scenario is a hard security gap*
+- [ ] **Multi-user audit traceability** — 7 new LOCKED events, verification that all 56 existing emits carry correct `actor_user_id` — *why essential: regulatory + forensic hygiene; cheap because most callsites are already correct*
+- [ ] **OpenAPI drift gate refresh** — `openapi.json` + `schema.d.ts` regenerated, forward-guards for new paths — *why essential: handoff invariant since v1.1*
+
+### Add After Validation (v1.7+)
+
+Features to add once core is working and we've seen real email volume.
+
+- [ ] **Weekly digest to owner** (bounces, deactivations, send failures summary) — *trigger: after v1.6 produces ≥1 month of `email_send_log` rows so we know what's worth summarizing*
+- [ ] **Per-client `preferred_channel` override UI** — *trigger: owner asks "client X wants email only, not Telegram"; cheap to add but no compelling reason day-1*
+- [ ] **Bounce auto-flag in admin-web `/clients/{id}`** (badge "email may be invalid" after 1 hard bounce) — *trigger: after first real-world hard bounce; until then it's speculative*
+- [ ] **Audit log read API** (`GET /api/v1/audit-log` with filter by actor) — *scheduled for v1.8 (existing roadmap); now that multi-user is real, "who did what" is meaningful to query*
+
+### Future Consideration (v2+)
+
+Features to defer until product-market fit is established or a second tenant exists.
+
+- [ ] **Marketing/campaign email** — *why defer: out of scope through v2.0; entirely different product surface and probably a different ESP*
+- [ ] **Custom RBAC roles beyond owner/reception** — *why defer: 26-entry frozenset already handles every observed case; custom roles is enterprise SaaS scope creep*
+- [ ] **TOTP / WebAuthn second factor** — *why defer: email + Telegram OTP already provide step-up; hardware factors only matter at higher attack-value targets*
+- [ ] **Per-client email preference centre (client-facing)** — *why defer: gym has ~100 clients, admin-web edit is enough*
+- [ ] **Email preference centre for operators** — *why defer: transactional only, nothing to unsubscribe from*
+- [ ] **SMS as a third channel** — *why defer: РФ SMS gateways are expensive and Telegram OTP already covers passwordless; revisit only if a hard requirement emerges*
+
+---
+
+## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| `trainer_availability_slots` CRUD (one-off, active/cancelled) | HIGH | LOW | P1 |
-| Booking creation with PT-package pre-flight | HIGH | MEDIUM | P1 |
-| Booking FSM (confirmed → cancelled / no_show / completed) + central guard | HIGH | MEDIUM | P1 |
-| Race-safe partial UNIQUE on `(slot_id) WHERE status='confirmed'` | HIGH | LOW | P1 |
-| `booking_id` FK on `pt_sessions` + `completed` transition on PT-session creation | HIGH | LOW | P1 |
-| 5 new LOCKED audit events (locked in Phase 37 before callsites) | HIGH | LOW | P1 |
-| Booking cancellation (reception ≤24h / owner anytime) | HIGH | LOW | P1 |
-| Slot-cancelled cascade to confirmed booking | HIGH | LOW | P1 |
-| Telegram DM: booking confirmed (immediate) | HIGH | LOW | P1 |
-| Telegram DM: booking cancelled (client) | HIGH | LOW | P1 |
-| Bot `/book`: slot discovery + confirm roundtrip | HIGH | MEDIUM | P1 |
-| Bot anti-oracle DM for no-package / not-linked | HIGH | LOW | P1 |
-| Buffer-time creation guard (10 min, hardcoded) | MEDIUM | LOW | P2 |
-| Manual no-show marking + no-show DM to client | MEDIUM | LOW | P2 |
-| 24h reminder DM via ARQ cron + `booking_notifications` idempotency table | MEDIUM | MEDIUM | P2 |
-| `trainer_id` optional on PT-package (for bot trainer discovery) | MEDIUM | LOW | P2 |
-| 1h reminder DM (incremental once 24h is built) | LOW | LOW | P3 |
-| Bot `/cancel_booking` command | LOW | MEDIUM | P3 (v1.5.1) |
+| Email integration scaffold + DKIM/SPF/DMARC runbook | HIGH (gate for everything else) | MEDIUM | **P1** |
+| Email OTP fallback for login | MEDIUM | MEDIUM | **P1** |
+| Email expiring-soon (7+3+1) | HIGH (revenue retention) | MEDIUM | **P1** |
+| Email payment receipt (sale + refund) | HIGH (operator habit) | MEDIUM | **P1** |
+| Email booking confirmed + 24h reminder | MEDIUM | MEDIUM | **P1** |
+| Multi-user invite-token flow | HIGH (milestone headline) | MEDIUM | **P1** |
+| Password reset (anti-oracle) | HIGH | MEDIUM | **P1** |
+| Deactivate user + atomic logout-all | HIGH (security) | LOW | **P1** |
+| Multi-user audit traceability | MEDIUM (hygiene) | LOW | **P1** |
+| OpenAPI drift gate refresh | HIGH (handoff invariant) | LOW | **P1** |
+| Dual-channel resolution (`clients.preferred_channel`) | MEDIUM | LOW | **P2** |
+| Locked email copy + owner sign-off per template | MEDIUM (consistency) | LOW | **P1** (mandated by quality gate) |
+| Anti-oracle A/B variant on expiring + booking emails | LOW (matches existing invariant) | LOW | **P1** (consistency with v1.3/v1.5) |
+| Invite-link copy-paste fallback (URL in response) | MEDIUM | LOW | **P2** |
+| DMARC `rua` weekly reports → owner | LOW | LOW (DNS only) | **P2** |
+| Bounce/complaint webhook + `email_send_log` | HIGH (operational sanity) | MEDIUM | **P1** |
+| Plaintext + HTML dual-part templates | MEDIUM | LOW | **P1** |
+| Owner weekly digest of bounces/deactivations | LOW (early) | MEDIUM | **P3** (v1.7+) |
+| Email preference centre (clients) | LOW | HIGH | **P3** (anti-feature for now) |
+| Marketing campaigns | NEGATIVE (off-strategy) | HIGH | **P3** (out of scope through v2.0) |
 
-**P1 = strictly required for milestone completion. P2 = should ship within v1.5 phases if budget allows. P3 = opportunistic or v1.5.1.**
-
----
-
-## Complexity Notes Per Category
-
-| Category | Overall Complexity | Key Risk |
-|---|---|---|
-| SLOT | LOW | Buffer-guard edge cases (overlapping slots across multi-trainer future scenarios; v1.5 is single-trainer-at-a-time so straightforward) |
-| BOOK | MEDIUM | Race-safe FSM, partial UNIQUE, three-check pre-flight, cross-module `completed` callback via Protocol slot |
-| PKG | LOW | Debit-at-delivery invariant already locked; new guards are 2–3 lines each; main risk is accidental coupling to `visits` (blocked by import-linter) |
-| NOTIFY | MEDIUM | 24h reminder cron + `booking_notifications` idempotency table follows v1.3 pattern exactly; risk is cron ordering (must run after `expire_pt_packages` 06:25) |
-| BOT | MEDIUM | Inline keyboard pagination, `trainer_id` association logic, HandlerContext extension; main risk is bot state across two-step confirm roundtrip (mitigated by using a single Telegram message + reply markup callback) |
+**Priority key:**
+- **P1:** Must have for v1.6 launch
+- **P2:** Should have, add if time permits within v1.6
+- **P3:** Future consideration
 
 ---
 
-## Open Questions for Requirements Step
+## Competitor Feature Analysis
 
-| # | Question | Default Recommendation | Confidence |
-|---|---|---|---|
-| Q1 | **`trainer_id` on PT-package at sale time — required or optional?** | Optional; bot asks if NULL. | MEDIUM |
-| Q2 | **24h cron reminder — include in v1.5 or defer to v1.5.1?** | Include; same pattern as v1.3 expiring-soon notifications. | HIGH |
-| Q3 | **No-show: session forfeited or not?** | NOT forfeited in v1.5 (no penalty). Owner enforces socially. | HIGH — breaking debit-at-delivery for no-show adds a new code branch with no clear user benefit at single-zal scale. |
-| Q4 | **`slot_published` audit event fires on creation or on explicit publish action?** | On creation (slot goes `active` immediately). `slot_published` = `slot_created_as_active`. | HIGH |
-| Q5 | **PT-package cancel/expire after booking confirmed — auto-cancel booking or leave `confirmed`?** | Leave `confirmed`; surface at PT-session recording time. | MEDIUM — auto-cancel requires event listener; manual surface is simpler and auditable. |
-| Q6 | **Slot buffer: 10 min hardcoded or configurable?** | Hardcoded 10 min for v1.5. Configurable is a v2.x settings feature. | HIGH |
-| Q7 | **Bot `/book` — list all trainers or only the PT-package's trainer?** | List only the PT-package's trainer (or ask trainer selection if `trainer_id` NULL). | HIGH — showing all trainers when a client already has a trainer-specific package is confusing. |
+(Indicative — single-gym CRM segment in РФ; data points from public marketing pages, not deep audit.)
+
+| Feature | 1С:Фитнес-клуб (incumbent) | Mobifitness (mid-market SaaS) | FitBase (cheap-SaaS) | Sportzal (our approach) |
+|---------|----------------------------|-------------------------------|----------------------|--------------------------|
+| Notification channels | SMS + email | SMS + email + push (mobile app) | SMS + email | **Telegram-primary + email fallback** (cheaper + higher engagement in RU 18-35) |
+| Operator multi-user | Yes (Windows-style user mgmt) | Yes (web invite-token) | Yes (admin-set password — anti-pattern) | **Invite-token flow** (industry-standard) |
+| Email receipts | Yes (PDF attachment) | Yes (HTML inline) | Yes (HTML inline) | **HTML inline + plaintext fallback**; no PDF (deferred to 54-ФЗ v1.7) |
+| Anti-oracle on forgot-password | Inconsistent (likely leaks) | Unknown | Likely leaks | **Explicit invariant**, constant-time floor + 202 for all |
+| Locked Russian copy | No (operator-editable) | No (operator-editable) | No (operator-editable) | **Yes, owner-sign-off per template** — consistency + brand control |
+| Bounce/complaint logging | Hidden in SMTP logs | ESP dashboard only | None | **First-class `email_send_log` table** queryable from admin-web |
+| DKIM/SPF/DMARC | Owner-handled, no docs | ESP-managed | Owner-handled, no docs | **Owner runbook in milestone close**, dedicated sending subdomain recommended |
+| Marketing campaigns | Yes (bundled — feature bloat) | Yes (separate tier) | Yes (bundled) | **No** (explicitly out of scope) |
+| Custom RBAC roles | Yes (Windows AD-style) | Limited | No | **No** (2 hard-coded roles, frozenset-gated) |
+
+**Strategic positioning:** Sportzal is the **opinionated minimal** option — fewer features, but every feature is correct (locked copy, anti-oracle, race-safe at DB layer, append-only audit). Target buyer is a single-gym owner who values not getting hacked / sued / spammed over having a Christmas-tree feature list.
 
 ---
 
-## Explicit Anti-Features Summary (v1.5 Scope Lock)
+## Complexity Reference (S/M/L per quality gate)
 
-| Anti-Feature | Category | Reason | Future Milestone |
-|---|---|---|---|
-| Group classes (capacity > 1) | Scope | Open-gym model; locked by user decision | Never / separate milestone |
-| Online payment at booking | Billing | ЮKassa in v1.7 | v1.7 |
-| Trainer payroll / commission per session | Billing | No compensation module | v1.8+ |
-| Email notifications | Notifications | Email channel in v1.6 | v1.6 |
-| Trainer Telegram DMs (booking created / cancelled) | Notifications | No `telegram_chat_id` on trainers; new schema not in v1.5 | v1.6 |
-| Recurring slot pattern generation | Slots | Complex cancel semantics; disproportionate at 5–10 slots/week | v2.x |
-| Trainer self-service slot publication | Slots | Trainer role / auth does not exist | v2.x |
-| Vacation / leave blocks | Slots | Absence of slot = unavailability; no extra entity needed | v2.x |
-| Draft / pending-review slot status | Slots | No trainer self-service; slots go live immediately | v2.x |
-| Waitlist | Bookings | Capacity = 1; manual coordination sufficient at single-zal scale | v2.x |
-| Atomic reschedule endpoint | Bookings | Two-step cancel+rebook covers the use case; race complexity high | v1.6 |
-| Auto-no-show cron | Bookings | Manual marking sufficient; ARQ job adds medium complexity | v1.5.1 |
-| Late-cancel session forfeit penalty | Policy | Breaks debit-at-delivery invariant | v2.x |
-| Bot `/cancel_booking` command | Bot | Adds stateful multi-step bot conversation; low urgency | v1.5.1 |
-| Free-text NLP date input in bot | Bot | Inline keyboard sufficient; no parsing library in stack | Never |
-| Client self-booking via web portal | Frontend | Design team integrates in v2.0 | v2.0 |
-| Pre-authorisation session hold | PKG | Adds `sessions_reserved` counter; overkill for single-zal | v2.x |
-| Session debit at booking creation | PKG | Breaks debit-at-delivery architectural invariant | Never |
-| Booking creates a Visit row | B-10 | Orthogonal — B-10 invariant locked | Never |
+- **S (Small, ≤1 day)** — single migration + service method + audit emit; reuses existing machinery; e.g. deactivate user, anti-oracle A/B variant on existing copy, `actor_display_name` in receipt
+- **M (Medium, 2-4 days)** — new table + new endpoints + new locked template + new audit events; bridges to external service or extends idempotency contract; e.g. invite-token flow, email OTP fallback, payment-receipt hook
+- **L (Large, ≥5 days)** — net-new subsystem requiring research; not present in v1.6 scope (the milestone is intentionally bridging, not greenfield)
+
+Aggregate v1.6 weight ≈ 7 × M + 4 × S ≈ 18-26 working days (consistent with v1.3's 6-day / 44-req shape and v1.5's 18-day / 57-req shape — v1.6 sits between).
+
+---
+
+## Quality-Gate Checklist (re-applied)
+
+- [x] **Categories clear** — Email-Templates / Multi-User-Admin / Audit-Traceability separated above
+- [x] **Complexity noted per feature** — S/M/L column in every table
+- [x] **Dependencies on existing modules called out** — payments (v1.4), bookings (v1.5), memberships (v1.3), auth/users (v1.1), audit_log (v1.1+)
+- [x] **Anti-features explicitly listed** — 11 anti-features documented, each with rationale and alternative
+- [x] **Locked Russian copy + owner sign-off pattern preserved** — explicit in Table Stakes (last row of multi-channel section) and Differentiators (locked copy row); mirrors `D-20-9` / `D-27-OWNER-COPY-LOCK`
+- [x] **Anti-oracle invariant on forgot-password** — flagged as quality-gate-mandated invariant in Table Stakes (password reset row) and Dependency Notes; same 202 for known + unknown email, constant-time floor
 
 ---
 
 ## Sources
 
-- [Mindbody — Appointment Options screen (buffer time, cancellation windows)](https://support.mindbodyonline.com/s/article/203259913-Appointment-Options-screen?language=en_US) — buffer time between sessions configuration
-- [Mindbody — Booking and Scheduling for Personal Training](https://www.mindbodyonline.com/business/education/blog/booking-scheduling-software-personal-training) — 24h cancel window, instant confirm, session-debit timing
-- [SimplyBook.me — Personal Trainer Scheduling](https://simplybook.me/en/scheduling-software-for-fitness--coaches-and-sports-classes/appointment-scheduling-software-for-personal-trainers) — capacity = 1, recurring vs one-off
-- [Goldie — Scheduling for Personal Trainers](https://heygoldie.com/customers/personal-trainers) — 24h cancellation window as industry norm, card-on-file to enforce
-- [SuperSaaS — Gym and Fitness Studios Booking](https://www.supersaas.com/info/gym-and-fitness-studios-booking-app) — cancellation policies, booking rules
-- [ABC Trainerize Idea Forum — Track Appointments as completed / no show](https://ideas.trainerize.com/forums/167887-coach-trainer-trainerize/suggestions/41349247-ability-to-track-appointments-as-completed-no-sh) — manual no-show marking by trainer is the industry pattern
-- [SchedulingKit — Appointment Reminders for Gyms](https://schedulingkit.com/appointment-reminders/gyms) — 24h + 2h reminder sequence, no-show reduction stats
-- [Alloy Franchise — 3 Key Policies for Personal Training](https://alloyfranchise.com/blog/3-key-policies-for-your-personal-training-business/) — no-show and cancellation policy structures
-- [Bookafy — Best Online Booking Systems for Fitness Comparison](https://bookafy.com/best-online-booking-systems-for-fitness-and-personal-trainers-detailed-comparison-buyers-guide-2/) — recurring vs one-off MVP feature matrix
-- [Starta.one — Telegram Bot for Training Center Booking](https://starta.one/features/telegram-bot/training-center) — Telegram inline-keyboard booking UX for gyms
-- [Nuffield Health — Personal Training Terms](https://www.nuffieldhealth.com/terms/nuffield-health-website-terms-and-conditions/personal-training-terms-and-conditions) — package debit-at-completion (delivery) model
-- Internal: `PROJECT.md` v1.5 scope definition, B-10/B-11/B-12 invariants, ARQ cron ordering discipline, `LOCKED_AUDIT_EVENTS` pre-locking pattern, `HandlerContext` extension pattern
+- [OWASP Forgot Password Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html) — anti-enumeration ("If an account exists for this email…") + constant-time response patterns + reset-token TTL guidance (single-use, 1h floor) — **HIGH confidence**, authoritative
+- [OWASP WSTG — Testing for Weak Password Change or Reset Functionalities](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/09-Testing_for_Weak_Password_Change_or_Reset_Functionalities) — verification methodology applied to anti-oracle quality gate — **HIGH**
+- [Vaadata — Exploring Password Reset Vulnerabilities and Security Best Practices](https://www.vaadata.com/blog/exploring-password-reset-vulnerabilities-and-security-best-practices/) — confirms token-in-URL avoidance, single-use + rate-limit patterns — **MEDIUM**
+- [Mailgun — Implementing SPF, DKIM, and DMARC for Reliable Email Delivery](https://www.mailgun.com/blog/dev-life/how-to-setup-email-authentication/) — confirms dedicated-subdomain pattern + DKIM/SPF/DMARC owner runbook shape — **MEDIUM**
+- [Brevo — SPF, DKIM, and DMARC explained](https://www.brevo.com/blog/understanding-spf-dkim-dmarc/) — confirms 2.7× inbox-placement uplift for fully-authenticated senders — **MEDIUM**
+- [Postmark — What is transactional email and what is it used for?](https://postmarkapp.com/blog/what-is-transactional-email-and-how-is-it-used) — confirms category boundary between transactional (no unsubscribe) and marketing (mandatory unsubscribe) — **HIGH**
+- [Klaviyo — What Is a Transactional Email? 7 Types and How to Use Them](https://www.klaviyo.com/blog/transactional-email) — confirms 7-type taxonomy maps cleanly to v1.6 scope (OTP, receipt, account-activity, notification) — **MEDIUM**
+- [Specops — Scripting new user onboarding with First Day Password](https://specopssoft.com/blog/scripting-new-user-onboarding-initial-password/) — explicit warning that "sending passwords via email is no longer supported" — anchors anti-feature "admin-set initial password" — **HIGH**
+- [WSO2 — Invite user to set password](https://is.docs.wso2.com/en/latest/guides/account-configurations/user-onboarding/invite-user-to-set-password/) — confirms invite-token flow as industry-standard pattern with TTL-bounded acceptance — **MEDIUM**
+- [Auth0 — User Onboarding Strategies in a B2B SaaS Application](https://auth0.com/blog/user-onboarding-strategies-b2b-saas/) — admin-provisioning vs self-service distinction; aligns with Sportzal's single-tenant private CRM (owner-only invitation, no public signup) — **MEDIUM**
+- [TechTarget — Enumeration Attacks: What They Are and How to Prevent Them](https://www.techtarget.com/searchsecurity/tip/What-enumeration-attacks-are-and-how-to-prevent-them) — broader enumeration-attack taxonomy beyond just password reset (login error messages, OTP "user exists" leaks) — informs constant-time invariant on login deactivation 401 — **MEDIUM**
+
+Existing project artefacts (HIGH confidence — local sources):
+- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — `LOCKED_AUDIT_EVENTS` 56-entry frozenset, `OWNER_ONLY` 26-entry RBAC, anti-oracle DM patterns, `D-27-OWNER-COPY-LOCK` sign-off mechanism, `membership_notifications` / `booking_notifications` idempotency table shapes
+- `/Users/andre/Workspace/Development/clubcore/.planning/MILESTONES.md` — v1.1 refresh-rotation family + revoke-family machinery; v1.3 expiring-soon cron + per-client A/B variant; v1.4 payments append-only ledger; v1.5 booking notifications
 
 ---
-
-*Feature research for: PT-slot booking, Sportzal v1.5 Schedule + Bookings milestone*
-*Researched: 2026-05-17*
+*Feature research for: v1.6 Email channel + Multi-user admin (Sportzal gym CRM, РФ/СНГ, single-gym pet-project)*
+*Researched: 2026-05-18*
