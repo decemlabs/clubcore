@@ -250,6 +250,45 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
 )
 
 
+LOCKED_EMAIL_TEMPLATES: frozenset[str] = frozenset(
+    {
+        # v1.6 (Phase 41 lock — INFRA-36 / D-41-12; templates landed in Phases 42/44/45)
+        # Phase 42 — auth (AUTH-EM-03):
+        "EMAIL_OTP_LOGIN",
+        # Phase 44 — users + auth (RESET-03 / USERS-03):
+        "USER_INVITATION_EMAIL",
+        "PASSWORD_RESET_EMAIL",
+        # Phase 45 — memberships expiring A/B (NOTIFY-08):
+        "EMAIL_EXPIRING_7D_VARIANT_A",
+        "EMAIL_EXPIRING_7D_VARIANT_B",
+        "EMAIL_EXPIRING_3D_VARIANT_A",
+        "EMAIL_EXPIRING_3D_VARIANT_B",
+        "EMAIL_EXPIRING_1D_VARIANT_A",
+        "EMAIL_EXPIRING_1D_VARIANT_B",
+        # Phase 45 — booking lifecycle (NOTIFY-10):
+        "EMAIL_BOOKING_CONFIRMED",
+        "EMAIL_BOOKING_CANCELLED_BY_CLIENT",
+        "EMAIL_BOOKING_CANCELLED_BY_OWNER",
+        "EMAIL_BOOKING_REMINDER_24H",
+        # Phase 45 — payment receipts (NOTIFY-12):
+        "EMAIL_PAYMENT_RECEIPT_SALE",
+        "EMAIL_PAYMENT_RECEIPT_REFUND",
+    }
+)
+"""Locked email template identifiers (Phase 41 INFRA-36 / D-41-11 / D-41-12).
+
+Mirrors LOCKED_AUDIT_EVENTS discipline: the runtime frozenset is the source
+of truth; the AST gate at tests/unit/test_locked_email_templates_ast.py
+asserts every get_email_dispatcher()(template_id=...) callsite passes a
+literal name resolving to a member here. Templates physically live next
+to their owning module per D-39-02 (e.g. auth/email_templates.py,
+bookings/notifications.py); this frozenset only holds the identifiers.
+
+Owner sign-off at VER-14 (Phase 46) enumerates these constant names — the
+D-27-OWNER-COPY-LOCK / D-39-02 lineage.
+"""
+
+
 async def emit(
     session: AsyncSession,
     event: str,
