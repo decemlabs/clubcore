@@ -36,14 +36,15 @@ mkdir -p "$EVIDENCE_DIR"
 
 BASE_URL="${BASE_URL:-http://localhost:8000/api/v1}"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sportzal}"
-RECEPTION_EMAIL="${RECEPTION_EMAIL:-reception@fixture.local}"
+RECEPTION_EMAIL="${RECEPTION_EMAIL:-verify_reception@local.dev}"
 RECEPTION_PASSWORD="${RECEPTION_PASSWORD:-Reception!Pass-2026}"
-OWNER_EMAIL="${OWNER_EMAIL:-owner@fixture.local}"
+OWNER_EMAIL="${OWNER_EMAIL:-verify_owner@local.dev}"
 OWNER_PASSWORD="${OWNER_PASSWORD:-Owner!Pass-2026}"
 
 # ── Pre-flight ────────────────────────────────────────────────────────────
-echo "[preflight] checking $BASE_URL/health"
-if ! curl --silent --fail "$BASE_URL/health" >/dev/null 2>&1; then
+HEALTH_URL="${HEALTH_URL:-${BASE_URL%/api/v1}/healthz}"
+echo "[preflight] checking $HEALTH_URL"
+if ! curl --silent --fail "$HEALTH_URL" >/dev/null 2>&1; then
   echo "FATAL: stack not up — run 'docker compose -f apps/backend/docker-compose.yml up -d' first" >&2
   exit 1
 fi
@@ -87,7 +88,7 @@ SCENARIO_OUT="$EVIDENCE_DIR/01_publish_list_slot.http"
 echo "[scenario 01] publish_list_slot — start" >> "$SCENARIO_OUT"
 
 # Hermetic cleanup
-psql "$DATABASE_URL" -c "DELETE FROM trainer_slots WHERE trainer_id='$TRAINER_ALPHA_ID' AND start_time > now();" >> "$SCENARIO_OUT"
+psql "$DATABASE_URL" -c "DELETE FROM trainer_availability_slots WHERE trainer_id='$TRAINER_ALPHA_ID' AND start_time > now();" >> "$SCENARIO_OUT"
 
 SLOT_START=$(date -u -v+1d +"%Y-%m-%dT10:00:00Z" 2>/dev/null || date -u -d 'tomorrow 10:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_END=$(date -u -v+1d +"%Y-%m-%dT11:00:00Z" 2>/dev/null || date -u -d 'tomorrow 11:00' +"%Y-%m-%dT%H:%M:%SZ")
@@ -120,7 +121,7 @@ echo "[scenario 02] book_slot_via_reception — start" >> "$SCENARIO_OUT"
 # Hermetic cleanup
 psql "$DATABASE_URL" -c "
 DELETE FROM bookings WHERE client_id='$VERIFY_CLIENT_A' AND status IN ('confirmed','cancelled');
-DELETE FROM trainer_slots WHERE trainer_id='$TRAINER_ALPHA_ID' AND status='booked' AND start_time > now();
+DELETE FROM trainer_availability_slots WHERE trainer_id='$TRAINER_ALPHA_ID' AND status='booked' AND start_time > now();
 " >> "$SCENARIO_OUT"
 
 # Ensure client has an active PT-package (sell via reception if needed)
@@ -221,7 +222,7 @@ DELETE FROM bookings WHERE client_id='$VERIFY_CLIENT_A' AND status='confirmed';
 
 # Seed a confirmed booking with slot start in 12 hours (inside the 24h window)
 psql "$DATABASE_URL" -t -A -c "
-INSERT INTO trainer_slots (id, trainer_id, start_time, end_time, status, created_at, updated_at)
+INSERT INTO trainer_availability_slots (id, trainer_id, start_time, end_time, status, created_at, updated_at)
 VALUES (gen_random_uuid(), '$TRAINER_ALPHA_ID', now() + interval '12 hours', now() + interval '13 hours', 'booked', now(), now())
 RETURNING id;" > /tmp/v15_cancel_slot.txt
 CANCEL_SLOT_ID=$(grep -oE '[a-f0-9-]{36}' /tmp/v15_cancel_slot.txt | head -1)
