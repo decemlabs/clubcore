@@ -22,10 +22,12 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import LOCKED_AUDIT_EVENTS
+from app.core.audit import LOCKED_AUDIT_EVENTS, AuditEventNotLockedError, emit
 
 # parents[0]=unit, [1]=tests, [2]=backend, [3]=apps, [4]=repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -279,3 +281,45 @@ def test_locked_audit_events_includes_v15_pairs() -> None:
         assert pair in LOCKED_AUDIT_EVENTS, (
             f"Phase 37 INFRA-24: required pair {pair} missing from LOCKED_AUDIT_EVENTS"
         )
+
+
+@pytest.mark.asyncio
+async def test_bogus_v16_audit_event_is_rejected() -> None:
+    """Phase 41 / INFRA-34 synthetic-violation fixture: a bogus v1.6 event name
+    that is NOT in LOCKED_AUDIT_EVENTS MUST be rejected at the emit() boundary
+    BEFORE any DB interaction.
+
+    Mirrors the existing Phase 15 AST literal-string gate, but at the runtime
+    layer — the dual-defence pair (AST gate + runtime frozenset check) is what
+    closes the AST-gate-churn class (v1.3 INFRA-15 lesson). This test guards the
+    runtime half: if a callsite somehow slips past the AST walker (e.g. via a
+    rebinding the walker doesn't recognise, or new dynamic code paths in future
+    phases), the runtime check still hard-fails per D-09.
+
+    The pair `('bogus_v16_event', 'user')` is intentionally chosen so the event
+    name is plausibly v1.6-shaped (`bogus_v16_*`) but the pair is not registered.
+    `resource_type='user'` is registered (it IS one of the new v1.6
+    resource_types), proving the rejection is on the FULL pair, not just on
+    `resource_type`.
+
+    Uses `AsyncMock(spec=AsyncSession)` because the error fires at audit.py:276
+    BEFORE any `session.add(...)` call — no real DB interaction needed.
+    """
+    session = AsyncMock(spec=AsyncSession)
+    with pytest.raises(AuditEventNotLockedError) as exc_info:
+        await emit(
+            session,
+            "bogus_v16_event",
+            actor_user_id=None,
+            resource_type="user",
+        )
+
+    msg = str(exc_info.value)
+    assert "bogus_v16_event" in msg, msg
+    assert "LOCKED_AUDIT_EVENTS" in msg, msg
+    # Belt-and-braces: confirm the pair is actually NOT in the frozenset so the
+    # test is exercising the real guard (not a falsely-passing assertion).
+    assert ("bogus_v16_event", "user") not in LOCKED_AUDIT_EVENTS
+    # Confirm the session was never touched — the guard must fire BEFORE any
+    # session.add / commit / flush call.
+    session.add.assert_not_called()
