@@ -804,18 +804,42 @@ async def create_booking(
     # Step 8 — Emit booking_created (LITERAL strings for INFRA-11 AST gate).
     # Payload matches BookingCreatedPayload (extra='forbid') verbatim; UUIDs
     # stringified at callsite per D-38-17 / Pitfall 13.
-    await audit.emit(
-        session,
-        "booking_created",  # LITERAL — INFRA-11 AST gate
-        actor_user_id=actor.id,
-        resource_type="booking",  # LITERAL
-        resource_id=booking.id,
-        booking_id=str(booking.id),
-        slot_id=str(booking.slot_id),
-        client_id=str(booking.client_id),
-        pt_package_id=str(booking.pt_package_id),
-        created_by_user_id=str(booking.created_by_user_id),
-    )
+    #
+    # Phase 40 D-40-05 / WARNING-1 — explicit ``actor_role`` literal kwarg
+    # branched on ``actor.role``; ``actor_user_id`` continues to be the RAW
+    # UUID (audit.emit's signature is ``UUID | None``, NOT str). Only the
+    # payload-level ``created_by_user_id`` is stringified (Pitfall P13 — the
+    # JSONB payload schema declares it as ``UUID | None`` but for forward
+    # compat with payload-as-str callsites we stringify here, mirroring the
+    # original Phase 38 shape).
+    if actor.role is Role.OWNER:
+        await audit.emit(
+            session,
+            "booking_created",  # LITERAL — INFRA-11 AST gate
+            actor_user_id=actor.id,  # RAW UUID (audit.emit signature)
+            resource_type="booking",  # LITERAL
+            resource_id=booking.id,
+            booking_id=str(booking.id),
+            slot_id=str(booking.slot_id),
+            client_id=str(booking.client_id),
+            pt_package_id=str(booking.pt_package_id),
+            created_by_user_id=str(actor.id),
+            actor_role="owner",  # LITERAL — INFRA-11 AST gate / D-40-05
+        )
+    else:
+        await audit.emit(
+            session,
+            "booking_created",  # LITERAL — INFRA-11 AST gate
+            actor_user_id=actor.id,  # RAW UUID (audit.emit signature)
+            resource_type="booking",  # LITERAL
+            resource_id=booking.id,
+            booking_id=str(booking.id),
+            slot_id=str(booking.slot_id),
+            client_id=str(booking.client_id),
+            pt_package_id=str(booking.pt_package_id),
+            created_by_user_id=str(actor.id),
+            actor_role="reception",  # LITERAL — INFRA-11 AST gate / D-40-05
+        )
 
     # Step 9 — Commit (SVC001 gate).
     await session.commit()

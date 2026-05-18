@@ -31,6 +31,7 @@ app.modules.* (importlinter `core-not-depend-on-modules` contract).
 """
 
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -380,6 +381,16 @@ class BookingCreatedPayload(BaseModel):
     `pt_session_recorded` event carrying `booking_id`) draws down sessions
     from this package. The (slot_id, client_id, pt_package_id) triple is
     the forensic chain for the booking.
+
+    Phase 40 D-40-05 additive extension: ``actor_role`` Literal discriminates
+    reception / owner (existing reception path) from telegram_bot (Phase 40
+    self-service /book via Telegram). ``created_by_user_id`` becomes Optional
+    because the bot path has no authenticated user — NULL means
+    "self-service via bot, see ``actor_role`` for the discriminator".
+    LOCKED_AUDIT_EVENTS frozenset and AUDIT_PAYLOAD_SCHEMAS registry are
+    untouched (cardinality unchanged) — only this Pydantic model body grows
+    (mirrors the additive pattern of ``PtPackageCancelledPayload`` in
+    Phase 33 / ``PtSessionRecordedPayload`` in Phase 37).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -388,7 +399,16 @@ class BookingCreatedPayload(BaseModel):
     slot_id: UUID
     client_id: UUID
     pt_package_id: UUID
-    created_by_user_id: UUID
+    # Phase 40 D-40-05 — Optional for the bot self-service path (NULL =
+    # actor_role='telegram_bot'); existing reception / owner emits continue
+    # to populate this with the actor's UUID (stringified at the callsite
+    # per Pitfall P13).
+    created_by_user_id: UUID | None = None
+    # Phase 40 D-40-05 — Literal discriminator. Default 'reception' preserves
+    # the Phase 38 reception-path emit shape (which historically did not
+    # carry actor_role); a Phase 40 callsite must pass actor_role explicitly
+    # when emitting on behalf of the owner or the bot.
+    actor_role: Literal["reception", "owner", "telegram_bot"] = "reception"
 
 
 class BookingCancelledPayload(BaseModel):

@@ -235,3 +235,84 @@ def test_v15_payload_schemas_registered() -> None:
     assert AUDIT_PAYLOAD_SCHEMAS[("booking_created", "booking")] is BookingCreatedPayload
     assert AUDIT_PAYLOAD_SCHEMAS[("booking_cancelled", "booking")] is BookingCancelledPayload
     assert AUDIT_PAYLOAD_SCHEMAS[("booking_no_show", "booking")] is BookingNoShowPayload
+
+
+# ---------------------------------------------------------------------------
+# Phase 40 D-40-05 — BookingCreatedPayload additive relaxation
+# ---------------------------------------------------------------------------
+
+
+def test_booking_created_payload_accepts_telegram_bot_role() -> None:
+    """Phase 40 D-40-05 — actor_role='telegram_bot' + created_by_user_id=None
+    is the canonical shape for the Telegram /book self-service path."""
+    p = BookingCreatedPayload(
+        booking_id=uuid4(),
+        slot_id=uuid4(),
+        client_id=uuid4(),
+        pt_package_id=uuid4(),
+        created_by_user_id=None,
+        actor_role="telegram_bot",
+    )
+    assert p.actor_role == "telegram_bot"
+    assert p.created_by_user_id is None
+
+
+def test_booking_created_payload_accepts_default_reception_role() -> None:
+    """Back-compat: omitting actor_role yields 'reception' (Phase 38 shape)."""
+    p = BookingCreatedPayload(
+        booking_id=uuid4(),
+        slot_id=uuid4(),
+        client_id=uuid4(),
+        pt_package_id=uuid4(),
+        created_by_user_id=uuid4(),
+    )
+    assert p.actor_role == "reception"
+
+
+def test_booking_created_payload_accepts_owner_role() -> None:
+    """The 3-value Literal accepts 'owner' for owner-initiated bookings."""
+    p = BookingCreatedPayload(
+        booking_id=uuid4(),
+        slot_id=uuid4(),
+        client_id=uuid4(),
+        pt_package_id=uuid4(),
+        created_by_user_id=uuid4(),
+        actor_role="owner",
+    )
+    assert p.actor_role == "owner"
+
+
+def test_booking_created_payload_rejects_unknown_role() -> None:
+    """Literal["reception", "owner", "telegram_bot"] rejects all other values."""
+    with pytest.raises(ValidationError):
+        BookingCreatedPayload(  # type: ignore[arg-type]
+            booking_id=uuid4(),
+            slot_id=uuid4(),
+            client_id=uuid4(),
+            pt_package_id=uuid4(),
+            created_by_user_id=uuid4(),
+            actor_role="client",  # type: ignore[arg-type]
+        )
+
+
+def test_booking_created_payload_extra_forbid_still_enforced() -> None:
+    """extra='forbid' invariant survives the Phase 40 additive relaxation."""
+    with pytest.raises(ValidationError):
+        BookingCreatedPayload(  # type: ignore[call-arg]
+            booking_id=uuid4(),
+            slot_id=uuid4(),
+            client_id=uuid4(),
+            pt_package_id=uuid4(),
+            created_by_user_id=uuid4(),
+            actor_role="reception",
+            foo="bar",
+        )
+
+
+def test_booking_created_payload_registry_unchanged() -> None:
+    """LOCKED_AUDIT_EVENTS / AUDIT_PAYLOAD_SCHEMAS shapes are additive-only —
+    the ('booking_created', 'booking') key still maps to BookingCreatedPayload."""
+    assert (
+        AUDIT_PAYLOAD_SCHEMAS[("booking_created", "booking")]
+        is BookingCreatedPayload
+    )
