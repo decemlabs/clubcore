@@ -240,6 +240,50 @@ const _v14Checks: [
   true,
 ]
 
+// --- v1.5 surface (Phase 40 HANDOFF-02) --------------------------------
+// operationIds intentionally NOT pinned — see 35-CONTEXT D-35-07.
+// GET /api/v1/bookings/{booking_id} is shipped per
+// apps/backend/app/modules/bookings/router.py:320-328 — committed to 11.
+
+type _TrainerSlotsListGet = AssertNonNever<paths['/api/v1/trainer-slots']['get']>
+type _TrainerSlotsCreate = AssertNonNever<paths['/api/v1/trainer-slots']['post']>
+type _TrainerSlotItemGet = AssertNonNever<paths['/api/v1/trainer-slots/{slot_id}']['get']>
+type _TrainerSlotCancel = AssertNonNever<
+  paths['/api/v1/trainer-slots/{slot_id}/cancel']['post']
+>
+type _BookingsCreate = AssertNonNever<paths['/api/v1/bookings']['post']>
+type _BookingItemGet = AssertNonNever<paths['/api/v1/bookings/{booking_id}']['get']>
+type _BookingCancel = AssertNonNever<
+  paths['/api/v1/bookings/{booking_id}/cancel']['post']
+>
+type _ClientBookingsList = AssertNonNever<
+  paths['/api/v1/clients/{client_id}/bookings']['get']
+>
+type _PtPackagesSalePostBody = AssertNonNever<
+  paths['/api/v1/pt-packages']['post']['requestBody']
+>
+type _PtSessionsRecordPostBody = AssertNonNever<
+  paths['/api/v1/pt-sessions']['post']['requestBody']
+>
+type _TrainerSlotsListOkRealised = AssertNonNever<
+  paths['/api/v1/trainer-slots']['get']['responses']['200']
+>
+
+// Static checks for v1.5 surface — each must resolve to true at compile time.
+const _v15Checks: [
+  _TrainerSlotsListGet,
+  _TrainerSlotsCreate,
+  _TrainerSlotItemGet,
+  _TrainerSlotCancel,
+  _BookingsCreate,
+  _BookingItemGet,
+  _BookingCancel,
+  _ClientBookingsList,
+  _PtPackagesSalePostBody,
+  _PtSessionsRecordPostBody,
+  _TrainerSlotsListOkRealised,
+] = [true, true, true, true, true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -253,5 +297,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v1.4 typed paths surface (Phases 31-34, backend-only handoff)', () => {
     expect(_v14Checks).toHaveLength(36)
+  })
+
+  it('compiles against the regenerated v1.5 typed paths surface (Phase 40 HANDOFF-02)', () => {
+    expect(_v15Checks).toHaveLength(11)
   })
 })

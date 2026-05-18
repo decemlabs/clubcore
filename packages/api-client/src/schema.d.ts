@@ -239,6 +239,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List bookings (reception+owner; paginated; client/trainer/status/time-window filters; default ±30d Moscow)
+         * @description Paginated booking list (Phase 38 BOOK-07).
+         *
+         *     `(LIST, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —
+         *     reception sees the same list as owner (gym-staff trust model).
+         *     Default ±30d Moscow window bounds enumeration (T-38-03-05 mitigation).
+         */
+        get: operations["list_bookings_api_v1_bookings_get"];
+        put?: never;
+        /**
+         * Create a confirmed booking (reception+owner; 404 slot_not_found; 409 slot_not_available / slot_already_booked / trainer_mismatch / pt_package_not_active / pt_package_exhausted / pt_package_expired_before_slot; requires Idempotency-Key — D-38-14)
+         * @description Create a confirmed booking (Phase 38 BOOK-02).
+         *
+         *     `(CREATE, BOOKINGS)` is NOT in `OWNER_ONLY` (Phase 37 INFRA-27) —
+         *     reception+owner both pass the RBAC gate per D-38-09 (gym-staff trust
+         *     model; audit records actor_user_id for accountability).
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf →
+         *     verify_idempotency → get_db.
+         *
+         *     Two-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX
+         *     claims the key with an in-flight placeholder so concurrent callers
+         *     carrying the SAME Idempotency-Key cannot both pass the "no stored
+         *     entry" gate and double-execute the orchestrator (which would attempt
+         *     two slot UPDATE active→booked + two booking INSERTs — the second
+         *     would be caught by the partial UNIQUE, but the cost is paid).
+         *
+         *     Error surface (service layer):
+         *       - 404 slot_not_found.
+         *       - 409 slot_not_available (slot status != 'active' before INSERT).
+         *       - 409 slot_already_booked (DB race-loser via partial UNIQUE — BOOK-10).
+         *       - 409 trainer_mismatch (pt_package.trainer_id != slot.trainer_id).
+         *       - 409 pt_package_not_active (no active package for client or id mismatch).
+         *       - 409 pt_package_exhausted (sessions_remaining <= 0).
+         *       - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).
+         *       - 422 idempotency_key_reuse (same key, different body).
+         */
+        post: operations["create_booking_api_v1_bookings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a booking with denormalized slot + pt_package (reception+owner; 404 booking_not_found; joinedload — Pitfall 19 / D-38-08)
+         * @description Read a single booking with denormalized slot + pt_package (BOOK-09).
+         *
+         *     Eager-loaded via repository.get_booking_with_relations (Pitfall 19 —
+         *     N+1 prevention). Returns BookingDetailResponse with inline
+         *     SlotSnapshot (no cross-module schema import per D-38-08).
+         */
+        get: operations["get_booking_api_v1_bookings__booking_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a confirmed booking (reception ≤24h before slot.start per C-05 / owner anytime; 404 booking_not_found; 409 invalid_transition / cancel_window_expired; requires Idempotency-Key — D-38-14)
+         * @description Cancel a confirmed booking (Phase 38 BOOK-06 / D-38-09 / D-38-16).
+         *
+         *     `(CANCEL, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —
+         *     reception+owner both pass the RBAC gate per D-38-09 (gym-staff trust
+         *     model). The 24h cancel-window (BOOK-06, measured against
+         *     `booking.slot.start_time`, NOT `created_at` per D-38-16) is enforced
+         *     application-layer in `service.cancel_booking` and surfaces as 409
+         *     `cancel_window_expired` for reception. Owner is anytime.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf →
+         *     verify_idempotency → get_db.
+         *
+         *     Two-phase Redis claim + replay (CR-02 — verbatim from
+         *     pt_sessions/router.py:200-227): SAME-key concurrent callers cannot
+         *     double-execute the orchestrator (which would emit two
+         *     booking_cancelled audit rows AND attempt two slot restores).
+         *
+         *     Error surface (service layer):
+         *       - 404 booking_not_found.
+         *       - 409 invalid_transition (non-confirmed source).
+         *       - 409 cancel_window_expired (reception <24h before slot.start_time).
+         *       - 422 idempotency_key_reuse (same key, different body).
+         */
+        post: operations["cancel_booking_api_v1_bookings__booking_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clients": {
         parameters: {
             query?: never;
@@ -293,6 +410,38 @@ export interface paths {
          * @description Partial update of an alive client (CLIENTS-07). EDIT + CSRF (D-21).
          */
         patch: operations["update_client_api_v1_clients__client_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/clients/{client_id}/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List bookings for a single client (reception+owner; paginated; from/to/status filters; default ±30d Moscow)
+         * @description Paginated per-client booking list (Phase 38 BOOK-08).
+         *
+         *     Mount: `GET /api/v1/clients/{client_id}/bookings` (BOOK-08 locked
+         *     contract). The route is *declared* in bookings/router.py (this file) on
+         *     the `client_scoped_bookings_router`, then composed by
+         *     `app.api.v1.router` at the `/clients` prefix — mirroring the v1.4
+         *     pt-sessions package-scoped router precedent
+         *     (pt_sessions.router.package_scoped_router mounted at `/pt-packages`).
+         *
+         *     This split keeps clients/ a dependency-leaf module — clients/router.py
+         *     contains zero `from app.modules.bookings` imports — while honouring
+         *     the REQUIREMENTS BOOK-08 URL contract. lint-imports stays green; the
+         *     bookings → clients edge lives only in the v1 composition root.
+         */
+        get: operations["list_bookings_for_client_api_v1_clients__client_id__bookings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/membership-plans": {
@@ -513,11 +662,13 @@ export interface paths {
          *     Status-guard ordering (D-32-11 invariant — specific code wins):
          *       1. status='frozen'                        → 409 must_unfreeze_first   (B-08)
          *       2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)
-         *       3. generic _assert_can_transition         → 409 invalid_transition    (already cancelled / expired)
+         *       3. generic _assert_can_transition         → 409 invalid_transition
+         *          (already cancelled / expired)
          *
          *     DB-side / refunder-side error mapping:
          *       - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)
-         *       - no original sale row (legacy)    → 404 original_payment_not_found  (OriginalPaymentNotFoundError)
+         *       - no original sale row (legacy)    → 404 original_payment_not_found
+         *         (OriginalPaymentNotFoundError)
          *
          *     Schema-layer validation (REF-05):
          *       - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')
@@ -1015,6 +1166,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trainer-slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List trainer slots (reception+owner; paginated; trainer/status/time-window filters)
+         * @description Paginated slot list (SLOT-08 read tier).
+         *
+         *     (LIST, SCHEDULE_SLOTS) is NOT in OWNER_ONLY — reception sees the same
+         *     list as owner (slot picker for booking flow). Default window is bounded
+         *     to 14 days forward (T-38-01-04 mitigation — prevents unbounded
+         *     enumeration).
+         */
+        get: operations["list_slots_api_v1_trainer_slots_get"];
+        put?: never;
+        /**
+         * Publish a trainer availability slot (owner-only; 409 slot_overlap / slot_too_close / slot_in_past / trainer_inactive / trainer_not_found; requires Idempotency-Key — D-38-14)
+         * @description Publish a trainer availability slot (Phase 38 SLOT-02).
+         *
+         *     (CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY (Phase 37 INFRA-27) — reception
+         *     receives 403 from the RBAC gate BEFORE any side effect. Two-phase Redis
+         *     claim + replay (CR-02 from Phase 33 review) closes the same-key race.
+         *
+         *     Error surface (service layer):
+         *       - 404 trainer_not_found       (no such trainer id)
+         *       - 409 trainer_inactive        (trainer.is_active=False)
+         *       - 409 slot_in_past            (start_time <= now() UTC)
+         *       - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)
+         *       - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)
+         *       - 422 idempotency_key_reuse   (same key, different body)
+         */
+        post: operations["publish_slot_api_v1_trainer_slots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trainer-slots/{slot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a single trainer slot (reception+owner; 404 slot_not_found)
+         * @description Read a single slot (SLOT-08 detail). 404 slot_not_found for missing id.
+         */
+        get: operations["get_slot_api_v1_trainer_slots__slot_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trainer-slots/{slot_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cancel a trainer slot (owner-only; 404 slot_not_found; 409 invalid_transition for cancelled source or booked-cascade deferred to 38-03; requires Idempotency-Key — D-38-14)
+         * @description Cancel a trainer slot (SLOT-09 — active-only path in plan 38-01).
+         *
+         *     For Phase 38 plan 38-01: only the `active → cancelled` transition is
+         *     supported. Cancelling a `booked` slot triggers the booked-cascade flow
+         *     which lands in plan 38-03 (it must atomically cancel the linked confirmed
+         *     booking + emit both `slot_cancelled` and `booking_cancelled`). In this
+         *     plan, attempting to cancel a booked slot raises
+         *     `InvalidSlotTransitionError` (409 `invalid_transition`) with an explicit
+         *     forward-link message.
+         *
+         *     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.
+         */
+        patch: operations["cancel_slot_api_v1_trainer_slots__slot_id__cancel_patch"];
+        trace?: never;
+    };
     "/api/v1/trainers": {
         parameters: {
             query?: never;
@@ -1203,6 +1445,187 @@ export interface components {
             /** Useragent */
             userAgent: string | null;
         };
+        /**
+         * BookingCancelRequest
+         * @description POST /api/v1/bookings/{id}/cancel body (Phase 38 plan 38-03 / BOOK-06).
+         *
+         *     `reason` is REQUIRED — 1..200 chars; downstream audit row stores this
+         *     string verbatim via `BookingCancelledPayload.cancel_reason`.
+         *     Mirrors `PtSessionCancelRequest` shape (B-12 precedent).
+         */
+        BookingCancelRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * BookingCreateRequest
+         * @description POST /api/v1/bookings body (Phase 38 BOOK-02 / D-38-02).
+         *
+         *     Three fields required:
+         *     - slot_id: target slot — must exist + status='active' (server checks).
+         *     - client_id: client to book for — reception/owner can book any client
+         *       (D-38-09 — gym-staff trust model; audit records actor_user_id).
+         *     - pt_package_id: must reference an active package that the client owns;
+         *       server cross-checks trainer_id match + validity window + remaining
+         *       sessions before flipping the slot.
+         *
+         *     `created_by_user_id` is server-set from `actor.id`; never accepted from
+         *     request body (extra='forbid' rejects it structurally).
+         *     `status` is server-set to 'confirmed' on INSERT.
+         */
+        BookingCreateRequest: {
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /**
+             * Ptpackageid
+             * Format: uuid
+             */
+            ptPackageId: string;
+            /**
+             * Slotid
+             * Format: uuid
+             */
+            slotId: string;
+        };
+        /**
+         * BookingDetailResponse
+         * @description Outbound full-detail booking payload (Phase 38 plan 38-03 / BOOK-09).
+         *
+         *     Extends `BookingResponse` with denormalized `slot` (via the LOCAL
+         *     `SlotSnapshot` — no cross-module schema import) and a minimal
+         *     `pt_package` dict snapshot (id, plan_name_snapshot, sessions_remaining,
+         *     end_date). Kept dict-typed to avoid pulling the pt_packages schema
+         *     surface into the bookings module — the read endpoint composes the dict
+         *     inline from the joinedload chain at the service layer.
+         *
+         *     Pitfall 19 — the repository must `joinedload(Booking.slot)` and
+         *     `joinedload(Booking.pt_package)` for this read path so the GET /{id}
+         *     handler emits ≤2 DB queries (test asserts).
+         */
+        BookingDetailResponse: {
+            /** Cancelreason */
+            cancelReason: string | null;
+            /** Cancelledat */
+            cancelledAt: string | null;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /** Completedat */
+            completedAt: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Createdbyuserid */
+            createdByUserId: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Noshowat */
+            noShowAt: string | null;
+            /** Ptpackage */
+            ptPackage: {
+                [key: string]: unknown;
+            };
+            /**
+             * Ptpackageid
+             * Format: uuid
+             */
+            ptPackageId: string;
+            slot: components["schemas"]["SlotSnapshot"];
+            /**
+             * Slotid
+             * Format: uuid
+             */
+            slotId: string;
+            /**
+             * Slotstarttime
+             * Format: date-time
+             */
+            slotStartTime: string;
+            status: components["schemas"]["BookingStatus"];
+            /** Trainerfullname */
+            trainerFullName: string;
+        };
+        /**
+         * BookingResponse
+         * @description Outbound representation of a Booking (BOOK-02 / BOOK-07 / BOOK-08).
+         *
+         *     Phase 40 BLOCKER-2 — ``trainer_full_name`` + ``slot_start_time`` are
+         *     JOIN-projected from the trainers + trainer_availability_slots tables
+         *     (preserves D-38-08 — no snapshot columns on ``bookings``). The Phase 40
+         *     /book callback handler (plan 40-03) consumes these fields directly to
+         *     render the confirmation DM without a secondary lookup.
+         *
+         *     Phase 40 D-40-05 — ``created_by_user_id`` becomes Optional. NULL means
+         *     "self-service via Telegram bot, see ``audit_log.payload.actor_role`` for
+         *     the discriminator"; the reception / owner paths continue to populate
+         *     this with the authenticated actor's UUID.
+         */
+        BookingResponse: {
+            /** Cancelreason */
+            cancelReason: string | null;
+            /** Cancelledat */
+            cancelledAt: string | null;
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /** Completedat */
+            completedAt: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Createdbyuserid */
+            createdByUserId: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Noshowat */
+            noShowAt: string | null;
+            /**
+             * Ptpackageid
+             * Format: uuid
+             */
+            ptPackageId: string;
+            /**
+             * Slotid
+             * Format: uuid
+             */
+            slotId: string;
+            /**
+             * Slotstarttime
+             * Format: date-time
+             */
+            slotStartTime: string;
+            status: components["schemas"]["BookingStatus"];
+            /** Trainerfullname */
+            trainerFullName: string;
+        };
+        /**
+         * BookingStatus
+         * @description Booking lifecycle status (Phase 37 BOOKING_STATUS_TRANSITIONS / C-04).
+         *
+         *     Values byte-stable with migration 0017_bookings CHECK ck_bookings_status.
+         *     The (confirmed → {cancelled, no_show, completed}) forward-only FSM is
+         *     encoded in `app.modules.bookings.constants.BOOKING_STATUS_TRANSITIONS`
+         *     (Phase 37 INFRA-30 / D-37-04).
+         * @enum {string}
+         */
+        BookingStatus: "confirmed" | "cancelled" | "no_show" | "completed";
         /**
          * ClientCreateRequest
          * @description POST /api/v1/clients body. Required: lastName, firstName, phone.
@@ -1633,6 +2056,17 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[BookingResponse] */
+        PaginatedData_BookingResponse_: {
+            /** Items */
+            items: components["schemas"]["BookingResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[ClientResponse] */
         PaginatedData_ClientResponse_: {
             /** Items */
@@ -1703,6 +2137,17 @@ export interface components {
         PaginatedData_PtSessionResponse_: {
             /** Items */
             items: components["schemas"]["PtSessionResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[SlotResponse] */
+        PaginatedData_SlotResponse_: {
+            /** Items */
+            items: components["schemas"]["SlotResponse"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -1785,11 +2230,18 @@ export interface components {
         };
         /**
          * PtPackageCreateRequest
-         * @description POST /api/v1/pt-packages body (D-33-09).
+         * @description POST /api/v1/pt-packages body (D-33-09 / Phase 38 PKG-01).
          *
          *     ``amount_kopecks`` is REQUIRED; the service validates
          *     ``amount_kopecks == plan.price_kopecks`` server-side (snapshot symmetry,
          *     D-33-17). Disagreement → 422 ``amount_mismatch``.
+         *
+         *     ``trainer_id`` is OPTIONAL (Phase 38 PKG-01 / C-08). When provided, the
+         *     service validates the trainer exists and is active via the
+         *     ``TrainerById`` Protocol slot — 404 ``trainer_not_found`` /
+         *     422 ``trainer_inactive``. When NULL, the pt_package is bookable against
+         *     any trainer's slot (the bookings trainer-mismatch guard short-circuits
+         *     per C-08).
          */
         PtPackageCreateRequest: {
             /** Amountkopecks */
@@ -1804,6 +2256,8 @@ export interface components {
              * Format: uuid
              */
             planId: string;
+            /** Trainerid */
+            trainerId?: string | null;
         };
         /**
          * PtPackageListSort
@@ -1945,6 +2399,8 @@ export interface components {
              */
             startDate: string;
             status: components["schemas"]["PtPackageStatus"];
+            /** Trainerid */
+            trainerId?: string | null;
             /**
              * Updatedat
              * Format: date-time
@@ -1987,6 +2443,8 @@ export interface components {
          *     422 via `extra='forbid'`.
          */
         PtSessionCreateRequest: {
+            /** Bookingid */
+            bookingId?: string | null;
             /** Notes */
             notes?: string | null;
             /**
@@ -2014,6 +2472,8 @@ export interface components {
          *     deactivated (B-05).
          */
         PtSessionResponse: {
+            /** Bookingid */
+            bookingId?: string | null;
             /** Cancelreason */
             cancelReason: string | null;
             /** Cancelledat */
@@ -2063,6 +2523,14 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** ResponseEnvelope[BookingDetailResponse] */
+        ResponseEnvelope_BookingDetailResponse_: {
+            data: components["schemas"]["BookingDetailResponse"];
+        };
+        /** ResponseEnvelope[BookingResponse] */
+        ResponseEnvelope_BookingResponse_: {
+            data: components["schemas"]["BookingResponse"];
+        };
         /** ResponseEnvelope[ClientResponse] */
         ResponseEnvelope_ClientResponse_: {
             data: components["schemas"]["ClientResponse"];
@@ -2092,6 +2560,10 @@ export interface components {
         ResponseEnvelope_PaginatedData_ActiveSessionItem__: {
             data: components["schemas"]["PaginatedData_ActiveSessionItem_"];
         };
+        /** ResponseEnvelope[PaginatedData[BookingResponse]] */
+        ResponseEnvelope_PaginatedData_BookingResponse__: {
+            data: components["schemas"]["PaginatedData_BookingResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[ClientResponse]] */
         ResponseEnvelope_PaginatedData_ClientResponse__: {
             data: components["schemas"]["PaginatedData_ClientResponse_"];
@@ -2120,6 +2592,10 @@ export interface components {
         ResponseEnvelope_PaginatedData_PtSessionResponse__: {
             data: components["schemas"]["PaginatedData_PtSessionResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[SlotResponse]] */
+        ResponseEnvelope_PaginatedData_SlotResponse__: {
+            data: components["schemas"]["PaginatedData_SlotResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[TrainerResponse]] */
         ResponseEnvelope_PaginatedData_TrainerResponse__: {
             data: components["schemas"]["PaginatedData_TrainerResponse_"];
@@ -2139,6 +2615,10 @@ export interface components {
         /** ResponseEnvelope[PtSessionResponse] */
         ResponseEnvelope_PtSessionResponse_: {
             data: components["schemas"]["PtSessionResponse"];
+        };
+        /** ResponseEnvelope[SlotResponse] */
+        ResponseEnvelope_SlotResponse_: {
+            data: components["schemas"]["SlotResponse"];
         };
         /** ResponseEnvelope[TelegramStartResponse] */
         ResponseEnvelope_TelegramStartResponse_: {
@@ -2165,6 +2645,149 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "reception";
+        /**
+         * SlotCancelRequest
+         * @description PATCH /api/v1/trainer-slots/{id}/cancel body (SLOT-09).
+         *
+         *     `cancel_reason` is REQUIRED — 1..200 chars; downstream notification flow
+         *     (Phase 39 CRON-01) reuses the same length bound for the audit payload
+         *     `cancel_reason` field.
+         */
+        SlotCancelRequest: {
+            /** Cancelreason */
+            cancelReason: string;
+        };
+        /**
+         * SlotCreateRequest
+         * @description POST /api/v1/trainer-slots body (SLOT-02 / D-38-05).
+         *
+         *     Three fields only — NO recurrence_rule (D-38-05 — RRULE expansion is a
+         *     v1.8 reports-milestone feature). `created_by_user_id` is server-set from
+         *     `actor.id`; never accepted from request body (extra='forbid' rejects it
+         *     structurally).
+         */
+        SlotCreateRequest: {
+            /**
+             * Endtime
+             * Format: date-time
+             */
+            endTime: string;
+            /**
+             * Starttime
+             * Format: date-time
+             */
+            startTime: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * SlotResponse
+         * @description Outbound representation of a TrainerAvailabilitySlot (SLOT-02 / SLOT-08).
+         *
+         *     Phase 40 BLOCKER-2 extension: ``trainer_full_name`` is projected via JOIN
+         *     on the trainers table at the repository layer (D-38-08 pattern preserved —
+         *     no snapshot column on ``trainer_availability_slots``). The /book bot
+         *     handler (Phase 40 D-40-07) consumes this field directly to label the
+         *     InlineKeyboard buttons without a secondary lookup.
+         */
+        SlotResponse: {
+            /** Cancelreason */
+            cancelReason: string | null;
+            /** Cancelledat */
+            cancelledAt: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Createdbyuserid
+             * Format: uuid
+             */
+            createdByUserId: string;
+            /**
+             * Endtime
+             * Format: date-time
+             */
+            endTime: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Starttime
+             * Format: date-time
+             */
+            startTime: string;
+            status: components["schemas"]["SlotStatus"];
+            /** Trainerfullname */
+            trainerFullName: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * SlotSnapshot
+         * @description INLINE slot projection for BookingDetailResponse (Phase 38 plan 38-03).
+         *
+         *     LOCAL class declared here — NOT imported from `app.modules.schedule.schemas`.
+         *
+         *     Rationale (D-38-08 + plan 38-03 §Task 1 locked-decision per checker fix):
+         *       - Preserves the `modules-independent` import-linter contract
+         *         unambiguously. NO `from app.modules.schedule import ...` in this
+         *         module — the bookings detail payload is built from a `joinedload(
+         *         Booking.slot)` chain at the repository layer, then the slot
+         *         attributes are projected into this 5-field BackendSchemaBase.
+         *       - Mirrors the v1.4 pt_sessions precedent: `pt_sessions/schemas.py`
+         *         inlines a brief projection of pt_packages rather than cross-importing
+         *         `pt_packages/schemas.py`. The same discipline applies here.
+         *       - D-38-08 governs DB design (no snapshot columns on the booking row);
+         *         the schema-layer view of a slot for a read-payload is a separate
+         *         concern — duplicating 5 fields here is cheap and decoupled.
+         *
+         *     Fields match the SlotById Protocol surface (D-37-06) + the `status`
+         *     string the GET-one endpoint surfaces for display.
+         */
+        SlotSnapshot: {
+            /**
+             * Endtime
+             * Format: date-time
+             */
+            endTime: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Starttime
+             * Format: date-time
+             */
+            startTime: string;
+            /** Status */
+            status: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * SlotStatus
+         * @description Slot lifecycle status (38-CONTEXT.md domain / D-38-03).
+         *
+         *     Values byte-stable with migration 0016_trainer_availability_slots CHECK
+         *     `ck_trainer_availability_slots_status`. NO 'available' — research
+         *     ARCHITECTURE.md drafted it but REQUIREMENTS SLOT-01 overrode (D-38-03).
+         * @enum {string}
+         */
+        SlotStatus: "active" | "booked" | "cancelled";
         /**
          * TelegramStartResponse
          * @description POST /auth/telegram/start success body (AUTH-TG-01).
@@ -2618,6 +3241,142 @@ export interface operations {
             };
         };
     };
+    list_bookings_api_v1_bookings_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                clientId?: string | null;
+                trainerId?: string | null;
+                fromTime?: string | null;
+                toTime?: string | null;
+                status?: components["schemas"]["BookingStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_BookingResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_booking_api_v1_bookings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_BookingResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_booking_api_v1_bookings__booking_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_BookingDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_booking_api_v1_bookings__booking_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_BookingResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_clients_api_v1_clients_get: {
         parameters: {
             query?: {
@@ -2772,6 +3531,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bookings_for_client_api_v1_clients__client_id__bookings_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                fromTime?: string | null;
+                toTime?: string | null;
+                status?: components["schemas"]["BookingStatus"] | null;
+            };
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_BookingResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -3768,6 +4564,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_PtSessionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_slots_api_v1_trainer_slots_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                trainerId?: string | null;
+                fromTime?: string | null;
+                toTime?: string | null;
+                status?: components["schemas"]["SlotStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_SlotResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_slot_api_v1_trainer_slots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SlotResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_slot_api_v1_trainer_slots__slot_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SlotResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_slot_api_v1_trainer_slots__slot_id__cancel_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SlotResponse_"];
                 };
             };
             /** @description Validation Error */
