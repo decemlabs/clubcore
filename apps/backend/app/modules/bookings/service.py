@@ -433,7 +433,13 @@ async def _mark_no_show_bookings(  # noqa: SVC001 caller-owns-txn
     # Step 3 — Per-row audit emit. Event name + resource_type MUST be string
     # literals (INFRA-11 AST gate). Payload matches BookingNoShowPayload
     # (extra='forbid') exactly: booking_id, slot_id, client_id, no_show_at.
-    # UUIDs passed raw — Pydantic v2 coerces (D-39-14).
+    # UUIDs stringified at callsite per Pitfall 13 / D-38-17: although the
+    # Pydantic v2 schema coerces both raw UUID and str (D-39-14), the
+    # downstream JSONB write needs JSON-serializable values; raw UUID
+    # objects are not json.dumps-able. Mirror the Phase 38 cancel_booking
+    # callsite shape at bookings/service.py:709-713 verbatim. `resource_id`
+    # is the typed FK column on AuditLog (PgUUID) — NOT in the JSONB
+    # payload — so it stays as a raw UUID.
     no_show_at_iso = datetime.now(MOSCOW_TZ).isoformat()
     for c in candidates:
         await audit.emit(
@@ -442,9 +448,9 @@ async def _mark_no_show_bookings(  # noqa: SVC001 caller-owns-txn
             actor_user_id=None,  # system actor; audit_log.actor_user_id is nullable
             resource_type="booking",  # LITERAL — INFRA-11 AST gate
             resource_id=c.id,
-            booking_id=c.id,
-            slot_id=c.slot_id,
-            client_id=c.client_id,
+            booking_id=str(c.id),
+            slot_id=str(c.slot_id),
+            client_id=str(c.client_id),
             no_show_at=no_show_at_iso,
         )
 
