@@ -13,6 +13,7 @@ the Pydantic extra-forbid round-trip precedent).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -23,9 +24,20 @@ from app.core.audit_payloads import (
     BookingCancelledPayload,
     BookingCreatedPayload,
     BookingNoShowPayload,
+    EmailSendFailedPayload,
+    EmailSentPayload,
+    PasswordResetCompletedPayload,
+    PasswordResetRequestedPayload,
+    PaymentReceiptEmailedPayload,
     PtSessionRecordedPayload,
     SlotCancelledPayload,
     SlotPublishedPayload,
+    UserDeactivatedPayload,
+    UserInvitationAcceptedPayload,
+    UserInvitationRevokedPayload,
+    UserInvitedPayload,
+    UserReactivatedPayload,
+    UserSoftDeletedPayload,
 )
 
 # ---------------------------------------------------------------------------
@@ -328,23 +340,6 @@ def test_booking_created_payload_registry_unchanged() -> None:
 # ---------------------------------------------------------------------------
 
 
-from datetime import datetime, timezone  # noqa: E402
-
-from app.core.audit_payloads import (  # noqa: E402
-    EmailSendFailedPayload,
-    EmailSentPayload,
-    PasswordResetCompletedPayload,
-    PasswordResetRequestedPayload,
-    PaymentReceiptEmailedPayload,
-    UserDeactivatedPayload,
-    UserInvitationAcceptedPayload,
-    UserInvitationRevokedPayload,
-    UserInvitedPayload,
-    UserReactivatedPayload,
-    UserSoftDeletedPayload,
-)
-
-
 # ---------------------------------------------------------------------------
 # EmailSentPayload — Phase 42 EMAIL-01
 # ---------------------------------------------------------------------------
@@ -445,7 +440,7 @@ def test_user_invited_payload_round_trip() -> None:
         invited_user_id=uuid4(),
         invited_email="new@example.com",
         invited_role="reception",
-        invitation_expires_at=datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+        invitation_expires_at=datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC),
     )
     assert p.invited_role == "reception"
     assert isinstance(p.invited_user_id, UUID)
@@ -458,7 +453,7 @@ def test_user_invited_payload_rejects_extra_keys() -> None:
             invited_user_id=uuid4(),
             invited_email="new@example.com",
             invited_role="reception",
-            invitation_expires_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            invitation_expires_at=datetime(2026, 6, 1, tzinfo=UTC),
             spurious="nope",
         )
 
@@ -703,7 +698,7 @@ def test_v16_payloads_accept_uuid_as_str() -> None:
         invited_user_id=str(uid),  # type: ignore[arg-type]
         invited_email="x@y.z",
         invited_role="owner",
-        invitation_expires_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        invitation_expires_at=datetime(2026, 6, 1, tzinfo=UTC),
     )
     assert p.invited_user_id == uid
     assert p.audit_correlation_id == uid
