@@ -48,6 +48,23 @@ from app.modules.bookings.schemas import (
 )
 
 
+def _slot_trainer_attr() -> Any:
+    """Resolve ``TrainerAvailabilitySlot.trainer`` attribute via importlib.
+
+    SA 2.0 strict rejects string-keyed nested joinedload, so the
+    ``joinedload(Booking.slot).joinedload(...)`` chain needs the class-bound
+    ``trainer`` attribute. A direct ``from app.modules.schedule.models import
+    TrainerAvailabilitySlot`` here would break the ``modules-independent``
+    import-linter contract; ``importlib.import_module`` is opaque to grimp's
+    static AST walker (PATTERNS.md §5 Option A — mirrors the indirection used
+    in ``bookings/service._load_booking_with_relationships``).
+    """
+    import importlib
+
+    schedule_models = importlib.import_module("app.modules.schedule.models")
+    return schedule_models.TrainerAvailabilitySlot.trainer
+
+
 async def get_booking_by_id(
     session: AsyncSession,
     booking_id: UUID,
@@ -56,8 +73,18 @@ async def get_booking_by_id(
 
     Cancelled / no_show / completed rows are still returned; lifecycle is
     purely status-based. Phase 38 plan 38-03 read/cancel endpoints consume.
+
+    Phase 40 BLOCKER-2 — eager-loads ``slot`` and ``slot.trainer`` so the
+    response projection in ``bookings/service.py`` can populate
+    ``trainer_full_name`` + ``slot_start_time`` on ``BookingResponse`` without
+    an N+1 lookup (D-38-08 — no snapshot columns; the JOIN runs at
+    response-construction time).
     """
-    stmt: Select[tuple[Booking]] = select(Booking).where(Booking.id == booking_id)
+    stmt: Select[tuple[Booking]] = (
+        select(Booking)
+        .options(joinedload(Booking.slot).joinedload(_slot_trainer_attr()))
+        .where(Booking.id == booking_id)
+    )
     result: Booking | None = await session.scalar(stmt)
     return result
 
@@ -192,10 +219,13 @@ async def get_booking_with_relations(
     Returns None for missing booking_id (no soft-delete filter — D-38-04
     mirror; cancelled / completed / no_show rows are still returned).
     """
+    # Phase 40 BLOCKER-2 — chain joinedload(slot).joinedload(trainer) so the
+    # BookingDetailResponse (inherits BookingResponse) carries
+    # trainer_full_name + slot_start_time without an N+1 lookup.
     stmt: Select[tuple[Booking]] = (
         select(Booking)
         .options(
-            joinedload(Booking.slot),
+            joinedload(Booking.slot).joinedload(_slot_trainer_attr()),
             joinedload(Booking.pt_package),
         )
         .where(Booking.id == booking_id)
@@ -284,8 +314,11 @@ async def list_bookings_paginated(
     `PaginatedData.model_construct` skips Pydantic validation against the
     SA ORM generic parameter (mirrors pt_packages.list_pt_packages_paginated).
     """
+    # Phase 40 BLOCKER-2 — chain joinedload(slot).joinedload(trainer) so
+    # BookingResponse can carry trainer_full_name + slot_start_time without
+    # an N+1 lookup at the service layer (D-38-08 preserved).
     base_stmt: Select[tuple[Booking]] = select(Booking).options(
-        joinedload(Booking.slot),
+        joinedload(Booking.slot).joinedload(_slot_trainer_attr()),
         joinedload(Booking.pt_package),
     )
     list_stmt, _predicates = _apply_booking_list_filters(
@@ -340,8 +373,10 @@ async def list_bookings_for_client_paginated(
     so the BookingDetailResponse projection path (if extended in v1.6+)
     finds the related rows already loaded.
     """
+    # Phase 40 BLOCKER-2 — chain joinedload(slot).joinedload(trainer) for
+    # BookingResponse.trainer_full_name + slot_start_time projection.
     base_stmt: Select[tuple[Booking]] = select(Booking).options(
-        joinedload(Booking.slot),
+        joinedload(Booking.slot).joinedload(_slot_trainer_attr()),
         joinedload(Booking.pt_package),
     )
     list_stmt, _ = _apply_booking_list_filters(

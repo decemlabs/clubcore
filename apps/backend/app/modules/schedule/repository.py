@@ -33,6 +33,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.pagination import PaginatedData
 from app.modules.schedule.models import TrainerAvailabilitySlot
@@ -51,9 +52,17 @@ async def get_slot_by_id(
     Cancelled / booked rows are still returned; lifecycle is purely status-based.
     Phase 38 bookings.service consumes via the SlotById Protocol slot in
     core.dependencies (silent-None per D-37-06).
+
+    Phase 40 BLOCKER-2 — ``joinedload(TrainerAvailabilitySlot.trainer)`` so the
+    schedule service can project ``trainer_full_name`` into ``SlotResponse``
+    without an N+1 lookup (D-38-08 — preserves modules-independent contract;
+    the relationship is string-keyed so no ``trainers`` module import is
+    introduced here).
     """
-    stmt: Select[tuple[TrainerAvailabilitySlot]] = select(TrainerAvailabilitySlot).where(
-        TrainerAvailabilitySlot.id == slot_id
+    stmt: Select[tuple[TrainerAvailabilitySlot]] = (
+        select(TrainerAvailabilitySlot)
+        .options(joinedload(TrainerAvailabilitySlot.trainer))
+        .where(TrainerAvailabilitySlot.id == slot_id)
     )
     result: TrainerAvailabilitySlot | None = await session.scalar(stmt)
     return result
@@ -123,6 +132,9 @@ async def list_slots_paginated(
 
     stmt: Select[tuple[TrainerAvailabilitySlot]] = (
         select(TrainerAvailabilitySlot)
+        # Phase 40 BLOCKER-2 — eager-load trainer for trainer_full_name
+        # projection in SlotResponse (avoids N+1; D-38-08 preserved).
+        .options(joinedload(TrainerAvailabilitySlot.trainer))
         .where(where_clause)
         .order_by(
             TrainerAvailabilitySlot.start_time.asc(),
@@ -131,7 +143,7 @@ async def list_slots_paginated(
     )
     offset = (query.page - 1) * query.page_size
     stmt = stmt.offset(offset).limit(query.page_size)
-    rows = (await session.scalars(stmt)).all()
+    rows = (await session.scalars(stmt)).unique().all()
     return PaginatedData.model_construct(
         items=list(rows),
         total=total,

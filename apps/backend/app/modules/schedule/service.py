@@ -51,6 +51,7 @@ from app.modules.schedule.schemas import (
     SlotCreateRequest,
     SlotListQuery,
     SlotResponse,
+    SlotStatus,
 )
 
 _log = structlog.get_logger("schedule.service")
@@ -223,6 +224,29 @@ async def restore_slot_to_active(  # noqa: SVC001 caller-owns-txn
 # ---------------------------------------------------------------------------
 
 
+def _slot_response_from_orm(slot: TrainerAvailabilitySlot) -> SlotResponse:
+    """Project a TrainerAvailabilitySlot ORM (with eager-loaded ``trainer``)
+    into ``SlotResponse``, injecting ``trainer_full_name`` from the joined
+    trainer row (Phase 40 BLOCKER-2).
+
+    Callers MUST have eager-loaded the ``trainer`` relationship via
+    ``joinedload(TrainerAvailabilitySlot.trainer)`` (the repository helpers
+    that return slots for response projection do this).
+    """
+    return SlotResponse(
+        id=slot.id,
+        trainer_id=slot.trainer_id,
+        start_time=slot.start_time,
+        end_time=slot.end_time,
+        status=SlotStatus(slot.status),
+        created_at=slot.created_at,
+        created_by_user_id=slot.created_by_user_id,
+        cancelled_at=slot.cancelled_at,
+        cancel_reason=slot.cancel_reason,
+        trainer_full_name=slot.trainer.full_name,
+    )
+
+
 async def list_slots(
     session: AsyncSession,
     query: SlotListQuery,
@@ -231,10 +255,12 @@ async def list_slots(
 
     Repository resolves default time-window bounds when the query fields
     are None (FastAPI query schema cannot synthesize a default datetime).
+    Repository eagerly loads ``trainer`` so each ``SlotResponse`` carries
+    ``trainer_full_name`` (Phase 40 D-40-07 keyboard label data).
     """
     page = await repository.list_slots_paginated(session, query)
     return PaginatedData.model_construct(
-        items=[SlotResponse.model_validate(s, from_attributes=True) for s in page.items],
+        items=[_slot_response_from_orm(s) for s in page.items],
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -249,7 +275,7 @@ async def get_slot(
     slot = await repository.get_slot_by_id(session, slot_id)
     if slot is None:
         raise SlotNotFoundError("slot_not_found")
-    return SlotResponse.model_validate(slot, from_attributes=True)
+    return _slot_response_from_orm(slot)
 
 
 # ---------------------------------------------------------------------------
@@ -348,9 +374,17 @@ async def publish_slot(
     # 8. Commit (SVC001 gate).
     await session.commit()
 
-    # 9. Narrow refresh + response.
-    await session.refresh(slot, attribute_names=["created_at", "updated_at"])
-    return SlotResponse.model_validate(slot, from_attributes=True)
+    # 9. Reload via repository (joinedload trainer for trainer_full_name
+    # projection in SlotResponse — Phase 40 BLOCKER-2).
+    reloaded = await repository.get_slot_by_id(session, slot.id)
+    if reloaded is None:
+        # Defensive — the slot was just INSERTed and committed in this UoW;
+        # `get_slot_by_id` returning None here would indicate session-state
+        # corruption.
+        raise RuntimeError(
+            "publish_slot: just-inserted slot disappeared on reload"
+        )
+    return _slot_response_from_orm(reloaded)
 
 
 async def cancel_slot(
@@ -549,6 +583,13 @@ async def cancel_slot(
                 sender=telegram_sender_mod,
             )
 
-    # 9. Refresh + response.
-    await session.refresh(slot, attribute_names=["updated_at"])
-    return SlotResponse.model_validate(slot, from_attributes=True)
+    # 9. Reload via repository (joinedload trainer for trainer_full_name
+    # projection in SlotResponse — Phase 40 BLOCKER-2).
+    reloaded = await repository.get_slot_by_id(session, slot.id)
+    if reloaded is None:
+        # Defensive — the slot was just cancelled in-place and committed;
+        # missing here would mean session-state corruption.
+        raise RuntimeError(
+            "cancel_slot: just-cancelled slot disappeared on reload"
+        )
+    return _slot_response_from_orm(reloaded)

@@ -168,7 +168,19 @@ class BookingsForClientListQuery(PageQuery):
 
 
 class BookingResponse(ResponseData):
-    """Outbound representation of a Booking (BOOK-02 / BOOK-07 / BOOK-08)."""
+    """Outbound representation of a Booking (BOOK-02 / BOOK-07 / BOOK-08).
+
+    Phase 40 BLOCKER-2 — ``trainer_full_name`` + ``slot_start_time`` are
+    JOIN-projected from the trainers + trainer_availability_slots tables
+    (preserves D-38-08 — no snapshot columns on ``bookings``). The Phase 40
+    /book callback handler (plan 40-03) consumes these fields directly to
+    render the confirmation DM without a secondary lookup.
+
+    Phase 40 D-40-05 — ``created_by_user_id`` becomes Optional. NULL means
+    "self-service via Telegram bot, see ``audit_log.payload.actor_role`` for
+    the discriminator"; the reception / owner paths continue to populate
+    this with the authenticated actor's UUID.
+    """
 
     id: UUID
     slot_id: UUID
@@ -176,11 +188,14 @@ class BookingResponse(ResponseData):
     pt_package_id: UUID
     status: BookingStatus
     created_at: datetime
-    created_by_user_id: UUID
+    created_by_user_id: UUID | None  # Phase 40 D-40-05 — NULL for bot path
     cancelled_at: datetime | None
     cancel_reason: str | None
     no_show_at: datetime | None
     completed_at: datetime | None
+    # Phase 40 BLOCKER-2 — JOIN-projected display fields:
+    trainer_full_name: str
+    slot_start_time: datetime
 
 
 class SlotSnapshot(BackendSchemaBase):

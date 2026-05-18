@@ -82,6 +82,7 @@ from app.modules.bookings.schemas import (
     BookingListQuery,
     BookingResponse,
     BookingsForClientListQuery,
+    BookingStatus,
     SlotSnapshot,
 )
 
@@ -197,6 +198,38 @@ class CancelWindowExpiredError(ConflictError):
 
     code = "cancel_window_expired"
     status_code = 409
+
+
+# ---------------------------------------------------------------------------
+# Phase 40 BLOCKER-2 — BookingResponse projection helper with JOIN fields.
+# ---------------------------------------------------------------------------
+
+
+def _booking_response_from_orm(booking: Booking) -> BookingResponse:
+    """Project a Booking ORM (with eager-loaded ``slot`` + ``slot.trainer``)
+    into ``BookingResponse``, injecting ``trainer_full_name`` and
+    ``slot_start_time`` from the joined rows (Phase 40 BLOCKER-2 / D-40-07).
+
+    Callers MUST have eager-loaded ``Booking.slot`` and ``slot.trainer``
+    (the repository helpers that return bookings for response projection
+    do this — ``get_booking_by_id``, ``list_bookings_paginated``,
+    ``list_bookings_for_client_paginated``, ``get_booking_with_relations``).
+    """
+    return BookingResponse(
+        id=booking.id,
+        slot_id=booking.slot_id,
+        client_id=booking.client_id,
+        pt_package_id=booking.pt_package_id,
+        status=BookingStatus(booking.status),
+        created_at=booking.created_at,
+        created_by_user_id=booking.created_by_user_id,
+        cancelled_at=booking.cancelled_at,
+        cancel_reason=booking.cancel_reason,
+        no_show_at=booking.no_show_at,
+        completed_at=booking.completed_at,
+        trainer_full_name=booking.slot.trainer.full_name,
+        slot_start_time=booking.slot.start_time,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -804,11 +837,17 @@ async def create_booking(
             sender=telegram_sender,
         )
 
-    # Step 10 — Narrow refresh + response (WR-04 lesson — populate the
-    # server-generated created_at / updated_at into the loaded ORM
-    # instance for the response envelope).
-    await session.refresh(booking, attribute_names=["created_at", "updated_at"])
-    return BookingResponse.model_validate(booking, from_attributes=True)
+    # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2) so
+    # BookingResponse carries trainer_full_name + slot_start_time without
+    # an N+1 lookup.
+    reloaded = await repository.get_booking_by_id(session, booking.id)
+    if reloaded is None:
+        # Defensive — booking was just INSERTed and committed; missing here
+        # would indicate session-state corruption.
+        raise RuntimeError(
+            "create_booking: just-inserted booking disappeared on reload"
+        )
+    return _booking_response_from_orm(reloaded)
 
 
 # ---------------------------------------------------------------------------
@@ -944,12 +983,13 @@ async def cancel_booking(
                 sender=telegram_sender,
             )
 
-    # Step 10 — Narrow refresh + response.
-    await session.refresh(
-        booking,
-        attribute_names=["updated_at"],
-    )
-    return BookingResponse.model_validate(booking, from_attributes=True)
+    # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2).
+    reloaded = await repository.get_booking_by_id(session, booking.id)
+    if reloaded is None:
+        raise RuntimeError(
+            "cancel_booking: just-cancelled booking disappeared on reload"
+        )
+    return _booking_response_from_orm(reloaded)
 
 
 # ---------------------------------------------------------------------------
@@ -964,15 +1004,13 @@ async def list_bookings(
     """Paginated booking list (Phase 38 plan 38-03 / BOOK-07).
 
     Read-only — NO commit, NO audit. Delegates to
-    `repository.list_bookings_paginated`; maps Booking ORM rows to
-    BookingResponse via `from_attributes=True`.
+    `repository.list_bookings_paginated`; projects Booking ORM rows via
+    ``_booking_response_from_orm`` (Phase 40 BLOCKER-2 — trainer_full_name +
+    slot_start_time fields populated from the joinedload chain).
     """
     page = await repository.list_bookings_paginated(session, query)
     return PaginatedData.model_construct(
-        items=[
-            BookingResponse.model_validate(b, from_attributes=True)
-            for b in page.items
-        ],
+        items=[_booking_response_from_orm(b) for b in page.items],
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -998,10 +1036,7 @@ async def list_bookings_for_client(
         session, client_id, query
     )
     return PaginatedData.model_construct(
-        items=[
-            BookingResponse.model_validate(b, from_attributes=True)
-            for b in page.items
-        ],
+        items=[_booking_response_from_orm(b) for b in page.items],
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -1060,6 +1095,9 @@ async def get_booking(
             "cancel_reason": booking.cancel_reason,
             "no_show_at": booking.no_show_at,
             "completed_at": booking.completed_at,
+            # Phase 40 BLOCKER-2 — JOIN-projected fields:
+            "trainer_full_name": slot_orm.trainer.full_name,
+            "slot_start_time": slot_orm.start_time,
             "slot": slot_snapshot,
             "pt_package": pt_package_payload,
         }
