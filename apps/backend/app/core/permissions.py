@@ -26,6 +26,8 @@ class Action(StrEnum):
     CANCEL = "cancel"  # Phase 15 INFRA-08 — memberships cancel
     CHECK_IN = "check_in"  # Phase 15 INFRA-08 — visits check-in (value uses underscore)
     LIST = "list"  # Phase 37 INFRA-26 / D-37-03a — semantic separation from VIEW for listings
+    # NEW Phase 41 INFRA-37 / D-41-22 — USERS mutations (deactivate/reactivate/invitation-revoke).
+    UPDATE = "update"
 
 
 class Resource(StrEnum):
@@ -51,9 +53,10 @@ class Resource(StrEnum):
     PT_SESSIONS = "pt-sessions"  # Phase 30 INFRA-18 — kebab (multi-word)
     SCHEDULE_SLOTS = "schedule-slots"  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
     BOOKINGS = "bookings"  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
+    USERS = "users"  # NEW Phase 41 INFRA-37 / D-41-21 — multi-user admin module (Phase 43)
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (29 entries after Phase 37 INFRA-27).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (33 entries after Phase 41 INFRA-37).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -111,6 +114,13 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         (Action.EDIT, Resource.SCHEDULE_SLOTS),
         (Action.DELETE, Resource.SCHEDULE_SLOTS),
         (Action.CANCEL, Resource.SCHEDULE_SLOTS),
+        # v1.6 (Phase 41 INFRA-37 / D-41-21 — Multi-user admin; reception has zero USERS perms).
+        # D-41-22: reuses Action.{CREATE, UPDATE, DELETE, LIST}; deactivate/reactivate/
+        # invitation-revoke all map to Action.UPDATE; soft-delete maps to Action.DELETE.
+        (Action.CREATE, Resource.USERS),
+        (Action.UPDATE, Resource.USERS),
+        (Action.DELETE, Resource.USERS),
+        (Action.LIST, Resource.USERS),
     }
 )
 
