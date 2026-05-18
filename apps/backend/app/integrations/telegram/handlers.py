@@ -36,6 +36,7 @@ from datetime import UTC, datetime, timedelta
 from datetime import datetime as _datetime
 from types import ModuleType
 from typing import Any, Final, NamedTuple
+from uuid import UUID
 from zoneinfo import ZoneInfo
 from zoneinfo import ZoneInfo as _ZoneInfo
 
@@ -537,3 +538,153 @@ async def book_handler(
             _BOOK_PROMPT_DM,
             reply_markup=markup,
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 40 BOT-03 — /book CallbackQueryHandler (D-40-09, D-40-10).
+# ---------------------------------------------------------------------------
+
+
+async def book_callback_handler(
+    update: Any,  # telegram.Update at runtime
+    context: Any,  # telegram.ext.CallbackContext at runtime
+    ctx: HandlerContext,
+) -> None:
+    """ptb /book CallbackQueryHandler — Phase 40 BOT-03.
+
+    PTB's ``CallbackQueryHandler(pattern=r"^BK:[uuid]$")`` already filters
+    callback_data shape (D-40-09); structurally invalid data never reaches
+    this handler. Defensive UUID parse is still applied — a regex bypass
+    via spoofed callback returns silently with a structlog WARNING.
+
+    Anti-oracle D-40-10 / C-12: every one of the 7 domain error classes
+    raised by ``ctx.bookings_service.create_booking_via_bot`` maps to the
+    byte-identical ``_BOT_BOOK_DENIED_DM`` (NO discriminating placeholder).
+    Discrimination lives only in structlog WARNING ``book_callback_denied``
+    with ``error_class=type(exc).__name__``.
+
+    BLOCKER-3 fix: confirmation DM renders directly from
+    ``BookingResponse.trainer_full_name`` + ``BookingResponse.slot_start_time``
+    (populated by Phase 40 plan 40-02 Task 2 JOIN projection). The handler
+    does NOT call any secondary slot-by-id resolver on the schedule service
+    module — that attribute does not exist there (the actual resolver is a
+    Protocol slot in ``app.core.dependencies``, not a service method).
+    The regression-guard test ``test_book_callback_does_not_reference_*``
+    asserts this file is free of any reference to the bogus attribute name.
+
+    Modules-independent contract preserved: the bookings_service module
+    arrives via ``HandlerContext``; the ``_BOT_BOOK_DENIED_DM`` constant
+    and ``render_booking_confirmed_dm`` helper are reached via
+    ``importlib.import_module`` (mirrors ``book_handler``'s indirection).
+    """
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    update_id = getattr(update, "update_id", None)
+    if update_id is None:
+        return
+    if query.message is None:
+        return
+    chat_id: int = query.message.chat.id
+
+    if not await _dedupe_update_id(ctx.redis, update_id, chat_id):
+        return
+
+    raw = query.data
+    if not raw.startswith("BK:"):
+        # PTB regex already filtered this — defensive log + drop (D-40-09).
+        logger.warning(
+            "book_callback_invalid_data",
+            update_id=update_id,
+            chat_id=chat_id,
+            data_prefix=raw[:10],
+        )
+        return
+    try:
+        slot_id = UUID(raw[3:])
+    except ValueError:
+        logger.warning(
+            "book_callback_invalid_uuid",
+            update_id=update_id,
+            chat_id=chat_id,
+            data_prefix=raw[:10],
+        )
+        return
+
+    effective_user = update.effective_user
+    if effective_user is None:
+        return
+    tg_user_id: int = effective_user.id
+
+    # Resolve modules-level constants WITHOUT static imports
+    # (preserves `integrations must not import modules` import-linter contract).
+    bookings_notifications = importlib.import_module(
+        "app.modules.bookings.notifications"
+    )
+    bot_book_denied_dm: str = bookings_notifications._BOT_BOOK_DENIED_DM
+    render_confirmed = bookings_notifications.render_booking_confirmed_dm
+
+    async with ctx.session_factory() as session:
+        # Anti-oracle path A — stale keyboard tap from an unlinked user.
+        client = await resolve_client_by_telegram_user_id(session, tg_user_id)
+        if client is None:
+            logger.warning(
+                "book_callback_denied",
+                update_id=update_id,
+                chat_id=chat_id,
+                error_class="ClientNotLinkedError",
+            )
+            await query.edit_message_text(bot_book_denied_dm)
+            return
+
+        # Anti-oracle path B — pt_package state changed between render and tap.
+        pt_package = await get_active_pt_package(session, client.id)
+        if pt_package is None:
+            logger.warning(
+                "book_callback_denied",
+                update_id=update_id,
+                chat_id=chat_id,
+                error_class="PtPackageNotActiveError",
+            )
+            await query.edit_message_text(bot_book_denied_dm)
+            return
+
+        try:
+            booking_response = await ctx.bookings_service.create_booking_via_bot(
+                session,
+                client_id=client.id,
+                slot_id=slot_id,
+                pt_package_id=pt_package.id,
+            )
+        except Exception as exc:
+            # Anti-oracle D-40-10: EVERY error class → byte-identical DM.
+            # String-name dispatch (integrations perp modules — no error class
+            # import lands in this file).
+            cls_name = type(exc).__name__
+            logger.warning(
+                "book_callback_denied",
+                update_id=update_id,
+                chat_id=chat_id,
+                error_class=cls_name,
+            )
+            await query.edit_message_text(bot_book_denied_dm)
+            return
+
+        # Happy path. Service already committed + emitted booking_created
+        # with actor_role='telegram_bot'. Render the confirmation DM directly
+        # from BookingResponse JOIN-projected fields (BLOCKER-3 fix — no
+        # secondary lookup against schedule_service).
+        # NOTE: ClientByTelegram Protocol exposes only `.id` (Phase 19 D-02 —
+        # kept narrow). The real resolver yields the full Client ORM row, so
+        # `first_name` is present at runtime. `getattr` access keeps the
+        # Protocol contract narrow while still letting us display a friendly
+        # name in the confirmation DM.
+        start_msk = booking_response.slot_start_time.astimezone(_MOSCOW_TZ)
+        raw_first_name: Any = getattr(client, "first_name", None) or "клиент"
+        client_display_name: str = str(raw_first_name).strip() or "клиент"
+        dm_text = render_confirmed(
+            client_name=client_display_name,
+            trainer_name=booking_response.trainer_full_name,
+            slot_start_msk=start_msk.strftime("%d.%m.%Y %H:%M"),
+        )
+        await query.edit_message_text(dm_text)

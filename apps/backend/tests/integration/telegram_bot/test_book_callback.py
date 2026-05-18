@@ -253,10 +253,10 @@ async def test_book_callback_happy_path_edits_to_confirmed_dm(
     edit = update.callback_query.edit_message_text
     assert edit.await_count == 1
     sent_text = edit.await_args.args[0] if edit.await_args.args else edit.await_args.kwargs["text"]
-    # Happy DM has trainer_full_name + 'МСК' marker + client first_name.
+    # Happy DM has trainer_full_name + Moscow-TZ marker + client first_name.
     assert "Анна Петрова" in sent_text
     assert "Иван" in sent_text
-    assert "МСК" in sent_text
+    assert "МСК" in sent_text  # noqa: RUF001
     assert sent_text != _BOT_BOOK_DENIED_DM
 
 
@@ -302,22 +302,25 @@ def test_anti_oracle_dm_byte_stable() -> None:
     tree = ast.parse(notifications_path.read_text(encoding="utf-8"))
     found = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            if node.target.id == "_BOT_BOOK_DENIED_DM":
-                found = True
-                rhs = node.value
-                assert rhs is not None, (
-                    "_BOT_BOOK_DENIED_DM must have a value (Final[str] assignment)"
-                )
-                assert isinstance(rhs, ast.Constant), (
-                    "_BOT_BOOK_DENIED_DM must be an ast.Constant (str), "
-                    "NOT an f-string / JoinedStr — anti-oracle invariant. "
-                    f"Actual node type: {type(rhs).__name__}"
-                )
-                assert isinstance(rhs.value, str), (
-                    "_BOT_BOOK_DENIED_DM constant value must be str"
-                )
-                break
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "_BOT_BOOK_DENIED_DM"
+        ):
+            found = True
+            rhs = node.value
+            assert rhs is not None, (
+                "_BOT_BOOK_DENIED_DM must have a value (Final[str] assignment)"
+            )
+            assert isinstance(rhs, ast.Constant), (
+                "_BOT_BOOK_DENIED_DM must be an ast.Constant (str), "
+                "NOT an f-string / JoinedStr — anti-oracle invariant. "
+                f"Actual node type: {type(rhs).__name__}"
+            )
+            assert isinstance(rhs.value, str), (
+                "_BOT_BOOK_DENIED_DM constant value must be str"
+            )
+            break
     assert found, "_BOT_BOOK_DENIED_DM annotation not found in notifications.py"
 
 
@@ -389,11 +392,11 @@ async def test_book_callback_anti_oracle_on_domain_error(
     slot_uuid = uuid4()
 
     # Build a synthetic error class with the requested __name__.
-    SyntheticError = type(error_class_name, (Exception,), {})
+    synthetic_error_cls = type(error_class_name, (Exception,), {})
 
     stub_bookings_service = MagicMock(spec=bookings_service_mod)
     stub_bookings_service.create_booking_via_bot = AsyncMock(
-        side_effect=SyntheticError("simulated")
+        side_effect=synthetic_error_cls("simulated")
     )
 
     fake_redis = fakeredis.aioredis.FakeRedis()
@@ -436,10 +439,10 @@ async def test_book_callback_logs_error_class_on_denial(
 
     structlog.configure(processors=[_capture, structlog.dev.ConsoleRenderer()])
     try:
-        SyntheticError = type("SlotAlreadyBookedError", (Exception,), {})
+        synthetic_error_cls = type("SlotAlreadyBookedError", (Exception,), {})
         stub_bookings_service = MagicMock(spec=bookings_service_mod)
         stub_bookings_service.create_booking_via_bot = AsyncMock(
-            side_effect=SyntheticError("simulated race-loss")
+            side_effect=synthetic_error_cls("simulated race-loss")
         )
 
         tg_user_id = _TG_USER_BASE + 30
