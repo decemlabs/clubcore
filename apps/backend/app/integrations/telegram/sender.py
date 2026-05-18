@@ -9,6 +9,7 @@ without try/except in the handler.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from telegram import Bot
 from telegram.error import BadRequest, Forbidden
@@ -53,14 +54,30 @@ async def send_otp_dm(bot: Bot, chat_id: int, code: str) -> SendResult:
         return SendResult(ok=False, blocked=False, error=str(exc))
 
 
-async def send_text_dm(bot: Bot, chat_id: int, text: str) -> SendResult:
+async def send_text_dm(
+    bot: Bot,
+    chat_id: int,
+    text: str,
+    *,
+    reply_markup: Any | None = None,
+) -> SendResult:
     """Generic text DM (used by handlers.py for stranger / replay messages).
 
     Same SendResult contract as send_otp_dm. Stubbing send_text_dm in tests is
     optional (the stranger / replay paths are observed via DB state + structlog).
+
+    Phase 40 WARNING-4 — ``reply_markup`` kwarg (keyword-only, default None)
+    forwards a ``telegram.ReplyMarkup`` (e.g. ``InlineKeyboardMarkup``) to the
+    underlying ``bot.send_message``. The /book command (Phase 40 BOT-02)
+    consumes this to attach the slot-picker keyboard. Existing 3-arg
+    positional callers are unaffected by the default.
     """
     try:
-        await bot.send_message(chat_id=chat_id, text=text)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+        )
         return SendResult(ok=True)
     except Forbidden:
         return SendResult(ok=False, blocked=True)
