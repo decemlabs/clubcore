@@ -68,13 +68,19 @@ async def insert_booking(
     slot_id: UUID,
     client_id: UUID,
     pt_package_id: UUID,
-    created_by_user_id: UUID,
+    created_by_user_id: UUID | None = None,
 ) -> Booking:
     """Insert a Booking row. Caller MUST flush + commit (D-38 SVC001).
 
     Keyword-only after `*` to match the call shape from
     `service.create_booking` and document field intent at the callsite
     (mirrors pt_sessions/repository.py:insert_pt_session).
+
+    ``created_by_user_id`` is ``UUID | None`` per Phase 40 D-40-05 / BLOCKER-4:
+    the bot self-service path (`create_booking_via_bot`) inserts with
+    ``None`` because no authenticated user is the creator. Reception / owner
+    callsites continue to pass a real UUID — the default does not change the
+    HTTP-API behaviour.
 
     Status defaults to 'confirmed' via the server_default in the ORM
     column. No `status=` kwarg here — the partial UNIQUE
