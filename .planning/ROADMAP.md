@@ -138,7 +138,7 @@ Plans:
 - [ ] 41-08-PLAN.md — INFRA-38 Alembic 0024 cross-channel discriminator on membership_/booking_notifications
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 41-07-PLAN.md — INFRA-39 actor_context_var + ActorContextMiddleware + ARQ on_job_start/end + audit.emit wiring
+- [x] 41-07-PLAN.md — INFRA-39 actor_context_var + ActorContextMiddleware + ARQ on_job_start/end + audit.emit wiring
 - [ ] 41-09-PLAN.md — INFRA-38 Alembic 0025 password_reset_tokens unified table + ORM + eager-import
 
 ### Phase 42: Email Transport Layer + Email OTP Fallback
@@ -215,7 +215,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 41. INFRA Bedrock + Anti-Oracle Scaffold | 8/11 | In Progress|  |
+| 41. INFRA Bedrock + Anti-Oracle Scaffold | 9/11 | In Progress|  |
 | 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
