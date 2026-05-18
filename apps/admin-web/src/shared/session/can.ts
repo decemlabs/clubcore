@@ -53,6 +53,13 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   { action: 'edit', resource: 'schedule-slots' },
   { action: 'delete', resource: 'schedule-slots' },
   { action: 'cancel', resource: 'schedule-slots' },
+  // v1.6 (Phase 41 INFRA-37 — Multi-user admin; reception has zero USERS perms per D-41-21).
+  // D-41-22: reuses Action.{CREATE, UPDATE, DELETE, LIST}; deactivate/reactivate/
+  // invitation-revoke all map to 'update'; soft-delete maps to 'delete'.
+  { action: 'create', resource: 'users' },
+  { action: 'update', resource: 'users' },
+  { action: 'delete', resource: 'users' },
+  { action: 'list', resource: 'users' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {

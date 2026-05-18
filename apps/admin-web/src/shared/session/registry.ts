@@ -21,6 +21,7 @@ export type Resource =
   | 'pt-sessions' // NEW Phase 30 INFRA-18 — kebab, mirror Resource.PT_SESSIONS.value
   | 'schedule-slots' // NEW Phase 37 INFRA-26 — kebab, mirror Resource.SCHEDULE_SLOTS.value
   | 'bookings' // NEW Phase 37 INFRA-26 — mirror Resource.BOOKINGS.value
+  | 'users' // NEW Phase 41 INFRA-37 / D-41-23 — multi-user admin backend contract; no sidebar in v1.3 mock-reference
 
 export type Action =
   | 'view'
@@ -31,6 +32,7 @@ export type Action =
   | 'cancel' // NEW Phase 15 INFRA-09 — mirrors backend Action.CANCEL.value
   | 'check_in' // NEW Phase 15 INFRA-09 — underscore mirrors Action.CHECK_IN.value
   | 'list' // NEW Phase 37 INFRA-26 / D-37-03a — mirrors backend Action.LIST.value
+  | 'update' // NEW Phase 41 INFRA-37 / D-41-22 — mirrors backend Action.UPDATE.value
 
 export interface RouteEntry {
   path: string
