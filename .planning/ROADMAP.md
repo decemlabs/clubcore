@@ -134,7 +134,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 41-02-PLAN.md — INFRA-35 11 new Pydantic payload schemas (extra=forbid + audit_correlation_id)
-- [ ] 41-06-PLAN.md — INFRA-39 Alembic 0023 audit_log.actor_email_snapshot + FK ON DELETE SET NULL
+- [x] 41-06-PLAN.md — INFRA-39 Alembic 0023 audit_log.actor_email_snapshot + FK ON DELETE SET NULL
 - [ ] 41-08-PLAN.md — INFRA-38 Alembic 0024 cross-channel discriminator on membership_/booking_notifications
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -215,7 +215,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 41. INFRA Bedrock + Anti-Oracle Scaffold | 7/11 | In Progress|  |
+| 41. INFRA Bedrock + Anti-Oracle Scaffold | 8/11 | In Progress|  |
 | 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |

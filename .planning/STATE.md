@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
-stopped_at: None
-last_updated: "2026-05-18T18:55:07.760Z"
+stopped_at: Completed 41-06-PLAN.md
+last_updated: "2026-05-18T19:00:25.943Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 7
-  percent: 64
+  completed_plans: 8
+  percent: 73
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 41 (infra-bedrock-anti-oracle-scaffold) — EXECUTING
-Plan: 8 of 11
+Plan: 9 of 11
 Status: Ready to execute
 Last activity: 2026-05-18
 
@@ -84,6 +84,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase 41]: D-41-27/28 .importlinter modules-independent gains app.modules.users; SVC001 walker scope gains modules/users/service.py + modules/auth/password_reset_service.py (anti-silent-drop pin)
 - [Phase ?]: Plan 41-11 (2026-05-18): RESET-06 anti-oracle xfail-strict test landed at apps/backend/tests/integration/auth/test_password_reset_no_oracle.py. 4-case identical-202 + identical-body + 100ms bounded-timing contract documented as code; xfail(strict=True) per D-41-17 ensures Phase 44 RESET-01 cannot ship the endpoint without satisfying the contract or breaking CI.
 - [Phase ?]: Plan 41-02: 11 v1.6 Pydantic payload schemas registered in AUDIT_PAYLOAD_SCHEMAS with extra='forbid' + audit_correlation_id: UUID | None per D-41-20; PasswordResetRequestedPayload.target_user_id is Optional to support the anti-oracle unknown-email branch (D-41-10)
+- [Phase ?]: Migration 0023 alters fk_audit_log_actor_user_id_users from ON DELETE RESTRICT to SET NULL via drop+recreate (no Postgres ALTER CONSTRAINT for ondelete); pairs with new actor_email_snapshot TEXT NULL column for forensic continuity past user hard-deletes (D-41-08/09/10 schema half).
 
 ### Pending Todos
 
@@ -110,6 +111,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T18:54:50.717Z
-Stopped at: None
+Last session: 2026-05-18T19:00:18.382Z
+Stopped at: Completed 41-06-PLAN.md
 Resume: `/gsd-execute-phase 41` (next plan: 41-10 User hoist+shim or 41-11 RESET-06 anti-oracle test — both Wave 1)
