@@ -1,90 +1,77 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Schedule + Bookings
-status: executing
-stopped_at: Phase 40 minimal verification PASS; full v1.5 close deferred to v1.9 (DEFER-40-01)
-last_updated: "2026-05-18T13:53:00.075Z"
-last_activity: 2026-05-18 -- Phase 40 execution started
+milestone: v1.6
+milestone_name: Email channel + Multi-user admin
+status: ready_to_start
+stopped_at: v1.5 milestone shipped 2026-05-18; ready to spec v1.6
+last_updated: "2026-05-18T14:05:00.000Z"
+last_activity: 2026-05-18 -- v1.5 milestone closed and archived
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-17)
+See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 40 — telegram-book-openapi-drift-gate-milestone-verification
+**Current focus:** v1.6 milestone planning — Email channel + Multi-user admin
 
 ## Current Position
 
-Phase: 40 (telegram-book-openapi-drift-gate-milestone-verification) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 40
-Last activity: 2026-05-18 -- Phase 40 execution started
+Phase: not_started (v1.6 milestone has no phases yet)
+Plan: none
+Status: Ready to start v1.6 (`/gsd-new-milestone` next)
+Last activity: 2026-05-18 -- v1.5 milestone closed and archived
 
 Progress: [░░░░░░░░░░] 0%
 
-## v1.5 Milestone Plan
+## v1.6 Milestone Plan
 
-**Phases:** 37 (Foundations Bedrock) → 38 (Schedule Module + Booking Core) → 39 (Notifications + Cron) → 40 (Telegram /book + OpenAPI + Milestone Verification)
-**Cadence:** 3 feature phases + 1 terminal verification phase (mirrors v1.4 cadence)
-**Requirements:** 57 mapped (11 INFRA/DEBT → Phase 37; 25 SLOT/BOOK/PKG → Phase 38; 10 NOTIFY/CRON → Phase 39; 11 BOT/HANDOFF/VER → Phase 40). 100% coverage.
+**Status:** Not yet specced. Run `/gsd-new-milestone` to capture goals + requirements + roadmap.
+
+**Working scope (from PROJECT.md Next Milestone Goals):**
+- Email integration as second notification channel (Resend / SES / Mailgun — selection TBD at spec phase)
+- Email templates for OTP fallback, expiring-soon, payment-receipt, booking confirm/remind
+- `POST /api/v1/users` (owner-only) for operator onboarding without DB poking
+- soft-delete + deactivate on users; multi-user audit traceability
 
 ## Accumulated Context
 
 ### Decisions
 
-Full decisions log lives in PROJECT.md Key Decisions table.
-
-**v1.5 bedrock decisions (C-01..C-15, locked in REQUIREMENTS.md):**
-
-- C-01 — Two-module split: `schedule/` (catalog) + `bookings/` (transaction), Protocol-bridged
-- C-02 — Partial UNIQUE `(slot_id) WHERE status='confirmed'` on `bookings` — DB wins race
-- C-03 — Decrement-at-delivery preserved; booking does NOT debit `sessions_remaining`
-- C-04 — Booking FSM: `confirmed → cancelled / no_show / completed` + central guard
-- C-05 — Cancel window: reception ≤24h before slot; owner anytime (mirror B-12)
-- C-06 — 5 new LOCKED audit events: `slot_published`, `slot_cancelled`, `booking_created`, `booking_cancelled`, `booking_no_show`. `booking_completed` NOT a separate event — carried by `pt_session_recorded` with `booking_id` payload field
-- C-10 — No-show is cron-only at 23:10 MSK; no manual endpoint in v1.5
-- C-11 — 24h reminder cron at 06:35 MSK + `booking_notifications` idempotency table
-
-**Critical pre-emptions for Phase 37 (from PITFALLS.md):**
-
-- P3: Audit events AND payload schemas pre-registered before any callsite
-- P13: All `audit_payloads.py` UUID fields typed as `str`, not `UUID`
-- P1: Partial UNIQUE on `bookings` must be conditional (`WHERE status='confirmed'`)
-- P8: `BOOKING_STATUS_TRANSITIONS` constant declared before service code lands
-- P6: Use `DateTime(timezone=True)` (TIMESTAMPTZ) for all slot time columns
+Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new decisions (D-37-01..D-40-18) — all archived in `.planning/milestones/v1.5-ROADMAP.md` and per-phase `*-CONTEXT.md` files.
 
 ### Pending Todos
 
-- Run `/gsd-plan-phase 37` to create Phase 37 plans (Foundations Bedrock).
+- Run `/gsd-new-milestone v1.6` to spec the next milestone (goal + requirements + roadmap).
 
 ### Blockers/Concerns
 
-11 remaining DEFER-36-04-A pytest failures from v1.4 (7 pt_sessions MissingGreenlet + 3 pt_packages validation_error envelope drift + 1 test_revert_predicate logic bug) — tracked in Deferred Items. Do not let these block Phase 37 start; address during Phase 37 or 38 as a parallel concern.
+None blocking. Deferred items from prior milestones remain tracked below; none gate v1.6 start.
 
 ## Deferred Items
 
-Items carried forward from v1.4 milestone close on 2026-05-16:
+Items carried forward from v1.5 milestone close on 2026-05-18:
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| pytest_failures | DEFER-36-04-A — 11 remaining failures (was 44; 33 cleared in Phase 36.1 hot-fix): 7 pt_sessions MissingGreenlet, 3 pt_packages validation_error envelope drift, 1 test_revert_predicate partial-UNIQUE logic bug | partial-resolved | Phase 36-04 → Phase 36.1 | Address during v1.5 cycle (Phase 37 plan 37-01 can include a sweep if cheap; otherwise Phase 38 pre-flight) |
-| lint_format | DEFER-36-04-B — `ruff format --check` red on 123 files | acknowledged | Phase 36-04 | Defer to v1.9 doc-debt sweep or a standalone quick task |
-| verification_gap | Phase 31 admin-web browser checks (2 scenarios) | acknowledged | Phase 31 | v2.0 Frontend Integration milestone scope |
-| quick_task | `260501-ndi` orphan in `.planning/quick/` | acknowledged | v1.0 | Defer to `/gsd-cleanup` |
-| uat_gap | Phase 06 + Phase 08 HUMAN-UAT.md pending scenarios | partial | v1.1 | v2.0 Frontend Integration milestone scope |
+| verification_gap | **DEFER-40-01** — Full v1.5 operator runbook (6 curl + 2 Telegram sandbox + 2 cron + 5 CI gate URLs); `run.sh` needs 2+ remaining hotfixes (wrong RBAC actor on POST /trainer-slots; missing X-CSRF-Token header on mutating endpoints). Phase 40 minimal verification PASSED via `scripts/verify_40_create_booking_via_bot.py`; full ritual deferred. | acknowledged | Phase 40 | v1.9 (API Handoff + Production Hardening) — rerun against the stack after `run.sh` hardening |
+| verification_gap | Phase 38 verification gaps (38-VERIFICATION.md status: gaps_found) | acknowledged at v1.5 close | Phase 38 | v1.9 audit sweep, or address during v1.6 if cheap |
+| pytest_failures | DEFER-36-04-A — 11 remaining failures from v1.4 (7 pt_sessions MissingGreenlet + 3 pt_packages validation_error envelope drift + 1 test_revert_predicate logic bug) | unchanged from v1.4 | Phase 36.1 | v1.9 doc-debt + test-debt sweep |
+| lint_format | DEFER-36-04-B — `ruff format --check` red on 123 files | unchanged from v1.4 | Phase 36-04 | v1.9 doc-debt sweep |
+| verification_gap | Phase 31 admin-web browser checks (2 scenarios) | unchanged from v1.3 | Phase 31 | v2.0 Frontend Integration milestone scope |
+| quick_task | `260501-ndi` orphan in `.planning/quick/` | unchanged from v1.0 | v1.0 | Defer to `/gsd-cleanup` |
+| uat_gap | Phase 06 + Phase 08 HUMAN-UAT.md pending scenarios | unchanged from v1.1 | v1.1 | v2.0 Frontend Integration milestone scope |
 
 ## Session Continuity
 
-Last session: 2026-05-18T13:53:00.071Z
-Stopped at: Phase 40 minimal verification PASS; full v1.5 close deferred to v1.9 (DEFER-40-01)
-Resume: `/gsd-plan-phase 37`
+Last session: 2026-05-18T14:05:00.000Z
+Stopped at: v1.5 milestone shipped 2026-05-18; ready to spec v1.6
+Resume: `/gsd-new-milestone v1.6`
