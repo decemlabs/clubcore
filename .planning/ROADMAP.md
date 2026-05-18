@@ -122,7 +122,19 @@ Full details: [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
   4. `alembic upgrade head` against a clean dev database applies: `users.deleted_at` + partial-UNIQUE `(lower(email)) WHERE deleted_at IS NULL`; `audit_log.actor_email_snapshot TEXT NULL` + FK `actor_user_id ON DELETE SET NULL`; cross-channel `channel TEXT NOT NULL DEFAULT 'telegram' CHECK (...)` discriminator on `membership_notifications` AND `booking_notifications` with UNIQUE recreated as `(subject_id, kind, channel)`.
   5. `EmailDispatcher` and `UserSessionInvalidator` Protocol types exist in `app/core/dependencies.py` with `register_*` / `get_*` accessors; `app.modules.users` is listed in `.importlinter` `modules-independent`; SVC001 AST commit-gate scope includes `app/modules/users/service.py` AND `app/modules/auth/password_reset_service.py`.
   6. `tests/integration/test_password_reset_no_oracle.py` exists and fails as expected against the not-yet-implemented endpoint (test-first lands before any reset endpoint code per Pitfall 1) — asserting the 4-case identical 202 + identical body + bounded timing contract is in the repo for future phases to satisfy.
-**Plans**: TBD
+**Plans**: 11 plans (waves 1-3)
+Plans:
+- [ ] 41-01-PLAN.md — INFRA-34 LOCKED_AUDIT_EVENTS 56→67 + synthetic-violation
+- [ ] 41-02-PLAN.md — INFRA-35 11 new Pydantic payload schemas (extra=forbid + audit_correlation_id)
+- [ ] 41-03-PLAN.md — INFRA-36 LOCKED_EMAIL_TEMPLATES frozenset + AST walker + 2 synthetic fixtures
+- [ ] 41-04-PLAN.md — INFRA-37 Resource.USERS + 4 OWNER_ONLY entries + three-way RBAC parity
+- [ ] 41-05-PLAN.md — INFRA-38 Alembic 0022 users.deleted_at + partial-UNIQUE on lower(email)
+- [ ] 41-06-PLAN.md — INFRA-39 Alembic 0023 audit_log.actor_email_snapshot + FK ON DELETE SET NULL
+- [ ] 41-07-PLAN.md — INFRA-39 actor_context_var + ActorContextMiddleware + ARQ on_job_start/end + audit.emit wiring
+- [ ] 41-08-PLAN.md — INFRA-38 Alembic 0024 cross-channel discriminator on membership_/booking_notifications
+- [ ] 41-09-PLAN.md — INFRA-38 Alembic 0025 password_reset_tokens unified table + ORM + eager-import
+- [ ] 41-10-PLAN.md — INFRA-40 User hoist+shim + EmailDispatcher/UserSessionInvalidator Protocol slots + .importlinter + SVC001 scope
+- [ ] 41-11-PLAN.md — RESET-06 test_password_reset_no_oracle.py (xfail-strict; 4-case identical 202 + body + 100ms timing)
 
 ### Phase 42: Email Transport Layer + Email OTP Fallback
 **Goal**: Sportzal can send a transactional email asynchronously through a verified РФ-domiciled provider end-to-end, with circuit-breaker protection, bounce-webhook intake, and an immediate consumer (email-channel OTP fallback for `/auth/otp/request`) proving the slot wiring works.
@@ -198,7 +210,7 @@ Full details: [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 41. INFRA Bedrock + Anti-Oracle Scaffold | 0/? | Not started | — |
+| 41. INFRA Bedrock + Anti-Oracle Scaffold | 0/11 | Planned | — |
 | 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
