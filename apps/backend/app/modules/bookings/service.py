@@ -48,7 +48,7 @@ from zoneinfo import ZoneInfo
 import sqlalchemy as sa
 import structlog
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import joinedload
 
 from app.core import audit
@@ -69,7 +69,7 @@ from app.modules.bookings.constants import (
     BOOKING_STATUS_TRANSITIONS,
     CANCEL_WINDOW_HOURS_RECEPTION,
 )
-from app.modules.bookings.models import Booking
+from app.modules.bookings.models import Booking, BookingNotification
 from app.modules.bookings.notifications import (
     BOOKING_CANCELLED_BY_CLIENT_DM,
     BOOKING_CANCELLED_BY_OWNER_DM,
@@ -457,6 +457,119 @@ async def _mark_no_show_bookings(  # noqa: SVC001 caller-owns-txn
     # Caller owns commit (D-39-06 single-session; worker function commits
     # after this helper returns).
     return len(candidates)
+
+
+async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    bot: Bot,
+    sender: ModuleType,
+    notifications_module: ModuleType,
+) -> int:
+    """Send 24h-out booking reminder DMs + insert booking_notifications
+    idempotency rows on each successful send (Phase 39 CRON-02 / D-39-08).
+
+    Multi-session per D-39-06b: one read session opens for the candidate
+    SELECT; each successful send opens a FRESH write session for the
+    INSERT + commit. This frees the DB connection across N Telegram HTTPS
+    round-trips (mirror v1.3 D-27-07b).
+
+    SVC001 marker (caller-owns-txn): the worker function
+    ``send_booking_reminders`` receives no session — this helper is the
+    transaction owner per per-send write session; the worker just supplies
+    the sessionmaker.
+
+    Idempotency (D-39-13): the SELECT pre-filters via LEFT JOIN
+    ``booking_notifications`` + ``WHERE n.id IS NULL`` so the steady-state
+    second tick is a no-op. The post-send INSERT is gated by the UNIQUE
+    ``uq_booking_notifications_booking_kind`` constraint — a concurrent
+    one-shot runner racing the live cron rolls back its write session and
+    INFO-logs ``booking_reminder_idempotency_collision``.
+
+    No audit emit (D-39-14): the ``booking_notifications`` row IS the
+    audit record. Do NOT add a ``booking_reminder_sent`` event here.
+
+    Returns:
+        int — count of successful DM sends (also the count of newly-
+        inserted ``booking_notifications`` rows on this run).
+    """
+    # Step 1 — read candidates in one short-lived read session.
+    # D-39-08 verbatim: LEFT JOIN booking_notifications + WHERE n.id IS NULL
+    # is the SELECT-level idempotency pre-filter; BETWEEN now()+23h AND
+    # now()+25h is the locked 2-hour reminder window; c.telegram_user_id
+    # IS NOT NULL excludes unlinked clients at the SQL layer (no sender
+    # call attempted for those).
+    async with session_factory() as read_session:
+        result = await read_session.execute(
+            sa.text(  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+                "SELECT b.id, b.client_id, b.slot_id, "
+                "       c.telegram_user_id, c.first_name, "
+                "       t.full_name AS trainer_name, "
+                "       s.start_time "
+                "FROM bookings b "
+                "JOIN clients c ON c.id = b.client_id "
+                "JOIN trainer_availability_slots s ON s.id = b.slot_id "
+                "JOIN trainers t ON t.id = s.trainer_id "
+                "LEFT JOIN booking_notifications n "
+                "       ON n.booking_id = b.id AND n.kind = 'reminder_24h' "
+                "WHERE b.status = 'confirmed' "
+                "  AND s.start_time BETWEEN now() + interval '23 hours' "
+                "                       AND now() + interval '25 hours' "
+                "  AND c.telegram_user_id IS NOT NULL "
+                "  AND n.id IS NULL"
+            )
+        )
+        rows = result.fetchall()
+
+    sent = 0
+    for r in rows:
+        # Step 2 — render the locked template via the supplied module
+        # (passing the module enables test-time monkeypatching of the
+        # renderer for the collision-rollback test).
+        text_body = notifications_module.render_booking_reminder_24h_dm(
+            client_name=r.first_name,
+            trainer_name=r.trainer_name,
+            slot_start_msk=r.start_time.astimezone(MOSCOW_TZ).strftime(
+                "%d.%m.%Y %H:%M"
+            ),
+        )
+
+        # Step 3 — fire the DM. ``sender.send_text_dm`` returns a typed
+        # SendResult and never re-raises transport errors (D-07 contract).
+        send_result = await sender.send_text_dm(bot, r.telegram_user_id, text_body)
+        if not send_result.ok:
+            reason = "bot_blocked" if send_result.blocked else "transient"
+            _log.warning(
+                "booking_reminder_send_failed",
+                reason=reason,
+                booking_id=str(r.id),
+                telegram_chat_id=r.telegram_user_id,
+                error_msg=send_result.error,
+            )
+            continue
+
+        # Step 4 — open a FRESH write session for the idempotency-row
+        # insert (multi-session per D-39-06b: never hold the DB
+        # connection across HTTPS I/O).
+        async with session_factory() as write_session:
+            try:
+                write_session.add(
+                    BookingNotification(booking_id=r.id, kind="reminder_24h")
+                )
+                await write_session.commit()
+                sent += 1
+            except IntegrityError:
+                # D-39-13: race with a concurrent tick OR the one-shot
+                # operator runner that hit uq_booking_notifications_booking_kind
+                # first. Rollback + INFO-log + continue.
+                await write_session.rollback()
+                _log.info(
+                    "booking_reminder_idempotency_collision",
+                    booking_id=str(r.id),
+                )
+
+    _log.info("send_booking_reminders_complete", count=sent)
+    return sent
 
 
 # ---------------------------------------------------------------------------

@@ -61,6 +61,7 @@ from app.core.database import db_lifespan_manager
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
 from app.workers.scheduled.mark_no_show_bookings import mark_no_show_bookings
+from app.workers.scheduled.send_booking_reminders import send_booking_reminders
 from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 
 _log = structlog.get_logger("workers")
@@ -80,6 +81,7 @@ class WorkerSettings:
         expire_memberships,
         send_expiring_notifications,
         expire_pt_packages,
+        send_booking_reminders,  # Phase 39 CRON-02
         mark_no_show_bookings,  # Phase 39 CRON-01
     ]
 
@@ -117,12 +119,27 @@ class WorkerSettings:
             unique=True,
             keep_result=60,
         ),
+        # Phase 39 CRON-02 — 06:35 MSK morning reminder (container TZ=UTC).
+        # Sends 24h-out booking reminder DMs; LEFT JOIN booking_notifications
+        # + WHERE n.id IS NULL is the SQL-level idempotency pre-filter
+        # (D-39-08); unique=True dedups concurrent ARQ ticks. Multi-session
+        # per-send pattern (D-39-06b) frees the DB connection across N
+        # Telegram HTTPS round-trips. Order per D-39-16: fires 10 min after
+        # expire_pt_packages at 06:25 and BEFORE mark_no_show_bookings's
+        # 23:10 evening tick.
+        cron(
+            send_booking_reminders,
+            hour=3,
+            minute=35,
+            unique=True,
+            keep_result=60,
+        ),
         # Phase 39 CRON-01 — 23:10 MSK evening tick (container TZ=UTC).
         # Flips overdue confirmed bookings (slot.end_time < now()) to
-        # no_show. Plan 39-04 will INSERT the send_booking_reminders cron
-        # BEFORE this entry per D-39-16 (final order: memberships ->
-        # expiring_notifs -> pt_packages -> reminders -> no_show). Until
-        # 39-04 lands, this entry sits directly after expire_pt_packages.
+        # no_show. Order per D-39-16: this is the LAST cron entry — the
+        # send_booking_reminders entry above sits between expire_pt_packages
+        # and this one (final order: memberships -> expiring_notifs ->
+        # pt_packages -> reminders -> no_show).
         # SQL-level idempotency via WHERE b.status='confirmed' is the real
         # gate (PITFALLS Pitfall 4); unique=True dedups concurrent ARQ
         # ticks. SELECT FOR UPDATE OF b (D-39-07) serializes against
