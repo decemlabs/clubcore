@@ -133,7 +133,7 @@ Plans:
 - [x] 41-11-PLAN.md — RESET-06 test_password_reset_no_oracle.py (xfail-strict; 4-case identical 202 + body + 100ms timing)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 41-02-PLAN.md — INFRA-35 11 new Pydantic payload schemas (extra=forbid + audit_correlation_id)
+- [x] 41-02-PLAN.md — INFRA-35 11 new Pydantic payload schemas (extra=forbid + audit_correlation_id)
 - [ ] 41-06-PLAN.md — INFRA-39 Alembic 0023 audit_log.actor_email_snapshot + FK ON DELETE SET NULL
 - [ ] 41-08-PLAN.md — INFRA-38 Alembic 0024 cross-channel discriminator on membership_/booking_notifications
 
@@ -215,7 +215,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 41. INFRA Bedrock + Anti-Oracle Scaffold | 6/11 | In Progress|  |
+| 41. INFRA Bedrock + Anti-Oracle Scaffold | 7/11 | In Progress|  |
 | 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
