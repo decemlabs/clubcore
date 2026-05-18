@@ -316,3 +316,443 @@ def test_booking_created_payload_registry_unchanged() -> None:
         AUDIT_PAYLOAD_SCHEMAS[("booking_created", "booking")]
         is BookingCreatedPayload
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 41 INFRA-35 — v1.6 payload schemas (11 new models)
+# Behaviour contract (per D-41-20):
+#   - extra='forbid' on every new payload (unknown key → ValidationError).
+#   - audit_correlation_id: UUID | None on every new payload (async chain anchor).
+#   - UUID fields accept both UUID(...) instances and str(uuid) (REG-36-03).
+#   - No actor_email_snapshot field (D-41-09 — column-only, not payload).
+# ---------------------------------------------------------------------------
+
+
+from datetime import datetime, timezone  # noqa: E402
+
+from app.core.audit_payloads import (  # noqa: E402
+    EmailSendFailedPayload,
+    EmailSentPayload,
+    PasswordResetCompletedPayload,
+    PasswordResetRequestedPayload,
+    PaymentReceiptEmailedPayload,
+    UserDeactivatedPayload,
+    UserInvitationAcceptedPayload,
+    UserInvitationRevokedPayload,
+    UserInvitedPayload,
+    UserReactivatedPayload,
+    UserSoftDeletedPayload,
+)
+
+
+# ---------------------------------------------------------------------------
+# EmailSentPayload — Phase 42 EMAIL-01
+# ---------------------------------------------------------------------------
+
+
+def test_email_sent_payload_round_trip() -> None:
+    """EmailSentPayload accepts the EMAIL-01 kwarg set."""
+    p = EmailSentPayload(
+        audit_correlation_id=uuid4(),
+        template_id="EMAIL_OTP_LOGIN",
+        to_email="user@example.com",
+        provider_message_id="msg-abc-123",
+    )
+    assert p.template_id == "EMAIL_OTP_LOGIN"
+    assert p.to_email == "user@example.com"
+
+
+def test_email_sent_payload_accepts_none_correlation_and_message_id() -> None:
+    """audit_correlation_id is Optional (chain-starter); provider_message_id too."""
+    p = EmailSentPayload(
+        audit_correlation_id=None,
+        template_id="EMAIL_OTP_LOGIN",
+        to_email="user@example.com",
+        provider_message_id=None,
+    )
+    assert p.audit_correlation_id is None
+    assert p.provider_message_id is None
+
+
+def test_email_sent_payload_rejects_extra_keys() -> None:
+    """extra='forbid' enforced on EmailSentPayload."""
+    with pytest.raises(ValidationError):
+        EmailSentPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            template_id="EMAIL_OTP_LOGIN",
+            to_email="user@example.com",
+            provider_message_id=None,
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# EmailSendFailedPayload — Phase 42 EMAIL-04 / EMAIL-06
+# ---------------------------------------------------------------------------
+
+
+def test_email_send_failed_payload_round_trip() -> None:
+    """EmailSendFailedPayload accepts every Literal reason."""
+    for reason in (
+        "provider_5xx",
+        "circuit_open",
+        "invalid_recipient",
+        "bounce",
+        "complaint",
+    ):
+        p = EmailSendFailedPayload(
+            audit_correlation_id=uuid4(),
+            template_id="EMAIL_OTP_LOGIN",
+            to_email="user@example.com",
+            reason=reason,  # type: ignore[arg-type]
+            provider_error_code="E500",
+        )
+        assert p.reason == reason
+
+
+def test_email_send_failed_payload_rejects_unknown_reason() -> None:
+    """Literal reason rejects unknown values."""
+    with pytest.raises(ValidationError):
+        EmailSendFailedPayload(
+            audit_correlation_id=None,
+            template_id="EMAIL_OTP_LOGIN",
+            to_email="user@example.com",
+            reason="rate_limited",  # type: ignore[arg-type]
+            provider_error_code=None,
+        )
+
+
+def test_email_send_failed_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        EmailSendFailedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            template_id="EMAIL_OTP_LOGIN",
+            to_email="user@example.com",
+            reason="bounce",
+            provider_error_code=None,
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UserInvitedPayload — Phase 43 USERS-03
+# ---------------------------------------------------------------------------
+
+
+def test_user_invited_payload_round_trip() -> None:
+    p = UserInvitedPayload(
+        audit_correlation_id=uuid4(),
+        invited_user_id=uuid4(),
+        invited_email="new@example.com",
+        invited_role="reception",
+        invitation_expires_at=datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    assert p.invited_role == "reception"
+    assert isinstance(p.invited_user_id, UUID)
+
+
+def test_user_invited_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        UserInvitedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            invited_user_id=uuid4(),
+            invited_email="new@example.com",
+            invited_role="reception",
+            invitation_expires_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UserInvitationAcceptedPayload — Phase 43 USERS-04
+# ---------------------------------------------------------------------------
+
+
+def test_user_invitation_accepted_payload_round_trip() -> None:
+    p = UserInvitationAcceptedPayload(
+        audit_correlation_id=uuid4(),
+        accepted_user_id=uuid4(),
+        invitation_token_id=uuid4(),
+    )
+    assert isinstance(p.accepted_user_id, UUID)
+    assert isinstance(p.invitation_token_id, UUID)
+
+
+def test_user_invitation_accepted_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        UserInvitationAcceptedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            accepted_user_id=uuid4(),
+            invitation_token_id=uuid4(),
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UserInvitationRevokedPayload — Phase 43 USERS-05
+# ---------------------------------------------------------------------------
+
+
+def test_user_invitation_revoked_payload_round_trip() -> None:
+    p = UserInvitationRevokedPayload(
+        audit_correlation_id=uuid4(),
+        revoked_user_id=uuid4(),
+        invitation_token_id=uuid4(),
+        reason="email typo",
+    )
+    assert p.reason == "email typo"
+
+
+def test_user_invitation_revoked_payload_accepts_none_reason() -> None:
+    p = UserInvitationRevokedPayload(
+        audit_correlation_id=None,
+        revoked_user_id=uuid4(),
+        invitation_token_id=uuid4(),
+        reason=None,
+    )
+    assert p.reason is None
+
+
+def test_user_invitation_revoked_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        UserInvitationRevokedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            revoked_user_id=uuid4(),
+            invitation_token_id=uuid4(),
+            reason=None,
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UserDeactivatedPayload — Phase 43 USERS-06
+# ---------------------------------------------------------------------------
+
+
+def test_user_deactivated_payload_round_trip() -> None:
+    p = UserDeactivatedPayload(
+        audit_correlation_id=None,
+        deactivated_user_id=uuid4(),
+        sessions_revoked_count=3,
+    )
+    assert p.sessions_revoked_count == 3
+
+
+def test_user_deactivated_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        UserDeactivatedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            deactivated_user_id=uuid4(),
+            sessions_revoked_count=0,
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UserReactivatedPayload / UserSoftDeletedPayload — Phase 43
+# ---------------------------------------------------------------------------
+
+
+def test_user_reactivated_payload_round_trip() -> None:
+    p = UserReactivatedPayload(
+        audit_correlation_id=None,
+        reactivated_user_id=uuid4(),
+    )
+    assert isinstance(p.reactivated_user_id, UUID)
+
+
+def test_user_reactivated_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        UserReactivatedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            reactivated_user_id=uuid4(),
+            spurious="nope",
+        )
+
+
+def test_user_soft_deleted_payload_round_trip() -> None:
+    p = UserSoftDeletedPayload(
+        audit_correlation_id=None,
+        deleted_user_id=uuid4(),
+    )
+    assert isinstance(p.deleted_user_id, UUID)
+
+
+def test_user_soft_deleted_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        UserSoftDeletedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            deleted_user_id=uuid4(),
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# PasswordResetRequestedPayload — Phase 44 RESET-01 (anti-oracle: both branches)
+# ---------------------------------------------------------------------------
+
+
+def test_password_reset_requested_payload_known_email_branch() -> None:
+    """Known-email branch — target_user_id is set, email_hint optional."""
+    p = PasswordResetRequestedPayload(
+        audit_correlation_id=uuid4(),
+        target_user_id=uuid4(),
+        email_hint="user@example.com",
+    )
+    assert p.target_user_id is not None
+    assert p.email_hint == "user@example.com"
+
+
+def test_password_reset_requested_payload_unknown_email_branch() -> None:
+    """RESET-01 anti-oracle: unknown-email branch — target_user_id=None.
+
+    D-41-10 system-emit pattern: forensic chain still captured via email_hint.
+    """
+    p = PasswordResetRequestedPayload(
+        audit_correlation_id=None,
+        target_user_id=None,
+        email_hint="stranger@example.com",
+    )
+    assert p.target_user_id is None
+    assert p.email_hint == "stranger@example.com"
+
+
+def test_password_reset_requested_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        PasswordResetRequestedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            target_user_id=None,
+            email_hint=None,
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# PasswordResetCompletedPayload — Phase 44 RESET-02
+# ---------------------------------------------------------------------------
+
+
+def test_password_reset_completed_payload_round_trip() -> None:
+    p = PasswordResetCompletedPayload(
+        audit_correlation_id=uuid4(),
+        user_id=uuid4(),
+        sessions_revoked_count=2,
+        token_id=uuid4(),
+    )
+    assert p.sessions_revoked_count == 2
+
+
+def test_password_reset_completed_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        PasswordResetCompletedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            user_id=uuid4(),
+            sessions_revoked_count=0,
+            token_id=uuid4(),
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# PaymentReceiptEmailedPayload — Phase 45 NOTIFY-12
+# ---------------------------------------------------------------------------
+
+
+def test_payment_receipt_emailed_payload_round_trip() -> None:
+    for kind in ("sale", "refund"):
+        p = PaymentReceiptEmailedPayload(
+            audit_correlation_id=uuid4(),
+            payment_id=uuid4(),
+            to_email="user@example.com",
+            receipt_kind=kind,  # type: ignore[arg-type]
+        )
+        assert p.receipt_kind == kind
+
+
+def test_payment_receipt_emailed_payload_rejects_unknown_kind() -> None:
+    with pytest.raises(ValidationError):
+        PaymentReceiptEmailedPayload(
+            audit_correlation_id=None,
+            payment_id=uuid4(),
+            to_email="user@example.com",
+            receipt_kind="invoice",  # type: ignore[arg-type]
+        )
+
+
+def test_payment_receipt_emailed_payload_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        PaymentReceiptEmailedPayload(  # type: ignore[call-arg]
+            audit_correlation_id=None,
+            payment_id=uuid4(),
+            to_email="user@example.com",
+            receipt_kind="sale",
+            spurious="nope",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UUID round-trip — REG-36-03 (UUIDs accept str(uuid) at emit time)
+# ---------------------------------------------------------------------------
+
+
+def test_v16_payloads_accept_uuid_as_str() -> None:
+    """REG-36-03: every new UUID field must accept str(uuid) coercion."""
+    uid = uuid4()
+    p = UserInvitedPayload(
+        audit_correlation_id=str(uid),  # type: ignore[arg-type]
+        invited_user_id=str(uid),  # type: ignore[arg-type]
+        invited_email="x@y.z",
+        invited_role="owner",
+        invitation_expires_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+    )
+    assert p.invited_user_id == uid
+    assert p.audit_correlation_id == uid
+
+
+# ---------------------------------------------------------------------------
+# Coverage gate — every v1.6 pair has a schema (Task 2)
+# ---------------------------------------------------------------------------
+
+
+def test_v16_pairs_all_have_payload_schemas() -> None:
+    """Every Phase 41 v1.6 (event, resource_type) pair MUST resolve to a Pydantic schema.
+
+    Mirrors the discipline of `test_v15_payload_schemas_registered` (Phase 37
+    INFRA-25) with an additional anti-drift gate: every pair MUST also live in
+    `LOCKED_AUDIT_EVENTS` so the runtime emitter cannot diverge from the
+    payload-schema registry (D-15 / Phase 30 D-30-03 lineage).
+    """
+    from app.core.audit import LOCKED_AUDIT_EVENTS
+
+    v16_pairs: list[tuple[str, str]] = [
+        ("email_sent", "email_send_log"),
+        ("email_send_failed", "email_send_log"),
+        ("user_invited", "user"),
+        ("user_invitation_accepted", "user"),
+        ("user_invitation_revoked", "user"),
+        ("user_deactivated", "user"),
+        ("user_reactivated", "user"),
+        ("user_soft_deleted", "user"),
+        ("password_reset_requested", "user"),
+        ("password_reset_completed", "user"),
+        ("payment_receipt_emailed", "payment"),
+    ]
+    missing_from_locked = [p for p in v16_pairs if p not in LOCKED_AUDIT_EVENTS]
+    missing_from_schemas = [p for p in v16_pairs if p not in AUDIT_PAYLOAD_SCHEMAS]
+    assert not missing_from_locked, (
+        f"v1.6 pairs missing from LOCKED_AUDIT_EVENTS: {missing_from_locked}"
+    )
+    assert not missing_from_schemas, (
+        f"v1.6 pairs missing from AUDIT_PAYLOAD_SCHEMAS: {missing_from_schemas}"
+    )
+    # Spot-check the registry resolves to the expected class.
+    assert AUDIT_PAYLOAD_SCHEMAS[("email_sent", "email_send_log")] is EmailSentPayload
+    assert AUDIT_PAYLOAD_SCHEMAS[("user_invited", "user")] is UserInvitedPayload
+    assert (
+        AUDIT_PAYLOAD_SCHEMAS[("password_reset_requested", "user")]
+        is PasswordResetRequestedPayload
+    )
+    assert (
+        AUDIT_PAYLOAD_SCHEMAS[("payment_receipt_emailed", "payment")]
+        is PaymentReceiptEmailedPayload
+    )
