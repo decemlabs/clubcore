@@ -1,6 +1,6 @@
 """bookings.created_by_user_id -> NULLABLE (Phase 40 D-40-05 / BLOCKER-4).
 
-Revision ID: 0021_bookings_created_by_user_id_nullable
+Revision ID: 0021_bookings_actor_nullable
 Revises: 0020_booking_notifications
 Create Date: 2026-05-18 00:00:00.000000
 
@@ -27,7 +27,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "0021_bookings_created_by_user_id_nullable"
+revision: str = "0021_bookings_actor_nullable"
 down_revision: str | None = "0020_booking_notifications"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
