@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
-stopped_at: Completed 41-05-PLAN.md
-last_updated: "2026-05-18T18:31:09Z"
+stopped_at: None
+last_updated: "2026-05-18T18:41:40.331Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 11
-  completed_plans: 4
-  percent: 36
+  completed_plans: 5
+  percent: 45
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 41 (infra-bedrock-anti-oracle-scaffold) — EXECUTING
-Plan: 5 of 11
+Plan: 6 of 11
 Status: Ready to execute
 Last activity: 2026-05-18
 
@@ -79,6 +79,9 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: Plan 41-03: LOCKED_EMAIL_TEMPLATES frozenset (15 v1.6 template identifiers) + AST walker enforcing literal-only template_id at every get_email_dispatcher() callsite (D-41-11/12/13)
 - [Phase ?]: Plan 41-04: Action.UPDATE added to backend Action StrEnum (D-41-22 verb). OWNER_ONLY 29 -> 33 with 4 USERS pairs. Three-way RBAC parity green at 33.
 - [Phase 41]: Plan 41-05: Alembic 0022 ships users.deleted_at TIMESTAMPTZ + partial UNIQUE INDEX uq_users_email_active ON users (lower(email)) WHERE deleted_at IS NULL (drops uq_users_email from 0001_auth.py). Revision id shortened to `0022_users_soft_delete_unique` (29 chars) to fit alembic_version VARCHAR(32). Round-trip clean. uq_users_email_active added to env.py _include_object skiplist (D-25-05 lineage). INFRA-38 partially progressed (schema half of 0022 done; 0024 + 0025 land in plans 41-08 + 41-09).
+- [Phase 41]: D-41-01/02 User ORM hoisted to app.core.models with one-milestone shim at app.modules.auth.models (v1.7 DEFER-41-shim removes)
+- [Phase 41]: D-41-24/25 EmailDispatcher + UserSessionInvalidator Protocol slots declared with defensive-raise accessors
+- [Phase 41]: D-41-27/28 .importlinter modules-independent gains app.modules.users; SVC001 walker scope gains modules/users/service.py + modules/auth/password_reset_service.py (anti-silent-drop pin)
 
 ### Pending Todos
 
@@ -105,6 +108,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T18:31:09Z
-Stopped at: Completed 41-05-PLAN.md (INFRA-38 Alembic 0022 — users.deleted_at + partial-UNIQUE)
+Last session: 2026-05-18T18:41:40.327Z
+Stopped at: None
 Resume: `/gsd-execute-phase 41` (next plan: 41-10 User hoist+shim or 41-11 RESET-06 anti-oracle test — both Wave 1)
