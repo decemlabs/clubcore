@@ -4,8 +4,8 @@ milestone: v1.5
 milestone_name: Schedule + Bookings
 status: executing
 stopped_at: Phase 40 context gathered
-last_updated: "2026-05-18T12:15:32.777Z"
-last_activity: 2026-05-18 -- Phase 40 planning complete
+last_updated: "2026-05-18T12:17:40.468Z"
+last_activity: 2026-05-18 -- Phase 40 execution started
 progress:
   total_phases: 4
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 39 — notifications-cron
+**Current focus:** Phase 40 — telegram-book-openapi-drift-gate-milestone-verification
 
 ## Current Position
 
-Phase: 40
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-18 -- Phase 40 planning complete
+Phase: 40 (telegram-book-openapi-drift-gate-milestone-verification) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 40
+Last activity: 2026-05-18 -- Phase 40 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

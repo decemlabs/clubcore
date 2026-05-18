@@ -59,6 +59,16 @@ class HandlerContext(NamedTuple):
                         (workers->modules.visits, D-10 — Phase 20).
     redis             : redis.asyncio.Redis client for /checkin update_id dedup
                         (Phase 20 D-20-2; keyspace `sz:bot:update:*`).
+    bookings_service  : the app.modules.bookings.service module
+                        (workers->modules.bookings, Phase 40 D-40-04 —
+                        create_booking_via_bot dispatch for /book callback).
+    schedule_service  : the app.modules.schedule.service module
+                        (workers->modules.schedule, Phase 40 D-40-06 —
+                        list_slots for /book keyboard render).
+
+    Field order is part of the stable contract — positional construction in
+    workers/telegram_bot.py:main() depends on it. New fields are APPENDED at
+    the END (never inserted in the middle).
     """
 
     session_factory: async_sessionmaker[AsyncSession]
@@ -66,6 +76,35 @@ class HandlerContext(NamedTuple):
     sender: ModuleType
     visits_service: ModuleType
     redis: Redis
+    bookings_service: ModuleType  # Phase 40 D-40-04 — create_booking_via_bot dispatch
+    schedule_service: ModuleType  # Phase 40 D-40-06 — list_slots for keyboard render
+
+
+async def _dedupe_update_id(redis: Redis, update_id: int, chat_id: int) -> bool:
+    """Return True on first-sight (proceed); False on replay (handler should return).
+
+    Fail-open per D-20-3: Redis errors return True (DB UNIQUE is the real
+    anti-replay backstop). Key prefix ``sz:bot:update:{update_id}`` TTL 1h.
+    Extracted from the Phase 20 checkin_handler inlined block per Phase 40
+    D-40-08 so that Phase 40's /book + /book-callback handlers reuse the
+    exact same fail-open + structlog-event-name semantics.
+    """
+    dedup_key = f"sz:bot:update:{update_id}"
+    try:
+        set_result: Any = await redis.set(dedup_key, "1", nx=True, ex=3600)
+    except Exception as exc:  # fail-open per D-20-3
+        logger.warning(
+            "bot_redis_dedup_unavailable",
+            update_id=update_id,
+            chat_id=chat_id,
+            error=str(exc),
+        )
+        return True  # DB UNIQUE is the real anti-replay backstop
+    if set_result is None:
+        # Replay (Telegram resent the Update on bot restart). Silent per D-20-4.
+        logger.debug("bot_replay_skipped", update_id=update_id, chat_id=chat_id)
+        return False
+    return True
 
 
 # Russian copy -- locked per specifics line 253. Single-language by design.
@@ -263,20 +302,9 @@ async def checkin_handler(
 
     # Redis SET-NX-EX dedup (D-20-1, D-20-3, D-20-5, D-20-6). Fail-open on Redis errors;
     # the DB UNIQUE on (client_id, gym_date) is the real anti-replay invariant.
-    dedup_key = f"sz:bot:update:{update_id}"
-    try:
-        set_result: Any = await ctx.redis.set(dedup_key, "1", nx=True, ex=3600)
-    except Exception as exc:  # fail-open per D-20-3
-        logger.warning(
-            "bot_redis_dedup_unavailable",
-            update_id=update_id,
-            chat_id=chat_id,
-            error=str(exc),
-        )
-        set_result = "OK"  # proceed; DB UNIQUE is the real anti-replay backstop
-    if set_result is None:
-        # Replay (Telegram resent the Update on bot restart). Silent per D-20-4.
-        logger.debug("bot_replay_skipped", update_id=update_id, chat_id=chat_id)
+    # Phase 40 D-40-08: extracted to module-level _dedupe_update_id helper so
+    # Phase 40 /book + /book-callback handlers share the same semantics.
+    if not await _dedupe_update_id(ctx.redis, update_id, chat_id):
         return
 
     async with ctx.session_factory() as session:
