@@ -2,10 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
-status: ready_to_start
-stopped_at: v1.5 milestone shipped 2026-05-18; ready to spec v1.6
-last_updated: "2026-05-18T14:05:00.000Z"
-last_activity: 2026-05-18 -- v1.5 milestone closed and archived
+status: planning
+last_updated: "2026-05-18T14:18:15.871Z"
+last_activity: 2026-05-18
 progress:
   total_phases: 0
   completed_phases: 0
@@ -25,22 +24,24 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: not_started (v1.6 milestone has no phases yet)
-Plan: none
-Status: Ready to start v1.6 (`/gsd-new-milestone` next)
-Last activity: 2026-05-18 -- v1.5 milestone closed and archived
-
-Progress: [░░░░░░░░░░] 0%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-18 — Milestone v1.6 started
 
 ## v1.6 Milestone Plan
 
-**Status:** Not yet specced. Run `/gsd-new-milestone` to capture goals + requirements + roadmap.
+**Status:** Speccing in progress — research → requirements → roadmap.
 
-**Working scope (from PROJECT.md Next Milestone Goals):**
-- Email integration as second notification channel (Resend / SES / Mailgun — selection TBD at spec phase)
-- Email templates for OTP fallback, expiring-soon, payment-receipt, booking confirm/remind
-- `POST /api/v1/users` (owner-only) for operator onboarding without DB poking
-- soft-delete + deactivate on users; multi-user audit traceability
+**Working scope (from PROJECT.md Current Milestone block):**
+
+- Email provider integration (Resend / SES / Mailgun — selection TBD post-research)
+- Email templates: OTP fallback + expiring-soon (mirror Telegram) + payment-receipt + booking confirm + booking reminder (locked Russian copy + owner sign-off)
+- Multi-user admin: `POST /api/v1/users` (owner-only) + PATCH deactivate + soft-delete; reset-password flow
+- Multi-user audit traceability across module boundaries
+- OpenAPI drift gate refresh for new user-management paths
+
+**Phase numbering:** continues from v1.5 — first phase is **Phase 41**.
 
 ## Accumulated Context
 
@@ -50,7 +51,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 
 ### Pending Todos
 
-- Run `/gsd-new-milestone v1.6` to spec the next milestone (goal + requirements + roadmap).
+- v1.6 spec in progress (running `/gsd-new-milestone`): domain research → REQUIREMENTS.md → ROADMAP.md.
 
 ### Blockers/Concerns
 
@@ -72,6 +73,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T14:05:00.000Z
-Stopped at: v1.5 milestone shipped 2026-05-18; ready to spec v1.6
-Resume: `/gsd-new-milestone v1.6`
+Last session: 2026-05-18T14:18:00.000Z
+Stopped at: v1.6 milestone spec in progress — research running
+Resume: `/gsd-discuss-phase 41` (after research → requirements → roadmap complete)

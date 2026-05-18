@@ -39,15 +39,26 @@ Cumulative shipped versions: v1.0 (Skeleton, 47/47), v1.1 (Auth + Clients, 70/70
 
 Reports + Audit Log read API: write-side complete (51 LOCKED events), read-side scheduled for v1.8.
 
-## Next Milestone Goals
+## Current Milestone: v1.6 Email channel + Multi-user admin
 
-**v1.6 Email channel + Multi-user admin (next)** — добавить email как второй канал уведомлений (Resend / SES / Mailgun — выбор TBD на спек-фазе) и закрыть последний промежуток operator-onboarding. Email-каналы покроют OTP fallback, expiring-soon, payment-receipt notifications, booking confirmations + reminders (parallel-friendly с уже existing Telegram-каналом). Multi-user admin — `POST /api/v1/users` (owner-only) для онбординга reception-аккаунтов без прямого ковыряния в БД + soft-delete/deactivate + multi-user audit traceability. Это последняя infra-фаза перед online-платежами (v1.7) и API-handoff'ом (v1.9).
+**Goal:** Закрыть последний infra-pillar перед online-платежами — добавить email как параллельный канал уведомлений (OTP fallback + expiring-soon + payment-receipt + booking confirm/remind) и закрыть operator-onboarding gap через owner-managed multi-user admin (`POST /api/v1/users` + soft-delete/deactivate + multi-user audit traceability).
+
+**Target features:**
+- Email provider integration (Resend / SES / Mailgun candidate — selection on spec phase after research) под РФ/СНГ constraints; deployment shape TBD (6-й docker-compose service vs ARQ-batch worker)
+- Email templates (locked Russian copy + owner sign-off): OTP fallback + expiring-soon (mirror Telegram `EXPIRING_{7D,3D,1D}` flow) + payment-receipt + booking confirm + booking reminder
+- Multi-user admin: `POST /api/v1/users` (owner-only) + PATCH deactivate + soft-delete; reset-password flow for added users (email link); active/deactivated user listing
+- Multi-user audit traceability: surface actor user identity across module boundaries in audit-log payloads
+- OpenAPI drift gate refresh: regenerate `openapi.json` + `schema.d.ts`; forward-guards for new user-management paths
+
+**Phase numbering:** v1.5 ended at Phase 40 → v1.6 starts at **Phase 41** (continued).
+
+## Next Milestone Goals
 
 Постлинейка milestone'ов осталась без изменений после v1.5 close:
 
 | Milestone | Focus |
 |---|---|
-| **v1.6 — Email channel + Multi-user admin (next)** | Email integration (Resend / SES / Mailgun — TBD) как второй канал уведомлений; шаблоны для OTP / expiring / payment-receipt / booking confirm/remind; owner-managed `POST /api/v1/users` чтобы reception-аккаунты онбордились без БД-инвазивности; soft-delete + deactivate; multi-user audit |
+| **v1.6 — Email channel + Multi-user admin (active)** | Email integration (Resend / SES / Mailgun — TBD) как второй канал уведомлений; шаблоны для OTP / expiring / payment-receipt / booking confirm/remind; owner-managed `POST /api/v1/users` чтобы reception-аккаунты онбордились без БД-инвазивности; soft-delete + deactivate; multi-user audit |
 | **v1.7 — Online Payments (ЮKassa) + 54-ФЗ fiscal receipts** | ЮKassa payment intake (memberships + PT-packages) + webhook state machine + online refunds; ЮKassa `/receipts` integration (АТОЛ-Онлайн / Чек.ОФД path) для 54-ФЗ-compliant фискальных чеков на email/SMS клиенту. **Bundled** — online sales по РФ нельзя запускать без фискальных чеков |
 | **v1.8 — Reports + Audit Log read API** | Owner-dashboard backend: revenue by day/month, active/expiring clients, top trainers, PT-session usage; `GET /api/v1/audit-log` с owner-only RBAC + фильтры (actor / resource / time-window / event-kind) |
 | **v1.9 — API Handoff + Production Hardening** | (was v1.5) Curated Postman v2.1 collection + Newman CLI runner; auth runbook expansion; OpenAPI doc site + versioned spec URL; `@sportzal/api-client` publish to npm; OpenAPI tag curation + explicit `operation_id=`; idempotency hardening (CR-01/02/02b carry-over from Phase 33); residual DEFER-36-04-A (11 failures) + DEFER-36-04-B (ruff format 123 files); **DEFER-40-01 full v1.5 operator runbook execution + run.sh hardening**; doc-debt sweep |
@@ -271,4 +282,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-17 — Milestone v1.5 Schedule + Bookings (PT slots) opened. Roadmap re-ordered under "finish business modules first → polish → integrate → launch" strategy: v1.5 → v1.6 (Email + Multi-user) → v1.7 (ЮKassa + 54-ФЗ) → v1.8 (Reports + Audit Log API) → v1.9 (API Handoff + Hardening; was v1.5) → v2.0 (Frontend Integration + Launch). Phase numbering continues from Phase 37.*
+*Last updated: 2026-05-18 — Milestone v1.6 Email channel + Multi-user admin opened after v1.5 close (Schedule + Bookings shipped 2026-05-18). v1.6 is the last infra-pillar before v1.7 ЮKassa + 54-ФЗ payments. Phase numbering continues from Phase 41.*
