@@ -26,6 +26,7 @@ modules =
     app.modules.payments
     app.modules.pt_packages
     app.modules.pt_sessions
+    app.modules.users
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules

@@ -176,6 +176,17 @@ _PT_SESSIONS_SERVICE = _BACKEND_APP / "modules" / "pt_sessions" / "service.py"
 # (no functions -> no offenders).").
 _SCHEDULE_SERVICE = _BACKEND_APP / "modules" / "schedule" / "service.py"
 _BOOKINGS_SERVICE = _BACKEND_APP / "modules" / "bookings" / "service.py"
+# Phase 41 INFRA-40 / D-41-28 — pre-register v1.6 service files so the live
+# walker enters the new write paths from the first commit in Phase 43/44.
+# Mirrors the Phase 30 INFRA-21 / Phase 37 INFRA-29 placeholder pattern.
+# Both placeholders ship as module-docstring-only files at Phase 41 — they
+# pass the SVC001 gate trivially (no functions -> no offenders), exactly as
+# documented for the Phase 30 INFRA-21 batch. The "expected target file
+# must exist" assertion below is the D-41-28 anti-silent-drop guarantee:
+# Phase 43/44 cannot land a write-path service.py that bypasses the gate
+# because the placeholder is already pinned in _INSPECTED_SERVICES.
+_USERS_SERVICE = _BACKEND_APP / "modules" / "users" / "service.py"
+_PASSWORD_RESET_SERVICE = _BACKEND_APP / "modules" / "auth" / "password_reset_service.py"
 _INSPECTED_SERVICES: tuple[Path, ...] = (
     _CLIENTS_SERVICE,
     _MEMBERSHIPS_SERVICE,
@@ -186,6 +197,8 @@ _INSPECTED_SERVICES: tuple[Path, ...] = (
     _PT_SESSIONS_SERVICE,
     _SCHEDULE_SERVICE,
     _BOOKINGS_SERVICE,
+    _USERS_SERVICE,
+    _PASSWORD_RESET_SERVICE,
 )
 
 
@@ -223,6 +236,16 @@ def test_service_commit_gate_against_app_modules() -> None:
     `payments/service.py`, `pt_packages/service.py` (empty placeholders at
     Phase 30 — substantive write paths land in Phases 31/32/33). A zero-
     function service passes the gate trivially (no functions → no offenders).
+
+    Phase 41 INFRA-40 / D-41-28 extends the live scope to
+    `modules/users/service.py` and `modules/auth/password_reset_service.py`
+    (empty placeholders at Phase 41 — substantive write paths land in
+    Phase 43/44). The hard-fail "expected target file must exist"
+    assertion is the D-41-28 anti-silent-drop guarantee: Phase 43/44
+    cannot land write-path service code that bypasses the gate because
+    the placeholders are already pinned in `_INSPECTED_SERVICES` and
+    will trip SVC001 if write paths are added without `await session.commit()`
+    or the SVC001 opt-out marker.
 
     The walker glob (`_SERVICE_GLOB`) and predicate apparatus are
     exercised by `test_walker_scope_is_modules_service_only` and the
