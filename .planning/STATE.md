@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
-status: executing
+status: verifying
 stopped_at: Completed 41-08-PLAN.md
-last_updated: "2026-05-18T19:19:45.314Z"
+last_updated: "2026-05-18T19:30:12.681Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 Phase: 41 (infra-bedrock-anti-oracle-scaffold) — EXECUTING
 Plan: 11 of 11
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-18
 
 ## v1.6 Milestone Plan
 
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 
 **Phase structure:**
 
@@ -87,6 +87,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: Migration 0023 alters fk_audit_log_actor_user_id_users from ON DELETE RESTRICT to SET NULL via drop+recreate (no Postgres ALTER CONSTRAINT for ondelete); pairs with new actor_email_snapshot TEXT NULL column for forensic continuity past user hard-deletes (D-41-08/09/10 schema half).
 - [Phase ?]: Phase 41 Plan 07: Wired ContextVar runtime half of INFRA-39 — actor_context_var + ActorContextMiddleware (baseline-None envelope) + get_current_user.set_actor() write site + audit.emit() reads contextvar with T-41-07-02 defensive identity check + ARQ on_job_start/on_job_end job envelope. ARQ 0.28 ctx limitation (no job kwargs surfaced) → jobs needing attribution call set_actor() in body. CurrentUser Protocol gained email: str.
 - [Phase ?]: [Phase 41 Plan 08]: Alembic 0024 channel discriminator on membership_notifications + booking_notifications — channel TEXT NOT NULL DEFAULT 'telegram' CHECK channel IN ('telegram','email'); UNIQUE recreated to include channel. Zero-row backfill (D-41-15 precedent). CK names wrapped in op.f() so project naming_convention does not double-prefix (caught + fixed pre-commit). Round-trip clean. INFRA-38 still progressing — 0025 lands in Plan 09.
+- [Phase ?]: Plan 41-09: INFRA-38 closed — Alembic 0025 ships password_reset_tokens (purpose discriminator + partial UNIQUE (user_id,purpose) WHERE consumed_at IS NULL + non-unique token_hash idx for atomic-consume); PasswordResetToken ORM + alembic/env.py registration; REG-29-04 eager-import discipline pinned in tests/unit/test_workers_eager_import.py (new file — no prior eager-import test existed). All 4 v1.6 INFRA-bedrock migrations in. Pre-existing 41-05/41-08 ORM drift catalogued in deferred-items.md (owned by Phases 43/45).
 
 ### Pending Todos
 
@@ -113,6 +114,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-18T19:19:30.381Z
+Last session: 2026-05-18T19:30:03.819Z
 Stopped at: Completed 41-08-PLAN.md
 Resume: `/gsd-execute-phase 41` (next plan: 41-10 User hoist+shim or 41-11 RESET-06 anti-oracle test — both Wave 1)

@@ -139,7 +139,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 41-07-PLAN.md — INFRA-39 actor_context_var + ActorContextMiddleware + ARQ on_job_start/end + audit.emit wiring
-- [ ] 41-09-PLAN.md — INFRA-38 Alembic 0025 password_reset_tokens unified table + ORM + eager-import
+- [x] 41-09-PLAN.md — INFRA-38 Alembic 0025 password_reset_tokens unified table + ORM + eager-import
 
 ### Phase 42: Email Transport Layer + Email OTP Fallback
 **Goal**: Sportzal can send a transactional email asynchronously through a verified РФ-domiciled provider end-to-end, with circuit-breaker protection, bounce-webhook intake, and an immediate consumer (email-channel OTP fallback for `/auth/otp/request`) proving the slot wiring works.
@@ -215,7 +215,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 41. INFRA Bedrock + Anti-Oracle Scaffold | 10/11 | In Progress|  |
+| 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
