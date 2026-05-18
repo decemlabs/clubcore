@@ -79,19 +79,19 @@
 
 ### NOTIFY — Telegram Notifications (Phase 39)
 
-- [ ] **NOTIFY-01**: 4 locked Russian DM templates in `app/modules/bookings/notifications.py`: `BOOKING_CONFIRMED_DM`, `BOOKING_CANCELLED_BY_CLIENT_DM`, `BOOKING_CANCELLED_BY_OWNER_DM`, `BOOKING_REMINDER_24H_DM`. Each receives `{client_name, trainer_name, slot_start_msk}` placeholders. **Owner copy-lock sign-off** required at Phase 39 close (mirror v1.3 D-27-OWNER-COPY-LOCK).
-- [ ] **NOTIFY-02**: 1 anti-oracle DM constant `_BOT_BOOK_DENIED_DM` covering ALL negative outcomes of bot `/book` flow ("no active PT-package" / "no slots available" / "client not linked") — single locked Russian string with no information leak (C-12, mirror v1.2 D-20-9).
-- [ ] **NOTIFY-03**: Booking-confirmed DM sent on `POST /bookings` success (linked client) and on bot `/book` success. Send-through factory `build_bot` (reuse v1.3 pattern). Failures (403/blocked) logged WARNING + no row in idempotency table — retried on next applicable cron (booking confirmation is once-off, so failures simply log).
-- [ ] **NOTIFY-04**: Booking-cancelled DM sent on `POST /bookings/{id}/cancel` (client cancelled their own → none; reception cancels → `BOOKING_CANCELLED_BY_CLIENT_DM` to the client because reception is acting on client's behalf; owner cancels → `BOOKING_CANCELLED_BY_OWNER_DM`). Slot-cancelled cascade (SLOT-07) sends `BOOKING_CANCELLED_BY_OWNER_DM`.
-- [ ] **NOTIFY-05**: New `booking_notifications` table (Alembic 0020): `id UUIDv4 PK`, `booking_id UUIDv4 NOT NULL FK bookings(id) ON DELETE RESTRICT`, `kind TEXT NOT NULL CHECK IN ('reminder_24h')`, `sent_at TIMESTAMPTZ NOT NULL DEFAULT now()`. UNIQUE `(booking_id, kind)` for cron idempotency (mirror v1.3 `membership_notifications`).
+- [x] **NOTIFY-01**: 4 locked Russian DM templates in `app/modules/bookings/notifications.py`: `BOOKING_CONFIRMED_DM`, `BOOKING_CANCELLED_BY_CLIENT_DM`, `BOOKING_CANCELLED_BY_OWNER_DM`, `BOOKING_REMINDER_24H_DM`. Each receives `{client_name, trainer_name, slot_start_msk}` placeholders. **Owner copy-lock sign-off** required at Phase 39 close (mirror v1.3 D-27-OWNER-COPY-LOCK).
+- [x] **NOTIFY-02**: 1 anti-oracle DM constant `_BOT_BOOK_DENIED_DM` covering ALL negative outcomes of bot `/book` flow ("no active PT-package" / "no slots available" / "client not linked") — single locked Russian string with no information leak (C-12, mirror v1.2 D-20-9).
+- [x] **NOTIFY-03**: Booking-confirmed DM sent on `POST /bookings` success (linked client) and on bot `/book` success. Send-through factory `build_bot` (reuse v1.3 pattern). Failures (403/blocked) logged WARNING + no row in idempotency table — retried on next applicable cron (booking confirmation is once-off, so failures simply log).
+- [x] **NOTIFY-04**: Booking-cancelled DM sent on `POST /bookings/{id}/cancel` (client cancelled their own → none; reception cancels → `BOOKING_CANCELLED_BY_CLIENT_DM` to the client because reception is acting on client's behalf; owner cancels → `BOOKING_CANCELLED_BY_OWNER_DM`). Slot-cancelled cascade (SLOT-07) sends `BOOKING_CANCELLED_BY_OWNER_DM`.
+- [x] **NOTIFY-05**: New `booking_notifications` table (Alembic 0020): `id UUIDv4 PK`, `booking_id UUIDv4 NOT NULL FK bookings(id) ON DELETE RESTRICT`, `kind TEXT NOT NULL CHECK IN ('reminder_24h')`, `sent_at TIMESTAMPTZ NOT NULL DEFAULT now()`. UNIQUE `(booking_id, kind)` for cron idempotency (mirror v1.3 `membership_notifications`).
 
 ### CRON — Scheduled Jobs (Phase 39)
 
-- [ ] **CRON-01**: New ARQ cron `mark_no_show_bookings` scheduled at 23:10 Europe/Moscow (`hour=20, minute=10` UTC; `unique=True, keep_result=60`). Selects `bookings` with `status='confirmed' AND slot.end_time < now() AT TIME ZONE 'Europe/Moscow'` (with explicit `SELECT FOR UPDATE` to avoid race with concurrent PT-session recording flipping to `completed`). For each: transitions `confirmed → no_show`, sets `no_show_at`, emits `booking_no_show`. Idempotent — re-running picks zero rows after first success.
-- [ ] **CRON-02**: New ARQ cron `send_booking_reminders` scheduled at 06:35 Europe/Moscow (`hour=3, minute=35` UTC; `unique=True, keep_result=60`; ordered AFTER `expire_pt_packages` 06:25). Selects `bookings` with `status='confirmed' AND slot.start_time BETWEEN now()+23h AND now()+25h AND client.telegram_chat_id IS NOT NULL`, sends `BOOKING_REMINDER_24H_DM`, inserts `booking_notifications` idempotency row on successful send only (403/blocked → WARNING log + no row + retry next applicable window — same pattern as v1.3 expiring-soon).
-- [ ] **CRON-03**: Both new crons join the canonical `app.workers.WorkerSettings` with `on_startup` cron-resolution invariant + `on_job_start`/`on_job_end` structlog `job_id`/`job_name` contextvars (mirror v1.2 Pitfall 14 RequestIdMiddleware discipline).
-- [ ] **CRON-04**: One-shot operator runner `apps/backend/scripts/run_no_show_cron_once.py` for verification (mirror v1.3 `run_expiring_cron_once.py`). Eager-imports all ORM models at top of file (REG-29-04 lesson — avoid empty-ORM-registry first-tick zero-row).
-- [ ] **CRON-05**: One-shot runner `apps/backend/scripts/run_booking_reminders_once.py` symmetric to CRON-04.
+- [x] **CRON-01**: New ARQ cron `mark_no_show_bookings` scheduled at 23:10 Europe/Moscow (`hour=20, minute=10` UTC; `unique=True, keep_result=60`). Selects `bookings` with `status='confirmed' AND slot.end_time < now() AT TIME ZONE 'Europe/Moscow'` (with explicit `SELECT FOR UPDATE` to avoid race with concurrent PT-session recording flipping to `completed`). For each: transitions `confirmed → no_show`, sets `no_show_at`, emits `booking_no_show`. Idempotent — re-running picks zero rows after first success.
+- [x] **CRON-02**: New ARQ cron `send_booking_reminders` scheduled at 06:35 Europe/Moscow (`hour=3, minute=35` UTC; `unique=True, keep_result=60`; ordered AFTER `expire_pt_packages` 06:25). Selects `bookings` with `status='confirmed' AND slot.start_time BETWEEN now()+23h AND now()+25h AND client.telegram_chat_id IS NOT NULL`, sends `BOOKING_REMINDER_24H_DM`, inserts `booking_notifications` idempotency row on successful send only (403/blocked → WARNING log + no row + retry next applicable window — same pattern as v1.3 expiring-soon).
+- [x] **CRON-03**: Both new crons join the canonical `app.workers.WorkerSettings` with `on_startup` cron-resolution invariant + `on_job_start`/`on_job_end` structlog `job_id`/`job_name` contextvars (mirror v1.2 Pitfall 14 RequestIdMiddleware discipline).
+- [x] **CRON-04**: One-shot operator runner `apps/backend/scripts/run_no_show_cron_once.py` for verification (mirror v1.3 `run_expiring_cron_once.py`). Eager-imports all ORM models at top of file (REG-29-04 lesson — avoid empty-ORM-registry first-tick zero-row).
+- [x] **CRON-05**: One-shot runner `apps/backend/scripts/run_booking_reminders_once.py` symmetric to CRON-04.
 
 ### BOT — Telegram /book (Phase 40)
 
@@ -186,16 +186,16 @@
 | PKG-04 | Phase 38 | Pending |
 | PKG-05 | Phase 38 | Pending |
 | PKG-06 | Phase 38 | Pending |
-| NOTIFY-01 | Phase 39 | Pending |
-| NOTIFY-02 | Phase 39 | Pending |
-| NOTIFY-03 | Phase 39 | Pending |
-| NOTIFY-04 | Phase 39 | Pending |
-| NOTIFY-05 | Phase 39 | Pending |
-| CRON-01 | Phase 39 | Pending |
-| CRON-02 | Phase 39 | Pending |
-| CRON-03 | Phase 39 | Pending |
-| CRON-04 | Phase 39 | Pending |
-| CRON-05 | Phase 39 | Pending |
+| NOTIFY-01 | Phase 39 | Complete |
+| NOTIFY-02 | Phase 39 | Complete |
+| NOTIFY-03 | Phase 39 | Complete |
+| NOTIFY-04 | Phase 39 | Complete |
+| NOTIFY-05 | Phase 39 | Complete |
+| CRON-01 | Phase 39 | Complete |
+| CRON-02 | Phase 39 | Complete |
+| CRON-03 | Phase 39 | Complete |
+| CRON-04 | Phase 39 | Complete |
+| CRON-05 | Phase 39 | Complete |
 | BOT-01 | Phase 40 | Pending |
 | BOT-02 | Phase 40 | Pending |
 | BOT-03 | Phase 40 | Pending |

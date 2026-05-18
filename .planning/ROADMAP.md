@@ -183,7 +183,7 @@ _Wave 4 (serial after 39-03 — needs `BookingNotification` ORM + Alembic 0020 +
 |-------|----------------|--------|-----------|
 | 37. Foundations Bedrock | 5/5 | Complete   | 2026-05-17 |
 | 38. Schedule Module + Booking Core | 6/6 | Complete   | 2026-05-17 |
-| 39. Notifications + Cron | 4/4 | Complete   | 2026-05-18 |
+| 39. Notifications + Cron | 4/4 | Complete    | 2026-05-18 |
 | 40. Telegram /book + OpenAPI + Verification | 0/TBD | Not started | - |
 
 ---
