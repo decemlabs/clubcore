@@ -128,7 +128,7 @@ Plans:
 - [x] 41-01-PLAN.md — INFRA-34 LOCKED_AUDIT_EVENTS 56→67 + synthetic-violation
 - [x] 41-03-PLAN.md — INFRA-36 LOCKED_EMAIL_TEMPLATES frozenset + AST walker + 2 synthetic fixtures
 - [x] 41-04-PLAN.md — INFRA-37 Resource.USERS + 4 OWNER_ONLY entries + three-way RBAC parity
-- [ ] 41-05-PLAN.md — INFRA-38 Alembic 0022 users.deleted_at + partial-UNIQUE on lower(email)
+- [x] 41-05-PLAN.md — INFRA-38 Alembic 0022 users.deleted_at + partial-UNIQUE on lower(email)
 - [ ] 41-10-PLAN.md — INFRA-40 User hoist+shim + EmailDispatcher/UserSessionInvalidator Protocol slots + .importlinter + SVC001 scope
 - [ ] 41-11-PLAN.md — RESET-06 test_password_reset_no_oracle.py (xfail-strict; 4-case identical 202 + body + 100ms timing)
 
@@ -215,7 +215,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 41. INFRA Bedrock + Anti-Oracle Scaffold | 3/11 | In Progress|  |
+| 41. INFRA Bedrock + Anti-Oracle Scaffold | 4/11 | In Progress|  |
 | 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
