@@ -152,7 +152,7 @@ Plans:
   4. When the provider returns 5xx for 5 consecutive calls, the Redis circuit breaker opens (`sz:email:circuit:{provider}` TTL 5m), subsequent `dispatch_email` jobs short-circuit to `EmailSendResult.transient_error` without touching the provider, and the 06:15 → 06:35 cron window completes within budget.
   5. `infra/dns/sportzal.ru.zone` documents SPF/DKIM/DMARC records for the dedicated email subdomain with `p=none` initial policy and DMARC `rua` reports addressed to the owner; the Pydantic `EmailProviderSettings` validator fails fast at boot if `from_domain` is empty in non-sandbox mode AND the boot-time `/domains` probe asserts domain verification.
   6. `POST /api/v1/_internal/email/webhook` rejects unsigned bodies in O(1) time via `hmac.compare_digest` BEFORE body parsing; valid signed bounce/complaint payloads append to `email_send_log` with classification.
-**Plans**: 11 plans (waves 1-4)
+**Plans**: 16 plans (waves 1-6); plans 42-12..42-16 are gap-closure plans created 2026-05-19 to address VERIFICATION.md CR-01..04 + WR hygiene
 Plans:
 **Wave 1**
 - [x] 42-01-PLAN.md — EMAIL-01/07 EmailEnvelope + EmailSendResult types + EmailSendLog ORM + Alembic 0026 + env.py registration
@@ -172,6 +172,15 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 42-11-PLAN.md — AUTH-EM-04 + REG-29-03/04 tests: test_otp_email_anti_oracle + test_app_wiring extension + test_workers_eager_import extension + test_locked_email_templates_ast real-callsite assertion
+
+**Wave 5** *(gap-closure — blocked on Wave 4; plans run parallel — zero files_modified overlap pairwise)*
+- [ ] 42-12-PLAN.md — CR-01 fix: flatten audit.emit kwargs in dispatch_email.py (both branches) + rewrite unit tests + integration test exercising real audit.emit + audit_log query (EMAIL-03)
+- [ ] 42-13-PLAN.md — CR-02 fix: _constant_time_floor try/finally on request_otp_telegram + extend test_otp_email_anti_oracle.py to include case B in body+timing parity (AUTH-EM-02, AUTH-EM-04)
+- [ ] 42-14-PLAN.md — CR-03 fix: atomic Redis pipeline in circuit_breaker.record_failure + concurrency test under asyncio.gather (EMAIL-06)
+- [ ] 42-15-PLAN.md — CR-04 fix: defensive UPDATE pass in migration 0027 + docstring + regression test seeding colliding rows; includes [BLOCKING] alembic round-trip checkpoint (AUTH-EM-01)
+
+**Wave 6** *(hygiene bundle — blocked on Wave 5; depends_on [12, 13] for dispatch_email.py + service.py overlap)*
+- [ ] 42-16-PLAN.md — WR-01/02/03/04/06 hygiene: migration 0029 (bounce_type CHECK + status circuit_open) + dispatch_email status taxonomy + webhook orphan event name + email_lower at dispatcher + HMAC strip/lower; includes [BLOCKING] alembic round-trip checkpoint (EMAIL-03/06/07, AUTH-EM-02)
 
 **Cross-cutting constraints:**
 - alembic upgrade head + downgrade -1 + upgrade head round-trips clean
