@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
-last_updated: "2026-05-19T19:17:27.835Z"
+last_updated: "2026-05-19T19:23:32.963Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 45
-  completed_plans: 44
-  percent: 98
+  completed_plans: 45
+  percent: 100
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 4 of 18
+Plan: 5 of 18
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -112,6 +112,8 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 
 - [Phase 43]: Plan 43-16 gap-closure: CR-04 fixed by introducing `_revoke_all_sessions_no_commit` (no commit helper) + `revoke_all_sessions` (thin commit wrapper for logout-all/pwd-change) + `invalidate_all_families_for_user` calling no-commit variant. WR-01 fixed by extending `UserSessionInvalidator` Protocol with `actor_user_id: UUID | None`; all 4 callsites updated atomically (users/service x2, auth/service Protocol impl, main.py registration). WR-04 fixed by using `UPDATE...RETURNING family_id` distinct set for DB-authoritative count (Redis SMEMBERS drift eliminated). WR-03 fixed by `repository.soft_delete_user` accepting `actor_user_id` + `func.coalesce(User.deactivated_by_user_id, actor_user_id)`. Regression suite 88 passed.
 
+- [Phase 43]: Plan 43-17 gap-closure: CR-03 (login chokepoint) closed — `authenticate()` SELECT now filters `User.is_active.is_(True)` AND `User.deleted_at.is_(None)`, mirroring the D-43-20 `rotate_refresh` predicate set. Deactivated/soft-deleted users fall into the existing sentinel-hash + `login_failed` emit path (no new emit branch needed; anti-oracle body+timing parity preserved). CR-03 secondary closed — `request_otp_email` eligibility replaced defensive `getattr(user, "is_active", True)` with a SQL predicate. All three auth chokepoints (rotate_refresh + authenticate + request_otp_email) now share the same predicate set. Regression suite 86 passed, 1 xfailed.
+
 ### Pending Todos
 
 - `/gsd-discuss-phase 41` — resolve open conflict #5 (`User` ORM ownership), draft Phase 41 plan structure for INFRA bedrock + anti-oracle scaffold
@@ -137,6 +139,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T19:17:27.831Z
-Stopped at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
-Resume: `/gsd-execute-phase 43` (Wave 4 continues — check 43-12 / overall phase verification status)
+Last session: 2026-05-19T19:45:00.000Z
+Stopped at: Completed 43-17-PLAN.md (login chokepoint CR-03 fix — all three auth chokepoints aligned)
+Resume: None — Phase 43 gap-closure plans complete
