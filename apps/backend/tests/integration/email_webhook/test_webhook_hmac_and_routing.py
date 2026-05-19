@@ -33,7 +33,7 @@ from app.core.audit_payloads import EmailSendFailedPayload
 from app.core.config import EmailProviderSettings, Settings, get_settings
 from app.integrations.email.models import EmailSendLog
 
-_WEBHOOK_SECRET = "test-webhook-shared-secret"
+_WEBHOOK_SECRET = "test-webhook-shared-secret"  # noqa: S105 — test fixture, not a real secret
 
 
 @pytest.fixture(autouse=True)
@@ -136,6 +136,108 @@ async def test_valid_signature_but_unparseable_json_returns_400(
         },
     )
     assert response.status_code == 400
+
+
+async def test_webhook_hmac_accepts_whitespace_and_uppercase_signature(
+    async_client: AsyncClient,
+) -> None:
+    """Test 3b (WR-06 regression): valid signature with surrounding whitespace and uppercase
+    hex MUST return 202 (not 401) — proxy-added whitespace and hex-case variance must not
+    produce false 401s after .strip().lower() normalisation on the presented header.
+    """
+    body = json.dumps({"eventType": "Delivery", "mail": {"messageId": "no-such-id"}}).encode(
+        "utf-8"
+    )
+    valid_sig = _sign(body)
+    # Wrap with leading/trailing whitespace AND uppercase: both are stripped + lowered.
+    padded_upper = f"  {valid_sig.upper()}  "
+    response = await async_client.post(
+        "/api/v1/_internal/email/webhook",
+        content=body,
+        headers={
+            "content-type": "application/json",
+            "x-email-webhook-signature": padded_upper,
+        },
+    )
+    assert response.status_code == 202, (
+        f"WR-06 regression: normalised signature should pass HMAC gate (got {response.status_code})"
+    )
+
+
+async def test_webhook_orphan_event_name(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test 3c (WR-02): missing and unknown messageId each log 'email_webhook_orphan_message_id'
+    with the correct 'kind' discriminator and still return 202 (SES retry semantics preserved).
+
+    Uses monkeypatch on the router's structlog bound-logger to intercept warning calls
+    (integration tests run structlog in production mode; capture_logs() only captures in
+    the test processor pipeline, not the full production pipeline used by ASGI transport).
+    """
+    warning_calls: list[tuple[str, dict[str, object]]] = []
+
+    def _capture_warning(event: str, **kwargs: object) -> None:
+        warning_calls.append((event, kwargs))
+
+    monkeypatch.setattr(
+        "app.api.v1._internal.email.router._log.warning",
+        _capture_warning,
+    )
+
+    # Case 1: missing messageId (mail block present but no messageId key).
+    body_missing = json.dumps(
+        {"eventType": "Bounce", "mail": {}, "bounce": {"bounceType": "Permanent"}}
+    ).encode("utf-8")
+    response = await async_client.post(
+        "/api/v1/_internal/email/webhook",
+        content=body_missing,
+        headers={
+            "content-type": "application/json",
+            "x-email-webhook-signature": _sign(body_missing),
+        },
+    )
+    assert response.status_code == 202, "missing messageId must still return 202"
+    orphan_missing = [
+        (ev, kw) for ev, kw in warning_calls if ev == "email_webhook_orphan_message_id"
+    ]
+    assert len(orphan_missing) == 1, (
+        f"expected 1 orphan_message_id warning for missing case, got: {warning_calls}"
+    )
+    assert orphan_missing[0][1].get("kind") == "missing", (
+        f"missing-messageId branch must log kind='missing', got: {orphan_missing[0][1]}"
+    )
+
+    # Reset for Case 2.
+    warning_calls.clear()
+
+    # Case 2: unknown messageId (messageId present but no matching EmailSendLog row).
+    body_unknown = json.dumps(
+        {
+            "eventType": "Bounce",
+            "mail": {"messageId": "msg-nonexistent-for-orphan-test"},
+            "bounce": {"bounceType": "Permanent"},
+        }
+    ).encode("utf-8")
+    response = await async_client.post(
+        "/api/v1/_internal/email/webhook",
+        content=body_unknown,
+        headers={
+            "content-type": "application/json",
+            "x-email-webhook-signature": _sign(body_unknown),
+        },
+    )
+    assert response.status_code == 202, "unknown messageId must still return 202"
+    orphan_unknown = [
+        (ev, kw) for ev, kw in warning_calls if ev == "email_webhook_orphan_message_id"
+    ]
+    assert len(orphan_unknown) == 1, (
+        f"expected 1 orphan_message_id warning for unknown case, got: {warning_calls}"
+    )
+    assert orphan_unknown[0][1].get("kind") == "unknown", (
+        f"unknown-messageId branch must log kind='unknown', got: {orphan_unknown[0][1]}"
+    )
 
 
 # ---------------------------------------------------------------------------

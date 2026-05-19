@@ -84,15 +84,17 @@ async def email_webhook(
     settings = get_settings()
     raw_body = await request.body()
 
-    presented_sig = request.headers.get("x-email-webhook-signature", "")
+    presented_sig = request.headers.get("x-email-webhook-signature", "").strip().lower()
     expected_sig = hmac.new(
         settings.email.webhook_secret.get_secret_value().encode("utf-8"),
         raw_body,
         hashlib.sha256,
-    ).hexdigest()
+    ).hexdigest()  # hashlib produces lowercase hex; normalisation is symmetric.
     if not presented_sig or not hmac.compare_digest(presented_sig, expected_sig):
         # 401 BEFORE parse. Do NOT emit audit -- this would amplify probe
-        # noise from internet scanners hitting /_internal/* paths.
+        # noise from internet scanners hitting /_internal/* paths. WR-06:
+        # both inputs are normalised (.strip().lower()) so proxy-added
+        # whitespace and hex-case variance do not produce false 401s.
         _log.warning(
             "email_webhook_invalid_signature",
             has_header=bool(presented_sig),
@@ -118,8 +120,11 @@ async def email_webhook(
     provider_message_id = mail.get("messageId")
 
     if not provider_message_id:
+        # WR-02: fixed event name for ops alerting; kind discriminator separates
+        # missing vs unknown without fragmenting log queries.
         _log.warning(
-            "email_webhook_missing_message_id",
+            "email_webhook_orphan_message_id",
+            kind="missing",
             event_type=event_type,
         )
         return Response(status_code=202)
@@ -129,7 +134,8 @@ async def email_webhook(
     )
     if row is None:
         _log.warning(
-            "email_webhook_unknown_message_id",
+            "email_webhook_orphan_message_id",
+            kind="unknown",
             provider_message_id=provider_message_id,
             event_type=event_type,
         )
