@@ -82,3 +82,19 @@ class InvitationRevokeRequest(BackendSchemaBase):
     """POST /api/v1/users/invitations/{token_id}/revoke body — D-43-19."""
 
     reason: str | None = Field(default=None, max_length=500)
+
+
+class InvitationAcceptRequest(BackendSchemaBase):
+    """Body for POST /api/v1/users/invitations/accept (RESET-04).
+
+    - ``token`` is the raw urlsafe-base64 token from the invitation URL fragment.
+    - ``password`` is the user's chosen initial password (>=8 chars enforced
+      at the service layer per D-44-17 — domain error, not pydantic 422).
+    - ``full_name`` is optional; non-empty value overwrites the owner-set
+      value per D-44-23 (self-healing typo correction at accept time).
+      Max length mirrors ``UserCreateRequest.full_name`` (128).
+    """
+
+    token: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=256)
+    full_name: str | None = Field(default=None, max_length=128)
