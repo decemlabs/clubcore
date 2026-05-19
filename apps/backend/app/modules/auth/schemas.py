@@ -119,6 +119,42 @@ class OtpRequestBody(BackendSchemaBase):
 
 
 # ---------------------------------------------------------------------------
+# Phase 44 — Password reset request/confirm bodies (RESET-01 / RESET-02).
+# ---------------------------------------------------------------------------
+
+
+class PasswordResetRequestBody(BackendSchemaBase):
+    """Body for POST /api/v1/auth/password-reset/request (RESET-01).
+
+    Anti-oracle: the email is lowercased server-side; format validation
+    is intentionally permissive (any string admitted — the anti-oracle
+    envelope hides resolution semantics, NOT format errors). ``EmailStr``
+    is deliberately NOT used here — a 422-on-bad-format would leak a
+    coarse "this string is shaped like an email vs. nonsense" oracle that
+    the 4-case identical-202 envelope (D-44-06) is supposed to suppress.
+    ``str`` with ``min_length=1`` accepts every shape and forces the
+    service layer to handle resolution uniformly.
+    """
+
+    email: str = Field(min_length=1, max_length=320)
+
+
+class PasswordResetConfirmBody(BackendSchemaBase):
+    """Body for POST /api/v1/auth/password-reset/confirm (RESET-02).
+
+    - ``token`` is the raw urlsafe-base64 token from the email URL fragment.
+    - ``new_password`` is the user's chosen new password (min 8 chars
+      enforced at service layer per D-44-17). The schema accepts any
+      string >=1 chars so weak-password failures become domain errors
+      (422 weak_password) rather than Pydantic validation errors —
+      consistent with the v1.0 AUTH-* baseline.
+    """
+
+    token: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+# ---------------------------------------------------------------------------
 # Phase 23 — Active sessions surface (HYG-03, FE-09 consumer).
 # ---------------------------------------------------------------------------
 
