@@ -73,13 +73,17 @@ def _resolve_template(template_id: str) -> Any:
         ``.text.render(...)`` directly so the structural shape suffices.
     """
     from app.modules.auth.email_templates import TEMPLATES as AUTH_TEMPLATES
+    from app.modules.users.email_templates import TEMPLATES as USERS_TEMPLATES
 
     if template_id in AUTH_TEMPLATES:
         return AUTH_TEMPLATES[template_id]
+    if template_id in USERS_TEMPLATES:
+        return USERS_TEMPLATES[template_id]
     raise KeyError(
         f"template_id {template_id!r} not in any per-module registry "
-        f"(Phase 42 only: auth.email_templates); add the per-module import here "
-        f"when Phase 44/45 register additional template files."
+        f"(Phase 42 auth.email_templates + Phase 43 users.email_templates); "
+        f"add the per-module import here when Phase 44/45 register additional "
+        f"template files."
     )
 
 

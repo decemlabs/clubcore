@@ -100,10 +100,7 @@ def _format_expires_ru(dt: datetime) -> str:
     # Render in UTC to keep the wire shape deterministic; production deployment
     # can shift to Europe/Moscow render via a future Settings.tz field if owner
     # decides the email should carry local time instead of the canonical UTC.
-    return (
-        f"{dt.day} {_RU_MONTHS_GENITIVE[dt.month - 1]} {dt.year} "
-        f"в {dt.hour:02d}:{dt.minute:02d}"
-    )
+    return f"{dt.day} {_RU_MONTHS_GENITIVE[dt.month - 1]} {dt.year} в {dt.hour:02d}:{dt.minute:02d}"
 
 
 def _build_invitation_url(raw_token: str) -> str:
@@ -149,9 +146,7 @@ async def create_user(
     if existing is not None and existing.status == "pending_invitation":
         # Branch B — atomic-consume any active invitation (race-tight against
         # parallel POSTs for the same email).
-        await repository.consume_active_invitation_for_user(
-            session, user_id=existing.id
-        )
+        await repository.consume_active_invitation_for_user(session, user_id=existing.id)
         user = existing
     else:
         # Branch A / D — INSERT (partial-UNIQUE permits soft-deleted email
@@ -199,17 +194,20 @@ async def create_user(
 
     # Audit emit — FLAT kwargs matching UserInvitedPayload (D-43-04 / D-43-14).
     # URL itself is NEVER in the payload — only link_copied bool (Pitfall 4).
+    # UUIDs / datetimes stringified at the audit boundary (REG-36-03 / Phase 42
+    # discipline): AuditLog.payload is JSONB with no UUID-aware serializer;
+    # Pydantic schemas accept str → UUID/datetime coercion during validation.
     await audit.emit(
         session,
         "user_invited",
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=user.id,
-        audit_correlation_id=audit_correlation_id,
-        invited_user_id=user.id,
+        audit_correlation_id=str(audit_correlation_id),
+        invited_user_id=str(user.id),
         invited_email=email_lower,
         invited_role=user.role.value,
-        invitation_expires_at=token.expires_at,
+        invitation_expires_at=token.expires_at.isoformat(),
         link_copied=include_invite_link,
     )
 
@@ -232,9 +230,7 @@ async def create_user(
     )
 
 
-async def deactivate_user(
-    session: AsyncSession, actor: CurrentUser, target_user_id: UUID
-) -> None:
+async def deactivate_user(session: AsyncSession, actor: CurrentUser, target_user_id: UUID) -> None:
     """USERS-04 / D-43-16 — self + last-owner guards, then UPDATE + revoke + audit."""
     target = await repository.get_alive(session, target_user_id)
     if target is None:
@@ -251,9 +247,7 @@ async def deactivate_user(
         if active_owner_count < 1:
             raise CannotDeactivateLastOwnerError("cannot_deactivate_last_owner")
 
-    await repository.deactivate_user(
-        session, target_user_id=target_user_id, actor_user_id=actor.id
-    )
+    await repository.deactivate_user(session, target_user_id=target_user_id, actor_user_id=actor.id)
 
     sessions_revoked = await get_user_session_invalidator()(
         session, user_id=target_user_id, reason="deactivated"
@@ -265,17 +259,15 @@ async def deactivate_user(
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=target_user_id,
-        audit_correlation_id=uuid4(),
-        deactivated_user_id=target_user_id,
+        audit_correlation_id=str(uuid4()),
+        deactivated_user_id=str(target_user_id),
         sessions_revoked_count=sessions_revoked,
     )
     await session.flush()
     await session.commit()
 
 
-async def reactivate_user(
-    session: AsyncSession, actor: CurrentUser, target_user_id: UUID
-) -> None:
+async def reactivate_user(session: AsyncSession, actor: CurrentUser, target_user_id: UUID) -> None:
     """USERS-04 / D-43-17 — flip back to active; NO self/last-owner guards.
 
     Sessions are NOT auto-restored — refresh families revoked at deactivate
@@ -295,16 +287,14 @@ async def reactivate_user(
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=target_user_id,
-        audit_correlation_id=uuid4(),
-        reactivated_user_id=target_user_id,
+        audit_correlation_id=str(uuid4()),
+        reactivated_user_id=str(target_user_id),
     )
     await session.flush()
     await session.commit()
 
 
-async def soft_delete_user(
-    session: AsyncSession, actor: CurrentUser, target_user_id: UUID
-) -> None:
+async def soft_delete_user(session: AsyncSession, actor: CurrentUser, target_user_id: UUID) -> None:
     """USERS-05 / D-43-18 — same self+last-owner guards as deactivate.
 
     Allowed regardless of ``is_active`` state (the common case is delete after
@@ -327,13 +317,9 @@ async def soft_delete_user(
     await repository.soft_delete_user(session, target_user_id=target_user_id)
     # Defensive — most deletes follow a deactivate (no families left), but
     # pure-delete-without-deactivate path needs the kill.
-    await get_user_session_invalidator()(
-        session, user_id=target_user_id, reason="soft_deleted"
-    )
+    await get_user_session_invalidator()(session, user_id=target_user_id, reason="soft_deleted")
     # Atomic-consume pending invitation (no separate audit — parent event covers).
-    await repository.consume_active_invitation_for_user(
-        session, user_id=target_user_id
-    )
+    await repository.consume_active_invitation_for_user(session, user_id=target_user_id)
 
     await audit.emit(
         session,
@@ -341,8 +327,8 @@ async def soft_delete_user(
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=target_user_id,
-        audit_correlation_id=uuid4(),
-        deleted_user_id=target_user_id,
+        audit_correlation_id=str(uuid4()),
+        deleted_user_id=str(target_user_id),
     )
     await session.flush()
     await session.commit()
@@ -366,9 +352,7 @@ async def revoke_invitation(
     if token.consumed_at is not None:
         raise InvitationAlreadyAcceptedError("invitation_already_accepted")
 
-    consumed_id = await repository.atomic_consume_invitation_token_by_id(
-        session, token_id
-    )
+    consumed_id = await repository.atomic_consume_invitation_token_by_id(session, token_id)
     if consumed_id is None:
         # Race lost — another request consumed between get + UPDATE.
         raise InvitationAlreadyAcceptedError("invitation_already_accepted")
@@ -379,9 +363,9 @@ async def revoke_invitation(
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=token.user_id,
-        audit_correlation_id=uuid4(),
-        revoked_user_id=token.user_id,
-        invitation_token_id=token_id,
+        audit_correlation_id=str(uuid4()),
+        revoked_user_id=str(token.user_id),
+        invitation_token_id=str(token_id),
         reason=reason,
     )
     await session.flush()
