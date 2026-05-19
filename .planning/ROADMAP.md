@@ -171,7 +171,7 @@ Plans:
 - [x] 42-10-PLAN.md — EMAIL-07 POST /api/v1/_internal/email/webhook HMAC-before-parse bounce/complaint handler
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 42-11-PLAN.md — AUTH-EM-04 + REG-29-03/04 tests: test_otp_email_anti_oracle + test_app_wiring extension + test_workers_eager_import extension + test_locked_email_templates_ast real-callsite assertion
+- [x] 42-11-PLAN.md — AUTH-EM-04 + REG-29-03/04 tests: test_otp_email_anti_oracle + test_app_wiring extension + test_workers_eager_import extension + test_locked_email_templates_ast real-callsite assertion
 
 **Cross-cutting constraints:**
 - alembic upgrade head + downgrade -1 + upgrade head round-trips clean
@@ -238,7 +238,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
-| 42. Email Transport Layer + Email OTP Fallback | 10/11 | In Progress|  |
+| 42. Email Transport Layer + Email OTP Fallback | 11/11 | Complete   | 2026-05-19 |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
