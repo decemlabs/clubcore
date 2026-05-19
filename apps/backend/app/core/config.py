@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     gym_hours_start: time = time(7, 0)
     gym_hours_end: time = time(23, 0)
 
+    # Phase 43 addition (D-43-14): frontend base URL for owner-managed
+    # invitation links (?include_invite_link=true escape hatch + email body).
+    # Default points at the admin-web dev server; production overrides via .env.
+    # The URL is NEVER stored in audit payloads — only the link_copied bool
+    # flag is captured (D-43-14 / Pitfall 4 anti-oracle).
+    frontend_base_url: str = "http://localhost:5173"
+
     @model_validator(mode="after")
     def _gym_hours_range_invariant(self) -> "Settings":
         # D-11: no midnight-spanning gym hours in v1.2.

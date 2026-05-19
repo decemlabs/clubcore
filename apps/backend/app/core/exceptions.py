@@ -315,6 +315,87 @@ class TrainerInUseError(ConflictError):
     status_code = 409
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 43 multi-user admin module (USERS-01..05).
+# Service-layer domain errors mapped to HTTP per the AppError handler below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class UserNotFoundError(NotFoundError):
+    """Raised when target user_id is missing or soft-deleted (D-43-16/17/18)."""
+
+    code = "user_not_found"
+    status_code = 404
+
+
+class EmailAlreadyActiveError(ConflictError):
+    """Raised when POST /users targets an email with an active user (D-43-13)."""
+
+    code = "email_already_active"
+    status_code = 409
+
+
+class UserAlreadyInactiveError(ConflictError):
+    """Raised when PATCH /users/{id}/deactivate hits an already-inactive user (D-43-16)."""
+
+    code = "user_already_inactive"
+    status_code = 409
+
+
+class UserNotInactiveError(ConflictError):
+    """Raised when PATCH /users/{id}/reactivate hits an already-active user (D-43-17)."""
+
+    code = "user_not_inactive"
+    status_code = 409
+
+
+class CannotDeactivateSelfError(ConflictError):
+    """Raised when the actor tries to deactivate themselves (D-43-16)."""
+
+    code = "cannot_deactivate_self"
+    status_code = 409
+
+
+class CannotDeleteSelfError(ConflictError):
+    """Raised when the actor tries to soft-delete themselves (D-43-18)."""
+
+    code = "cannot_delete_self"
+    status_code = 409
+
+
+class CannotDeactivateLastOwnerError(ConflictError):
+    """Raised when deactivating the target would leave zero active owners (D-43-16)."""
+
+    code = "cannot_deactivate_last_owner"
+    status_code = 409
+
+
+class CannotDeleteLastOwnerError(ConflictError):
+    """Raised when soft-deleting the target would leave zero active owners (D-43-18)."""
+
+    code = "cannot_delete_last_owner"
+    status_code = 409
+
+
+class InvitationNotFoundError(NotFoundError):
+    """Raised when POST /users/invitations/{id}/revoke hits a missing token (D-43-19)."""
+
+    code = "invitation_not_found"
+    status_code = 404
+
+
+class InvitationAlreadyAcceptedError(ConflictError):
+    """Raised when the invitation token is already consumed (D-43-19).
+
+    Same code is used for both pre-check (consumed_at IS NOT NULL on get) and
+    race-loss (UPDATE...RETURNING returned zero rows because a concurrent
+    consume already won). Mirrors v1.1 refresh-rotation race-loss discipline.
+    """
+
+    code = "invitation_already_accepted"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
