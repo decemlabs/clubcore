@@ -260,3 +260,64 @@ def test_non_literal_template_id_is_rejected() -> None:
         f"Walker flagged {fixture} but the message did not say "
         f"'not a literal'. Violations: {violations}"
     )
+
+
+def test_password_reset_email_literal_at_password_reset_service_callsite() -> None:
+    """Phase 44 D-44-36 — positive-fixture assertion on the
+    ``PASSWORD_RESET_EMAIL`` real callsite.
+
+    Plan 44-04 shipped the third ``get_email_dispatcher()(template_id=...)``
+    callsite in production code (``app/modules/auth/password_reset_service.py``
+    inside ``request_password_reset``). Mirrors the Phase 42 4-11 +
+    Phase 43 plan 13 patterns for ``EMAIL_OTP_LOGIN`` /
+    ``USER_INVITATION_EMAIL``: a future "helpfully refactored" const-extraction
+    (e.g. ``template_id=PASSWORD_RESET_EMAIL_CONST``) would silently bypass
+    ``test_real_callsites_pass`` because the walker rejects only non-Constant
+    nodes that reach a dispatcher call. This test pins the contract that the
+    literal ``"PASSWORD_RESET_EMAIL"`` exists as an ``ast.Constant(str)``
+    directly at a callsite inside ``auth.password_reset_service``.
+
+    Walker logic mirrored locally (not delegated to ``_iter_dispatcher_calls``)
+    so a refactor of the production walker cannot silently weaken this gate
+    (D-43-33 anti-weakening discipline, applied to PASSWORD_RESET_EMAIL here).
+    """
+    service_py = _BACKEND_APP / "modules" / "auth" / "password_reset_service.py"
+    tree = ast.parse(service_py.read_text(encoding="utf-8"))
+
+    found_literal_template_ids: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "template_id"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
+                found_literal_template_ids.append(kw.value.value)
+
+    assert "PASSWORD_RESET_EMAIL" in found_literal_template_ids, (
+        "Phase 44 RESET-03 / D-44-36 violation: literal PASSWORD_RESET_EMAIL "
+        "template_id callsite not found in "
+        "app/modules/auth/password_reset_service.py. "
+        "If you refactored the callsite to read template_id from a constant "
+        "or f-string, revert — the AST walker (D-41-11) only accepts "
+        "ast.Constant(str). "
+        f"Got literal template_ids: {found_literal_template_ids}"
+    )
+
+    # Exactly ONE dispatcher callsite is expected in password_reset_service.py:
+    # ``request_password_reset`` enqueues; ``confirm_password_reset`` and
+    # ``accept_invitation`` never enqueue (D-44-09 / D-44-20). A future change
+    # that adds a second callsite must be reviewed for anti-oracle implications
+    # before this assertion is relaxed.
+    password_reset_literal_count = sum(
+        1 for tid in found_literal_template_ids if tid == "PASSWORD_RESET_EMAIL"
+    )
+    assert password_reset_literal_count == 1, (
+        "Expected exactly 1 PASSWORD_RESET_EMAIL literal callsite in "
+        "app/modules/auth/password_reset_service.py "
+        f"(found {password_reset_literal_count}). A new dispatcher callsite "
+        "requires anti-oracle review (D-44-06 / D-44-09 envelope parity) "
+        "before this assertion is updated."
+    )
