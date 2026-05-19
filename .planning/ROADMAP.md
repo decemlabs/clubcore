@@ -177,7 +177,7 @@ Plans:
 - [ ] 42-12-PLAN.md — CR-01 fix: flatten audit.emit kwargs in dispatch_email.py (both branches) + rewrite unit tests + integration test exercising real audit.emit + audit_log query (EMAIL-03)
 - [ ] 42-13-PLAN.md — CR-02 fix: _constant_time_floor try/finally on request_otp_telegram + extend test_otp_email_anti_oracle.py to include case B in body+timing parity (AUTH-EM-02, AUTH-EM-04)
 - [ ] 42-14-PLAN.md — CR-03 fix: atomic Redis pipeline in circuit_breaker.record_failure + concurrency test under asyncio.gather (EMAIL-06)
-- [ ] 42-15-PLAN.md — CR-04 fix: defensive UPDATE pass in migration 0027 + docstring + regression test seeding colliding rows; includes [BLOCKING] alembic round-trip checkpoint (AUTH-EM-01)
+- [x] 42-15-PLAN.md — CR-04 fix: defensive UPDATE pass in migration 0027 + docstring + regression test seeding colliding rows; includes [BLOCKING] alembic round-trip checkpoint (AUTH-EM-01)
 
 **Wave 6** *(hygiene bundle — blocked on Wave 5; depends_on [12, 13] for dispatch_email.py + service.py overlap)*
 - [ ] 42-16-PLAN.md — WR-01/02/03/04/06 hygiene: migration 0029 (bounce_type CHECK + status circuit_open) + dispatch_email status taxonomy + webhook orphan event name + email_lower at dispatcher + HMAC strip/lower; includes [BLOCKING] alembic round-trip checkpoint (EMAIL-03/06/07, AUTH-EM-02)
@@ -247,7 +247,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
-| 42. Email Transport Layer + Email OTP Fallback | 11/16 | In Progress|  |
+| 42. Email Transport Layer + Email OTP Fallback | 12/16 | In Progress|  |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
