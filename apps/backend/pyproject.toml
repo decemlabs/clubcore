@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Sportzal — gym CRM backend (modular monolith)."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aioboto3>=13.0,<14",
     "alembic>=1.13",
     "argon2-cffi>=25.1.0,<26",
     "arq>=0.26",
