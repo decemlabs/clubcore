@@ -32,6 +32,7 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/telegram/start",  # Phase 7 — pre-auth deep-link handshake
         "/api/v1/auth/telegram/status",  # Phase 7 — pre-auth poll
         "/api/v1/auth/telegram/verify",  # Phase 7 — body carries token + code
+        "/api/v1/auth/otp/request",  # Phase 42 D-42-22 — pre-auth OTP bootstrap (telegram + email channels)
         # FastAPI built-ins:
         "/openapi.json",
         "/docs",
