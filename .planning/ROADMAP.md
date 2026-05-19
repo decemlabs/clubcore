@@ -155,12 +155,12 @@ Plans:
 **Plans**: 11 plans (waves 1-4)
 Plans:
 **Wave 1**
-- [ ] 42-01-PLAN.md — EMAIL-01/07 EmailEnvelope + EmailSendResult types + EmailSendLog ORM + Alembic 0026 + env.py registration
-- [ ] 42-02-PLAN.md — EMAIL-02 EmailProviderSettings Pydantic block + fail-fast validator
-- [ ] 42-03-PLAN.md — AUTH-EM-01 Alembic 0027 otp_codes.channel discriminator + ORM column + partial-UNIQUE recreate
-- [ ] 42-04-PLAN.md — AUTH-EM-02 Alembic 0028 users.email_verified + ORM column + bootstrap-runbook docstring
-- [ ] 42-05-PLAN.md — AUTH-EM-03 app/modules/auth/email_templates.py with EMAIL_OTP_LOGIN (Jinja2 SandboxedEnvironment) + jinja2 dep pin
-- [ ] 42-06-PLAN.md — EMAIL-05 infra/dns/sportzal.ru.zone SPF/DKIM/DMARC operator runbook (p=none baseline)
+- [x] 42-01-PLAN.md — EMAIL-01/07 EmailEnvelope + EmailSendResult types + EmailSendLog ORM + Alembic 0026 + env.py registration
+- [x] 42-02-PLAN.md — EMAIL-02 EmailProviderSettings Pydantic block + fail-fast validator
+- [x] 42-03-PLAN.md — AUTH-EM-01 Alembic 0027 otp_codes.channel discriminator + ORM column + partial-UNIQUE recreate
+- [x] 42-04-PLAN.md — AUTH-EM-02 Alembic 0028 users.email_verified + ORM column + bootstrap-runbook docstring
+- [x] 42-05-PLAN.md — AUTH-EM-03 app/modules/auth/email_templates.py with EMAIL_OTP_LOGIN (Jinja2 SandboxedEnvironment) + jinja2 dep pin
+- [x] 42-06-PLAN.md — EMAIL-05 infra/dns/sportzal.ru.zone SPF/DKIM/DMARC operator runbook (p=none baseline)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 42-07-PLAN.md — EMAIL-01/02 EmailClient aioboto3 adapter + SandboxEmailClient stub + build_email_client factory + boot-time /domains probe
@@ -238,7 +238,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
-| 42. Email Transport Layer + Email OTP Fallback | 0/? | Not started | — |
+| 42. Email Transport Layer + Email OTP Fallback | 6/11 | In Progress|  |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
