@@ -962,3 +962,36 @@ async def request_otp_email(
 
     # Both branches converge on the constant-time floor.
     await _constant_time_floor(t_start)
+
+
+async def request_otp_telegram(
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    ip: str | None = None,
+) -> None:
+    """POST /auth/otp/request {channel:'telegram'} entry (D-42-22 backwards-compat).
+
+    Thin facade that delegates to :func:`telegram_service.start_deep_link`
+    to mint an OtpCode placeholder + emit ``telegram_deep_link_issued`` —
+    the canonical Telegram OTP entry today. The returned
+    ``(raw_token, hash)`` tuple is DISCARDED because the unified
+    ``/auth/otp/request`` endpoint returns the anti-oracle envelope (
+    ``data: null``), NOT a deep-link URL. Clients that need the deep-link
+    continue to call POST ``/auth/telegram/start`` directly — that route is
+    untouched.
+
+    ``redis`` and ``ip`` are accepted for signature parity with
+    :func:`request_otp_email` so the router can call either branch with the
+    same arg shape (D-42-22 anti-oracle uniformity).
+    """
+    # Local import keeps the top-of-file clean. ``telegram_service`` is a
+    # sibling module already loaded by the router.
+    from app.modules.auth import telegram_service
+
+    # The returned (raw_token, hash) is intentionally discarded — the
+    # unified /otp/request route returns the anti-oracle envelope, not the
+    # deep-link. Cross-arg references silence the unused-arg lint.
+    _ = redis
+    _ = ip
+    _raw_token, _token_hash = await telegram_service.start_deep_link(session)
