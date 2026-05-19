@@ -203,7 +203,7 @@ Plans:
 - [x] 43-03-PLAN.md — invalidate_all_families_for_user + main.py registration + UserInvitedPayload.link_copied + RefreshFailedPayload + test_app_wiring extension
 
 **Wave 2** (blocked on Wave 1)
-- [ ] 43-04-PLAN.md — users/repository.py (list_alive/get_alive/invitation token CRUD)
+- [x] 43-04-PLAN.md — users/repository.py (list_alive/get_alive/invitation token CRUD)
 - [ ] 43-05-PLAN.md — users/service.py (4-branch create, deactivate/reactivate/soft-delete/revoke orchestration)
 - [ ] 43-06-PLAN.md — users/router.py 6 endpoints + RBAC + CSRF + api/v1/router.py include
 
@@ -269,7 +269,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
-| 43. Multi-User Admin Module | 3/14 | In Progress|  |
+| 43. Multi-User Admin Module | 4/14 | In Progress|  |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
