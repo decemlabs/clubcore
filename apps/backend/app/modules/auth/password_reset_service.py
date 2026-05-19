@@ -49,7 +49,6 @@ from app.modules.auth.exceptions import (
     WeakPasswordError,
 )
 from app.modules.auth.password_reset_token_model import PasswordResetToken
-from app.modules.auth.service import invalidate_all_families_for_user
 
 # NOTE: `INVITATION_TOKEN_TTL` from `app.modules.users.constants` was originally
 # listed in plan 44-03's required-imports block but importing it here BREAKS the
@@ -69,18 +68,10 @@ __all__ = [
     "request_password_reset",
 ]
 
-# Tasks 3 + 4 of plan 44-04 land in subsequent commits; their symbol bindings
-# stay imported at module scope per the auth/service.py precedent. This tuple
-# anchors them so ruff F401 doesn't strip imports between commits. Removed in
-# the final task once every symbol is referenced in an actual call site.
-_TASK_3_4_PENDING: Final = (
-    get_user_session_invalidator,
-    hash_password,
-    invalidate_all_families_for_user,
-    InvalidOrExpiredTokenError,
-    InvitationAlreadyAcceptedError,
-    WeakPasswordError,
-)
+# Task 4 of plan 44-04 (accept_invitation) lands in the next commit. This
+# symbol is imported now to keep the import block stable across the
+# multi-commit Wave 2 sequence. Removed once accept_invitation is filled.
+_TASK_4_PENDING: Final = (InvitationAlreadyAcceptedError,)
 
 # D-44-11: ops events (rate-limit hits) emit via structlog, NOT audit_log,
 # to preserve the anti-oracle public surface while keeping ops visibility.
@@ -378,7 +369,57 @@ async def confirm_password_reset(
     NO new login cookies are issued per D-44-16 step 5 (user must
     re-authenticate via ``/auth/login`` with the new password).
     """
-    raise NotImplementedError("Wave 2 plan 44-04 fills this body.")
+    # 1. Weak-password gate BEFORE atomic-consume (D-44-17) so the token
+    #    stays valid for retry within TTL on a 422.
+    if len(new_password) < 8:
+        raise WeakPasswordError("weak_password")
+
+    # 2. Atomic consume (race-tight; D-44-14). replay/expired/unknown all
+    #    collapse to None → identical 410 per D-44-15 anti-oracle.
+    consumed = await _atomic_consume_token(
+        session, raw_token=raw_token, purpose="password_reset"
+    )
+    if consumed is None:
+        raise InvalidOrExpiredTokenError("invalid_or_expired_token")
+    token_id, user_id, corr_id = consumed
+
+    # 3. Password rotate — Argon2id via app.core.security.hash_password.
+    #    deleted_at IS NULL is defence in depth (token issuance branch
+    #    already excludes soft-deleted users).
+    new_hash = await hash_password(new_password)
+    await session.execute(
+        update(User)
+        .where(User.id == user_id, User.deleted_at.is_(None))
+        .values(password_hash=new_hash)
+    )
+
+    # 4. Revoke ALL session families (Phase 43 D-43-26 Protocol slot).
+    #    Self-reset, actor == target per 44-CONTEXT clarification.
+    invalidator = get_user_session_invalidator()
+    sessions_revoked_count = await invalidator(
+        session,
+        user_id=user_id,
+        actor_user_id=user_id,
+        reason="password_reset",
+    )
+
+    # 5. Audit emit — FLAT kwargs (Phase 42 CR-01); shape locked by
+    #    PasswordResetCompletedPayload at audit_payloads.py:630.
+    await audit.emit(
+        session,
+        "password_reset_completed",
+        actor_user_id=None,
+        actor_email_snapshot=None,
+        resource_type="user",
+        resource_id=user_id,
+        audit_correlation_id=str(corr_id) if corr_id is not None else None,
+        user_id=str(user_id),
+        sessions_revoked_count=sessions_revoked_count,
+        token_id=str(token_id),
+    )
+
+    # 6. Service-owns-commit (SVC001 walker scope — D-41-28).
+    await session.commit()
 
 
 async def accept_invitation(
