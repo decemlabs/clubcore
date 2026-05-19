@@ -37,6 +37,20 @@ otp_codes UNIQUEs are ``pk_otp_codes`` (PK on ``id``) and
 CREATES the partial-UNIQUE outright; the downgrade DROPs it
 symmetrically without recreating a non-existent predecessor. The
 schema end-state matches the AUTH-EM-01 contract verbatim.
+
+CR-04 DEFENSIVE CLEANUP (Phase 42 plan 42-15): Before the partial-UNIQUE
+index creation, this migration now runs an UPDATE pass that marks any
+duplicate same-(user_id, channel) ``consumed_at IS NULL`` rows as
+``consumed_at = now()``, keeping only the latest by ``created_at DESC``.
+Today the risk is bounded -- ``telegram_service.start_deep_link`` writes
+``user_id = NULL`` (NULLs are distinct under UNIQUE in Postgres), so the
+SC#1 demo path cannot trigger the collision. But ANY future writer that
+inserts ``user_id IS NOT NULL + consumed_at IS NULL`` rows across the
+channel will collide on this partial-UNIQUE without the cleanup, and
+alembic upgrade will fail with ``duplicate key value violates unique
+constraint "uq_otp_codes_user_channel_active"``. The defensive pass is
+idempotent: zero rows match on a clean schema. See VERIFICATION.md CR-04
+and REVIEW.md CR-04 for the full reasoning.
 """
 
 from __future__ import annotations
@@ -76,6 +90,20 @@ def upgrade() -> None:
         op.f("ck_otp_codes_channel"),
         "otp_codes",
         "channel IN ('telegram','email')",
+    )
+
+    # 2b. CR-04 defensive cleanup (plan 42-15) -- mark duplicate
+    # same-(user_id, channel) consumed_at IS NULL rows as consumed_at = now(),
+    # keeping only the latest by created_at DESC. Idempotent on a clean
+    # schema. See module docstring for the full rationale.
+    op.execute(
+        "UPDATE otp_codes SET consumed_at = now() "
+        "WHERE consumed_at IS NULL "
+        "AND id NOT IN ("
+        "    SELECT DISTINCT ON (user_id, channel) id FROM otp_codes "
+        "    WHERE consumed_at IS NULL "
+        "    ORDER BY user_id, channel, created_at DESC"
+        ")"
     )
 
     # 3. Partial-UNIQUE on (user_id, channel) WHERE consumed_at IS NULL.
