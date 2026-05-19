@@ -24,6 +24,7 @@ from app.core.database import Base
 # Register all ORM models with Base.metadata for autogenerate (TEST-08 / Phase 5 INFRA-03).
 import app.modules.auth.models
 import app.modules.auth.password_reset_token_model  # Phase 41 INFRA-38 / 0025 — D-41-04
+import app.integrations.email.models  # Phase 42 D-42-33 / 0026 -- EMAIL-01 (email_send_log)
 import app.modules.bookings.models  # Phase 38 BOOK-01 / 0017
 import app.modules.clients.models
 import app.modules.memberships.models
@@ -79,6 +80,11 @@ def _include_object(
             "uq_pt_packages_active_per_client",
             # Phase 41 INFRA-38: partial UNIQUE on lower(email) WHERE deleted_at IS NULL
             "uq_users_email_active",
+            # Phase 42 D-42-18: index has `recorded_at DESC` expression in
+            # migration DDL; SQLAlchemy Index can't surface DESC on the second
+            # column at the ORM layer, so autogenerate sees a column-vs-expr
+            # mismatch. Skip — same D-25-05 lineage as the partial-index entries.
+            "ix_email_send_log_to_addr_recorded",
         )
     )
 
