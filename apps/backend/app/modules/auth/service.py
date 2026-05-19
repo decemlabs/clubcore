@@ -665,7 +665,7 @@ async def revoke_session(
 # upon); ``actor_user_id`` is the audit row's ``actor_user_id`` column.
 
 
-async def _revoke_all_sessions_no_commit(
+async def _revoke_all_sessions_no_commit(  # noqa: SVC001 caller-owns-txn
     session: AsyncSession,
     redis: Redis,
     user_id: UUID,
