@@ -163,12 +163,12 @@ Plans:
 - [x] 42-06-PLAN.md — EMAIL-05 infra/dns/sportzal.ru.zone SPF/DKIM/DMARC operator runbook (p=none baseline)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 42-07-PLAN.md — EMAIL-01/02 EmailClient aioboto3 adapter + SandboxEmailClient stub + build_email_client factory + boot-time /domains probe
+- [x] 42-07-PLAN.md — EMAIL-01/02 EmailClient aioboto3 adapter + SandboxEmailClient stub + build_email_client factory + boot-time /domains probe
 - [ ] 42-08-PLAN.md — EMAIL-03/06 enqueue_email_dispatch + _resolve_template walker + Redis circuit breaker + ARQ dispatch_email task
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 42-09-PLAN.md — EMAIL-03/04 + AUTH-EM-02/03 REG-29-03 double-wire + OtpRequestBody channel discriminator + /auth/otp/request route + request_otp_email anti-oracle service
-- [ ] 42-10-PLAN.md — EMAIL-07 POST /api/v1/_internal/email/webhook HMAC-before-parse bounce/complaint handler
+- [x] 42-10-PLAN.md — EMAIL-07 POST /api/v1/_internal/email/webhook HMAC-before-parse bounce/complaint handler
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 42-11-PLAN.md — AUTH-EM-04 + REG-29-03/04 tests: test_otp_email_anti_oracle + test_app_wiring extension + test_workers_eager_import extension + test_locked_email_templates_ast real-callsite assertion
@@ -238,7 +238,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
-| 42. Email Transport Layer + Email OTP Fallback | 6/11 | In Progress|  |
+| 42. Email Transport Layer + Email OTP Fallback | 8/11 | In Progress|  |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
