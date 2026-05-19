@@ -958,9 +958,12 @@ async def request_otp_email(
         # AST-gated callsite — first real LOCKED_EMAIL_TEMPLATES exercise
         # (D-42-27 / INFRA-36). template_id MUST be a literal string —
         # the walker only accepts ast.Constant(str).
+        # Pass the lowercased input (not user.email's stored case) so
+        # EmailSendLog.to_address is case-consistent with the
+        # ix_email_send_log_to_addr_recorded forensic index (WR-03).
         await get_email_dispatcher()(
             template_id="EMAIL_OTP_LOGIN",
-            to=user.email,
+            to=email_lower,  # WR-03 -- lowercased boundary for forensic index consistency.
             audit_correlation_id=audit_correlation_id,
             otp_code=raw_code,
         )
