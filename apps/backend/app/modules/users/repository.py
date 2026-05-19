@@ -326,6 +326,12 @@ async def atomic_consume_invitation_token_by_id(
 ) -> UUID | None:
     """D-43-19 — atomic-consume by id; race-loss → None → service maps to 409.
 
+    WR-06 (Phase 43 review) — filtered on ``expires_at > now()`` so an
+    expired-but-unconsumed token cannot be silently "consumed" by a revoke
+    operation. The service-layer pre-check raises ``InvitationExpiredError``
+    before reaching this query for the deterministic-error path; this filter
+    is defence-in-depth for the race between the pre-check and the UPDATE.
+
     Mirrors the v1.1 refresh-token rotation race-loss pattern: a single
     ``UPDATE ... RETURNING`` against ``consumed_at IS NULL`` means a parallel
     consume by another endpoint loses the race and gets ``None`` back, which
@@ -337,6 +343,7 @@ async def atomic_consume_invitation_token_by_id(
             PasswordResetToken.id == token_id,
             PasswordResetToken.purpose == "invitation",
             PasswordResetToken.consumed_at.is_(None),
+            PasswordResetToken.expires_at > _now_utc(),
         )
         .values(consumed_at=_now_utc())
         .returning(PasswordResetToken.id)

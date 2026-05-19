@@ -36,9 +36,10 @@ EmailDispatcher slot with literal ``template_id="USER_INVITATION_EMAIL"``.
 from __future__ import annotations
 
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Final
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +58,7 @@ from app.core.exceptions import (
     CannotDeleteSelfError,
     EmailAlreadyActiveError,
     InvitationAlreadyAcceptedError,
+    InvitationExpiredError,
     InvitationNotFoundError,
     UserAlreadyInactiveError,
     UserNotFoundError,
@@ -65,7 +67,7 @@ from app.core.exceptions import (
 from app.core.pagination import PaginatedData
 from app.core.permissions import Role
 from app.modules.users import repository
-from app.modules.users.email_templates import ROLE_RU, TEMPLATES
+from app.modules.users.email_templates import ROLE_RU
 from app.modules.users.schemas import (
     UserCreateRequest,
     UserCreateResponse,
@@ -90,17 +92,27 @@ _RU_MONTHS_GENITIVE: Final[tuple[str, ...]] = (
     "декабря",
 )
 
+# WR-07 (Phase 43 review) — project i18n is Europe/Moscow; mirror the
+# ZoneInfo precedent from app/integrations/telegram/handlers.py.
+_MOSCOW_TZ: Final[ZoneInfo] = ZoneInfo("Europe/Moscow")
+
 
 def _format_expires_ru(dt: datetime) -> str:
-    """Render a Russian long-form datetime (e.g. '26 мая 2026 в 12:00').
+    """Render a Russian long-form datetime in Europe/Moscow with (MSK) suffix.
 
     The output feeds the ``expires_at_human`` Jinja variable in the locked
     USER_INVITATION_EMAIL template (D-43-23 / D-43-OWNER-COPY-LOCK).
+
+    WR-07 (Phase 43 review) — converted to Europe/Moscow before formatting
+    and tagged with Cyrillic MSK suffix to remove TZ ambiguity.
+    The project i18n convention (CLAUDE.md: "all human-facing dates in
+    Europe/Moscow") makes UTC rendering an off-by-3-hours defect.
     """
-    # Render in UTC to keep the wire shape deterministic; production deployment
-    # can shift to Europe/Moscow render via a future Settings.tz field if owner
-    # decides the email should carry local time instead of the canonical UTC.
-    return f"{dt.day} {_RU_MONTHS_GENITIVE[dt.month - 1]} {dt.year} в {dt.hour:02d}:{dt.minute:02d}"
+    local = dt.astimezone(_MOSCOW_TZ)
+    return (
+        f"{local.day} {_RU_MONTHS_GENITIVE[local.month - 1]} {local.year} "
+        f"в {local.hour:02d}:{local.minute:02d} (МСК)"  # noqa: RUF001
+    )
 
 
 def _build_invitation_url(raw_token: str) -> str:
@@ -146,6 +158,14 @@ async def create_user(
     if existing is not None and existing.status == "pending_invitation":
         # Branch B — atomic-consume any active invitation (race-tight against
         # parallel POSTs for the same email).
+        #
+        # WR-02 (Phase 43 review) — re-invite POST is the authoritative
+        # re-statement of the invite. Overwrite full_name/role from the
+        # inbound request so an owner correcting a typo lands the new values
+        # (previous behaviour: silently keep the original, defeating the
+        # re-invite UX). The flush below surfaces any constraint violation.
+        existing.full_name = data.full_name
+        existing.role = data.role
         await repository.consume_active_invitation_for_user(session, user_id=existing.id)
         user = existing
     else:
@@ -175,22 +195,14 @@ async def create_user(
     )
     await session.flush()  # surface partial-UNIQUE (user, purpose) race
 
-    # Render email envelope (D-43-24 — render-at-enqueue).
+    # Render variables for the locked USER_INVITATION_EMAIL template.
+    # Dispatcher renders subject/html/text at enqueue time (D-43-24 / Phase 42
+    # render-at-enqueue contract). The service NEVER pre-renders — passing
+    # subject/html/text as **template_vars is silently ignored by Jinja and
+    # was the CR-01 defect (Phase 43 review).
     invitation_url = _build_invitation_url(raw_token)
     expires_at_human = _format_expires_ru(token.expires_at)
-    template = TEMPLATES["USER_INVITATION_EMAIL"]
     role_ru = ROLE_RU[user.role]
-    render_kwargs = {
-        "full_name": user.full_name,
-        "role_ru": role_ru,
-        "invitation_url": invitation_url,
-        "expires_at_human": expires_at_human,
-    }
-    envelope_fields = {
-        "subject": template.subject,
-        "html": template.html.render(**render_kwargs),
-        "text": template.text.render(**render_kwargs),
-    }
 
     # Audit emit — FLAT kwargs matching UserInvitedPayload (D-43-04 / D-43-14).
     # URL itself is NEVER in the payload — only link_copied bool (Pitfall 4).
@@ -212,11 +224,17 @@ async def create_user(
     )
 
     # Enqueue email — literal template_id required by AST gate (D-41-11).
+    # Pass RAW template vars (CR-01 fix); the dispatcher renders the locked
+    # template against these — matches the Phase 42 EMAIL_OTP_LOGIN callsite
+    # at auth/service.py:1031-1036.
     await get_email_dispatcher()(
         template_id="USER_INVITATION_EMAIL",
         to=email_lower,
         audit_correlation_id=audit_correlation_id,
-        **envelope_fields,
+        full_name=user.full_name,
+        role_ru=role_ru,
+        invitation_url=invitation_url,
+        expires_at_human=expires_at_human,
     )
 
     await session.commit()
@@ -259,7 +277,7 @@ async def deactivate_user(session: AsyncSession, actor: CurrentUser, target_user
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=target_user_id,
-        audit_correlation_id=str(uuid4()),
+        audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
         deactivated_user_id=str(target_user_id),
         sessions_revoked_count=sessions_revoked,
     )
@@ -287,7 +305,7 @@ async def reactivate_user(session: AsyncSession, actor: CurrentUser, target_user
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=target_user_id,
-        audit_correlation_id=str(uuid4()),
+        audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
         reactivated_user_id=str(target_user_id),
     )
     await session.flush()
@@ -327,7 +345,7 @@ async def soft_delete_user(session: AsyncSession, actor: CurrentUser, target_use
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=target_user_id,
-        audit_correlation_id=str(uuid4()),
+        audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
         deleted_user_id=str(target_user_id),
     )
     await session.flush()
@@ -342,19 +360,27 @@ async def revoke_invitation(
 ) -> None:
     """USERS-03 / D-43-19 — atomic-consume invitation token; race-loss → 409.
 
-    Pre-check (consumed_at IS NOT NULL) and race-loss (UPDATE...RETURNING
-    returned zero rows because a concurrent consume won) both map to the same
-    InvitationAlreadyAcceptedError. Mirrors v1.1 refresh-rotation discipline.
+    WR-06 (Phase 43 review) — expired-token pre-check raises
+    InvitationExpiredError so the owner UI can distinguish "expired" from
+    "already accepted". Both the pre-check and the race-loss against
+    atomic_consume_invitation_token_by_id (now filtered on expires_at > now())
+    fall back to the same domain error.
     """
     token = await repository.get_invitation_token_by_id(session, token_id)
     if token is None:
         raise InvitationNotFoundError("invitation_not_found")
     if token.consumed_at is not None:
         raise InvitationAlreadyAcceptedError("invitation_already_accepted")
+    # WR-06 — expired tokens cannot be revoked (already useless, audit muddying).
+    now = datetime.now(tz=UTC)
+    if token.expires_at <= now:
+        raise InvitationExpiredError("invitation_expired")
 
     consumed_id = await repository.atomic_consume_invitation_token_by_id(session, token_id)
     if consumed_id is None:
-        # Race lost — another request consumed between get + UPDATE.
+        # Race lost — another request consumed between get + UPDATE, OR
+        # the token expired between the pre-check and the UPDATE (the
+        # repository now filters on expires_at > now() too).
         raise InvitationAlreadyAcceptedError("invitation_already_accepted")
 
     await audit.emit(
@@ -363,7 +389,7 @@ async def revoke_invitation(
         actor_user_id=actor.id,
         resource_type="user",
         resource_id=token.user_id,
-        audit_correlation_id=str(uuid4()),
+        audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
         revoked_user_id=str(token.user_id),
         invitation_token_id=str(token_id),
         reason=reason,

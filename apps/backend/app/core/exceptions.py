@@ -396,6 +396,18 @@ class InvitationAlreadyAcceptedError(ConflictError):
     status_code = 409
 
 
+class InvitationExpiredError(ConflictError):
+    """Raised when revoke_invitation hits an expired token (WR-06 / D-43-19 extension).
+
+    Distinct from InvitationAlreadyAcceptedError: an expired token has
+    consumed_at IS NULL AND expires_at <= now(). The owner UI distinguishes
+    "expired" from "already accepted" via the response code.
+    """
+
+    code = "invitation_expired"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
