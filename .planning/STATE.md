@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
-status: executing
-stopped_at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
-last_updated: "2026-05-19T19:23:32.963Z"
-last_activity: 2026-05-19
+status: completed
+stopped_at: Completed 43-17-PLAN.md (login chokepoint CR-03 fix — all three auth chokepoints aligned)
+last_updated: "2026-05-19T19:32:42.432Z"
+last_activity: 2026-05-19 -- Phase 43 marked complete
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 45
   completed_plans: 45
-  percent: 100
+  percent: 50
 ---
 
 # Project State
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: 43 (multi-user-admin-module) — EXECUTING
+Phase: 43 — COMPLETE
 Plan: 5 of 18
-Status: Ready to execute
-Last activity: 2026-05-19
+Status: Phase 43 complete
+Last activity: 2026-05-19 -- Phase 43 marked complete
 
 ## v1.6 Milestone Plan
 
-**Status:** Ready to execute
+**Status:** Phase 43 complete
 
 **Phase structure:**
 
