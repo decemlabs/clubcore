@@ -59,30 +59,42 @@ async def is_circuit_open(redis: Redis, provider: str) -> bool:
 async def record_failure(redis: Redis, provider: str) -> None:
     """Record one provider failure in the sliding window; open the breaker on threshold.
 
-    Steps (all on Redis):
+    Steps (atomic on Redis via MULTI/EXEC):
       1. ZADD a unique-membered timestamp into the window sorted set
          (uuid hex suffix so duplicate same-ms calls do not silently dedupe).
       2. ZREMRANGEBYSCORE to drop entries older than 60s from the window.
       3. EXPIRE the window key at ``2 * _WINDOW_SECONDS`` so the structure
          self-cleans even when failures stop arriving.
       4. ZCARD to count what's left.
+
+    Steps 1-4 run inside a single ``redis.pipeline(transaction=True)``
+    MULTI/EXEC block so the ZCARD read is consistent with the trim that
+    preceded it -- closes CR-03 (concurrent-worker lost-trim race where
+    the count read could interleave with another worker's
+    ZREMRANGEBYSCORE and miss the threshold).
+
       5. If count >= threshold, SET the open-marker key with TTL = 5min
-         and emit a structlog WARN for ops dashboards.
+         and emit a structlog WARN for ops dashboards. The SET is
+         idempotent (TTL refresh) and lives outside the MULTI -- the
+         open-marker key is a separate Redis key with its own TTL contract.
 
     The function is idempotent in the "already open" case: the SET ... EX
     just refreshes the open-marker TTL.
     """
     window_key = f"{_WINDOW_KEY_PREFIX}{provider}"
     now_ms = int(time.time() * 1000)
+    member = f"{now_ms}-{uuid4().hex[:8]}"
+    cutoff = now_ms - _WINDOW_SECONDS * 1000
 
-    # Step 1 — unique member name so two failures in the same ms do not collapse.
-    await redis.zadd(window_key, {f"{now_ms}-{uuid4().hex[:8]}": now_ms})
-    # Step 2 — trim old entries (older than the 60s window).
-    await redis.zremrangebyscore(window_key, 0, now_ms - _WINDOW_SECONDS * 1000)
-    # Step 3 — TTL safety net so the window key self-cleans.
-    await redis.expire(window_key, _WINDOW_SECONDS * 2)
-    # Step 4 — count fresh failures within the window.
-    count = await redis.zcard(window_key)
+    async with redis.pipeline(transaction=True) as pipe:
+        pipe.zadd(window_key, {member: now_ms})
+        pipe.zremrangebyscore(window_key, 0, cutoff)
+        pipe.expire(window_key, _WINDOW_SECONDS * 2)
+        pipe.zcard(window_key)
+        results = await pipe.execute()
+
+    # pipeline results list is positional: [zadd_count, zremrange_count, expire_ok, zcard_count]
+    count = int(results[3])
 
     if count >= _FAILURE_THRESHOLD:
         await redis.set(
