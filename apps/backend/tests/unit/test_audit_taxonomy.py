@@ -195,13 +195,17 @@ def test_locked_audit_events_has_expected_count() -> None:
     NOTE: the 41-01 plan header glosses "56 → 67" by counting only the v1.1-v1.5
     pairs the planner had in mind (it omitted the Phase 20 D-20-10
     `telegram_unknown_checkin` and Phase 23 D-23-10 `session_revoked`/`auth_session`
-    drift adds); the actual frozenset is 58 + 11 = 69. The 11-pair v1.6 delta is
-    what matters per INFRA-34, and `test_locked_audit_events_includes_v16_pairs`
-    asserts every required pair is present byte-for-byte.
+    drift adds); the actual frozenset was 58 + 11 = 69 at Phase 41 lock.
+
+    Phase 42 Plan 09 (D-42-35) ADDS one v1.6 pair: ``('otp_requested', 'otp')``
+    — piggybacked on the existing ``otp_*`` resource-type lineage so the
+    unified ``/auth/otp/request`` endpoint (telegram facade + email branch)
+    emits a single locked event regardless of channel. The 11-v1.6 count
+    becomes 12 and the frozenset total becomes 58 + 12 = 70.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 69, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 69 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 11 v1.6), "
+    assert len(LOCKED_AUDIT_EVENTS) == 70, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 70 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 12 v1.6), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
 

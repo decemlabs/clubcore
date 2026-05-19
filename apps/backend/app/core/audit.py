@@ -155,6 +155,13 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("telegram_deep_link_issued", "otp"),
         ("otp_issued", "otp"),
         ("otp_consumed", "otp"),
+        # Phase 42 D-42-35 — piggyback for unified /auth/otp/request (AUTH-EM-02).
+        # Emitted by request_otp_email AND (eventually) request_otp_telegram with
+        # channel='telegram'|'email' kwarg so the existing event name covers both
+        # branches without inventing a new pair. Resource type stays 'otp'
+        # alongside the existing telegram_deep_link_issued / otp_issued /
+        # otp_consumed lineage.
+        ("otp_requested", "otp"),
         # Drift fix: docstring claimed 'telegram' but handlers.py:116/160/171 emit 'otp'.
         ("telegram_unknown_start", "otp"),
         ("telegram_dm_blocked", "otp"),
