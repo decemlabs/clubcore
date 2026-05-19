@@ -67,12 +67,6 @@ __all__ = [
     "confirm_password_reset",
     "request_password_reset",
 ]
-
-# Task 4 of plan 44-04 (accept_invitation) lands in the next commit. This
-# symbol is imported now to keep the import block stable across the
-# multi-commit Wave 2 sequence. Removed once accept_invitation is filled.
-_TASK_4_PENDING: Final = (InvitationAlreadyAcceptedError,)
-
 # D-44-11: ops events (rate-limit hits) emit via structlog, NOT audit_log,
 # to preserve the anti-oracle public surface while keeping ops visibility.
 _log: Final = structlog.get_logger("auth.password_reset_service")
@@ -471,4 +465,73 @@ async def accept_invitation(
     soft-deleted-email replay invariant at create-user time per
     D-43-13 / D-41-07). Phase 44's accept-flow operates on the post-state.
     """
-    raise NotImplementedError("Wave 2 plan 44-04 fills this body.")
+    # 1. Weak-password gate BEFORE atomic-consume (D-44-17).
+    if len(new_password) < 8:
+        raise WeakPasswordError("weak_password")
+
+    # 2. Atomic consume invitation token (purpose='invitation').
+    consumed = await _atomic_consume_token(
+        session, raw_token=raw_token, purpose="invitation"
+    )
+    if consumed is None:
+        raise InvalidOrExpiredTokenError("invalid_or_expired_token")
+    token_id, user_id, corr_id = consumed
+
+    # 3. Argon2id hash for the freshly-set password.
+    new_hash = await hash_password(new_password)
+
+    # 4. UPDATE-only user-row mutation (D-44-20 verbatim — NEVER INSERT).
+    #    COALESCE preserves the owner-set full_name when caller passes empty
+    #    string or None; otherwise applies the user's self-correction
+    #    (D-44-23 "self-healing typo correction"). Empty-string is normalised
+    #    to None Python-side before the SQL.
+    full_name_arg = full_name.strip() if full_name else None
+    if full_name_arg == "":
+        full_name_arg = None
+
+    result = await session.execute(
+        update(User)
+        .where(
+            User.id == user_id,
+            User.status == "pending_invitation",
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        .values(
+            password_hash=new_hash,
+            status="active",
+            email_verified=True,
+            full_name=func.coalesce(full_name_arg, User.full_name),
+        )
+        .returning(User.id, User.email, User.role, User.full_name)
+    )
+    row = result.first()
+    if row is None:
+        # Millisecond-scale race window: between the atomic-consume and this
+        # UPDATE landing, a concurrent admin action (revoke + soft-delete)
+        # flipped the target user out of pending_invitation. 409.
+        raise InvitationAlreadyAcceptedError("invitation_already_accepted")
+    returned_user_id, email_out, role_out, full_name_out = row
+
+    # 5. Audit emit — FLAT kwargs (Phase 42 CR-01); shape locked by
+    #    UserInvitationAcceptedPayload at audit_payloads.py:537.
+    await audit.emit(
+        session,
+        "user_invitation_accepted",
+        actor_user_id=None,
+        actor_email_snapshot=None,
+        resource_type="user",
+        resource_id=returned_user_id,
+        audit_correlation_id=str(corr_id) if corr_id is not None else None,
+        accepted_user_id=str(returned_user_id),
+        invitation_token_id=str(token_id),
+    )
+
+    # 6. Service-owns-commit.
+    await session.commit()
+
+    # 7. Return user tuple for the Wave 3 router to construct LoginResponse
+    #    + issue session cookies via issue_tokens + issue_session_cookies
+    #    (D-44-21). role_out is a Role StrEnum; .value yields the wire string.
+    role_value: str = role_out.value if hasattr(role_out, "value") else str(role_out)
+    return (returned_user_id, email_out, role_value, full_name_out)
