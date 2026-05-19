@@ -1,0 +1,31 @@
+; sportzal.ru zone -- Phase 42 EMAIL-05 operator runbook (D-42-09..12).
+;
+; THIS FILE IS NOT EXECUTED BY CI. The owner applies these records at the
+; registrar (Reg.ru or alternate). Committed alongside code so the Phase 42
+; gate cannot land without the DNS spec.
+;
+; DKIM PRIVATE KEY MUST NOT APPEAR IN THIS FILE. The Yandex Cloud Postbox
+; console issues the DKIM selector + public key at domain-verification time;
+; the private key stays in the Postbox tenant and never leaves it. This file
+; carries only the PUBLIC half of the DKIM record (the TXT value with p=...).
+;
+; DMARC ladder: Phase 42 = p=none baseline (monitoring). p=quarantine flip
+; after 7 clean-report days (operator-action, NOT code). p=reject deferred
+; to v1.7.
+;
+; D-42-09 -- subdomain mail.sportzal.ru = single dedicated subdomain for
+; both From: envelope and DKIM key. Future mktg.sportzal.ru (marketing)
+; lives on a separate subdomain for clean reputation isolation.
+
+$ORIGIN sportzal.ru.
+$TTL 3600
+
+; SPF -- Yandex Cloud Postbox include macro (per Postbox docs).
+mail.sportzal.ru.   TXT   "v=spf1 include:_spf.yandexcloud.net -all"
+
+; DKIM -- public key issued by Yandex Cloud Postbox console at domain
+; verification time. Insert the rendered 2048-bit public-key value below.
+sport1._domainkey.mail.sportzal.ru.   TXT   "v=DKIM1; k=rsa; p=<2048-bit-public-key-placeholder>"
+
+; DMARC -- p=none baseline (D-42-11). rua addressed to owner mailbox.
+_dmarc.mail.sportzal.ru.   TXT   "v=DMARC1; p=none; rua=mailto:dmarc-reports@sportzal.ru; pct=100"

@@ -4,8 +4,8 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Phase 42 context gathered (--auto)
-last_updated: "2026-05-19T06:31:28.885Z"
-last_activity: 2026-05-19 -- Phase 42 planning complete
+last_updated: "2026-05-19T07:48:17.538Z"
+last_activity: 2026-05-19 -- Phase 42 execution started
 progress:
   total_phases: 6
   completed_phases: 1
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 41 — infra-bedrock-anti-oracle-scaffold
+**Current focus:** Phase 42 — email-transport-layer-email-otp-fallback
 
 ## Current Position
 
-Phase: 41 — COMPLETE
-Plan: 11 of 11
-Status: Ready to execute
-Last activity: 2026-05-19 -- Phase 42 planning complete
+Phase: 42 (email-transport-layer-email-otp-fallback) — EXECUTING
+Plan: 1 of 11
+Status: Executing Phase 42
+Last activity: 2026-05-19 -- Phase 42 execution started
 
 ## v1.6 Milestone Plan
 
-**Status:** Ready to execute
+**Status:** Executing Phase 42
 
 **Phase structure:**
 
