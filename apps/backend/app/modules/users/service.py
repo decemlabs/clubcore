@@ -24,9 +24,9 @@ D-43-13 — POST /users is a 4-branch idempotent flow:
      branch A (Pitfall 4 INSERT-only invariant at CREATE-time).
 
 D-43-16/18 — deactivate / soft_delete share self + last-owner guards. The
-last-owner count uses ``count_active_owners_excluding`` which acquires
-``FOR UPDATE`` to serialise concurrent attempts (mirrors v1.2 freeze-period
-serial-arbiter).
+last-owner count uses ``count_active_owners_excluding`` which locks the
+candidate-owner rows themselves (CR-02/WR-05 fix — aggregate FOR UPDATE is
+illegal in Postgres) to serialise concurrent attempts at the row-lock layer.
 
 D-43-24 — invitation email is rendered at enqueue time (not transport time);
 the EmailEnvelope (subject + html + text) is passed via kwargs to the
@@ -258,7 +258,11 @@ async def deactivate_user(session: AsyncSession, actor: CurrentUser, target_user
     if target.id == actor.id:
         raise CannotDeactivateSelfError("cannot_deactivate_self")
     if target.role == Role.OWNER:
-        # FOR UPDATE serialises parallel deactivate attempts on owners.
+        # CR-02/WR-05 (Phase 43 review) — count_active_owners_excluding now
+        # locks the candidate-owner ROWS (not an aggregate) so parallel
+        # deactivate attempts targeting the second-to-last owner serialise
+        # at the row-lock layer. The first tx holds locks; the second blocks
+        # until the first commits, then re-reads — exactly one wins.
         active_owner_count = await repository.count_active_owners_excluding(
             session, excluded_user_id=target_user_id
         )

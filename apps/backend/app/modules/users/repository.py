@@ -251,10 +251,18 @@ async def deactivate_user(
 
     Single UPDATE. Service layer owns pre-conditions (self / last-owner guard)
     and the transactional commit — repository only emits the SQL.
+
+    IN-02 (Phase 43 review) — defence-in-depth predicate ``deleted_at IS NULL``:
+    a race between a parallel soft-delete and this deactivate could otherwise
+    re-flip ``is_active`` on a tombstoned row, violating the "soft-deleted
+    rows are tombstones, never mutated again" invariant.
     """
     await session.execute(
         update(User)
-        .where(User.id == target_user_id)
+        .where(
+            User.id == target_user_id,
+            User.deleted_at.is_(None),
+        )
         .values(
             is_active=False,
             deactivated_at=_now_utc(),
@@ -271,10 +279,17 @@ async def reactivate_user(
     Mirrors the column-consistency CHECK constraint from migration 0030:
     ``(is_active=true AND deactivated_at IS NULL)``
     ``OR (is_active=false AND deactivated_at IS NOT NULL)``.
+
+    IN-02 (Phase 43 review) — defence-in-depth predicate ``deleted_at IS NULL``
+    so a tombstoned row cannot be silently un-deactivated by a race against
+    a soft-delete.
     """
     await session.execute(
         update(User)
-        .where(User.id == target_user_id)
+        .where(
+            User.id == target_user_id,
+            User.deleted_at.is_(None),
+        )
         .values(
             is_active=True,
             deactivated_at=None,
@@ -291,11 +306,18 @@ async def soft_delete_user(
     Single UPDATE; ``COALESCE`` preserves existing ``deactivated_at`` (common
     path: delete after deactivate) and falls back to now() (pure-delete-
     without-deactivate path). Preserves the column-consistency CHECK.
+
+    IN-02 (Phase 43 review) — predicate ``deleted_at IS NULL`` makes
+    soft-delete-on-soft-delete a no-op (the row is already a tombstone) rather
+    than re-stamping ``deleted_at``. Idempotent at the SQL layer.
     """
     now = _now_utc()
     await session.execute(
         update(User)
-        .where(User.id == target_user_id)
+        .where(
+            User.id == target_user_id,
+            User.deleted_at.is_(None),
+        )
         .values(
             deleted_at=now,
             is_active=False,
@@ -356,17 +378,28 @@ async def atomic_consume_invitation_token_by_id(
 async def count_active_owners_excluding(
     session: AsyncSession, *, excluded_user_id: UUID
 ) -> int:
-    """D-43-16 last-owner guard — ``FOR UPDATE`` to serialise concurrent deactivates.
+    """D-43-16 last-owner guard — lock candidate owner ROWS, count Python-side.
 
-    Returns the count of owners that would remain active+alive+non-pending if
-    ``excluded_user_id`` were deactivated/soft-deleted. Service-layer guard
-    refuses the operation when this returns 0 (mirrors v1.2 freeze-period
-    serial-arbiter pattern — the row-level lock serialises parallel attempts
-    against the same target).
+    CR-02 / WR-05 (Phase 43 review) — the pre-fix code used
+    ``select(func.count()).with_for_update()`` which Postgres rejects with
+    ``FOR UPDATE is not allowed with aggregate functions``. Even if Postgres
+    allowed it, FOR UPDATE on an aggregate has no rows to lock and would
+    serialise nothing.
+
+    The fix selects the row ids of the candidate owners (those that would
+    remain active+alive+non-pending if ``excluded_user_id`` were deactivated)
+    with ``with_for_update()``, materialises the result set Python-side, and
+    returns the length. Two parallel deactivate attempts targeting the
+    second-to-last owner now actually serialise: the first transaction holds
+    locks on the surviving owner rows; the second blocks on those locks until
+    the first commits; the second then re-reads the (possibly reduced) set
+    and refuses if the count dropped to zero.
+
+    This is the genuine "v1.2 freeze-period serial-arbiter" pattern — lock
+    specific rows, then assert the invariant over the locked set.
     """
     stmt = (
-        select(func.count())
-        .select_from(User)
+        select(User.id)
         .where(
             User.role == Role.OWNER,
             User.is_active.is_(True),
@@ -376,4 +409,5 @@ async def count_active_owners_excluding(
         )
         .with_for_update()
     )
-    return (await session.scalar(stmt)) or 0
+    result = await session.execute(stmt)
+    return len(result.all())
