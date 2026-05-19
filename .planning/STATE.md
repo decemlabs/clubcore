@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Completed 43-03-PLAN.md (cross-cutting runtime bedrock)
-last_updated: "2026-05-19T14:13:54.204Z"
+last_updated: "2026-05-19T14:22:49.374Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 41
-  completed_plans: 31
-  percent: 76
+  completed_plans: 32
+  percent: 78
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 5 of 14
+Plan: 6 of 14
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -92,6 +92,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: Plan 43-02 D-43-OWNER-COPY-LOCK landed USER_INVITATION_EMAIL
 - [Phase ?]: Phase 43 Plan 03: UserSessionInvalidator single-wire (D-43-27) — closure-injected Redis factory; LOCKED_AUDIT_EVENTS cardinality 70 -> 71 (pre-existing Phase 42 plan 09 drift documented); test_audit_taxonomy assertion updated
 - [Phase ?]: Plan 43-04: users/repository.py — 12 async functions, zero commit/flush (D-43-09); list_alive LEFT JOIN subquery MAX(expires_at) populates invitation_expires_at; count_active_owners_excluding uses .with_for_update() last-owner serial-arbiter; atomic-consume via UPDATE...RETURNING for both re-invite + revoke paths
+- [Phase ?]: Plan 43-05: users/service.py — 6 public async functions composing repository + audit + email-dispatch + session-invalidation. 4-branch idempotent create_user (D-43-13: active=409, pending=re-invite, no-row=INSERT, soft-deleted=fallthrough). Two-guard layer on deactivate/soft-delete (self + last-owner via FOR UPDATE count). Atomic-consume race-loss → 409 on revoke. SVC001 invariant green (5/5 mutating functions carry `await session.commit()`). FLAT audit kwargs (Phase 42 CR-01) — 0 nested payload= occurrences. Literal `template_id="USER_INVITATION_EMAIL"` at dispatcher callsite. 10 domain exceptions added to app/core/exceptions.py. Settings.frontend_base_url added (D-43-14 invitation URL base). Hand-rolled Russian-date helper (no babel dep).
 
 ### Pending Todos
 
@@ -118,6 +119,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T14:13:46.072Z
-Stopped at: Completed 43-03-PLAN.md (cross-cutting runtime bedrock)
-Resume: `/gsd-execute-phase 41` (next plan: 41-10 User hoist+shim or 41-11 RESET-06 anti-oracle test — both Wave 1)
+Last session: 2026-05-19T14:20:47Z
+Stopped at: Completed 43-05-PLAN.md (users/service.py orchestration)
+Resume: `/gsd-execute-phase 43` (next plan: 43-06 users/router.py — Wave 2 final)
