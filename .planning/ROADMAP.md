@@ -180,7 +180,7 @@ Plans:
 - [x] 42-15-PLAN.md — CR-04 fix: defensive UPDATE pass in migration 0027 + docstring + regression test seeding colliding rows; includes [BLOCKING] alembic round-trip checkpoint (AUTH-EM-01)
 
 **Wave 6** *(hygiene bundle — blocked on Wave 5; depends_on [12, 13] for dispatch_email.py + service.py overlap)*
-- [ ] 42-16-PLAN.md — WR-01/02/03/04/06 hygiene: migration 0029 (bounce_type CHECK + status circuit_open) + dispatch_email status taxonomy + webhook orphan event name + email_lower at dispatcher + HMAC strip/lower; includes [BLOCKING] alembic round-trip checkpoint (EMAIL-03/06/07, AUTH-EM-02)
+- [x] 42-16-PLAN.md — WR-01/02/03/04/06 hygiene: migration 0029 (bounce_type CHECK + status circuit_open) + dispatch_email status taxonomy + webhook orphan event name + email_lower at dispatcher + HMAC strip/lower; includes [BLOCKING] alembic round-trip checkpoint (EMAIL-03/06/07, AUTH-EM-02)
 
 **Cross-cutting constraints:**
 - alembic upgrade head + downgrade -1 + upgrade head round-trips clean
@@ -247,7 +247,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
-| 42. Email Transport Layer + Email OTP Fallback | 12/16 | In Progress|  |
+| 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
