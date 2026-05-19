@@ -61,9 +61,12 @@ class EmailSendLog(Base, UUIDPkMixin):
     - ``status``: closed taxonomy gated at the DB layer by a CHECK constraint;
       mirrors ``EmailSendResult.classification`` taxonomy extended with bounce-
       webhook event types (``delivered`` / ``bounced`` / ``complained`` /
-      ``rejected``) which only the webhook can flip a row to.
-    - ``bounce_type``: nullable provider-specific bounce reason (``hard`` /
-      ``soft`` / ``complaint``) — typed prose only, not part of the CHECK.
+      ``rejected``) which only the webhook can flip a row to. Extended in
+      migration 0029 with ``'circuit_open'`` to distinguish breaker-shorts from
+      provider rejections (WR-04).
+    - ``bounce_type``: nullable provider-specific bounce reason (``'hard'`` /
+      ``'soft'`` / ``'complaint'``); DB-level CHECK constraint enforces the
+      closed set (migration 0029 WR-01).
     - ``recorded_at``: server-default ``now()``; single-column timestamp.
     """
 
@@ -86,14 +89,18 @@ class EmailSendLog(Base, UUIDPkMixin):
     )
 
     __table_args__ = (
-        # CHECK name passed bare (``"status"``) — the project naming_convention
-        # in ``core/database.py`` expands to ``ck_email_send_log_status``,
-        # matching the migration's ``op.f("ck_email_send_log_status")``.
+        # CHECK names passed bare — the project naming_convention in
+        # ``core/database.py`` expands to ``ck_email_send_log_<name>``,
+        # matching the migration's ``op.f("ck_email_send_log_<name>")``.
         # Mirrors PasswordResetToken's ``name="purpose"`` pattern
         # (``password_reset_token_model.py:88``).
         CheckConstraint(
-            "status IN ('sent','bounced','complained','delivered','rejected')",
+            "status IN ('sent','bounced','complained','delivered','rejected','circuit_open')",
             name="status",
+        ),
+        CheckConstraint(
+            "bounce_type IN ('hard','soft','complaint') OR bounce_type IS NULL",
+            name="bounce_type",
         ),
         # Forensic lookup: "what did we send for this audit correlation UUID?"
         Index(
