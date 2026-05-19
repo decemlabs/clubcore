@@ -271,6 +271,8 @@ Requirements in scope: **USERS-01, USERS-02, USERS-03, USERS-04, USERS-05, USERS
 - **Bouncing-mailbox aggressive `email_verified=false` flag flip** — Phase 42 D-42-XX explicit defer to v1.7.
 - **Owner-managed password reset for another user (administrative override)** — out of scope for v1.6; if the owner cannot reach reception, the revoke + re-invite path provides equivalent functionality via the user's mailbox.
 - **Activity log surfacing in operator list** ("last seen", "last login at") — v1.8 audit-read concern.
+- **IN-03 (Phase 43 review): `INVITATION_TOKEN_TTL` style inconsistency vs `frontend_base_url`** — Promote `INVITATION_TOKEN_TTL` to a `Settings` field (`invitation_token_ttl_seconds: int = 7 * 86400`) and read it at call time so test overrides of the env var take effect. **Deferred to v1.7** — neither configuration is currently per-environment; no immediate functional impact. Recommended by 43-REVIEW.md IN-03.
+- **IN-04 (Phase 43 review): `__table_args__ name="role"` constraint naming inconsistency** — The `CheckConstraint("role IN ('owner', 'reception')", name="role")` on `apps/backend/app/core/models.py:116-118` predates the `ck_<table>_<name>` convention used by migration 0030. **Deferred to a future Alembic naming-cleanup pass** — out-of-Phase-43-scope (already noted as such by the reviewer at 43-REVIEW.md IN-04). No-op for v1.6.
 
 </deferred>
 
