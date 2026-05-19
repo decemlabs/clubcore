@@ -3,15 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
-stopped_at: Completed 43-07b-PLAN.md (users tests conftest.py shared fixture surface)
-last_updated: "2026-05-19T15:17:12.000Z"
+stopped_at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
+last_updated: "2026-05-19T15:30:00.000Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 41
-  completed_plans: 40
-  percent: 98
+  completed_plans: 41
+  percent: 100
+# Note: total_plans/completed_plans tally is owned by the orchestrator;
+# 43-10's plan-counter advance is reflected here. Verifier may recompute
+# from disk SUMMARY counts.
 ---
 
 # Project State
@@ -26,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 12 of 14
+Plan: 13 of 14 (43-10 complete; 43-12 still pending)
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -100,6 +103,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase 43]: 43-09: Test assertion shape uses r.json()['code'] flat — AppError handler returns {code, message, fields} at top level, not nested under 'detail'
 - [Phase ?]: 43-11: Drift-tolerant invitation-flow tests using AuditLog.action (not .event), r.json()['code'] (not detail.error), JSONB UUID-string roundtrip
 - [Phase 43]: Phase 43 Plan 08: Audit payload UUIDs/datetimes stringified at users/service.py audit.emit callsites (REG-36-03 carried forward); integrations/email/dispatcher per-module walker gains users.email_templates branch with matching .importlinter ignore_imports
+- [Phase 43]: Plan 43-10: e2e USERS-04+USERS-06 + USERS-05+USERS-06 integration test lands. Documents that in the real prod sequence the post-deactivate refresh hits Branch C (family_reuse_detected → invalid_token), not Branch A (account_inactive → invalid_session), because families are revoked in the same UoW as is_active=false. Branch A coverage is 43-12's responsibility via refresh_client_deactivated synthetic fixture. Test accepts code in {invalid_session, invalid_token} — both are anti-oracle-safe.
 
 ### Pending Todos
 
@@ -126,6 +130,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T15:16:32.007Z
-Stopped at: Completed 43-07b-PLAN.md (users tests conftest.py shared fixture surface)
-Resume: `/gsd-execute-phase 43` (next plan: 43-06 users/router.py — Wave 2 final)
+Last session: 2026-05-19T15:30:00.000Z
+Stopped at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
+Resume: `/gsd-execute-phase 43` (Wave 4 continues — check 43-12 / overall phase verification status)
