@@ -4,7 +4,7 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Completed 43-07b-PLAN.md (users tests conftest.py shared fixture surface)
-last_updated: "2026-05-19T15:16:17.694Z"
+last_updated: "2026-05-19T15:17:12.000Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
@@ -99,6 +99,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase 43]: Plan 43-07b: shared tests/integration/users/conftest.py (17 fixtures + RecordingEmailDispatcher) lands BEFORE Wave 4 to eliminate parallel conftest race; deactivated state encoded as is_active=False+deactivated_at (status enum only admits 'active'|'pending_invitation' per migration 0030 CHECK)
 - [Phase 43]: 43-09: Test assertion shape uses r.json()['code'] flat — AppError handler returns {code, message, fields} at top level, not nested under 'detail'
 - [Phase ?]: 43-11: Drift-tolerant invitation-flow tests using AuditLog.action (not .event), r.json()['code'] (not detail.error), JSONB UUID-string roundtrip
+- [Phase 43]: Phase 43 Plan 08: Audit payload UUIDs/datetimes stringified at users/service.py audit.emit callsites (REG-36-03 carried forward); integrations/email/dispatcher per-module walker gains users.email_templates branch with matching .importlinter ignore_imports
 
 ### Pending Todos
 
@@ -125,6 +126,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T15:16:06.544Z
+Last session: 2026-05-19T15:16:32.007Z
 Stopped at: Completed 43-07b-PLAN.md (users tests conftest.py shared fixture surface)
 Resume: `/gsd-execute-phase 43` (next plan: 43-06 users/router.py — Wave 2 final)
