@@ -637,8 +637,83 @@ async def revoke_session(
 
 
 # ---------------------------------------------------------------------------
-# Revoke all sessions — /auth/logout-all (D-10, AUTH-LO-02, AUTH-LO-03)
+# Revoke all sessions — composable atomic UoW + thin commit wrapper.
 # ---------------------------------------------------------------------------
+#
+# CR-04 (Phase 43 review) — splitting the implementation into a no-commit
+# helper lets users/service.deactivate_user and soft_delete_user compose the
+# revocation into their own atomic UoW. The thin wrapper preserves the
+# previous "I am my own UoW" semantics for password_changed_revokes_sessions
+# and the standalone /auth/logout-all endpoint.
+#
+# WR-04 (Phase 43 review) — family_count is now read from the DB UPDATE's
+# RETURNING DISTINCT family_id set rather than Redis SMEMBERS, which can
+# drift below DB truth (TTL expiry, flush, replica lag).
+#
+# WR-01 (Phase 43 review) — actor_user_id distinguishes the initiator from
+# the target. ``user_id`` stays in ``resource_id`` (the entity being acted
+# upon); ``actor_user_id`` is the audit row's ``actor_user_id`` column.
+
+
+async def _revoke_all_sessions_no_commit(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: UUID,
+    *,
+    actor_user_id: UUID | None,
+) -> int:
+    """Revoke every alive refresh-token family for user_id. NO session.commit().
+
+    Composable UoW variant (CR-04). Returns the count of DISTINCT families
+    revoked, sourced from the DB UPDATE's RETURNING set (WR-04 — DB-authoritative).
+
+    The caller is responsible for the commit. The audit row is emitted here
+    so it commits atomically with the bulk revocation UPDATE — Pitfall 2 emit
+    ordering preserved.
+    """
+    # Best-effort Redis cleanup — bounded by the user's active families.
+    # `smembers` is typed `Awaitable[set] | set` (sync/async shared stubs); cast.
+    family_ids_raw = await cast(
+        "Awaitable[set[str]]",
+        redis.smembers(f"auth:user_sessions:{user_id}"),
+    )
+    if family_ids_raw:
+        pipe = redis.pipeline()
+        for fid in family_ids_raw:
+            pipe.delete(f"auth:session:{user_id}:{fid}")
+        pipe.delete(f"auth:user_sessions:{user_id}")
+        await pipe.execute()
+
+    # DB UPDATE with RETURNING distinct family_id — the DB-authoritative count.
+    # WR-04: Redis SMEMBERS can drift below DB truth. The UPDATE applies to
+    # every alive refresh_tokens row regardless of Redis state, so the
+    # RETURNING set is the ground truth for "how many families were just killed".
+    result = await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(tz=UTC))
+        .returning(RefreshToken.family_id)
+    )
+    family_ids_revoked: set[UUID] = {row.family_id for row in result}
+    family_count = len(family_ids_revoked)
+
+    # Pitfall 2: emit BEFORE caller's commit so the audit row commits
+    # atomically with the bulk revocation UPDATE (single UoW).
+    # WR-01: actor_user_id is the initiator (owner), user_id is the target
+    # (still surfaced via resource_id).
+    await audit.emit(
+        session,
+        "session_revoked_all",
+        actor_user_id=actor_user_id,
+        resource_type="user",
+        resource_id=user_id,
+        family_count=family_count,
+    )
+
+    return family_count
 
 
 async def revoke_all_sessions(
@@ -646,49 +721,24 @@ async def revoke_all_sessions(
     redis: Redis,
     user_id: UUID,
 ) -> int:
-    """Revoke every alive refresh-token family for the user. Return family count.
+    """Revoke every alive refresh-token family for the user. Owns its own commit.
 
-    Enumerates via SMEMBERS auth:user_sessions:{user_id} (no SCAN — bounded by
-    the user's active families, typically 1-3). Postgres is authoritative:
-    the UPDATE always runs even if Redis SET is empty (e.g. after a flush).
+    Public API preserved for callers that own their UoW boundary
+    (``password_changed_revokes_sessions``, ``POST /auth/logout-all``).
+    Internally delegates to ``_revoke_all_sessions_no_commit`` and adds a
+    ``session.commit()``.
+
+    Note on actor attribution: this entry point treats the user_id as BOTH
+    the target AND the actor — appropriate for "/auth/logout-all" (the user
+    is logging themselves out) and "password_changed_revokes_sessions" (the
+    user just changed their own password). For initiator != target cases
+    (owner deactivates reception), users/service uses the no-commit variant
+    directly with the owner's id as ``actor_user_id``.
     """
-    # `smembers` is typed `Awaitable[set] | set` (sync/async shared stubs); cast.
-    family_ids_raw = await cast(
-        "Awaitable[set[str]]",
-        redis.smembers(f"auth:user_sessions:{user_id}"),
-    )
-    family_count = len(family_ids_raw)
-
-    if family_count > 0:
-        pipe = redis.pipeline()
-        for fid in family_ids_raw:
-            pipe.delete(f"auth:session:{user_id}:{fid}")
-        pipe.delete(f"auth:user_sessions:{user_id}")
-        await pipe.execute()
-
-    # See revoke_session for the rationale: rely on autobegin + explicit commit
-    # so this works whether or not the route's dep chain (get_current_user) has
-    # already issued a query that started a transaction on this session.
-    await session.execute(
-        update(RefreshToken)
-        .where(
-            RefreshToken.user_id == user_id,
-            RefreshToken.revoked_at.is_(None),
-        )
-        .values(revoked_at=datetime.now(tz=UTC))
-    )
-    # Pitfall 2: emit BEFORE commit so the audit row commits atomically with
-    # the bulk revocation UPDATE.
-    await audit.emit(
-        session,
-        "session_revoked_all",
-        actor_user_id=user_id,
-        resource_type="user",
-        resource_id=user_id,
-        family_count=family_count,
+    family_count = await _revoke_all_sessions_no_commit(
+        session, redis, user_id, actor_user_id=user_id,
     )
     await session.commit()
-
     return family_count
 
 
@@ -1118,6 +1168,7 @@ async def invalidate_all_families_for_user(
     session: AsyncSession,
     *,
     user_id: UUID,
+    actor_user_id: UUID | None,
     reason: Literal["deactivated", "password_reset", "soft_deleted"],
 ) -> int:
     """Phase 41 D-41-25 UserSessionInvalidator Protocol implementation.
@@ -1126,6 +1177,15 @@ async def invalidate_all_families_for_user(
     (structlog) but is NOT in the audit emit — calling sites emit their own
     domain event (user_deactivated / password_reset_completed /
     user_soft_deleted) carrying sessions_revoked_count per D-43-28.
+
+    CR-04 (Phase 43 review) — calls the no-commit variant so the caller
+    (users/service.deactivate_user, soft_delete_user) owns the single
+    transactional boundary. The pre-fix code's mid-flow commit broke the
+    audit + mutation atomicity contract.
+
+    WR-01 (Phase 43 review) — actor_user_id is plumbed into the
+    session_revoked_all audit row as the actor, distinguishing the owner
+    initiator from the target.
     """
     if _redis_factory is None:
         raise RuntimeError(
@@ -1137,6 +1197,9 @@ async def invalidate_all_families_for_user(
     _log.info(
         "user_session_invalidator.invoked",
         user_id=str(user_id),
+        actor_user_id=str(actor_user_id) if actor_user_id else None,
         reason=reason,
     )
-    return await revoke_all_sessions(session, redis, user_id)
+    return await _revoke_all_sessions_no_commit(
+        session, redis, user_id, actor_user_id=actor_user_id,
+    )
