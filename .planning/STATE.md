@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
-stopped_at: Completed 43-13-PLAN.md (AST gate hardening — out-of-order; 43-06..43-12 pending)
-last_updated: "2026-05-19T14:28:27.160Z"
+stopped_at: Completed 43-05-PLAN.md (users/service.py orchestration)
+last_updated: "2026-05-19T14:31:27.290Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 41
-  completed_plans: 33
-  percent: 80
+  completed_plans: 34
+  percent: 83
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 6 of 14
+Plan: 7 of 14
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -94,6 +94,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: Plan 43-04: users/repository.py — 12 async functions, zero commit/flush (D-43-09); list_alive LEFT JOIN subquery MAX(expires_at) populates invitation_expires_at; count_active_owners_excluding uses .with_for_update() last-owner serial-arbiter; atomic-consume via UPDATE...RETURNING for both re-invite + revoke paths
 - [Phase ?]: Plan 43-05: users/service.py — 6 public async functions composing repository + audit + email-dispatch + session-invalidation. 4-branch idempotent create_user (D-43-13: active=409, pending=re-invite, no-row=INSERT, soft-deleted=fallthrough). Two-guard layer on deactivate/soft-delete (self + last-owner via FOR UPDATE count). Atomic-consume race-loss → 409 on revoke. SVC001 invariant green (5/5 mutating functions carry `await session.commit()`). FLAT audit kwargs (Phase 42 CR-01) — 0 nested payload= occurrences. Literal `template_id="USER_INVITATION_EMAIL"` at dispatcher callsite. 10 domain exceptions added to app/core/exceptions.py. Settings.frontend_base_url added (D-43-14 invitation URL base). Hand-rolled Russian-date helper (no babel dep).
 - [Phase ?]: Plan 43-13: AST positive-assertion for USER_INVITATION_EMAIL literal at users/service.py callsite — mirrors Phase 42 4-11 pattern; walker logic mirrored locally so future _iter_dispatcher_calls refactor cannot weaken the gate (D-43-33)
+- [Phase ?]: Users router uses global AppError handler (no per-endpoint try/except) — mirrors clients/router.py
 
 ### Pending Todos
 
@@ -120,6 +121,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T14:20:47Z
+Last session: 2026-05-19T14:31:16.304Z
 Stopped at: Completed 43-05-PLAN.md (users/service.py orchestration)
 Resume: `/gsd-execute-phase 43` (next plan: 43-06 users/router.py — Wave 2 final)
