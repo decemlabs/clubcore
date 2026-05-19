@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Completed 43-07b-PLAN.md (users tests conftest.py shared fixture surface)
-last_updated: "2026-05-19T15:06:58.855Z"
+last_updated: "2026-05-19T15:12:23.619Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 41
-  completed_plans: 36
-  percent: 88
+  completed_plans: 37
+  percent: 90
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 9 of 14
+Plan: 10 of 14
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -97,6 +97,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: Users router uses global AppError handler (no per-endpoint try/except) — mirrors clients/router.py
 - [Phase ?]: Plan 43-07: rotate_refresh single-SELECT predicate (is_active=true AND deleted_at IS NULL); refresh_failed/account_inactive forensic audit emit; row-is-None harmonised to InvalidSession for anti-oracle parity
 - [Phase 43]: Plan 43-07b: shared tests/integration/users/conftest.py (17 fixtures + RecordingEmailDispatcher) lands BEFORE Wave 4 to eliminate parallel conftest race; deactivated state encoded as is_active=False+deactivated_at (status enum only admits 'active'|'pending_invitation' per migration 0030 CHECK)
+- [Phase 43]: 43-09: Test assertion shape uses r.json()['code'] flat — AppError handler returns {code, message, fields} at top level, not nested under 'detail'
 
 ### Pending Todos
 
@@ -123,6 +124,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T15:06:58.851Z
+Last session: 2026-05-19T15:11:25.393Z
 Stopped at: Completed 43-07b-PLAN.md (users tests conftest.py shared fixture surface)
 Resume: `/gsd-execute-phase 43` (next plan: 43-06 users/router.py — Wave 2 final)
