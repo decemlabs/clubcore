@@ -199,7 +199,7 @@ Plans:
 Plans:
 **Wave 1** (parallel — zero files_modified overlap pairwise)
 - [x] 43-01-PLAN.md — Alembic 0030 users lifecycle columns + User ORM extension + [BLOCKING] round-trip checkpoint
-- [ ] 43-02-PLAN.md — users/{schemas, permissions, constants, email_templates} + USER_INVITATION_EMAIL snapshot test
+- [x] 43-02-PLAN.md — users/{schemas, permissions, constants, email_templates} + USER_INVITATION_EMAIL snapshot test
 - [ ] 43-03-PLAN.md — invalidate_all_families_for_user + main.py registration + UserInvitedPayload.link_copied + RefreshFailedPayload + test_app_wiring extension
 
 **Wave 2** (blocked on Wave 1)
@@ -269,7 +269,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
-| 43. Multi-User Admin Module | 1/14 | In Progress|  |
+| 43. Multi-User Admin Module | 2/14 | In Progress|  |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |

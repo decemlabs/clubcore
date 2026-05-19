@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Completed 43-01-PLAN.md (Alembic 0030 + User ORM extension)
-last_updated: "2026-05-19T13:51:44.659Z"
+last_updated: "2026-05-19T14:03:37.396Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 41
-  completed_plans: 28
-  percent: 68
+  completed_plans: 29
+  percent: 71
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 2 of 14
+Plan: 3 of 14
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -89,6 +89,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: [Phase 41 Plan 08]: Alembic 0024 channel discriminator on membership_notifications + booking_notifications — channel TEXT NOT NULL DEFAULT 'telegram' CHECK channel IN ('telegram','email'); UNIQUE recreated to include channel. Zero-row backfill (D-41-15 precedent). CK names wrapped in op.f() so project naming_convention does not double-prefix (caught + fixed pre-commit). Round-trip clean. INFRA-38 still progressing — 0025 lands in Plan 09.
 - [Phase ?]: Plan 41-09: INFRA-38 closed — Alembic 0025 ships password_reset_tokens (purpose discriminator + partial UNIQUE (user_id,purpose) WHERE consumed_at IS NULL + non-unique token_hash idx for atomic-consume); PasswordResetToken ORM + alembic/env.py registration; REG-29-04 eager-import discipline pinned in tests/unit/test_workers_eager_import.py (new file — no prior eager-import test existed). All 4 v1.6 INFRA-bedrock migrations in. Pre-existing 41-05/41-08 ORM drift catalogued in deferred-items.md (owned by Phases 43/45).
 - [Phase ?]: Phase 43 Plan 01: Alembic 0030 adds 4 user-lifecycle columns (is_active, status, deactivated_at, deactivated_by_user_id) + 2 CHECKs + self-FK ON DELETE SET NULL; password_hash NOT NULL dropped (D-43-06); User ORM at app.core.models extended with same shape + deleted_at mirror; round-trip clean against live Postgres. D-43-36 BLOCKING checkpoint auto-approved (objective verification PASS).
+- [Phase ?]: Plan 43-02 D-43-OWNER-COPY-LOCK landed USER_INVITATION_EMAIL
 
 ### Pending Todos
 
@@ -115,6 +116,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T13:51:44.655Z
+Last session: 2026-05-19T14:03:16.433Z
 Stopped at: Completed 43-01-PLAN.md (Alembic 0030 + User ORM extension)
 Resume: `/gsd-execute-phase 41` (next plan: 41-10 User hoist+shim or 41-11 RESET-06 anti-oracle test — both Wave 1)
