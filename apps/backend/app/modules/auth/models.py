@@ -15,9 +15,10 @@ migrate to ``from app.core.models import User`` at their convenience.
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID as UUIDType  # noqa: N811
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +28,11 @@ from app.core.database import Base, TimestampMixin, UUIDPkMixin
 # removes this re-export; downstream callers should migrate to
 # `from app.core.models import User` at their convenience.
 from app.core.models import User  # noqa: F401 — public re-export
+
+# Phase 42 AUTH-EM-01 / D-42-20 — OTP channel discriminator. Mirrors
+# password_reset_token_model.py:38 PasswordResetTokenPurpose shape
+# (Literal-as-TypeAlias). CHECK enforced at the DB layer via Alembic 0027.
+OtpChannel = Literal["telegram", "email"]
 
 
 class RefreshToken(Base, UUIDPkMixin, TimestampMixin):
@@ -91,6 +97,15 @@ class OtpCode(Base, UUIDPkMixin, TimestampMixin):
         BigInteger,
         nullable=True,
     )
+    # Phase 42 AUTH-EM-01 / D-42-20 — schema-side shipped by Alembic 0027.
+    # ``server_default='telegram'`` matches the migration's column-DEFAULT
+    # zero-row backfill; placed next to ``telegram_chat_id`` for locality
+    # with the legacy channel.
+    channel: Mapped[OtpChannel] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'telegram'"),
+    )
     deep_link_token_hash: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -109,4 +124,21 @@ class OtpCode(Base, UUIDPkMixin, TimestampMixin):
     consumed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    __table_args__ = (
+        # Phase 42 AUTH-EM-01 / D-42-20 — partial UNIQUE on
+        # ``(user_id, channel) WHERE consumed_at IS NULL``. Declared in
+        # BOTH ORM ``__table_args__`` and Alembic 0027 with the SAME
+        # literal name + identical ``postgresql_where`` text so
+        # SQLAlchemy + Alembic compare clean (mirrors
+        # ``password_reset_token_model.py:94-100``). Allows one active
+        # Telegram OTP AND one active email OTP per user simultaneously.
+        Index(
+            "uq_otp_codes_user_channel_active",
+            "user_id",
+            "channel",
+            unique=True,
+            postgresql_where=text("consumed_at IS NULL"),
+        ),
     )
