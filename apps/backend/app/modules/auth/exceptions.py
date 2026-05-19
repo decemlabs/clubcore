@@ -22,6 +22,9 @@ the classes themselves are declarative and only carry `code` + `status_code`.
 """
 
 from app.core.exceptions import AppError
+from app.core.exceptions import (
+    InvitationAlreadyAcceptedError as _CoreInvitationAlreadyAcceptedError,
+)
 
 
 class BotNotStarted(AppError):  # noqa: N818
@@ -72,3 +75,59 @@ class TokenUnknown(AppError):  # noqa: N818
 
     code = "token_unknown"
     status_code = 404
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 44 RESET-02 / RESET-04 password-reset + invitation-accept flow.
+# All three exceptions extend AppError so the existing _app_error_handler
+# (app/core/exceptions.py) renders the {code, message, fields?} envelope
+# without extra wiring.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class InvalidOrExpiredTokenError(AppError):
+    """Atomic-consume returned zero rows on the password_reset_tokens table.
+
+    Emitted by both `confirm_password_reset` and `accept_invitation` when
+    `_atomic_consume_token` yields no row. Per D-44-15 (and its D-44-19 mirror
+    on the invitation path), replay / expired / unknown-token all collapse to
+    this single 410 Gone error for anti-oracle parity — no caller can
+    distinguish which precondition failed.
+    """
+
+    code = "invalid_or_expired_token"
+    status_code = 410
+
+
+class WeakPasswordError(AppError):
+    """New password failed the strength predicate (currently len >= 8).
+
+    Per D-44-17, this is the one deliberate exception to the 410 anti-oracle
+    envelope: the strength check runs BEFORE `_atomic_consume_token`, so a
+    422 here does not leak any token-state oracle (the token is still valid
+    for a retry within its TTL). Emitted by `confirm_password_reset` and
+    `accept_invitation`.
+    """
+
+    code = "weak_password"
+    status_code = 422
+
+
+class InvitationAlreadyAcceptedError(_CoreInvitationAlreadyAcceptedError):
+    """Pending-user UPDATE returned zero rows after a successful token consume.
+
+    Per D-44-20 / RESET-05: between `_atomic_consume_token(purpose='invitation')`
+    succeeding and the `UPDATE users SET status='active'…WHERE
+    status='pending_invitation' AND is_active=TRUE AND deleted_at IS NULL`
+    landing, a concurrent admin action (revoke + soft-delete chain via
+    `consume_active_invitation_for_user`) flipped the target user out of
+    `pending_invitation`. 409 Conflict, millisecond-scale race window.
+
+    Subclasses the Phase 43 `app.core.exceptions.InvitationAlreadyAcceptedError`
+    so isinstance checks at Phase 43 callsites (`users` module repository /
+    router) still hold; the `code`/`status_code` are inherited verbatim
+    (`"invitation_already_accepted"` / 409).
+    """
+
+    # Inherit code = "invitation_already_accepted", status_code = 409 verbatim
+    # from the Phase 43 parent so the wire shape stays byte-identical.
