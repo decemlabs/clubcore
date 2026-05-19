@@ -25,30 +25,31 @@ import asyncio
 import hashlib
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Final, Literal
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import structlog
 from redis.asyncio import Redis
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.config import get_settings
 from app.core.dependencies import get_email_dispatcher, get_user_session_invalidator
+from app.core.exceptions import RateLimited
+from app.core.models import User
 from app.core.security import hash_password
-from app.integrations.email.types import EmailEnvelope
 from app.modules.auth import reset_rate_limit
 from app.modules.auth.constants import PASSWORD_RESET_TOKEN_TTL
-from app.modules.auth.email_templates import TEMPLATES
 from app.modules.auth.exceptions import (
     InvalidOrExpiredTokenError,
     InvitationAlreadyAcceptedError,
     WeakPasswordError,
 )
 from app.modules.auth.password_reset_token_model import PasswordResetToken
-from app.modules.auth.service import invalidate_all_families_for_user, issue_tokens
+from app.modules.auth.service import invalidate_all_families_for_user
 
 # NOTE: `INVITATION_TOKEN_TTL` from `app.modules.users.constants` was originally
 # listed in plan 44-03's required-imports block but importing it here BREAKS the
@@ -62,47 +63,81 @@ from app.modules.auth.service import invalidate_all_families_for_user, issue_tok
 # constant to `app.core` (architectural change — Rule 4). Deviation logged
 # in 44-03-SUMMARY.md.
 
-# Wave 2 will reference these in body — declared here so import-linter sees
-# the wire shape compile cleanly and ruff doesn't strip them as unused at the
-# skeleton stage.
 __all__ = [
     "accept_invitation",
     "confirm_password_reset",
     "request_password_reset",
 ]
 
-# D-44-11: ops events (rate-limit hits) emit via structlog, NOT audit_log,
-# to preserve the anti-oracle public surface while keeping ops visibility.
-_log: Final = structlog.get_logger("auth.password_reset_service")
-
-# Re-export stdlib + symbol bindings the bodies will pick up (Wave 2). Keeping
-# them at module scope avoids the ruff F401 "imported but unused" complaint
-# on the skeleton commit. Each symbol below is a stable callsite Wave 2 uses.
-_UNUSED_AT_SKELETON: Final = (
-    asyncio,
-    hashlib,
-    secrets,
-    time,
-    datetime,
-    timedelta,
-    timezone,
-    uuid4,
-    audit,
-    get_settings,
-    get_email_dispatcher,
+# Tasks 3 + 4 of plan 44-04 land in subsequent commits; their symbol bindings
+# stay imported at module scope per the auth/service.py precedent. This tuple
+# anchors them so ruff F401 doesn't strip imports between commits. Removed in
+# the final task once every symbol is referenced in an actual call site.
+_TASK_3_4_PENDING: Final = (
     get_user_session_invalidator,
     hash_password,
-    EmailEnvelope,
-    reset_rate_limit,
-    PASSWORD_RESET_TOKEN_TTL,
-    TEMPLATES,
-    PasswordResetToken,
     invalidate_all_families_for_user,
-    issue_tokens,
     InvalidOrExpiredTokenError,
     InvitationAlreadyAcceptedError,
     WeakPasswordError,
 )
+
+# D-44-11: ops events (rate-limit hits) emit via structlog, NOT audit_log,
+# to preserve the anti-oracle public surface while keeping ops visibility.
+_log: Final = structlog.get_logger("auth.password_reset_service")
+
+# D-44-07 — 500ms wall-clock floor on every /password-reset/request response
+# path (anti-oracle timing parity). Mirrors auth/service.py:_constant_time_floor.
+_RESPONSE_FLOOR_SECONDS: Final[float] = 0.5
+
+# Russian-locale datetime formatting (D-44-25 — `expires_at_human` Jinja var).
+# Duplicated inline from users/service.py:80-115 because import-linter forbids
+# auth ↛ users module imports. ~15-line helper, accepted per the "3-line shared
+# util not worth packaging" carve-out documented in 44-CONTEXT § Reusable Assets.
+_RU_MONTHS_GENITIVE: Final[tuple[str, ...]] = (
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+)
+
+_MOSCOW_TZ: Final[ZoneInfo] = ZoneInfo("Europe/Moscow")
+
+
+def _format_expires_ru(dt: datetime) -> str:
+    """Render a Russian long-form datetime in Europe/Moscow with MSK suffix.
+
+    Duplicated from ``app.modules.users.service._format_expires_ru`` because
+    the import-linter contract forbids ``auth -> users``. WR-07 Phase 43 review.
+    """
+    local = dt.astimezone(_MOSCOW_TZ)
+    return (
+        f"{local.day} {_RU_MONTHS_GENITIVE[local.month - 1]} {local.year} "
+        f"в {local.hour:02d}:{local.minute:02d} (МСК)"  # noqa: RUF001
+    )
+
+
+async def _floor_response_time(started: float) -> None:
+    """500ms wall-clock floor for /password-reset/request anti-oracle (D-44-07).
+
+    Awaited on EVERY return path of :func:`request_password_reset` so the
+    HTTP latency distribution is identical across the 4 anti-oracle cases
+    (active / deactivated / owner / nonexistent) AND the rate-limit-hit
+    branch. ``time.perf_counter()`` is monotonic; ``asyncio.sleep(0)`` yields
+    if elapsed already exceeds the floor.
+    """
+    elapsed = time.perf_counter() - started
+    remaining = _RESPONSE_FLOOR_SECONDS - elapsed
+    if remaining > 0:
+        await asyncio.sleep(remaining)
 
 
 async def _atomic_consume_token(
@@ -184,7 +219,130 @@ async def request_password_reset(
     so the SVC001 walker (D-41-28) sees a single mutating UoW closed in
     this module.
     """
-    raise NotImplementedError("Wave 2 plan 44-04 fills this body.")
+    started = time.perf_counter()
+    email_lower = email.strip().lower()
+    audit_correlation_id = uuid4()
+
+    # 3-key rate-limit check BEFORE user lookup (D-44-13). On hit: structlog
+    # WARN + 500ms floor + return 202 envelope; NO audit emit, NO bump
+    # (D-44-11 — idempotent re-check; the request that pushed the counter
+    # past threshold already burned the bump quota).
+    try:
+        await reset_rate_limit.check_reset_rate_ip(redis, client_ip)
+        await reset_rate_limit.check_reset_rate_email_minute(redis, email_lower)
+        await reset_rate_limit.check_reset_rate_email_hour(redis, email_lower)
+    except RateLimited:
+        _log.warning(
+            "password_reset.rate_limited",
+            ip=client_ip,
+            email_lower=email_lower,
+            audit_correlation_id=str(audit_correlation_id),
+        )
+        await _floor_response_time(started)
+        return
+
+    # Bump all 3 counters UNCONDITIONALLY (anti-oracle parity — unknown email
+    # floods also trip the limit; D-44-10).
+    await reset_rate_limit.bump_reset_rate_ip(redis, client_ip)
+    await reset_rate_limit.bump_reset_rate_email_minute(redis, email_lower)
+    await reset_rate_limit.bump_reset_rate_email_hour(redis, email_lower)
+
+    # User lookup — case-insensitive on lower(email), excluding soft-deleted.
+    lookup_stmt = select(User).where(
+        func.lower(User.email) == email_lower,
+        User.deleted_at.is_(None),
+    )
+    result = await session.execute(lookup_stmt)
+    user = result.scalar_one_or_none()
+
+    if user is not None and user.is_active and user.deleted_at is None:
+        # Branch A — known + active + non-deleted: issue token + audit + email.
+        raw_token = secrets.token_urlsafe(32)
+
+        # Pre-empt the (user_id, purpose) WHERE consumed_at IS NULL partial-
+        # UNIQUE collision by marking any active prior token as consumed.
+        await session.execute(
+            update(PasswordResetToken)
+            .where(
+                PasswordResetToken.user_id == user.id,
+                PasswordResetToken.purpose == "password_reset",
+                PasswordResetToken.consumed_at.is_(None),
+            )
+            .values(consumed_at=func.now())
+        )
+        token_row = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
+            purpose="password_reset",
+            expires_at=datetime.now(UTC) + PASSWORD_RESET_TOKEN_TTL,
+            audit_correlation_id=audit_correlation_id,
+        )
+        session.add(token_row)
+        await session.flush()  # surface IntegrityError before audit/enqueue.
+
+        await audit.emit(
+            session,
+            "password_reset_requested",
+            actor_user_id=None,
+            actor_email_snapshot=None,
+            resource_type="user",
+            resource_id=user.id,
+            audit_correlation_id=str(audit_correlation_id),
+            target_user_id=str(user.id),
+            email_hint=email_lower,
+        )
+
+        # D-44-28 — raw token lives in URL fragment, never path/query (Referer
+        # leak mitigation T-44-04-08).
+        base = get_settings().frontend_base_url.rstrip("/")
+        reset_url = f"{base}/auth/password-reset#token={raw_token}"
+        expires_at_human = _format_expires_ru(token_row.expires_at)
+
+        # Enqueue email PRE-COMMIT mirroring Phase 43 users/service.py:230-238.
+        # Dispatcher renders subject/html/text from raw template_vars at
+        # enqueue time (CR-01 lesson — passing pre-rendered subject/html/text
+        # would be silently dropped by Jinja). Literal template_id required
+        # by Phase 41 D-41-11 AST gate.
+        await get_email_dispatcher()(
+            template_id="PASSWORD_RESET_EMAIL",
+            to=email_lower,
+            audit_correlation_id=audit_correlation_id,
+            reset_url=reset_url,
+            expires_at_human=expires_at_human,
+        )
+    elif user is not None:
+        # Branch B — known but deactivated or soft-deleted: emit audit only,
+        # NO email enqueue (D-44-09). Audit row is forensic-only; HTTP
+        # response is identical to Branch A.
+        await audit.emit(
+            session,
+            "password_reset_requested",
+            actor_user_id=None,
+            actor_email_snapshot=None,
+            resource_type="user",
+            resource_id=user.id,
+            audit_correlation_id=str(audit_correlation_id),
+            target_user_id=str(user.id),
+            email_hint=email_lower,
+        )
+    else:
+        # Branch C — unknown email: emit audit with target_user_id=None,
+        # email_hint=email_lower (D-44-08 dual-branch emit). Anti-oracle
+        # parity with Branches A+B at the HTTP envelope layer.
+        await audit.emit(
+            session,
+            "password_reset_requested",
+            actor_user_id=None,
+            actor_email_snapshot=None,
+            resource_type="user",
+            resource_id=None,
+            audit_correlation_id=str(audit_correlation_id),
+            target_user_id=None,
+            email_hint=email_lower,
+        )
+
+    await session.commit()
+    await _floor_response_time(started)
 
 
 async def confirm_password_reset(
