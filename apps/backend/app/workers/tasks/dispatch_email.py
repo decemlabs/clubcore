@@ -57,7 +57,6 @@ from uuid import UUID
 import structlog
 
 from app.core import audit
-from app.core.audit_payloads import EmailSendFailedPayload, EmailSentPayload
 from app.integrations.email.circuit_breaker import is_circuit_open, record_failure
 from app.integrations.email.models import EmailSendLog
 from app.integrations.email.types import EmailEnvelope, EmailSendResult
@@ -175,12 +174,12 @@ async def dispatch_email(ctx: dict[str, Any], envelope_kwargs: dict[str, Any]) -
                 actor_user_id=None,
                 resource_type="email_send_log",
                 resource_id=log_row.id,
-                payload=EmailSentPayload(
-                    audit_correlation_id=envelope.audit_correlation_id,
-                    template_id=envelope.template_id,
-                    to_email=envelope.to,
-                    provider_message_id=result.provider_message_id,
-                ),
+                # Flattened kwargs per **payload: Any contract (D-42-34 / CR-01 fix).
+                # UUID is str-cast for JSONB serialisability — mirrors router.py:192.
+                audit_correlation_id=str(envelope.audit_correlation_id),
+                template_id=envelope.template_id,
+                to_email=envelope.to,
+                provider_message_id=result.provider_message_id,
             )
         else:
             reason = _audit_reason_for(result)
@@ -190,13 +189,12 @@ async def dispatch_email(ctx: dict[str, Any], envelope_kwargs: dict[str, Any]) -
                 actor_user_id=None,
                 resource_type="email_send_log",
                 resource_id=log_row.id,
-                payload=EmailSendFailedPayload(
-                    audit_correlation_id=envelope.audit_correlation_id,
-                    template_id=envelope.template_id,
-                    to_email=envelope.to,
-                    reason=reason,
-                    provider_error_code=result.error,
-                ),
+                # Flattened kwargs per **payload: Any contract (D-42-34 / CR-01 fix).
+                audit_correlation_id=str(envelope.audit_correlation_id),
+                template_id=envelope.template_id,
+                to_email=envelope.to,
+                reason=reason,
+                provider_error_code=result.error,
             )
         await session.commit()
 

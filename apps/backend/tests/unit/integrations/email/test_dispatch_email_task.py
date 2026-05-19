@@ -12,6 +12,16 @@ Covers:
   - dispatch_email_complete summary log line emitted
 
 Pure-unit: no live Redis, no real DB. Uses fakeredis + AsyncMock session.
+
+NOTE (Plan 42-12 CR-01 fix): These are sequence/structure unit tests that use
+``fake_emit`` to capture audit.emit kwargs. The REAL ``audit.emit`` Pydantic
+validator is exercised by
+``tests/integration/email/test_dispatch_email_audit_integration.py``, added in
+Plan 42-12 to close CR-01. The ``fake_emit`` bypass was the structural reason
+CR-01 escaped CI: the unit tests passed while production crashed because
+``fake_emit`` never ran the real ``EmailSentPayload.model_validate`` call.
+All assertions below use flattened kwargs (``kwargs["template_id"]`` etc.) and
+include ``assert "payload" not in kwargs`` as a CR-01 regression guard.
 """
 
 from __future__ import annotations
@@ -100,13 +110,14 @@ class _AsyncCtx:
 
 
 def _envelope_kwargs() -> dict[str, Any]:
+    _corr_id = str(uuid4())
     return {
         "to": "user@example.com",
         "subject": "Тема",  # noqa: RUF001 — Cyrillic in test fixture
         "html": "<p>hi</p>",
         "text": "hi",
         "template_id": "EMAIL_OTP_LOGIN",
-        "audit_correlation_id": str(uuid4()),
+        "audit_correlation_id": _corr_id,
     }
 
 
@@ -163,6 +174,7 @@ async def test_dispatch_email_success_path_logs_and_audits_sent(
 ) -> None:
     """Test 1: ok path - INSERT log status='sent', audit 'email_sent', commit."""
     captured_audit: list[tuple[Any, ...]] = []
+    envelope_kw = _envelope_kwargs()
 
     async def fake_emit(session: Any, event: str, **kwargs: Any) -> None:
         captured_audit.append((event, kwargs))
@@ -176,7 +188,7 @@ async def test_dispatch_email_success_path_logs_and_audits_sent(
     factory = _StubSessionFactory()
     ctx = _make_ctx(email_client=client, redis=redis, session_factory=factory)
 
-    result = await dispatch_email(ctx, _envelope_kwargs())
+    result = await dispatch_email(ctx, envelope_kw)
 
     assert result == "sent"
     # Provider was called exactly once.
@@ -193,8 +205,15 @@ async def test_dispatch_email_success_path_logs_and_audits_sent(
     event, kwargs = captured_audit[0]
     assert event == "email_sent"
     assert kwargs["resource_type"] == "email_send_log"
-    payload = kwargs["payload"]
-    assert payload.provider_message_id == "msg-123"
+    # CR-01 regression guard: audit.emit must NOT receive payload=<Model>
+    assert "payload" not in kwargs, "audit.emit received payload=<Model> kwarg — CR-01 regression"
+    # Flattened kwargs assertions (plan 42-12 Task 2)
+    assert kwargs["template_id"] == envelope_kw["template_id"]
+    assert kwargs["to_email"] == envelope_kw["to"]
+    assert kwargs["provider_message_id"] == "msg-123"
+    # audit_correlation_id must be stringified at the boundary
+    assert kwargs["audit_correlation_id"] == str(envelope_kw["audit_correlation_id"])
+    assert isinstance(kwargs["audit_correlation_id"], str)
 
 
 @pytest.mark.asyncio
@@ -227,9 +246,12 @@ async def test_dispatch_email_blocked_path_audits_invalid_recipient(
     assert len(captured_audit) == 1
     event, kwargs = captured_audit[0]
     assert event == "email_send_failed"
-    payload = kwargs["payload"]
-    assert payload.reason == "invalid_recipient"
-    assert payload.provider_error_code == "MessageRejected"
+    # CR-01 regression guard
+    assert "payload" not in kwargs, "audit.emit received payload=<Model> kwarg — CR-01 regression"
+    # Flattened kwargs assertions
+    assert kwargs["reason"] == "invalid_recipient"
+    assert kwargs["provider_error_code"] == "MessageRejected"
+    assert "audit_correlation_id" in kwargs and isinstance(kwargs["audit_correlation_id"], str)
     # Circuit breaker NOT exercised for 'blocked' (not transient).
     # Window key should be untouched.
     assert (await redis.zcard("sz:email:circuit_window:yandex_postbox")) == 0
@@ -268,9 +290,12 @@ async def test_dispatch_email_transient_5xx_records_failure_and_audits_provider_
     assert (await redis.zcard("sz:email:circuit_window:yandex_postbox")) == 1
     event, kwargs = captured_audit[0]
     assert event == "email_send_failed"
-    payload = kwargs["payload"]
-    assert payload.reason == "provider_5xx"
-    assert payload.provider_error_code == "HTTP 503"
+    # CR-01 regression guard
+    assert "payload" not in kwargs, "audit.emit received payload=<Model> kwarg — CR-01 regression"
+    # Flattened kwargs assertions
+    assert kwargs["reason"] == "provider_5xx"
+    assert kwargs["provider_error_code"] == "HTTP 503"
+    assert "audit_correlation_id" in kwargs and isinstance(kwargs["audit_correlation_id"], str)
     # WR-04 regression: transient provider 5xx uses status='rejected' (not 'circuit_open').
     s = factory.sessions[0]
     assert s.added[0].status == "rejected", (
@@ -306,9 +331,12 @@ async def test_dispatch_email_when_circuit_open_short_circuits(
     assert len(client.calls) == 0
     event, kwargs = captured_audit[0]
     assert event == "email_send_failed"
-    payload = kwargs["payload"]
-    assert payload.reason == "circuit_open"
-    assert payload.provider_error_code == "circuit_open"
+    # CR-01 regression guard
+    assert "payload" not in kwargs, "audit.emit received payload=<Model> kwarg — CR-01 regression"
+    # Flattened kwargs assertions
+    assert kwargs["reason"] == "circuit_open"
+    assert kwargs["provider_error_code"] == "circuit_open"
+    assert "audit_correlation_id" in kwargs and isinstance(kwargs["audit_correlation_id"], str)
     # WR-04 — status='circuit_open' on breaker shorts (NOT 'rejected').
     assert len(factory.sessions) == 1
     s = factory.sessions[0]
@@ -346,8 +374,11 @@ async def test_dispatch_email_permanent_error_audits_provider_5xx(
     assert result == "failed"
     event, kwargs = captured_audit[0]
     assert event == "email_send_failed"
-    payload = kwargs["payload"]
-    assert payload.reason == "provider_5xx"
+    # CR-01 regression guard
+    assert "payload" not in kwargs, "audit.emit received payload=<Model> kwarg — CR-01 regression"
+    # Flattened kwargs assertions
+    assert kwargs["reason"] == "provider_5xx"
+    assert "audit_correlation_id" in kwargs and isinstance(kwargs["audit_correlation_id"], str)
     # Circuit-breaker NOT armed on permanent_error (only transient_error arms it).
     assert (await redis.zcard(f"sz:email:circuit_window:{_PROVIDER}")) == 0
     # WR-04 regression: permanent error uses status='rejected' (not 'circuit_open').

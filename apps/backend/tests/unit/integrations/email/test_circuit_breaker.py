@@ -12,6 +12,7 @@ The Redis sliding-window circuit breaker (D-42-14):
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import cast
 
@@ -76,7 +77,7 @@ async def test_circuit_stays_open_after_window_entries_slide_out() -> None:
     assert await is_circuit_open(redis, "yandex_postbox") is True
     # Simulate every window entry sliding out by removing them entirely;
     # this is the moral equivalent of >60s passing with no new failures.
-    await redis.delete(f"sz:email:circuit_window:yandex_postbox")
+    await redis.delete("sz:email:circuit_window:yandex_postbox")
     # The open key remains — circuit still considered open.
     assert await is_circuit_open(redis, "yandex_postbox") is True
 
@@ -116,3 +117,54 @@ async def test_record_failure_trims_stale_window_entries() -> None:
     assert await is_circuit_open(redis, "yandex_postbox") is False
     count = await redis.zcard(window_key)
     assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_record_failure_concurrent_open_at_threshold() -> None:
+    """CR-03 regression: N=threshold concurrent record_failure calls open the circuit exactly once.
+
+    Races _FAILURE_THRESHOLD parallel record_failure calls via asyncio.gather.
+    The pipelined implementation must produce N window members AND set the
+    open-marker. The pre-fix non-pipelined form could miss the open under
+    race-y interleaving of ZREMRANGEBYSCORE/ZCARD.
+
+    Note: fakeredis pipeline enforces sequential execution per-call, so this
+    test exercises pipeline-call ordering / structural correctness (pipeline +
+    execute() with positional results indexing) rather than true MULTI atomicity.
+    That is acceptable at the unit tier — the purpose is to lock the API surface
+    against accidental regression to the non-pipelined form.
+    """
+    redis = _fake_redis()
+    provider = "test_provider_concurrent"
+
+    # Race N=threshold parallel record_failure calls.
+    await asyncio.gather(
+        *[record_failure(redis, provider) for _ in range(_FAILURE_THRESHOLD)]
+    )
+
+    # Open-marker key MUST exist after threshold is reached.
+    exists = await redis.exists(f"{_CIRCUIT_KEY_PREFIX}{provider}")
+    assert exists == 1, "circuit failed to open after N concurrent failures (CR-03 regression)"
+
+    # Window key must have exactly N entries (unique uuid suffix per call).
+    count = await redis.zcard(f"sz:email:circuit_window:{provider}")
+    assert count == _FAILURE_THRESHOLD, (
+        f"window cardinality drift: expected {_FAILURE_THRESHOLD}, got {count} "
+        "(lost member from non-atomic ZADD?)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_record_failure_below_threshold_does_not_open() -> None:
+    """Below-threshold concurrent calls do NOT set the open-marker."""
+    redis = _fake_redis()
+    provider = "test_provider_below"
+
+    n = _FAILURE_THRESHOLD - 1
+    await asyncio.gather(*[record_failure(redis, provider) for _ in range(n)])
+
+    exists = await redis.exists(f"{_CIRCUIT_KEY_PREFIX}{provider}")
+    assert exists == 0, "circuit opened below threshold (false positive)"
+
+    count = await redis.zcard(f"sz:email:circuit_window:{provider}")
+    assert count == n
