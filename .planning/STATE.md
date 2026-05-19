@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
-stopped_at: Completed 43-14-PLAN.md (invitation flow gap-closure CR-01/WR-02/WR-06/WR-07/IN-01)
-last_updated: "2026-05-19T18:55:21.669Z"
+stopped_at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
+last_updated: "2026-05-19T19:05:20.532Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 43 (multi-user-admin-module) — EXECUTING
-Plan: 2 of 18
+Plan: 3 of 18
 Status: Ready to execute
 Last activity: 2026-05-19
 
@@ -107,6 +107,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
   (3) `User.email` ORM `unique=True` removed (Migration 0022 dropped the global `uq_users_email` in favour of partial-UNIQUE `uq_users_email_active` on `lower(email) WHERE deleted_at IS NULL`);
   (4) `app.modules.users.repository -> app.modules.auth.password_reset_token_model` added to `.importlinter` `modules-independent` `ignore_imports` (Phase 41 0025 password_reset_tokens is shared bedrock between auth RESET-02 and users USERS-02; v1.7 tighten path is `DEFER-43-shim` — hoist model to `app.core.models` alongside `User`).
   Phase 43 users/ integration suite still 19/19 green. `test_alembic_check_clean` still fails on PRE-EXISTING `booking_notifications.channel` + `membership_notifications.channel` ORM-vs-DB drift (unrelated to Phase 43 — out of scope per regression-fix spec). Phase 43-specific `users.*` drift is fully resolved.
+
 - [Phase 43]: Plan 43-14 gap-closure: CR-01 (email empty) fixed by dropping local render and passing raw template vars to dispatcher. WR-02 overwrite policy chosen for Branch B re-invite (full_name/role updated from request). WR-06 expired-token guard added to revoke_invitation (InvitationExpiredError 409) + repository defence-in-depth filter. WR-07 _format_expires_ru now converts to Europe/Moscow + appends (MSK) Cyrillic suffix. IN-01 audit_correlation_id=None at 4 terminal events (deactivate/reactivate/soft_delete/revoke). IN-03+IN-04 recorded as CONTEXT.md deferred ideas. Regression suite 80 passed.
 
 ### Pending Todos
@@ -134,6 +135,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T18:55:21.664Z
+Last session: 2026-05-19T19:05:20.527Z
 Stopped at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
 Resume: `/gsd-execute-phase 43` (Wave 4 continues — check 43-12 / overall phase verification status)
