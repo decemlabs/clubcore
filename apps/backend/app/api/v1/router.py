@@ -32,6 +32,7 @@ from app.modules.pt_sessions.router import (
 )
 from app.modules.schedule.router import schedule_router
 from app.modules.trainers.router import router as trainers_router
+from app.modules.users.router import router as users_router
 from app.modules.visits.router import router as visits_router
 
 v1 = APIRouter()
@@ -64,6 +65,7 @@ v1.include_router(
     tags=["bookings"],
 )
 v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
+v1.include_router(users_router, prefix="/users", tags=["users"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])
 
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
