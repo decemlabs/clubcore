@@ -101,6 +101,52 @@ def test_create_app_registers_all_protocol_slots() -> None:
         "Phase 42 register_email_dispatcher missing in create_app()"
     )
 
+    # Phase 43 D-43-26/27 slot — UserSessionInvalidator (single-wire — NOT
+    # double-wired in the worker because no ARQ consumer exists in Phase 43
+    # scope). The anti-double-wire half is asserted separately by
+    # ``test_user_session_invalidator_registered_single_wire``.
+    assert deps._user_session_invalidator is not None, (
+        "Phase 43 register_user_session_invalidator missing in create_app() — "
+        "expected closure-injected impl after register_email_dispatcher call."
+    )
+
+
+def test_user_session_invalidator_registered_single_wire() -> None:
+    """Phase 43 D-43-27 — UserSessionInvalidator is SINGLE-wired (FastAPI only).
+
+    Unlike EmailDispatcher (double-wired per REG-29-03), the
+    UserSessionInvalidator has zero ARQ consumers — the worker MUST NOT
+    register it. This test enforces the asymmetry on BOTH halves:
+
+      (A) Positive: after create_app(), deps._user_session_invalidator is
+          non-None (also covered by the all-slots test above; pinned here
+          again so this single test is self-contained for the D-43-27
+          parity assertion).
+      (B) Negative anti-double-wire: ``app/workers/__init__.py`` MUST NOT
+          contain a ``register_user_session_invalidator(...)`` call. An
+          accidental future addition would violate D-43-27 single-wire
+          discipline (the slot has no ARQ consumer; double-wiring it would
+          create an idle registration that REG-29-03 parity would flag as
+          drift if anyone ever consumes it from a cron without a parallel
+          main.py update).
+    """
+    # Reset slot so the test is order-independent.
+    deps._user_session_invalidator = None
+
+    create_app()
+    assert deps._user_session_invalidator is not None, (
+        "Phase 43 register_user_session_invalidator missing in create_app() — "
+        "expected closure-injected impl after register_email_dispatcher call."
+    )
+
+    # Anti-double-wire assertion: worker module MUST NOT call
+    # register_user_session_invalidator (D-43-27 single-wire discipline).
+    worker_calls = _register_call_names(_WORKERS_PY)
+    assert "register_user_session_invalidator" not in worker_calls, (
+        "Phase 43 D-43-27 single-wire violated — worker/__init__.py must NOT "
+        "register UserSessionInvalidator (no ARQ consumers in Phase 43 scope)."
+    )
+
 
 def test_bot_main_register_set_is_subset_of_api_main_register_set() -> None:
     """Parity test (INFRA-33 / D-37-06): bot wires a subset of slots create_app() wires.
