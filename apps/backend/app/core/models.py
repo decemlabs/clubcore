@@ -21,7 +21,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    String,
     Text,
     text,
 )
@@ -45,7 +44,12 @@ class User(Base, UUIDPkMixin, TimestampMixin):
 
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # Phase 41 INFRA-38 / migration 0022: the global table-level UNIQUE
+    # (uq_users_email) was DROPPED and replaced with a partial expression-index
+    # uq_users_email_active on lower(email) WHERE deleted_at IS NULL (soft-delete
+    # aware + case-insensitive). The ORM must NOT redeclare `unique=True` — that
+    # would re-introduce the global UNIQUE invariant at autogenerate time.
+    email: Mapped[str] = mapped_column(Text, nullable=False)
     email_verified: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -91,10 +95,11 @@ class User(Base, UUIDPkMixin, TimestampMixin):
     )
     # Phase 43 regression fix: column is migrated as TEXT (migration 0030)
     # with CHECK ck_users_status enforcing the value set ('active','pending_invitation').
-    # The CHECK constraint is the source of truth; using `String(32)` here keeps the
-    # ORM in sync with the on-disk type so `alembic check` produces no drift.
+    # The CHECK constraint is the source of truth; using `Text` here keeps the
+    # ORM in sync with the on-disk type so `alembic check` produces no drift
+    # (mirrors User.role pattern — TEXT + CHECK, NOT a native PG enum, D-07).
     status: Mapped[Literal["active", "pending_invitation"]] = mapped_column(
-        String(32),
+        Text,
         nullable=False,
         server_default=text("'active'"),
     )
