@@ -12,9 +12,10 @@ inputs.
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, model_validator
 
 from app.core.pagination import PaginatedData
 from app.core.permissions import Role
@@ -83,6 +84,38 @@ class TelegramVerifyRequest(BackendSchemaBase):
 
     deep_link_token: str
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+# ---------------------------------------------------------------------------
+# Phase 42 — Unified OTP request channel discriminator (AUTH-EM-02 / D-42-22).
+# ---------------------------------------------------------------------------
+
+
+class OtpRequestBody(BackendSchemaBase):
+    """POST /api/v1/auth/otp/request body (D-42-22 / AUTH-EM-02).
+
+    channel='telegram' (default) preserves backwards compat — existing
+    callers send no ``channel`` field and the route surfaces the unified
+    OTP flow under one endpoint. The service-layer Telegram facade
+    (``request_otp_telegram``) delegates to the pre-existing
+    ``telegram_service.start_deep_link`` so /auth/telegram/start stays in
+    place for any FE callers that already use it.
+
+    channel='email' requires ``email`` to be present; the model_validator
+    enforces this so FastAPI returns 422 BEFORE the route function runs.
+    The 422 is not an anti-oracle leak: invalid body SHAPE is not a
+    successful-vs-unknown-account discriminator — anti-oracle is enforced
+    in the authenticated branches of ``request_otp_email`` (Task 4).
+    """
+
+    channel: Literal["telegram", "email"] = "telegram"
+    email: EmailStr | None = None
+
+    @model_validator(mode="after")
+    def _email_required_when_email_channel(self) -> "OtpRequestBody":
+        if self.channel == "email" and self.email is None:
+            raise ValueError("email is required when channel='email'")
+        return self
 
 
 # ---------------------------------------------------------------------------
