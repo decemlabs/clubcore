@@ -1,4 +1,4 @@
-"""Anti-oracle contract for POST /auth/otp/request (channel='email') — AUTH-EM-04 / D-42-24.
+"""Anti-oracle contract for POST /auth/otp/request (all channels) — AUTH-EM-04 / D-42-24.
 
 GREEN at land-time. Mirrors ``test_password_reset_no_oracle.py`` (RESET-06 lineage,
 PATTERNS.md §21) but exercises the Phase 42 unified OTP endpoint that ships in plan
@@ -6,15 +6,18 @@ PATTERNS.md §21) but exercises the Phase 42 unified OTP endpoint that ships in 
 this test goes green on land because the endpoint + anti-oracle floor already exist.
 
 Contract (D-42-24, 4 cases):
-  Cases A, C, D — all sent with ``{channel:'email', email:<x>}`` — MUST produce:
+  Cases A, B, C, D — ALL MUST produce:
     - status code 202
     - byte-for-byte identical response body
     - bounded-equal timing within a 100 ms tolerance (RESET-06 precedent)
 
   Case B — sent without a ``channel`` field — exercises the Telegram-default
-  backwards-compat path (D-42-22). Asserted separately for status 202 only;
-  body shape across channels intentionally diverges (different log-emission paths)
-  so case B is NOT included in the body-parity / timing-parity assertions.
+  backwards-compat path (D-42-22). Per CR-02 fix (Phase 42 plan 42-13), case B
+  is now INCLUDED in the body-parity AND timing-parity assertions: both
+  channels return byte-identical ``envelope(None)`` (router.py:411) AND
+  converge on the same ``_constant_time_floor`` distribution. This enforces
+  the D-42-22 anti-oracle uniformity invariant across BOTH channels of
+  /auth/otp/request.
 
 Per-case fixtures (D-42-24):
   - case_a: email_verified=True AND telegram_chat_id=None  (eligible email branch)
@@ -103,52 +106,46 @@ async def test_otp_email_anti_oracle(
     async_client: AsyncClient,
     four_otp_fixture_users: dict[str, str],
 ) -> None:
-    """AUTH-EM-04 (D-42-24) — 4-case anti-oracle gate.
+    """AUTH-EM-04 (D-42-24) + CR-02 — 4-case anti-oracle gate (cases A+B+C+D).
 
-    Cases A, C, D send ``{channel:'email', email:<x>}`` and MUST produce
-    byte-identical 202 + bounded-equal timing within 100 ms (RESET-06 lineage).
-    Case B sends no ``channel`` field — exercises Telegram-default backwards-compat
-    path (D-42-22) and is asserted separately for status 202 only.
+    All four cases MUST produce:
+      - status code 202
+      - byte-for-byte identical response body
+      - bounded-equal timing within 100 ms (RESET-06 precedent + D-42-22 uniformity)
+
+    Cases A, C, D send ``{channel:'email', email:<x>}``. Case B sends ``{email:<x>}``
+    (no channel field) and exercises the Telegram-default backwards-compat path;
+    after CR-02 fix (plan 42-13), case B's request_otp_telegram applies the same
+    ``_constant_time_floor`` so timing converges.
     """
-    emails_email_channel = [
-        ("case_a", four_otp_fixture_users["case_a"]),
-        ("case_c", four_otp_fixture_users["case_c"]),
-        ("case_d", four_otp_fixture_users["case_d"]),
+    probes: list[tuple[str, dict[str, str]]] = [
+        ("case_a", {"channel": "email", "email": four_otp_fixture_users["case_a"]}),
+        ("case_b", {"email": four_otp_fixture_users["case_b"]}),  # Telegram-default
+        ("case_c", {"channel": "email", "email": four_otp_fixture_users["case_c"]}),
+        ("case_d", {"channel": "email", "email": four_otp_fixture_users["case_d"]}),
     ]
     responses: list[tuple[str, int, bytes, float]] = []
-    for name, email in emails_email_channel:
+    for name, body in probes:
         t0 = time.perf_counter()
-        resp = await async_client.post(
-            "/api/v1/auth/otp/request",
-            json={"channel": "email", "email": email},
-        )
+        resp = await async_client.post("/api/v1/auth/otp/request", json=body)
         t1 = time.perf_counter()
         responses.append((name, resp.status_code, resp.content, t1 - t0))
 
-    # Status-code parity — every case must respond 202.
+    # Status-code parity — all four cases must respond 202.
     statuses = {r[1] for r in responses}
     assert statuses == {202}, f"non-uniform statuses (anti-oracle leak): {responses}"
 
-    # Body parity — byte-for-byte identical across the 3 email-channel cases.
+    # Body parity — byte-for-byte identical across all 4 cases (cross-channel).
     bodies = {r[2] for r in responses}
     assert len(bodies) == 1, (
-        "response body diverges across 3 email-channel cases — anti-oracle leak: "
+        "response body diverges across 4 cases — anti-oracle leak: "
         f"{[(r[0], r[2]) for r in responses]}"
     )
 
     # Timing parity — bounded-equal within 100 ms (D-42-22 floor + RESET-06 precedent).
     timings = [r[3] for r in responses]
     assert max(timings) - min(timings) < 0.100, (
-        "timing oracle on email-channel: "
+        "cross-channel timing oracle on /auth/otp/request: "
         f"max-min={max(timings) - min(timings):.3f}s > 100ms; "
         f"per-case timings={list(zip([r[0] for r in responses], timings, strict=True))}"
     )
-
-    # Case B — Telegram-default backwards-compat — separate assertion (status only).
-    # Body shape across channels diverges by design; this case verifies the
-    # default-channel path remains wired and returns the unified 202 envelope.
-    resp_b = await async_client.post(
-        "/api/v1/auth/otp/request",
-        json={"email": four_otp_fixture_users["case_b"]},
-    )
-    assert resp_b.status_code == 202, resp_b.status_code
