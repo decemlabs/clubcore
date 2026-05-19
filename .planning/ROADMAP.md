@@ -213,7 +213,7 @@ Plans:
 **Wave 4** (blocked on Wave 3 — parallel-eligible test files, zero files_modified overlap pairwise)
 - [x] 43-08-PLAN.md — test_users_crud.py (4-branch create + paginated list + denylist)
 - [x] 43-09-PLAN.md — test_users_guards.py (self/last-owner/RBAC/CSRF)
-- [ ] 43-10-PLAN.md — test_users_session_invalidation.py (deactivate→revoke→refresh-fail)
+- [x] 43-10-PLAN.md — test_users_session_invalidation.py (deactivate→revoke→refresh-fail)
 - [x] 43-11-PLAN.md — test_users_invitation_flow.py (sandbox email + invite-link + revoke)
 - [x] 43-12-PLAN.md — test_refresh_account_inactive.py (anti-oracle 4-case body+timing parity)
 - [x] 43-13-PLAN.md — test_locked_email_templates_ast.py extension (USER_INVITATION_EMAIL real-callsite assertion)
@@ -269,7 +269,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
-| 43. Multi-User Admin Module | 13/14 | In Progress|  |
+| 43. Multi-User Admin Module | 14/14 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
