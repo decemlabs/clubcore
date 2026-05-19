@@ -228,7 +228,28 @@ Plans:
   3. A pending-invitation user can `POST /api/v1/users/invitations/accept {token, password, fullName}` with the token from the invitation email and receive a login cookie pair; if the same email previously belonged to a soft-deleted user, the accept INSERTS a new row (never UPDATEs the soft-deleted row) and emits `user_invitation_accepted` with the new `user_id`.
   4. Invitation tokens TTL = 7 days; password-reset tokens TTL = 1 hour (OWASP 2025 floor); both delivered via URL fragment `#token=...` or POST body — never URL path; `/auth/password-reset/request` rate-limited at 5/15min per IP AND 1/min + 5/hour per email with the same generic 202 on rate-limit hit.
   5. Owner can `POST /api/v1/users/invitations/{id}/revoke` and observe `user_invitation_revoked` audit emission plus the token immediately becomes invalid; revoking an already-accepted invitation returns 409 `invitation_already_accepted`.
-**Plans**: TBD
+**Plans**: 11 plans (waves 1-5)
+Plans:
+**Wave 1** (parallel — zero files_modified overlap pairwise)
+- [ ] 44-01-PLAN.md — PASSWORD_RESET_TOKEN_TTL constant + reset_rate_limit.py 3-key fixed-window (D-44-05/10)
+- [ ] 44-02-PLAN.md — PASSWORD_RESET_EMAIL locked Russian template (D-44-OWNER-COPY-LOCK)
+- [ ] 44-03-PLAN.md — password_reset_service.py skeleton + 3 new exceptions (D-44-15/17/20)
+
+**Wave 2** (blocked on Wave 1)
+- [ ] 44-04-PLAN.md — Fill request_password_reset + confirm_password_reset + accept_invitation bodies (D-44-06..23)
+
+**Wave 3** (blocked on Wave 2)
+- [ ] 44-05-PLAN.md — Router endpoints: /auth/password-reset/{request,confirm} + /users/invitations/accept (D-44-18/34)
+
+**Wave 4** (blocked on Wave 3 — parallel-eligible, zero files_modified overlap pairwise)
+- [ ] 44-06-PLAN.md — [BLOCKING] Ungate test_password_reset_no_oracle.py + audit-row extension (D-41-17 / D-44-29/30/39)
+- [ ] 44-07-PLAN.md — test_password_reset_confirm.py + test_password_reset_rate_limit.py
+- [ ] 44-08-PLAN.md — test_invitation_accept.py + test_invitation_accept_insert_only.py (RESET-04 + RESET-05 cross-coverage)
+- [ ] 44-09-PLAN.md — test_password_reset_email_render.py + AST gate extension for PASSWORD_RESET_EMAIL real callsite (D-44-36)
+
+**Wave 5** (blocked on Wave 4 — cleanup cron)
+- [ ] 44-10-PLAN.md — cleanup_password_reset_tokens.py ARQ cron + WorkerSettings registration (D-44-31/32)
+- [ ] 44-11-PLAN.md — test_cleanup_password_reset_tokens.py retention-boundary integration test
 
 ### Phase 45: Email Notification Mirrors
 **Goal**: Existing Telegram-only flows (expiring-soon at 06:15, booking reminders at 06:35, cash payment-receipts) reach clients via email when Telegram is unavailable or the client prefers email — with cross-channel idempotency preserved per the Phase 41 `channel` discriminator and owner-signed-off locked Russian copy.
@@ -270,7 +291,7 @@ Plans:
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
-| 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
+| 44. Invitation + Password-Reset Flow | 0/11 | Planned | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
