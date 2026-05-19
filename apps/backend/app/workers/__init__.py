@@ -89,6 +89,9 @@ from app.core.database import db_lifespan_manager
 # touch — directly OR indirectly through a cron job — gets an eager
 # import here so the module-load side effect registers the table on
 # `Base.metadata` before any worker code runs.
+from app.integrations.email.models import (  # noqa: F401
+    EmailSendLog,  # Phase 42 D-42-33 — email_send_log eager-import (REG-29-04)
+)
 from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
@@ -97,6 +100,7 @@ from app.workers.scheduled.expire_pt_packages import expire_pt_packages
 from app.workers.scheduled.mark_no_show_bookings import mark_no_show_bookings
 from app.workers.scheduled.send_booking_reminders import send_booking_reminders
 from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
+from app.workers.tasks.dispatch_email import dispatch_email
 
 _log = structlog.get_logger("workers")
 
@@ -117,6 +121,7 @@ class WorkerSettings:
         expire_pt_packages,
         send_booking_reminders,  # Phase 39 CRON-02
         mark_no_show_bookings,  # Phase 39 CRON-01
+        dispatch_email,  # Phase 42 EMAIL-03 — request-handler-driven (NOT a cron)
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -214,6 +219,41 @@ class WorkerSettings:
         ctx["_db_stack"] = stack
         ctx["engine"] = engine
         ctx["sessionmaker"] = sessionmaker
+
+        # Phase 42 D-42-26 / EMAIL-04 — REG-29-03 double-wire of EmailDispatcher.
+        # The IDENTICAL symbol reference `enqueue_email_dispatch` is also passed
+        # in app/main.py:create_app() so the Phase 42 parity test (plan 42-11)
+        # sees a byte-equal callable in both processes. The per-process ArqRedis
+        # pool itself differs (each process holds its own pool reference); only
+        # the dispatcher function reference must match.
+        #
+        # Local imports keep the top-of-module clean and avoid eager-loading
+        # email integration code in cron-only worker invocations that never
+        # dequeue a dispatch_email job.
+        from app.core.config import get_settings as _get_settings_local
+        from app.core.dependencies import register_email_dispatcher
+        from app.integrations.email.dispatcher import (
+            enqueue_email_dispatch,
+            register_arq_pool,
+        )
+        from app.integrations.email.factory import build_email_client
+
+        settings_local = _get_settings_local()
+
+        # LOCKED async — plan 42-07 ships build_email_client as async def. The
+        # non-sandbox branch awaits a real Yandex Cloud Postbox /domains probe;
+        # sync def + asyncio.run would crash inside ARQ's running event loop.
+        ctx["email_client"] = await build_email_client(settings=settings_local.email)
+
+        register_email_dispatcher(enqueue_email_dispatch)
+
+        # ARQ 0.28 exposes the in-worker ArqRedis pool to job bodies via
+        # ctx["redis"] (the standard ARQ convention). The worker's own pool
+        # reference is the same Redis client used to dequeue this job;
+        # reusing it for re-enqueue (e.g., when a scheduled cron emits an
+        # email later in Phase 45) is the project-canonical wiring.
+        register_arq_pool(ctx["redis"])
+
         _log.info("worker_startup_complete", function_count=len(function_names))
 
     @staticmethod

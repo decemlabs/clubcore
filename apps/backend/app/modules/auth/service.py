@@ -15,11 +15,13 @@ follower: a flush degrades latency but does not lose correctness.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import time
 from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
-from typing import Literal, cast
+from typing import Final, Literal, cast
 from uuid import UUID, uuid4
 
 import structlog
@@ -29,16 +31,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.config import get_settings
+from app.core.dependencies import get_email_dispatcher
 from app.core.exceptions import InvalidAccessToken, InvalidPassword
 from app.core.pagination import PaginatedData
 from app.core.security import (
     encode_access_token,
     generate_csrf_token,
+    generate_otp_code,
     generate_refresh_token,
     hash_password,
     verify_password,
 )
-from app.modules.auth.models import RefreshToken, User
+from app.modules.auth.models import OtpCode, RefreshToken, User
 from app.modules.auth.rate_limit import bump_login_rate, check_login_rate
 from app.modules.auth.schemas import ActiveSessionItem
 
@@ -789,3 +793,205 @@ async def revoke_family(
     await pipe.execute()
 
     return "revoked"
+
+
+# ---------------------------------------------------------------------------
+# Phase 42 — Unified OTP request entry points (D-42-22 / AUTH-EM-02 / AUTH-EM-03).
+# ---------------------------------------------------------------------------
+
+# Constant-time floor: matches the populated-branch median; test tolerance 100ms
+# (plan 42-11 anti-oracle integration suite).
+_EMAIL_OTP_FLOOR_MS: Final[int] = 200
+
+# LOCKED placeholder for OtpCode.deep_link_token_hash on email-channel inserts.
+# Rationale: apps/backend/app/modules/auth/models.py:109-113 declares the
+# column ``nullable=False`` AND ``unique=True``. An empty-string ``""``
+# placeholder collides on the SECOND email-channel insert via the unique
+# constraint. The ``email-channel:`` prefix is non-overlapping with real
+# deep-link sha256 hex hashes (which are exactly 64 lowercase-hex chars per
+# ``telegram_service.py:_sha256_hex``); the placeholder is 78 chars and
+# contains a colon, so a reader can grep
+# ``deep_link_token_hash LIKE 'email-channel:%'`` to count email-channel rows.
+_EMAIL_DEEP_LINK_PLACEHOLDER_PREFIX: Final[str] = "email-channel:"
+
+
+async def _constant_time_floor(t_start: float) -> None:
+    """Sleep just long enough to pad ``request_otp_email`` to the floor.
+
+    Anti-oracle uniformity (D-42-22 / RESET-06 lineage): all branches
+    (eligible / unknown-email / unverified / inactive / cooldown) converge
+    on this floor so wall-clock duration cannot be used as an oracle for
+    "did the email belong to a known verified user?".
+    """
+    elapsed_ms = (time.perf_counter() - t_start) * 1000
+    remaining_ms = _EMAIL_OTP_FLOOR_MS - elapsed_ms
+    if remaining_ms > 0:
+        await asyncio.sleep(remaining_ms / 1000)
+
+
+async def request_otp_email(
+    session: AsyncSession,
+    redis: Redis,
+    email: str,
+    *,
+    ip: str | None = None,
+) -> None:
+    """POST /auth/otp/request {channel:'email'} entry (D-42-22 + AUTH-EM-02 + AUTH-EM-03).
+
+    Anti-oracle invariant (D-42-22 / RESET-06 lineage / PITFALLS 1):
+    user_unknown / email_verified=False / inactive ALL return None with
+    bounded wall-clock matching the populated branch median (<=100ms
+    tolerance per plan 42-11 anti-oracle integration suite).
+
+    Per D-42-22:
+      - TTL = 600s (10 min, Telegram x 2 per FEATURES SLO).
+      - 60s resend cooldown enforced at otp_codes row level; cooldown-hit
+        returns the same shape as success/silent-drop.
+      - Second request for same (user_id, channel='email') invalidates the
+        first via atomic UPDATE-to-consumed + INSERT-new in same UoW
+        (RFC 6238 single-active per channel).
+      - OtpCode.deep_link_token_hash uses LOCKED placeholder
+        ``email-channel:{uuid4().hex}`` because the column is
+        ``nullable=False + unique=True`` (verified-real-file).
+
+    Per D-42-27 / INFRA-36: the ``get_email_dispatcher()(template_id=...)``
+    callsite below is the FIRST real LOCKED_EMAIL_TEMPLATES consumer. The
+    literal ``"EMAIL_OTP_LOGIN"`` is enforced by the Phase 41 AST gate at
+    ``tests/unit/test_locked_email_templates_ast.py`` — do NOT replace
+    with a module constant; the walker only accepts ``ast.Constant(str)``.
+
+    ``redis`` and ``ip`` are accepted for signature parity with future
+    request-rate enforcement (AUTH-EM-02 rate-limit clauses 5/15min IP +
+    1/min email — wired in a downstream Wave-3 follow-up; the 60s row-level
+    cooldown here is the in-Phase-42 mitigation).
+    """
+    t_start = time.perf_counter()
+    email_lower = email.lower()
+    audit_correlation_id = uuid4()  # D-42-35 chain seed
+    now = datetime.now(tz=UTC)
+
+    user = await session.scalar(select(User).where(User.email == email_lower))
+
+    # Three-way eligibility guard (D-42-22). ``is_active`` was added in
+    # Phase 43 (USERS-02); defensive ``getattr(..., True)`` keeps Phase 42
+    # compatible with the current ORM (Phase 43 will tighten by reading the
+    # actual Mapped column directly).
+    is_eligible = (
+        user is not None
+        and getattr(user, "email_verified", False) is True
+        and getattr(user, "is_active", True) is True
+    )
+
+    if is_eligible:
+        assert user is not None  # narrowed by is_eligible
+        # 60s cooldown silent-drop -- same response shape as success/silent.
+        cooldown_row = await session.scalar(
+            select(OtpCode)
+            .where(
+                OtpCode.user_id == user.id,
+                OtpCode.channel == "email",
+                OtpCode.consumed_at.is_(None),
+            )
+            .order_by(OtpCode.created_at.desc())
+        )
+        if cooldown_row is not None and cooldown_row.created_at > now - timedelta(
+            seconds=60
+        ):
+            await _constant_time_floor(t_start)
+            return
+
+        # Atomic single-active: consume prior + INSERT new in same UoW
+        # (RFC 6238 / D-42-22). The partial UNIQUE
+        # ``uq_otp_codes_user_channel_active`` (plan 42-03 / models.py:137-143)
+        # is the DB-level floor; the app-level UPDATE+INSERT is the optimistic
+        # happy path that flushes cleanly.
+        await session.execute(
+            update(OtpCode)
+            .where(
+                OtpCode.user_id == user.id,
+                OtpCode.channel == "email",
+                OtpCode.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+
+        raw_code, code_hash = generate_otp_code()
+
+        # LOCKED unique placeholder -- deep_link_token_hash is
+        # nullable=False + unique=True. The ``email-channel:`` prefix is
+        # non-overlapping with real deep-link sha256 hex (64 lowercase-hex
+        # chars); this placeholder is 78 chars and contains a colon.
+        placeholder_token_hash = f"{_EMAIL_DEEP_LINK_PLACEHOLDER_PREFIX}{uuid4().hex}"
+
+        otp_row = OtpCode(
+            user_id=user.id,
+            channel="email",
+            deep_link_token_hash=placeholder_token_hash,
+            code_hash=code_hash,
+            telegram_chat_id=None,
+            expires_at=now + timedelta(seconds=600),  # D-42-22 -- 10 min TTL
+            attempts=0,
+            consumed_at=None,
+        )
+        session.add(otp_row)
+
+        # Pitfall 2: audit.emit BEFORE commit (PATTERNS.md §A).
+        # Piggyback on the existing ``otp_requested`` audit event per
+        # D-42-35 -- no new event name; the channel='email' kwarg + the
+        # audit_correlation_id correlate the row with the eventual
+        # email_sent / email_send_failed row downstream.
+        await audit.emit(
+            session,
+            "otp_requested",
+            actor_user_id=user.id,
+            resource_type="otp",
+            audit_correlation_id=audit_correlation_id,
+            channel="email",
+        )
+        await session.commit()
+
+        # AST-gated callsite — first real LOCKED_EMAIL_TEMPLATES exercise
+        # (D-42-27 / INFRA-36). template_id MUST be a literal string —
+        # the walker only accepts ast.Constant(str).
+        await get_email_dispatcher()(
+            template_id="EMAIL_OTP_LOGIN",
+            to=user.email,
+            audit_correlation_id=audit_correlation_id,
+            otp_code=raw_code,
+        )
+
+    # Both branches converge on the constant-time floor.
+    await _constant_time_floor(t_start)
+
+
+async def request_otp_telegram(
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    ip: str | None = None,
+) -> None:
+    """POST /auth/otp/request {channel:'telegram'} entry (D-42-22 backwards-compat).
+
+    Thin facade that delegates to :func:`telegram_service.start_deep_link`
+    to mint an OtpCode placeholder + emit ``telegram_deep_link_issued`` —
+    the canonical Telegram OTP entry today. The returned
+    ``(raw_token, hash)`` tuple is DISCARDED because the unified
+    ``/auth/otp/request`` endpoint returns the anti-oracle envelope (
+    ``data: null``), NOT a deep-link URL. Clients that need the deep-link
+    continue to call POST ``/auth/telegram/start`` directly — that route is
+    untouched.
+
+    ``redis`` and ``ip`` are accepted for signature parity with
+    :func:`request_otp_email` so the router can call either branch with the
+    same arg shape (D-42-22 anti-oracle uniformity).
+    """
+    # Local import keeps the top-of-file clean. ``telegram_service`` is a
+    # sibling module already loaded by the router.
+    from app.modules.auth import telegram_service
+
+    # The returned (raw_token, hash) is intentionally discarded — the
+    # unified /otp/request route returns the anti-oracle envelope, not the
+    # deep-link. Cross-arg references silence the unused-arg lint.
+    _ = redis
+    _ = ip
+    _raw_token, _token_hash = await telegram_service.start_deep_link(session)

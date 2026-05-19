@@ -46,6 +46,7 @@ Phase 38 additions:
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
 
 from app.api.router import api
@@ -57,6 +58,7 @@ from app.core.dependencies import (
     register_booking_completer,
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
+    register_email_dispatcher,
     register_payment_recorder,
     register_payment_refunder,
     register_slot_by_id_resolver,
@@ -67,6 +69,10 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
 from app.core.redis import redis_lifespan
+from app.integrations.email.dispatcher import (
+    enqueue_email_dispatch,
+    register_arq_pool,
+)
 from app.modules.auth.service import load_user_by_id
 from app.modules.memberships.service import resolve_active_membership_by_client
 
@@ -78,9 +84,25 @@ async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
     The adapters internally open db_lifespan_manager() / redis_lifespan_manager()
     so the bot worker (app/workers/telegram_bot.py) can reuse the managers
     without FastAPI app.state coupling.
+
+    Phase 42 D-42-26 / EMAIL-04 — REG-29-03 ArqRedis pool slot:
+    Create the ArqRedis pool used by ``enqueue_email_dispatch`` to hand
+    email-send jobs to the worker process. Lives in the lifespan (not in
+    ``create_app``) because ``arq.create_pool`` is an async coroutine and
+    each FastAPI process owns exactly one pool reference. The dispatcher
+    slot itself (the function reference) is registered synchronously in
+    ``create_app`` so the REG-29-03 parity test sees a literal identical
+    symbol reference in both processes — the per-process pool is a
+    separate concern.
     """
     async with db_lifespan(app), redis_lifespan(app):
-        yield
+        settings = get_settings()
+        arq_pool = await create_pool(RedisSettings.from_dsn(str(settings.redis_url)))
+        register_arq_pool(arq_pool)
+        try:
+            yield
+        finally:
+            await arq_pool.aclose()
 
 
 def create_app() -> FastAPI:
@@ -218,6 +240,14 @@ def create_app() -> FastAPI:
     register_slot_by_id_resolver(schedule_service.resolve_slot_by_id)
     register_booking_slot_restorer(schedule_service.restore_slot_to_active)
     register_booking_completer(bookings_service.complete_booking)
+
+    # Phase 42 D-42-26 / EMAIL-04 — REG-29-03 double-wire of the EmailDispatcher
+    # slot. The IDENTICAL symbol reference ``enqueue_email_dispatch`` is also
+    # passed at ``app/workers/__init__.py:WorkerSettings.on_startup`` so the
+    # Phase 42 parity test (plan 42-11) sees a byte-equal callable in both
+    # processes. The ArqRedis pool itself is registered in the lifespan above
+    # because it requires an awaitable factory (``arq.create_pool``).
+    register_email_dispatcher(enqueue_email_dispatch)
 
     app.include_router(api)
     return app

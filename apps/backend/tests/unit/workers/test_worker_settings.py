@@ -96,10 +96,14 @@ def test_worker_settings_functions_registered() -> None:
     asserted by tests/unit/test_worker_cron_resolution.py.
 
     Phase 39 (D-39-16) appended mark_no_show_bookings (Wave 3) and
-    send_booking_reminders (Wave 4) — list now has 5 entries.
+    send_booking_reminders (Wave 4) — list had 5 entries.
+
+    Phase 42 (Plan 09 / EMAIL-03) appended ``dispatch_email`` — the
+    request-handler-driven (NOT cron) email-send job. List now has 6
+    entries.
     """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 5
+    assert len(WorkerSettings.functions) == 6
 
 
 def test_worker_settings_redis_settings_resolved() -> None:
@@ -117,7 +121,12 @@ async def test_on_startup_cron_resolution_invariant_passes_at_baseline() -> None
     invariant `cron_function_names ⊆ function_names` holds because Plan 18-03
     wires `cron_jobs[0].coroutine == expire_memberships == functions[0]`.
     """
-    ctx: dict[str, Any] = {}
+    # Phase 42 Plan 09: on_startup also reads ctx["redis"] to register the
+    # ArqRedis pool used by enqueue_email_dispatch. Seed a sentinel
+    # alongside the DB sentinels — register_arq_pool only stores the
+    # reference, it does not call any method on it, so a bare object()
+    # suffices for this unit test.
+    ctx: dict[str, Any] = {"redis": object()}
 
     # We must not actually open the DB lifespan in a unit test — monkey-patch
     # `db_lifespan_manager` to a no-op so on_startup runs the assertion path

@@ -48,6 +48,7 @@ from app.modules.auth.schemas import (
     LoginRequest,
     LoginResponse,
     MeResponse,
+    OtpRequestBody,
     TelegramStartResponse,
     TelegramStatusResponse,
     TelegramVerifyRequest,
@@ -57,6 +58,8 @@ from app.modules.auth.service import (
     authenticate,
     issue_tokens,
     list_user_sessions,
+    request_otp_email,
+    request_otp_telegram,
     revoke_all_sessions,
     revoke_family,
     revoke_session,
@@ -360,3 +363,49 @@ async def telegram_verify(
         channel="telegram",
     )
     return envelope(LoginResponse(user=UserPublic.model_validate(user)))
+
+
+# ---------------------------------------------------------------------------
+# Phase 42 — Unified OTP request entry (AUTH-EM-02 / D-42-22).
+#
+# Returns 202 with IDENTICAL envelope shape across BOTH branches (telegram
+# facade + email) and across all sub-cases (known/unknown/unverified/cooldown)
+# so the response shape cannot be used as an oracle. UNAUTHENTICATED. The
+# existing POST /auth/telegram/start endpoint remains in place for any FE
+# callers that need the deep-link URL directly — this endpoint is the new
+# unified surface that hides the channel discrimination behind a single
+# shape.
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/otp/request",
+    response_model=ResponseEnvelope[None],
+    status_code=202,
+)
+async def otp_request(
+    payload: OtpRequestBody,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> ResponseEnvelope[None]:
+    """Request an OTP via the configured channel (AUTH-EM-02 / D-42-22).
+
+    Always returns 202 with IDENTICAL body shape regardless of channel,
+    success/silent-drop branch, or known/unknown user. The Pydantic body
+    validator enforces ``email`` presence when ``channel='email'`` (returns
+    422 BEFORE the route fires — not an anti-oracle leak because invalid
+    body SHAPE is not a success-vs-unknown discriminator).
+    """
+    ip = request.client.host if request.client is not None else None
+    if payload.channel == "email":
+        assert payload.email is not None  # narrowed by model_validator
+        await request_otp_email(session, redis, payload.email, ip=ip)
+    else:
+        # channel='telegram' (default) — delegates to the new
+        # service.request_otp_telegram facade which itself delegates to
+        # the existing telegram_service.start_deep_link. Both branches
+        # return the same envelope; the deep-link URL is suppressed here
+        # (clients that need it continue using /auth/telegram/start).
+        await request_otp_telegram(session, redis, ip=ip)
+    return envelope(None)
