@@ -195,7 +195,28 @@ Plans:
   3. Owner can `DELETE /api/v1/users/{id}` to soft-delete and then `POST /api/v1/users` with the SAME email for a different person — the partial-UNIQUE permits the INSERT, a brand-new `users.id` is generated (never reactivates the soft-deleted row), and historical audit rows from the deleted user still resolve their `actor_email_snapshot`.
   4. Owner attempts to deactivate self → 409 `cannot_deactivate_self`; owner attempts to deactivate the last active owner → 409 `cannot_deactivate_last_owner`; reception attempts any `/api/v1/users/*` mutation → 403 (RBAC three-way parity holds).
   5. `GET /api/v1/users?active=true|false&deleted=false` returns the paginated `{items, total, page, pageSize}` envelope with each item carrying `{id, email, fullName, role, isActive, isDeactivated, createdAt, deactivatedAt, deactivatedByUserId}` — no leak of `passwordHash`, `password_changed_at`, refresh families, or invitation tokens.
-**Plans**: TBD
+**Plans**: 13 plans (waves 1-4)
+Plans:
+**Wave 1** (parallel — zero files_modified overlap pairwise)
+- [ ] 43-01-PLAN.md — Alembic 0030 users lifecycle columns + User ORM extension + [BLOCKING] round-trip checkpoint
+- [ ] 43-02-PLAN.md — users/{schemas, permissions, constants, email_templates} + USER_INVITATION_EMAIL snapshot test
+- [ ] 43-03-PLAN.md — invalidate_all_families_for_user + main.py registration + UserInvitedPayload.link_copied + RefreshFailedPayload + test_app_wiring extension
+
+**Wave 2** (blocked on Wave 1)
+- [ ] 43-04-PLAN.md — users/repository.py (list_alive/get_alive/invitation token CRUD)
+- [ ] 43-05-PLAN.md — users/service.py (4-branch create, deactivate/reactivate/soft-delete/revoke orchestration)
+- [ ] 43-06-PLAN.md — users/router.py 6 endpoints + RBAC + CSRF + api/v1/router.py include
+
+**Wave 3** (blocked on Wave 2)
+- [ ] 43-07-PLAN.md — auth.service.rotate_refresh is_active+deleted_at predicate + refresh_failed audit emit
+
+**Wave 4** (blocked on Wave 3 — parallel-eligible test files, zero files_modified overlap pairwise)
+- [ ] 43-08-PLAN.md — test_users_crud.py (4-branch create + paginated list + denylist)
+- [ ] 43-09-PLAN.md — test_users_guards.py (self/last-owner/RBAC/CSRF)
+- [ ] 43-10-PLAN.md — test_users_session_invalidation.py (deactivate→revoke→refresh-fail)
+- [ ] 43-11-PLAN.md — test_users_invitation_flow.py (sandbox email + invite-link + revoke)
+- [ ] 43-12-PLAN.md — test_refresh_account_inactive.py (anti-oracle 4-case body+timing parity)
+- [ ] 43-13-PLAN.md — test_locked_email_templates_ast.py extension (USER_INVITATION_EMAIL real-callsite assertion)
 
 ### Phase 44: Invitation + Password-Reset Flow
 **Goal**: A pending-invitation user can accept their invitation by setting an initial password via email link; any user can reset their password via email link with full anti-oracle protection; existing operators can revoke outstanding invitations.
