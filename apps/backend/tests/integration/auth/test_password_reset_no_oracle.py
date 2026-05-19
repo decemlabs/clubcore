@@ -36,9 +36,13 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
 from httpx import AsyncClient
+from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit_models import AuditLog
 from app.core.permissions import Role
 from app.core.security import hash_password
 
@@ -54,7 +58,27 @@ _FIXTURE_PASSWORD = "reset-oracle-fixture-pw"  # noqa: S105 — test literal
 
 
 @pytest_asyncio.fixture
-async def four_fixture_users(db_session: AsyncSession) -> dict[str, User | None]:
+async def redis_clean(app: FastAPI) -> Redis:
+    """Flush Redis between tests so rate-limit counters don't bleed.
+
+    The 3-key reset rate-limit (per-IP, per-email-minute, per-email-hour)
+    triggers on the 5th IP-key bump within 15 minutes — and ASGITransport
+    defaults `client.host` to "127.0.0.1" so prior tests in the same process
+    share the IP key. Without this flush, the 4-case anti-oracle assertion
+    flips into the rate-limit-hit branch (no audit row emitted per D-44-11)
+    and breaks the D-44-30 audit-row assertion. Mirrors the established
+    pattern at `tests/integration/auth/test_login.py:27-32`.
+    """
+    client: Redis = app.state.redis
+    await client.flushdb()
+    return client
+
+
+@pytest_asyncio.fixture
+async def four_fixture_users(
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> dict[str, User | None]:
     """Seed the 4 canonical RESET-06 cases per-test (D-41-18).
 
     Returns a mapping keyed by case name:
@@ -114,9 +138,17 @@ async def four_fixture_users(db_session: AsyncSession) -> dict[str, User | None]
 
 async def test_password_reset_request_no_oracle(
     async_client: AsyncClient,
+    db_session: AsyncSession,
     four_fixture_users: dict[str, User | None],
 ) -> None:
-    """4-case identical-202 + identical-body + bounded-timing-100ms contract."""
+    """4-case identical-202 + identical-body + bounded-timing-100ms contract.
+
+    Plan 44-06 extension (D-44-30): also asserts that
+    ``password_reset_requested`` is emitted in BOTH the known-email branch
+    (3 fixture users — active / deactivated / owner) AND the unknown-email
+    branch, per D-44-08 dual-branch emit + D-41-10 system-emit (the unknown
+    branch has ``target_user_id=None`` and ``actor_user_id=None``).
+    """
 
     active = four_fixture_users["active"]
     deactivated = four_fixture_users["deactivated"]
@@ -125,11 +157,12 @@ async def test_password_reset_request_no_oracle(
     assert deactivated is not None
     assert owner is not None
 
+    nonexistent_email = f"nonexistent+{uuid4().hex}@example.com"
     emails = [
         active.email,
         deactivated.email,
         owner.email,
-        f"nonexistent+{uuid4().hex}@example.com",
+        nonexistent_email,
     ]
 
     responses: list[tuple[int, bytes, float]] = []
@@ -159,3 +192,65 @@ async def test_password_reset_request_no_oracle(
         f"timing oracle: max-min={max(timings) - min(timings):.3f}s "
         f"> 100ms; per-case timings={timings}"
     )
+
+    # ------------------------------------------------------------------
+    # Plan 44-06 / D-44-30 — dual-branch audit-row assertion.
+    #
+    # `password_reset_requested` audit row MUST be emitted in BOTH branches
+    # of D-44-08: known-email (target_user_id=UUID-string, email_hint=lower)
+    # and unknown-email (target_user_id=None, email_hint=lower). D-41-10
+    # forces actor_user_id=None for system-emitted rows in both branches.
+    # JSONB roundtrip stringifies UUIDs, so the comparison target is
+    # `str(user.id)` (Phase 43 plan 11 / test_users_invitation_flow.py
+    # established this pattern).
+    # ------------------------------------------------------------------
+    audit_rows = (
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.action == "password_reset_requested")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(audit_rows) == 4, (
+        "expected 4 password_reset_requested audit rows (1 per case — D-44-08 "
+        f"dual-branch emit); got {len(audit_rows)}"
+    )
+
+    # D-41-10 — every system-emitted row in BOTH branches has actor_user_id=None.
+    for row in audit_rows:
+        assert row.actor_user_id is None, (
+            f"actor_user_id must be None for system-emitted password_reset_requested "
+            f"(D-41-10); got {row.actor_user_id!r}"
+        )
+        assert row.actor_email_snapshot is None, (
+            f"actor_email_snapshot must be None (mirrors actor_user_id per D-41-10); "
+            f"got {row.actor_email_snapshot!r}"
+        )
+        # audit_correlation_id is generated per-request even in the unknown
+        # branch (D-44-08); JSONB stores it as a string.
+        assert row.payload["audit_correlation_id"] is not None, (
+            "audit_correlation_id must be non-None for every request (D-44-08)"
+        )
+
+    by_email = {row.payload["email_hint"]: row for row in audit_rows}
+    assert set(by_email.keys()) == {
+        active.email.lower(),
+        deactivated.email.lower(),
+        owner.email.lower(),
+        nonexistent_email.lower(),
+    }, (
+        "email_hint set mismatch — expected one row per case keyed by lowercased "
+        f"email; got {sorted(by_email.keys())}"
+    )
+
+    # Known-email branch: target_user_id is the resolved user UUID (stringified).
+    assert by_email[active.email.lower()].payload["target_user_id"] == str(active.id)
+    assert by_email[deactivated.email.lower()].payload["target_user_id"] == str(
+        deactivated.id
+    )
+    assert by_email[owner.email.lower()].payload["target_user_id"] == str(owner.id)
+
+    # Unknown-email branch (D-41-10 / D-44-08): target_user_id IS NULL.
+    assert by_email[nonexistent_email.lower()].payload["target_user_id"] is None
