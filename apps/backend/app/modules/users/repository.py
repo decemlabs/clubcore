@@ -299,17 +299,22 @@ async def reactivate_user(
 
 
 async def soft_delete_user(
-    session: AsyncSession, *, target_user_id: UUID
+    session: AsyncSession, *, target_user_id: UUID, actor_user_id: UUID
 ) -> None:
-    """D-43-18 — set ``deleted_at=now()``, ``is_active=false``, ``deactivated_at=COALESCE(...)``.
+    """D-43-18 — set ``deleted_at=now()``, ``is_active=false``, ``deactivated_at=COALESCE(...)``,
+    ``deactivated_by_user_id=COALESCE(existing, actor_user_id)``.
 
-    Single UPDATE; ``COALESCE`` preserves existing ``deactivated_at`` (common
-    path: delete after deactivate) and falls back to now() (pure-delete-
-    without-deactivate path). Preserves the column-consistency CHECK.
+    Single UPDATE; ``COALESCE`` preserves existing ``deactivated_at`` /
+    ``deactivated_by_user_id`` (common path: delete after deactivate, where
+    the deactivate step already populated both) and falls back to now() /
+    actor_user_id (pure-delete-without-deactivate path).
 
-    IN-02 (Phase 43 review) — predicate ``deleted_at IS NULL`` makes
-    soft-delete-on-soft-delete a no-op (the row is already a tombstone) rather
-    than re-stamping ``deleted_at``. Idempotent at the SQL layer.
+    WR-03 (Phase 43 review) — pre-fix code never wrote ``deactivated_by_user_id``
+    on the pure-delete path, breaking the forensic chain ("which owner ended
+    this account"). The COALESCE pattern preserves history on the post-deactivate
+    path and fills the slot on the pure-delete path.
+
+    IN-02 (Phase 43 review) — ``deleted_at IS NULL`` predicate already added in 43-15.
     """
     now = _now_utc()
     await session.execute(
@@ -322,6 +327,9 @@ async def soft_delete_user(
             deleted_at=now,
             is_active=False,
             deactivated_at=func.coalesce(User.deactivated_at, now),
+            deactivated_by_user_id=func.coalesce(
+                User.deactivated_by_user_id, actor_user_id,
+            ),
         )
     )
 

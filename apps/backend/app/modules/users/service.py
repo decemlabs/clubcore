@@ -249,7 +249,17 @@ async def create_user(
 
 
 async def deactivate_user(session: AsyncSession, actor: CurrentUser, target_user_id: UUID) -> None:
-    """USERS-04 / D-43-16 — self + last-owner guards, then UPDATE + revoke + audit."""
+    """USERS-04 / D-43-16 — self + last-owner guards, then UPDATE + revoke + audit.
+
+    CR-04 (Phase 43 review) — single atomic UoW: repository UPDATE + session
+    revoke + session_revoked_all audit + user_deactivated audit all commit
+    together. The previous mid-flow commit inside revoke_all_sessions has
+    been eliminated by splitting it into a no-commit variant (43-16 plan).
+
+    WR-01 (Phase 43 review) — actor_user_id=actor.id plumbed into the
+    invalidator so the session_revoked_all audit row attributes to the
+    initiating owner, not the deactivated target.
+    """
     target = await repository.get_alive(session, target_user_id)
     if target is None:
         raise UserNotFoundError("user_not_found")
@@ -272,7 +282,10 @@ async def deactivate_user(session: AsyncSession, actor: CurrentUser, target_user
     await repository.deactivate_user(session, target_user_id=target_user_id, actor_user_id=actor.id)
 
     sessions_revoked = await get_user_session_invalidator()(
-        session, user_id=target_user_id, reason="deactivated"
+        session,
+        user_id=target_user_id,
+        actor_user_id=actor.id,  # WR-01 — owner attribution
+        reason="deactivated",
     )
 
     await audit.emit(
@@ -286,7 +299,7 @@ async def deactivate_user(session: AsyncSession, actor: CurrentUser, target_user
         sessions_revoked_count=sessions_revoked,
     )
     await session.flush()
-    await session.commit()
+    await session.commit()  # ONE commit covers UPDATE + revoke + both audits.
 
 
 async def reactivate_user(session: AsyncSession, actor: CurrentUser, target_user_id: UUID) -> None:
@@ -323,6 +336,14 @@ async def soft_delete_user(session: AsyncSession, actor: CurrentUser, target_use
     deactivate). Defensive session revoke covers the pure-delete-without-
     deactivate path. Pending invitations are atomic-consumed in the same UoW —
     no separate audit event (the parent ``user_soft_deleted`` covers it).
+
+    CR-04 (Phase 43 review) — single atomic UoW: repository UPDATE + session
+    revoke + invitation-consume + session_revoked_all audit + user_soft_deleted
+    audit all commit together.
+
+    WR-01 (Phase 43 review) — actor_user_id=actor.id plumbed into the invalidator.
+    WR-03 (Phase 43 review) — actor.id plumbed into repository.soft_delete_user
+    so the pure-delete path populates deactivated_by_user_id via COALESCE.
     """
     target = await repository.get_alive(session, target_user_id)
     if target is None:
@@ -336,10 +357,19 @@ async def soft_delete_user(session: AsyncSession, actor: CurrentUser, target_use
         if active_owner_count < 1:
             raise CannotDeleteLastOwnerError("cannot_delete_last_owner")
 
-    await repository.soft_delete_user(session, target_user_id=target_user_id)
+    await repository.soft_delete_user(
+        session,
+        target_user_id=target_user_id,
+        actor_user_id=actor.id,  # WR-03 — COALESCE into deactivated_by_user_id
+    )
     # Defensive — most deletes follow a deactivate (no families left), but
     # pure-delete-without-deactivate path needs the kill.
-    await get_user_session_invalidator()(session, user_id=target_user_id, reason="soft_deleted")
+    await get_user_session_invalidator()(
+        session,
+        user_id=target_user_id,
+        actor_user_id=actor.id,  # WR-01
+        reason="soft_deleted",
+    )
     # Atomic-consume pending invitation (no separate audit — parent event covers).
     await repository.consume_active_invitation_for_user(session, user_id=target_user_id)
 
@@ -353,7 +383,7 @@ async def soft_delete_user(session: AsyncSession, actor: CurrentUser, target_use
         deleted_user_id=str(target_user_id),
     )
     await session.flush()
-    await session.commit()
+    await session.commit()  # ONE commit covers UPDATE + revoke + invitation + both audits.
 
 
 async def revoke_invitation(
