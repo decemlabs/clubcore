@@ -11,8 +11,21 @@ stays separate. Future hoists land here only when they have the same
 "shared between auth and another module" justification.
 """
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Text, text
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Text,
+    text,
+)
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base, TimestampMixin, UUIDPkMixin
@@ -22,7 +35,8 @@ from app.core.permissions import Role
 class User(Base, UUIDPkMixin, TimestampMixin):
     """Operator user (D-06). 1-2 rows total — `full_name` is a single column (D-01).
 
-    `password_hash` is NOT NULL (D-02): Phase 5 only mints email/password users.
+    Phase 43 D-43-06/08: ``password_hash`` is now nullable — invited-but-unaccepted
+    rows carry NULL until invitation-accept (Phase 44 RESET-04) sets the password.
     `telegram_chat_id` is BIGINT NULL UNIQUE from day one (D-02) so Phase 7's bind
     flow is a plain `UPDATE users SET telegram_chat_id = ... WHERE id = ...`.
     `role` is TEXT + CHECK constraint (D-07), NOT a native PG enum.
@@ -36,7 +50,9 @@ class User(Base, UUIDPkMixin, TimestampMixin):
         nullable=False,
         server_default=text("FALSE"),
     )
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # D-43-06 Phase 43: drops NOT NULL — invited-but-unaccepted rows carry NULL
+    # until invitation-accept (Phase 44 RESET-04) sets the password.
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[Role] = mapped_column(
         SAEnum(
             Role,
@@ -57,6 +73,41 @@ class User(Base, UUIDPkMixin, TimestampMixin):
         Text,
         nullable=True,
         unique=True,
+    )
+
+    # Phase 41 0022 column — ORM mirror added in Phase 43 D-43-08 (deferred from
+    # Phase 41 plan-05 which shipped DB-only; soft-delete consumers land here).
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # Phase 43 D-43-08 — user lifecycle columns (migration 0030).
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+    status: Mapped[Literal["active", "pending_invitation"]] = mapped_column(
+        SAEnum(
+            "active",
+            "pending_invitation",
+            name="user_status",
+            native_enum=False,
+            length=32,
+            validate_strings=True,
+        ),
+        nullable=False,
+        server_default=text("'active'"),
+    )
+    deactivated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    deactivated_by_user_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     __table_args__ = (
