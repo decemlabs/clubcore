@@ -40,7 +40,7 @@ from app.core.security import (
     clear_session_cookies,
     issue_session_cookies,
 )
-from app.modules.auth import telegram_service
+from app.modules.auth import password_reset_service, telegram_service
 from app.modules.auth.exceptions import BotNotStarted
 from app.modules.auth.models import RefreshToken, User
 from app.modules.auth.schemas import (
@@ -49,6 +49,8 @@ from app.modules.auth.schemas import (
     LoginResponse,
     MeResponse,
     OtpRequestBody,
+    PasswordResetConfirmBody,
+    PasswordResetRequestBody,
     TelegramStartResponse,
     TelegramStatusResponse,
     TelegramVerifyRequest,
@@ -408,4 +410,72 @@ async def otp_request(
         # return the same envelope; the deep-link URL is suppressed here
         # (clients that need it continue using /auth/telegram/start).
         await request_otp_telegram(session, redis, ip=ip)
+    return envelope(None)
+
+
+# ---------------------------------------------------------------------------
+# Phase 44 — Password reset request/confirm anonymous endpoints
+# (RESET-01 / RESET-02 / D-44-34).
+#
+# Both endpoints are UNAUTHENTICATED — no `require_authenticated`, no
+# `verify_csrf`, no `require_permission` (D-44-34). The router is a thin
+# delegate: all anti-oracle / atomic-consume / audit / rate-limit policy
+# lives in `password_reset_service`.
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=ResponseEnvelope[None],
+    status_code=202,
+    summary="Request a password-reset email (anti-oracle, rate-limited)",
+)
+async def password_reset_request_endpoint(
+    body: PasswordResetRequestBody,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> ResponseEnvelope[None]:
+    """RESET-01 anonymous endpoint.
+
+    No CSRF, no RBAC (D-44-34). Anti-oracle: response is byte-identical
+    across all 4 cases (active / deactivated / owner / nonexistent) AND
+    across the rate-limit-hit branch. 500ms wall-clock floor + audit emit
+    in BOTH known/unknown branches live entirely inside the service layer.
+    """
+    # D-44-12 — X-Forwarded-For first hop, fall back to request.client.host.
+    # "0.0.0.0" is a final fallback when ASGI provides no client (test transport
+    # without explicit client) — it is a sentinel string, never bound to a port.
+    xff = request.headers.get("x-forwarded-for")
+    client_ip = (
+        xff.split(",")[0].strip()
+        if xff
+        else (request.client.host if request.client else "0.0.0.0")  # noqa: S104
+    )
+    await password_reset_service.request_password_reset(
+        session, redis, email=body.email, client_ip=client_ip
+    )
+    return envelope(None)
+
+
+@router.post(
+    "/password-reset/confirm",
+    response_model=ResponseEnvelope[None],
+    status_code=200,
+    summary="Confirm password reset (atomic-consume + revoke-all)",
+)
+async def password_reset_confirm_endpoint(
+    body: PasswordResetConfirmBody,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[None]:
+    """RESET-02 anonymous endpoint.
+
+    No CSRF, no RBAC (D-44-34). Atomic-consume + Argon2 rehash +
+    revoke-all sessions + audit emit live in the service layer.
+    Returns 200 envelope(None) on success; 410 invalid_or_expired_token /
+    422 weak_password on failure (translated by the global AppError handler).
+    """
+    await password_reset_service.confirm_password_reset(
+        session, raw_token=body.token, new_password=body.new_password
+    )
     return envelope(None)

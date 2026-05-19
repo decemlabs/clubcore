@@ -1,9 +1,9 @@
-"""Anti-oracle contract for POST /auth/password-reset/request (RESET-06 / D-41-17).
+"""Anti-oracle contract for POST /auth/password-reset/request (RESET-01 / RESET-06).
 
-LANDS RED at Phase 41 — the endpoint does not exist yet (HTTP 404 at the
-request layer). GOES GREEN at Phase 44 RESET-01 in the same commit that
-removes the xfail marker. ``strict=True`` ensures CI breaks loudly if the
-marker is removed without the endpoint actually satisfying the contract.
+Phase 41 plan 11 landed this test as xfail-strict; Phase 44 plan 05 ungates
+it (D-41-17 / D-44-29) atomically with the endpoint shipping in 44-04/05
+(same commit — no CI-red window on master). Plan 44-06 extends the test
+with the audit-row assertion (D-44-30) in a follow-on commit.
 
 Contract (RESET-06):
   For all 4 cases — existing-active / existing-deactivated / owner-account
@@ -14,8 +14,8 @@ Contract (RESET-06):
     headers/body/redirect-target)
   - bounded-equal timing within a 100 ms tolerance (no timing oracle)
 
-  Additionally (audit half of RESET-01, covered by separate Phase 44 tests
-  once the endpoint lands): ``password_reset_requested`` audit row is
+  Additionally (audit half of RESET-01, covered by plan 44-06 in a
+  follow-on commit per D-44-30): ``password_reset_requested`` audit row is
   emitted in BOTH branches (known and unknown email) per D-41-10.
 
 D-41-18 — real Postgres via SAVEPOINT per-test isolation (see project
@@ -112,16 +112,6 @@ async def four_fixture_users(db_session: AsyncSession) -> dict[str, User | None]
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "POST /api/v1/auth/password-reset/request lands in Phase 44 "
-        "RESET-01; this test documents the anti-oracle contract as code "
-        "per D-41-17. Remove the marker in the same commit that ships "
-        "the endpoint. strict=True ensures CI fails loudly if the marker "
-        "is removed without the endpoint actually passing."
-    ),
-)
 async def test_password_reset_request_no_oracle(
     async_client: AsyncClient,
     four_fixture_users: dict[str, User | None],

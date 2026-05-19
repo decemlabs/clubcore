@@ -36,6 +36,20 @@ ignore_imports =
     # second consumer. Future tighten: hoist the model to app.core.models
     # alongside User (DEFER-43-shim) — at that point this ignore is removed.
     app.modules.users.repository -> app.modules.auth.password_reset_token_model
+    # Phase 44 RESET-04 / D-44-18 / D-44-21 — POST /users/invitations/accept is
+    # an anonymous endpoint that delegates atomic-consume + UPDATE-only password
+    # set to auth bedrock (password_reset_service), then issues session cookies
+    # via the SAME issue_tokens + issue_session_cookies sequence that /auth/login
+    # uses. The endpoint MUST live in users/router.py because the URL space is
+    # /users/invitations/* (Phase 43 surface), but the auth-bedrock primitives
+    # (User ORM, LoginResponse/UserPublic schemas, issue_tokens helper) cannot
+    # be duplicated without cookie-issuance drift. Future tighten: hoist
+    # User + LoginResponse + UserPublic + issue_tokens into app.core to
+    # eliminate the auth-coupling (DEFER-44-cookies-hoist).
+    app.modules.users.router -> app.modules.auth.password_reset_service
+    app.modules.users.router -> app.modules.auth.service
+    app.modules.users.router -> app.modules.auth.schemas
+    app.modules.users.router -> app.modules.auth.models
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules
