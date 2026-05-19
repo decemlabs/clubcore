@@ -144,10 +144,20 @@ async def authenticate(
     # emails: both miss → sentinel-hash branch → InvalidPassword. The explicit
     # ``user.password_hash is not None`` Python re-check below carries the
     # invariant for mypy (which cannot follow SQL predicate narrowing).
+    #
+    # Phase 43 CR-03 (review) — D-43-20 added is_active + deleted_at predicates
+    # to rotate_refresh but missed the LOGIN chokepoint. Without these filters,
+    # a soft-deleted owner or deactivated operator can present their original
+    # credentials and mint a fresh session, contradicting USERS-04/05 revoke
+    # semantics. Mirror the rotate_refresh predicate set so deactivated /
+    # soft-deleted users fall into the same anti-oracle bucket as unknown
+    # emails — same audit shape (reason='invalid_credentials'), same timing.
     user = await session.scalar(
         select(User).where(
             User.email == email_lower,
             User.password_hash.is_not(None),
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
         )
     )
     target_hash: str
@@ -987,16 +997,28 @@ async def request_otp_email(
     audit_correlation_id = uuid4()  # D-42-35 chain seed
     now = datetime.now(tz=UTC)
 
-    user = await session.scalar(select(User).where(User.email == email_lower))
+    # Phase 43 CR-03 (review) — tighten the eligibility predicate set to use
+    # explicit SQL filters. The previous code used a defensive getattr read for
+    # is_active because the column was added mid-Phase; now that Phase 43 has landed
+    # is_active on the User ORM, defensive Python reads are obsolete.
+    # The deactivated / soft-deleted case is folded into the unknown-email
+    # silent-drop bucket (anti-oracle: same wall-clock floor, same None return).
+    user = await session.scalar(
+        select(User).where(
+            User.email == email_lower,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+    )
 
-    # Three-way eligibility guard (D-42-22). ``is_active`` was added in
-    # Phase 43 (USERS-02); defensive ``getattr(..., True)`` keeps Phase 42
-    # compatible with the current ORM (Phase 43 will tighten by reading the
-    # actual Mapped column directly).
+    # Three-way eligibility guard (D-42-22). All non-eligibility branches
+    # (unknown-email / deactivated / soft-deleted / unverified-email) fall
+    # through to the constant-time floor + None return — anti-oracle uniformity.
+    # is_active and deleted_at are now filtered at the SQL layer (CR-03), so any
+    # user object returned is by definition active+alive.
     is_eligible = (
         user is not None
-        and getattr(user, "email_verified", False) is True
-        and getattr(user, "is_active", True) is True
+        and user.email_verified is True
     )
 
     if is_eligible:
