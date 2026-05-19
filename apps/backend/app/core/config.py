@@ -2,10 +2,47 @@
 
 from datetime import time
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import PostgresDsn, RedisDsn, SecretStr, model_validator
+from pydantic import BaseModel, PostgresDsn, RedisDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class EmailProviderSettings(BaseModel):
+    """Email transport settings (D-42-28).
+
+    Defaults are sandbox-safe so fresh-clone dev boot does NOT require setting
+    email credentials first (mirrors v1.1 Telegram-block discipline in this
+    same file). The @model_validator below fails fast at construction when
+    provider != 'sandbox' and sandbox_mode=False but credentials/domain/
+    webhook secret are missing.
+    """
+
+    provider: Literal["yandex_postbox", "sandbox"] = "sandbox"
+    aws_access_key_id: SecretStr | None = None
+    aws_secret_access_key: SecretStr | None = None
+    endpoint_url: str = "https://postbox.cloud.yandex.net"
+    from_address: str = "noreply@mail.sportzal.ru"
+    from_domain: str = ""
+    webhook_secret: SecretStr = SecretStr("")
+    sandbox_mode: bool = False
+
+    @model_validator(mode="after")
+    def _validate_production_required(self) -> Self:
+        if self.provider != "sandbox" and not self.sandbox_mode:
+            if not self.from_domain:
+                raise ValueError(
+                    "EmailProviderSettings.from_domain required for non-sandbox provider"
+                )
+            if not self.webhook_secret.get_secret_value():
+                raise ValueError(
+                    "EmailProviderSettings.webhook_secret required for non-sandbox provider"
+                )
+            if not self.aws_access_key_id or not self.aws_secret_access_key:
+                raise ValueError(
+                    "EmailProviderSettings AWS credentials required for non-sandbox provider"
+                )
+        return self
 
 
 class Settings(BaseSettings):
@@ -44,6 +81,11 @@ class Settings(BaseSettings):
     otp_deep_link_ttl_seconds: int = 600  # 10 min — AUTH-TG-01
     otp_code_ttl_seconds: int = 300       # 5 min  — AUTH-TG-02
     otp_max_attempts: int = 5             # AUTH-TG-02
+
+    # Phase 42 addition (D-42-28): Email transport settings nested block.
+    # Defaults are sandbox-safe so fresh-clone dev boot does NOT require setting
+    # email credentials first (mirrors Telegram block discipline above).
+    email: EmailProviderSettings = EmailProviderSettings()
 
     # Phase 19 additions (VIS-05): gym hours window in Europe/Moscow.
     # Pydantic v2 parses "07:00" env strings → time(7, 0) natively.
