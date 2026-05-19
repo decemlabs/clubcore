@@ -68,6 +68,14 @@ _INSERT_OTP_B = (
     " RETURNING id"
 )
 
+# Test users INSERT — satisfies fk_otp_codes_user_id_users for the seeded
+# otp_codes rows. Columns mirror the live users schema (email, password_hash,
+# role, full_name NOT NULL). Test rows are deleted in the test's finally block.
+_INSERT_USER = (
+    "INSERT INTO users (id, email, password_hash, role, full_name, created_at, updated_at)"
+    " VALUES (:uid, :email, 'x', 'reception', 'cr04-test', now(), now())"
+)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -161,6 +169,12 @@ async def test_0027_upgrade_with_colliding_unconsumed_rows(
     _assert_alembic_ok(result, f"downgrade {_REV_0026}")
 
     try:
+        # Seed the parent user row (FK target for the otp_codes seeds below).
+        await session.execute(
+            text(_INSERT_USER),
+            {"uid": str(user_id), "email": f"cr04-{uuid4().hex}@test.local"},
+        )
+
         # Step 2: seed two rows with the SAME user_id, both consumed_at=NULL.
         # ``deep_link_token_hash`` must be UNIQUE per row (separate constraint).
         # row_b's created_at is 1 second later — DISTINCT ON keeps row_b.
@@ -202,12 +216,15 @@ async def test_0027_upgrade_with_colliding_unconsumed_rows(
 
     finally:
         # Cleanup: remove the seeded rows so subsequent test runs start clean.
-        if seeded_ids:
-            await session.execute(
-                text("DELETE FROM otp_codes WHERE id = ANY(:ids::uuid[])"),
-                {"ids": seeded_ids},
-            )
-            await session.commit()
+        # Delete otp_codes by user_id (simpler than passing an array param);
+        # then delete the parent user row.
+        await session.execute(
+            text("DELETE FROM otp_codes WHERE user_id = :uid"), {"uid": str(user_id)}
+        )
+        await session.execute(
+            text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)}
+        )
+        await session.commit()
 
 
 async def test_0027_round_trip_with_data(
@@ -233,6 +250,12 @@ async def test_0027_round_trip_with_data(
     _assert_alembic_ok(result, f"downgrade {_REV_0026} (round-trip)")
 
     try:
+        # Seed the parent user row (FK target for the otp_codes seeds below).
+        await session.execute(
+            text(_INSERT_USER),
+            {"uid": str(user_id), "email": f"cr04-rt-{uuid4().hex}@test.local"},
+        )
+
         row_a = await session.execute(
             text(_INSERT_OTP_A),
             {"uid": str(user_id), "dlh": f"test-cr04-rt-a-{uuid4().hex}", "ch": "ch_a"},
@@ -250,19 +273,21 @@ async def test_0027_round_trip_with_data(
         upgrade_result = _run_alembic("upgrade", "head")
         _assert_alembic_ok(upgrade_result, "upgrade head (round-trip with data)")
 
-        # Sanity check: the schema should now be at head.
+        # Sanity check: the schema should now be at head (the partial-UNIQUE
+        # from 0027 is in place; later migrations have also applied).
         current_result = _run_alembic("current")
         _assert_alembic_ok(current_result, "current (round-trip verification)")
-        assert _REV_0027 in current_result.stdout, (
-            f"alembic current did not show expected revision {_REV_0027!r}:\n"
+        assert "(head)" in current_result.stdout, (
+            f"alembic current did not show head revision after upgrade:\n"
             f"{current_result.stdout}"
         )
 
     finally:
-        # Cleanup: remove seeded rows.
-        if seeded_ids:
-            await session.execute(
-                text("DELETE FROM otp_codes WHERE id = ANY(:ids::uuid[])"),
-                {"ids": seeded_ids},
-            )
-            await session.commit()
+        # Cleanup: remove seeded rows (otp_codes by user_id, then the user).
+        await session.execute(
+            text("DELETE FROM otp_codes WHERE user_id = :uid"), {"uid": str(user_id)}
+        )
+        await session.execute(
+            text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)}
+        )
+        await session.commit()
