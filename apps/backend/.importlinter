@@ -27,6 +27,15 @@ modules =
     app.modules.pt_packages
     app.modules.pt_sessions
     app.modules.users
+ignore_imports =
+    # Phase 43 USERS-02 / D-43-13 / D-43-19 — Phase 41 0025 password_reset_tokens
+    # row (purpose='invitation') is shared infrastructure consumed by both the
+    # auth (RESET-02) and users (USERS-02) modules. The ORM model lives under
+    # app.modules.auth.password_reset_token_model as the canonical bedrock; the
+    # users repository (USERS-02 invitation-token CRUD) is the legitimate
+    # second consumer. Future tighten: hoist the model to app.core.models
+    # alongside User (DEFER-43-shim) — at that point this ignore is removed.
+    app.modules.users.repository -> app.modules.auth.password_reset_token_model
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules
