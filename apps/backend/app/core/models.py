@@ -11,7 +11,7 @@ stays separate. Future hoists land here only when they have the same
 "shared between auth and another module" justification.
 """
 
-from sqlalchemy import BigInteger, CheckConstraint, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,11 @@ class User(Base, UUIDPkMixin, TimestampMixin):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("FALSE"),
+    )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[Role] = mapped_column(
         SAEnum(
