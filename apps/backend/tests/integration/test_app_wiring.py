@@ -35,6 +35,10 @@ from app.main import create_app
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _MAIN_PY = _BACKEND_ROOT / "app" / "main.py"
 _BOT_PY = _BACKEND_ROOT / "app" / "workers" / "telegram_bot.py"
+# Phase 42 D-42-26 — ARQ worker entrypoint (REG-29-03 EmailDispatcher
+# double-wire). WorkerSettings.on_startup is a sibling-process composition
+# root that must re-register every dispatcher slot create_app() registers.
+_WORKERS_PY = _BACKEND_ROOT / "app" / "workers" / "__init__.py"
 
 
 def _register_call_names(path: Path) -> set[str]:
@@ -89,6 +93,14 @@ def test_create_app_registers_all_protocol_slots() -> None:
         "Phase 37 register_booking_completer missing"
     )
 
+    # Phase 42 D-42-26 slot — EmailDispatcher (REG-29-03 double-wire).
+    # create_app() registers the FastAPI-side dispatcher; the ARQ worker
+    # process registers the same callable inside WorkerSettings.on_startup
+    # (asserted structurally by ``test_worker_on_startup_double_wires_email_dispatcher``).
+    assert deps._email_dispatcher is not None, (
+        "Phase 42 register_email_dispatcher missing in create_app()"
+    )
+
 
 def test_bot_main_register_set_is_subset_of_api_main_register_set() -> None:
     """Parity test (INFRA-33 / D-37-06): bot wires a subset of slots create_app() wires.
@@ -129,4 +141,36 @@ def test_bot_main_register_set_is_subset_of_api_main_register_set() -> None:
     assert "register_booking_completer" not in bot_calls, (
         "D-37-06 violation: register_booking_completer is API-only (bot does not "
         "record PT-sessions)"
+    )
+
+
+def test_worker_on_startup_double_wires_email_dispatcher() -> None:
+    """REG-29-03 (D-42-26): ARQ ``WorkerSettings.on_startup`` MUST register
+    EmailDispatcher with the same callable that ``app.main.create_app()`` does.
+
+    The AST-walk parity is structural — it verifies BOTH ``app/main.py`` AND
+    ``app/workers/__init__.py`` call ``register_email_dispatcher``. Byte-equality
+    of the symbol reference is implicit because both files import the same
+    ``enqueue_email_dispatch`` from ``app.integrations.email.dispatcher``
+    (asserted indirectly by the runtime slot-fills test above plus per-process
+    smoke tests in plan 42-09).
+
+    Why structural and not runtime: ``WorkerSettings.on_startup`` runs inside
+    an ARQ worker process — the integration test runs inside the FastAPI ASGI
+    process, so there is no way to call ``on_startup`` here without
+    instantiating the worker side-effect tree (Redis pool, EmailClient, etc.)
+    that this test deliberately avoids.
+    """
+    main_calls = _register_call_names(_MAIN_PY)
+    workers_calls = _register_call_names(_WORKERS_PY)
+
+    assert "register_email_dispatcher" in main_calls, (
+        "REG-29-03 violation: create_app() does NOT register EmailDispatcher "
+        "(Phase 42 D-42-26 mandates the FastAPI-side wire)."
+    )
+    assert "register_email_dispatcher" in workers_calls, (
+        "REG-29-03 violation: WorkerSettings.on_startup does NOT register "
+        "EmailDispatcher (Phase 42 D-42-26 mandates the worker-side wire). "
+        "Without the double-wire the ARQ dispatch_email task cannot resolve "
+        "the dispatcher slot and the email-OTP fallback silently fails."
     )
