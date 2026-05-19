@@ -21,6 +21,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    String,
     Text,
     text,
 )
@@ -88,15 +89,12 @@ class User(Base, UUIDPkMixin, TimestampMixin):
         nullable=False,
         server_default=text("true"),
     )
+    # Phase 43 regression fix: column is migrated as TEXT (migration 0030)
+    # with CHECK ck_users_status enforcing the value set ('active','pending_invitation').
+    # The CHECK constraint is the source of truth; using `String(32)` here keeps the
+    # ORM in sync with the on-disk type so `alembic check` produces no drift.
     status: Mapped[Literal["active", "pending_invitation"]] = mapped_column(
-        SAEnum(
-            "active",
-            "pending_invitation",
-            name="user_status",
-            native_enum=False,
-            length=32,
-            validate_strings=True,
-        ),
+        String(32),
         nullable=False,
         server_default=text("'active'"),
     )
