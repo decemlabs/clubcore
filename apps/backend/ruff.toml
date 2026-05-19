@@ -42,6 +42,12 @@ external = ["SVC"]
 # `{end_date}` placeholder, and ruff does not currently flag them under RUF001 --
 # so without this allowance every line would trip RUF100 ("unused noqa").
 "app/integrations/telegram/copy.py" = ["RUF100"]
+# Phase 42 AUTH-EM-03 (plan 42-05): the locked Russian EMAIL_OTP_LOGIN template
+# (D-42-23) carries a disciplinary `# noqa: RUF001` tripwire on the dict-entry
+# line so that a future edit which introduces an ambiguous Cyrillic letter is
+# flagged for re-review. The currently-shipped Russian copy uses unambiguous
+# Cyrillic only, so the noqa is "unused" today and would otherwise trip RUF100.
+"app/modules/auth/email_templates.py" = ["RUF100"]
 
 [format]
 quote-style = "double"
