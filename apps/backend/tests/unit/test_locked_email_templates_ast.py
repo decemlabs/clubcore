@@ -202,6 +202,48 @@ def test_email_otp_login_real_callsite_present() -> None:
     )
 
 
+def test_user_invitation_email_literal_at_users_service_callsite() -> None:
+    """Phase 43 D-43-33 / USERS-03 — positive-fixture assertion on the
+    ``USER_INVITATION_EMAIL`` real callsite.
+
+    Plan 43-05 shipped the second ``get_email_dispatcher()(template_id=...)``
+    callsite in production code (``app/modules/users/service.py`` inside
+    ``create_user``). Mirrors the Phase 42 4-11 pattern for
+    ``EMAIL_OTP_LOGIN``: a future "helpfully refactored" const-extraction
+    (e.g. ``template_id=USER_INVITATION_EMAIL_CONST``) would silently bypass
+    ``test_real_callsites_pass`` because the walker rejects only non-Constant
+    nodes that reach a dispatcher call. This test pins the contract that the
+    literal ``"USER_INVITATION_EMAIL"`` exists as an ``ast.Constant(str)``
+    directly at a callsite inside ``users.service``.
+
+    Walker logic mirrored locally (not delegated to ``_iter_dispatcher_calls``)
+    so a refactor of the production walker cannot silently weaken this gate.
+    """
+    service_py = _BACKEND_APP / "modules" / "users" / "service.py"
+    tree = ast.parse(service_py.read_text(encoding="utf-8"))
+
+    found_literal_template_ids: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "template_id"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
+                found_literal_template_ids.append(kw.value.value)
+
+    assert "USER_INVITATION_EMAIL" in found_literal_template_ids, (
+        "Phase 43 USERS-03 / D-43-33 violation: literal USER_INVITATION_EMAIL "
+        "template_id callsite not found in app/modules/users/service.py. "
+        "If you refactored the callsite to read template_id from a constant "
+        "or f-string, revert — the AST walker (D-41-11) only accepts "
+        "ast.Constant(str). "
+        f"Got literal template_ids: {found_literal_template_ids}"
+    )
+
+
 def test_non_literal_template_id_is_rejected() -> None:
     """D-41-13: the synthetic-violation fixture passes `template_id=chosen_id`
     where `chosen_id` is a variable, not a literal `ast.Constant(str)`.
