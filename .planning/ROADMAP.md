@@ -247,7 +247,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
-| 42. Email Transport Layer + Email OTP Fallback | 11/11 | Complete   | 2026-05-19 |
+| 42. Email Transport Layer + Email OTP Fallback | 11/16 | In Progress|  |
 | 43. Multi-User Admin Module | 0/? | Not started | — |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
