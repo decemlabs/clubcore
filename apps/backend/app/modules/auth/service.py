@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import audit
 from app.core.config import get_settings
 from app.core.dependencies import get_email_dispatcher
-from app.core.exceptions import InvalidAccessToken, InvalidPassword
+from app.core.exceptions import InvalidAccessToken, InvalidPassword, InvalidSession
 from app.core.pagination import PaginatedData
 from app.core.security import (
     encode_access_token,
@@ -134,8 +134,32 @@ async def authenticate(
     # 1. Rate limit BEFORE Argon2 (D-18). RateLimited is a 429 — propagate.
     await check_login_rate(redis, email_lower)
 
-    user = await session.scalar(select(User).where(User.email == email_lower))
-    target_hash = user.password_hash if user is not None else await _get_sentinel_hash()
+    # Phase 43 D-43-06 follow-up — explicit ``password_hash IS NOT NULL`` filter:
+    # since Phase 43 migration 0030 dropped users.password_hash NOT NULL, the
+    # ORM column is now ``Mapped[str | None]``. Pending_invitation users carry
+    # ``password_hash=NULL`` and would otherwise leak to verify_password as a
+    # None argument (Phase 12.1 lesson — verify by-types vs verify on-the-wire
+    # MUST be aligned via SQL predicate, not Python branch). The IS NOT NULL
+    # filter folds pending users into the same anti-oracle bucket as unknown
+    # emails: both miss → sentinel-hash branch → InvalidPassword. The explicit
+    # ``user.password_hash is not None`` Python re-check below carries the
+    # invariant for mypy (which cannot follow SQL predicate narrowing).
+    user = await session.scalar(
+        select(User).where(
+            User.email == email_lower,
+            User.password_hash.is_not(None),
+        )
+    )
+    target_hash: str
+    if user is not None and user.password_hash is not None:
+        target_hash = user.password_hash
+    else:
+        # Either no row (unknown email / pending_invitation filtered out) OR
+        # — defence-in-depth — a row whose SQL-side IS NOT NULL filter raced
+        # against a concurrent UPDATE...SET password_hash=NULL (Phase 12.1
+        # by-types/on-the-wire alignment). Both paths fall to the sentinel
+        # hash so wall-clock latency matches the success path (D-28).
+        target_hash = await _get_sentinel_hash()
 
     try:
         await verify_password(password, target_hash)
@@ -376,7 +400,15 @@ async def rotate_refresh(
     )
 
     if row is None:
-        raise InvalidAccessToken("refresh_not_found")
+        # Phase 43 D-43-20 — anti-oracle harmonisation. The truly-missing
+        # refresh row and the deactivated-account branch below MUST surface
+        # byte-identical 401 ``invalid_session`` bodies so the dashboard /
+        # response cannot enumerate "token unknown" vs "account inactive".
+        # Pre-Phase-43 this raised ``InvalidAccessToken("refresh_not_found")``
+        # (code='invalid_token'); harmonised to ``InvalidSession`` so plan
+        # 43-12's bounded-timing+identical-body test can assert parity across
+        # (active, deactivated, deleted, missing) refresh-token cases.
+        raise InvalidSession("invalid_session")
 
     # ---- Branch (A): ACTIVE — rotate ------------------------------------
     if (
@@ -384,9 +416,39 @@ async def rotate_refresh(
         and row.replaced_by_id is None
         and row.expires_at > now
     ):
-        user_loaded = await session.get(User, row.user_id)
+        # Phase 43 D-43-20 — USERS-06 anti-oracle refresh chokepoint.
+        # Single SELECT race-tight against parallel deactivate / soft-delete
+        # (Pitfall 5 case 3). Predicate filtered IN the SQL — NOT a post-fetch
+        # Python branch (which would race against UPDATE...SET is_active=false).
+        user_loaded = await session.scalar(
+            select(User).where(
+                User.id == row.user_id,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+        )
         if user_loaded is None:
-            raise InvalidAccessToken("user_not_found")
+            # Anti-oracle: same 401 invalid_session response shape as the
+            # truly-missing refresh-row branch above (D-20-9 lineage, D-43-20).
+            # Audit emit is forensic-only — reason='account_inactive' lets
+            # ops dashboards distinguish a deactivated/soft-deleted operator
+            # from a generic invalid-session at the audit-log layer, while
+            # the response body stays identical so the caller cannot enumerate.
+            # emit → commit → raise ordering (Pitfall 2): commit BEFORE raise
+            # so the audit row persists; otherwise InvalidSession propagation
+            # would roll back the audit insert via the get_db dep cleanup.
+            await audit.emit(
+                session,
+                "refresh_failed",
+                actor_user_id=None,
+                resource_type="session",
+                resource_id=None,
+                audit_correlation_id=None,
+                user_id=row.user_id,
+                reason="account_inactive",
+            )
+            await session.commit()
+            raise InvalidSession("invalid_session")
 
         raw_refresh, refresh_hash = generate_refresh_token()
         access = encode_access_token(user_loaded.id, user_loaded.role, now=now)
