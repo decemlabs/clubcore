@@ -35,6 +35,24 @@ def test_password_reset_tokens_eager_imported() -> None:
     )
 
 
+def test_email_send_log_eager_imported() -> None:
+    """Phase 42 D-42-33 — ``email_send_log`` reachable from worker root (REG-29-04).
+
+    Importing ``app.workers`` MUST surface ``email_send_log`` on
+    ``Base.metadata.tables``; the eager-import line for
+    ``app.integrations.email.models.EmailSendLog`` in
+    ``app/workers/__init__.py`` (plan 42-09) is the contract. Without it,
+    the ARQ ``dispatch_email`` task's bounce/complaint webhook joins would
+    crash at the first append.
+    """
+    import app.workers  # noqa: F401 — trigger eager-import side effect
+    from app.core.database import Base
+
+    assert "email_send_log" in Base.metadata.tables, sorted(
+        Base.metadata.tables.keys()
+    )
+
+
 def test_v15_critical_tables_still_visible() -> None:
     """Smoke — stable v1.5 worker-touched tables remain visible from import root.
 
