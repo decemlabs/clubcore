@@ -31,6 +31,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from redis.asyncio import Redis
+from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
@@ -132,7 +133,29 @@ async def _atomic_consume_token(
     "3-line shared util not worth packaging" carve-out in 44-CONTEXT
     § Reusable Assets).
     """
-    raise NotImplementedError("Wave 2 plan 44-04 fills this body.")
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    stmt = (
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.token_hash == token_hash,
+            PasswordResetToken.purpose == purpose,
+            PasswordResetToken.consumed_at.is_(None),
+            PasswordResetToken.expires_at > func.now(),
+        )
+        .values(consumed_at=func.now())
+        .returning(
+            PasswordResetToken.id,
+            PasswordResetToken.user_id,
+            PasswordResetToken.audit_correlation_id,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    result = await session.execute(stmt)
+    row = result.first()
+    if row is None:
+        return None
+    token_id, user_id, audit_corr_id = row
+    return (token_id, user_id, audit_corr_id)
 
 
 async def request_password_reset(
