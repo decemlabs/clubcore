@@ -1,14 +1,14 @@
 ---
 phase: 43-multi-user-admin-module
-verified: 2026-05-19T15:41:30Z
+verified: 2026-05-19T21:10:00Z
 status: passed
-score: 5/5 success criteria verified (7/7 USERS-* requirements satisfied)
+score: 5/5 success criteria verified (7/7 USERS-* requirements satisfied); 13/13 review findings closed (CR-01..04 + WR-01..07 + IN-01..02); IN-03/IN-04 deferred per CONTEXT.md; SVC001 regression closed by commit 629b433
 overrides_applied: 0
 re_verification:
   previous_status: passed
   previous_score: 5/5
-  re_verified: 2026-05-19T21:00:00Z
-  re_verification_reason: "Post-gap-closure re-verification after 43-14..43-17 (4 BLOCKER + 7 WARNING + 2 INFO findings from 43-REVIEW.md)"
+  re_verified: 2026-05-19T21:10:00Z
+  re_verification_reason: "Post-gap-closure re-verification after 43-14..43-17 (4 BLOCKER + 7 WARNING + 2 INFO findings from 43-REVIEW.md). SVC001 regression flagged at 21:00 and closed at 21:10 via commit 629b433."
   gaps_closed:
     - "CR-01: Invitation email dispatched with EMPTY Jinja variables"
     - "CR-02: count_active_owners_excluding used SELECT count(*) FOR UPDATE — rejected by Postgres"
@@ -23,21 +23,10 @@ re_verification:
     - "WR-07: _format_expires_ru formatted in UTC not MSK — Russian email showed wrong time"
     - "IN-01: deactivate/reactivate/soft_delete/revoke_invitation fabricated uuid4() for audit_correlation_id"
     - "IN-02: deactivate_user/reactivate_user/soft_delete_user UPDATEs missing deleted_at IS NULL defence"
-  gaps_remaining:
-    - "REGRESSION: _revoke_all_sessions_no_commit at auth/service.py:668 is missing # noqa: SVC001 caller-owns-txn marker — test_service_commit_gate_against_app_modules FAILS"
-  regressions:
-    - "test_service_commit_gate_against_app_modules FAILS: _revoke_all_sessions_no_commit (introduced by 43-16 CR-04 fix) is a write-path function with no session.commit() and no SVC001 opt-out marker. Fix: add '# noqa: SVC001 caller-owns-txn' to the def line at auth/service.py:668."
-gaps:
-  - truth: "All project quality gates pass (ruff + mypy + import-linter + commit-gate + full test suite)"
-    status: failed
-    reason: "test_service_commit_gate_against_app_modules FAILS because _revoke_all_sessions_no_commit (the no-commit helper introduced by the CR-04 fix in plan 43-16, commit 1d70be9) is flagged by the SVC001 AST walker. The function is intentionally a caller-owns-txn helper but is missing the '# noqa: SVC001 caller-owns-txn' opt-out marker on its def line. The 43-16 regression suite ran tests/integration/users/ tests/integration/auth/ tests/integration/test_app_wiring.py tests/unit/users/ — it did NOT include tests/unit/test_service_commit_gate.py, so the regression went undetected."
-    artifacts:
-      - path: "apps/backend/app/modules/auth/service.py"
-        issue: "Line 668: async def _revoke_all_sessions_no_commit( — missing '# noqa: SVC001 caller-owns-txn' on the def line"
-    missing:
-      - "Add '# noqa: SVC001 caller-owns-txn' to the def line: 'async def _revoke_all_sessions_no_commit(  # noqa: SVC001 caller-owns-txn'"
-      - "Re-run: uv run pytest tests/unit/test_service_commit_gate.py -q (must pass)"
-      - "Re-run: uv run pytest tests/unit/ tests/integration/users/ tests/integration/auth/ -q (full regression, 95+ passed, 1 xfailed)"
+    - "REGRESSION-43-16-SVC001: _revoke_all_sessions_no_commit missing # noqa: SVC001 caller-owns-txn marker — closed by commit 629b433"
+  gaps_remaining: []
+  regressions_closed:
+    - "REGRESSION-43-16-SVC001: commit 629b433 adds '# noqa: SVC001 caller-owns-txn' to auth/service.py:668. tests/unit/test_service_commit_gate.py now 7/7 PASS. Full users + auth chokepoint sanity suite: 45/45 PASS."
 ---
 
 # Phase 43: Multi-User Admin Module Verification Report
@@ -46,7 +35,7 @@ gaps:
 
 **Initial Verification:** 2026-05-19T15:41:30Z — status: passed (5/5 SC, 7/7 USERS-*)
 **Re-Verification:** 2026-05-19T21:00:00Z — after gap-closure plans 43-14..43-17
-**Re-Verification Status:** gaps_found (1 regression introduced by 43-16)
+**Re-Verification Status:** passed (1 regression introduced by 43-16 closed by commit 629b433 at 21:10)
 
 ---
 
