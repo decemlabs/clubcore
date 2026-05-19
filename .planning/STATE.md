@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: completed
-stopped_at: Completed 43-17-PLAN.md (login chokepoint CR-03 fix — all three auth chokepoints aligned)
-last_updated: "2026-05-19T19:32:42.432Z"
+stopped_at: Phase 44 context gathered
+last_updated: "2026-05-19T19:46:03.845Z"
 last_activity: 2026-05-19 -- Phase 43 marked complete
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 45
   completed_plans: 45
-  percent: 50
+  percent: 100
 ---
 
 # Project State
@@ -139,6 +139,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-19T19:45:00.000Z
-Stopped at: Completed 43-17-PLAN.md (login chokepoint CR-03 fix — all three auth chokepoints aligned)
+Last session: 2026-05-19T19:46:03.841Z
+Stopped at: Phase 44 context gathered
 Resume: None — Phase 43 gap-closure plans complete
