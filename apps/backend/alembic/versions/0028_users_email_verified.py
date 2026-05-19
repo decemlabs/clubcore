@@ -32,7 +32,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0028_users_email_verified"
-down_revision: str | None = "0027_otp_codes_channel_discriminator"
+down_revision: str | None = "0027_otp_channel_discriminator"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
