@@ -7,6 +7,7 @@ business modules.
 
 from fastapi import APIRouter
 
+from app.api.v1._internal.email.router import router as email_webhook_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bookings.router import bookings_router, client_scoped_bookings_router
 from app.modules.clients.router import router as clients_router
@@ -64,3 +65,15 @@ v1.include_router(
 )
 v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])
+
+# Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
+# Transport-layer endpoints (provider webhooks, ops callbacks) sit under
+# /api/v1/_internal/* with their own auth model (HMAC signature in
+# X-Email-Webhook-Signature for the email webhook). Future infrastructure
+# callbacks (ЮKassa, SMS providers, ...) land here, NOT under business
+# modules.
+v1.include_router(
+    email_webhook_router,
+    prefix="/_internal/email",
+    tags=["_internal"],
+)

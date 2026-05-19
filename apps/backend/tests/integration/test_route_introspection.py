@@ -42,7 +42,19 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
 
 # D-19: prefix exclusions for subtrees (Phase 7 telegram routes; defensive
 # in case Phase 7 mounts variants beyond the three listed paths).
-EXCLUDED_PREFIXES: tuple[str, ...] = ("/api/v1/auth/telegram/",)
+#
+# Phase 42 EMAIL-07 / D-42-17 — /api/v1/_internal/* is the transport-layer
+# namespace for provider webhooks. Each inhabitant carries its OWN auth model
+# (HMAC-SHA256 signature in X-Email-Webhook-Signature for the email webhook),
+# verified BEFORE body parse with hmac.compare_digest. The gate IS present
+# at the source level; it is not a FastAPI Depends so the introspection-based
+# gate test cannot see it. Prefix-exclusion preserves the diff-as-audit-trail
+# property (D-19) — adding new /_internal/* endpoints without HMAC will pass
+# this test, so each new inhabitant must be reviewed for its own auth shape.
+EXCLUDED_PREFIXES: tuple[str, ...] = (
+    "/api/v1/auth/telegram/",
+    "/api/v1/_internal/",
+)
 
 # D-18: __qualname__ prefix discriminator.
 # Phase 32 D-32-25 — payments.permissions.require_payments_view_for_subject is a
