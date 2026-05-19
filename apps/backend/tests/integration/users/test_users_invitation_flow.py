@@ -81,11 +81,13 @@ async def test_invitation_email_enqueued_through_sandbox(
     email = sent[0]
     assert email["to"] == "invitee@example.com"
     assert email["template_id"] == "USER_INVITATION_EMAIL"
-    # Subject is the locked Russian copy from email_templates.py (D-43-23).
-    assert "Приглашение в Sportzal" in email["subject"]
-    # Text body interpolates full_name and the invitation URL with fragment.
-    assert "Иван Тестовый" in email["text"]
-    assert "/auth/accept-invite#token=" in email["text"]
+    # CR-01 fix (Phase 43 plan 43-14): the recorder now captures raw template
+    # vars (full_name, role_ru, invitation_url, expires_at_human) NOT the
+    # pre-rendered subject/html/text. The prod dispatcher renders at enqueue
+    # time (D-43-24 / Phase 42 render-at-enqueue contract). Assert on the
+    # raw vars that the service passes through to the dispatcher.
+    assert email["full_name"] == "Иван Тестовый"
+    assert "/auth/accept-invite#token=" in email["invitation_url"]
     # audit_correlation_id is forwarded to the dispatcher (D-41-04 chain).
     assert email["audit_correlation_id"] is not None
 
