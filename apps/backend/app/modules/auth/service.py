@@ -19,7 +19,7 @@ import asyncio
 import hashlib
 import json
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Final, Literal, cast
 from uuid import UUID, uuid4
@@ -1014,3 +1014,62 @@ async def request_otp_telegram(
         # Anti-oracle floor MUST run even on exception -- unprotected
         # exception propagation also leaks timing (CR-02).
         await _constant_time_floor(t_start)
+
+
+# ---------------------------------------------------------------------------
+# Phase 43 D-43-26/27 — UserSessionInvalidator Protocol implementation.
+# ---------------------------------------------------------------------------
+#
+# Wraps revoke_all_sessions(session, redis, user_id) to match the Protocol
+# signature declared in app/core/dependencies.py:UserSessionInvalidator. The
+# Redis client is supplied via _redis_factory which app/main.py:create_app()
+# sets at composition time (single-wire — NO worker registration per D-43-27).
+#
+# `reason` is logged via structlog but NOT placed in the audit emit — calling
+# sites (users/service.py:deactivate_user, etc.) emit their own audit event
+# carrying sessions_revoked_count per D-43-28.
+
+
+_redis_factory: Callable[[], Redis] | None = None
+
+
+def set_redis_factory(factory: Callable[[], Redis]) -> None:
+    """Phase 43 D-43-26 composition-root injection of the Redis client factory.
+
+    Called once from app/main.py:create_app(). Idempotent — last call wins.
+    The factory is invoked lazily on each call to
+    invalidate_all_families_for_user so it can read app.state.redis after
+    the lifespan has populated it (the FastAPI lifespan sets app.state.redis
+    AFTER create_app() returns, so the factory closes over the FastAPI app
+    rather than over a Redis client directly).
+    """
+    global _redis_factory
+    _redis_factory = factory
+
+
+async def invalidate_all_families_for_user(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    reason: Literal["deactivated", "password_reset", "soft_deleted"],
+) -> int:
+    """Phase 41 D-41-25 UserSessionInvalidator Protocol implementation.
+
+    Returns the number of refresh-token families revoked. Reason is logged
+    (structlog) but is NOT in the audit emit — calling sites emit their own
+    domain event (user_deactivated / password_reset_completed /
+    user_soft_deleted) carrying sessions_revoked_count per D-43-28.
+    """
+    if _redis_factory is None:
+        raise RuntimeError(
+            "invalidate_all_families_for_user called before "
+            "auth.service.set_redis_factory(...) was wired in create_app(). "
+            "Phase 43 D-43-26 composition discipline."
+        )
+    redis = _redis_factory()
+    _log.info(
+        "user_session_invalidator.invoked",
+        user_id=str(user_id),
+        reason=reason,
+    )
+    return await revoke_all_sessions(session, redis, user_id)
