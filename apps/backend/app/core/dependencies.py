@@ -703,6 +703,14 @@ class UserSessionInvalidator(Protocol):
     the count of refresh-token families revoked so the calling
     orchestrator can include ``sessions_revoked_count`` in its audit
     payload (UserDeactivatedPayload / PasswordResetCompletedPayload).
+
+    Phase 43 WR-01 (review) — ``actor_user_id`` is the user who initiated
+    the action (the owner deactivating a reception operator), used as the
+    ``actor_user_id`` field on the ``session_revoked_all`` audit row.
+    ``user_id`` is the TARGET being revoked (stays as ``resource_id``).
+    ``None`` is acceptable when the invalidator is invoked from a context
+    with no human actor (e.g. Phase 44 self-initiated password reset where
+    actor == target — that flow passes actor_user_id=user_id explicitly).
     """
 
     async def __call__(
@@ -710,6 +718,7 @@ class UserSessionInvalidator(Protocol):
         session: AsyncSession,
         *,
         user_id: UUID,
+        actor_user_id: UUID | None,
         reason: Literal["deactivated", "password_reset", "soft_deleted"],
     ) -> int: ...
 
