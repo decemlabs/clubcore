@@ -518,6 +518,10 @@ class UserInvitedPayload(BaseModel):
     with future roles (D-41-20 — exact field shape left to implementor).
     `invitation_expires_at` is the UTC datetime at which the invitation
     becomes unusable (mirrors v1.1 `refresh_tokens.expires_at` discipline).
+
+    `link_copied` (Phase 43 D-43-14): True when the owner used the
+    ?include_invite_link=true escape-hatch query param at POST /users.
+    URL itself is NOT in the payload (Pitfall 4 — anti-oracle for link bleed).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -527,6 +531,7 @@ class UserInvitedPayload(BaseModel):
     invited_email: str
     invited_role: str
     invitation_expires_at: datetime
+    link_copied: bool  # Phase 43 D-43-14
 
 
 class UserInvitationAcceptedPayload(BaseModel):
@@ -661,6 +666,34 @@ class PaymentReceiptEmailedPayload(BaseModel):
     receipt_kind: Literal["sale", "refund"]
 
 
+# Refresh-token failure tracking (Phase 43 USERS-06 / D-43-20):
+
+
+class RefreshFailedPayload(BaseModel):
+    """Payload schema for ("refresh_failed", "session") — Phase 43 USERS-06 / D-43-20.
+
+    Emitted from auth.service.rotate_refresh when a refresh attempt fails for
+    a reason that warrants forensic tracking. `reason` discriminates the failure
+    class. `account_inactive` (USERS-06) is the new entry that lets ops dashboards
+    distinguish a deactivated/deleted operator from a stolen-token attempt
+    (`family_reuse_detected` — handled by its own existing event).
+
+    Anti-oracle: the HTTP response is identical across reasons (D-43-20). The
+    audit emit is forensic-only — never leaks via the response.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    user_id: UUID | None  # None when refresh-token did not resolve to any user
+    reason: Literal[
+        "account_inactive",
+        "invalid_session",
+        "expired",
+        "revoked",
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
@@ -711,6 +744,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # Password reset (Phase 44):
     ("password_reset_requested", "user"): PasswordResetRequestedPayload,
     ("password_reset_completed", "user"): PasswordResetCompletedPayload,
+    # Refresh-token failure tracking (Phase 43 USERS-06 / D-43-20):
+    ("refresh_failed", "session"): RefreshFailedPayload,
     # Payment receipt email (Phase 45):
     ("payment_receipt_emailed", "payment"): PaymentReceiptEmailedPayload,
 }
