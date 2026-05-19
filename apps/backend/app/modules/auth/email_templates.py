@@ -88,4 +88,25 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "Sportzal · noreply@mail.sportzal.ru"
         ),
     ),
+    "PASSWORD_RESET_EMAIL": EmailTemplate(  # noqa: RUF001
+        subject="Восстановление пароля Sportzal",
+        html=_ENV.from_string(
+            "<h1>Восстановление пароля Sportzal</h1>"
+            "<p>Перейдите по ссылке, чтобы задать новый пароль:</p>"
+            '<p><a href="{{ reset_url }}">{{ reset_url }}</a></p>'
+            "<p>Ссылка действительна до {{ expires_at_human }}. "
+            "Если вы не запрашивали восстановление пароля — "
+            "проигнорируйте это письмо.</p>"
+            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+        ),
+        text=_ENV_TEXT.from_string(
+            "Восстановление пароля Sportzal\n\n"
+            "Перейдите по ссылке, чтобы задать новый пароль:\n"
+            "{{ reset_url }}\n\n"
+            "Ссылка действительна до {{ expires_at_human }}. "
+            "Если вы не запрашивали восстановление пароля — "
+            "проигнорируйте это письмо.\n\n"
+            "Sportzal · noreply@mail.sportzal.ru"
+        ),
+    ),
 }
