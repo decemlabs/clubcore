@@ -444,7 +444,12 @@ async def rotate_refresh(
                 resource_type="session",
                 resource_id=None,
                 audit_correlation_id=None,
-                user_id=row.user_id,
+                # UUID → str at the JSONB boundary (same pattern as
+                # invalidate_all_families_for_user line 1134 + the audit
+                # convention in app/integrations/email/dispatcher.py). asyncpg's
+                # default JSONB serializer raises TypeError on raw UUID — caught
+                # by plan 43-12's anti-oracle integration test (Rule 1 fix).
+                user_id=str(row.user_id),
                 reason="account_inactive",
             )
             await session.commit()
