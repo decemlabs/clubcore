@@ -35,3 +35,5 @@ source_modules =
     app.integrations
 forbidden_modules =
     app.modules
+ignore_imports =
+    app.integrations.email.dispatcher -> app.modules.auth.email_templates
