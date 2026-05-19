@@ -531,7 +531,7 @@ class UserInvitedPayload(BaseModel):
     invited_email: str
     invited_role: str
     invitation_expires_at: datetime
-    link_copied: bool  # Phase 43 D-43-14
+    link_copied: bool = False  # Phase 43 D-43-14 — default False = forensic "owner has not yet clicked the copy-link button" at user creation time.
 
 
 class UserInvitationAcceptedPayload(BaseModel):
