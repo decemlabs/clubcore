@@ -940,12 +940,17 @@ async def request_otp_email(
         # D-42-35 -- no new event name; the channel='email' kwarg + the
         # audit_correlation_id correlate the row with the eventual
         # email_sent / email_send_failed row downstream.
+        #
+        # audit_correlation_id is stringified at the audit boundary because
+        # AuditLog.payload is a JSONB column with no UUID-aware serializer
+        # (the convention is mirrored in app.integrations.email.dispatcher
+        # at the ARQ enqueue boundary — UUID → str at every JSON boundary).
         await audit.emit(
             session,
             "otp_requested",
             actor_user_id=user.id,
             resource_type="otp",
-            audit_correlation_id=audit_correlation_id,
+            audit_correlation_id=str(audit_correlation_id),
             channel="email",
         )
         await session.commit()
