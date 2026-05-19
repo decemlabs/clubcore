@@ -64,6 +64,7 @@ from app.core.dependencies import (
     register_slot_by_id_resolver,
     register_trainer_by_id_resolver,
     register_user_loader,
+    register_user_session_invalidator,  # Phase 43 D-43-26/27 — single-wire.
 )
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -73,7 +74,13 @@ from app.integrations.email.dispatcher import (
     enqueue_email_dispatch,
     register_arq_pool,
 )
-from app.modules.auth.service import load_user_by_id
+from app.modules.auth.service import (
+    invalidate_all_families_for_user,
+    load_user_by_id,
+)
+from app.modules.auth.service import (
+    set_redis_factory as set_auth_redis_factory,
+)
 from app.modules.memberships.service import resolve_active_membership_by_client
 
 
@@ -248,6 +255,19 @@ def create_app() -> FastAPI:
     # processes. The ArqRedis pool itself is registered in the lifespan above
     # because it requires an awaitable factory (``arq.create_pool``).
     register_email_dispatcher(enqueue_email_dispatch)
+
+    # Phase 43 D-43-26/27 — UserSessionInvalidator SINGLE-wire (no ARQ consumer).
+    # ``set_auth_redis_factory`` lambda closes over ``app`` and reads
+    # ``app.state.redis`` lazily, so the factory resolves the Redis client
+    # AFTER the lifespan has populated it (the lifespan sets app.state.redis
+    # AFTER create_app() returns). ``invalidate_all_families_for_user`` wraps
+    # ``revoke_all_sessions`` to match the Phase 41 UserSessionInvalidator
+    # Protocol signature exactly. NOT wired in app/workers/__init__.py —
+    # the worker has zero ``get_user_session_invalidator()`` callsites in
+    # Phase 43 scope (D-43-27 single-wire asymmetric vs the EmailDispatcher
+    # double-wire above).
+    set_auth_redis_factory(lambda: app.state.redis)
+    register_user_session_invalidator(invalidate_all_families_for_user)
 
     app.include_router(api)
     return app
