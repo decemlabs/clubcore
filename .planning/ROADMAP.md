@@ -208,7 +208,7 @@ Plans:
 - [x] 43-06-PLAN.md — users/router.py 6 endpoints + RBAC + CSRF + api/v1/router.py include
 
 **Wave 3** (blocked on Wave 2)
-- [ ] 43-07-PLAN.md — auth.service.rotate_refresh is_active+deleted_at predicate + refresh_failed audit emit
+- [x] 43-07-PLAN.md — auth.service.rotate_refresh is_active+deleted_at predicate + refresh_failed audit emit
 
 **Wave 4** (blocked on Wave 3 — parallel-eligible test files, zero files_modified overlap pairwise)
 - [ ] 43-08-PLAN.md — test_users_crud.py (4-branch create + paginated list + denylist)
@@ -269,7 +269,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
-| 43. Multi-User Admin Module | 7/14 | In Progress|  |
+| 43. Multi-User Admin Module | 8/14 | In Progress|  |
 | 44. Invitation + Password-Reset Flow | 0/? | Not started | — |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
