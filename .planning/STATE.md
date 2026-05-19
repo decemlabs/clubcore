@@ -4,7 +4,7 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Completed 43-10-PLAN.md (users session-invalidation e2e test)
-last_updated: "2026-05-19T15:30:00.000Z"
+last_updated: "2026-05-19T18:37:00.000Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 6
@@ -104,6 +104,12 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: 43-11: Drift-tolerant invitation-flow tests using AuditLog.action (not .event), r.json()['code'] (not detail.error), JSONB UUID-string roundtrip
 - [Phase 43]: Phase 43 Plan 08: Audit payload UUIDs/datetimes stringified at users/service.py audit.emit callsites (REG-36-03 carried forward); integrations/email/dispatcher per-module walker gains users.email_templates branch with matching .importlinter ignore_imports
 - [Phase 43]: Plan 43-10: e2e USERS-04+USERS-06 + USERS-05+USERS-06 integration test lands. Documents that in the real prod sequence the post-deactivate refresh hits Branch C (family_reuse_detected → invalid_token), not Branch A (account_inactive → invalid_session), because families are revoked in the same UoW as is_active=false. Branch A coverage is 43-12's responsibility via refresh_client_deactivated synthetic fixture. Test accepts code in {invalid_session, invalid_token} — both are anti-oracle-safe.
+- [Phase 43 regression gate fix-pack (2026-05-19)]: 4 atomic commits resolved 3/4 Phase 43 regressions discovered by the post-phase regression gate:
+  (1) `UserInvitedPayload.link_copied` defaulted to `False` (restores `test_user_invited_payload_round_trip` + `test_v16_payloads_accept_uuid_as_str`);
+  (2) `User.status` ORM type changed `SAEnum(...)` → `Text` so on-disk TEXT no longer produces `modify_type` autogenerate diff (mirrors `User.role` TEXT+CHECK pattern, D-07);
+  (3) `User.email` ORM `unique=True` removed (Migration 0022 dropped the global `uq_users_email` in favour of partial-UNIQUE `uq_users_email_active` on `lower(email) WHERE deleted_at IS NULL`);
+  (4) `app.modules.users.repository -> app.modules.auth.password_reset_token_model` added to `.importlinter` `modules-independent` `ignore_imports` (Phase 41 0025 password_reset_tokens is shared bedrock between auth RESET-02 and users USERS-02; v1.7 tighten path is `DEFER-43-shim` — hoist model to `app.core.models` alongside `User`).
+  Phase 43 users/ integration suite still 19/19 green. `test_alembic_check_clean` still fails on PRE-EXISTING `booking_notifications.channel` + `membership_notifications.channel` ORM-vs-DB drift (unrelated to Phase 43 — out of scope per regression-fix spec). Phase 43-specific `users.*` drift is fully resolved.
 
 ### Pending Todos
 
