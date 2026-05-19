@@ -233,6 +233,11 @@ async def test_dispatch_email_blocked_path_audits_invalid_recipient(
     # Circuit breaker NOT exercised for 'blocked' (not transient).
     # Window key should be untouched.
     assert (await redis.zcard("sz:email:circuit_window:yandex_postbox")) == 0
+    # WR-04 regression: non-circuit non-ok paths must use status='rejected'.
+    s = factory.sessions[0]
+    assert s.added[0].status == "rejected", (
+        f"blocked path EmailSendLog should use status='rejected' (WR-04), got {s.added[0].status!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -266,6 +271,11 @@ async def test_dispatch_email_transient_5xx_records_failure_and_audits_provider_
     payload = kwargs["payload"]
     assert payload.reason == "provider_5xx"
     assert payload.provider_error_code == "HTTP 503"
+    # WR-04 regression: transient provider 5xx uses status='rejected' (not 'circuit_open').
+    s = factory.sessions[0]
+    assert s.added[0].status == "rejected", (
+        f"transient 5xx EmailSendLog should use status='rejected' (WR-04), got {s.added[0].status!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -299,6 +309,15 @@ async def test_dispatch_email_when_circuit_open_short_circuits(
     payload = kwargs["payload"]
     assert payload.reason == "circuit_open"
     assert payload.provider_error_code == "circuit_open"
+    # WR-04 — status='circuit_open' on breaker shorts (NOT 'rejected').
+    assert len(factory.sessions) == 1
+    s = factory.sessions[0]
+    assert len(s.added) == 1
+    log_row = s.added[0]
+    assert log_row.status == "circuit_open", (
+        f"breaker-short EmailSendLog row should use status='circuit_open' "
+        f"(WR-04 regression — got {log_row.status!r})"
+    )
 
 
 @pytest.mark.asyncio
@@ -331,6 +350,11 @@ async def test_dispatch_email_permanent_error_audits_provider_5xx(
     assert payload.reason == "provider_5xx"
     # Circuit-breaker NOT armed on permanent_error (only transient_error arms it).
     assert (await redis.zcard(f"sz:email:circuit_window:{_PROVIDER}")) == 0
+    # WR-04 regression: permanent error uses status='rejected' (not 'circuit_open').
+    s = factory.sessions[0]
+    assert s.added[0].status == "rejected", (
+        f"permanent_error EmailSendLog should use status='rejected' (WR-04), got {s.added[0].status!r}"
+    )
 
 
 @pytest.mark.asyncio

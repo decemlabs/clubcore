@@ -141,13 +141,25 @@ async def dispatch_email(ctx: dict[str, Any], envelope_kwargs: dict[str, Any]) -
     #    + commit. Single session, one transaction; audit row commits
     #    atomically with the EmailSendLog INSERT.
     async with session_factory() as session:
+        # Status taxonomy (matches the migration 0029 CHECK):
+        # - 'sent'         : ok
+        # - 'circuit_open' : breaker short-circuit (no provider call)
+        # - 'rejected'     : provider returned an error (blocked / transient / permanent)
+        # Webhook can later flip to 'bounced' / 'complained' / 'delivered'.
+        if result.ok:
+            log_status = "sent"
+        elif result.error == "circuit_open":
+            log_status = "circuit_open"
+        else:
+            log_status = "rejected"
+
         log_row = EmailSendLog(
             audit_correlation_id=envelope.audit_correlation_id,
             to_address=envelope.to,
             template_id=envelope.template_id,
             provider=_PROVIDER,
             provider_message_id=result.provider_message_id,
-            status="sent" if result.ok else "rejected",
+            status=log_status,
             bounce_type=None,
         )
         session.add(log_row)
