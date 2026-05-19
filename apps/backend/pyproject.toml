@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Sportzal — gym CRM backend (modular monolith)."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aioboto3>=13.0,<14",
     "alembic>=1.13",
     "argon2-cffi>=25.1.0,<26",
     "arq>=0.26",
@@ -48,6 +49,13 @@ disable_error_code = ["no-untyped-call"]
 [[tool.mypy.overrides]]
 module = "tests.unit.fixtures.*"
 ignore_errors = true
+
+# Phase 42 42-07: aioboto3 + botocore lack py.typed markers. Suppressing the
+# import-untyped error here keeps mypy --strict for our own EmailClient code
+# without forcing the heavy boto3-stubs dependency into the dev install.
+[[tool.mypy.overrides]]
+module = ["aioboto3.*", "botocore.*"]
+ignore_missing_imports = true
 
 [tool.ruff.lint.per-file-ignores]
 # Fixtures intentionally have unused imports / untyped params for walker testing.
