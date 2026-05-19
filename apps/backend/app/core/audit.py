@@ -151,6 +151,10 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # Drift fix: docstring claimed 'session' but auth/service.py:528 emits 'user'.
         ("session_revoked_all", "user"),
         ("family_reuse_detected", "session"),
+        # Phase 43 D-43-20 — refresh_failed for deactivated/deleted user
+        # (USERS-06). Anti-oracle: response is identical to invalid_session;
+        # the audit row is forensic-only.
+        ("refresh_failed", "session"),
         ("password_changed_revokes_sessions", "user"),
         ("telegram_deep_link_issued", "otp"),
         ("otp_issued", "otp"),

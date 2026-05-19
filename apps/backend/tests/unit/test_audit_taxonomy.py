@@ -202,10 +202,17 @@ def test_locked_audit_events_has_expected_count() -> None:
     unified ``/auth/otp/request`` endpoint (telegram facade + email branch)
     emits a single locked event regardless of channel. The 11-v1.6 count
     becomes 12 and the frozenset total becomes 58 + 12 = 70.
+
+    Phase 43 Plan 03 (D-43-20) ADDS one more v1.6 pair:
+    ``('refresh_failed', 'session')`` — anti-oracle forensic emit from
+    ``/auth/refresh`` when the refresh-token resolves to a deactivated /
+    soft-deleted user (USERS-06). HTTP response is identical to the
+    invalid_session branch; only the audit row discriminates. The 12-v1.6
+    count becomes 13 and the frozenset total becomes 58 + 13 = 71.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 70, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 70 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 12 v1.6), "
+    assert len(LOCKED_AUDIT_EVENTS) == 71, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 71 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
 
