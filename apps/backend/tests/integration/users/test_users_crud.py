@@ -2,7 +2,7 @@
 
 CRUD + invitation lifecycle for POST/GET /api/v1/users. Uses real
 audit.emit + real audit_log query (Phase 42 CR-01 lesson, D-43-34); no
-monkeypatching of ContextVar; authenticated httpx.AsyncClient with cookies.
+ContextVar patching; authenticated httpx.AsyncClient with cookies.
 
 Plan: ``.planning/phases/43-multi-user-admin-module/43-08-PLAN.md``.
 
