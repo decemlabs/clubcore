@@ -49,25 +49,23 @@ async def test_sandbox_returns_ok_without_calling_provider() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sandbox_logs_envelope_at_info(caplog: pytest.LogCaptureFixture) -> None:
-    """Test 2: SandboxEmailClient logs subject + text preview + to + template_id."""
-    import logging
+async def test_sandbox_logs_envelope_at_info(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test 2: SandboxEmailClient logs subject + text preview + to + template_id.
 
-    caplog.set_level(logging.INFO)
+    structlog is configured to render to stdout in this codebase, so we capture
+    stdout (not caplog) and assert the envelope's identifying fields appear.
+    """
     c = SandboxEmailClient()
     env = _envelope()
     await c.send_email(env)
-    combined = " ".join(rec.getMessage() for rec in caplog.records) + " " + " ".join(
-        str(getattr(rec, "args", "")) for rec in caplog.records
-    )
-    # structlog routes to stdlib logging in tests; we check substring presence.
-    # subject + to + template_id should appear somewhere in the captured records.
-    text_blob = combined + " ".join(
-        str(rec.__dict__) for rec in caplog.records
-    )
-    assert env.to in text_blob
-    assert env.subject in text_blob
-    assert env.template_id in text_blob
+    captured = capsys.readouterr()
+    blob = captured.out + captured.err
+    assert env.to in blob
+    assert env.subject in blob
+    assert env.template_id in blob
+    assert env.text[:40] in blob  # text_preview cap is 80 chars; 40 is a safe slice
 
 
 # ---------- EmailClient classification chain --------------------------------
