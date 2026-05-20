@@ -95,6 +95,7 @@ from app.core.exceptions import (
 )
 from app.core.formatters import _format_ru_datetime, format_money
 from app.core.pagination import PaginatedData
+from app.integrations.telegram.sender import SendResult
 from app.modules.memberships import repository
 from app.modules.memberships.constants import (
     CANCELLATION_REASON_REFUNDED,
@@ -111,7 +112,6 @@ from app.modules.memberships.models import (
     MembershipFreezePeriod,
     MembershipNotification,
 )
-from app.integrations.telegram.sender import SendResult
 from app.modules.memberships.notifications import enqueue_expiring_email_fallback
 from app.modules.payments.models import PaymentReceipt
 from app.modules.users.display import format_actor_display
@@ -1757,7 +1757,7 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
                             kind=cand.kind,
                             reason="duplicate_row",
                         )
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         # Best-effort enqueue — never re-raise; the FSM-style
                         # Telegram path already logged the original failure.
                         await fb_session.rollback()
