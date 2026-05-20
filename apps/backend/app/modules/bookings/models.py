@@ -180,7 +180,11 @@ class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
     of truth for cron idempotency per D-39-13).
 
     DB-level invariants:
-    - kind IN ('reminder_24h') (CHECK ck_booking_notifications_kind).
+    - kind IN ('reminder_24h', 'confirmed', 'cancelled_by_client',
+      'cancelled_by_owner') (CHECK ck_booking_notifications_kind).
+      Phase 45 Migration 0032 widened from the Phase 39 single-element set
+      (D-39-13) to admit the 3 FSM-lifecycle email-fallback kinds + the
+      original reminder kind (D-45-05 / D-45-13).
     - FK fk_booking_notifications_booking_id_bookings ON DELETE RESTRICT
       to bookings.id (D-39-13 — deviation from v1.3 CASCADE; bookings
       never hard-delete per Phase 38 D-38-04, so RESTRICT prevents silent
@@ -233,9 +237,14 @@ class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('reminder_24h')",
-            # NAMING_CONVENTION expands to ck_booking_notifications_kind
-            # (matches migration 0020 op.f()-derived name).
+            # Phase 45 D-45-05 / Migration 0032 — widened kind set covering
+            # the 3 FSM lifecycle hooks (confirmed / cancelled_by_client /
+            # cancelled_by_owner) + the original reminder_24h. NAMING_CONVENTION
+            # expands `kind` -> ck_booking_notifications_kind (matches Migration
+            # 0020 op.f()-derived name + Migration 0032 drop-and-recreate
+            # letter-for-letter).
+            "kind IN ('reminder_24h', 'confirmed', "
+            "'cancelled_by_client', 'cancelled_by_owner')",
             name="kind",
         ),
         # Phase 45 D-45-13 — UNIQUE renamed by Alembic 0024 to include channel.
