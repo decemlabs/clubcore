@@ -1,0 +1,3199 @@
+{
+  "info": {
+    "_postman_id": "9446793f-81d6-5315-ba9b-7a4b487e4999",
+    "name": "Sportzal v1.6 — Email channel + Multi-user admin",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "description": "",
+      "item": [
+        {
+          "description": "",
+          "item": [
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "e8504658-7d2c-5a5f-a998-6de4ec275914",
+                  "name": "Login",
+                  "request": {
+                    "body": {
+                      "mode": "raw",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      },
+                      "raw": "{}"
+                    },
+                    "description": {
+                      "content": "Authenticate email+password; issue cookies + envelope (AUTH-EP-01..02, AUTH-EP-05).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "POST",
+                    "name": "Login",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "auth",
+                        "login"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/auth/login",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "id": "fc381840-64cc-5d51-bd33-c8a0379a4c9f",
+                  "name": "Logout",
+                  "request": {
+                    "description": {
+                      "content": "Revoke current family + clear cookies (AUTH-LO-01).\n\nIdempotent: if the refresh cookie is absent or already revoked, the cookie\nclear still runs so the browser ends in a clean state.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "POST",
+                    "name": "Logout",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "auth",
+                        "logout"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/auth/logout",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "id": "dfa77512-5722-5221-97c2-a768e66d8fa3",
+                  "name": "Logout All",
+                  "request": {
+                    "description": {
+                      "content": "Revoke ALL alive families for the user + clear caller's cookies (AUTH-LO-02).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "POST",
+                    "name": "Logout All",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "auth",
+                        "logout-all"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/auth/logout-all",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "id": "1e24c91d-02d4-5c51-91da-c60034b17e10",
+                  "name": "Me",
+                  "request": {
+                    "description": {
+                      "content": "Return the authenticated user's profile (AUTH-LO-04).\n\n`CurrentUser` is a Protocol with `id` + `role` only. The route knows the\nruntime instance is the SA `User` model (registered via register_user_loader\nin app.main.create_app), so we cast for access to email / full_name /\ntelegram_chat_id. The cast is safe because the loader is fixed at composition.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Me",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "auth",
+                        "me"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/auth/me",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "583e2043-d00c-589b-af36-4b83033fd04b",
+                      "name": "Otp Request",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Request an OTP via the configured channel (AUTH-EM-02 / D-42-22).\n\nAlways returns 202 with IDENTICAL body shape regardless of channel,\nsuccess/silent-drop branch, or known/unknown user. The Pydantic body\nvalidator enforces ``email`` presence when ``channel='email'`` (returns\n422 BEFORE the route fires — not an anti-oracle leak because invalid\nbody SHAPE is not a success-vs-unknown discriminator).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Otp Request",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "auth",
+                            "otp",
+                            "request"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/auth/otp/request",
+                          "variable": []
+                        }
+                      }
+                    }
+                  ],
+                  "name": "otp"
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "8778b284-2d06-57f0-a28a-1a371275b360",
+                      "name": "Confirm password reset (atomic-consume + revoke-all)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "RESET-02 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Atomic-consume + Argon2 rehash +\nrevoke-all sessions + audit emit live in the service layer.\nReturns 200 envelope(None) on success; 410 invalid_or_expired_token /\n422 weak_password on failure (translated by the global AppError handler).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Confirm password reset (atomic-consume + revoke-all)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "auth",
+                            "password-reset",
+                            "confirm"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/auth/password-reset/confirm",
+                          "variable": []
+                        }
+                      }
+                    },
+                    {
+                      "id": "69ffa4a9-4779-5442-b12d-d00e06eca522",
+                      "name": "Request a password-reset email (anti-oracle, rate-limited)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "RESET-01 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Anti-oracle: response is byte-identical\nacross all 4 cases (active / deactivated / owner / nonexistent) AND\nacross the rate-limit-hit branch. 500ms wall-clock floor + audit emit\nin BOTH known/unknown branches live entirely inside the service layer.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Request a password-reset email (anti-oracle, rate-limited)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "auth",
+                            "password-reset",
+                            "request"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/auth/password-reset/request",
+                          "variable": []
+                        }
+                      }
+                    }
+                  ],
+                  "name": "password-reset"
+                },
+                {
+                  "id": "901c36c5-df6d-5e01-abff-1fcc51f28b7a",
+                  "name": "Refresh",
+                  "request": {
+                    "description": {
+                      "content": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `sz_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "POST",
+                    "name": "Refresh",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "auth",
+                        "refresh"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/auth/refresh",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "id": "fabe5930-e9fa-566a-b671-cbce1a6df48e",
+                  "name": "List the current user's active session families",
+                  "request": {
+                    "description": {
+                      "content": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(sz_refresh)\ntoken_hash lookup (D-23-3).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "List the current user's active session families",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "auth",
+                        "sessions"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/auth/sessions",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "description": "",
+                      "item": [
+                        {
+                          "id": "6e1a71e5-e8d4-51f3-ae60-c5837fff7df7",
+                          "name": "Revoke a single session family (idempotent)",
+                          "request": {
+                            "description": {
+                              "content": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's sz_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
+                              "type": "text/plain"
+                            },
+                            "header": [
+                              {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                              },
+                              {
+                                "key": "Accept",
+                                "value": "application/json"
+                              }
+                            ],
+                            "method": "POST",
+                            "name": "Revoke a single session family (idempotent)",
+                            "url": {
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "sessions",
+                                "{family_id}",
+                                "revoke"
+                              ],
+                              "query": [],
+                              "raw": "{{baseUrl}}/api/v1/auth/sessions/{family_id}/revoke",
+                              "variable": [
+                                {
+                                  "key": "family_id",
+                                  "value": ""
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "name": "{family_id}"
+                    }
+                  ],
+                  "name": "sessions"
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "db735ced-2ce0-5bdf-bb7a-10bc01521a22",
+                      "name": "Telegram Start",
+                      "request": {
+                        "description": {
+                          "content": "Mint a deep-link token (AUTH-TG-01).\n\nReturns the deep-link URL the FE shows to the operator. The OtpCode row\nis created with code_hash=NULL — the bot will fill it after /start <token>.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Telegram Start",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "auth",
+                            "telegram",
+                            "start"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/auth/telegram/start",
+                          "variable": []
+                        }
+                      }
+                    },
+                    {
+                      "id": "f7ba9697-315c-59dc-bc27-60ac73e2c2df",
+                      "name": "Telegram Status",
+                      "request": {
+                        "description": {
+                          "content": "Poll: has the bot DMed the code yet? (AUTH-TG-03).\n\nPer D-19: never raises; unknown / expired / consumed all return bound=False\n(do NOT leak token validity).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "GET",
+                        "name": "Telegram Status",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "auth",
+                            "telegram",
+                            "status"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/auth/telegram/status",
+                          "variable": []
+                        }
+                      }
+                    },
+                    {
+                      "id": "62165ee8-12f3-5954-84ab-dbc3d74fbbb4",
+                      "name": "Telegram Verify",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Verify the 6-digit OTP and issue session cookies (AUTH-TG-04, AUTH-TG-06).\n\nOn success: mints tokens + cookies identical to /login, then emits\n`login_success` with `channel='telegram'` (D-14). Distinct error codes\nper D-13 ride the AppError envelope handler. BotNotStarted is re-raised\nwith `fields={'deepLinkUrl': ...}` so the FE can re-display the deep-link\nbutton (D-13 row 1).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Telegram Verify",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "auth",
+                            "telegram",
+                            "verify"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/auth/telegram/verify",
+                          "variable": []
+                        }
+                      }
+                    }
+                  ],
+                  "name": "telegram"
+                }
+              ],
+              "name": "auth"
+            },
+            {
+              "id": "71bd35cc-ebbc-5824-b23f-8c499ca60b23",
+              "name": "List bookings (reception+owner; paginated; client/trainer/status/time-window filters; default ±30d Moscow)",
+              "request": {
+                "description": {
+                  "content": "Paginated booking list (Phase 38 BOOK-07).\n\n`(LIST, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —\nreception sees the same list as owner (gym-staff trust model).\nDefault ±30d Moscow window bounds enumeration (T-38-03-05 mitigation).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List bookings (reception+owner; paginated; client/trainer/status/time-window filters; default ±30d Moscow)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "bookings"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/bookings",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "e654ed16-ab37-50c8-b0ad-60a8eb29b0dd",
+              "name": "Create a confirmed booking (reception+owner; 404 slot_not_found; 409 slot_not_available / slot_already_booked / trainer_mismatch / pt_package_not_active / pt_package_exhausted / pt_package_expired_before_slot; requires Idempotency-Key — D-38-14)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Create a confirmed booking (Phase 38 BOOK-02).\n\n`(CREATE, BOOKINGS)` is NOT in `OWNER_ONLY` (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel; audit records actor_user_id for accountability).\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would attempt\ntwo slot UPDATE active→booked + two booking INSERTs — the second\nwould be caught by the partial UNIQUE, but the cost is paid).\n\nError surface (service layer):\n  - 404 slot_not_found.\n  - 409 slot_not_available (slot status != 'active' before INSERT).\n  - 409 slot_already_booked (DB race-loser via partial UNIQUE — BOOK-10).\n  - 409 trainer_mismatch (pt_package.trainer_id != slot.trainer_id).\n  - 409 pt_package_not_active (no active package for client or id mismatch).\n  - 409 pt_package_exhausted (sessions_remaining <= 0).\n  - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).\n  - 422 idempotency_key_reuse (same key, different body).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Create a confirmed booking (reception+owner; 404 slot_not_found; 409 slot_not_available / slot_already_booked / trainer_mismatch / pt_package_not_active / pt_package_exhausted / pt_package_expired_before_slot; requires Idempotency-Key — D-38-14)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "bookings"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/bookings",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "faa33e61-1ffe-5231-a2fc-ee60616aaccf",
+                  "name": "Read a booking with denormalized slot + pt_package (reception+owner; 404 booking_not_found; joinedload — Pitfall 19 / D-38-08)",
+                  "request": {
+                    "description": {
+                      "content": "Read a single booking with denormalized slot + pt_package (BOOK-09).\n\nEager-loaded via repository.get_booking_with_relations (Pitfall 19 —\nN+1 prevention). Returns BookingDetailResponse with inline\nSlotSnapshot (no cross-module schema import per D-38-08).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Read a booking with denormalized slot + pt_package (reception+owner; 404 booking_not_found; joinedload — Pitfall 19 / D-38-08)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "bookings",
+                        "{booking_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/bookings/{booking_id}",
+                      "variable": [
+                        {
+                          "key": "booking_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "d63c0714-307c-5255-a53b-9341d090798d",
+                      "name": "Cancel a confirmed booking (reception ≤24h before slot.start per C-05 / owner anytime; 404 booking_not_found; 409 invalid_transition / cancel_window_expired; requires Idempotency-Key — D-38-14)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Cancel a confirmed booking (Phase 38 BOOK-06 / D-38-09 / D-38-16).\n\n`(CANCEL, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel). The 24h cancel-window (BOOK-06, measured against\n`booking.slot.start_time`, NOT `created_at` per D-38-16) is enforced\napplication-layer in `service.cancel_booking` and surfaces as 409\n`cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 — verbatim from\npt_sessions/router.py:200-227): SAME-key concurrent callers cannot\ndouble-execute the orchestrator (which would emit two\nbooking_cancelled audit rows AND attempt two slot restores).\n\nError surface (service layer):\n  - 404 booking_not_found.\n  - 409 invalid_transition (non-confirmed source).\n  - 409 cancel_window_expired (reception <24h before slot.start_time).\n  - 422 idempotency_key_reuse (same key, different body).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Cancel a confirmed booking (reception ≤24h before slot.start per C-05 / owner anytime; 404 booking_not_found; 409 invalid_transition / cancel_window_expired; requires Idempotency-Key — D-38-14)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "bookings",
+                            "{booking_id}",
+                            "cancel"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/bookings/{booking_id}/cancel",
+                          "variable": [
+                            {
+                              "key": "booking_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{booking_id}"
+                }
+              ],
+              "name": "bookings"
+            },
+            {
+              "id": "de7b7400-dcb4-503b-998b-0e24653fddf0",
+              "name": "List alive clients with filters and pagination",
+              "request": {
+                "description": {
+                  "content": "List alive clients (CLIENTS-03/04). VIEW permission required (D-21).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List alive clients with filters and pagination",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "clients"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/clients",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "b6b0415a-0c44-54d1-942d-ae72c355648b",
+              "name": "Create a new client (E.164 phone; 409 phone_exists on partial-unique conflict)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Create a client (CLIENTS-06). EDIT permission + CSRF required (D-21).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Create a new client (E.164 phone; 409 phone_exists on partial-unique conflict)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "clients"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/clients",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "6d4746b2-08e2-560e-ba10-2dad8039c248",
+                  "name": "Get a single alive client by id (404 if soft-deleted or missing)",
+                  "request": {
+                    "description": {
+                      "content": "Read one alive client (CLIENTS-05). 404 for missing or soft-deleted ids.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Get a single alive client by id (404 if soft-deleted or missing)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "clients",
+                        "{client_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/clients/{client_id}",
+                      "variable": [
+                        {
+                          "key": "client_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "2b5c33e4-734e-5c9f-97a4-c4ac88bfbb67",
+                  "name": "Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)",
+                  "request": {
+                    "body": {
+                      "mode": "raw",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      },
+                      "raw": "{}"
+                    },
+                    "description": {
+                      "content": "Partial update of an alive client (CLIENTS-07). EDIT + CSRF (D-21).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "PATCH",
+                    "name": "Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "clients",
+                        "{client_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/clients/{client_id}",
+                      "variable": [
+                        {
+                          "key": "client_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "900d6f8d-984f-5aca-a6fc-437f318a6d28",
+                  "name": "Soft-delete a client (owner-only; sets deleted_at, never hard-deletes)",
+                  "request": {
+                    "description": {
+                      "content": "Soft-delete an alive client (CLIENTS-08).\n\nOwner-only: (DELETE, CLIENTS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content;\nFastAPI emits an empty body for 204 status_code.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "DELETE",
+                    "name": "Soft-delete a client (owner-only; sets deleted_at, never hard-deletes)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "clients",
+                        "{client_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/clients/{client_id}",
+                      "variable": [
+                        {
+                          "key": "client_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "0406916b-f3d3-52c8-8062-36759bf6f75b",
+                      "name": "List bookings for a single client (reception+owner; paginated; from/to/status filters; default ±30d Moscow)",
+                      "request": {
+                        "description": {
+                          "content": "Paginated per-client booking list (Phase 38 BOOK-08).\n\nMount: `GET /api/v1/clients/{client_id}/bookings` (BOOK-08 locked\ncontract). The route is *declared* in bookings/router.py (this file) on\nthe `client_scoped_bookings_router`, then composed by\n`app.api.v1.router` at the `/clients` prefix — mirroring the v1.4\npt-sessions package-scoped router precedent\n(pt_sessions.router.package_scoped_router mounted at `/pt-packages`).\n\nThis split keeps clients/ a dependency-leaf module — clients/router.py\ncontains zero `from app.modules.bookings` imports — while honouring\nthe REQUIREMENTS BOOK-08 URL contract. lint-imports stays green; the\nbookings → clients edge lives only in the v1 composition root.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "GET",
+                        "name": "List bookings for a single client (reception+owner; paginated; from/to/status filters; default ±30d Moscow)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "clients",
+                            "{client_id}",
+                            "bookings"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/clients/{client_id}/bookings",
+                          "variable": [
+                            {
+                              "key": "client_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{client_id}"
+                }
+              ],
+              "name": "clients"
+            },
+            {
+              "id": "9388e203-317e-5ed8-8cbf-0055bc089df2",
+              "name": "List alive membership plans (owner-only); paginated; ?active filter",
+              "request": {
+                "description": {
+                  "content": "List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List alive membership plans (owner-only); paginated; ?active filter",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "membership-plans"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/membership-plans",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "76d54e35-c4b2-56be-9376-662a4922b3c4",
+              "name": "Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "membership-plans"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/membership-plans",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "2c4844c3-6536-5e00-864b-7bfc2872fd4f",
+                  "name": "Fetch a single alive membership plan (owner-only)",
+                  "request": {
+                    "description": {
+                      "content": "Read one alive membership plan. 404 for missing or soft-deleted ids.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Fetch a single alive membership plan (owner-only)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "membership-plans",
+                        "{plan_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/membership-plans/{plan_id}",
+                      "variable": [
+                        {
+                          "key": "plan_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "543c30d6-71b4-5072-955f-861c9f0edd97",
+                  "name": "Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)",
+                  "request": {
+                    "body": {
+                      "mode": "raw",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      },
+                      "raw": "{}"
+                    },
+                    "description": {
+                      "content": "Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "PATCH",
+                    "name": "Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "membership-plans",
+                        "{plan_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/membership-plans/{plan_id}",
+                      "variable": [
+                        {
+                          "key": "plan_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "87c60f6c-fb06-5271-a4cc-9b8333512759",
+                  "name": "Soft-delete a membership plan (owner-only); frees lower(name) unique slot",
+                  "request": {
+                    "description": {
+                      "content": "Soft-delete an alive membership plan (MEM-PLAN-EP-04).\n\nOwner-only: (DELETE, MEMBERSHIP_PLANS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content.\n\nD-15: Phase 16 ships soft-delete only — no 409 plan_in_use. The memberships table\nFK plan_id ON DELETE RESTRICT and _is_plan_in_use_conflict helper arrive in Phase 17.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "DELETE",
+                    "name": "Soft-delete a membership plan (owner-only); frees lower(name) unique slot",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "membership-plans",
+                        "{plan_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/membership-plans/{plan_id}",
+                      "variable": [
+                        {
+                          "key": "plan_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "name": "membership-plans"
+            },
+            {
+              "id": "5a46217b-535c-5ddf-a47a-7ce9874514aa",
+              "name": "List memberships filtered by clientId/status with pagination",
+              "request": {
+                "description": {
+                  "content": "List memberships, paginated (MEM-EP-01).\n\nQuery parameters (Phase 17 D-09; Phase 24 DEBT-02 adds expiring/within):\n  - clientId — optional UUID filter; omit for global feed (owner)\n  - status   — optional single-value enum (active|expired|cancelled); omit for all\n  - sort     — created_at_desc (default) | end_date_desc | start_date_desc\n  - page / pageSize — PageQuery contract (default 1 / 20, max 100)\n  - expiring — bool (default false); when true, forces status='active' and\n               adds inclusive end_date window [today, today + (within - 1)]\n               (Europe/Moscow today). Conflict with status != active -> 422\n               query_invalid {status: incompatible_with_expiring}.\n  - within   — int (default 7, bounded 1..30); window size in days when\n               expiring=true. Silently ignored when expiring=false.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List memberships filtered by clientId/status with pagination",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "memberships"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/memberships",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "576b4deb-59fa-5a98-bf86-9546889316c0",
+              "name": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).\n\nPhase 32 PAY-09 idempotency contract (D-32-18..D-32-20):\n  - Header `Idempotency-Key` is required; missing or malformed → 422\n    (idempotency_key_required / idempotency_key_invalid_format).\n  - First call: SET NX claims the key with an in-flight placeholder, runs\n    the service, stores the response envelope under the same key, returns.\n  - Replay with identical key + identical body → 200 with the cached\n    envelope bytes (byte-identical to the original response). Status code\n    is also replayed from the stored envelope.\n  - Replay with identical key + different body → 422 idempotency_key_reuse;\n    no second sale is recorded.\n  - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "memberships"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/memberships",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "f855e69a-9445-5d97-ba85-805f5627aa2a",
+                  "name": "Get a membership by id (404 membership_not_found)",
+                  "request": {
+                    "description": {
+                      "content": "Read one membership (MEM-EP-02). 404 `membership_not_found` for missing ids.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Get a membership by id (404 membership_not_found)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "memberships",
+                        "{membership_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/memberships/{membership_id}",
+                      "variable": [
+                        {
+                          "key": "membership_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "94cde714-9f19-5159-b4e0-83f176fb42ab",
+                      "name": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and\n`frozen → cancelled` are both allowed; `expired` and `cancelled` source\nstates raise 409 `invalid_transition` with payload `{from_status, to_status}`.\n\nPhase 25 D-25-20: also accepts frozen source. When called on a frozen\nmembership, the open freeze period is closed without end_date extension\n(cancellation supersedes freeze) and audit emits `membership_unfrozen`\n(days_added=0) before `membership_cancelled` in the same UoW. Owner-only\nvia existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "memberships",
+                            "{membership_id}",
+                            "cancel"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/memberships/{membership_id}/cancel",
+                          "variable": [
+                            {
+                              "key": "membership_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "4a1b5e2c-939f-5028-a659-d0d847295773",
+                      "name": "Freeze membership (reception+owner; 409 freeze_limit_exceeded / already_frozen / invalid_transition)",
+                      "request": {
+                        "description": {
+                          "content": "Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.\n\nTransitions active -> frozen and opens a freeze period. Returns the\nupdated MembershipResponse including freezeDaysUsed/Remaining and\ncurrentFreezePeriod populated.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not active)\n  - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)\n  - 409 already_frozen (concurrent INSERT race)",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Freeze membership (reception+owner; 409 freeze_limit_exceeded / already_frozen / invalid_transition)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "memberships",
+                            "{membership_id}",
+                            "freeze"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/memberships/{membership_id}/freeze",
+                          "variable": [
+                            {
+                              "key": "membership_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "6cf1948b-4143-5c69-9a64-8caf3ef85670",
+                      "name": "Refund a membership (reception+owner per B-07; 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition / already_refunded; 422 if amountKopecks supplied [REF-05])",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Refund a membership (Phase 32 REF-01). REFUND permission + CSRF required.\n\n(REFUND, MEMBERSHIPS) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (H-13 AlertDialog mitigation handled at admin-web FE-13 in\nPhase 35). NO Idempotency-Key dependency — refund flow uses DB partial\nUNIQUE ``uq_payments_refund_of_alive`` for natural idempotency (D-32-20);\nrepeat POST → 409 ``already_refunded``.\n\nStatus-guard ordering (D-32-11 invariant — specific code wins):\n  1. status='frozen'                        → 409 must_unfreeze_first   (B-08)\n  2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)\n  3. generic _assert_can_transition         → 409 invalid_transition\n     (already cancelled / expired)\n\nDB-side / refunder-side error mapping:\n  - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)\n  - no original sale row (legacy)    → 404 original_payment_not_found\n    (OriginalPaymentNotFoundError)\n\nSchema-layer validation (REF-05):\n  - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')\n  - empty reason / reason >200 chars       → 422\n\nRBAC-04 ordering: auth → require_permission → verify_csrf.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Refund a membership (reception+owner per B-07; 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition / already_refunded; 422 if amountKopecks supplied [REF-05])",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "memberships",
+                            "{membership_id}",
+                            "refund"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/memberships/{membership_id}/refund",
+                          "variable": [
+                            {
+                              "key": "membership_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "d5eb197c-cdaa-5764-a068-e97e3a9d8185",
+                      "name": "Renew membership (reception+owner; 404 plan_not_found / membership_not_found; 409 cannot_renew_cancelled / plan_archived)",
+                      "request": {
+                        "description": {
+                          "content": "Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.\n\nCreates a follow-up membership chained via ``previous_membership_id`` to\nthe source. Snapshots from the CURRENT plan (so price increases between\nsale and renewal apply — PROJECT.md). Returns 201 + new\n``MembershipResponse`` including ``previousMembershipId`` field.\n\nDate strategy:\n  - source 'active' / 'frozen' → start_date = source.end_date + 1 day\n  - source 'expired'           → start_date = today (Europe/Moscow)\n\nErrors:\n  - 404 membership_not_found  (source missing)\n  - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)\n  - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)\n  - 409 plan_archived          (source's plan soft-deleted by owner)",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Renew membership (reception+owner; 404 plan_not_found / membership_not_found; 409 cannot_renew_cancelled / plan_archived)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "memberships",
+                            "{membership_id}",
+                            "renew"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/memberships/{membership_id}/renew",
+                          "variable": [
+                            {
+                              "key": "membership_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "3e381b08-ab2c-5f8f-ade8-5d283970d619",
+                      "name": "Unfreeze membership (reception+owner; 409 invalid_transition)",
+                      "request": {
+                        "description": {
+                          "content": "Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.\n\nCloses the open freeze period, extends end_date by ceil(delta_seconds /\n86400) (minimum 1 day), and transitions frozen -> active.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not frozen)",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Unfreeze membership (reception+owner; 409 invalid_transition)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "memberships",
+                            "{membership_id}",
+                            "unfreeze"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/memberships/{membership_id}/unfreeze",
+                          "variable": [
+                            {
+                              "key": "membership_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{membership_id}"
+                }
+              ],
+              "name": "memberships"
+            },
+            {
+              "id": "f7d442a4-3d0c-5a0f-8556-ecc9416277ed",
+              "name": "List payments globally (owner-only; filters by subject + actor + date window)",
+              "request": {
+                "description": {
+                  "content": "List payments globally with filter parity (Phase 32 PAY-06).\n\nOwner-only because ``(VIEW, PAYMENTS)`` is in ``OWNER_ONLY``. Reception\non the global route receives 403 — they use the scoped ``/by-client`` and\n``/by-membership`` routes instead.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List payments globally (owner-only; filters by subject + actor + date window)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/payments",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "ca73a0d8-c6aa-5977-9a87-382d30779501",
+                      "name": "List payments tied to a client's memberships (reception+owner; PAY-07)",
+                      "request": {
+                        "description": {
+                          "content": "List payments scoped to a client (Phase 32 PAY-07).\n\nReception is admitted because the client detail page (Phase 35 UI) needs\nthe customer's payment history. Includes refund rows whose\n``refund_of`` references this client's membership sales.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "GET",
+                        "name": "List payments tied to a client's memberships (reception+owner; PAY-07)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "payments",
+                            "by-client",
+                            "{client_id}"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/payments/by-client/{client_id}",
+                          "variable": [
+                            {
+                              "key": "client_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "by-client"
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "bccb0c55-9252-5ad6-b207-ab35b61c8dbf",
+                      "name": "List payments tied to a single membership (reception+owner; PAY-07)",
+                      "request": {
+                        "description": {
+                          "content": "List payments scoped to a single membership (Phase 32 PAY-07).\n\nReturns the sale row plus the refund row (if any) for the same\nmembership.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "GET",
+                        "name": "List payments tied to a single membership (reception+owner; PAY-07)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "payments",
+                            "by-membership",
+                            "{membership_id}"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/payments/by-membership/{membership_id}",
+                          "variable": [
+                            {
+                              "key": "membership_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "by-membership"
+                }
+              ],
+              "name": "payments"
+            },
+            {
+              "id": "a51e5479-79d5-5490-8571-9ce9be5a2c5d",
+              "name": "List PT-package plans (owner-only); paginated; ?includeArchived toggle",
+              "request": {
+                "description": {
+                  "content": "List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List PT-package plans (owner-only); paginated; ?includeArchived toggle",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pt-package-plans"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/pt-package-plans",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "116232c9-b5e1-510f-b745-6114588ab7d2",
+              "name": "Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Create a PT-package plan (PT-02). CREATE + CSRF required.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pt-package-plans"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/pt-package-plans",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "056ed83e-d2c7-5d37-8962-8821cf1de817",
+                  "name": "Fetch a single alive PT-package plan (owner-only)",
+                  "request": {
+                    "description": {
+                      "content": "Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Fetch a single alive PT-package plan (owner-only)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "pt-package-plans",
+                        "{plan_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/pt-package-plans/{plan_id}",
+                      "variable": [
+                        {
+                          "key": "plan_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "142b59c6-e855-5eb4-9268-9a59753bc390",
+                  "name": "Patch a PT-package plan (owner-only); session_count / price_kopecks / validity_days mutation -> 409 field_immutable (D-33-07)",
+                  "request": {
+                    "body": {
+                      "mode": "raw",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      },
+                      "raw": "{}"
+                    },
+                    "description": {
+                      "content": "Patch a PT-package plan (PT-02 / D-33-07). EDIT + CSRF required.\n\nOnly ``name`` is mutable post-creation. Mutating session_count /\nprice_kopecks / validity_days raises 409 ``field_immutable`` with\n``fields.field`` carrying the offending field name.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "PATCH",
+                    "name": "Patch a PT-package plan (owner-only); session_count / price_kopecks / validity_days mutation -> 409 field_immutable (D-33-07)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "pt-package-plans",
+                        "{plan_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/pt-package-plans/{plan_id}",
+                      "variable": [
+                        {
+                          "key": "plan_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "208dfc37-9a46-55e8-9517-e4581788688c",
+                  "name": "Soft-delete a PT-package plan (owner-only); 409 plan_in_use if any pt_packages row references it (D-33-08)",
+                  "request": {
+                    "description": {
+                      "content": "Soft-delete a PT-package plan (PT-02 / D-33-08).\n\nOwner-only — reception → 403 from require_permission. Pre-flight checks\nfor any pt_packages row referencing this plan (409 plan_in_use) before\nflipping deleted_at. Returns 204 No Content on success.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "DELETE",
+                    "name": "Soft-delete a PT-package plan (owner-only); 409 plan_in_use if any pt_packages row references it (D-33-08)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "pt-package-plans",
+                        "{plan_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/pt-package-plans/{plan_id}",
+                      "variable": [
+                        {
+                          "key": "plan_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "name": "pt-package-plans"
+            },
+            {
+              "id": "7650a151-444c-5208-80b6-a0cad8855c00",
+              "name": "List PT-packages (reception+owner; paginated; ?clientId / ?status filters)",
+              "request": {
+                "description": {
+                  "content": "Paginated PT-package list (D-33-06 read tier).\n\n(VIEW, PT_PACKAGES) is NOT in OWNER_ONLY — reception sees the same list\nas owner (B-07 / Phase 35 PT-session form prefill — FE-10..18).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List PT-packages (reception+owner; paginated; ?clientId / ?status filters)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pt-packages"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/pt-packages",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "9d7ed47c-4535-58e4-bf7d-d9a28a1b8a37",
+              "name": "Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``sz:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Two-phase Redis claim + replay block mirrors\n``memberships.router.create_membership``.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pt-packages"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/pt-packages",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "a2790d3a-b491-528b-b1f1-315fb149f53d",
+                  "name": "Read a single PT-package (reception+owner; 404 pt_package_not_found)",
+                  "request": {
+                    "description": {
+                      "content": "Read a single PT-package instance (D-33-06; D-33-10 ``is_active`` computed).\n\n404 ``pt_package_not_found`` for missing ids.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Read a single PT-package (reception+owner; 404 pt_package_not_found)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "pt-packages",
+                        "{pt_package_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/pt-packages/{pt_package_id}",
+                      "variable": [
+                        {
+                          "key": "pt_package_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "b80becf7-eff3-5e14-a30f-96e7fa96a82a",
+                      "name": "Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; 409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Cancel a PT-package without refund (PT-08 / D-33-10).\n\n(CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception\nreceives 403 from the RBAC gate BEFORE any side effect.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db. Two-phase Redis claim + replay pattern\nmirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay\nreturns the cached envelope WITHOUT a second audit emit.\n\nError surface (service layer):\n  - 404 pt_package_not_found  (missing instance).\n  - 409 invalid_transition    (cancelled source — FSM terminal).\n  - 422 (schema layer)        (extra field / empty reason / >200 chars).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; 409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "pt-packages",
+                            "{pt_package_id}",
+                            "cancel"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/pt-packages/{pt_package_id}/cancel",
+                          "variable": [
+                            {
+                              "key": "pt_package_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "5bb8abc0-6bed-5f1c-809f-de8caf78ca08",
+                      "name": "Refund a PT-package (reception+owner per B-07; 404 pt_package_not_found / original_payment_not_found; 409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Refund a PT-package (REF-02 / PT-13 / D-33-11).\n\n(REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (uniform-reception RBAC). RBAC-04 ordering: auth →\nrequire_permission → verify_csrf → verify_idempotency → get_db.\n\nSubject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT\npayments/router.py). Cross-module communication via the\n``get_payment_refunder()`` Protocol slot — service layer NEVER imports\n``app.modules.payments.*`` (modules-independent contract).\n\nError surface:\n  - 404 pt_package_not_found        (missing instance).\n  - 404 original_payment_not_found  (no sale payment row — should not\n                                    occur in v1.4 since PT-packages\n                                    are introduced in Phase 33 with sale\n                                    flow; defence-in-depth for parity\n                                    with memberships).\n  - 409 invalid_transition          (cancelled source — FSM terminal;\n                                    fires BEFORE the refunder so the\n                                    already-cancelled case never reaches\n                                    the DB partial UNIQUE).\n  - 409 already_refunded            (concurrent race on\n                                    uq_payments_refund_of_alive partial\n                                    UNIQUE — REF-TEST-02 exhaustive\n                                    race coverage).\n  - 422 (schema layer)              (extra field / empty reason /\n                                    >200 chars).\n\nIdempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel\nsurfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for\noperator UX consistency, beyond the DB partial UNIQUE which is the\nload-bearing race defence on its own).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Refund a PT-package (reception+owner per B-07; 404 pt_package_not_found / original_payment_not_found; 409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "pt-packages",
+                            "{pt_package_id}",
+                            "refund"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/pt-packages/{pt_package_id}/refund",
+                          "variable": [
+                            {
+                              "key": "pt_package_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "4e7a4463-2804-5966-8400-ae305798b582",
+                      "name": "List PT-sessions for a package (reception+owner; paginated; ?includeCancelled filter; performed_at DESC, created_at DESC)",
+                      "request": {
+                        "description": {
+                          "content": "Paginated PT-session history for a package (PT-19 / D-34-08).\n\nSubject-side ownership (D-33-18): implementation lives in the\n`pt_sessions` module even though the URL path is rooted at\n`/pt-packages/{id}/sessions`. The `package_scoped_router` is\nmounted at `/api/v1/pt-packages` by `app.api.v1.router`.\n\nReturns the standard `{items, total, page, pageSize}` envelope ordered\n`performed_at DESC, created_at DESC, id DESC`. The `include_cancelled`\nquery param (camelCase `?includeCancelled`) defaults to `true`.\nReturns `items=[], total=0` for unknown `pt_package_id` (no 404 —\npackage-existence check is out of scope for list endpoints per\n`pt_packages` list precedent).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "GET",
+                        "name": "List PT-sessions for a package (reception+owner; paginated; ?includeCancelled filter; performed_at DESC, created_at DESC)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "pt-packages",
+                            "{pt_package_id}",
+                            "sessions"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/pt-packages/{pt_package_id}/sessions",
+                          "variable": [
+                            {
+                              "key": "pt_package_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{pt_package_id}"
+                }
+              ],
+              "name": "pt-packages"
+            },
+            {
+              "id": "63f08dc2-e970-59df-be18-d83014ee494b",
+              "name": "Record a PT-session (reception+owner; 404 pt_package_not_found / trainer_not_found; 409 pt_package_not_active / pt_package_exhausted; 422 trainer_inactive / performed_at_in_future / performed_at_out_of_window / idempotency_key_reuse; requires Idempotency-Key — D-34-10)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Record a PT-session (PT-15 / PT-16 / PT-17).\n\n(CREATE, PT_SESSIONS) is NOT in OWNER_ONLY (Phase 30 INFRA-19) —\nreception + owner both receive 201 from the RBAC gate. The 7-day\nbackdating window (B-11) is enforced application-layer in\n``service.record_pt_session`` and surfaces as 422\n``performed_at_out_of_window`` for reception.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo pt_session_recorded audit rows AND decrement\nsessions_remaining twice). The losing caller falls into the replay\nbranch and either gets the cached envelope (matching body) or 409\n``idempotency_in_flight`` (placeholder still set).\n\nError surface (service layer):\n  - 404 pt_package_not_found / trainer_not_found.\n  - 409 pt_package_not_active (pre-decrement guard fires first).\n  - 409 pt_package_exhausted (race-loser at atomic UPDATE).\n  - 422 trainer_inactive / performed_at_in_future /\n    performed_at_out_of_window.\n  - 422 idempotency_key_reuse (same key, different body).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Record a PT-session (reception+owner; 404 pt_package_not_found / trainer_not_found; 409 pt_package_not_active / pt_package_exhausted; 422 trainer_inactive / performed_at_in_future / performed_at_out_of_window / idempotency_key_reuse; requires Idempotency-Key — D-34-10)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pt-sessions"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/pt-sessions",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "4a482e84-5079-5db5-bd10-4856aace7c18",
+                  "name": "Read a single PT-session (reception+owner; 404 pt_session_not_found)",
+                  "request": {
+                    "description": {
+                      "content": "Read a single PT-session row (PT-19 read tier).\n\nReception + owner both pass (single-zone CRM, T-34-M accepted). Returns\n404 `pt_session_not_found` if the id is unknown.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Read a single PT-session (reception+owner; 404 pt_session_not_found)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "pt-sessions",
+                        "{pt_session_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/pt-sessions/{pt_session_id}",
+                      "variable": [
+                        {
+                          "key": "pt_session_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "a8d28267-4114-5012-9d5a-1a836465bc2d",
+                      "name": "Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).\n\n`(CANCEL, PT_SESSIONS)` is NOT in `OWNER_ONLY` (Plan 34-01 removed it) —\nreception + owner both pass the RBAC gate. The 24h cancel-window (B-12,\nmeasured from `pt_session.created_at`, NOT `performed_at` per D-34-07)\nis enforced application-layer in `service.cancel_pt_session` and surfaces\nas 403 `cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo `pt_session_cancelled` audit rows AND increment\n`sessions_remaining` twice).\n\nError surface (service layer):\n  - 404 pt_session_not_found.\n  - 409 already_cancelled.\n  - 403 cancel_window_expired (reception >24h since created_at).\n  - 422 idempotency_key_reuse (same key, different body).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "pt-sessions",
+                            "{pt_session_id}",
+                            "cancel"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/pt-sessions/{pt_session_id}/cancel",
+                          "variable": [
+                            {
+                              "key": "pt_session_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{pt_session_id}"
+                }
+              ],
+              "name": "pt-sessions"
+            },
+            {
+              "id": "741a2aa6-edfd-5f88-8325-291a8b268bcc",
+              "name": "List trainer slots (reception+owner; paginated; trainer/status/time-window filters)",
+              "request": {
+                "description": {
+                  "content": "Paginated slot list (SLOT-08 read tier).\n\n(LIST, SCHEDULE_SLOTS) is NOT in OWNER_ONLY — reception sees the same\nlist as owner (slot picker for booking flow). Default window is bounded\nto 14 days forward (T-38-01-04 mitigation — prevents unbounded\nenumeration).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List trainer slots (reception+owner; paginated; trainer/status/time-window filters)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "trainer-slots"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/trainer-slots",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "180a84ab-21e2-5420-b00c-80870beeece0",
+              "name": "Publish a trainer availability slot (owner-only; 409 slot_overlap / slot_too_close / slot_in_past / trainer_inactive / trainer_not_found; requires Idempotency-Key — D-38-14)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Publish a trainer availability slot (Phase 38 SLOT-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY (Phase 37 INFRA-27) — reception\nreceives 403 from the RBAC gate BEFORE any side effect. Two-phase Redis\nclaim + replay (CR-02 from Phase 33 review) closes the same-key race.\n\nError surface (service layer):\n  - 404 trainer_not_found       (no such trainer id)\n  - 409 trainer_inactive        (trainer.is_active=False)\n  - 409 slot_in_past            (start_time <= now() UTC)\n  - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)\n  - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)\n  - 422 idempotency_key_reuse   (same key, different body)",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Publish a trainer availability slot (owner-only; 409 slot_overlap / slot_too_close / slot_in_past / trainer_inactive / trainer_not_found; requires Idempotency-Key — D-38-14)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "trainer-slots"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/trainer-slots",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "6ea48ac2-5e9b-5a3a-a19b-89e7adbacf00",
+                  "name": "Read a single trainer slot (reception+owner; 404 slot_not_found)",
+                  "request": {
+                    "description": {
+                      "content": "Read a single slot (SLOT-08 detail). 404 slot_not_found for missing id.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Read a single trainer slot (reception+owner; 404 slot_not_found)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "trainer-slots",
+                        "{slot_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/trainer-slots/{slot_id}",
+                      "variable": [
+                        {
+                          "key": "slot_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "48dec834-619b-5603-ac99-6bca6e6b8355",
+                      "name": "Cancel a trainer slot (owner-only; 404 slot_not_found; 409 invalid_transition for cancelled source or booked-cascade deferred to 38-03; requires Idempotency-Key — D-38-14)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "Cancel a trainer slot (SLOT-09 — active-only path in plan 38-01).\n\nFor Phase 38 plan 38-01: only the `active → cancelled` transition is\nsupported. Cancelling a `booked` slot triggers the booked-cascade flow\nwhich lands in plan 38-03 (it must atomically cancel the linked confirmed\nbooking + emit both `slot_cancelled` and `booking_cancelled`). In this\nplan, attempting to cancel a booked slot raises\n`InvalidSlotTransitionError` (409 `invalid_transition`) with an explicit\nforward-link message.\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "PATCH",
+                        "name": "Cancel a trainer slot (owner-only; 404 slot_not_found; 409 invalid_transition for cancelled source or booked-cascade deferred to 38-03; requires Idempotency-Key — D-38-14)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "trainer-slots",
+                            "{slot_id}",
+                            "cancel"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/trainer-slots/{slot_id}/cancel",
+                          "variable": [
+                            {
+                              "key": "slot_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{slot_id}"
+                }
+              ],
+              "name": "trainer-slots"
+            },
+            {
+              "id": "0e54246e-e270-5cdf-8710-eb1805bbbbf3",
+              "name": "List alive trainers with optional is_active filter and pagination",
+              "request": {
+                "description": {
+                  "content": "List alive trainers (TRN-04). VIEW permission required — reception allowed (D-31-09).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List alive trainers with optional is_active filter and pagination",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "trainers"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/trainers",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "b038a22b-6087-5ae4-b56e-e52d7ff2141a",
+              "name": "Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Create a trainer (TRN-02). CREATE permission + CSRF required (RBAC-04 ordering).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "trainers"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/trainers",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "79f32285-f66d-5b70-a4e1-48539ad2e907",
+                  "name": "Get a single alive trainer by id (404 if soft-deleted or missing)",
+                  "request": {
+                    "description": {
+                      "content": "Read one alive trainer (TRN-02). 404 for missing or soft-deleted ids.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Get a single alive trainer by id (404 if soft-deleted or missing)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "trainers",
+                        "{trainer_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/trainers/{trainer_id}",
+                      "variable": [
+                        {
+                          "key": "trainer_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "067edc58-0e36-5540-b4fa-136a3ee76159",
+                  "name": "Partial update (PATCH semantics; handles deactivate/reactivate via isActive)",
+                  "request": {
+                    "body": {
+                      "mode": "raw",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      },
+                      "raw": "{}"
+                    },
+                    "description": {
+                      "content": "Partial update of an alive trainer (TRN-03). EDIT + CSRF (RBAC-04 ordering).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "PATCH",
+                    "name": "Partial update (PATCH semantics; handles deactivate/reactivate via isActive)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "trainers",
+                        "{trainer_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/trainers/{trainer_id}",
+                      "variable": [
+                        {
+                          "key": "trainer_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "73c902cc-7a0c-59b8-a835-6196cf10ecd8",
+                  "name": "Hard-delete a trainer (owner-only; 409 trainer_in_use if pt_sessions FK)",
+                  "request": {
+                    "description": {
+                      "content": "Hard-delete an alive trainer (TRN-05).\n\nOwner-only: (DELETE, TRAINERS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content.\nMaps IntegrityError pgcode=23503 → 409 trainer_in_use (pre-emptive D-31-07).",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "DELETE",
+                    "name": "Hard-delete a trainer (owner-only; 409 trainer_in_use if pt_sessions FK)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "trainers",
+                        "{trainer_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/trainers/{trainer_id}",
+                      "variable": [
+                        {
+                          "key": "trainer_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "name": "trainers"
+            },
+            {
+              "id": "3f5e291b-082d-5a5b-b940-4babbdcec90d",
+              "name": "List users with optional active/deleted filters and pagination",
+              "request": {
+                "description": {
+                  "content": "USERS-02 — paginated list (D-43-15). LIST permission required; no CSRF (read).",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List users with optional active/deleted filters and pagination",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/users",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "758fd1d4-12e2-5b39-8453-f4fb404a256f",
+              "name": "Create user + send invitation (idempotent re-invite; 409 on active email)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "USERS-03 / D-43-13 — create user + invite. CREATE permission + CSRF required.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Create user + send invitation (idempotent re-invite; 409 on active email)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/users",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "193d6dff-a66c-553a-ae38-3e9bb2209af4",
+                      "name": "Accept a pending invitation: set password + log in (RESET-04)",
+                      "request": {
+                        "body": {
+                          "mode": "raw",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          },
+                          "raw": "{}"
+                        },
+                        "description": {
+                          "content": "RESET-04 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Cross-module delegate to\n``auth.password_reset_service.accept_invitation`` (D-44-18 — atomic\nconsume + UPDATE-only password set lives in auth bedrock). On\nsuccess, issues session cookies via the SAME verbatim sequence\n/auth/login uses (see auth/router.py:72-92).\n\nCanonical ordering — DO NOT deviate:\n  1. service.accept_invitation owns its own commit (SVC001).\n  2. Re-load User row by id for UserPublic.model_validate.\n  3. issue_tokens(session, redis, user) — 3-tuple (access, refresh, csrf).\n  4. issue_session_cookies(response, access_token=, refresh_token=,\n     csrf_token=, secure=) — kwargs match /auth/login verbatim.\n  5. NO explicit session.commit() between (3) and (4) — mirrors /auth/login.\n  6. envelope(LoginResponse(user=UserPublic.model_validate(user))).",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "POST",
+                        "name": "Accept a pending invitation: set password + log in (RESET-04)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "users",
+                            "invitations",
+                            "accept"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/users/invitations/accept",
+                          "variable": []
+                        }
+                      }
+                    },
+                    {
+                      "description": "",
+                      "item": [
+                        {
+                          "id": "cd0db291-56df-5447-ba59-8318f78bc82b",
+                          "name": "Revoke a pending invitation by token row id (404 missing, 409 already accepted)",
+                          "request": {
+                            "body": {
+                              "mode": "raw",
+                              "options": {
+                                "raw": {
+                                  "language": "json"
+                                }
+                              },
+                              "raw": "{}"
+                            },
+                            "description": {
+                              "content": "USERS-03 / D-43-19 — atomic-consume invitation token by row UUID (NOT raw token).",
+                              "type": "text/plain"
+                            },
+                            "header": [
+                              {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                              },
+                              {
+                                "key": "Accept",
+                                "value": "application/json"
+                              }
+                            ],
+                            "method": "POST",
+                            "name": "Revoke a pending invitation by token row id (404 missing, 409 already accepted)",
+                            "url": {
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "invitations",
+                                "{token_id}",
+                                "revoke"
+                              ],
+                              "query": [],
+                              "raw": "{{baseUrl}}/api/v1/users/invitations/{token_id}/revoke",
+                              "variable": [
+                                {
+                                  "key": "token_id",
+                                  "value": ""
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "name": "{token_id}"
+                    }
+                  ],
+                  "name": "invitations"
+                },
+                {
+                  "id": "6cc4f945-7db3-56b2-99c0-c5d1efab7124",
+                  "name": "Soft-delete user (session revoke + invitation cascade; 409 on self / last-owner)",
+                  "request": {
+                    "description": {
+                      "content": "USERS-05 / D-43-18 — soft-delete + session revoke + invitation cascade.\n\nDELETE permission + CSRF required. `(Action.DELETE, Resource.USERS)` is in\n`OWNER_ONLY`, so reception → 403 from `require_permission`.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "DELETE",
+                    "name": "Soft-delete user (session revoke + invitation cascade; 409 on self / last-owner)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "users",
+                        "{user_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/users/{user_id}",
+                      "variable": [
+                        {
+                          "key": "user_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "description": "",
+                  "item": [
+                    {
+                      "id": "462cbfa7-ee75-5d7d-8152-365b811d32c8",
+                      "name": "Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)",
+                      "request": {
+                        "description": {
+                          "content": "USERS-04 / D-43-16 — self + last-owner guards; UPDATE permission + CSRF required.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "PATCH",
+                        "name": "Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "users",
+                            "{user_id}",
+                            "deactivate"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/users/{user_id}/deactivate",
+                          "variable": [
+                            {
+                              "key": "user_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "id": "8e12f2be-fdde-5c4b-9706-034bfa7de5e4",
+                      "name": "Reactivate a previously-deactivated user (404 missing, 409 if already active)",
+                      "request": {
+                        "description": {
+                          "content": "USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required.",
+                          "type": "text/plain"
+                        },
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          },
+                          {
+                            "key": "Accept",
+                            "value": "application/json"
+                          }
+                        ],
+                        "method": "PATCH",
+                        "name": "Reactivate a previously-deactivated user (404 missing, 409 if already active)",
+                        "url": {
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "users",
+                            "{user_id}",
+                            "reactivate"
+                          ],
+                          "query": [],
+                          "raw": "{{baseUrl}}/api/v1/users/{user_id}/reactivate",
+                          "variable": [
+                            {
+                              "key": "user_id",
+                              "value": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "name": "{user_id}"
+                }
+              ],
+              "name": "users"
+            },
+            {
+              "id": "a40c3461-2dbc-5edc-8f74-6cae7cacb5ee",
+              "name": "List visits filtered by clientId/from/to with pagination",
+              "request": {
+                "description": {
+                  "content": "List visits, paginated (VIS-EP-01). VIEW permission required.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "name": "List visits filtered by clientId/from/to with pagination",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "visits"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/visits",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "id": "cac84519-3622-577b-a8a6-d8dd498b8d1a",
+              "name": "Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{}"
+                },
+                "description": {
+                  "content": "Reception manual check-in (VIS-EP-03). CHECK_IN permission + CSRF required.\n\nSealed body — only `clientId` accepted (D-01). Every other field is\nserver-derived: membershipId resolved via resolve_active_membership;\ncheckedInAt defaults to DB now(); gymDate is the STORED GENERATED column;\nchannel is 'reception'; checkedInBy is actor.id.\n\nRBAC-04: `actor` (require_permission) parameter is declared BEFORE\n`_csrf` (verify_csrf) so unauthenticated callers see 401, not CSRF\nerrors. (CHECK_IN, VISITS) is NOT in OWNER_ONLY — reception receives\n201 on success.",
+                  "type": "text/plain"
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "name": "Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)",
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "visits"
+                  ],
+                  "query": [],
+                  "raw": "{{baseUrl}}/api/v1/visits",
+                  "variable": []
+                }
+              }
+            },
+            {
+              "description": "",
+              "item": [
+                {
+                  "id": "58c1dcd9-d7ee-5b1d-8be3-1d228c66c233",
+                  "name": "Gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)",
+                  "request": {
+                    "description": {
+                      "content": "Return gym hours window. Reception + owner. No DB access.\n\nCache-Control: public, max-age=300 — value travels with route (D-22-1).\nReads Settings.gym_hours_start / gym_hours_end (lru_cache) and serialises\nvia .isoformat()[:5] → HH:MM strings.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "visits",
+                        "_meta"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/visits/_meta",
+                      "variable": []
+                    }
+                  }
+                },
+                {
+                  "id": "485bb2e2-8498-5beb-948e-5f76b5833a66",
+                  "name": "Get a single visit by id (404 visit_not_found)",
+                  "request": {
+                    "description": {
+                      "content": "Read one visit (VIS-EP-02). 404 `visit_not_found` for missing ids.",
+                      "type": "text/plain"
+                    },
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "name": "Get a single visit by id (404 visit_not_found)",
+                    "url": {
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "visits",
+                        "{visit_id}"
+                      ],
+                      "query": [],
+                      "raw": "{{baseUrl}}/api/v1/visits/{visit_id}",
+                      "variable": [
+                        {
+                          "key": "visit_id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "name": "visits"
+            }
+          ],
+          "name": "v1"
+        }
+      ],
+      "name": "api"
+    },
+    {
+      "description": "",
+      "item": [
+        {
+          "id": "4ba28667-649b-5f0d-afe2-20b30fed06f8",
+          "name": "Health",
+          "request": {
+            "description": {
+              "content": "Liveness probe. Returns {\"status\": \"ok\"} with HTTP 200.",
+              "type": "text/plain"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "name": "Health",
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "healthz"
+              ],
+              "query": [],
+              "raw": "{{baseUrl}}/healthz",
+              "variable": []
+            }
+          }
+        }
+      ],
+      "name": "healthz"
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    }
+  ]
+}
