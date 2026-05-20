@@ -80,12 +80,16 @@ def _reset_worker_logger_cache() -> None:
     re-resolves processors from the current `_CONFIG.default_processors`
     on the next call — which is the list `capture_logs` mutates.
     """
+    from app.workers.scheduled import (
+        cleanup_password_reset_tokens as cleanup_mod,
+    )
     from app.workers.scheduled import expire_memberships as worker_mod
 
     # `bind` is the cached attribute set by BoundLoggerLazyProxy's first call
     # under `cache_logger_on_first_use=True`. Removing it forces re-resolution.
-    if "bind" in worker_mod._log.__dict__:
-        del worker_mod._log.__dict__["bind"]
+    for mod in (worker_mod, cleanup_mod):
+        if "bind" in mod._log.__dict__:
+            del mod._log.__dict__["bind"]
 
 
 @pytest_asyncio.fixture
