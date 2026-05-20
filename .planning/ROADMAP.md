@@ -308,16 +308,16 @@ Plans:
 - [x] 46-04-PLAN.md — export_postman.py + .planning/handoff/v1.6-postman.json (filter _internal) (HANDOFF-04)
 
 **Wave 3** *(race tests; parallelisable, no cross-wave deps)*
-- [ ] 46-05-PLAN.md — test_password_reset_token_replay_race.py (VER-10)
-- [ ] 46-06-PLAN.md — test_soft_delete_reinvite_race.py (VER-10)
-- [ ] 46-07-PLAN.md — test_deactivate_refresh_race.py (VER-10)
-- [ ] 46-08-PLAN.md — test_bounce_webhook_active_send_race.py (VER-10)
-- [ ] 46-09-PLAN.md — test_concurrent_expiring_cron_double_pings_race.py (VER-10)
-- [ ] 46-10-PLAN.md — test_rfc2047_cyrillic_subject_roundtrip.py (VER-10)
+- [x] 46-05-PLAN.md — test_password_reset_token_replay_race.py (VER-10)
+- [x] 46-06-PLAN.md — test_soft_delete_reinvite_race.py (VER-10)
+- [x] 46-07-PLAN.md — test_deactivate_refresh_race.py (VER-10)
+- [x] 46-08-PLAN.md — test_bounce_webhook_active_send_race.py (VER-10)
+- [x] 46-09-PLAN.md — test_concurrent_expiring_cron_double_pings_race.py (VER-10)
+- [x] 46-10-PLAN.md — test_rfc2047_cyrillic_subject_roundtrip.py (VER-10)
 
 **Wave 4** *(runbook + probe scaffolding; parallelisable, no cross-wave deps)*
-- [ ] 46-11-PLAN.md — Engineer v1.6-verification-evidence/run.sh (8 scenarios, DEFER-40-01 hardened) (VER-09)
-- [ ] 46-12-PLAN.md — apps/backend/scripts/verify/v1_6_email_probe.py (VER-12)
+- [x] 46-11-PLAN.md — Engineer v1.6-verification-evidence/run.sh (8 scenarios, DEFER-40-01 hardened) (VER-09)
+- [x] 46-12-PLAN.md — apps/backend/scripts/verify/v1_6_email_probe.py (VER-12)
 
 **Wave 5** *(live verification session; SERIAL, depends on all prior; autonomous: false)*
 - [ ] 46-13-PLAN.md — Execute 8-scenario runbook + email probe + anti-oracle re-run + CI evidence capture + v1.6-VERIFICATION-LOG.md + 15-template owner sign-off (VER-09, VER-11, VER-12, VER-13, VER-14)
@@ -339,7 +339,7 @@ Plans:
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
 | 45. Email Notification Mirrors | 13/13 | Complete   | 2026-05-20 |
-| 46. OpenAPI Handoff + Milestone Verification | 4/13 | In Progress|  |
+| 46. OpenAPI Handoff + Milestone Verification | 12/13 | In Progress|  |
 
 ---
 
