@@ -395,7 +395,15 @@ async def test_booking_cancelled_by_client_fanouts_email(
 ) -> None:
     """FSM hook: cancel_booking (reception actor) → cancelled_by_client kind."""
     trainer = await _make_trainer(db_session)
-    slot = await _make_slot(db_session, trainer=trainer, owner=seeded_owner)
+    # 48h offset so the reception-actor cancel window guard (24h floor)
+    # does not fire — this test exercises the cancel-DM path, not the
+    # window-validation path.
+    slot = await _make_slot(
+        db_session,
+        trainer=trainer,
+        owner=seeded_owner,
+        start_offset=timedelta(hours=48),
+    )
     client = await _make_client(
         db_session,
         owner=seeded_owner,

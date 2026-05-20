@@ -576,11 +576,18 @@ async def cancel_slot(
             dm_bot = telegram_bot.build_bot(
                 token=get_settings().telegram_bot_token.get_secret_value(),
             )
-            await bookings_service._dispatch_booking_dm(
+            # Phase 45 D-45-05 — schedule.cancel_slot cascade lifecycle DMs
+            # are owner-initiated (the cancel originates from the slot
+            # owner), so kind='cancelled_by_owner' literal here. Email
+            # fanout on Telegram-blocked uses the same module helper as
+            # the bookings/service.py FSM callsites for consistency.
+            await bookings_service._dispatch_booking_lifecycle_notification(
                 cancelled_booking,
+                kind="cancelled_by_owner",  # LITERAL — Plan 45-08
                 template=bookings_notifications.BOOKING_CANCELLED_BY_OWNER_DM,
                 bot=dm_bot,
                 sender=telegram_sender_mod,
+                session=session,
             )
 
     # 9. Reload via repository (joinedload trainer for trainer_full_name

@@ -60,6 +60,7 @@ from app.core.dependencies import (
     restore_booking_slot,
 )
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.formatters import _RU_MONTHS_GEN
 from app.core.pagination import PaginatedData
 from app.core.permissions import Role
 from app.integrations.telegram import sender as telegram_sender
@@ -74,6 +75,7 @@ from app.modules.bookings.notifications import (
     BOOKING_CANCELLED_BY_CLIENT_DM,
     BOOKING_CANCELLED_BY_OWNER_DM,
     BOOKING_CONFIRMED_DM,
+    enqueue_booking_email_fallback,
 )
 from app.modules.bookings.schemas import (
     BookingCancelRequest,
@@ -407,6 +409,178 @@ async def _dispatch_booking_dm(
 
 
 # ---------------------------------------------------------------------------
+# Phase 45 D-45-05 — lifecycle email-fallback dispatch helper.
+# ---------------------------------------------------------------------------
+
+
+async def _dispatch_booking_lifecycle_notification(  # noqa: SVC001 caller-owns-txn -- helper opens its own fanout-INSERT scope post outer-commit
+    booking: Booking,
+    *,
+    kind: str,
+    template: str,
+    bot: Bot,
+    sender: ModuleType,
+    session: AsyncSession,
+) -> None:
+    """Telegram-DM first + email-fallback INSERT for a lifecycle FSM event.
+
+    Phase 45 D-45-05 / D-45-13. Wraps the existing
+    ``_dispatch_booking_dm`` fire-and-forget Telegram path with a
+    post-result email-fallback INSERT into ``booking_notifications``
+    when:
+
+      - Telegram returns ``SendResult.blocked=True`` AND the client has
+        ``email IS NOT NULL`` — fanout to email + INSERT row with
+        ``channel='email'``.
+      - Telegram succeeds — no INSERT (lifecycle DMs are fire-and-forget
+        per Phase 39 D-39-09; the booking row itself is the audit).
+      - Client is Telegram-unlinked but has email — direct email send
+        + INSERT row with ``channel='email'``.
+      - Both channels unreachable — INFO-log + skip (no rows).
+
+    Cross-channel UNIQUE ``uq_booking_notifications_booking_kind_channel``
+    (Migration 0024) makes the INSERT idempotent per
+    ``(booking_id, kind, channel)`` triple — concurrent FSM transitions
+    cannot double-write.
+
+    ``session`` is reused (the outer ``create_booking`` / ``cancel_booking``
+    UoW has already committed and the session is in a clean state ready to
+    begin a fresh transaction for the fanout INSERT). Mirrors the
+    post-commit re-use shape established at create_booking lines 852-862
+    where the same session is consumed by ``_load_booking_with_relationships``
+    + ``get_booking_by_id`` reload.
+
+    SVC001 marker (caller-owns-txn): this helper opens its own post-commit
+    fanout scope — it commits the email-fallback INSERT independently of
+    the outer booking-creation/cancellation transaction. Best-effort: an
+    exception inside the fanout block does NOT roll back the booking
+    FSM transition (that already committed upstream).
+    """
+    # Guard: missing eager-loaded relationships. Mirror _dispatch_booking_dm.
+    if (
+        booking.client is None
+        or booking.slot is None
+        or booking.slot.trainer is None
+    ):
+        _log.error(
+            "booking_lifecycle_dm_missing_joinedload",
+            booking_id=str(booking.id),
+            kind=kind,
+        )
+        return
+
+    chat_id = booking.client.telegram_user_id
+    client_email = booking.client.email
+    trainer_full_name = booking.slot.trainer.full_name
+    slot_start_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime(
+        "%d.%m.%Y %H:%M"
+    )
+
+    # Telegram side — only fire when a chat_id is present. Preserve the
+    # Phase 39 log-event names (`booking_dm_skipped_unlinked` /
+    # `booking_dm_send_failed`) so existing integration test assertions
+    # in tests/integration/bookings/test_{create,cancel}_sends_dm.py
+    # continue to match (the Phase 45 fanout is additive; the Phase 39
+    # observability contract is unchanged).
+    send_result = None
+    if chat_id is None:
+        _log.info("booking_dm_skipped_unlinked", booking_id=str(booking.id))
+    else:
+        text_body = template.format(
+            client_name=booking.client.first_name,
+            trainer_name=trainer_full_name,
+            slot_start_msk=slot_start_msk,
+        )
+        send_result = await sender.send_text_dm(bot, chat_id, text_body)
+        if not send_result.ok:
+            reason = "bot_blocked" if send_result.blocked else "transient"
+            # Phase 39 log-event name preserved for test-assertion stability.
+            _log.warning(
+                "booking_dm_send_failed",
+                reason=reason,
+                booking_id=str(booking.id),
+                telegram_chat_id=chat_id,
+                error_msg=send_result.error,
+            )
+
+    # Email-fallback decision (D-45-05): fire when Telegram unreachable AND
+    # client has email. Transient Telegram failures (ok=False, blocked=False)
+    # do NOT fan out — lifecycle DMs are best-effort; transient retries are
+    # not the cron's job for lifecycle events (D-39-09 fire-and-forget).
+    should_email_fanout = client_email is not None and (
+        send_result is None  # Telegram-unlinked client
+        or send_result.blocked  # Telegram bot blocked
+    )
+    if not should_email_fanout:
+        return
+
+    # Map the lifecycle kind -> 4-literal-branch email helper kind. Each
+    # branch passes its own kind literal (D-45-22 + AST gate parity).
+    try:
+        if kind == "confirmed":
+            session.add(
+                BookingNotification(
+                    booking_id=booking.id,
+                    kind="confirmed",
+                    channel="email",
+                )
+            )
+            await enqueue_booking_email_fallback(
+                kind="confirmed",
+                client_email=client_email,
+                trainer_name=trainer_full_name,
+                slot_start_msk=slot_start_msk,
+            )
+        elif kind == "cancelled_by_client":
+            session.add(
+                BookingNotification(
+                    booking_id=booking.id,
+                    kind="cancelled_by_client",
+                    channel="email",
+                )
+            )
+            await enqueue_booking_email_fallback(
+                kind="cancelled_by_client",
+                client_email=client_email,
+                trainer_name=trainer_full_name,
+                slot_start_msk=slot_start_msk,
+            )
+        elif kind == "cancelled_by_owner":
+            session.add(
+                BookingNotification(
+                    booking_id=booking.id,
+                    kind="cancelled_by_owner",
+                    channel="email",
+                )
+            )
+            await enqueue_booking_email_fallback(
+                kind="cancelled_by_owner",
+                client_email=client_email,
+                trainer_name=trainer_full_name,
+                slot_start_msk=slot_start_msk,
+            )
+        else:  # pragma: no cover -- defensive; callers pass literals.
+            raise ValueError(f"unknown lifecycle kind: {kind}")
+        await session.commit()
+    except IntegrityError:
+        # Race with a concurrent FSM transition (idempotency catch).
+        await session.rollback()
+        _log.info(
+            "booking_lifecycle_email_idempotency_conflict",
+            booking_id=str(booking.id),
+            kind=kind,
+        )
+    except Exception as exc:
+        await session.rollback()
+        _log.warning(
+            "booking_lifecycle_email_fanout_failed",
+            booking_id=str(booking.id),
+            kind=kind,
+            error_msg=str(exc),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Phase 39 CRON-01 — no-show batch helper (D-39-06 single-session, D-39-07
 # SELECT FOR UPDATE OF b; SVC001-exempt: worker owns commit).
 # ---------------------------------------------------------------------------
@@ -529,14 +703,28 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
     # Step 1 — read candidates in one short-lived read session.
     # D-39-08 verbatim: LEFT JOIN booking_notifications + WHERE n.id IS NULL
     # is the SELECT-level idempotency pre-filter; BETWEEN now()+23h AND
-    # now()+25h is the locked 2-hour reminder window; c.telegram_user_id
-    # IS NOT NULL excludes unlinked clients at the SQL layer (no sender
-    # call attempted for those).
+    # now()+25h is the locked 2-hour reminder window.
+    #
+    # Phase 45 D-45-01 cross-channel relax: the Telegram-only filter
+    # `c.telegram_user_id IS NOT NULL` is widened to
+    # `(c.telegram_user_id IS NOT NULL OR c.email IS NOT NULL)` so
+    # email-only clients reach the email-fallback branch in the send loop
+    # below. Both c.email and c.last_name/c.first_name are projected onto
+    # the row so the per-send loop can call `enqueue_booking_email_fallback`
+    # without a per-candidate re-query (matches the memberships
+    # Plan 45-07 ExpiringCandidate widening shape — see
+    # apps/backend/app/modules/memberships/repository.py:find_expiring_candidates).
+    #
+    # D-45-14: the NOT EXISTS / LEFT JOIN predicate on `booking_notifications`
+    # stays channel-agnostic — `n.id IS NULL` matches the single-shot-per-kind
+    # invariant ACROSS channels (Telegram OR email — only one wins per
+    # (booking_id, kind), idempotency anchored by the cross-channel UNIQUE
+    # `uq_booking_notifications_booking_kind_channel` from Migration 0024).
     async with session_factory() as read_session:
         result = await read_session.execute(
             sa.text(  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
                 "SELECT b.id, b.client_id, b.slot_id, "
-                "       c.telegram_user_id, c.first_name, "
+                "       c.telegram_user_id, c.first_name, c.last_name, c.email, "
                 "       t.full_name AS trainer_name, "
                 "       s.start_time "
                 "FROM bookings b "
@@ -548,7 +736,8 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
                 "WHERE b.status = 'confirmed' "
                 "  AND s.start_time BETWEEN now() + interval '23 hours' "
                 "                       AND now() + interval '25 hours' "
-                "  AND c.telegram_user_id IS NOT NULL "
+                "  AND (c.telegram_user_id IS NOT NULL "
+                "       OR c.email IS NOT NULL) "
                 "  AND n.id IS NULL"
             )
         )
@@ -556,21 +745,65 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
 
     sent = 0
     for r in rows:
-        # Step 2 — render the locked template via the supplied module
-        # (passing the module enables test-time monkeypatching of the
-        # renderer for the collision-rollback test).
-        text_body = notifications_module.render_booking_reminder_24h_dm(
-            client_name=r.first_name,
-            trainer_name=r.trainer_name,
-            slot_start_msk=r.start_time.astimezone(MOSCOW_TZ).strftime(
-                "%d.%m.%Y %H:%M"
-            ),
+        slot_start_msk = r.start_time.astimezone(MOSCOW_TZ).strftime(
+            "%d.%m.%Y %H:%M"
         )
 
-        # Step 3 — fire the DM. ``sender.send_text_dm`` returns a typed
-        # SendResult and never re-raises transport errors (D-07 contract).
-        send_result = await sender.send_text_dm(bot, r.telegram_user_id, text_body)
-        if not send_result.ok:
+        # Phase 45 D-45-01 — Telegram-side dispatch only when chat_id present.
+        # Email-only clients (telegram_user_id IS NULL but email IS NOT NULL)
+        # skip the Telegram branch entirely and proceed directly to the
+        # email-fallback block below; the read-session SELECT already
+        # admitted them via the widened OR-predicate (D-45-01 / D-45-14).
+        send_result = None
+        if r.telegram_user_id is not None:
+            # Step 2 — render the locked template via the supplied module
+            # (passing the module enables test-time monkeypatching of the
+            # renderer for the collision-rollback test).
+            text_body = notifications_module.render_booking_reminder_24h_dm(
+                client_name=r.first_name,
+                trainer_name=r.trainer_name,
+                slot_start_msk=slot_start_msk,
+            )
+
+            # Step 3 — fire the DM. ``sender.send_text_dm`` returns a typed
+            # SendResult and never re-raises transport errors (D-07 contract).
+            send_result = await sender.send_text_dm(
+                bot, r.telegram_user_id, text_body
+            )
+
+        if send_result is not None and send_result.ok:
+            # Step 4 (Telegram success) — open a FRESH write session for the
+            # idempotency-row insert (multi-session per D-39-06b: never hold
+            # the DB connection across HTTPS I/O). D-45-13: pass
+            # `channel='telegram'` explicitly so the cross-channel UNIQUE
+            # `uq_booking_notifications_booking_kind_channel` row is keyed
+            # correctly.
+            async with session_factory() as write_session:
+                try:
+                    write_session.add(
+                        BookingNotification(
+                            booking_id=r.id,
+                            kind="reminder_24h",
+                            channel="telegram",
+                        )
+                    )
+                    await write_session.commit()
+                    sent += 1
+                except IntegrityError:
+                    # D-39-13: race with a concurrent tick OR the one-shot
+                    # operator runner that hit
+                    # uq_booking_notifications_booking_kind_channel first.
+                    # Rollback + INFO-log + continue.
+                    await write_session.rollback()
+                    _log.info(
+                        "booking_reminder_idempotency_collision",
+                        booking_id=str(r.id),
+                        channel="telegram",
+                    )
+            continue
+
+        # Telegram failed (or was not attempted because Telegram-unlinked).
+        if send_result is not None:
             reason = "bot_blocked" if send_result.blocked else "transient"
             _log.warning(
                 "booking_reminder_send_failed",
@@ -579,26 +812,59 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
                 telegram_chat_id=r.telegram_user_id,
                 error_msg=send_result.error,
             )
+
+        # Phase 45 D-45-05 / D-45-06 — email-fallback sub-branch. Fires when
+        # (a) Telegram was never attempted (email-only client), OR
+        # (b) Telegram returned `blocked=True` AND the client has an email.
+        # Transient Telegram failures (`blocked=False, ok=False`) do NOT
+        # fan out — they retry on the next cron tick via the n.id IS NULL
+        # pre-filter (D-39-13 idempotency anchored by row absence).
+        client_email = r.email
+        should_email_fanout = client_email is not None and (
+            send_result is None  # email-only client
+            or send_result.blocked  # Telegram-blocked
+        )
+        if not should_email_fanout:
             continue
 
-        # Step 4 — open a FRESH write session for the idempotency-row
-        # insert (multi-session per D-39-06b: never hold the DB
-        # connection across HTTPS I/O).
+        # D-45-06 reminder_24h email-fallback: open fresh write session,
+        # INSERT channel='email' row, enqueue email, commit. IntegrityError
+        # race-catch mirrors the Telegram-success branch above.
+        slot_date_ru = (
+            f"{r.start_time.astimezone(MOSCOW_TZ).day} "
+            f"{_RU_MONTHS_GEN[r.start_time.astimezone(MOSCOW_TZ).month - 1]}"
+        )
         async with session_factory() as write_session:
             try:
                 write_session.add(
-                    BookingNotification(booking_id=r.id, kind="reminder_24h")
+                    BookingNotification(
+                        booking_id=r.id,
+                        kind="reminder_24h",
+                        channel="email",
+                    )
+                )
+                await enqueue_booking_email_fallback(
+                    kind="reminder_24h",
+                    client_email=client_email,
+                    trainer_name=r.trainer_name,
+                    slot_start_msk=slot_start_msk,
+                    slot_date=slot_date_ru,
                 )
                 await write_session.commit()
                 sent += 1
             except IntegrityError:
-                # D-39-13: race with a concurrent tick OR the one-shot
-                # operator runner that hit uq_booking_notifications_booking_kind
-                # first. Rollback + INFO-log + continue.
                 await write_session.rollback()
                 _log.info(
                     "booking_reminder_idempotency_collision",
                     booking_id=str(r.id),
+                    channel="email",
+                )
+            except Exception as exc:
+                await write_session.rollback()
+                _log.warning(
+                    "booking_reminder_email_fanout_failed",
+                    booking_id=str(r.id),
+                    error_msg=str(exc),
                 )
 
     _log.info("send_booking_reminders_complete", count=sent)
@@ -844,9 +1110,10 @@ async def create_booking(
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
 
-    # Step 9.5 — Phase 39 NOTIFY-03 — fire-and-forget DM (post-commit per
-    # D-39-10). Booking is fully durable here; the helper never raises so
-    # the HTTP path is unaffected by any DM-send outcome. Re-fetch with
+    # Step 9.5 — Phase 39 NOTIFY-03 + Phase 45 D-45-05 — fire-and-forget
+    # DM (post-commit per D-39-10) with email-fallback when Telegram is
+    # unreachable. Booking is fully durable here; the helper never raises
+    # so the HTTP path is unaffected by any DM-send outcome. Re-fetch with
     # joinedload(client, slot.trainer) — `repository.insert_booking` returns
     # a freshly-added ORM instance with relationships not eager-loaded.
     booking_for_dm = await _load_booking_with_relationships(session, booking.id)
@@ -854,11 +1121,13 @@ async def create_booking(
         dm_bot = build_bot(
             token=get_settings().telegram_bot_token.get_secret_value(),
         )
-        await _dispatch_booking_dm(
+        await _dispatch_booking_lifecycle_notification(
             booking_for_dm,
+            kind="confirmed",  # LITERAL — Plan 45-08 4-kind contract
             template=BOOKING_CONFIRMED_DM,
             bot=dm_bot,
             sender=telegram_sender,
+            session=session,
         )
 
     # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2) so
@@ -1114,20 +1383,15 @@ async def cancel_booking(
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
 
-    # Step 9.5 — Phase 39 NOTIFY-04 — fire-and-forget DM (post-commit per
-    # D-39-10). Actor-role discriminator (D-39-05): owner -> owner copy
-    # ("cancelled by venue"); reception -> client copy ("cancelled by
-    # request"). Any other role is defensive — INFO-log and skip. The
-    # helper never raises so the HTTP path is unaffected.
-    template: str | None
+    # Step 9.5 — Phase 39 NOTIFY-04 + Phase 45 D-45-05 — fire-and-forget
+    # DM (post-commit per D-39-10) with email-fallback when Telegram is
+    # unreachable. Actor-role discriminator (D-39-05): owner -> owner copy
+    # ("cancelled by venue", kind='cancelled_by_owner'); reception ->
+    # client copy ("cancelled by request", kind='cancelled_by_client').
+    # Any other role is defensive — INFO-log and skip. Each branch passes
+    # its OWN literal `kind` string per the Plan 45-08 4-literal contract
+    # (no shared variable — AST gate parity D-45-22).
     if actor.role is Role.OWNER:
-        template = BOOKING_CANCELLED_BY_OWNER_DM
-    elif actor.role is Role.RECEPTION:
-        template = BOOKING_CANCELLED_BY_CLIENT_DM
-    else:
-        _log.info("cancel_booking_dm_unexpected_role", role=str(actor.role))
-        template = None
-    if template is not None:
         booking_for_dm = await _load_booking_with_relationships(
             session, booking.id
         )
@@ -1135,12 +1399,32 @@ async def cancel_booking(
             dm_bot = build_bot(
                 token=get_settings().telegram_bot_token.get_secret_value(),
             )
-            await _dispatch_booking_dm(
+            await _dispatch_booking_lifecycle_notification(
                 booking_for_dm,
-                template=template,
+                kind="cancelled_by_owner",  # LITERAL — Plan 45-08
+                template=BOOKING_CANCELLED_BY_OWNER_DM,
                 bot=dm_bot,
                 sender=telegram_sender,
+                session=session,
             )
+    elif actor.role is Role.RECEPTION:
+        booking_for_dm = await _load_booking_with_relationships(
+            session, booking.id
+        )
+        if booking_for_dm is not None:
+            dm_bot = build_bot(
+                token=get_settings().telegram_bot_token.get_secret_value(),
+            )
+            await _dispatch_booking_lifecycle_notification(
+                booking_for_dm,
+                kind="cancelled_by_client",  # LITERAL — Plan 45-08
+                template=BOOKING_CANCELLED_BY_CLIENT_DM,
+                bot=dm_bot,
+                sender=telegram_sender,
+                session=session,
+            )
+    else:
+        _log.info("cancel_booking_dm_unexpected_role", role=str(actor.role))
 
     # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2).
     reloaded = await repository.get_booking_by_id(session, booking.id)

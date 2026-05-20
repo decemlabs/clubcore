@@ -217,7 +217,10 @@ class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
         ),
         nullable=False,
     )
-    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Phase 45 Migration 0032 widened from VARCHAR(16) (Phase 39 D-39-13) to
+    # VARCHAR(32) to fit lifecycle kinds 'cancelled_by_client' (19 chars) and
+    # 'cancelled_by_owner' (18 chars) — both overflow the original size.
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=text("now()"),
