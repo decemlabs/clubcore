@@ -21,6 +21,17 @@ Loads 5 clients + 5 memberships:
   - verify_cancelled                   -> status = 'cancelled', end_date = today + 30
                                           (negative renew path)
 
+Phase 46 D-46-26 / 46-13 Task 0: when both env vars
+`SEED_VERIFY_OWNER_PASSWORD` and `SEED_VERIFY_RECEPTION_PASSWORD` are set
+(>=12 chars each), additionally seeds two operator users for the v1.6 live
+verification runbook (`.planning/milestones/v1.6-verification-evidence/run.sh`):
+  - verify_owner@local.dev      (role=owner)
+  - verify_reception@local.dev  (role=reception)
+Password hashes use Argon2id via app.core.security.hash_password.
+ON CONFLICT (id) DO UPDATE refreshes password_hash + is_active on re-runs.
+If env vars are absent, this block is skipped silently (existing Phase 29
+behavior preserved). If only one of the two env vars is set, FATAL exit.
+
 TM-29-02 guard: refuses to run unless DATABASE_URL contains 'localhost' or
 'postgres:5432' -- prevents accidental execution against staging/prod.
 """
@@ -28,6 +39,7 @@ TM-29-02 guard: refuses to run unless DATABASE_URL contains 'localhost' or
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -39,6 +51,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 from app.core.permissions import Role
+from app.core.security import hash_password
 from app.modules.auth.models import User
 from app.modules.clients.models import Client
 from app.modules.memberships.models import Membership, MembershipPlan
@@ -60,6 +73,60 @@ _PHONE_BY_EMAIL: dict[str, str] = {
     "verify_cancelled@fixture.local": "+79990000000",
 }
 
+# Phase 46 D-46-26 / 46-13 Task 0 — operator user fixtures for the v1.6
+# verification runbook. Seeded only when both env vars below are set
+# (>=12 chars each); skipped silently otherwise so existing Phase 29 usage
+# remains unaffected.
+_OPERATOR_USERS: tuple[tuple[str, Role, str, str], ...] = (
+    # (email, role, full_name, env_var_for_password)
+    ("verify_owner@local.dev", Role.OWNER, "Verify Owner", "SEED_VERIFY_OWNER_PASSWORD"),
+    (
+        "verify_reception@local.dev",
+        Role.RECEPTION,
+        "Verify Reception",
+        "SEED_VERIFY_RECEPTION_PASSWORD",
+    ),
+)
+
+_OPERATOR_MIN_PASSWORD_LEN = 12
+
+
+def _read_operator_passwords() -> dict[str, str] | None:
+    """Return env-sourced passwords keyed by email, or None to skip seeding.
+
+    Skip rule: BOTH env vars absent → skip silently (return None).
+    FATAL rule: exactly ONE env var present, OR either value < 12 chars → exit 1.
+    """
+    env_pairs = [(email, os.environ.get(env_var)) for email, _, _, env_var in _OPERATOR_USERS]
+    present = [(email, val) for email, val in env_pairs if val is not None]
+    if not present:
+        return None
+    if len(present) != len(env_pairs):
+        missing = [
+            env_var
+            for (_, _, _, env_var), (_, val) in zip(_OPERATOR_USERS, env_pairs, strict=True)
+            if val is None
+        ]
+        print(
+            "ERROR: operator-user seeding requires BOTH env vars; missing: "
+            + ", ".join(missing),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    too_short = [
+        env_var
+        for (_, _, _, env_var), (_, val) in zip(_OPERATOR_USERS, env_pairs, strict=True)
+        if val is not None and len(val) < _OPERATOR_MIN_PASSWORD_LEN
+    ]
+    if too_short:
+        print(
+            f"ERROR: operator passwords must be >= {_OPERATOR_MIN_PASSWORD_LEN} chars; "
+            "too short: " + ", ".join(too_short),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return {email: val for email, val in present if val is not None}
+
 
 async def _run() -> int:
     settings = get_settings()
@@ -74,6 +141,10 @@ async def _run() -> int:
             file=sys.stderr,
         )
         return 1
+
+    # Phase 46 D-46-26: pre-validate operator-user env vars BEFORE opening the
+    # DB session so a misconfigured run fails fast without partial side effects.
+    operator_passwords = _read_operator_passwords()
 
     today_msk = datetime.now(ZoneInfo("Europe/Moscow")).date()
 
@@ -105,6 +176,51 @@ async def _run() -> int:
                     file=sys.stderr,
                 )
                 return 1
+
+            # Phase 46 D-46-26: seed operator users for the v1.6 verification
+            # runbook. ON CONFLICT (id) DO UPDATE refreshes password_hash +
+            # is_active + deleted_at on re-runs so credentials are always fresh.
+            if operator_passwords is not None:
+                for email, role, full_name, _env_var in _OPERATOR_USERS:
+                    plain_password = operator_passwords[email]
+                    password_hash = await hash_password(plain_password)
+                    user_id = uuid.uuid5(uuid.NAMESPACE_DNS, email)
+                    user_stmt = (
+                        pg_insert(User)
+                        .values(
+                            id=user_id,
+                            email=email,
+                            email_verified=True,
+                            password_hash=password_hash,
+                            role=role,
+                            full_name=full_name,
+                            is_active=True,
+                            status="active",
+                            deleted_at=None,
+                            deactivated_at=None,
+                            deactivated_by_user_id=None,
+                        )
+                        .on_conflict_do_update(
+                            index_elements=["id"],
+                            set_={
+                                "password_hash": password_hash,
+                                "role": role,
+                                "full_name": full_name,
+                                "is_active": True,
+                                "status": "active",
+                                "email_verified": True,
+                                "deleted_at": None,
+                                "deactivated_at": None,
+                                "deactivated_by_user_id": None,
+                            },
+                        )
+                    )
+                    await session.execute(user_stmt)
+                print(
+                    f"Seeded {len(_OPERATOR_USERS)} operator users "
+                    "(verify_owner@local.dev + verify_reception@local.dev) "
+                    "with env-driven passwords."
+                )
 
             for email_key, telegram_user_id, days_to_end, status in _FIXTURES:
                 client_id = uuid.uuid5(uuid.NAMESPACE_DNS, email_key)
