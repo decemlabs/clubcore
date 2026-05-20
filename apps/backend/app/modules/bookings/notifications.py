@@ -23,7 +23,10 @@ pre-formats ``slot_start_msk`` via
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Literal
+from uuid import UUID, uuid4
+
+from app.core.dependencies import get_email_dispatcher
 
 # === Phase 39 NOTIFY-01 -- locked Russian DM copy. Owner sign-off pending in plan 39-01. ===
 # RUF001/E501/RUF003 per-line: Cyrillic letters + locked single-line format are intentional
@@ -89,3 +92,90 @@ def render_booking_reminder_24h_dm(
         trainer_name=trainer_name,
         slot_start_msk=slot_start_msk,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 45 NOTIFY-09/10 — email-fallback fanout (D-45-05 / D-45-06 / D-45-22).
+# ---------------------------------------------------------------------------
+
+
+async def enqueue_booking_email_fallback(
+    *,
+    kind: Literal["confirmed", "cancelled_by_client", "cancelled_by_owner", "reminder_24h"],
+    client_email: str,
+    trainer_name: str,
+    slot_start_msk: str,
+    slot_date: str | None = None,
+) -> UUID:
+    """Render + enqueue a booking lifecycle/reminder email via the EmailDispatcher slot.
+
+    Phase 45 D-45-22 — 4 explicit literal ``template_id`` branches satisfy the
+    AST gate at ``tests/unit/test_locked_email_templates_ast.py:42-46``
+    (NO f-strings, NO variable interpolation in the ``template_id`` position).
+
+    Branches map ``kind`` → ``template_id``:
+      - ``confirmed`` → ``EMAIL_BOOKING_CONFIRMED`` (D-45-05 FSM hook).
+      - ``cancelled_by_client`` → ``EMAIL_BOOKING_CANCELLED_BY_CLIENT`` (D-45-05).
+      - ``cancelled_by_owner`` → ``EMAIL_BOOKING_CANCELLED_BY_OWNER`` (D-45-05).
+      - ``reminder_24h`` → ``EMAIL_BOOKING_REMINDER_24H`` (D-45-06 cron only).
+
+    ``slot_date`` is REQUIRED for ``reminder_24h`` (the email body renders the
+    Russian-formatted slot date in the subject-line preview); the 3 lifecycle
+    kinds do not consume it (their subject says only "Запись подтверждена" /
+    similar — the slot start carries enough context).
+
+    Returns:
+        UUID — freshly-minted ``audit_correlation_id``. Caller
+        (``bookings/service.py``) stores it on the structlog binding for the
+        email-side ``booking_notifications`` INSERT so the forensic chain
+        reassembles via ``email_send_log.audit_correlation_id`` (Phase 42 D-42-18).
+
+    Raises:
+        ValueError: on an unknown ``kind`` (defensive — the helper's caller
+            in ``bookings/service.py`` only ever passes one of the 4 literal
+            strings from the Literal type above).
+        ValueError: when ``kind == "reminder_24h"`` and ``slot_date`` is None
+            (defensive — the cron caller pre-formats this before invoking).
+    """
+    audit_correlation_id = uuid4()
+    dispatcher = get_email_dispatcher()
+
+    if kind == "confirmed":
+        await dispatcher(
+            template_id="EMAIL_BOOKING_CONFIRMED",
+            to=client_email,
+            audit_correlation_id=audit_correlation_id,
+            trainer_name=trainer_name,
+            slot_start_msk=slot_start_msk,
+        )
+    elif kind == "cancelled_by_client":
+        await dispatcher(
+            template_id="EMAIL_BOOKING_CANCELLED_BY_CLIENT",
+            to=client_email,
+            audit_correlation_id=audit_correlation_id,
+            trainer_name=trainer_name,
+            slot_start_msk=slot_start_msk,
+        )
+    elif kind == "cancelled_by_owner":
+        await dispatcher(
+            template_id="EMAIL_BOOKING_CANCELLED_BY_OWNER",
+            to=client_email,
+            audit_correlation_id=audit_correlation_id,
+            trainer_name=trainer_name,
+            slot_start_msk=slot_start_msk,
+        )
+    elif kind == "reminder_24h":
+        if slot_date is None:
+            raise ValueError("reminder_24h requires slot_date")
+        await dispatcher(
+            template_id="EMAIL_BOOKING_REMINDER_24H",
+            to=client_email,
+            audit_correlation_id=audit_correlation_id,
+            trainer_name=trainer_name,
+            slot_start_msk=slot_start_msk,
+            slot_date=slot_date,
+        )
+    else:  # pragma: no cover — defensive; the Literal type narrows callers.
+        raise ValueError(f"unknown booking email kind: {kind}")
+
+    return audit_correlation_id

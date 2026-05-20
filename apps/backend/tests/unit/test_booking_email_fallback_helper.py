@@ -63,7 +63,7 @@ def recorder() -> _RecordingEmailDispatcher:
 
 
 @pytest.mark.asyncio
-async def test_enqueue_confirmed_fanouts_EMAIL_BOOKING_CONFIRMED(
+async def test_enqueue_confirmed_fanouts_EMAIL_BOOKING_CONFIRMED(  # noqa: N802 -- upper-case literal pinning
     recorder: _RecordingEmailDispatcher,
 ) -> None:
     from app.modules.bookings.notifications import enqueue_booking_email_fallback
@@ -71,8 +71,8 @@ async def test_enqueue_confirmed_fanouts_EMAIL_BOOKING_CONFIRMED(
     aci = await enqueue_booking_email_fallback(
         kind="confirmed",
         client_email="client@example.com",
-        trainer_name="Алексей Иванов",  # noqa: RUF001
-        slot_start_msk="завтра в 19:00",  # noqa: RUF001
+        trainer_name="Алексей Иванов",
+        slot_start_msk="завтра в 19:00",
     )
 
     assert isinstance(aci, UUID)
@@ -81,12 +81,12 @@ async def test_enqueue_confirmed_fanouts_EMAIL_BOOKING_CONFIRMED(
     assert call["template_id"] == "EMAIL_BOOKING_CONFIRMED"
     assert call["to"] == "client@example.com"
     assert call["audit_correlation_id"] == aci
-    assert call["trainer_name"] == "Алексей Иванов"  # noqa: RUF001
-    assert call["slot_start_msk"] == "завтра в 19:00"  # noqa: RUF001
+    assert call["trainer_name"] == "Алексей Иванов"
+    assert call["slot_start_msk"] == "завтра в 19:00"
 
 
 @pytest.mark.asyncio
-async def test_enqueue_cancelled_by_client_fanouts_EMAIL_BOOKING_CANCELLED_BY_CLIENT(
+async def test_enqueue_cancelled_by_client_fanouts_EMAIL_BOOKING_CANCELLED_BY_CLIENT(  # noqa: N802 -- upper-case literal pinning
     recorder: _RecordingEmailDispatcher,
 ) -> None:
     from app.modules.bookings.notifications import enqueue_booking_email_fallback
@@ -94,8 +94,8 @@ async def test_enqueue_cancelled_by_client_fanouts_EMAIL_BOOKING_CANCELLED_BY_CL
     aci = await enqueue_booking_email_fallback(
         kind="cancelled_by_client",
         client_email="c2@example.com",
-        trainer_name="Тренер",  # noqa: RUF001
-        slot_start_msk="16 мая в 10:00",  # noqa: RUF001
+        trainer_name="Тренер",
+        slot_start_msk="16 мая в 10:00",
     )
 
     assert isinstance(aci, UUID)
@@ -104,7 +104,7 @@ async def test_enqueue_cancelled_by_client_fanouts_EMAIL_BOOKING_CANCELLED_BY_CL
 
 
 @pytest.mark.asyncio
-async def test_enqueue_cancelled_by_owner_fanouts_EMAIL_BOOKING_CANCELLED_BY_OWNER(
+async def test_enqueue_cancelled_by_owner_fanouts_EMAIL_BOOKING_CANCELLED_BY_OWNER(  # noqa: N802 -- upper-case literal pinning
     recorder: _RecordingEmailDispatcher,
 ) -> None:
     from app.modules.bookings.notifications import enqueue_booking_email_fallback
@@ -112,8 +112,8 @@ async def test_enqueue_cancelled_by_owner_fanouts_EMAIL_BOOKING_CANCELLED_BY_OWN
     aci = await enqueue_booking_email_fallback(
         kind="cancelled_by_owner",
         client_email="c3@example.com",
-        trainer_name="Тренер",  # noqa: RUF001
-        slot_start_msk="17 мая в 11:00",  # noqa: RUF001
+        trainer_name="Тренер",
+        slot_start_msk="17 мая в 11:00",
     )
 
     assert isinstance(aci, UUID)
@@ -122,7 +122,7 @@ async def test_enqueue_cancelled_by_owner_fanouts_EMAIL_BOOKING_CANCELLED_BY_OWN
 
 
 @pytest.mark.asyncio
-async def test_enqueue_reminder_24h_fanouts_EMAIL_BOOKING_REMINDER_24H_with_slot_date(
+async def test_enqueue_reminder_24h_fanouts_EMAIL_BOOKING_REMINDER_24H_with_slot_date(  # noqa: N802 -- upper-case literal pinning
     recorder: _RecordingEmailDispatcher,
 ) -> None:
     from app.modules.bookings.notifications import enqueue_booking_email_fallback
@@ -130,16 +130,16 @@ async def test_enqueue_reminder_24h_fanouts_EMAIL_BOOKING_REMINDER_24H_with_slot
     aci = await enqueue_booking_email_fallback(
         kind="reminder_24h",
         client_email="c4@example.com",
-        trainer_name="Тренер",  # noqa: RUF001
+        trainer_name="Тренер",
         slot_start_msk="19:00",
-        slot_date="16 мая",  # noqa: RUF001
+        slot_date="16 мая",
     )
 
     assert isinstance(aci, UUID)
     assert len(recorder.calls) == 1
     call = recorder.calls[0]
     assert call["template_id"] == "EMAIL_BOOKING_REMINDER_24H"
-    assert call["slot_date"] == "16 мая"  # noqa: RUF001
+    assert call["slot_date"] == "16 мая"
 
 
 @pytest.mark.asyncio
@@ -152,7 +152,7 @@ async def test_enqueue_reminder_24h_missing_slot_date_raises(
         await enqueue_booking_email_fallback(
             kind="reminder_24h",
             client_email="c5@example.com",
-            trainer_name="Тренер",  # noqa: RUF001
+            trainer_name="Тренер",
             slot_start_msk="19:00",
         )
     assert recorder.calls == []
