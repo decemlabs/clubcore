@@ -269,7 +269,7 @@ Plans:
 - [ ] 45-02-PLAN.md — ExpiringNotificationSentPayload (CREATE) + format_actor_display helper + unit test
 - [ ] 45-04-PLAN.md — memberships/email_templates.py (6 EMAIL_EXPIRING templates)
 - [ ] 45-05-PLAN.md — bookings/email_templates.py (4 EMAIL_BOOKING templates)
-- [ ] 45-06-PLAN.md — payments/email_templates.py (2 receipt templates) + dispatcher walker + .importlinter
+- [x] 45-06-PLAN.md — payments/email_templates.py (2 receipt templates) + dispatcher walker + .importlinter
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 45-03-PLAN.md — Eager-import PaymentReceipt in app/workers/__init__.py + test extension
@@ -315,7 +315,7 @@ Plans:
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
-| 45. Email Notification Mirrors | 0/12 | Not started | — |
+| 45. Email Notification Mirrors | 1/13 | In Progress|  |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
 ---

@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Phase 45 context gathered
-last_updated: "2026-05-20T09:45:35.552Z"
-last_activity: 2026-05-20 -- Phase 45 planning complete
+last_updated: "2026-05-20T10:06:39.115Z"
+last_activity: 2026-05-20
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 69
-  completed_plans: 56
-  percent: 81
+  completed_plans: 57
+  percent: 83
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 44 — COMPLETE
-Plan: 1 of 11
+Plan: 2 of 11
 Status: Ready to execute
-Last activity: 2026-05-20 -- Phase 45 planning complete
+Last activity: 2026-05-20
 
 ## v1.6 Milestone Plan
 
@@ -113,6 +113,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase 43]: Plan 43-16 gap-closure: CR-04 fixed by introducing `_revoke_all_sessions_no_commit` (no commit helper) + `revoke_all_sessions` (thin commit wrapper for logout-all/pwd-change) + `invalidate_all_families_for_user` calling no-commit variant. WR-01 fixed by extending `UserSessionInvalidator` Protocol with `actor_user_id: UUID | None`; all 4 callsites updated atomically (users/service x2, auth/service Protocol impl, main.py registration). WR-04 fixed by using `UPDATE...RETURNING family_id` distinct set for DB-authoritative count (Redis SMEMBERS drift eliminated). WR-03 fixed by `repository.soft_delete_user` accepting `actor_user_id` + `func.coalesce(User.deactivated_by_user_id, actor_user_id)`. Regression suite 88 passed.
 
 - [Phase 43]: Plan 43-17 gap-closure: CR-03 (login chokepoint) closed — `authenticate()` SELECT now filters `User.is_active.is_(True)` AND `User.deleted_at.is_(None)`, mirroring the D-43-20 `rotate_refresh` predicate set. Deactivated/soft-deleted users fall into the existing sentinel-hash + `login_failed` emit path (no new emit branch needed; anti-oracle body+timing parity preserved). CR-03 secondary closed — `request_otp_email` eligibility replaced defensive `getattr(user, "is_active", True)` with a SQL predicate. All three auth chokepoints (rotate_refresh + authenticate + request_otp_email) now share the same predicate set. Regression suite 86 passed, 1 xfailed.
+- [Phase ?]: 45-06: Payments email templates registered (SALE + REFUND); pure-literal subjects per D-45-19
 
 ### Pending Todos
 
@@ -139,6 +140,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-20T08:55:28.936Z
+Last session: 2026-05-20T10:06:29.561Z
 Stopped at: Phase 45 context gathered
 Resume: None — Phase 43 gap-closure plans complete
