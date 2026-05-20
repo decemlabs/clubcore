@@ -300,7 +300,7 @@ Plans:
 **Plans**: 13 plans
 
 **Wave 1** *(OpenAPI atomic regen)*
-- [ ] 46-01-PLAN.md — Regen openapi.json + schema.d.ts in one atomic commit (HANDOFF-03)
+- [x] 46-01-PLAN.md — Regen openapi.json + schema.d.ts in one atomic commit (HANDOFF-03)
 
 **Wave 2** *(handoff artifacts; blocked on Wave 1)*
 - [ ] 46-02-PLAN.md — schema.contract.test.ts +12 forward-guards in 3 epic banner blocks (HANDOFF-04)
@@ -339,7 +339,7 @@ Plans:
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
 | 45. Email Notification Mirrors | 13/13 | Complete   | 2026-05-20 |
-| 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
+| 46. OpenAPI Handoff + Milestone Verification | 1/13 | In Progress|  |
 
 ---
 
