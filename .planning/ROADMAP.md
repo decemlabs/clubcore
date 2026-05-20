@@ -264,17 +264,26 @@ Plans:
 **Plans**: 12 plans
 
 Plans:
+**Wave 1**
 - [ ] 45-01-PLAN.md — Alembic 0031 payment_receipts + PaymentReceipt ORM + telegram_chat_id NULLABLE widening
 - [ ] 45-02-PLAN.md — ExpiringNotificationSentPayload (CREATE) + format_actor_display helper + unit test
-- [ ] 45-03-PLAN.md — Eager-import PaymentReceipt in app/workers/__init__.py + test extension
 - [ ] 45-04-PLAN.md — memberships/email_templates.py (6 EMAIL_EXPIRING templates)
 - [ ] 45-05-PLAN.md — bookings/email_templates.py (4 EMAIL_BOOKING templates)
 - [ ] 45-06-PLAN.md — payments/email_templates.py (2 receipt templates) + dispatcher walker + .importlinter
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 45-03-PLAN.md — Eager-import PaymentReceipt in app/workers/__init__.py + test extension
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 45-07-PLAN.md — memberships notifications helper + repo + service email fallback + integration test
 - [ ] 45-08-PLAN.md — bookings notifications helper + repo + service (4 callsites) email fallback + integration test
 - [ ] 45-09-PLAN.md — Payment receipt fanout at memberships orchestrators (sale + refund) + integration test
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 45-10-PLAN.md — Payment receipt fanout at pt_packages orchestrators + integration test
 - [ ] 45-11-PLAN.md — Real-Postgres concurrent receipt UNIQUE race test
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 45-12-PLAN.md — Phase 45 AST gate enumeration + walker scope extension
 
 ### Phase 46: OpenAPI Handoff + Milestone Verification
