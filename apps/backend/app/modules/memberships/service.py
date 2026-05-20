@@ -627,8 +627,12 @@ async def _fanout_payment_receipt_email(  # noqa: SVC001 caller-owns-txn
             actor_user_id=actor.id,
             resource_type="payment",  # LITERAL
             resource_id=payment_id,
-            audit_correlation_id=audit_correlation_id,
-            payment_id=payment_id,
+            # UUID kwargs str-cast for JSONB serialisability (Phase 32-02
+            # deviation #1 lesson — raw UUIDs fail JSON encoder). Pydantic
+            # UUID validators on PaymentReceiptEmailedPayload accept both
+            # UUID and well-formed str input (D-30-03 lineage).
+            audit_correlation_id=str(audit_correlation_id),
+            payment_id=str(payment_id),
             to_email=client_email,
             receipt_kind=receipt_kind,
         )
