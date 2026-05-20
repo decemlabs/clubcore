@@ -21,6 +21,7 @@ DB-level invariants (mirror migration 0012_payments):
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
@@ -30,6 +31,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -113,4 +115,79 @@ class Payment(Base, UUIDPkMixin):
         Index("ix_payments_subject", "subject_kind", "subject_id"),
         Index("ix_payments_received_by_user_id", "received_by_user_id"),
         Index("ix_payments_received_at", text("received_at DESC")),
+    )
+
+
+class PaymentReceipt(Base, UUIDPkMixin):
+    """Email/Telegram receipt idempotency ledger (Phase 45 NOTIFY-11 / D-45-11).
+
+    Composition: Base + UUIDPkMixin (NO TimestampMixin — only `enqueued_at`
+    is carried; matches `Payment`'s single-temporal-column discipline at
+    D-32-01..D-32-04).
+
+    DB-level invariants (mirror migration 0031_payment_receipts):
+    - CHECK channel IN ('telegram','email') (ck_payment_receipts_channel).
+    - UNIQUE (payment_id, channel) (uq_payment_receipts_payment_channel) —
+      one attempt per (payment, channel) tuple. The orchestrator post-commit
+      fanout (D-45-08) catches IntegrityError on this constraint to skip
+      docker-restart race re-enqueues.
+    - FK fk_payment_receipts_payment_id_payments ON DELETE RESTRICT — receipts
+      MUST NOT orphan; deleting a payment with sent receipts requires an
+      explicit cascade decision (T-45-01-03 accept disposition).
+    - Index ix_payment_receipts_audit_corr — non-unique btree supporting the
+      forensic join `payment_receipts ↔ email_send_log` keyed by
+      audit_correlation_id (D-45-25).
+
+    NO `status` / `provider_message_id` / `bounce_type` columns — the actual
+    send-attempt outcome lives in `email_send_log` (Phase 42) keyed by the
+    shared `audit_correlation_id`. This row is a pure idempotency ledger:
+    one INSERT = one channel-targeted attempt enqueued.
+
+    NO relationship() back to Payment — the join is by id only; no ORM-level
+    navigation required in v1.6 (the read query in D-45-25 is raw SQL via
+    repository helpers in later Phase 45 plans).
+    """
+
+    __tablename__ = "payment_receipts"
+
+    payment_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "payments.id",
+            ondelete="RESTRICT",
+            name="fk_payment_receipts_payment_id_payments",
+        ),
+        nullable=False,
+    )
+    channel: Mapped[Literal["telegram", "email"]] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    audit_correlation_id: Mapped[UUIDType] = mapped_column(
+        PgUUID(as_uuid=True),
+        nullable=False,
+    )
+    to_address: Mapped[str] = mapped_column(Text, nullable=False)
+    enqueued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("now()"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "channel IN ('telegram','email')",
+            # NAMING_CONVENTION expands to ck_payment_receipts_channel
+            # (matches migration 0031 op.f()-derived name).
+            name="channel",
+        ),
+        UniqueConstraint(
+            "payment_id",
+            "channel",
+            name="uq_payment_receipts_payment_channel",
+        ),
+        Index(
+            "ix_payment_receipts_audit_corr",
+            "audit_correlation_id",
+        ),
     )
