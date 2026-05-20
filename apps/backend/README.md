@@ -42,3 +42,19 @@ uv run alembic upgrade head  # применить миграции (в Phase A �
 - [`docs/conventions.md`](docs/conventions.md) — стиль кода, naming, тестирование, миграции.
 - [`docs/adr/`](docs/adr/) — каталог ADR (MADR 4.0). Стартовая точка — [`0001-modular-monolith.md`](docs/adr/0001-modular-monolith.md). Шаблон для новых ADR — [`template.md`](docs/adr/template.md).
 - [`scripts/`](scripts/) — `seed_demo_data.py` (Phase A placeholder) и `backup_db.sh` (`pg_dump` против compose-network Postgres).
+
+## v1.6 — Email channel + Multi-user admin (2026-05-20)
+
+- `POST /api/v1/users` — owner создаёт пользователя; отправляет invitation email (USERS-01, USERS-03).
+- `GET /api/v1/users` — список пользователей с фильтрацией по `role` + `is_active` (USERS-04).
+- `POST /api/v1/users/{user_id}/deactivate` — soft-deactivate; revokes refresh families (USERS-05).
+- `POST /api/v1/users/{user_id}/reactivate` — re-activate (USERS-05).
+- `DELETE /api/v1/users/{user_id}` — soft-delete (Alembic 0022 `deleted_at` + partial UNIQUE) (USERS-07).
+- `POST /api/v1/users/invitations/accept` — приглашённый юзер устанавливает пароль (RESET-04).
+- `POST /api/v1/users/invitations/{token_id}/revoke` — owner отзывает приглашение (RESET-05).
+- `POST /api/v1/auth/password-reset/request` — anti-oracle 202, bounded-timing (RESET-01).
+- `POST /api/v1/auth/password-reset/confirm` — атомарный consume + revoke всех сессий (RESET-02).
+- `POST /api/v1/_internal/email/webhook` — provider bounce/complaint ingestion (EMAIL-04, internal).
+- `POST /api/v1/auth/otp/request` — добавлен параметр `channel` (telegram | email) (AUTH-EM-01).
+
+Locked Russian email templates: 15 constants — см. `app/core/audit.py` `LOCKED_EMAIL_TEMPLATES`.
