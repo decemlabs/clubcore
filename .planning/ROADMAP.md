@@ -281,7 +281,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 45-10-PLAN.md — Payment receipt fanout at pt_packages orchestrators + integration test
-- [ ] 45-11-PLAN.md — Real-Postgres concurrent receipt UNIQUE race test
+- [x] 45-11-PLAN.md — Real-Postgres concurrent receipt UNIQUE race test
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 45-12-PLAN.md — Phase 45 AST gate enumeration + walker scope extension
@@ -315,7 +315,7 @@ Plans:
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
-| 45. Email Notification Mirrors | 10/13 | In Progress|  |
+| 45. Email Notification Mirrors | 11/13 | In Progress|  |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
 ---
