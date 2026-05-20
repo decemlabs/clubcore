@@ -95,6 +95,7 @@ from app.integrations.email.models import (  # noqa: F401
 from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
+from app.workers.scheduled.cleanup_password_reset_tokens import cleanup_password_reset_tokens
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
 from app.workers.scheduled.mark_no_show_bookings import mark_no_show_bookings
@@ -122,6 +123,7 @@ class WorkerSettings:
         send_booking_reminders,  # Phase 39 CRON-02
         mark_no_show_bookings,  # Phase 39 CRON-01
         dispatch_email,  # Phase 42 EMAIL-03 — request-handler-driven (NOT a cron)
+        cleanup_password_reset_tokens,  # Phase 44 D-44-31 — housekeeping
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -187,6 +189,19 @@ class WorkerSettings:
             mark_no_show_bookings,
             hour=20,
             minute=10,
+            unique=True,
+            keep_result=60,
+        ),
+        # Phase 44 D-44-31/32 — daily 03:30 Europe/Moscow (container TZ=UTC
+        # → hour=0, minute=30). Off-peak: well away from the 06:05-06:35
+        # morning notification crons above and the 23:10 MSK no-show cron.
+        # 30-day retention per D-41-06; DELETEs password_reset_tokens whose
+        # expires_at is older than now() - INTERVAL '30 days'. No audit
+        # emit (housekeeping, not an observable state change — D-44-31).
+        cron(
+            cleanup_password_reset_tokens,
+            hour=0,
+            minute=30,
             unique=True,
             keep_result=60,
         ),
