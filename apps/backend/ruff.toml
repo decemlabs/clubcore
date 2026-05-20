@@ -65,6 +65,16 @@ external = ["SVC"]
 # would otherwise flag every line.
 "app/core/formatters.py" = ["RUF100"]
 "tests/unit/test_formatters.py" = ["RUF100"]
+# Phase 45 NOTIFY-08 (plan 45-04): the locked Russian expiring-membership email
+# templates (D-45-15) carry disciplinary `# noqa: RUF001` tripwires (mirrors
+# auth precedent line 50). Unlike auth, these templates legitimately MUST
+# contain the Russian abbreviation `г.` (the letter `г` is RUF001-ambiguous
+# with Latin `r`) and literal U+00A0 NO-BREAK SPACE between the rendered
+# date and `г.` (D-45-17 NBSP discipline). RUF002 catches the same `г` in
+# the module docstring. Locked copy + per-domain ownership (D-45-15) means
+# these characters cannot move, so RUF001/RUF002 are silenced for this file;
+# RUF100 covers the now-no-op per-line noqa tripwire markers.
+"app/modules/memberships/email_templates.py" = ["RUF001", "RUF002", "RUF100"]
 
 [format]
 quote-style = "double"
