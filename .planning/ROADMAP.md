@@ -107,7 +107,7 @@ Full details: [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
 - [ ] **Phase 41: INFRA Bedrock + Anti-Oracle Scaffold** — Pre-register audit taxonomy, RBAC additions, schema migrations, Protocol slots, and the anti-oracle reset-flow test BEFORE any feature callsite lands (v1.3 INFRA-15 + Pitfall 1 discipline). INFRA-34..40 + RESET-06.
 - [ ] **Phase 42: Email Transport Layer + Email OTP Fallback** — Channel-agnostic outbound email transport (provider adapter, ARQ dispatch task, DNS runbook, circuit breaker, bounce webhook) plus email-channel OTP fallback for `/auth/otp/request`. EMAIL-01..07 + AUTH-EM-01..04.
 - [ ] **Phase 43: Multi-User Admin Module** — New `app/modules/users/` (owner-managed CRUD, soft-delete, deactivate-with-session-revoke, multi-user audit traceability). USERS-01..07.
-- [ ] **Phase 44: Invitation + Password-Reset Flow** — Anti-oracle `password-reset/request`, atomic-consume `password-reset/confirm`, invitation accept (INSERT-only re-claim), revoke. RESET-01..05.
+- [x] **Phase 44: Invitation + Password-Reset Flow** — Anti-oracle `password-reset/request`, atomic-consume `password-reset/confirm`, invitation accept (INSERT-only re-claim), revoke. RESET-01..05.
 - [ ] **Phase 45: Email Notification Mirrors** — Channel-discriminator migration, email fallback for expiring + booking reminders, payment-receipt email, locked Russian email templates with owner sign-off. NOTIFY-06..14.
 - [ ] **Phase 46: OpenAPI Handoff + Milestone Verification** — Byte-stable spec + `schema.d.ts` regen with new v1.6 paths, forward-guards 61 → ~73, then live-stack operator runbook + race tests + email-deliverability probe + 6/6 CI gates green + owner sign-off (DEFER-40-01 lesson — budget runbook scaffolding hardening). HANDOFF-03..04 + VER-09..14.
 
@@ -291,7 +291,7 @@ Plans:
 | 41. INFRA Bedrock + Anti-Oracle Scaffold | 11/11 | Complete   | 2026-05-18 |
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
-| 44. Invitation + Password-Reset Flow | 0/11 | Planned | — |
+| 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
 | 45. Email Notification Mirrors | 0/? | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
