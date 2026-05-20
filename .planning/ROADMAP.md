@@ -275,7 +275,7 @@ Plans:
 - [x] 45-03-PLAN.md — Eager-import PaymentReceipt in app/workers/__init__.py + test extension
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 45-07-PLAN.md — memberships notifications helper + repo + service email fallback + integration test
+- [x] 45-07-PLAN.md — memberships notifications helper + repo + service email fallback + integration test
 - [ ] 45-08-PLAN.md — bookings notifications helper + repo + service (4 callsites) email fallback + integration test
 - [ ] 45-09-PLAN.md — Payment receipt fanout at memberships orchestrators (sale + refund) + integration test
 
@@ -315,7 +315,7 @@ Plans:
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
-| 45. Email Notification Mirrors | 7/13 | In Progress|  |
+| 45. Email Notification Mirrors | 8/13 | In Progress|  |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
 ---

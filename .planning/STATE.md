@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Phase 45 context gathered
-last_updated: "2026-05-20T10:18:07.566Z"
+last_updated: "2026-05-20T10:36:16.554Z"
 last_activity: 2026-05-20
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 69
-  completed_plans: 63
-  percent: 91
+  completed_plans: 64
+  percent: 93
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 44 — COMPLETE
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Ready to execute
 Last activity: 2026-05-20
 
@@ -117,6 +117,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 - [Phase ?]: Plan 45-02 anchors landed
 - [Phase 45]: Phase 45-05: 4 EMAIL_BOOKING locked Russian templates land in app/modules/bookings/email_templates.py — voice mirrors Telegram BOOKING_*_DM, NBSP discipline per D-45-17, owner sign-off recorded in 45-05-SUMMARY.md
 - [Phase ?]: Override D-45-24 'zero .importlinter changes' per PATTERNS.md correction #3 — grimp parses function-scope imports
+- [Phase ?]: Phase 45 plan 07: ExpiringNotificationSentPayload extra=forbid prevents audit_correlation_id from flowing through audit.emit — logged via structlog instead
 
 ### Pending Todos
 
@@ -143,6 +144,6 @@ Items carried forward from v1.5 milestone close on 2026-05-18:
 
 ## Session Continuity
 
-Last session: 2026-05-20T10:17:48.606Z
+Last session: 2026-05-20T10:36:11.017Z
 Stopped at: Phase 45 context gathered
 Resume: None — Phase 43 gap-closure plans complete
