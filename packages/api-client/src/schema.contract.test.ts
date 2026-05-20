@@ -284,6 +284,73 @@ const _v15Checks: [
   _TrainerSlotsListOkRealised,
 ] = [true, true, true, true, true, true, true, true, true, true, true]
 
+// --- v1.6 surface — Multi-user admin (Phase 43 USERS-*) ---------------
+// All v1.6 USERS-* paths are LANDED (Phase 43 shipped); hard non-never guards.
+// Path-truth (verified against regenerated schema.d.ts at Wave 1):
+//   - deactivate / reactivate use PATCH (not POST — plan template was stale).
+//   - DELETE /users/{user_id} returns 204 (soft-delete via deleted_at).
+type _UsersListGet = AssertNonNever<paths['/api/v1/users']['get']>
+type _UsersCreatePost = AssertNonNever<paths['/api/v1/users']['post']>
+type _UsersDeactivatePatch = AssertNonNever<
+  paths['/api/v1/users/{user_id}/deactivate']['patch']
+>
+type _UsersReactivatePatch = AssertNonNever<
+  paths['/api/v1/users/{user_id}/reactivate']['patch']
+>
+type _UsersDelete = AssertNonNever<paths['/api/v1/users/{user_id}']['delete']>
+
+// --- v1.6 surface — Password reset + invitation accept (Phase 44 RESET-*) ---
+// All v1.6 RESET-* paths are LANDED (Phase 44 shipped); hard non-never guards.
+type _InvitationAcceptPost = AssertNonNever<
+  paths['/api/v1/users/invitations/accept']['post']
+>
+type _InvitationRevokePost = AssertNonNever<
+  paths['/api/v1/users/invitations/{token_id}/revoke']['post']
+>
+type _PasswordResetRequestPost = AssertNonNever<
+  paths['/api/v1/auth/password-reset/request']['post']
+>
+type _PasswordResetConfirmPost = AssertNonNever<
+  paths['/api/v1/auth/password-reset/confirm']['post']
+>
+
+// --- v1.6 surface — Email channel (Phase 42 AUTH-EM-* + EMAIL-*) ----------
+// All v1.6 EMAIL paths are LANDED (Phase 42 shipped); hard non-never guards.
+// /_internal/email/webhook IS included here per D-46-07 — internal-but-typed.
+// Path-truth: live router exposes /api/v1/auth/otp/request (NOT /api/v1/otp/request).
+// Webhook returns 202 (Postbox protocol) with no JSON requestBody (HMAC raw-body).
+type _InternalEmailWebhookPost = AssertNonNever<
+  paths['/api/v1/_internal/email/webhook']['post']
+>
+type _OtpRequestChannelBody = AssertNonNever<
+  paths['/api/v1/auth/otp/request']['post']['requestBody']
+>
+
+// Static checks for v1.6 USERS surface (Phase 43) — each must resolve to true.
+const _v16UsersChecks: [
+  _UsersListGet,
+  _UsersCreatePost,
+  _UsersDeactivatePatch,
+  _UsersReactivatePatch,
+  _UsersDelete,
+] = [true, true, true, true, true]
+
+// Static checks for v1.6 RESET surface (Phase 44) — each must resolve to true.
+const _v16ResetChecks: [
+  _InvitationAcceptPost,
+  _InvitationRevokePost,
+  _PasswordResetRequestPost,
+  _PasswordResetConfirmPost,
+] = [true, true, true, true]
+
+// Static checks for v1.6 EMAIL surface (Phase 42 + AUTH-EM-01) — D-46-07.
+// _OtpRequestChannelBody anchors the AUTH-EM-01 channel-parameter surfacing
+// (proves the regenerated body type accepts the new `channel` discriminator).
+const _v16EmailChecks: [
+  _InternalEmailWebhookPost,
+  _OtpRequestChannelBody,
+] = [true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -301,5 +368,17 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v1.5 typed paths surface (Phase 40 HANDOFF-02)', () => {
     expect(_v15Checks).toHaveLength(11)
+  })
+
+  it('compiles against the regenerated v1.6 USERS surface (Phase 43)', () => {
+    expect(_v16UsersChecks).toHaveLength(5)
+  })
+
+  it('compiles against the regenerated v1.6 RESET surface (Phase 44)', () => {
+    expect(_v16ResetChecks).toHaveLength(4)
+  })
+
+  it('compiles against the regenerated v1.6 EMAIL surface (Phase 42 + AUTH-EM-01 channel)', () => {
+    expect(_v16EmailChecks).toHaveLength(2)
   })
 })
