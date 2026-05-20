@@ -60,11 +60,13 @@ external = ["SVC"]
 # Cyrillic so the noqa would otherwise trip RUF100.
 "app/modules/users/display.py" = ["RUF100"]
 "tests/unit/test_actor_display_format.py" = ["RUF100"]
-# Phase 45 NOTIFY-12 (plan 45-02): Cyrillic month names + datetime literal
-# "г." in formatters carry RUF001 tripwires; unambiguous today, so RUF100
-# would otherwise flag every line.
-"app/core/formatters.py" = ["RUF100"]
-"tests/unit/test_formatters.py" = ["RUF100"]
+# Phase 45 NOTIFY-12 (plan 45-02): Cyrillic genitive month names + NBSP
+# constants + Russian "г." abbreviation (RUF002/RUF003 for docstring/comment;
+# RUF001 for the NBSP literal `_NBSP = " "`). Same allowance shape as
+# memberships email templates (line 77 below) because this file IS the canonical
+# source the receipt email render path imports for amount + datetime formatting.
+"app/core/formatters.py" = ["RUF001", "RUF002", "RUF003", "RUF100"]
+"tests/unit/test_formatters.py" = ["RUF001", "RUF002", "RUF003", "RUF100"]
 # Phase 45 NOTIFY-08 (plan 45-04): the locked Russian expiring-membership email
 # templates (D-45-15) carry disciplinary `# noqa: RUF001` tripwires (mirrors
 # auth precedent line 50). Unlike auth, these templates legitimately MUST
