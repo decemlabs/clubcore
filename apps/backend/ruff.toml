@@ -77,6 +77,14 @@ external = ["SVC"]
 # these characters cannot move, so RUF001/RUF002 are silenced for this file;
 # RUF100 covers the now-no-op per-line noqa tripwire markers.
 "app/modules/memberships/email_templates.py" = ["RUF001", "RUF002", "RUF100"]
+# Phase 45 NOTIFY-07 (plan 45-07): memberships/notifications.py hoists the
+# Russian genitive month-name table from telegram/copy.py for cross-channel
+# reuse (D-45-16). Cyrillic-only literals trip RUF001 (letter-ambiguity
+# tripwires); the module docstring + helper docstring also reference the
+# `г.` abbreviation (RUF002 for docstrings). Locked copy means these
+# characters cannot move, so silence RUF001/RUF002 for this file and
+# RUF100 for the per-line noqa tripwires that ruff treats as no-ops today.
+"app/modules/memberships/notifications.py" = ["RUF001", "RUF002", "RUF003", "RUF100"]
 
 [format]
 quote-style = "double"
