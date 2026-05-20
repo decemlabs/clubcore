@@ -28,7 +28,7 @@ NO snapshot columns (D-38-08) — display payloads use joinedload(Booking.slot)
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
@@ -219,6 +219,17 @@ class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
         server_default=text("now()"),
         nullable=False,
     )
+    # Phase 45 D-45-13 — cross-channel discriminator. ORM-side default mirrors
+    # the DB server_default 'telegram' (Alembic 0024); INSERTs MUST pass
+    # channel=<literal> explicitly per D-45-13. No `telegram_chat_id` column
+    # ever existed on this table (Phase 39 D-39-03 — explicit deviation from
+    # membership_notifications); the cron resolves chat ids via JOIN at send
+    # time, so widening-to-NULLABLE is N/A here.
+    channel: Mapped[Literal["telegram", "email"]] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'telegram'"),
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -227,10 +238,14 @@ class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
             # (matches migration 0020 op.f()-derived name).
             name="kind",
         ),
+        # Phase 45 D-45-13 — UNIQUE renamed by Alembic 0024 to include channel.
+        # Name MUST match 0024's _BOOKING_NOTIFS_NEW_UNIQUE letter-for-letter
+        # so `alembic check` produces empty diff.
         UniqueConstraint(
             "booking_id",
             "kind",
-            name="uq_booking_notifications_booking_kind",
+            "channel",
+            name="uq_booking_notifications_booking_kind_channel",
         ),
         # Mirrors migration 0020 op.create_index() — required for
         # `alembic check` to stay clean (drift detection treats migration-only

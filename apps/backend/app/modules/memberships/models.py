@@ -29,6 +29,7 @@ DB-level invariants:
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
@@ -301,7 +302,18 @@ class MembershipNotification(Base, UUIDPkMixin, TimestampMixin):
         server_default=text("now()"),
         nullable=False,
     )
-    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Phase 45 D-45-01 + Alembic 0031 — widened to NULLABLE so email-fallback
+    # rows (channel='email') can record NULL chat_id (Telegram is the BLOCKED
+    # channel at fanout time by definition).
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Phase 45 D-45-13 — cross-channel discriminator. ORM-side default mirrors
+    # the DB server_default 'telegram' (Alembic 0024); INSERTs MUST pass
+    # channel=<literal> explicitly per D-45-13 (no implicit app-layer default).
+    channel: Mapped[Literal["telegram", "email"]] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'telegram'"),
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -310,10 +322,14 @@ class MembershipNotification(Base, UUIDPkMixin, TimestampMixin):
             # (matches migration 0010_notifications.py op.f()-derived name).
             name="kind",
         ),
+        # Phase 45 D-45-13 — UNIQUE renamed by Alembic 0024 to include channel.
+        # Name MUST match 0024's _MEMBERSHIP_NOTIFS_NEW_UNIQUE letter-for-letter
+        # so `alembic check` produces empty diff.
         UniqueConstraint(
             "membership_id",
             "kind",
-            name="uq_membership_notifications_membership_kind",
+            "channel",
+            name="uq_membership_notifications_membership_kind_channel",
         ),
         # Mirrors migration 0010 op.create_index() — required for `alembic check`
         # to stay clean (drift detection treats migration-only indexes as drift).
