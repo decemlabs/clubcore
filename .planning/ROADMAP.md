@@ -315,7 +315,7 @@ Plans:
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
-| 45. Email Notification Mirrors | 5/13 | In Progress|  |
+| 45. Email Notification Mirrors | 6/13 | In Progress|  |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
 ---
