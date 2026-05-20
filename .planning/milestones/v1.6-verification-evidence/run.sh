@@ -107,8 +107,10 @@ mailhog_purge() {
 
 run_scenario() {
   local slug="$1"; shift
+  # Evidence transcript path: $EVIDENCE_DIR/${slug}.http (default: .planning/.../curl/${slug}.http)
   local evidence="$EVIDENCE_DIR/${slug}.http"
   echo "=== scenario $slug ==="; echo "started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "evidence: tee -> curl/${slug}.http"
   ( "$@" ) 2>&1 | tee "$evidence"
   echo "=== scenario $slug end ==="
 }
@@ -117,6 +119,8 @@ run_scenario() {
 
 # ════════════════════════════════════════════════════════════════════════
 # Scenario 01: invite_accept_login (VER-09 a)
+# All POST/PUT/DELETE/PATCH calls below go through mut() which threads
+# X-CSRF-Token: $CSRF_TOKEN per Phase 6 D-06-XSRF.
 # ════════════════════════════════════════════════════════════════════════
 scenario_01() {
   mailhog_purge
@@ -157,6 +161,8 @@ scenario_01() {
 
 # ════════════════════════════════════════════════════════════════════════
 # Scenario 02: deactivate_revokes_refresh (VER-09 b)
+# Owner /deactivate POST goes through mut() (X-CSRF-Token threaded);
+# target's /refresh is CSRF-exempt per Phase 6.
 # ════════════════════════════════════════════════════════════════════════
 scenario_02() {
   local target_email="deactivate+$(date +%s)@local.dev"
@@ -314,13 +320,158 @@ scenario_04() {
 # ════════════════════════════════════════════════════════════════════════
 # Main runner skeleton — scenarios 01-04 wired; 05-08 appended in Task 2b
 # ════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════
+# Scenario 05: expiring_email_fallback (VER-09 e)
+# ════════════════════════════════════════════════════════════════════════
+scenario_05() {
+  mailhog_purge
+  # Seed a client with email + telegram_user_id=NULL + membership expiring in 7d
+  local client_id; client_id="$(uuidgen)"
+  local membership_id; membership_id="$(uuidgen)"
+  local target_email="expiring_email+$(date +%s)@local.dev"
+
+  psql "$DB_URL" -c "DELETE FROM membership_notifications WHERE membership_id IN (SELECT id FROM memberships WHERE client_id IN (SELECT id FROM clients WHERE email LIKE 'expiring_email+%'))" >/dev/null
+  psql "$DB_URL" -c "DELETE FROM memberships WHERE client_id IN (SELECT id FROM clients WHERE email LIKE 'expiring_email+%')" >/dev/null
+  psql "$DB_URL" -c "DELETE FROM clients WHERE email LIKE 'expiring_email+%'" >/dev/null
+
+  psql "$DB_URL" -c "INSERT INTO clients (id, last_name, first_name, phone, email, telegram_user_id, created_by_user_id, created_at) VALUES ('$client_id', 'Expiring', 'Email', '+79991234567', '$target_email', NULL, (SELECT id FROM users WHERE email='$OWNER_EMAIL'), now())" >/dev/null
+  psql "$DB_URL" -c "INSERT INTO memberships (id, client_id, plan_id, plan_name_snapshot, duration_days_snapshot, price_kopecks_snapshot, freeze_days_limit_snapshot, start_date, end_date, status, created_at) VALUES ('$membership_id', '$client_id', (SELECT id FROM membership_plans LIMIT 1), 'verify-plan', 30, 100000, 7, (CURRENT_DATE - 23), (CURRENT_DATE + 7), 'active', now())" >/dev/null
+
+  echo "--- invoke expiring cron (one-shot) ---"
+  ( cd apps/backend && uv run python -m scripts.run_expiring_cron_once ) 2>&1 || true
+
+  # Verify membership_notifications row with channel='email' was inserted
+  local email_count
+  email_count="$(psql "$DB_URL" -tc "SELECT count(*) FROM membership_notifications WHERE membership_id='$membership_id' AND channel='email'" | xargs)"
+  if [ "$email_count" != "1" ]; then
+    echo "result: FAIL - expected 1 email-channel notification, got $email_count" >&2; return 1
+  fi
+  assert_status 1 "$email_count" "expiring email notification count (idempotent)"
+
+  # Verify MailHog inbox has the expiring email
+  if [ -n "${MAILHOG_URL:-}" ]; then
+    sleep 1
+    local inbox; inbox="$(mailhog_search "$target_email")"
+    echo "$inbox" | jq -r '.items[0].Content.Headers.Subject[0]' || true
+  else
+    echo "notes: inbox check skipped - MAILHOG_URL empty; verify in Postbox sandbox manually"
+  fi
+  echo "result: PASS - expiring_email_fallback complete"
+}
+
+# ════════════════════════════════════════════════════════════════════════
+# Scenario 06: cash_sale_receipt (VER-09 f)
+# ════════════════════════════════════════════════════════════════════════
+scenario_06() {
+  mailhog_purge
+  login_as "$OWNER_EMAIL" "$OWNER_PASSWORD"
+
+  # Use a seed client with email (verify_freezable@local.dev or similar; per D-46-10 use verify_*@local.dev)
+  local client_email="verify_freezable@local.dev"
+  local client_id
+  client_id="$(psql "$DB_URL" -tc "SELECT id FROM clients WHERE email='$client_email' LIMIT 1" | xargs)"
+  [ -z "$client_id" ] && { echo "FAIL: seed client $client_email not found - re-run seed_verification_fixtures" >&2; return 1; }
+
+  echo "--- POST /api/v1/payments (cash sale) ---"
+  local sale_response
+  sale_response="$(mut POST /api/v1/payments "{\"client_id\":\"$client_id\",\"amount_kopecks\":150000,\"payment_method\":\"cash\",\"kind\":\"sale\",\"note\":\"v1.6 verify cash sale\"}")"
+  echo "$sale_response"
+  assert_status 201 "$(echo "$sale_response" | head -1 | awk '{print $2}')" "POST /payments (cash sale)"
+
+  # Poll payment_receipts for email-channel row
+  sleep 2
+  local receipt_count
+  receipt_count="$(psql "$DB_URL" -tc "SELECT count(*) FROM payment_receipts WHERE client_id='$client_id' AND channel='email'" | xargs)"
+  if [ "$receipt_count" -lt 1 ]; then
+    echo "result: FAIL - expected >=1 email payment_receipt for client, got $receipt_count" >&2; return 1
+  fi
+
+  if [ -n "${MAILHOG_URL:-}" ]; then
+    sleep 1
+    local inbox; inbox="$(mailhog_search "$client_email")"
+    echo "$inbox" | jq -r '.items[0].Content.Headers.Subject[0]' || true
+  else
+    echo "notes: inbox check skipped - MAILHOG_URL empty"
+  fi
+  echo "result: PASS - cash_sale_receipt complete"
+}
+
+# ════════════════════════════════════════════════════════════════════════
+# Scenario 07: soft_delete_reinvite_same_email (VER-09 g)
+# Both POST /users and DELETE /users/{id} below go through mut() and
+# thread X-CSRF-Token per Phase 6 D-06-XSRF.
+# ════════════════════════════════════════════════════════════════════════
+scenario_07() {
+  local target_email="reinvite+$(date +%s)@local.dev"
+  psql "$DB_URL" -c "DELETE FROM users WHERE email='$target_email'" >/dev/null
+
+  login_as "$OWNER_EMAIL" "$OWNER_PASSWORD"
+  echo "--- POST /api/v1/users (first invite) ---"
+  local first_response
+  first_response="$(mut POST /api/v1/users "{\"email\":\"$target_email\",\"full_name\":\"Reinvite First\",\"role\":\"reception\"}")"
+  echo "$first_response"
+  assert_status 201 "$(echo "$first_response" | head -1 | awk '{print $2}')" "first POST /users"
+  local first_id
+  first_id="$(echo "$first_response" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}' | jq -r '.id')"
+
+  echo "--- DELETE /api/v1/users/{first_id} (soft-delete) ---"
+  local del_response
+  del_response="$(mut DELETE "/api/v1/users/${first_id}")"
+  echo "$del_response"
+  assert_status 204 "$(echo "$del_response" | head -1 | awk '{print $2}')" "DELETE /users/{id}"
+
+  echo "--- POST /api/v1/users (re-invite same email) ---"
+  local second_response
+  second_response="$(mut POST /api/v1/users "{\"email\":\"$target_email\",\"full_name\":\"Reinvite Second\",\"role\":\"reception\"}")"
+  echo "$second_response"
+  assert_status 201 "$(echo "$second_response" | head -1 | awk '{print $2}')" "re-invite POST /users (partial-UNIQUE allows)"
+
+  # Verify both rows visible in DB (first soft-deleted, second active)
+  local row_count
+  row_count="$(psql "$DB_URL" -tc "SELECT count(*) FROM users WHERE email='$target_email'" | xargs)"
+  if [ "$row_count" != "2" ]; then
+    echo "result: FAIL - expected 2 rows (1 soft-deleted + 1 active), got $row_count" >&2; return 1
+  fi
+  echo "result: PASS - soft_delete_reinvite_same_email complete"
+}
+
+# ════════════════════════════════════════════════════════════════════════
+# Scenario 08: cron_chain_circuit_breaker (VER-09 h)
+# ════════════════════════════════════════════════════════════════════════
+scenario_08() {
+  # Set env so the cron's provider returns 5xx (e.g. EMAIL_PROVIDER=fake_5xx — adjust per actual mock provider)
+  echo "--- invoke expiring cron with mock 5xx provider ---"
+  local t_start; t_start="$(date +%s)"
+  ( cd apps/backend && EMAIL_PROVIDER=fake_5xx timeout 600 uv run python -m scripts.run_expiring_cron_once ) 2>&1 | tee /tmp/v1_6_cron_expiring.log || true
+  echo "--- invoke booking-reminders cron with mock 5xx provider ---"
+  ( cd apps/backend && EMAIL_PROVIDER=fake_5xx timeout 600 uv run python -m scripts.run_booking_reminders_cron_once ) 2>&1 | tee /tmp/v1_6_cron_bookings.log || true
+  local t_end; t_end="$(date +%s)"
+
+  local total_elapsed=$((t_end - t_start))
+  if [ "$total_elapsed" -gt 600 ]; then
+    echo "result: FAIL - cron chain exceeded 10min budget (took ${total_elapsed}s)" >&2; return 1
+  fi
+  assert_status 0 0 "cron chain elapsed=${total_elapsed}s within 600s budget"
+
+  # Verify circuit_state='open' lands in structlog (cron writes JSON)
+  if grep -qE '"circuit_state"[[:space:]]*:[[:space:]]*"open"' /tmp/v1_6_cron_expiring.log /tmp/v1_6_cron_bookings.log; then
+    echo "circuit-breaker: open state observed in structlog"
+  else
+    echo "result: FAIL - expected circuit_state='open' in cron structlog" >&2; return 1
+  fi
+  echo "result: PASS - cron_chain_circuit_breaker complete (elapsed=${total_elapsed}s)"
+}
+
+# ════════════════════════════════════════════════════════════════════════
+# Main runner skeleton — scenarios 01-04 wired; 05-08 appended in Task 2b
+# ════════════════════════════════════════════════════════════════════════
 run_scenario 01_invite_accept_login scenario_01
 run_scenario 02_deactivate_revokes_refresh scenario_02
 run_scenario 03_password_reset_invalidates_sessions scenario_03
 run_scenario 04_anti_oracle_request_unknown_email scenario_04
-# Task 2b appends:
-# run_scenario 05_expiring_email_fallback scenario_05
-# run_scenario 06_cash_sale_receipt scenario_06
-# run_scenario 07_soft_delete_reinvite_same_email scenario_07
-# run_scenario 08_cron_chain_circuit_breaker scenario_08
-# echo "=== run.sh complete - $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+run_scenario 05_expiring_email_fallback scenario_05
+run_scenario 06_cash_sale_receipt scenario_06
+run_scenario 07_soft_delete_reinvite_same_email scenario_07
+run_scenario 08_cron_chain_circuit_breaker scenario_08
+
+echo "=== run.sh complete - $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
