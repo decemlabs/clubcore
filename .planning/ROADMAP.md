@@ -303,9 +303,9 @@ Plans:
 - [x] 46-01-PLAN.md — Regen openapi.json + schema.d.ts in one atomic commit (HANDOFF-03)
 
 **Wave 2** *(handoff artifacts; blocked on Wave 1)*
-- [ ] 46-02-PLAN.md — schema.contract.test.ts +12 forward-guards in 3 epic banner blocks (HANDOFF-04)
-- [ ] 46-03-PLAN.md — apps/backend/README.md v1.6 changelog H2 (HANDOFF-04)
-- [ ] 46-04-PLAN.md — export_postman.py + .planning/handoff/v1.6-postman.json (filter _internal) (HANDOFF-04)
+- [x] 46-02-PLAN.md — schema.contract.test.ts +12 forward-guards in 3 epic banner blocks (HANDOFF-04)
+- [x] 46-03-PLAN.md — apps/backend/README.md v1.6 changelog H2 (HANDOFF-04)
+- [x] 46-04-PLAN.md — export_postman.py + .planning/handoff/v1.6-postman.json (filter _internal) (HANDOFF-04)
 
 **Wave 3** *(race tests; parallelisable, no cross-wave deps)*
 - [ ] 46-05-PLAN.md — test_password_reset_token_replay_race.py (VER-10)
@@ -339,7 +339,7 @@ Plans:
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
 | 45. Email Notification Mirrors | 13/13 | Complete   | 2026-05-20 |
-| 46. OpenAPI Handoff + Milestone Verification | 1/13 | In Progress|  |
+| 46. OpenAPI Handoff + Milestone Verification | 4/13 | In Progress|  |
 
 ---
 
