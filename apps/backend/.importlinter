@@ -61,3 +61,13 @@ forbidden_modules =
 ignore_imports =
     app.integrations.email.dispatcher -> app.modules.auth.email_templates
     app.integrations.email.dispatcher -> app.modules.users.email_templates
+    # Phase 45 NOTIFY-08 / NOTIFY-10 / NOTIFY-12 (Plan 45-06b) — extend the
+    # walker's per-module template registries (Plans 45-04 memberships,
+    # 45-05 bookings, 45-06 payments). Overrides D-45-24's "zero
+    # .importlinter changes" claim per PATTERNS.md correction #3 — grimp
+    # parses function-scope imports, so each new registry needs its own
+    # allowlist entry. The narrow source -> target shape keeps the
+    # exception bounded to dispatcher.py importing template-only modules.
+    app.integrations.email.dispatcher -> app.modules.memberships.email_templates
+    app.integrations.email.dispatcher -> app.modules.bookings.email_templates
+    app.integrations.email.dispatcher -> app.modules.payments.email_templates

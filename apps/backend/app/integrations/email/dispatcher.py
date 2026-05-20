@@ -43,11 +43,12 @@ _log = structlog.get_logger("integrations.email.dispatcher")
 # ---------------------------------------------------------------------------
 # Per-module template registry walker.
 #
-# Phase 42 only registers ``auth.email_templates``; Phases 44/45 extend this
-# walker with additional per-module registries (users, memberships, bookings,
-# payments). Adding a new domain is a single-line edit here — the walker is
-# the central transport-boundary indirection that keeps the .importlinter
-# exception bounded to one source -> target pair.
+# Phase 42 registers ``auth.email_templates``; Phase 43 added ``users``;
+# Phase 45 (Plans 04/05/06) wires ``memberships``, ``bookings``, and
+# ``payments`` registries. Adding a new domain is a single-line edit here —
+# the walker is the central transport-boundary indirection that keeps the
+# .importlinter exception bounded to one source -> target pair (per
+# ignore_imports allowlist in ``apps/backend/.importlinter``).
 # ---------------------------------------------------------------------------
 
 
@@ -73,17 +74,26 @@ def _resolve_template(template_id: str) -> Any:
         ``.text.render(...)`` directly so the structural shape suffices.
     """
     from app.modules.auth.email_templates import TEMPLATES as AUTH_TEMPLATES
+    from app.modules.bookings.email_templates import TEMPLATES as BOOKINGS_TEMPLATES
+    from app.modules.memberships.email_templates import TEMPLATES as MEMBERSHIPS_TEMPLATES
+    from app.modules.payments.email_templates import TEMPLATES as PAYMENTS_TEMPLATES
     from app.modules.users.email_templates import TEMPLATES as USERS_TEMPLATES
 
     if template_id in AUTH_TEMPLATES:
         return AUTH_TEMPLATES[template_id]
     if template_id in USERS_TEMPLATES:
         return USERS_TEMPLATES[template_id]
+    if template_id in MEMBERSHIPS_TEMPLATES:
+        return MEMBERSHIPS_TEMPLATES[template_id]
+    if template_id in BOOKINGS_TEMPLATES:
+        return BOOKINGS_TEMPLATES[template_id]
+    if template_id in PAYMENTS_TEMPLATES:
+        return PAYMENTS_TEMPLATES[template_id]
     raise KeyError(
         f"template_id {template_id!r} not in any per-module registry "
-        f"(Phase 42 auth.email_templates + Phase 43 users.email_templates); "
-        f"add the per-module import here when Phase 44/45 register additional "
-        f"template files."
+        f"(Phase 42 auth + Phase 43 users + Phase 45 memberships/bookings/payments); "
+        f"add the per-module import + if-block here when a new domain registers "
+        f"additional template files."
     )
 
 
