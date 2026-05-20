@@ -4,6 +4,36 @@
  */
 
 export interface paths {
+    "/api/v1/_internal/email/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email Webhook
+         * @description Yandex Cloud Postbox bounce/complaint webhook (D-42-17 / EMAIL-07).
+         *
+         *     Flow:
+         *       1. Read raw body bytes (no parse yet).
+         *       2. Compute HMAC-SHA256 of raw body with settings.email.webhook_secret.
+         *       3. hmac.compare_digest against X-Email-Webhook-Signature header.
+         *       4. Mismatch / missing -> 401 (no audit emit -- would amplify noise from
+         *          unsigned probes; structlog WARN is the visibility surface).
+         *       5. Parse body, route by eventType -> UPDATE EmailSendLog status.
+         *       6. On hard-bounce/complaint: audit.emit('email_send_failed', ...) with
+         *          LOCKED reason value ('bounce' or 'complaint').
+         */
+        post: operations["email_webhook_api_v1__internal_email_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -86,6 +116,82 @@ export interface paths {
         get: operations["me_api_v1_auth_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/otp/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Otp Request
+         * @description Request an OTP via the configured channel (AUTH-EM-02 / D-42-22).
+         *
+         *     Always returns 202 with IDENTICAL body shape regardless of channel,
+         *     success/silent-drop branch, or known/unknown user. The Pydantic body
+         *     validator enforces ``email`` presence when ``channel='email'`` (returns
+         *     422 BEFORE the route fires — not an anti-oracle leak because invalid
+         *     body SHAPE is not a success-vs-unknown discriminator).
+         */
+        post: operations["otp_request_api_v1_auth_otp_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm password reset (atomic-consume + revoke-all)
+         * @description RESET-02 anonymous endpoint.
+         *
+         *     No CSRF, no RBAC (D-44-34). Atomic-consume + Argon2 rehash +
+         *     revoke-all sessions + audit emit live in the service layer.
+         *     Returns 200 envelope(None) on success; 410 invalid_or_expired_token /
+         *     422 weak_password on failure (translated by the global AppError handler).
+         */
+        post: operations["password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password-reset email (anti-oracle, rate-limited)
+         * @description RESET-01 anonymous endpoint.
+         *
+         *     No CSRF, no RBAC (D-44-34). Anti-oracle: response is byte-identical
+         *     across all 4 cases (active / deactivated / owner / nonexistent) AND
+         *     across the rate-limit-hit branch. 500ms wall-clock floor + audit emit
+         *     in BOTH known/unknown branches live entirely inside the service layer.
+         */
+        post: operations["password_reset_request_endpoint_api_v1_auth_password_reset_request_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1313,6 +1419,148 @@ export interface paths {
         patch: operations["update_trainer_api_v1_trainers__trainer_id__patch"];
         trace?: never;
     };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users with optional active/deleted filters and pagination
+         * @description USERS-02 — paginated list (D-43-15). LIST permission required; no CSRF (read).
+         */
+        get: operations["list_users_endpoint_api_v1_users_get"];
+        put?: never;
+        /**
+         * Create user + send invitation (idempotent re-invite; 409 on active email)
+         * @description USERS-03 / D-43-13 — create user + invite. CREATE permission + CSRF required.
+         */
+        post: operations["create_user_endpoint_api_v1_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a pending invitation: set password + log in (RESET-04)
+         * @description RESET-04 anonymous endpoint.
+         *
+         *     No CSRF, no RBAC (D-44-34). Cross-module delegate to
+         *     ``auth.password_reset_service.accept_invitation`` (D-44-18 — atomic
+         *     consume + UPDATE-only password set lives in auth bedrock). On
+         *     success, issues session cookies via the SAME verbatim sequence
+         *     /auth/login uses (see auth/router.py:72-92).
+         *
+         *     Canonical ordering — DO NOT deviate:
+         *       1. service.accept_invitation owns its own commit (SVC001).
+         *       2. Re-load User row by id for UserPublic.model_validate.
+         *       3. issue_tokens(session, redis, user) — 3-tuple (access, refresh, csrf).
+         *       4. issue_session_cookies(response, access_token=, refresh_token=,
+         *          csrf_token=, secure=) — kwargs match /auth/login verbatim.
+         *       5. NO explicit session.commit() between (3) and (4) — mirrors /auth/login.
+         *       6. envelope(LoginResponse(user=UserPublic.model_validate(user))).
+         */
+        post: operations["accept_invitation_endpoint_api_v1_users_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/invitations/{token_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a pending invitation by token row id (404 missing, 409 already accepted)
+         * @description USERS-03 / D-43-19 — atomic-consume invitation token by row UUID (NOT raw token).
+         */
+        post: operations["revoke_invitation_endpoint_api_v1_users_invitations__token_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Soft-delete user (session revoke + invitation cascade; 409 on self / last-owner)
+         * @description USERS-05 / D-43-18 — soft-delete + session revoke + invitation cascade.
+         *
+         *     DELETE permission + CSRF required. `(Action.DELETE, Resource.USERS)` is in
+         *     `OWNER_ONLY`, so reception → 403 from `require_permission`.
+         */
+        delete: operations["soft_delete_user_endpoint_api_v1_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)
+         * @description USERS-04 / D-43-16 — self + last-owner guards; UPDATE permission + CSRF required.
+         */
+        patch: operations["deactivate_user_endpoint_api_v1_users__user_id__deactivate_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Reactivate a previously-deactivated user (404 missing, 409 if already active)
+         * @description USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required.
+         */
+        patch: operations["reactivate_user_endpoint_api_v1_users__user_id__reactivate_patch"];
+        trace?: never;
+    };
     "/api/v1/visits": {
         parameters: {
             query?: never;
@@ -1790,6 +2038,33 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * InvitationAcceptRequest
+         * @description Body for POST /api/v1/users/invitations/accept (RESET-04).
+         *
+         *     - ``token`` is the raw urlsafe-base64 token from the invitation URL fragment.
+         *     - ``password`` is the user's chosen initial password (>=8 chars enforced
+         *       at the service layer per D-44-17 — domain error, not pydantic 422).
+         *     - ``full_name`` is optional; non-empty value overwrites the owner-set
+         *       value per D-44-23 (self-healing typo correction at accept time).
+         *       Max length mirrors ``UserCreateRequest.full_name`` (128).
+         */
+        InvitationAcceptRequest: {
+            /** Fullname */
+            fullName?: string | null;
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+        };
+        /**
+         * InvitationRevokeRequest
+         * @description POST /api/v1/users/invitations/{token_id}/revoke body — D-43-19.
+         */
+        InvitationRevokeRequest: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * LoginRequest
          * @description POST /api/v1/auth/login body.
          */
@@ -2045,6 +2320,33 @@ export interface components {
          * @enum {string}
          */
         MembershipStatus: "active" | "expired" | "cancelled" | "frozen";
+        /**
+         * OtpRequestBody
+         * @description POST /api/v1/auth/otp/request body (D-42-22 / AUTH-EM-02).
+         *
+         *     channel='telegram' (default) preserves backwards compat — existing
+         *     callers send no ``channel`` field and the route surfaces the unified
+         *     OTP flow under one endpoint. The service-layer Telegram facade
+         *     (``request_otp_telegram``) delegates to the pre-existing
+         *     ``telegram_service.start_deep_link`` so /auth/telegram/start stays in
+         *     place for any FE callers that already use it.
+         *
+         *     channel='email' requires ``email`` to be present; the model_validator
+         *     enforces this so FastAPI returns 422 BEFORE the route function runs.
+         *     The 422 is not an anti-oracle leak: invalid body SHAPE is not a
+         *     successful-vs-unknown-account discriminator — anti-oracle is enforced
+         *     in the authenticated branches of ``request_otp_email`` (Task 4).
+         */
+        OtpRequestBody: {
+            /**
+             * Channel
+             * @default telegram
+             * @enum {string}
+             */
+            channel: "telegram" | "email";
+            /** Email */
+            email?: string | null;
+        };
         /** PaginatedData[ActiveSessionItem] */
         PaginatedData_ActiveSessionItem_: {
             /** Items */
@@ -2166,6 +2468,17 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[UserListItemResponse] */
+        PaginatedData_UserListItemResponse_: {
+            /** Items */
+            items: components["schemas"]["UserListItemResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[VisitResponse] */
         PaginatedData_VisitResponse_: {
             /** Items */
@@ -2176,6 +2489,40 @@ export interface components {
             pageSize: number;
             /** Total */
             total: number;
+        };
+        /**
+         * PasswordResetConfirmBody
+         * @description Body for POST /api/v1/auth/password-reset/confirm (RESET-02).
+         *
+         *     - ``token`` is the raw urlsafe-base64 token from the email URL fragment.
+         *     - ``new_password`` is the user's chosen new password (min 8 chars
+         *       enforced at service layer per D-44-17). The schema accepts any
+         *       string >=1 chars so weak-password failures become domain errors
+         *       (422 weak_password) rather than Pydantic validation errors —
+         *       consistent with the v1.0 AUTH-* baseline.
+         */
+        PasswordResetConfirmBody: {
+            /** Newpassword */
+            newPassword: string;
+            /** Token */
+            token: string;
+        };
+        /**
+         * PasswordResetRequestBody
+         * @description Body for POST /api/v1/auth/password-reset/request (RESET-01).
+         *
+         *     Anti-oracle: the email is lowercased server-side; format validation
+         *     is intentionally permissive (any string admitted — the anti-oracle
+         *     envelope hides resolution semantics, NOT format errors). ``EmailStr``
+         *     is deliberately NOT used here — a 422-on-bad-format would leak a
+         *     coarse "this string is shaped like an email vs. nonsense" oracle that
+         *     the 4-case identical-202 envelope (D-44-06) is supposed to suppress.
+         *     ``str`` with ``min_length=1`` accepts every shape and forces the
+         *     service layer to handle resolution uniformly.
+         */
+        PasswordResetRequestBody: {
+            /** Email */
+            email: string;
         };
         /**
          * PaymentResponse
@@ -2600,6 +2947,10 @@ export interface components {
         ResponseEnvelope_PaginatedData_TrainerResponse__: {
             data: components["schemas"]["PaginatedData_TrainerResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[UserListItemResponse]] */
+        ResponseEnvelope_PaginatedData_UserListItemResponse__: {
+            data: components["schemas"]["PaginatedData_UserListItemResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[VisitResponse]] */
         ResponseEnvelope_PaginatedData_VisitResponse__: {
             data: components["schemas"]["PaginatedData_VisitResponse_"];
@@ -2631,6 +2982,10 @@ export interface components {
         /** ResponseEnvelope[TrainerResponse] */
         ResponseEnvelope_TrainerResponse_: {
             data: components["schemas"]["TrainerResponse"];
+        };
+        /** ResponseEnvelope[UserCreateResponse] */
+        ResponseEnvelope_UserCreateResponse_: {
+            data: components["schemas"]["UserCreateResponse"];
         };
         /** ResponseEnvelope[VisitResponse] */
         ResponseEnvelope_VisitResponse_: {
@@ -2875,6 +3230,89 @@ export interface components {
             phone?: string | null;
         };
         /**
+         * UserCreateRequest
+         * @description POST /api/v1/users body — D-43-13.
+         */
+        UserCreateRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Fullname */
+            fullName: string;
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * UserCreateResponse
+         * @description POST /api/v1/users response — D-43-13. NEVER returns plaintext password.
+         */
+        UserCreateResponse: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Invitationexpiresat
+             * Format: date-time
+             */
+            invitationExpiresAt: string;
+            /** Invitelinkurl */
+            inviteLinkUrl?: string | null;
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * UserListItemResponse
+         * @description Item shape for GET /api/v1/users list — D-43-10.
+         *
+         *     Fields explicitly enumerated per ROADMAP success criterion #5.
+         *     NO password_hash / telegram_* / email_verified leak.
+         */
+        UserListItemResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Deactivatedat */
+            deactivatedAt: string | null;
+            /** Deactivatedbyuserid */
+            deactivatedByUserId: string | null;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Fullname */
+            fullName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invitationexpiresat */
+            invitationExpiresAt: string | null;
+            /** Isactive */
+            isActive: boolean;
+            /**
+             * Isdeactivated
+             * @description Derived per D-43-10 — `not is_active and deactivated_at is not None`.
+             */
+            readonly isDeactivated: boolean;
+            role: components["schemas"]["Role"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "pending_invitation";
+        };
+        /**
          * UserPublic
          * @description Subset of User exposed on login response.
          */
@@ -2981,6 +3419,24 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    email_webhook_api_v1__internal_email_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;
@@ -3070,6 +3526,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_MeResponse_"];
+                };
+            };
+        };
+    };
+    otp_request_api_v1_auth_otp_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirmBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    password_reset_request_endpoint_api_v1_auth_password_reset_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4861,6 +5416,229 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_TrainerResponse_"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_endpoint_api_v1_users_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                active?: boolean | null;
+                deleted?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_UserListItemResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_user_endpoint_api_v1_users_post: {
+        parameters: {
+            query?: {
+                /** @description When true, the response carries the raw invitation URL (D-43-14). Audited via link_copied=true. */
+                include_invite_link?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_UserCreateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_endpoint_api_v1_users_invitations_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationAcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_LoginResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invitation_endpoint_api_v1_users_invitations__token_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    soft_delete_user_endpoint_api_v1_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_user_endpoint_api_v1_users__user_id__deactivate_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_user_endpoint_api_v1_users__user_id__reactivate_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -857,6 +857,62 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "InvitationAcceptRequest": {
+        "additionalProperties": false,
+        "description": "Body for POST /api/v1/users/invitations/accept (RESET-04).\n\n- ``token`` is the raw urlsafe-base64 token from the invitation URL fragment.\n- ``password`` is the user's chosen initial password (>=8 chars enforced\n  at the service layer per D-44-17 — domain error, not pydantic 422).\n- ``full_name`` is optional; non-empty value overwrites the owner-set\n  value per D-44-23 (self-healing typo correction at accept time).\n  Max length mirrors ``UserCreateRequest.full_name`` (128).",
+        "properties": {
+          "fullName": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fullname"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "InvitationAcceptRequest",
+        "type": "object"
+      },
+      "InvitationRevokeRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/users/invitations/{token_id}/revoke body — D-43-19.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "InvitationRevokeRequest",
+        "type": "object"
+      },
       "LoginRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/auth/login body.",
@@ -1350,6 +1406,35 @@
         "title": "MembershipStatus",
         "type": "string"
       },
+      "OtpRequestBody": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/auth/otp/request body (D-42-22 / AUTH-EM-02).\n\nchannel='telegram' (default) preserves backwards compat — existing\ncallers send no ``channel`` field and the route surfaces the unified\nOTP flow under one endpoint. The service-layer Telegram facade\n(``request_otp_telegram``) delegates to the pre-existing\n``telegram_service.start_deep_link`` so /auth/telegram/start stays in\nplace for any FE callers that already use it.\n\nchannel='email' requires ``email`` to be present; the model_validator\nenforces this so FastAPI returns 422 BEFORE the route function runs.\nThe 422 is not an anti-oracle leak: invalid body SHAPE is not a\nsuccessful-vs-unknown-account discriminator — anti-oracle is enforced\nin the authenticated branches of ``request_otp_email`` (Task 4).",
+        "properties": {
+          "channel": {
+            "default": "telegram",
+            "enum": [
+              "telegram",
+              "email"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "title": "OtpRequestBody",
+        "type": "object"
+      },
       "PaginatedData_ActiveSessionItem_": {
         "properties": {
           "items": {
@@ -1691,6 +1776,37 @@
         "title": "PaginatedData[TrainerResponse]",
         "type": "object"
       },
+      "PaginatedData_UserListItemResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[UserListItemResponse]",
+        "type": "object"
+      },
       "PaginatedData_VisitResponse_": {
         "properties": {
           "items": {
@@ -1720,6 +1836,47 @@
           "pageSize"
         ],
         "title": "PaginatedData[VisitResponse]",
+        "type": "object"
+      },
+      "PasswordResetConfirmBody": {
+        "additionalProperties": false,
+        "description": "Body for POST /api/v1/auth/password-reset/confirm (RESET-02).\n\n- ``token`` is the raw urlsafe-base64 token from the email URL fragment.\n- ``new_password`` is the user's chosen new password (min 8 chars\n  enforced at service layer per D-44-17). The schema accepts any\n  string >=1 chars so weak-password failures become domain errors\n  (422 weak_password) rather than Pydantic validation errors —\n  consistent with the v1.0 AUTH-* baseline.",
+        "properties": {
+          "newPassword": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Newpassword",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ],
+        "title": "PasswordResetConfirmBody",
+        "type": "object"
+      },
+      "PasswordResetRequestBody": {
+        "additionalProperties": false,
+        "description": "Body for POST /api/v1/auth/password-reset/request (RESET-01).\n\nAnti-oracle: the email is lowercased server-side; format validation\nis intentionally permissive (any string admitted — the anti-oracle\nenvelope hides resolution semantics, NOT format errors). ``EmailStr``\nis deliberately NOT used here — a 422-on-bad-format would leak a\ncoarse \"this string is shaped like an email vs. nonsense\" oracle that\nthe 4-case identical-202 envelope (D-44-06) is supposed to suppress.\n``str`` with ``min_length=1`` accepts every shape and forces the\nservice layer to handle resolution uniformly.",
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "PasswordResetRequestBody",
         "type": "object"
       },
       "PaymentResponse": {
@@ -2591,6 +2748,18 @@
         "title": "ResponseEnvelope[PaginatedData[TrainerResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_UserListItemResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_UserListItemResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[UserListItemResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_VisitResponse__": {
         "properties": {
           "data": {
@@ -2685,6 +2854,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[TrainerResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_UserCreateResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/UserCreateResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[UserCreateResponse]",
         "type": "object"
       },
       "ResponseEnvelope_VisitResponse_": {
@@ -3069,6 +3250,172 @@
         "title": "TrainerUpdateRequest",
         "type": "object"
       },
+      "UserCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/users body — D-43-13.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 255,
+            "title": "Email",
+            "type": "string"
+          },
+          "fullName": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Fullname",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "email",
+          "fullName",
+          "role"
+        ],
+        "title": "UserCreateRequest",
+        "type": "object"
+      },
+      "UserCreateResponse": {
+        "description": "POST /api/v1/users response — D-43-13. NEVER returns plaintext password.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invitationExpiresAt": {
+            "format": "date-time",
+            "title": "Invitationexpiresat",
+            "type": "string"
+          },
+          "inviteLinkUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitelinkurl"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "invitationExpiresAt"
+        ],
+        "title": "UserCreateResponse",
+        "type": "object"
+      },
+      "UserListItemResponse": {
+        "description": "Item shape for GET /api/v1/users list — D-43-10.\n\nFields explicitly enumerated per ROADMAP success criterion #5.\nNO password_hash / telegram_* / email_verified leak.",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "deactivatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deactivatedat"
+          },
+          "deactivatedByUserId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deactivatedbyuserid"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invitationExpiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitationexpiresat"
+          },
+          "isActive": {
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "isDeactivated": {
+            "description": "Derived per D-43-10 — `not is_active and deactivated_at is not None`.",
+            "readOnly": true,
+            "title": "Isdeactivated",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "pending_invitation"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "fullName",
+          "role",
+          "isActive",
+          "status",
+          "createdAt",
+          "deactivatedAt",
+          "deactivatedByUserId",
+          "invitationExpiresAt",
+          "isDeactivated"
+        ],
+        "title": "UserListItemResponse",
+        "type": "object"
+      },
       "UserPublic": {
         "description": "Subset of User exposed on login response.",
         "properties": {
@@ -3241,6 +3588,21 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/_internal/email/webhook": {
+      "post": {
+        "description": "Yandex Cloud Postbox bounce/complaint webhook (D-42-17 / EMAIL-07).\n\nFlow:\n  1. Read raw body bytes (no parse yet).\n  2. Compute HMAC-SHA256 of raw body with settings.email.webhook_secret.\n  3. hmac.compare_digest against X-Email-Webhook-Signature header.\n  4. Mismatch / missing -> 401 (no audit emit -- would amplify noise from\n     unsigned probes; structlog WARN is the visibility surface).\n  5. Parse body, route by eventType -> UPDATE EmailSendLog status.\n  6. On hard-bounce/complaint: audit.emit('email_send_failed', ...) with\n     LOCKED reason value ('bounce' or 'complaint').",
+        "operationId": "email_webhook_api_v1__internal_email_webhook_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Email Webhook",
+        "tags": [
+          "_internal"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "description": "Authenticate email+password; issue cookies + envelope (AUTH-EP-01..02, AUTH-EP-05).",
@@ -3344,6 +3706,132 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/otp/request": {
+      "post": {
+        "description": "Request an OTP via the configured channel (AUTH-EM-02 / D-42-22).\n\nAlways returns 202 with IDENTICAL body shape regardless of channel,\nsuccess/silent-drop branch, or known/unknown user. The Pydantic body\nvalidator enforces ``email`` presence when ``channel='email'`` (returns\n422 BEFORE the route fires — not an anti-oracle leak because invalid\nbody SHAPE is not a success-vs-unknown discriminator).",
+        "operationId": "otp_request_api_v1_auth_otp_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Otp Request",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/confirm": {
+      "post": {
+        "description": "RESET-02 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Atomic-consume + Argon2 rehash +\nrevoke-all sessions + audit emit live in the service layer.\nReturns 200 envelope(None) on success; 410 invalid_or_expired_token /\n422 weak_password on failure (translated by the global AppError handler).",
+        "operationId": "password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm password reset (atomic-consume + revoke-all)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/request": {
+      "post": {
+        "description": "RESET-01 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Anti-oracle: response is byte-identical\nacross all 4 cases (active / deactivated / owner / nonexistent) AND\nacross the rate-limit-hit branch. 500ms wall-clock floor + audit emit\nin BOTH known/unknown branches live entirely inside the service layer.",
+        "operationId": "password_reset_request_endpoint_api_v1_auth_password_reset_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request a password-reset email (anti-oracle, rate-limited)",
         "tags": [
           "auth"
         ]
@@ -6531,6 +7019,343 @@
         "summary": "Partial update (PATCH semantics; handles deactivate/reactivate via isActive)",
         "tags": [
           "trainers"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "description": "USERS-02 — paginated list (D-43-15). LIST permission required; no CSRF (read).",
+        "operationId": "list_users_endpoint_api_v1_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deleted",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Deleted",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_UserListItemResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List users with optional active/deleted filters and pagination",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "description": "USERS-03 / D-43-13 — create user + invite. CREATE permission + CSRF required.",
+        "operationId": "create_user_endpoint_api_v1_users_post",
+        "parameters": [
+          {
+            "description": "When true, the response carries the raw invitation URL (D-43-14). Audited via link_copied=true.",
+            "in": "query",
+            "name": "include_invite_link",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "When true, the response carries the raw invitation URL (D-43-14). Audited via link_copied=true.",
+              "title": "Include Invite Link",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_UserCreateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create user + send invitation (idempotent re-invite; 409 on active email)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/invitations/accept": {
+      "post": {
+        "description": "RESET-04 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Cross-module delegate to\n``auth.password_reset_service.accept_invitation`` (D-44-18 — atomic\nconsume + UPDATE-only password set lives in auth bedrock). On\nsuccess, issues session cookies via the SAME verbatim sequence\n/auth/login uses (see auth/router.py:72-92).\n\nCanonical ordering — DO NOT deviate:\n  1. service.accept_invitation owns its own commit (SVC001).\n  2. Re-load User row by id for UserPublic.model_validate.\n  3. issue_tokens(session, redis, user) — 3-tuple (access, refresh, csrf).\n  4. issue_session_cookies(response, access_token=, refresh_token=,\n     csrf_token=, secure=) — kwargs match /auth/login verbatim.\n  5. NO explicit session.commit() between (3) and (4) — mirrors /auth/login.\n  6. envelope(LoginResponse(user=UserPublic.model_validate(user))).",
+        "operationId": "accept_invitation_endpoint_api_v1_users_invitations_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_LoginResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept a pending invitation: set password + log in (RESET-04)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/invitations/{token_id}/revoke": {
+      "post": {
+        "description": "USERS-03 / D-43-19 — atomic-consume invitation token by row UUID (NOT raw token).",
+        "operationId": "revoke_invitation_endpoint_api_v1_users_invitations__token_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Token Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke a pending invitation by token row id (404 missing, 409 already accepted)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "delete": {
+        "description": "USERS-05 / D-43-18 — soft-delete + session revoke + invitation cascade.\n\nDELETE permission + CSRF required. `(Action.DELETE, Resource.USERS)` is in\n`OWNER_ONLY`, so reception → 403 from `require_permission`.",
+        "operationId": "soft_delete_user_endpoint_api_v1_users__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soft-delete user (session revoke + invitation cascade; 409 on self / last-owner)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/deactivate": {
+      "patch": {
+        "description": "USERS-04 / D-43-16 — self + last-owner guards; UPDATE permission + CSRF required.",
+        "operationId": "deactivate_user_endpoint_api_v1_users__user_id__deactivate_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/reactivate": {
+      "patch": {
+        "description": "USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required.",
+        "operationId": "reactivate_user_endpoint_api_v1_users__user_id__reactivate_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reactivate a previously-deactivated user (404 missing, 409 if already active)",
+        "tags": [
+          "users"
         ]
       }
     },
