@@ -1,0 +1,56 @@
+--- invoke expiring cron (one-shot) ---
+2026-05-20 20:04:03 [info     ] email_client_built             provider=sandbox sandbox_mode=False
+2026-05-20 20:04:03 [info     ] worker_startup_complete        function_count=7
+2026-05-20 20:04:03,971 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-05-20 20:04:03,971 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-05-20 20:04:03,972 INFO sqlalchemy.engine.Engine select current_schema()
+2026-05-20 20:04:03,972 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-05-20 20:04:03,973 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-05-20 20:04:03,973 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-05-20 20:04:03,974 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-05-20 20:04:03,974 INFO sqlalchemy.engine.Engine 
+        SELECT
+            m.id           AS membership_id,
+            m.client_id    AS client_id,
+            m.end_date     AS end_date,
+            c.telegram_user_id AS chat_id,
+            c.email        AS client_email,
+            TRIM(c.last_name || ' ' || c.first_name) AS client_full_name,
+            CASE
+                WHEN m.end_date = $1::DATE THEN 'expiring_7d'
+                WHEN m.end_date = $2::DATE THEN 'expiring_3d'
+                WHEN m.end_date = $3::DATE THEN 'expiring_1d'
+            END AS kind
+        FROM memberships m
+        JOIN clients c ON c.id = m.client_id
+        WHERE m.status = 'active'
+          AND m.end_date IN ($3::DATE, $2::DATE, $1::DATE)
+          AND (c.telegram_user_id IS NOT NULL OR c.email IS NOT NULL)
+          AND c.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM membership_notifications mn
+              WHERE mn.membership_id = m.id
+                AND mn.kind = CASE
+                    WHEN m.end_date = $1::DATE THEN 'expiring_7d'
+                    WHEN m.end_date = $2::DATE THEN 'expiring_3d'
+                    WHEN m.end_date = $3::DATE THEN 'expiring_1d'
+                END
+          )
+        
+2026-05-20 20:04:03,974 INFO sqlalchemy.engine.Engine [generated in 0.00008s] (datetime.date(2026, 5, 27), datetime.date(2026, 5, 23), datetime.date(2026, 5, 21))
+2026-05-20 20:04:03,977 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-05-20 20:04:03 [warning  ] expiring_notification_send_failed client_id=ec5424a4-b0c4-4a85-afc7-6295300db01b error_msg=no_telegram_user_id kind=expiring_7d membership_id=44ead446-0250-4a20-aae3-09f08f06ba80 reason=bot_blocked telegram_chat_id=None
+2026-05-20 20:04:04 [info     ] email_dispatch_enqueued        audit_correlation_id=300bfced-d672-4a16-b483-7c9afa572b2d template_id=EMAIL_EXPIRING_7D_VARIANT_A to=expiring_email+1779296643@local.dev
+2026-05-20 20:04:04 [info     ] expiring_notification_sent_7d  channel=email client_id=ec5424a4-b0c4-4a85-afc7-6295300db01b kind=expiring_7d telegram_chat_id=None
+2026-05-20 20:04:04,009 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-05-20 20:04:04,011 INFO sqlalchemy.engine.Engine INSERT INTO audit_log (actor_user_id, actor_email_snapshot, action, resource_type, resource_id, payload) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::UUID, $6::JSONB) RETURNING audit_log.created_at, audit_log.id
+2026-05-20 20:04:04,011 INFO sqlalchemy.engine.Engine [generated in 0.00011s] (None, None, 'expiring_notification_sent_7d', 'membership', UUID('44ead446-0250-4a20-aae3-09f08f06ba80'), '{"client_id": "ec5424a4-b0c4-4a85-afc7-6295300db01b", "telegram_chat_id": null, "kind": "expiring_7d", "channel": "email"}')
+2026-05-20 20:04:04,012 INFO sqlalchemy.engine.Engine INSERT INTO membership_notifications (membership_id, kind, telegram_chat_id, channel) VALUES ($1::UUID, $2::VARCHAR, $3::BIGINT, $4::VARCHAR) RETURNING membership_notifications.sent_at, membership_notifications.id, membership_notifications.created_at, membership_notifications.updated_at
+2026-05-20 20:04:04,013 INFO sqlalchemy.engine.Engine [generated in 0.00007s] (UUID('44ead446-0250-4a20-aae3-09f08f06ba80'), 'expiring_7d', None, 'email')
+2026-05-20 20:04:04,013 INFO sqlalchemy.engine.Engine COMMIT
+2026-05-20 20:04:04 [info     ] expiring_notification_email_fanout_sent audit_correlation_id=300bfced-d672-4a16-b483-7c9afa572b2d client_id=ec5424a4-b0c4-4a85-afc7-6295300db01b kind=expiring_7d membership_id=44ead446-0250-4a20-aae3-09f08f06ba80
+2026-05-20 20:04:04 [info     ] send_expiring_notifications_complete count=1
+Fired send_expiring_notifications once: count=1
+2026-05-20 20:04:04 [info     ] worker_shutdown_complete
+notes: inbox check skipped - MAILHOG_URL empty; verify in Postbox sandbox manually
+result: PASS - expiring_email_fallback complete

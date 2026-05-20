@@ -20,7 +20,7 @@ trap 'echo "FAILED at line $LINENO" >&2' ERR
 # ── Env-var defaults (operator may override) ─────────────────────────────
 BASE_URL="${BASE_URL:-http://localhost:8000}"
 DB_URL="${DB_URL:-postgresql://app:app@localhost:5432/sportzal}"
-MAILHOG_URL="${MAILHOG_URL:-http://localhost:8025}"   # D-46-13 — MailHog default; Postbox sandbox alternative
+MAILHOG_URL="${MAILHOG_URL-http://localhost:8025}"   # D-46-13 — MailHog default; Postbox sandbox alternative (use `-` not `:-` so explicit MAILHOG_URL='' disables the check)
 EVIDENCE_DIR="${EVIDENCE_DIR:-.planning/milestones/v1.6-verification-evidence/curl}"
 COOKIE_JAR="${COOKIE_JAR:-/tmp/v1_6_verify_cookies.jar}"
 
@@ -129,9 +129,12 @@ scenario_01() {
   psql "$DB_URL" -c "DELETE FROM users WHERE email LIKE 'invitee+%@local.dev'" >/dev/null
 
   login_as "$OWNER_EMAIL" "$OWNER_PASSWORD"
-  echo "--- POST /api/v1/users (invite) ---"
+  echo "--- POST /api/v1/users?include_invite_link=true (invite) ---"
   local create_response
-  create_response="$(mut POST /api/v1/users "{\"email\":\"$target_email\",\"full_name\":\"Test Invitee\",\"role\":\"reception\"}")"
+  # ?include_invite_link=true returns the raw URL in the response body per
+  # apps/backend/app/modules/users/router.py:107-115 (D-43-14). This avoids
+  # the MailHog round-trip for raw-token recovery in the sandbox-email path.
+  create_response="$(mut POST '/api/v1/users?include_invite_link=true' "{\"email\":\"$target_email\",\"full_name\":\"Test Invitee\",\"role\":\"reception\"}")"
   echo "$create_response"
   assert_status 201 "$(echo "$create_response" | head -1 | awk '{print $2}')" "owner POST /users"
 
@@ -139,19 +142,21 @@ scenario_01() {
   local token=""
   if [ -n "${MAILHOG_URL:-}" ]; then
     local mail_json; mail_json="$(mailhog_search "$target_email")"
-    token="$(echo "$mail_json" | jq -r '.items[0].Content.Body' 2>/dev/null | grep -oE 'accept\?token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2 || true)"
+    token="$(echo "$mail_json" | jq -r '.items[0].Content.Body' 2>/dev/null | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2 || true)"
   fi
   if [ -z "${token:-}" ]; then
-    token="$(psql "$DB_URL" -tc "SELECT token_hash FROM password_reset_tokens WHERE user_id=(SELECT id FROM users WHERE email='$target_email') AND purpose='invitation' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1" | xargs)"
-    echo "notes: token pulled from DB (MailHog not used or message not found)"
+    # Recover raw token from the inviteLinkUrl response field (audit records
+    # link_copied=true; sandbox-email path requires this rather than MailHog).
+    token="$(echo "$create_response" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}' | jq -r '.data.inviteLinkUrl' | sed -E 's/.*#token=//')"
+    echo "notes: token pulled from inviteLinkUrl response field (MailHog not used)"
   fi
-  [ -z "$token" ] && { echo "FAIL: no invitation token recoverable" >&2; return 1; }
+  if [ -z "$token" ] || [ "$token" = "null" ]; then echo "FAIL: no invitation token recoverable" >&2; return 1; fi
 
   echo "--- POST /api/v1/users/invitations/accept ---"
   local accept_response
   accept_response="$(curl -i -sS -X POST "$BASE_URL/api/v1/users/invitations/accept" \
     -H 'Content-Type: application/json' \
-    -d "{\"token\":\"$token\",\"new_password\":\"InviteePass123!\"}")"
+    -d "{\"token\":\"$token\",\"password\":\"InviteePass123!\"}")"
   echo "$accept_response"
   assert_status 200 "$(echo "$accept_response" | head -1 | awk '{print $2}')" "POST /invitations/accept"
 
@@ -169,31 +174,52 @@ scenario_02() {
   # idempotent re-run: clean priors
   psql "$DB_URL" -c "DELETE FROM users WHERE email LIKE 'deactivate+%@local.dev'" >/dev/null
 
+  # Bootstrap target via the API invite+accept flow so the user has a real
+  # argon2id hash and can mint a refresh family. Then deactivate, then
+  # attempt refresh from the target's cookie jar (saved in a separate jar
+  # so we don't clobber the owner session). This mirrors scenario 01.
   login_as "$OWNER_EMAIL" "$OWNER_PASSWORD"
-  # Bootstrap a target user (invite + accept path skipped — direct INSERT for speed)
+  local create_response
+  create_response="$(mut POST '/api/v1/users?include_invite_link=true' "{\"email\":\"$target_email\",\"full_name\":\"Target\",\"role\":\"reception\"}")"
+  echo "$create_response"
   local target_id
-  target_id="$(psql "$DB_URL" -tc "INSERT INTO users (id, email, full_name, role, password_hash, is_active, status, created_at) VALUES (gen_random_uuid(), '$target_email', 'Target', 'reception', '\$2b\$12\$placeholder', true, 'active', now()) RETURNING id" | xargs)"
+  target_id="$(echo "$create_response" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}' | jq -r '.data.id')"
+  local invite_token
+  invite_token="$(echo "$create_response" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}' | jq -r '.data.inviteLinkUrl' | sed -E 's/.*#token=//')"
 
-  # Have target log in to mint a refresh family
-  login_as "$target_email" "TargetPass123!" || true   # password mismatch expected unless seed exists; skip if so
+  # Accept the invitation (sets a real password).
+  local target_password='TargetPass1234!'
+  curl -sS -X POST "$BASE_URL/api/v1/users/invitations/accept" \
+    -H 'Content-Type: application/json' \
+    -d "{\"token\":\"$invite_token\",\"password\":\"$target_password\"}" >/dev/null
 
+  # Target logs in to mint a refresh family. Cookie jar swap.
+  local target_jar="${COOKIE_JAR}.target"
+  local saved_jar="$COOKIE_JAR"
+  COOKIE_JAR="$target_jar"
+  login_as "$target_email" "$target_password"
+  COOKIE_JAR="$saved_jar"
+
+  # Owner deactivates target.
   login_as "$OWNER_EMAIL" "$OWNER_PASSWORD"
   echo "--- POST /api/v1/users/{id}/deactivate ---"
   local deact_response
-  deact_response="$(mut POST "/api/v1/users/${target_id}/deactivate" "{}")"
+  deact_response="$(mut PATCH "/api/v1/users/${target_id}/deactivate" "{}")"
   echo "$deact_response"
-  assert_status 200 "$(echo "$deact_response" | head -1 | awk '{print $2}')" "owner POST /deactivate"
+  local deact_status; deact_status="$(echo "$deact_response" | head -1 | awk '{print $2}')"
+  if [ "$deact_status" != "200" ] && [ "$deact_status" != "204" ]; then
+    echo "result: FAIL - deactivate expected 200/204, got $deact_status" >&2; return 1
+  fi
 
-  # Target attempts /refresh → expect 401 account_inactive (or invalid_session per D-43)
+  # Target attempts /refresh from THEIR jar → expect 401 account_inactive.
   echo "--- POST /api/v1/auth/refresh (after deactivate) ---"
   local refresh_response
-  refresh_response="$(curl -i -sS -X POST "$BASE_URL/api/v1/auth/refresh" -b "$COOKIE_JAR")"
+  refresh_response="$(curl -i -sS -X POST "$BASE_URL/api/v1/auth/refresh" -b "$target_jar")"
   echo "$refresh_response"
   local refresh_status; refresh_status="$(echo "$refresh_response" | head -1 | awk '{print $2}')"
   assert_status 401 "$refresh_status" "POST /auth/refresh after deactivate"
 
-  # Re-activate for idempotent re-run
-  mut POST "/api/v1/users/${target_id}/reactivate" "{}" >/dev/null || true
+  rm -f "$target_jar"
   echo "result: PASS - deactivate_revokes_refresh complete"
 }
 
@@ -204,6 +230,17 @@ scenario_03() {
   mailhog_purge
   local target_email="$RECEPTION_EMAIL"
 
+  # Ensure target has the env-driven password so we can pre-login.
+  ( cd apps/backend && uv run python -m scripts.seed_verification_fixtures ) >/dev/null
+
+  # 0. Pre-login as the target so we have an OLD refresh family that the
+  #    confirm step should invalidate.
+  local target_jar="${COOKIE_JAR}.target_pre_reset"
+  local saved_jar="$COOKIE_JAR"
+  COOKIE_JAR="$target_jar"
+  login_as "$target_email" "$SEED_VERIFY_RECEPTION_PASSWORD"
+  COOKIE_JAR="$saved_jar"
+
   # 1. user POST /auth/password-reset/request (no CSRF — public endpoint)
   echo "--- POST /api/v1/auth/password-reset/request ---"
   local req_response
@@ -213,10 +250,12 @@ scenario_03() {
   echo "$req_response"
   assert_status 202 "$(echo "$req_response" | head -1 | awk '{print $2}')" "POST /password-reset/request"
 
-  # 2. pull reset token from DB (MailHog fallback similar to scenario 01)
-  sleep 1
+  # 2. Recover the raw token via dev_mint_reset_token (sandbox-email path).
+  #    The helper invalidates the prior /request token AND writes a fresh
+  #    one whose hash we can reverse to the raw token.
   local token
-  token="$(psql "$DB_URL" -tc "SELECT token_hash FROM password_reset_tokens WHERE user_id=(SELECT id FROM users WHERE email='$target_email') AND purpose='reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1" | xargs)"
+  token="$( cd apps/backend && uv run python -m scripts.verify.dev_mint_reset_token --email "$target_email" 2>/dev/null | tail -1 )"
+  echo "notes: token minted via dev_mint_reset_token (sandbox-email path; replaces MailHog inbox round-trip)"
 
   # 3. POST /confirm with new password
   local new_password="NewResetPass123!"
@@ -228,15 +267,22 @@ scenario_03() {
   echo "$confirm_response"
   assert_status 200 "$(echo "$confirm_response" | head -1 | awk '{print $2}')" "POST /password-reset/confirm"
 
-  # 4. verify old refresh now fails (old jar should be stale)
+  # 4. verify old refresh now fails (target's PRE-RESET jar should be stale)
   echo "--- POST /api/v1/auth/refresh (old session after reset) ---"
-  local old_refresh; old_refresh="$(curl -i -sS -X POST "$BASE_URL/api/v1/auth/refresh" -b "$COOKIE_JAR")"
+  local old_refresh; old_refresh="$(curl -i -sS -X POST "$BASE_URL/api/v1/auth/refresh" -b "$target_jar")"
   echo "$old_refresh"
   local old_status; old_status="$(echo "$old_refresh" | head -1 | awk '{print $2}')"
   assert_status 401 "$old_status" "old refresh after password reset"
 
   # 5. verify new login with new password works
   login_as "$target_email" "$new_password"
+
+  # Restore the target's password to the env-seeded value so the seed script
+  # remains the source-of-truth and downstream scenarios (and re-runs) stay
+  # idempotent.
+  ( cd apps/backend && uv run python -m scripts.seed_verification_fixtures ) >/dev/null
+
+  rm -f "$target_jar"
   echo "result: PASS - password_reset_invalidates_sessions complete"
 }
 
@@ -273,7 +319,14 @@ scenario_04() {
     #   sub-request 3 (known_softdel):      $EPOCHREALTIME at t_start + t_end
     #   sub-request 4 (unknown):            $EPOCHREALTIME at t_start + t_end
     local t_start t_end elapsed
-    t_start="$EPOCHREALTIME"                                                            # bash 5+ — seconds with microsecond precision
+    # bash 5+ exposes $EPOCHREALTIME natively; macOS /bin/bash is 3.2 and lacks
+    # it (Apple's pre-GPLv3 fork). Fall back to python3 time.time() which is
+    # microsecond-precision on every platform we run on.
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+      t_start="$EPOCHREALTIME"
+    else
+      t_start="$(python3 -c 'import time; print(time.time())')"
+    fi
 
     # Tee body to the per-case file; status code captured via -w
     curl -sS -o "$body_file" -w '%{http_code}\n' -X POST "$BASE_URL/api/v1/auth/password-reset/request" \
@@ -281,7 +334,11 @@ scenario_04() {
       -d "{\"email\":\"$email\"}" \
       > "$body_dir/status_${label}.txt" 2>&1
 
-    t_end="$EPOCHREALTIME"                                                              # capture post-request EPOCHREALTIME
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+      t_end="$EPOCHREALTIME"
+    else
+      t_end="$(python3 -c 'import time; print(time.time())')"
+    fi
     elapsed="$(awk -v s="$t_start" -v e="$t_end" 'BEGIN{printf "%.3f", (e - s)}')"
     TIMINGS+=("$elapsed")
     echo "sub-request $label: status=$(cat "$body_dir/status_${label}.txt") elapsed=${elapsed}s body=$body_file"
@@ -366,22 +423,41 @@ scenario_06() {
   mailhog_purge
   login_as "$OWNER_EMAIL" "$OWNER_PASSWORD"
 
-  # Use a seed client with email (verify_freezable@local.dev or similar; per D-46-10 use verify_*@local.dev)
-  local client_email="verify_freezable@local.dev"
-  local client_id
-  client_id="$(psql "$DB_URL" -tc "SELECT id FROM clients WHERE email='$client_email' LIMIT 1" | xargs)"
-  [ -z "$client_id" ] && { echo "FAIL: seed client $client_email not found - re-run seed_verification_fixtures" >&2; return 1; }
+  # Use a seed client with email + NULL telegram so the receipt fanout falls
+  # through to the email channel. The fixture domain is @fixture.local
+  # (see apps/backend/scripts/seed_verification_fixtures.py _FIXTURES).
+  # NOTE: verify_freezable has telegram_user_id=7000000099 (placeholder),
+  # so we use a fresh client_id created here with email-only.
+  local client_email="cash_receipt+$(date +%s)@local.dev"
+  # Cascade-style cleanup: payment_receipts → payments → memberships → clients.
+  psql "$DB_URL" -c "DELETE FROM payment_receipts WHERE payment_id IN (SELECT id FROM payments WHERE subject_id IN (SELECT id FROM memberships WHERE client_id IN (SELECT id FROM clients WHERE email LIKE 'cash_receipt+%')))" >/dev/null 2>&1 || true
+  psql "$DB_URL" -c "DELETE FROM payments WHERE subject_id IN (SELECT id FROM memberships WHERE client_id IN (SELECT id FROM clients WHERE email LIKE 'cash_receipt+%'))" >/dev/null 2>&1 || true
+  psql "$DB_URL" -c "DELETE FROM memberships WHERE client_id IN (SELECT id FROM clients WHERE email LIKE 'cash_receipt+%')" >/dev/null 2>&1 || true
+  psql "$DB_URL" -c "DELETE FROM clients WHERE email LIKE 'cash_receipt+%'" >/dev/null
+  local owner_id
+  owner_id="$(psql "$DB_URL" -tc "SELECT id FROM users WHERE email='$OWNER_EMAIL'" | xargs)"
+  local client_id; client_id="$(uuidgen | tr 'A-Z' 'a-z')"
+  psql "$DB_URL" -c "INSERT INTO clients (id, last_name, first_name, phone, email, telegram_user_id, created_by_user_id, created_at) VALUES ('$client_id', 'Cash', 'Receipt', '+79991230006', '$client_email', NULL, '$owner_id', now())" >/dev/null
 
-  echo "--- POST /api/v1/payments (cash sale) ---"
+  # Pick a membership plan with a positive price.
+  local plan_id
+  plan_id="$(psql "$DB_URL" -tc "SELECT id FROM membership_plans WHERE price_kopecks > 0 AND deleted_at IS NULL ORDER BY created_at LIMIT 1" | xargs)"
+  [ -z "$plan_id" ] && { echo "FAIL: no priced membership plan found" >&2; return 1; }
+
+  echo "--- POST /api/v1/memberships (sells a plan = cash sale + payment_receipt) ---"
+  # POST /api/v1/memberships sells a plan; the cash sale recording + post-commit
+  # payment_receipts row + email fanout chain is wired in Phase 45 NOTIFY-12.
   local sale_response
-  sale_response="$(mut POST /api/v1/payments "{\"client_id\":\"$client_id\",\"amount_kopecks\":150000,\"payment_method\":\"cash\",\"kind\":\"sale\",\"note\":\"v1.6 verify cash sale\"}")"
+  sale_response="$(mut POST /api/v1/memberships "{\"client_id\":\"$client_id\",\"plan_id\":\"$plan_id\",\"notes\":\"v1.6 verify cash sale\"}")"
   echo "$sale_response"
-  assert_status 201 "$(echo "$sale_response" | head -1 | awk '{print $2}')" "POST /payments (cash sale)"
+  assert_status 201 "$(echo "$sale_response" | head -1 | awk '{print $2}')" "POST /memberships (cash sale)"
 
-  # Poll payment_receipts for email-channel row
+  # Poll payment_receipts for email-channel row. payment_receipts FKs to
+  # payments, which carries the client linkage via the subject (membership →
+  # client) — join through payments + memberships to find rows for this client.
   sleep 2
   local receipt_count
-  receipt_count="$(psql "$DB_URL" -tc "SELECT count(*) FROM payment_receipts WHERE client_id='$client_id' AND channel='email'" | xargs)"
+  receipt_count="$(psql "$DB_URL" -tc "SELECT count(*) FROM payment_receipts pr JOIN payments p ON p.id = pr.payment_id JOIN memberships m ON m.id = p.subject_id WHERE m.client_id='$client_id' AND pr.channel='email'" | xargs)"
   if [ "$receipt_count" -lt 1 ]; then
     echo "result: FAIL - expected >=1 email payment_receipt for client, got $receipt_count" >&2; return 1
   fi
@@ -391,9 +467,9 @@ scenario_06() {
     local inbox; inbox="$(mailhog_search "$client_email")"
     echo "$inbox" | jq -r '.items[0].Content.Headers.Subject[0]' || true
   else
-    echo "notes: inbox check skipped - MAILHOG_URL empty"
+    echo "notes: inbox check skipped - MAILHOG_URL empty (sandbox-email path; verify in structlog backend.log: grep email_dispatch_enqueued)"
   fi
-  echo "result: PASS - cash_sale_receipt complete"
+  echo "result: PASS - cash_sale_receipt complete (receipts=$receipt_count)"
 }
 
 # ════════════════════════════════════════════════════════════════════════
@@ -412,7 +488,7 @@ scenario_07() {
   echo "$first_response"
   assert_status 201 "$(echo "$first_response" | head -1 | awk '{print $2}')" "first POST /users"
   local first_id
-  first_id="$(echo "$first_response" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}' | jq -r '.id')"
+  first_id="$(echo "$first_response" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}' | jq -r '.data.id')"
 
   echo "--- DELETE /api/v1/users/{first_id} (soft-delete) ---"
   local del_response
@@ -442,9 +518,14 @@ scenario_08() {
   # Set env so the cron's provider returns 5xx (e.g. EMAIL_PROVIDER=fake_5xx — adjust per actual mock provider)
   echo "--- invoke expiring cron with mock 5xx provider ---"
   local t_start; t_start="$(date +%s)"
-  ( cd apps/backend && EMAIL_PROVIDER=fake_5xx timeout 600 uv run python -m scripts.run_expiring_cron_once ) 2>&1 | tee /tmp/v1_6_cron_expiring.log || true
+  # macOS /bin/bash lacks coreutils `timeout`; fall back to gtimeout if available,
+  # else trust the cron's own 20s _expires per ARQ job. The 600s budget is a
+  # ceiling not a hard cap on this invocation.
+  local TIMEOUT_BIN
+  TIMEOUT_BIN="$(command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || echo '')"
+  ( cd apps/backend && EMAIL_PROVIDER=fake_5xx ${TIMEOUT_BIN:+$TIMEOUT_BIN 600} uv run python -m scripts.run_expiring_cron_once ) 2>&1 | tee /tmp/v1_6_cron_expiring.log || true
   echo "--- invoke booking-reminders cron with mock 5xx provider ---"
-  ( cd apps/backend && EMAIL_PROVIDER=fake_5xx timeout 600 uv run python -m scripts.run_booking_reminders_cron_once ) 2>&1 | tee /tmp/v1_6_cron_bookings.log || true
+  ( cd apps/backend && EMAIL_PROVIDER=fake_5xx ${TIMEOUT_BIN:+$TIMEOUT_BIN 600} uv run python -m scripts.run_booking_reminders_once ) 2>&1 | tee /tmp/v1_6_cron_bookings.log || true
   local t_end; t_end="$(date +%s)"
 
   local total_elapsed=$((t_end - t_start))

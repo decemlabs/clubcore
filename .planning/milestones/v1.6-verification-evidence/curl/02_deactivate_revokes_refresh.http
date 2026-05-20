@@ -1,0 +1,25 @@
+HTTP/1.1 201 Created
+date: Wed, 20 May 2026 17:03:55 GMT
+server: uvicorn
+content-length: 276
+content-type: application/json
+x-request-id: 74f4b107-0510-441b-bd6a-edc121b38caa
+
+{"data":{"id":"22d92db4-5890-409c-8fef-d010c1dc0a9a","email":"deactivate+1779296635@local.dev","role":"reception","invitationExpiresAt":"2026-05-27T17:03:56.107890Z","inviteLinkUrl":"http://localhost:5173/auth/accept-invite#token=wxIlA4MUULTDE-K32_3QOLkNw7uMdaHg0pUcn_gDKuA"}}
+--- POST /api/v1/users/{id}/deactivate ---
+HTTP/1.1 204 No Content
+date: Wed, 20 May 2026 17:03:55 GMT
+server: uvicorn
+content-type: application/json
+x-request-id: fc030a7c-6d78-4f42-b509-6765837b14e3
+
+--- POST /api/v1/auth/refresh (after deactivate) ---
+HTTP/1.1 401 Unauthorized
+date: Wed, 20 May 2026 17:03:56 GMT
+server: uvicorn
+content-length: 72
+content-type: application/json
+x-request-id: b70fce0a-ba63-4e2d-ae92-242d37eec3a9
+
+{"code":"invalid_token","message":"family_reuse_detected","fields":null}
+result: PASS - deactivate_revokes_refresh complete

@@ -1,0 +1,15 @@
+sub-request known_active: status=202 elapsed=0,603s body=/var/folders/4j/b8jf8xpx0lxc8f13vs17bwdh0000gn/T/tmp.yuK25gkow9/body_known_active.json
+--- body for known_active ---
+{"data":null}
+sub-request known_deactivated: status=202 elapsed=0,604s body=/var/folders/4j/b8jf8xpx0lxc8f13vs17bwdh0000gn/T/tmp.yuK25gkow9/body_known_deactivated.json
+--- body for known_deactivated ---
+{"data":null}
+sub-request known_softdel: status=202 elapsed=0,603s body=/var/folders/4j/b8jf8xpx0lxc8f13vs17bwdh0000gn/T/tmp.yuK25gkow9/body_known_softdel.json
+--- body for known_softdel ---
+{"data":null}
+sub-request unknown: status=202 elapsed=0,603s body=/var/folders/4j/b8jf8xpx0lxc8f13vs17bwdh0000gn/T/tmp.yuK25gkow9/body_unknown.json
+--- body for unknown ---
+{"data":null}
+bodies: all 4 byte-identical
+timings: spread=0,001s (min=0,603s max=0,604s, individual: 0,603 0,604 0,603 0,603)
+result: PASS - anti_oracle_request_unknown_email complete (4 identical 202s, spread 0,001s)

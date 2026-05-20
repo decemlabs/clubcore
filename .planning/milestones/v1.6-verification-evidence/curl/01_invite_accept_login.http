@@ -1,0 +1,23 @@
+--- POST /api/v1/users?include_invite_link=true (invite) ---
+HTTP/1.1 201 Created
+date: Wed, 20 May 2026 17:03:53 GMT
+server: uvicorn
+content-length: 273
+content-type: application/json
+x-request-id: 6eda5630-056a-4179-ab53-a531444d50b9
+
+{"data":{"id":"f23d2b56-fad4-4bc7-bab1-3b2839d770ed","email":"invitee+1779296634@local.dev","role":"reception","invitationExpiresAt":"2026-05-27T17:03:54.472543Z","inviteLinkUrl":"http://localhost:5173/auth/accept-invite#token=e1yzc4QFLisWggi-jAzlyNztgKmQ71P3pKpoVj5eCFc"}}
+notes: token pulled from inviteLinkUrl response field (MailHog not used)
+--- POST /api/v1/users/invitations/accept ---
+HTTP/1.1 200 OK
+date: Wed, 20 May 2026 17:03:54 GMT
+server: uvicorn
+content-length: 108
+content-type: application/json
+set-cookie: sz_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMjNkMmI1Ni1mYWQ0LTRiYzctYmFiMS0zYjI4MzlkNzcwZWQiLCJyb2xlIjoicmVjZXB0aW9uIiwidHlwIjoiYWNjZXNzIiwiaWF0IjoxNzc5Mjk2NjM1LCJleHAiOjE3NzkyOTc1MzV9.FYTiVhNO9BZJXCCXtu0ILHzKMhhhhMIGsCP76nFN4y4; HttpOnly; Max-Age=900; Path=/; SameSite=lax
+set-cookie: sz_refresh=4qcm9USxeEmRcJuLxO0KJGx-Bv4SXf8M0R4ZQsQJW7A; HttpOnly; Max-Age=2592000; Path=/api/v1/auth; SameSite=lax
+set-cookie: sportzal_csrf=3108d6ddab0595e3104b2d377ac96335b356cd94987f1f35d72b51037d6de311; Max-Age=2592000; Path=/; SameSite=lax
+x-request-id: 0c3dc512-1c71-417b-9f01-5278c9b9cabf
+
+{"data":{"user":{"id":"f23d2b56-fad4-4bc7-bab1-3b2839d770ed","role":"reception","fullName":"Test Invitee"}}}
+result: PASS - invite_accept_login complete

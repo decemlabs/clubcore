@@ -1,0 +1,11 @@
+--- POST /api/v1/memberships (sells a plan = cash sale + payment_receipt) ---
+HTTP/1.1 201 Created
+date: Wed, 20 May 2026 17:04:04 GMT
+server: uvicorn
+content-length: 634
+content-type: application/json
+x-request-id: 7a532b2d-1d78-4f1a-bf19-cafa48563a71
+
+{"data":{"id":"5e51b96b-44cf-408b-b483-3626be055c16","clientId":"c701cbfe-b373-425b-a947-2fa0b7124a90","planId":"22d8f32f-1940-587d-adb7-18463fb80719","planNameSnapshot":"Verify Long 90d","durationDaysSnapshot":90,"priceKopecksSnapshot":750000,"startDate":"2026-05-20","endDate":"2026-08-17","status":"active","cancelledAt":null,"cancelReason":null,"cancellationReason":null,"paidAt":null,"notes":"v1.6 verify cash sale","createdAt":"2026-05-20T17:04:04.860492Z","updatedAt":"2026-05-20T17:04:04.860492Z","freezeDaysLimitSnapshot":30,"freezeDaysUsed":0,"freezeDaysRemaining":30,"currentFreezePeriod":null,"previousMembershipId":null}}
+notes: inbox check skipped - MAILHOG_URL empty (sandbox-email path; verify in structlog backend.log: grep email_dispatch_enqueued)
+result: PASS - cash_sale_receipt complete (receipts=1)

@@ -1,0 +1,26 @@
+--- POST /api/v1/users (first invite) ---
+HTTP/1.1 201 Created
+date: Wed, 20 May 2026 17:04:06 GMT
+server: uvicorn
+content-length: 186
+content-type: application/json
+x-request-id: fc9c8638-c6b1-440b-ba80-834946d1d5e6
+
+{"data":{"id":"6e1947a3-a7be-40eb-bc60-dc6ef9c56f83","email":"reinvite+1779296647@local.dev","role":"reception","invitationExpiresAt":"2026-05-27T17:04:07.302029Z","inviteLinkUrl":null}}
+--- DELETE /api/v1/users/{first_id} (soft-delete) ---
+HTTP/1.1 204 No Content
+date: Wed, 20 May 2026 17:04:06 GMT
+server: uvicorn
+content-type: application/json
+x-request-id: 832caf29-203e-4ace-b024-add60659e1e6
+
+--- POST /api/v1/users (re-invite same email) ---
+HTTP/1.1 201 Created
+date: Wed, 20 May 2026 17:04:06 GMT
+server: uvicorn
+content-length: 186
+content-type: application/json
+x-request-id: 0005a522-c85c-4b48-9890-db6b4d2042c3
+
+{"data":{"id":"9cc019b1-c102-4f63-8adc-e9dc09545679","email":"reinvite+1779296647@local.dev","role":"reception","invitationExpiresAt":"2026-05-27T17:04:07.532001Z","inviteLinkUrl":null}}
+result: PASS - soft_delete_reinvite_same_email complete
