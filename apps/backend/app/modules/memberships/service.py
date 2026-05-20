@@ -64,17 +64,22 @@ access before service is called.
 import math
 from datetime import UTC, date, datetime, timedelta
 from types import ModuleType
-from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from typing import TYPE_CHECKING, Any, Literal
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import audit
-from app.core.dependencies import CurrentUser, get_payment_recorder, get_payment_refunder
+from app.core.dependencies import (
+    CurrentUser,
+    get_email_dispatcher,
+    get_payment_recorder,
+    get_payment_refunder,
+)
 from app.core.exceptions import (
     AlreadyFrozenError,
     CannotRenewCancelledError,
@@ -88,6 +93,7 @@ from app.core.exceptions import (
     PlanNameExistsError,
     PlanNotFoundError,
 )
+from app.core.formatters import _format_ru_datetime, format_money
 from app.core.pagination import PaginatedData
 from app.modules.memberships import repository
 from app.modules.memberships.constants import (
@@ -105,6 +111,10 @@ from app.modules.memberships.models import (
     MembershipFreezePeriod,
     MembershipNotification,
 )
+from app.integrations.telegram.sender import SendResult
+from app.modules.memberships.notifications import enqueue_expiring_email_fallback
+from app.modules.payments.models import PaymentReceipt
+from app.modules.users.display import format_actor_display
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -511,6 +521,166 @@ async def soft_delete_plan(
 # ===========================================================================
 
 
+async def _fanout_payment_receipt_email(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    *,
+    actor: CurrentUser,
+    payment_id: UUID,
+    payment_amount_kopecks: int,
+    payment_received_at: datetime,
+    client_id: UUID,
+    plan_snapshot: str,
+    receipt_kind: Literal["sale", "refund"],
+) -> None:
+    """Post-commit payment-receipt email fanout (Phase 45 NOTIFY-11/12/13, D-45-08).
+
+    Called AFTER the outer orchestrator (``create_membership`` /
+    ``refund_membership``) has committed its business UoW. Per PATTERNS.md
+    correction #4 the fanout MUST live at the orchestrator site, not in
+    ``payments/service.py:record_payment`` / ``issue_refund`` (those are
+    ``# noqa: SVC001 caller-owns-txn`` and do not commit).
+
+    Sequence (D-45-08):
+      1. Look up ``client.email`` + ``actor.full_name`` via raw ``text()``
+         SQL (modules-independent contract precludes ORM-side cross-module
+         queries; same pattern as ``find_expiring_candidates`` D-27-19).
+      2. ``client.email IS NULL`` → log INFO ``payment_receipt_skipped``
+         and return (D-45-10). No row, no audit, no dispatch.
+      3. Fresh ``audit_correlation_id = uuid4()`` linking the receipt row
+         to the upcoming ``email_send_log`` row (D-41-20 / D-45-25).
+      4. INSERT ``PaymentReceipt(payment_id, channel='email',
+         audit_correlation_id, to_address=client.email)`` — UNIQUE
+         (payment_id, channel) catches docker-restart re-runs as
+         ``IntegrityError`` → WARN + return without dispatching (D-45-08).
+      5. Emit ``payment_receipt_emailed`` audit row with literal event /
+         resource_type kwargs + ``receipt_kind`` discriminator
+         (sale|refund). The audit row commits in the same session.commit()
+         below.
+      6. ``await session.commit()`` to durably land both the receipt row
+         AND the audit row before the email enqueue (commit-then-dispatch
+         per D-45-25 — the audit row records intent; ``email_send_log``
+         records delivery outcome via shared ``audit_correlation_id``).
+      7. Best-effort dispatch via ``get_email_dispatcher()`` with LITERAL
+         ``template_id`` (one of two branches gated by ``receipt_kind``
+         so the AST gate sees ``ast.Constant(str)`` at every callsite).
+         Any exception → WARN (the receipt row is already durable; v1.7
+         operator "resend receipt" surface replays from there).
+
+    The fanout reuses the orchestrator's ``session`` (post-commit). Tests
+    run inside a SAVEPOINT (per-test isolation), so the second commit
+    becomes a nested-transaction release — both the business commit AND
+    the fanout commit are visible to the test inspector via the same
+    session, and the outer fixture rollback wipes both.
+
+    The dispatch block has TWO literal callsites (sale + refund) to
+    satisfy the Phase 41 ``LOCKED_EMAIL_TEMPLATES`` AST gate
+    (``tests/unit/test_locked_email_templates_ast.py``) which requires
+    ``template_id`` to be ``ast.Constant(str)`` — a conditional variable
+    would fail the gate.
+    """
+    log = structlog.get_logger("memberships.payment_receipt_fanout")
+
+    # 1. Lookup client.email + actor.full_name (raw text() per D-27-19
+    # modules-independent contract — same pattern as find_expiring_candidates).
+    row = (
+        await session.execute(
+            text(
+                "SELECT c.email AS email, u.full_name AS full_name "
+                "FROM clients c, users u "
+                "WHERE c.id = :client_id AND u.id = :actor_id"
+            ).bindparams(client_id=client_id, actor_id=actor.id),
+        )
+    ).first()
+    client_email: str | None = row.email if row is not None else None
+    actor_full_name: str = (
+        row.full_name if row is not None and row.full_name is not None else ""
+    )
+
+    # 2. Skip fanout when client.email IS NULL (D-45-10).
+    if client_email is None:
+        log.info(
+            "payment_receipt_skipped",
+            reason="no_email",
+            payment_id=str(payment_id),
+        )
+        return
+
+    # 3. Fresh audit_correlation_id links receipt row ↔ email_send_log
+    # (D-41-20 / D-45-25).
+    audit_correlation_id = uuid4()
+
+    # 4 + 5 + 6. Receipt row + audit emit + commit (best-effort: any error
+    # past this point does NOT roll back the already-committed business
+    # transaction — that durability lives in step 0 [outer commit]).
+    try:
+        session.add(
+            PaymentReceipt(
+                payment_id=payment_id,
+                channel="email",
+                audit_correlation_id=audit_correlation_id,
+                to_address=client_email,
+            )
+        )
+        await audit.emit(
+            session,
+            "payment_receipt_emailed",  # LITERAL — Phase 15 INFRA-11 AST gate
+            actor_user_id=actor.id,
+            resource_type="payment",  # LITERAL
+            resource_id=payment_id,
+            audit_correlation_id=audit_correlation_id,
+            payment_id=payment_id,
+            to_email=client_email,
+            receipt_kind=receipt_kind,
+        )
+        await session.commit()
+    except IntegrityError:
+        # UNIQUE (payment_id, channel) — docker-restart re-fanout race;
+        # rollback + WARN; return without dispatching (the prior receipt
+        # row already enqueued / dispatched its email).
+        await session.rollback()
+        log.warning(
+            "payment_receipt_idempotency_conflict",
+            payment_id=str(payment_id),
+            channel="email",
+        )
+        return
+
+    # 7. Best-effort dispatch with LITERAL template_id per Phase 41 AST gate.
+    # The two callsites below are intentional duplicates — a conditional
+    # would collapse template_id to a variable and the AST walker would
+    # reject it.
+    actor_display_name = format_actor_display(actor_full_name)
+    amount = format_money(payment_amount_kopecks)
+    paid_at = _format_ru_datetime(payment_received_at)
+    try:
+        if receipt_kind == "sale":
+            await get_email_dispatcher()(
+                template_id="EMAIL_PAYMENT_RECEIPT_SALE",
+                to=client_email,
+                audit_correlation_id=audit_correlation_id,
+                amount=amount,
+                paid_at=paid_at,
+                plan_snapshot=plan_snapshot,
+                actor_display_name=actor_display_name,
+            )
+        else:
+            await get_email_dispatcher()(
+                template_id="EMAIL_PAYMENT_RECEIPT_REFUND",
+                to=client_email,
+                audit_correlation_id=audit_correlation_id,
+                amount=amount,
+                paid_at=paid_at,
+                plan_snapshot=plan_snapshot,
+                actor_display_name=actor_display_name,
+            )
+    except Exception as exc:
+        log.warning(
+            "payment_receipt_enqueue_failed",
+            payment_id=str(payment_id),
+            error=str(exc),
+        )
+
+
 async def create_membership(
     session: AsyncSession,
     actor: CurrentUser,
@@ -590,6 +760,23 @@ async def create_membership(
     )
     # 7: commit the unit of work (SVC001 AST gate enforces explicit commit)
     await session.commit()
+
+    # Phase 45 NOTIFY-11/12/13 D-45-08 — payment-receipt email fanout (sale).
+    # Best-effort, post-commit: any failure inside the helper does NOT roll
+    # back the just-committed business UoW. Per PATTERNS.md correction #4
+    # the fanout lives at the orchestrator (here), NOT in
+    # payments/service.py:record_payment (caller-owns-txn, no commit).
+    await _fanout_payment_receipt_email(
+        session,
+        actor=actor,
+        payment_id=payment.id,
+        payment_amount_kopecks=payment.amount_kopecks,
+        payment_received_at=payment.received_at,
+        client_id=membership.client_id,
+        plan_snapshot=membership.plan_name_snapshot,
+        receipt_kind="sale",
+    )
+
     # Phase 25 D-25-12 migration: route through _build_membership_response so
     # the 4 freeze projection fields populate. At create time, no freeze
     # period exists yet — compute_freeze_days_used returns 0,
@@ -797,6 +984,22 @@ async def refund_membership(
 
     # 10. Commit (SVC001 gate enforces explicit commit).
     await session.commit()
+
+    # Phase 45 NOTIFY-11/12/13 D-45-08 — payment-receipt email fanout (refund).
+    # Same best-effort post-commit shape as the SALE path in create_membership.
+    # ``refund_payment.amount_kopecks`` is signed-negative per the
+    # ck_payments_amount_sign_matches_subject_kind CHECK; ``format_money``
+    # renders the leading minus naturally.
+    await _fanout_payment_receipt_email(
+        session,
+        actor=actor,
+        payment_id=refund_payment.id,
+        payment_amount_kopecks=refund_payment.amount_kopecks,
+        payment_received_at=refund_payment.received_at,
+        client_id=membership.client_id,
+        plan_snapshot=membership.plan_name_snapshot,
+        receipt_kind="refund",
+    )
 
     # 11. Return via _build_membership_response (current_freeze_period
     # resolves to None — status is now 'cancelled').
@@ -1342,7 +1545,9 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
     kind: str,
     membership_id: UUID,
     client_id: UUID,
-    chat_id: int,
+    chat_id: int | None,
+    channel: Literal["telegram", "email"],
+    audit_correlation_id: UUID | None = None,
 ) -> None:
     """Emit one of three locked Phase 27 audit events with literal event names.
 
@@ -1351,10 +1556,29 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
     at every ``audit.emit`` callsite must be ``ast.Constant(str)``. So we branch
     on ``kind`` with three explicit ``if/elif/else`` callsites (D-27-12).
 
+    Phase 45 D-45-26 extension: ``channel`` is now a load-bearing kwarg —
+    ``ExpiringNotificationSentPayload`` (audit_payloads.py:672) validates the
+    payload at emit time and rejects anything other than ``'telegram' | 'email'``.
+    Email-side calls pass ``chat_id=None`` (telegram_chat_id NULL on the audit
+    payload + the membership_notifications row).
+
+    ``audit_correlation_id`` (Phase 45 D-45-22 contract) carries the link to the
+    email-side ``email_send_log`` row for forensic chain reassembly. It is
+    accepted on the signature for symmetry between Telegram and email branches,
+    but it is NOT forwarded into ``audit.emit(**payload)`` — the locked payload
+    schema ``ExpiringNotificationSentPayload`` declares ``extra='forbid'`` with
+    exactly 4 fields (client_id, telegram_chat_id, kind, channel) and would
+    raise ``pydantic.ValidationError`` at emit time if the correlation id were
+    included. Caller logs the correlation id via structlog instead (see
+    ``_send_expiring_notifications`` email-fallback branch).
+
     Caller (service ``_send_expiring_notifications``) owns the per-send write
     session; this helper carries ``# noqa: SVC001 caller-owns-txn`` because it
     does NOT commit (its caller does after the audit row joins the UoW).
     """
+    # audit_correlation_id is accepted for symmetry but intentionally not
+    # forwarded into audit.emit — the locked payload schema forbids it.
+    del audit_correlation_id
     if kind == EXPIRING_KIND_7D:
         await audit.emit(
             session,
@@ -1365,7 +1589,7 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
             client_id=str(client_id),
             telegram_chat_id=chat_id,
             kind="expiring_7d",
-            channel="telegram",
+            channel=channel,
         )
     elif kind == EXPIRING_KIND_3D:
         await audit.emit(
@@ -1377,7 +1601,7 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
             client_id=str(client_id),
             telegram_chat_id=chat_id,
             kind="expiring_3d",
-            channel="telegram",
+            channel=channel,
         )
     elif kind == EXPIRING_KIND_1D:
         await audit.emit(
@@ -1389,7 +1613,7 @@ async def _emit_send_event(  # noqa: SVC001 caller-owns-txn
             client_id=str(client_id),
             telegram_chat_id=chat_id,
             kind="expiring_1d",
-            channel="telegram",
+            channel=channel,
         )
     else:
         # Defensive guard — survives `python -O` (REVIEW.md CR-01).
@@ -1455,16 +1679,24 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
 
     sent = 0
     for cand in candidates:
-        # 2) Render + send (no session held during network I/O).
-        text_body = copy_module.render_expiring_dm(
-            kind=cand.kind,
-            client_id=cand.client_id,
-            end_date=cand.end_date,
-        )
-        result = await sender.send_text_dm(bot, cand.chat_id, text_body)
+        # 2) Render + send (no session held during network I/O). Phase 45
+        #    D-45-01 widened the candidate filter to admit email-only clients;
+        #    when ``cand.chat_id is None`` we synthesise a "blocked" SendResult
+        #    so the existing failure branch routes the candidate into the
+        #    email-fallback sub-branch below (no Telegram network call needed).
+        if cand.chat_id is None:
+            result = SendResult(ok=False, blocked=True, error="no_telegram_user_id")
+        else:
+            text_body = copy_module.render_expiring_dm(
+                kind=cand.kind,
+                client_id=cand.client_id,
+                end_date=cand.end_date,
+            )
+            result = await sender.send_text_dm(bot, cand.chat_id, text_body)
 
-        # 3) Failure path — WARNING + skip; idempotency table catches retry on
-        #    next tick (no row insert, no audit emit per D-27-14).
+        # 3) Failure path — WARNING + (D-45-02) optional email-fallback;
+        #    idempotency table catches retry on next tick (no row insert, no
+        #    audit emit on transient errors per D-27-14 / D-45-04).
         if not result.ok:
             reason = "bot_blocked" if result.blocked else "transient"
             log.warning(
@@ -1476,6 +1708,65 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
                 kind=cand.kind,
                 error_msg=result.error,
             )
+            # D-45-02 email fallback — only on terminal block AND client has
+            # email. Transient errors retry Telegram on the next tick first
+            # (preserves email quota; D-45-01 fallback-only-on-blocked policy).
+            if result.blocked and cand.client_email is not None:
+                async with session_factory() as fb_session:
+                    try:
+                        fb_session.add(
+                            MembershipNotification(
+                                membership_id=cand.membership_id,
+                                kind=cand.kind,
+                                telegram_chat_id=None,
+                                channel="email",
+                            )
+                        )
+                        audit_correlation_id = await enqueue_expiring_email_fallback(
+                            kind=cand.kind,
+                            client_id=cand.client_id,
+                            client_email=cand.client_email,
+                            end_date=cand.end_date,
+                        )
+                        await _emit_send_event(
+                            fb_session,
+                            kind=cand.kind,
+                            membership_id=cand.membership_id,
+                            client_id=cand.client_id,
+                            chat_id=None,
+                            channel="email",
+                            audit_correlation_id=audit_correlation_id,
+                        )
+                        await fb_session.commit()
+                        sent += 1
+                        log.info(
+                            "expiring_notification_email_fanout_sent",
+                            membership_id=str(cand.membership_id),
+                            client_id=str(cand.client_id),
+                            kind=cand.kind,
+                            audit_correlation_id=str(audit_correlation_id),
+                        )
+                    except IntegrityError:
+                        # Race-duplicate on uq_membership_notifications_membership_
+                        # kind_channel (Alembic 0024) — another worker tick already
+                        # wrote the email row. Rollback + WARN, no audit emit.
+                        await fb_session.rollback()
+                        log.warning(
+                            "expiring_email_idempotency_conflict",
+                            membership_id=str(cand.membership_id),
+                            kind=cand.kind,
+                            reason="duplicate_row",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        # Best-effort enqueue — never re-raise; the FSM-style
+                        # Telegram path already logged the original failure.
+                        await fb_session.rollback()
+                        log.warning(
+                            "expiring_email_fanout_failed",
+                            membership_id=str(cand.membership_id),
+                            kind=cand.kind,
+                            error=str(exc),
+                        )
             continue
 
         # 4) Success path — fresh write session: INSERT + audit emit + commit.
@@ -1486,6 +1777,7 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
                         membership_id=cand.membership_id,
                         kind=cand.kind,
                         telegram_chat_id=cand.chat_id,
+                        channel="telegram",
                     )
                 )
                 await _emit_send_event(
@@ -1494,6 +1786,7 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
                     membership_id=cand.membership_id,
                     client_id=cand.client_id,
                     chat_id=cand.chat_id,
+                    channel="telegram",
                 )
                 await write_session.commit()
                 sent += 1

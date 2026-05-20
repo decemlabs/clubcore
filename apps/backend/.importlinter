@@ -50,6 +50,17 @@ ignore_imports =
     app.modules.users.router -> app.modules.auth.service
     app.modules.users.router -> app.modules.auth.schemas
     app.modules.users.router -> app.modules.auth.models
+    # Phase 45 NOTIFY-11/12/13 (Plan 45-09) — orchestrator-site receipt-email
+    # fanout in memberships/service.py needs (a) the PaymentReceipt ORM row
+    # to write the idempotency ledger, and (b) format_actor_display to compose
+    # the operator display name into the receipt render context. Both are
+    # narrowly scoped to memberships/service.py only; the broader
+    # modules-independent invariant remains in force for every other file.
+    # Per PATTERNS.md correction #4 the fanout cannot live in payments
+    # (caller-owns-txn) and the helper must be single-canonical-path
+    # (WARNING-4) — so module crosses are the only path.
+    app.modules.memberships.service -> app.modules.payments.models
+    app.modules.memberships.service -> app.modules.users.display
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules
