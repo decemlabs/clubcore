@@ -42,6 +42,8 @@ import os
 import sys
 from typing import Any
 
+from arq import create_pool
+
 from app.core.config import get_settings
 
 # REG-29-04 (Phase 29 wave 3): SQLAlchemy resolves FK references lazily at
@@ -52,8 +54,11 @@ from app.core.config import get_settings
 # models touched by the cron + audit path so all tables are registered
 # before the session opens.
 from app.modules.auth import models as _auth_models  # noqa: F401 — eager FK reg
+from app.modules.bookings import models as _bookings_models  # noqa: F401 — eager FK reg
 from app.modules.clients import models as _client_models  # noqa: F401 — eager FK reg
 from app.modules.memberships import models as _memberships_models  # noqa: F401 — eager FK reg
+from app.modules.schedule import models as _schedule_models  # noqa: F401 — eager FK reg
+from app.modules.trainers import models as _trainers_models  # noqa: F401 — eager FK reg
 from app.modules.visits import models as _visits_models  # noqa: F401 — eager FK reg
 from app.workers import WorkerSettings
 from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
@@ -81,7 +86,12 @@ async def _run() -> int:
         )
         return 1
 
-    ctx: dict[str, Any] = {}
+    # Phase 42 wired `register_arq_pool(ctx["redis"])` into WorkerSettings.on_startup
+    # so the email dispatcher can enqueue jobs. The ARQ runtime normally
+    # pre-populates ctx["redis"] from the worker pool; this one-shot script must
+    # supply an equivalent ArqRedis pool manually before invoking on_startup.
+    redis_pool = await create_pool(WorkerSettings.redis_settings)
+    ctx: dict[str, Any] = {"redis": redis_pool}
     # Reuse the locked WorkerSettings startup logic — populates ctx["sessionmaker"]
     # and runs the cron-resolution invariant assertion. DO NOT re-implement the
     # DB lifespan inline (MH-29-05): call the staticmethod, never the helper.
@@ -91,6 +101,7 @@ async def _run() -> int:
         print(f"Fired send_expiring_notifications once: count={count}")
     finally:
         await WorkerSettings.on_shutdown(ctx)
+        await redis_pool.aclose()
     return 0
 
 

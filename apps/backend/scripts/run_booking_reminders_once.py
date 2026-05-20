@@ -40,6 +40,8 @@ import os
 import sys
 from typing import Any
 
+from arq import create_pool
+
 from app.core.config import get_settings
 
 # REG-29-04 eager-imports — see module docstring rationale.
@@ -77,7 +79,13 @@ async def _run() -> int:
         )
         return 1
 
-    ctx: dict[str, Any] = {}
+    # Phase 42 wired `register_arq_pool(ctx["redis"])` into
+    # WorkerSettings.on_startup so the email dispatcher can enqueue jobs.
+    # The ARQ runtime normally pre-populates ctx["redis"] from the worker
+    # pool; this one-shot script must supply an equivalent ArqRedis pool
+    # manually before invoking on_startup.
+    redis_pool = await create_pool(WorkerSettings.redis_settings)
+    ctx: dict[str, Any] = {"redis": redis_pool}
     # Reuse the locked WorkerSettings startup logic — populates
     # ctx["sessionmaker"] and runs the cron-resolution invariant assertion.
     # DO NOT re-implement the DB lifespan inline (MH-29-05 mirror): call
@@ -88,6 +96,7 @@ async def _run() -> int:
         print(f"Fired send_booking_reminders once: count={count}")
     finally:
         await WorkerSettings.on_shutdown(ctx)
+        await redis_pool.aclose()
     return 0
 
 
