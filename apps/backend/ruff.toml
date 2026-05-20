@@ -48,6 +48,12 @@ external = ["SVC"]
 # flagged for re-review. The currently-shipped Russian copy uses unambiguous
 # Cyrillic only, so the noqa is "unused" today and would otherwise trip RUF100.
 "app/modules/auth/email_templates.py" = ["RUF100"]
+# Phase 45 NOTIFY-12 (plan 45-06): the locked Russian payment-receipt templates
+# (D-45-15) carry disciplinary `# noqa: RUF001` tripwires on every Cyrillic line
+# so a future edit introducing an ambiguous Cyrillic letter is flagged for
+# re-review. The currently-shipped Russian copy uses unambiguous Cyrillic only,
+# so the noqa directives are "unused" today and would otherwise trip RUF100.
+"app/modules/payments/email_templates.py" = ["RUF100"]
 
 [format]
 quote-style = "double"
