@@ -51,24 +51,42 @@ from app.modules.memberships.schemas import (
 
 @dataclass(frozen=True)
 class ExpiringCandidate:
-    """A membership eligible for expiring-soon DM (Phase 27 NTF-02 / D-27-18).
+    """A membership eligible for expiring-soon notification (Phase 27 NTF-02 / D-27-18,
+    Phase 45 D-45-01 cross-channel extension).
 
-    `kind` matches the corresponding `audit.emit` event suffix AND the migration
-    CHECK / UNIQUE-index value (one of `expiring_7d` / `expiring_3d` / `expiring_1d`,
-    captured as `EXPIRING_KIND_*` constants in `memberships.constants`).
-    `chat_id` is the snapshot value passed to `bot.send_message` (D-27-04 — Telegram
-    private-DM convention chat_id == user_id; sourced from `clients.telegram_user_id`).
+    ``kind`` matches the corresponding ``audit.emit`` event suffix AND the migration
+    CHECK / UNIQUE-index value (one of ``expiring_7d`` / ``expiring_3d`` /
+    ``expiring_1d``, captured as ``EXPIRING_KIND_*`` constants in
+    ``memberships.constants``).
 
-    Returned by `find_expiring_candidates`; consumed by
-    `service._send_expiring_notifications` (Phase 27 D-27-07 multi-session pattern —
-    helper closes the read session before iterating sends).
+    ``chat_id`` is the snapshot value passed to ``bot.send_message`` (D-27-04 —
+    Telegram private-DM convention chat_id == user_id; sourced from
+    ``clients.telegram_user_id``). Phase 45 D-45-01 widens it to ``int | None``
+    so email-only clients (``telegram_user_id IS NULL`` but ``email IS NOT NULL``)
+    can flow through ``_send_expiring_notifications`` and reach the email-fallback
+    branch without a separate query.
+
+    ``client_email`` and ``client_full_name`` (Phase 45 D-45-01) are surfaced on
+    the candidate so the service-layer email-fallback sub-branch can render +
+    enqueue without re-querying the clients table per candidate. ``client_email``
+    is nullable (Telegram-only clients have NULL email); when None, the
+    email-fallback path skips the candidate entirely. ``client_full_name`` is
+    snapshotted for future template render contexts (currently unused by the
+    expiring email templates per D-45-15 anti-oracle — only ``end_date`` is
+    exposed — but kept for symmetry with bookings/payments receipt paths).
+
+    Returned by ``find_expiring_candidates``; consumed by
+    ``service._send_expiring_notifications`` (Phase 27 D-27-07 multi-session
+    pattern — helper closes the read session before iterating sends).
     """
 
     membership_id: UUID
     client_id: UUID
     end_date: date
-    chat_id: int
+    chat_id: int | None  # Phase 45 D-45-01 — NULL for email-only clients.
     kind: str  # one of EXPIRING_KIND_7D / _3D / _1D from constants.py
+    client_email: str | None  # Phase 45 D-45-01 — NULL for Telegram-only clients.
+    client_full_name: str  # Phase 45 D-45-01 — snapshot for future render contexts.
 
 
 async def get_alive(session: AsyncSession, plan_id: UUID) -> MembershipPlan | None:
@@ -477,16 +495,21 @@ async def find_expiring_candidates(
     *,
     today: date,
 ) -> Sequence[ExpiringCandidate]:
-    """SELECT memberships expiring in 1/3/7 days for clients with linked Telegram
-    AND no matching ``membership_notifications`` row yet (Phase 27 NTF-02 + NTF-04).
+    """SELECT memberships expiring in 1/3/7 days for clients reachable via Telegram
+    OR email AND no matching ``membership_notifications`` row yet (Phase 27 NTF-02
+    + NTF-04, Phase 45 D-45-01 cross-channel relax).
 
-    Filters (D-27-05):
+    Filters (D-27-05 + D-45-01):
       - ``memberships.status = 'active'`` (frozen / cancelled / expired excluded)
       - ``memberships.end_date IN (today+1, today+3, today+7)``
-      - ``clients.telegram_user_id IS NOT NULL``
+      - ``(clients.telegram_user_id IS NOT NULL OR clients.email IS NOT NULL)`` —
+        Phase 45 D-45-01 relaxes the Phase 27 Telegram-only filter so email-only
+        clients reach the fallback branch in ``_send_expiring_notifications``.
       - ``clients.deleted_at IS NULL``
       - ``NOT EXISTS (SELECT 1 FROM membership_notifications mn
-        WHERE mn.membership_id = memberships.id AND mn.kind = <matched_kind>)``
+        WHERE mn.membership_id = memberships.id AND mn.kind = <matched_kind>)`` —
+        channel-agnostic per D-45-14 (no ``mn.channel = X`` predicate); preserves
+        the v1.3 NTF-05 single-shot-per-kind invariant ACROSS channels.
 
     Cross-module note (D-27-19): import-linter's ``modules-independent`` contract
     forbids importing the clients ORM (``app.modules.clients.models``) from
@@ -517,6 +540,8 @@ async def find_expiring_candidates(
             m.client_id    AS client_id,
             m.end_date     AS end_date,
             c.telegram_user_id AS chat_id,
+            c.email        AS client_email,
+            TRIM(c.last_name || ' ' || c.first_name) AS client_full_name,
             CASE
                 WHEN m.end_date = :today_plus_7 THEN 'expiring_7d'
                 WHEN m.end_date = :today_plus_3 THEN 'expiring_3d'
@@ -526,7 +551,7 @@ async def find_expiring_candidates(
         JOIN clients c ON c.id = m.client_id
         WHERE m.status = 'active'
           AND m.end_date IN (:today_plus_1, :today_plus_3, :today_plus_7)
-          AND c.telegram_user_id IS NOT NULL
+          AND (c.telegram_user_id IS NOT NULL OR c.email IS NOT NULL)
           AND c.deleted_at IS NULL
           AND NOT EXISTS (
               SELECT 1 FROM membership_notifications mn
@@ -552,6 +577,8 @@ async def find_expiring_candidates(
             end_date=row.end_date,
             chat_id=row.chat_id,
             kind=row.kind,
+            client_email=row.client_email,
+            client_full_name=row.client_full_name,
         )
         for row in result
     ]
