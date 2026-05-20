@@ -38,23 +38,28 @@ Both defined in migrations 0013 / 0014 and __table_args__ in models.py.
 """
 
 from datetime import date, datetime, timedelta
-from typing import Any
-from uuid import UUID
+from typing import Any, Literal
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
+import structlog
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.dependencies import (
     CurrentUser,
+    get_email_dispatcher,
     get_payment_recorder,
     get_payment_refunder,
     resolve_trainer_by_id,
 )
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
+from app.core.formatters import _format_ru_datetime, format_money
 from app.core.pagination import PaginatedData
+from app.modules.payments.models import PaymentReceipt
 from app.modules.pt_packages import repository
 from app.modules.pt_packages.constants import (
     CANCELLATION_REASON_REFUNDED,
@@ -73,6 +78,7 @@ from app.modules.pt_packages.schemas import (
     PtPackageRefundRequest,
     PtPackageResponse,
 )
+from app.modules.users.display import format_actor_display
 
 # ---------------------------------------------------------------------------
 # Error classes (per-module subclasses with .code class attribute)
@@ -496,6 +502,145 @@ async def resolve_active_pt_package(
 
 
 # ---------------------------------------------------------------------------
+# Phase 45 NOTIFY-11/12/13 — payment-receipt email fanout helper (D-45-08).
+#
+# Mirrors `app/modules/memberships/service.py::_fanout_payment_receipt_email`
+# byte-for-byte (Plan 45-09 reference) with PT-package-specific snapshot text
+# passed via `plan_snapshot` from the caller. Two LITERAL `template_id`
+# callsites (sale + refund) satisfy the Phase 41 AST gate.
+# ---------------------------------------------------------------------------
+
+
+async def _fanout_payment_receipt_email(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    *,
+    actor: CurrentUser,
+    payment_id: UUID,
+    payment_amount_kopecks: int,
+    payment_received_at: datetime,
+    client_id: UUID,
+    plan_snapshot: str,
+    receipt_kind: Literal["sale", "refund"],
+) -> None:
+    """Post-commit payment-receipt email fanout (Phase 45 NOTIFY-11/12/13, D-45-08).
+
+    Called AFTER the outer orchestrator (``create_pt_package`` /
+    ``refund_pt_package``) has committed its business UoW. Per PATTERNS.md
+    correction #4 the fanout MUST live at the orchestrator site, not in
+    ``payments/service.py:record_payment`` / ``issue_refund`` (those are
+    ``# noqa: SVC001 caller-owns-txn`` and do not commit).
+
+    Sequence + invariants mirror Plan 45-09 memberships exactly — refer to
+    ``app/modules/memberships/service.py::_fanout_payment_receipt_email`` for
+    the long-form rationale. Single-session post-commit fanout (Plan 45-09
+    deviation #2): we reuse the orchestrator's ``session`` because pt_packages
+    routes do not receive a sessionmaker either, and the durability invariant
+    holds — the business commit ran BEFORE this helper, any failure past this
+    point cannot roll back already-durable work.
+    """
+    log = structlog.get_logger("pt_packages.payment_receipt_fanout")
+
+    # 1. Lookup client.email + actor.full_name (raw text() per D-27-19
+    # modules-independent contract).
+    row = (
+        await session.execute(
+            text(
+                "SELECT c.email AS email, u.full_name AS full_name "
+                "FROM clients c, users u "
+                "WHERE c.id = :client_id AND u.id = :actor_id"
+            ).bindparams(client_id=client_id, actor_id=actor.id),
+        )
+    ).first()
+    client_email: str | None = row.email if row is not None else None
+    actor_full_name: str = (
+        row.full_name if row is not None and row.full_name is not None else ""
+    )
+
+    # 2. Skip fanout when client.email IS NULL (D-45-10).
+    if client_email is None:
+        log.info(
+            "payment_receipt_skipped",
+            reason="no_email",
+            payment_id=str(payment_id),
+        )
+        return
+
+    # 3. Fresh audit_correlation_id links receipt row ↔ email_send_log
+    # (D-41-20 / D-45-25).
+    audit_correlation_id = uuid4()
+
+    # 4 + 5 + 6. Receipt row + audit emit + commit (best-effort).
+    try:
+        session.add(
+            PaymentReceipt(
+                payment_id=payment_id,
+                channel="email",
+                audit_correlation_id=audit_correlation_id,
+                to_address=client_email,
+            )
+        )
+        await audit.emit(
+            session,
+            "payment_receipt_emailed",  # LITERAL — Phase 15 INFRA-11 AST gate
+            actor_user_id=actor.id,
+            resource_type="payment",  # LITERAL
+            resource_id=payment_id,
+            # UUID kwargs str-cast for JSONB serialisability (Plan 45-09
+            # deviation #1 — raw UUIDs fail JSON encoder). Pydantic UUID
+            # validators on PaymentReceiptEmailedPayload accept both UUID
+            # and well-formed str input (D-30-03 lineage).
+            audit_correlation_id=str(audit_correlation_id),
+            payment_id=str(payment_id),
+            to_email=client_email,
+            receipt_kind=receipt_kind,
+        )
+        await session.commit()
+    except IntegrityError:
+        # UNIQUE (payment_id, channel) — docker-restart re-fanout race.
+        await session.rollback()
+        log.warning(
+            "payment_receipt_idempotency_conflict",
+            payment_id=str(payment_id),
+            channel="email",
+        )
+        return
+
+    # 7. Best-effort dispatch with LITERAL template_id per Phase 41 AST gate.
+    # Two literal callsites (sale + refund) — a conditional would collapse
+    # template_id to a variable and the AST walker would reject it.
+    actor_display_name = format_actor_display(actor_full_name)
+    amount = format_money(payment_amount_kopecks)
+    paid_at = _format_ru_datetime(payment_received_at)
+    try:
+        if receipt_kind == "sale":
+            await get_email_dispatcher()(
+                template_id="EMAIL_PAYMENT_RECEIPT_SALE",
+                to=client_email,
+                audit_correlation_id=audit_correlation_id,
+                amount=amount,
+                paid_at=paid_at,
+                plan_snapshot=plan_snapshot,
+                actor_display_name=actor_display_name,
+            )
+        else:
+            await get_email_dispatcher()(
+                template_id="EMAIL_PAYMENT_RECEIPT_REFUND",
+                to=client_email,
+                audit_correlation_id=audit_correlation_id,
+                amount=amount,
+                paid_at=paid_at,
+                plan_snapshot=plan_snapshot,
+                actor_display_name=actor_display_name,
+            )
+    except Exception as exc:
+        log.warning(
+            "payment_receipt_enqueue_failed",
+            payment_id=str(payment_id),
+            error=str(exc),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Instance-side orchestrators (Plan 33-02 — sale + read APIs)
 # ---------------------------------------------------------------------------
 
@@ -666,6 +811,23 @@ async def create_pt_package(
 
     # 9: commit (SVC001 AST gate enforces explicit commit on orchestrator).
     await session.commit()
+
+    # Phase 45 NOTIFY-11/12/13 D-45-08 — payment-receipt email fanout (sale).
+    # Best-effort, post-commit: any failure inside the helper does NOT roll
+    # back the just-committed business UoW. Per PATTERNS.md correction #4
+    # the fanout lives at the orchestrator (here), NOT in
+    # payments/service.py:record_payment (caller-owns-txn, no commit).
+    # Plan 45-10 mirrors Plan 45-09 memberships byte-for-byte.
+    await _fanout_payment_receipt_email(
+        session,
+        actor=actor,
+        payment_id=payment.id,
+        payment_amount_kopecks=payment.amount_kopecks,
+        payment_received_at=payment.received_at,
+        client_id=pt_package.client_id,
+        plan_snapshot=pt_package.plan_name_snapshot,
+        receipt_kind="sale",
+    )
 
     # 10: refresh + return response (computed is_active derived from status).
     # Narrow attribute_names so the refresh does NOT eagerly reload future
@@ -1006,6 +1168,22 @@ async def refund_pt_package(
 
     # 8. Commit (SVC001 gate enforces explicit commit).
     await session.commit()
+
+    # Phase 45 NOTIFY-11/12/13 D-45-08 — payment-receipt email fanout (refund).
+    # Same best-effort post-commit shape as the SALE path in create_pt_package.
+    # ``refund_payment.amount_kopecks`` is signed-negative per the
+    # ck_payments_amount_sign_matches_subject_kind CHECK; ``format_money``
+    # renders the leading minus naturally. Plan 45-10 mirrors Plan 45-09.
+    await _fanout_payment_receipt_email(
+        session,
+        actor=actor,
+        payment_id=refund_payment.id,
+        payment_amount_kopecks=refund_payment.amount_kopecks,
+        payment_received_at=refund_payment.received_at,
+        client_id=pt_package.client_id,
+        plan_snapshot=pt_package.plan_name_snapshot,
+        receipt_kind="refund",
+    )
 
     # 9. Return response.
     return PtPackageResponse.model_validate(pt_package, from_attributes=True)
