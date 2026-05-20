@@ -666,6 +666,31 @@ class PaymentReceiptEmailedPayload(BaseModel):
     receipt_kind: Literal["sale", "refund"]
 
 
+# Expiring-notification fanout (Phase 45 D-45-26 / NOTIFY-13):
+
+
+class ExpiringNotificationSentPayload(BaseModel):
+    """Payload for ('expiring_notification_sent_{7d,3d,1d}', 'membership') — Phase 45 D-45-26.
+
+    Carries channel discriminator so audit history records which channel actually
+    delivered (Telegram vs email fallback). Per PATTERNS.md correction #2 this
+    schema does NOT exist before Phase 45 — the 3 existing audit events emitted
+    via raw kwargs with no registered schema.
+
+    Exactly 4 fields with extra='forbid'. audit_correlation_id is a TOP-LEVEL
+    column on audit_log (INFRA-39 lineage), passed as a kwarg to audit.emit() —
+    NOT a member of this payload schema. Adding it here would break payload
+    validation at emit time.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: UUID
+    telegram_chat_id: int | None
+    kind: Literal["expiring_7d", "expiring_3d", "expiring_1d"]
+    channel: Literal["telegram", "email"]
+
+
 # Refresh-token failure tracking (Phase 43 USERS-06 / D-43-20):
 
 
@@ -748,4 +773,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("refresh_failed", "session"): RefreshFailedPayload,
     # Payment receipt email (Phase 45):
     ("payment_receipt_emailed", "payment"): PaymentReceiptEmailedPayload,
+    # Expiring-notification fanout (Phase 45 D-45-26):
+    ("expiring_notification_sent_7d", "membership"): ExpiringNotificationSentPayload,
+    ("expiring_notification_sent_3d", "membership"): ExpiringNotificationSentPayload,
+    ("expiring_notification_sent_1d", "membership"): ExpiringNotificationSentPayload,
 }
