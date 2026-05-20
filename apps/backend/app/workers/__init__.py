@@ -95,6 +95,9 @@ from app.integrations.email.models import (  # noqa: F401
 from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
+from app.modules.payments.models import (  # noqa: F401
+    PaymentReceipt,  # Phase 45 D-45-20 — payment_receipts eager-import (REG-29-04)
+)
 from app.workers.scheduled.cleanup_password_reset_tokens import cleanup_password_reset_tokens
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
