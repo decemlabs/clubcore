@@ -297,7 +297,30 @@ Plans:
   4. ≥6 real-Postgres race tests pass: token replay race, soft-delete + re-invite race, deactivate + `/refresh` race, bounce-webhook + active-send race, concurrent expiring-cron double-pings race, RFC 2047 Cyrillic-subject round-trip; `test_password_reset_no_oracle.py` + `test_otp_email_anti_oracle.py` pass at the gate.
   5. Live email-deliverability probe is captured as evidence in `.planning/milestones/v1.6-VERIFICATION-LOG.md` — one email each to a yandex.ru + mail.ru + rambler.ru recipient with `Authentication-Results` showing SPF=pass, DKIM=pass, DMARC=pass alignment; 6/6 CI gates green (ruff + mypy --strict + pytest + import-linter + OpenAPI drift + frontend codegen drift) plus SVC001 + `LOCKED_EMAIL_TEMPLATES` AST gates green.
   6. Owner sign-off is recorded in `.planning/milestones/v1.6-VERIFICATION-LOG.md` enumerating every locked Russian email template constant name (D-27-OWNER-COPY-LOCK + D-39-02 lineage); inline regressions discovered at the gate are fixed in place under the ≤5 hard cap (>5 → roll forward as DEFER-46-N).
-**Plans**: TBD
+**Plans**: 13 plans
+
+**Wave 1** *(OpenAPI atomic regen)*
+- [ ] 46-01-PLAN.md — Regen openapi.json + schema.d.ts in one atomic commit (HANDOFF-03)
+
+**Wave 2** *(handoff artifacts; blocked on Wave 1)*
+- [ ] 46-02-PLAN.md — schema.contract.test.ts +12 forward-guards in 3 epic banner blocks (HANDOFF-04)
+- [ ] 46-03-PLAN.md — apps/backend/README.md v1.6 changelog H2 (HANDOFF-04)
+- [ ] 46-04-PLAN.md — export_postman.py + .planning/handoff/v1.6-postman.json (filter _internal) (HANDOFF-04)
+
+**Wave 3** *(race tests; parallelisable, no cross-wave deps)*
+- [ ] 46-05-PLAN.md — test_password_reset_token_replay_race.py (VER-10)
+- [ ] 46-06-PLAN.md — test_soft_delete_reinvite_race.py (VER-10)
+- [ ] 46-07-PLAN.md — test_deactivate_refresh_race.py (VER-10)
+- [ ] 46-08-PLAN.md — test_bounce_webhook_active_send_race.py (VER-10)
+- [ ] 46-09-PLAN.md — test_concurrent_expiring_cron_double_pings_race.py (VER-10)
+- [ ] 46-10-PLAN.md — test_rfc2047_cyrillic_subject_roundtrip.py (VER-10)
+
+**Wave 4** *(runbook + probe scaffolding; parallelisable, no cross-wave deps)*
+- [ ] 46-11-PLAN.md — Engineer v1.6-verification-evidence/run.sh (8 scenarios, DEFER-40-01 hardened) (VER-09)
+- [ ] 46-12-PLAN.md — apps/backend/scripts/verify/v1_6_email_probe.py (VER-12)
+
+**Wave 5** *(live verification session; SERIAL, depends on all prior; autonomous: false)*
+- [ ] 46-13-PLAN.md — Execute 8-scenario runbook + email probe + anti-oracle re-run + CI evidence capture + v1.6-VERIFICATION-LOG.md + 15-template owner sign-off (VER-09, VER-11, VER-12, VER-13, VER-14)
 
 </details>
 
