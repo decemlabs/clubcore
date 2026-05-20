@@ -261,7 +261,21 @@ Plans:
   3. After reception records a cash sale via `POST /api/v1/memberships` or `POST /api/v1/pt-packages`, the client receives `EMAIL_PAYMENT_RECEIPT_SALE` containing amount via `formatMoney` (NBSP-safe — `&nbsp;` in HTML body, literal U+00A0 in plain-text), receipt timestamp, snapshot description, and `actor_display_name` of the operator who recorded it; `payment_receipt_emailed` audit row exists with `audit_correlation_id` linking to the original `payment_recorded` row; `payment_receipts` UNIQUE `(payment_id, channel)` prevents double-receipt across docker-restart races.
   4. After owner issues a refund via `POST /api/v1/memberships/{id}/refund`, the client receives the locked `EMAIL_PAYMENT_RECEIPT_REFUND` email and `payment_receipt_emailed` audit is emitted; payment commit is NOT rolled back if the email send fails (best-effort informational receipt).
   5. The eager-import discipline (REG-29-04 mirror) is enforced — `app/workers/__init__.py` imports the new ORM models (`email_send_log`, `payment_receipts`, optional `password_reset_tokens`) and `tests/test_workers_eager_import.py` verifies via AST introspection; cron one-shot scripts return non-zero counts on first call against a freshly migrated database.
-**Plans**: TBD
+**Plans**: 12 plans
+
+Plans:
+- [ ] 45-01-PLAN.md — Alembic 0031 payment_receipts + PaymentReceipt ORM + telegram_chat_id NULLABLE widening
+- [ ] 45-02-PLAN.md — ExpiringNotificationSentPayload (CREATE) + format_actor_display helper + unit test
+- [ ] 45-03-PLAN.md — Eager-import PaymentReceipt in app/workers/__init__.py + test extension
+- [ ] 45-04-PLAN.md — memberships/email_templates.py (6 EMAIL_EXPIRING templates)
+- [ ] 45-05-PLAN.md — bookings/email_templates.py (4 EMAIL_BOOKING templates)
+- [ ] 45-06-PLAN.md — payments/email_templates.py (2 receipt templates) + dispatcher walker + .importlinter
+- [ ] 45-07-PLAN.md — memberships notifications helper + repo + service email fallback + integration test
+- [ ] 45-08-PLAN.md — bookings notifications helper + repo + service (4 callsites) email fallback + integration test
+- [ ] 45-09-PLAN.md — Payment receipt fanout at memberships orchestrators (sale + refund) + integration test
+- [ ] 45-10-PLAN.md — Payment receipt fanout at pt_packages orchestrators + integration test
+- [ ] 45-11-PLAN.md — Real-Postgres concurrent receipt UNIQUE race test
+- [ ] 45-12-PLAN.md — Phase 45 AST gate enumeration + walker scope extension
 
 ### Phase 46: OpenAPI Handoff + Milestone Verification
 **Goal**: The external design team can consume the v1.6 contract via byte-stable artifacts; the milestone is gated by live-stack proof that anti-oracle, cross-channel idempotency, multi-user audit traceability, and deliverability invariants all hold against a real provider AND a real Postgres.
@@ -292,7 +306,7 @@ Plans:
 | 42. Email Transport Layer + Email OTP Fallback | 13/16 | In Progress|  |
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
-| 45. Email Notification Mirrors | 0/? | Not started | — |
+| 45. Email Notification Mirrors | 0/12 | Not started | — |
 | 46. OpenAPI Handoff + Milestone Verification | 0/? | Not started | — |
 
 ---
