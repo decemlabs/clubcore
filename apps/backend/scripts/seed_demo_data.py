@@ -1,8 +1,10 @@
 """Seed the bootstrap owner (AUTH-EP-04 / D-25).
 
-Idempotent: INSERT ... ON CONFLICT (email) DO NOTHING. Re-running the script
-after the owner exists is a no-op. The compose stack does NOT auto-run this —
-it is a one-shot operator command:
+Idempotent: INSERT ... ON CONFLICT DO NOTHING keyed on the partial-UNIQUE
+index `uq_users_email_active` (lower(email) WHERE deleted_at IS NULL,
+Alembic 0022). Re-running the script after the owner exists is a no-op.
+The compose stack does NOT auto-run this — it is a one-shot operator
+command:
 
     uv run python -m scripts.seed_demo_data
 
@@ -19,7 +21,7 @@ import asyncio
 import os
 import sys
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -61,7 +63,13 @@ async def _run() -> int:
                     role=Role.OWNER.value,
                     full_name="Owner",
                 )
-                .on_conflict_do_nothing(index_elements=["email"])
+                # Partial UNIQUE index `uq_users_email_active` was introduced
+                # in Alembic 0022 (lower(email) WHERE deleted_at IS NULL).
+                # ON CONFLICT must reference the same expression + predicate.
+                .on_conflict_do_nothing(
+                    index_elements=[func.lower(User.email)],
+                    index_where=User.deleted_at.is_(None),
+                )
             )
             await session.execute(stmt)
             await session.commit()
