@@ -54,6 +54,17 @@ external = ["SVC"]
 # re-review. The currently-shipped Russian copy uses unambiguous Cyrillic only,
 # so the noqa directives are "unused" today and would otherwise trip RUF100.
 "app/modules/payments/email_templates.py" = ["RUF100"]
+# Phase 45 NOTIFY-12 (plan 45-02): same disciplinary `# noqa: RUF001` tripwire
+# on the Cyrillic defensive fallback "Сотрудник" in format_actor_display (and
+# the parametrize cases that exercise it). Today's literals are unambiguous
+# Cyrillic so the noqa would otherwise trip RUF100.
+"app/modules/users/display.py" = ["RUF100"]
+"tests/unit/test_actor_display_format.py" = ["RUF100"]
+# Phase 45 NOTIFY-12 (plan 45-02): Cyrillic month names + datetime literal
+# "г." in formatters carry RUF001 tripwires; unambiguous today, so RUF100
+# would otherwise flag every line.
+"app/core/formatters.py" = ["RUF100"]
+"tests/unit/test_formatters.py" = ["RUF100"]
 
 [format]
 quote-style = "double"
