@@ -17,7 +17,7 @@ Requirements covered: INFRA-34, INFRA-35, INFRA-36, INFRA-37, INFRA-38, INFRA-39
 
 ### Protocol Slots (INFRA-38)
 - **D-47-01:** Declare **both** `MembershipActivator` and `PtPackageActivator` Protocol slots in Phase 47, alongside `YooKassaClientProvider` and `FiscalReceiptDispatcher`. Empty/no-op wiring at composition root; Phase 50 fills the concrete implementations.
-- **D-47-02:** All four Protocol slot definitions live in **`apps/backend/app/core/services.py`**, co-located with existing slots (`EmailDispatcher`, `PaymentRecorder`, etc.). This matches the 12-prior-Protocol-slot precedent and keeps `app/core/services.py` as the single canonical home for composition-root contracts.
+- **D-47-02:** All four Protocol slot definitions live in **`apps/backend/app/core/dependencies.py`**, co-located with existing slots (`EmailDispatcher`, `PaymentRecorder`, etc.). This matches the 12+ prior Protocol slot precedent and keeps `app/core/dependencies.py` as the single canonical home for composition-root contracts. (Initial discussion said `app/core/services.py` — that file turned out to be a docstring-only stub; corrected via pattern-mapper finding 2026-05-21.)
 - **Rationale:** Zero `.importlinter` ignore entries needed for the v1.7 webhook → memberships/pt_packages boundary. Future code-review and audit-fix passes won't have to relitigate the boundary because there's nothing to relitigate.
 
 ### Alembic 0033 — `clients.email` (INFRA-41)
@@ -63,7 +63,7 @@ The user did not select the following gray areas; defaults apply. Downstream age
 ### Codebase contracts to preserve
 - `apps/backend/app/core/audit.py` — `LOCKED_AUDIT_EVENTS` frozenset + `_assert_audit_pair_locked` guard pattern to extend
 - `apps/backend/app/core/audit_payloads.py` — Pydantic v2 `extra='forbid'` payload schema pattern; carries `audit_correlation_id`
-- `apps/backend/app/core/services.py` — canonical Protocol slot home (`EmailDispatcher`, `PaymentRecorder`, ...)
+- `apps/backend/app/core/dependencies.py` — canonical Protocol slot home (`EmailDispatcher`, `PaymentRecorder`, ...); `app/core/services.py` is docstring-only and is NOT a slot home despite its name
 - `apps/backend/app/core/config.py` — main `Settings`; `YooKassaSettings` is **NOT** nested here
 - `apps/backend/app/integrations/email/` — template for the new `app/integrations/yookassa/` skeleton: `types.py` / `client.py` / `factory.py` / `circuit_breaker.py` analogs
 - `apps/backend/app/modules/clients/models.py:67` — existing `email: Mapped[str | None]` column (do NOT re-add in 0033)
@@ -96,7 +96,7 @@ The user did not select the following gray areas; defaults apply. Downstream age
 - `app/integrations/yookassa/` (new) — populated as skeletons only in Phase 47; full client lands in Phase 48.
 - `app/core/audit.py` `LOCKED_AUDIT_EVENTS` — extension point (9 new tuples).
 - `app/core/audit_payloads.py` — 9 new payload classes.
-- `app/core/services.py` — 4 new Protocol slots (`YooKassaClientProvider`, `FiscalReceiptDispatcher`, `MembershipActivator`, `PtPackageActivator`).
+- `app/core/dependencies.py` — 4 new Protocol slots (`YooKassaClientProvider`, `FiscalReceiptDispatcher`, `MembershipActivator`, `PtPackageActivator`) using defensive-raise accessor pattern (mirrors `get_email_dispatcher` / `get_payment_recorder`). `YooKassaClientProvider` + `FiscalReceiptDispatcher` are double-wired (FastAPI + ARQ worker per REG-29-03); `MembershipActivator` + `PtPackageActivator` are HTTP-only single-wire.
 - `app/main.py` composition root — wires Protocol slots empty/no-op in Phase 47; concrete in Phases 48–50.
 - `.importlinter` — add `app.modules.online_payments` to `modules-independent` contract preemptively (the module itself ships in Phase 49, but the contract list is updated now to fail fast on misplaced imports).
 - `.env.example` — 6 new `YOOKASSA_*` placeholder entries.
