@@ -1,263 +1,510 @@
-# Feature Research — v1.6 Email channel + Multi-user admin
+# Feature Landscape: v1.7 Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
 
-**Domain:** Operator-facing CRM (single-gym pet-project, РФ/СНГ), two new pillars laid on top of an already-shipped Telegram-first system: **(1) email as a parallel notification channel** mirroring v1.1/v1.3/v1.4/v1.5 Telegram flows, **(2) owner-managed multi-user admin** (operator onboarding, deactivation, password reset, multi-actor audit traceability).
-**Researched:** 2026-05-18
-**Confidence:** HIGH (the patterns to mirror — locked Russian copy, anti-oracle, idempotency tables, mandatory snapshot — are all already in production; the open questions are about *what to send by email* and *how to onboard a second reception user*, not how to wire the plumbing)
-
-> Scope reminder. v1.6 is a **subsequent** milestone bolted onto a working system. Existing Telegram flows, auth, payments, audit log (56 LOCKED events) are **not** in scope to re-research. Everything below is constrained to the new surface only.
+**Domain:** Online payment intake + fiscal compliance for single-gym CRM (РФ/СНГ market)
+**Researched:** 2026-05-21
+**Milestone context:** Adding ЮKassa payment intake and 54-ФЗ fiscal receipts to existing Sportzal CRM.
+  Existing bedrock: v1.4 cash ledger (append-only `payments` table, `payment_recorder` Protocol slot,
+  `Idempotency-Key`, full-only refund discipline, atomic audit chain), v1.6 cross-channel notifications
+  (Telegram + email with `channel` discriminator idempotency), v1.6 email integration (Yandex Postbox,
+  `LOCKED_EMAIL_TEMPLATES`, circuit breaker).
 
 ---
 
-## Feature Landscape
+## PAYMENT — Online Payment Intake
 
-### Table Stakes (Users Expect These)
+### PAY-01: Server-side payment creation (redirect confirmation)
+- **Category:** Table stake
+- **Complexity:** MED
+- **Dependency:** v1.4 `payment_recorder` Protocol slot; `Idempotency-Key` discipline already established
+- **Description:** `POST /api/v1/memberships/{id}/pay-online` and `POST /api/v1/pt-packages/{id}/pay-online`
+  create a ЮKassa payment object via `POST /v3/payments` (HTTP Basic Auth: shop_id + secret_key).
+  Confirmation type `redirect` — API returns `confirmation.confirmation_url`; CRM redirects client browser
+  there. After client action ЮKassa redirects back to `return_url`. Membership/package is credited ONLY
+  on `payment.succeeded` webhook (never on redirect return). `Idempotency-Key` = UUIDv4 stored in local
+  `online_payments` row before the ЮKassa call so retry on network error returns same result.
+- **ЮKassa states:** `pending` (initial) → `succeeded` (final) or `canceled` (final). Single-stage flow
+  skips `waiting_for_capture`.
+- **Sources:** HIGH confidence — official yookassa.ru/developers/payment-acceptance/getting-started/payment-process
 
-Features users assume exist in any modern operator CRM. Missing these = product feels incomplete or unsafe.
+### PAY-02: Embedded checkout widget
+- **Category:** Differentiator
+- **Complexity:** MED
+- **Dependency:** PAY-01 (requires payment token from server); admin-web must load ЮKassa JS SDK
+- **Description:** ЮKassa provides a JS widget (`YooMoneyCheckoutWidget`) that embeds directly on the
+  admin-web page or in a modal. Accepts bank cards, Mir Pay, SberPay, T-Pay, СБП, ЮMoney. No page
+  redirect — widget handles 3-D Secure internally. On success widget displays 10-second confirmation
+  then redirects to `return_url`. Improves UX for reception desk flow where a separate tab redirect is
+  disruptive.
+  Confirmation type: `embedded` (not `redirect`).
+- **Sources:** HIGH confidence — yookassa.ru/developers/payment-acceptance/integration-scenarios/widget/basics
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Email channel — OTP fallback for login** | When a reception user has no Telegram link (or Telegram is down), they still need a passwordless / second-factor path. Today email/password works but Telegram OTP doesn't have an email twin. | **M** | Mirror `app/modules/auth/otp_*` shape: `email_otp_codes` table or reuse `otp_codes` with `channel ∈ {telegram, email}`; same 6-digit / 5-min TTL / 5-attempt envelope; rate-limit 5/15min reused. Russian-locked template `EMAIL_OTP_LOGIN`. |
-| **Email channel — expiring-membership notice (7+3+1)** | v1.3 already sends Telegram DMs at T-7 / T-3 / T-1. Clients without a Telegram link get nothing today — silent churn. Email mirror closes the gap. | **M** | Extend `membership_notifications` UNIQUE key from `(membership_id, kind)` to `(membership_id, kind, channel)` so Telegram and email idempotency rows coexist without double-sending. Reuse 06:15 MSK cron loop; add a sibling pass that selects rows where `client.email IS NOT NULL` AND no Telegram link (or both, per D-XX). 6 locked Russian email templates `EMAIL_EXPIRING_{7D,3D,1D}_VARIANT_{A,B}` — anti-oracle A/B variant kept (`client_id.bytes[0] & 1`). |
-| **Email channel — payment receipt (cash sale + refund)** | After every cash sale (v1.4 `payments`), client expects a written record. РФ tax law doesn't *require* email receipts for cash yet (54-ФЗ kicks in only for online — v1.7), but operator-facing CRMs treat it as table stakes. Refunds especially must produce a receipt trail. | **M** | New `payment_receipts` idempotency table (UNIQUE `(payment_id, channel)`); fire-on-commit hook after `record_payment` / `issue_refund`; locked Russian templates `EMAIL_PAYMENT_RECEIPT_SALE` + `EMAIL_PAYMENT_RECEIPT_REFUND` carrying `formatMoney`-style ru-RU RUB rendering (NBSP-safe in HTML). **Dependency: v1.4 payments ledger (already shipped).** |
-| **Email channel — booking confirmation + 24h reminder** | v1.5 sends Telegram DMs for `BOOKING_CONFIRMED_DM` / `BOOKING_REMINDER_24H_DM`. Email mirror covers clients without Telegram. | **M** | Extend `booking_notifications` UNIQUE to `(booking_id, kind, channel)`. Reuse 06:35 MSK cron. 4 locked Russian email templates: `EMAIL_BOOKING_CONFIRMED`, `EMAIL_BOOKING_CANCELLED_BY_CLIENT`, `EMAIL_BOOKING_CANCELLED_BY_OWNER`, `EMAIL_BOOKING_REMINDER_24H`. |
-| **Multi-user admin — owner invites reception user (invite-token flow)** | A one-gym CRM that requires the solo owner to manually INSERT into `users` is a non-starter once the gym hires a second receptionist. Industry-standard pattern: owner clicks "Invite", system mails one-time invite link, invitee sets their own Argon2id password. | **M** | New `user_invitations` table (UUIDv4 token, `email`, `role`, `created_by_user_id`, `expires_at` 72h, `accepted_at NULL`, `revoked_at NULL`, UNIQUE on `(lower(email)) WHERE accepted_at IS NULL AND revoked_at IS NULL`); `POST /api/v1/users/invitations` (owner-only); `POST /api/v1/users/invitations/accept` (public, accepts token + password); 1 locked Russian email template `EMAIL_USER_INVITATION`. **Anti-pattern: admin-set initial password mailed in plaintext.** Sources unanimous — never email a password. |
-| **Multi-user admin — password reset (forgot-password)** | Reception loses access regularly (forgotten passwords, lost devices). Without self-service reset the owner becomes a permanent helpdesk. Reusing the invite-token mechanism is the cheapest correct path. | **M** | `password_reset_tokens` table (separate from `user_invitations` to keep semantics clean: invitation = no prior account, reset = existing account); token TTL 1h (shorter than invite — per OWASP 2025); single-use; `POST /api/v1/auth/password/reset/request` returns **the same 202 response for known + unknown email** (anti-oracle invariant — see quality gate); constant-time response (sleep-to-floor pattern, e.g. 500ms minimum) to defeat timing oracle. |
-| **Multi-user admin — deactivate user (owner-only, soft)** | The owner needs to revoke a fired receptionist *immediately* without losing audit history. Hard delete would orphan FK references (audit_log, payments.received_by_user_id). | **S** | `users.deactivated_at` nullable timestamp (or `is_active BOOL DEFAULT TRUE` mirroring v1.4 `trainers.is_active`); `POST /api/v1/users/{id}/deactivate` owner-only; deactivation cascades to `logout-all` for that user's families (revoke all refresh-token families); login attempts post-deactivation return 401 `invalid_credentials` (no oracle leak — same code as wrong password). |
-| **Multi-user admin — multi-actor audit trail (already-emitting actor surfaced)** | Today audit rows already carry `actor_user_id` from `request.state.user`. The work is making sure all 56 LOCKED events continue to carry the correct actor when the actor is no longer always the solo owner. | **S** | Verification + 1-2 callsite fixes max — most paths already pass actor through correctly via `require_permission` deps. New audit-event pairs: `user_invited`, `user_invitation_accepted`, `user_invitation_revoked`, `user_deactivated`, `user_reactivated`, `password_reset_requested`, `password_reset_completed`. Frozenset grows 56 → 63. |
-| **Email — bounce/complaint logging (passive)** | Sending blindly into a black hole is operationally unsafe; if `reception@badtypo.gym` bounces 100 emails before the owner notices, real receipts get lost in the noise. Need a minimal "we tried, here's what happened" log. | **S** | `email_send_log` append-only table (`id`, `to_email`, `template_kind`, `provider_message_id`, `status ∈ {sent, bounced, complained, deferred}`, `received_at`); webhook endpoint `/api/v1/_webhooks/email/{provider}` (provider-signed) that flips status on bounce/complaint events. **No retry orchestrator in v1.6** — manual operator action on a bounce. |
-| **Email — sender-domain authentication (SPF + DKIM + DMARC)** | Without SPF/DKIM, Gmail / Mail.ru / Yandex throw to spam ~70% of the time (Google now hard-rejects unauthenticated bulk mail). Setup is a **one-time DNS task**, not code, but it must be in the v1.6 spec as a hard launch gate. | **S** (config) | Configure SPF (single record, prefer ESP's include), DKIM (provider-generated CNAME/TXT in DNS), DMARC (start at `p=none` for monitoring → graduate to `p=quarantine`). Use a **dedicated sending subdomain** (e.g. `mail.sportzal.ru`) so reputation is isolated from the corporate domain. **Owner action**, not developer action — but verification runbook lands in v1.6 milestone close. |
-| **Email — plaintext + minimal-HTML dual-part** | Some Russian email clients (older corporate, Mail.ru web on slow connection) still degrade HTML; plaintext fallback prevents an unreadable receipt. | **S** | Every template ships as `(subject, plaintext_body, html_body)` tuple; HTML is "minimal-HTML" — no tracking pixels, no remote images, no JS, table-based layout for legacy Mail.ru rendering. Russian copy is **owner-locked** (same `D-27-OWNER-COPY-LOCK` pattern). |
+### PAY-03: QR / SBP payment
+- **Category:** Differentiator
+- **Complexity:** LOW
+- **Dependency:** PAY-01; display layer only
+- **Description:** Confirmation type `qr` — server returns `confirmation.confirmation_data` (QR payload).
+  CRM renders QR code (any library). Client scans with bank app. Fires `payment.succeeded` webhook on
+  completion. Useful for mobile-first reception desk (client scans instead of entering card).
+- **Sources:** HIGH confidence — ЮKassa `confirmation_type` docs; SBP QR equated to card payment under
+  54-ФЗ as of Sept 2025.
 
-### Differentiators (Competitive Advantage)
+### PAY-04: Telegram WebApp native invoice
+- **Category:** Anti-feature (v1.7)
+- **Complexity:** HIGH
+- **Dependency:** Telegram Bot Payments API (separate `sendinvoice` flow); no `waiting_for_capture`
+  support; cannot configure payment holds
+- **Description:** ЮKassa does support Telegram Bot Payments API (`sendinvoice` → `answerPreCheckoutQuery`
+  → `SuccessfulPayment` update). However this flow is entirely separate from the REST payment API:
+  no `waiting_for_capture`, no autopayments, no receipt injection via ЮKassa API — receipt must be
+  sent separately. The CRM admin panel is a web SPA, not a Telegram Mini App. Reception desk does not
+  use Telegram-native invoices for selling memberships.
+  DO NOT implement in v1.7. Existing Telegram bot covers check-in and bookings; payment via bot is
+  a separate product feature for a later milestone.
+- **Sources:** MEDIUM confidence — yookassa.ru/docs/support/payments/onboarding/integration/cms-module/telegram
 
-Features that set Sportzal apart in the one-gym-CRM segment. The bar is low here — the segment is dominated by Excel + WhatsApp.
+### PAY-05: Mobile application deep-link confirmation
+- **Category:** Anti-feature (v1.7)
+- **Complexity:** MED
+- **Dependency:** Mobile app not in scope
+- **Description:** Confirmation type `mobile_application` redirects to bank app deep-link for
+  confirmation. Only relevant for a native mobile client app. Sportzal v1.7 is admin-web SPA only.
+  Defer until a client-facing mobile app is built.
+- **Sources:** HIGH confidence — ЮKassa confirmation_type docs
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Dual-channel notification (Telegram preferred, email fallback)** | Most РФ gym CRMs (1С:Фитнес, Mobifitness) are SMS-first or email-only. Sportzal's value: Telegram-native for clients who use Telegram (~85% in RU 18-35), email for the rest, with the same locked Russian copy on both. Anti-oracle invariant preserved end-to-end. | **M** | Resolution rule: per-client preference defaults to "Telegram if linked, else email". Owner can override per-client (`clients.preferred_channel ∈ {auto, telegram, email, both}`). For OTP fallback specifically: `both` is risky (which OTP wins?) → restrict to `auto / telegram / email`. |
-| **Locked Russian copy + owner sign-off per template** | Every other CRM in this segment lets the operator (or worse, the developer) hand-edit notification templates and ships generic / typo-ridden copy. v1.3 and v1.5 already pay this cost — v1.6 just preserves it on the new channel. | **S** | Mirror `D-20-9` / `D-27-OWNER-COPY-LOCK` mechanism: each new template constant is owner-signed in a decision row before merge; modifying the constant requires a new sign-off. |
-| **Per-template anti-oracle A/B variant for membership/booking emails** | The expiring-membership Telegram flow already varies copy by `client_id.bytes[0] & 1` to defeat timing/content-based oracle leak in shared-screen scenarios. Extending the same invariant to email keeps the two channels behaviorally identical. | **S** | Same selector function reused; just doubles the template constant count for expiring + booking. Receipt and OTP templates do NOT need variants (no oracle surface). |
-| **Multi-user audit traceability surfaced in receipts** | Cash sale email receipts include "Принял: Анна П." (operator first-name + last-initial). Owner can audit at a glance from email archive without opening admin-web. | **S** | One JOIN in receipt-render path; field is `actor_display_name` derived from `users.full_name`. No new endpoint needed. |
-| **Invite-link copy-paste fallback (owner sees the link)** | Email deliverability is never 100%. Owner sees the invitation URL in admin-web immediately after creating it and can paste it into Telegram / SMS / WhatsApp if the email doesn't arrive. | **S** | `POST /api/v1/users/invitations` returns the `accept_url` in the response body **once** (creation-time only — never echoed again, since the URL is the secret). Stored audit row notes "url returned to owner". |
-| **`logout-all-on-deactivate` happens atomically** | Most competitor CRMs deactivate a user but leave their browser session live for hours until the JWT expires. Sportzal already has refresh-rotation families — deactivation revokes them in the same transaction. | **S** | Reuse v1.1 `revoke_family` machinery; just iterate all families for the user. Audit `user_deactivated` payload includes `families_revoked: N`. |
-| **DMARC `rua` reports surface to owner** | The owner gets a weekly summary email of who's been spoofing the gym's domain (basically "0 spoof attempts this week, you're safe"). Trivial config trick, but no other RU gym CRM bothers. | **S** | Configure `rua=mailto:owner@gym.ru` in the DMARC record. No code. |
+---
 
-### Anti-Features (Commonly Requested, Often Problematic)
+## WEBHOOK — Payment FSM
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **Email preference centre / unsubscribe management UI** | Modern email best practice; CAN-SPAM / GDPR-style framing. | All v1.6 email is **transactional** (CAN-SPAM doesn't apply; РФ ФЗ-152 transactional carve-out applies). A preference centre implies marketing campaigns (out of scope through v2.0). Building UI for "do you want to receive payment receipts? Y/N" is silly — if the answer is N, the client shouldn't be doing business with the gym. | **No unsubscribe link on transactional emails.** Plaintext footer line: "Это служебное письмо от тренажёрного зала Sportzal. Если вы получили его по ошибке, напишите owner@gym.ru." Single mailto, no API. |
-| **Marketing campaigns / mailing lists / scheduled blasts** | "We could just send a promo email to everyone with an expiring membership!" | This is a different product. Marketing email = subscription consent + suppression list + send-time optimization + unsubscribe link compliance + likely a separate ESP account (high-volume ESPs reject mixing transactional and marketing on same IP). Sportzal's volume is ~5-50 emails/day; ESPs for that volume don't even sell marketing tiers. | **Explicit out-of-scope.** Re-evaluate in v3+ (post-launch, post-multi-tenant). |
-| **Multi-factor auth with TOTP / hardware keys** | "Reception logs in from a shared front-desk PC, MFA is best practice." | Reception turnover is high; TOTP enrollment friction is real; the gym already has CCTV at front desk for physical access control. Email OTP fallback already covers the "lost phone" recovery path. Owner can enable later if pain becomes real. | Telegram OTP (already shipped) + email OTP (v1.6) already provide step-up auth on demand. Reception can be required to re-enter password every N hours via short access-token TTL (already 15min) — no new mechanism needed. |
-| **Per-user RBAC granularity / custom roles** | "What if the night reception shouldn't be able to issue refunds?" | Sportzal currently has 2 roles (owner / reception) and `OWNER_ONLY` is 26 entries. Custom roles = role designer UI = role-explosion management = enterprise SaaS scope. The gym has at most 3-5 operators ever. | Stay 2-role. If a refund-restriction comes up, add a third hard-coded role (`reception_no_refund`) and one frozenset row — but only when there's a real second receptionist asking for it. |
-| **In-app inbox / notification centre** | "Email is unreliable; let's show a bell icon in admin-web with notifications for operators." | Operators don't need to see expiring-membership notices in their inbox — those go to clients. The only operator-facing notification surface is the dashboard itself (v1.8 reports). Building an inbox is building a second UI for data that already has a UI. | Owner gets one weekly digest email (v1.7+) summarizing bounces / failed sends / deactivated users — that's it. |
-| **Admin-set initial password (mailed in plaintext)** | "Just generate `Welcome2026!` for new users and email it" — sounds simpler than invite-token flow. | Cardinal sin: passwords in email get archived, forwarded, indexed by spam filters, screenshot. Industry has moved away from this; OWASP/Specops/Auth0 all explicit. Also: forces password rotation on first login, doubling complexity. | **Invite-token flow only.** Owner clicks "Invite" → token-link emailed → invitee sets their own Argon2id password on accept. Never plaintext. |
-| **Email-based username (separate from login email)** | "Allow different login email vs notification email per user." | Two email fields means two enumeration surfaces, two verification flows, two reset paths. Real value: ~zero for a 3-5 operator gym. | **Single `users.email` column** serves login + notifications. Future: optional `clients.email` for client-side receipts is separate (clients ≠ users). |
-| **Bounce auto-retry with exponential backoff** | "Email failed, we should retry it like a webhook." | Bounces are usually permanent (typo, mailbox full, domain gone). Soft bounces (transient SMTP) are already retried by every modern ESP internally. Building our own retry loop in ARQ duplicates work and risks burn-through of sender reputation. | **No app-layer retry.** Trust ESP's internal retry; log bounce; surface to owner via weekly digest. |
-| **Multi-channel "any one of N" for OTP** | "If Telegram fails, automatically fall back to email — same OTP." | Two delivery channels for the *same* OTP doubles the attack surface (compromise either inbox) and creates UX confusion ("which 6-digit do I type?"). Race condition between channels also messy. | **One channel per request.** User picks Telegram OR email at login tab; system delivers via that channel only. If the chosen channel fails (Telegram blocked, email bounce), user re-tries with the other. |
-| **Self-service signup for reception users** | "Just put a /signup page so new receptionists can register themselves." | Sportzal is a single-tenant private CRM — there's no "the public" allowed in. Self-signup means anyone with the URL is in the audit log as a real actor. | Owner-only invitation, no public signup. |
-| **Client-side email preference per client** (different from operator preference centre — this is for clients) | "Some clients want both Telegram and email; some want only Telegram." | At ~100 clients/gym, manually setting per-client preferences in admin-web is feasible; building a client-facing preference page is not. | `clients.preferred_channel ∈ {auto, telegram, email, both}` editable from admin-web `/clients/{id}` only — no client-facing UI. Default `auto` (Telegram if linked, else email). |
+### WH-01: Webhook endpoint with IP whitelist + object re-fetch verification
+- **Category:** Table stake
+- **Complexity:** MED
+- **Dependency:** None (new module `app/modules/billing/webhooks.py`)
+- **Description:** `POST /api/v1/webhooks/yookassa` receives ЮKassa notifications.
+  Security model (two-layer defense-in-depth):
+  1. IP source check against ЮKassa published CIDR list:
+     `185.71.76.0/27, 185.71.77.0/27, 77.75.153.0/25, 77.75.156.11, 77.75.156.35,
+      77.75.154.128/25, 2a02:5180::/32`
+  2. Re-fetch payment/refund object from ЮKassa API after receiving webhook and verify status
+     matches notification payload (defends against spoofed IP, replay, and stale notifications).
+  ЮKassa does NOT provide `Notification-Sign` HMAC header — IP whitelist + re-fetch is the canonical
+  ЮKassa security model (confirmed in official webhook docs). Respond HTTP 200 immediately; process
+  asynchronously. ЮKassa retries for 24 hours on non-200 response.
+  Must be exempt from CSRF middleware (external caller). Must NOT require auth cookie.
+- **Sources:** HIGH confidence — yookassa.ru/developers/using-api/webhooks
+
+### WH-02: Payment FSM mapping (`pending` → `succeeded` / `canceled`)
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** WH-01, PAY-01, v1.4 `payments` table
+- **Description:** Internal `online_payments.status` maps to ЮKassa payment statuses:
+
+  | ЮKassa status          | Internal event               | Action                                          |
+  |------------------------|------------------------------|-------------------------------------------------|
+  | `pending`              | payment_initiated            | Row created; no ledger entry yet                |
+  | `waiting_for_capture`  | payment_awaiting_capture     | Two-stage only (not used in v1.7 single-stage)  |
+  | `succeeded`            | payment_online_succeeded     | Call `payment_recorder`; credit membership/pkg  |
+  | `canceled`             | payment_online_canceled      | Mark row canceled; no ledger entry              |
+
+  `payment.succeeded` is the ONLY trigger for crediting membership or PT-package.
+  Idempotency: UNIQUE constraint on `(yookassa_payment_id)` in `online_payments` table prevents
+  double-processing. On duplicate webhook: return 200, skip.
+- **Sources:** HIGH confidence — ЮKassa payment-process docs
+
+### WH-03: Refund FSM mapping (`refund.succeeded`)
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** WH-01, REFUND-01
+- **Description:** ЮKassa refund statuses:
+  - `succeeded` (final, positive) → fires `refund.succeeded` webhook
+  - `canceled` (final, negative) → fires no webhook; must poll or handle timeout
+
+  Internal mapping:
+
+  | ЮKassa refund status | Internal event            | Action                                               |
+  |----------------------|---------------------------|------------------------------------------------------|
+  | `succeeded`          | refund_online_succeeded   | Complete v1.4 atomic audit chain (mirrors cash path) |
+  | `canceled`           | refund_online_canceled    | Alert operator; membership stays credited            |
+
+  Note: `refund.succeeded` webhook is NOT auto-enabled — must be explicitly subscribed during
+  ЮKassa account setup. This is a known pitfall.
+- **Sources:** HIGH confidence — yookassa.ru/developers/using-api/webhooks + refunds docs
+
+### WH-04: Idempotent webhook processing
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** WH-01, Redis (already in stack)
+- **Description:** Each webhook notification carries a unique `object.id` (payment or refund UUID).
+  Processing must be idempotent:
+  1. Check Redis key `sz:webhook:{event_type}:{object_id}` (TTL 48h) — if present, return 200 skip.
+  2. Process event transactionally.
+  3. Set Redis key on success.
+  Mirrors `_dedupe_update_id` pattern from v1.2 Telegram bot. Prevents double-credit on webhook
+  delivery retry.
+- **Sources:** MEDIUM confidence — pattern inference from ЮKassa retry behavior + v1.2 precedent
+
+---
+
+## REFUND — Online Refunds
+
+### REF-01: Online refund initiation (full only, v1.7)
+- **Category:** Table stake
+- **Complexity:** MED
+- **Dependency:** v1.4 `payments` table + `refund_of` partial UNIQUE; WH-03; RBAC (reception+owner)
+- **Description:** `POST /api/v1/memberships/{id}/refund` (and pt-packages equivalent) — if the payment
+  was made online, routes to ЮKassa Refund API `POST /v3/refunds` with `payment_id` and full `amount`.
+  `Idempotency-Key` = new UUIDv4 stored before the API call.
+  Flow: CRM creates refund request → ЮKassa processes → `refund.succeeded` webhook arrives →
+  CRM completes v1.4 atomic audit chain (`payment_recorded → refund_issued → payment_refunded →
+  membership_refunded`) with `payment_row_hash`.
+  Payment MUST be in `succeeded` status to initiate refund (enforced by both CRM and ЮKassa API).
+  Refund window: up to 3 years (cards); up to 1 year (Sberbank).
+- **Sources:** HIGH confidence — yookassa.ru/developers/payment-acceptance/after-the-payment/refunds
+
+### REF-02: Partial online refund
+- **Category:** Anti-feature (v1.7)
+- **Complexity:** HIGH
+- **Dependency:** v1.4 B-02 (partial refund) still deferred
+- **Description:** ЮKassa API supports partial refunds (send partial `amount` in refund request).
+  However v1.4 deliberately deferred partial refund (B-02) for both cash and online flows. The
+  constraint `partial UNIQUE on refund_of` allows only one refund per payment row by design.
+  DO NOT implement partial online refund in v1.7 — this would require coordinating amount split
+  with membership partial-cancel semantics that are not yet designed. Defer to v1.8+.
+- **Sources:** HIGH confidence — v1.4 design doc + ЮKassa refunds API
+
+### REF-03: Refund timeout / cancellation handling
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** REF-01
+- **Description:** If `refund.succeeded` webhook does not arrive within N minutes (suggest 30 min),
+  ARQ task polls ЮKassa `GET /v3/refunds/{refund_id}` to check current status. If `canceled`:
+  emit `refund_online_failed` audit event, notify operator via Telegram + email DM.
+  Membership/package is NOT revoked — the original sale stands until refund is confirmed.
+  This covers the case where ЮKassa rejects the refund (e.g., acquirer refusal >15 months for cards).
+- **Sources:** MEDIUM confidence — ЮKassa refund behavior docs + industry pattern
+
+---
+
+## FISCAL — 54-ФЗ Fiscal Receipts
+
+### FIS-01: Receipt delivery mechanism choice
+- **Category:** Table stake (legal requirement)
+- **Complexity:** LOW (decision only)
+- **Dependency:** None
+- **Description:** Two options exist:
+  1. **Чеки от ЮKassa** (ЮKassa's built-in receipt service) — ЮKassa acts as the cloud cash register.
+     Zero setup cost, included in commission, no separate fiscal accumulator, connects within 1 day.
+     Limitation: delivery via EMAIL ONLY (no SMS). Requires client email.
+  2. **Third-party cash register** (АТОЛ-Онлайн, Чек.ОФД, etc.) — CRM sends receipt data to ЮKassa
+     which relays to the external cash register. More control, supports phone/SMS delivery.
+
+  RECOMMENDATION: Use "Чеки от ЮKassa" for v1.7. Lowest integration complexity, no separate
+  fiscal accumulator contract, covers the legally required ОФД path. Accept email-only constraint
+  (aligns with v1.6 email integration already in place).
+- **Sources:** HIGH confidence — yookassa.ru/54fz/ + yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics
+
+### FIS-02: Receipt sent alongside payment (simultaneous scenario)
+- **Category:** Table stake (legal requirement)
+- **Complexity:** MED
+- **Dependency:** FIS-01; PAY-01; client must have email on record
+- **Description:** Include `receipt` object in the `POST /v3/payments` creation request.
+  ЮKassa registers receipt with ОФД simultaneously with payment authorization.
+  This is the simplest and legally safest path: receipt is always tied to the payment event.
+
+  Mandatory receipt fields (confirmed via ЮKassa docs):
+  - `customer.email` — client email (REQUIRED for "Чеки от ЮKassa"; no SMS fallback)
+  - `items[]` — array of receipt line items, each with:
+    - `description` — human-readable name (e.g., "Абонемент Безлимит 30 дней")
+    - `quantity` — 1.00 for memberships/packages
+    - `amount.value` — price
+    - `amount.currency` — "RUB"
+    - `vat_code` — 1 (НДС не облагается / без НДС) for ИП on УСН; verify with accountant
+    - `payment_subject` — `"service"` for memberships and PT-packages (услуга; confirmed for
+      online gym service sales)
+    - `payment_mode` — `"full_payment"` when client pays full amount at moment of sale;
+      `"full_prepayment"` if the membership hasn't started yet (future start date).
+      For standard same-day membership sales: `"full_payment"`. For advance booking: `"full_prepayment"`.
+  - `tax_system_code` — matches merchant's tax regime (2 = УСН доходы; 3 = УСН доходы-расходы;
+    6 = ПСН; etc.)
+
+  54-ФЗ timing: the law does not specify a hard second/minute limit for online payments.
+  "Момент расчёта" is defined by the merchant in their public offer (terms).
+  Simultaneous scenario satisfies the legal requirement because ОФД gets the receipt data
+  at the time of payment creation — before the client confirms payment.
+  The "5-minute rule" is a myth based on misreading a 2013 FNS letter.
+- **Sources:** HIGH confidence — ЮKassa receipt docs; MEDIUM confidence on timing rule (kassa.komtet.ru)
+
+### FIS-03: Receipt status FSM + idempotency
+- **Category:** Table stake
+- **Complexity:** MED
+- **Dependency:** FIS-01, FIS-02; mirrors v1.6 `channel` discriminator pattern
+- **Description:** Receipt registration tracked in `fiscal_receipts` table (new):
+  - UNIQUE `(payment_id, kind)` where `kind` IN `('payment', 'refund')` — mirrors v1.6 cross-channel
+    idempotency pattern. Prevents double-send on webhook retry.
+  - `status` column: `pending` → `succeeded` | `canceled`
+    - `pending`: receipt queued for ОФД registration
+    - `succeeded`: ОФД confirmed registration
+    - `canceled`: registration failed (ЮKassa gives up; contact support)
+  - Check `receipt_registration` field on payment object response — `pending` / `succeeded` / `canceled`
+  - If `canceled` after >3 days: trigger alert to operator (structlog ERROR + Telegram DM to owner)
+  - Receipt failure must NOT block or rollback payment — payment commit is atomic, fiscal send is
+    best-effort (mirrors v1.6 `EMAIL_PAYMENT_RECEIPT_*` pattern already shipping).
+- **Sources:** HIGH confidence — ЮKassa receipt status docs (pending/succeeded/canceled confirmed)
+
+### FIS-04: Refund receipt (возврат прихода)
+- **Category:** Table stake (legal requirement)
+- **Complexity:** LOW
+- **Dependency:** FIS-01, REF-01
+- **Description:** When a refund succeeds, a refund receipt (возврат прихода) MUST be sent to the client
+  and ОФД. For "Чеки от ЮKassa": include `receipt` object in refund creation request (`POST /v3/refunds`)
+  with same item structure as payment receipt. Same `customer.email` requirement.
+  `kind='refund'` in `fiscal_receipts` table, UNIQUE `(payment_id, 'refund')`.
+  Items must mirror the original payment receipt items.
+- **Sources:** HIGH confidence — yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics
+
+### FIS-05: Client has no email — pre-validation gate
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** FIS-01, FIS-02; v1.1 Clients CRUD
+- **Description:** "Чеки от ЮKassa" requires `customer.email` in every receipt. If client has no email
+  on record, the online payment flow must be blocked at the point of sale (before creating ЮKassa
+  payment object), not at receipt generation time.
+  Error response: `422 Unprocessable Entity` with `code: "client_email_required_for_online_payment"`.
+  Reception must add email to client record first.
+  DO NOT use phone as fallback — "Чеки от ЮKassa" does not support SMS delivery (email-only).
+  If third-party cash register is adopted later (FIS-01 alternative), phone becomes valid. Flag this
+  as a future relaxation point.
+- **Sources:** HIGH confidence — ЮKassa receipt docs (email-only for ЮKassa receipts, confirmed)
+
+### FIS-06: VAT code and tax system configuration
+- **Category:** Table stake (legal requirement)
+- **Complexity:** LOW
+- **Dependency:** FIS-02; deployment config
+- **Description:** `vat_code` and `tax_system_code` must match the gym's actual tax regime.
+  For most small gyms (ИП or ООО) on УСН: `vat_code=1` (без НДС), `tax_system_code=2` (УСН доходы)
+  or `tax_system_code=3` (УСН доходы-расходы). From Jan 2025 УСН entities that cross the VAT
+  threshold (60M RUB revenue) must indicate 5% or 7% VAT — but a single gym CRM at MVP scale will
+  not hit this threshold. Configure as environment variables, NOT hardcoded in source.
+  Provide `YOOKASSA_TAX_SYSTEM_CODE` and `YOOKASSA_VAT_CODE` in `.env.example`.
+- **Sources:** MEDIUM confidence — search results + ЮKassa parameter-values docs
+
+---
+
+## NOTIFY — Cross-Channel Payment Notifications
+
+### NOT-01: Payment success DM (Telegram + email)
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** v1.6 dual-channel notification infrastructure; `LOCKED_EMAIL_TEMPLATES` ladder
+- **Description:** On `payment.succeeded` webhook processing: emit Telegram DM + email notification
+  to client. Content: payment amount, membership/package name, validity period.
+  New locked templates: `PAYMENT_ONLINE_SUCCESS_TG` + `EMAIL_PAYMENT_ONLINE_SUCCESS`.
+  Use v1.6 `channel` discriminator on `payment_notifications` idempotency table (new table mirrors
+  `membership_notifications` pattern). UNIQUE `(payment_id, channel)`.
+  Best-effort: send failure does NOT rollback payment commit (v1.6 discipline).
+- **Sources:** HIGH confidence (pattern from v1.6 `EMAIL_PAYMENT_RECEIPT_*`)
+
+### NOT-02: Refund success DM (Telegram + email)
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** NOT-01; REF-01; WH-03
+- **Description:** On `refund.succeeded` webhook: emit Telegram DM + email to client.
+  Content: refunded amount, membership/package name.
+  New locked templates: `REFUND_ONLINE_SUCCESS_TG` + `EMAIL_REFUND_ONLINE_SUCCESS`.
+  Same `(payment_id, channel)` idempotency row, `kind='refund'`.
+- **Sources:** HIGH confidence (pattern from v1.4 + v1.6 precedent)
+
+### NOT-03: Fiscal receipt email (from ЮKassa, not from CRM)
+- **Category:** Table stake
+- **Complexity:** LOW (configuration, not code)
+- **Dependency:** FIS-01, FIS-02
+- **Description:** When "Чеки от ЮKassa" is used, ЮKassa itself sends the fiscal receipt to the
+  client's email directly from its system. This is separate from the CRM's payment-success email
+  (NOT-01). The CRM's email (NOT-01) is a business confirmation; the ЮKassa email is the legal
+  fiscal document. No CRM code needed for fiscal email delivery — just ensure `customer.email` is
+  passed correctly in the receipt object.
+- **Sources:** HIGH confidence — ЮKassa receipts docs
+
+### NOT-04: Operator alert on fiscal receipt failure
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** FIS-03; structlog; Telegram bot (owner-only DM)
+- **Description:** If `fiscal_receipts.status` transitions to `canceled` (ЮKassa gave up on ОФД
+  registration), alert the owner:
+  1. structlog ERROR with `payment_id`, `client_id`, `amount`
+  2. Telegram DM to owner: "Чек не зарегистрирован в ОФД. Платёж: {amount}. Клиент: {name}."
+  This is a legal obligation — merchant must ensure receipt reaches ОФД. Operator must contact
+  ЮKassa support to resolve.
+- **Sources:** MEDIUM confidence — ЮKassa docs note "contact support if receipt stays pending >3 days"
+
+### NOT-05: Operator alert on payment cancellation
+- **Category:** Differentiator
+- **Complexity:** LOW
+- **Dependency:** WH-02
+- **Description:** On `payment.canceled` webhook: log the `cancellation_details.reason` from
+  ЮKassa response (e.g., `insufficient_funds`, `card_expired`, `3d_secure_failed`). No DM to client
+  (they see the result in the ЮKassa redirect page). Optionally: if initiated by reception, show
+  toast in admin-web. Audit event `payment_online_canceled` with cancellation reason in payload.
+- **Sources:** MEDIUM confidence — ЮKassa cancellation details docs (inferred from search)
+
+---
+
+## DIFFERENTIATOR FEATURES (Defer)
+
+### DIFF-01: Recurring autopayments (рекуррентные платежи / saved cards)
+- **Category:** Differentiator
+- **Complexity:** HIGH
+- **Dependency:** ЮKassa manager approval required for production; PAY-01; user consent flow
+- **Description:** ЮKassa supports saving card via `save_payment_method: true` on first payment.
+  Subsequent charges use `payment_method_id`. Merchant must:
+  1. Contact ЮKassa manager to enable autopayments on live account
+  2. Implement user consent flow (legal requirement under 54-ФЗ + Visa/MC rules)
+  3. Build subscription schedule management (when to charge, how to cancel)
+  High legal + implementation complexity. v1.7 reception desk sells memberships manually — no
+  self-service client portal yet. Defer to v2.0+ when client-facing app exists.
+- **Sources:** HIGH confidence — ЮKassa recurring-payments docs
+
+### DIFF-02: Refund without original card (client lost card)
+- **Category:** Differentiator
+- **Complexity:** MED
+- **Dependency:** ЮKassa account configuration; payout module
+- **Description:** ЮKassa supports refunds to a different card or bank account via the Payout API,
+  but this requires a separate Payout agreement with ЮKassa. Standard refund always goes to
+  original payment method. For v1.7, standard refund (to original method) is sufficient.
+  Defer card-change refund to later milestone.
+- **Sources:** MEDIUM confidence — inferred from ЮKassa refund limitations docs
+
+---
+
+## ANTI-FEATURES (Explicit Exclusions for v1.7)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|---|---|---|
+| Partial online refund | B-02 still deferred in v1.4; membership partial-cancel semantics undefined | Full refund only in v1.7 |
+| Telegram WebApp native invoice | Different API path, no receipt injection, no holds; admin SPA not a Telegram Mini App | Use redirect/widget for reception desk |
+| Mobile-app deep-link confirmation | No mobile app in scope | Redirect or widget for web |
+| Recurring autopayments | Requires ЮKassa manager activation + client consent flow + portal | Defer to v2.0 client portal |
+| Third-party cash register (АТОЛ etc.) | Higher setup complexity; email-only is sufficient for v1.7 | ЮKassa built-in receipts |
+| SMS receipt delivery | Not supported by "Чеки от ЮKassa" | Email only (require email on client record) |
+| `waiting_for_capture` two-stage flow | Unnecessary complexity for single-stage membership sale | Single-stage `pending → succeeded` |
+| Partial VAT (5%/7%) calculation | Only applies when УСН revenue >60M RUB; not relevant for single gym MVP | Simple `vat_code=1` (no VAT) + env var for future change |
+| Payout / split payments | Not needed for single-gym, single-merchant model | Standard single-merchant integration |
 
 ---
 
 ## Feature Dependencies
 
 ```
-EXISTING (already shipped — v1.1 through v1.5):
-    auth.users  ──provides──> actor_user_id for all audit emits
-    payments    ──provides──> payment row for receipt trigger (v1.4)
-    bookings    ──provides──> booking row for confirm/reminder (v1.5)
-    memberships ──provides──> expiring rows for 7+3+1 cron (v1.3)
-    audit_log   ──provides──> LOCKED_AUDIT_EVENTS frozenset (56 entries)
+PAY-01 (server payment creation)
+  → WH-01 (webhook endpoint)
+    → WH-02 (payment FSM)
+      → v1.4 payment_recorder (credit membership/pkg)
+        → NOT-01 (payment success DM)
+    → WH-03 (refund FSM)
+      → REF-01 (online refund)
+        → NOT-02 (refund DM)
+        → FIS-04 (refund receipt)
+  → FIS-02 (receipt in payment creation)
+    → FIS-01 (receipt mechanism choice — must decide before PAY-01)
+    → FIS-05 (client email gate)
+    → FIS-06 (VAT/tax config)
+    → FIS-03 (receipt status FSM + idempotency)
+      → NOT-03 (fiscal email — auto from ЮKassa)
+      → NOT-04 (operator alert on failure)
 
-NEW in v1.6:
-    [email-integration]
-        └──requires──> ESP selection (Resend / SES / Mailgun — STACK.md decision)
-        └──requires──> sender-domain DNS (SPF/DKIM/DMARC — owner config gate)
-        └──requires──> email_send_log table (passive bounce tracking)
-
-    [email-otp-fallback]
-        └──requires──> [email-integration]
-        └──extends───> auth.otp_codes (add channel column, OR new email_otp_codes table)
-
-    [email-expiring-soon]
-        └──requires──> [email-integration]
-        └──extends───> membership_notifications (UNIQUE key gains channel column)
-        └──reuses────> 06:15 MSK cron (already shipped v1.3)
-
-    [email-payment-receipt]
-        └──requires──> [email-integration]
-        └──requires──> payment_receipts table (idempotency)
-        └──hooks-into> record_payment + issue_refund commit paths
-
-    [email-booking-notifications]
-        └──requires──> [email-integration]
-        └──extends───> booking_notifications (UNIQUE key gains channel column)
-        └──reuses────> 06:35 MSK cron (already shipped v1.5)
-
-    [multi-user-admin-invite]
-        └──requires──> user_invitations table
-        └──requires──> [email-integration] (for invite-link delivery)
-        └──extends───> LOCKED_AUDIT_EVENTS (+3: invited / accepted / revoked)
-
-    [multi-user-admin-deactivate]
-        └──requires──> users.is_active OR users.deactivated_at column
-        └──hooks-into> refresh_tokens revoke-family machinery (already shipped v1.1)
-        └──extends───> LOCKED_AUDIT_EVENTS (+2: deactivated / reactivated)
-
-    [multi-user-admin-password-reset]
-        └──requires──> password_reset_tokens table (separate from user_invitations)
-        └──requires──> [email-integration]
-        └──must-honour> ANTI-ORACLE INVARIANT (same 202 for known + unknown email)
-        └──extends───> LOCKED_AUDIT_EVENTS (+2: requested / completed)
-
-    [multi-user-audit-traceability]
-        └──reuses────> existing actor_user_id flow from require_permission
-        └──verifies──> all 56 existing emits already carry actor (mostly already true)
-        └──extends───> audit-row response projection to surface actor_display_name
+PAY-02 (widget) → PAY-01
+PAY-03 (QR/SBP) → PAY-01
 ```
 
-### Dependency Notes
+---
 
-- **Every email feature requires the ESP integration + DNS auth first.** Phase ordering: integration scaffold (Phase 41) → DNS gate → individual templates layered on. STACK.md owns the ESP selection.
-- **`email_send_log` is a hard prerequisite for any production launch.** Without it, the owner has no way to diagnose "client says they didn't get the receipt" — and that question *will* come up on day one.
-- **Multi-user invite requires email integration.** The two pillars are not independent — the invite-link is delivered via the email channel. v1.6 must ship both or neither (the invite flow without email is meaningless; an email channel without operator multi-user is leaving owner cash on the table).
-- **Password reset MUST honour anti-oracle invariant.** Forgot-password endpoint returns 202 with body `{"status":"accepted"}` for *every* email, real or not — and waits a constant-time floor (500ms) before responding. **Stated as a quality gate** in the milestone spec.
-- **`booking_notifications` and `membership_notifications` UNIQUE-key extension** is a single Alembic migration step but it's a **breaking semantics change** for any in-flight idempotency rows. Migration plan: add `channel TEXT NOT NULL DEFAULT 'telegram'` then drop default — preserves existing rows as Telegram-channel and new email-channel rows coexist.
-- **Phase 41 must be the email-integration scaffold**, not a feature-bearing phase. (Same shape as v1.0 Phase A skeleton.) Without it the rest of v1.6 has no commit-floor.
+## MVP Recommendation for v1.7
+
+**Must implement (legal + commercial table stakes):**
+1. FIS-01: Choose "Чеки от ЮKassa" receipt mechanism
+2. FIS-05: Client email validation gate before creating payment
+3. FIS-06: Tax system + VAT code environment config
+4. PAY-01: Server-side payment creation with redirect confirmation
+5. WH-01: Webhook endpoint (IP whitelist + re-fetch verification)
+6. WH-02: Payment FSM (pending → succeeded/canceled)
+7. WH-03: Refund FSM (refund.succeeded)
+8. WH-04: Idempotent webhook processing
+9. FIS-02: Receipt sent alongside payment
+10. FIS-03: Receipt status FSM + `fiscal_receipts` table
+11. FIS-04: Refund receipt
+12. REF-01: Online refund (full only)
+13. REF-03: Refund timeout/poll fallback
+14. NOT-01: Payment success DM (Telegram + email)
+15. NOT-02: Refund success DM (Telegram + email)
+16. NOT-03: Fiscal receipt email (configuration, not code)
+17. NOT-04: Operator alert on fiscal failure
+
+**Implement if time allows (differentiators that are LOW complexity):**
+- PAY-03: QR/SBP confirmation type (mostly display-layer work)
+- NOT-05: Operator alert on payment cancellation with reason logging
+
+**Defer:**
+- PAY-02: Widget (MED complexity, frontend work; can ship with redirect in v1.7)
+- DIFF-01: Recurring autopayments (HIGH complexity + external approval)
+- DIFF-02: Refund without card (separate payout agreement needed)
 
 ---
 
-## MVP Definition
+## Failure Mode Catalogue
 
-### Launch With (v1.6)
+### FM-01: Webhook arrives but DB is down
+**What happens:** HTTP handler cannot write to Postgres.
+**Industry norm:** Return HTTP 503 (non-200). ЮKassa retries for 24 hours with backoff.
+**Mitigation:** Respond 503 on DB connection failure; do not swallow exception. Once DB recovers,
+next ЮKassa retry delivers the notification. No outbox pattern needed — ЮKassa IS the outbox.
+**Risk:** If DB is down >24h, webhook delivery stops. Mitigation: ARQ poll task on `online_payments`
+rows stuck in `pending` status for >30 min (re-fetch from ЮKassa API).
+**Confidence:** MEDIUM (24h window confirmed in ЮKassa docs; poll fallback is industry pattern)
 
-Minimum viable product — what's needed to ship v1.6 against the milestone goal "close last infra-pillar before online payments".
+### FM-02: ЮKassa `/receipts` registration fails after payment succeeded
+**What happens:** `receipt_registration = 'canceled'` on payment object.
+**Legal risk:** Merchant is in violation of 54-ФЗ if receipt never reaches ОФД.
+**Mitigation:** Monitor `fiscal_receipts.status`; if `canceled`, emit structlog ERROR and owner DM
+(NOT-04). Operator must manually contact ЮKassa support. Payment is NOT rolled back —
+54-ФЗ violation is an administrative issue, not a payment integrity issue.
+**Confidence:** HIGH (ЮKassa docs explicitly state "payment unaffected by receipt failure")
 
-- [ ] **Email integration scaffold** — ESP wired (STACK.md owns provider choice), `email_send_log` table, send-from helper, DKIM/SPF/DMARC owner runbook — *why essential: every other v1.6 feature requires this*
-- [ ] **Email OTP fallback for login** — login tab #3 alongside email/password + Telegram OTP — *why essential: closes auth gap for clients without Telegram and is the simplest end-to-end test of the email send path*
-- [ ] **Email expiring-soon (7+3+1) mirror** — same selector as Telegram cron, channel-aware idempotency — *why essential: the operator-facing payoff for adding email at all — revenue retention from non-Telegram clients*
-- [ ] **Email payment-receipt (sale + refund)** — hook into v1.4 commit paths — *why essential: the operator-facing artefact most users will ask for first*
-- [ ] **Email booking confirmed + 24h reminder** — channel-aware extension of v1.5 templates — *why essential: parity with Telegram booking flow*
-- [ ] **Multi-user admin — owner invites reception (invite-token flow)** — `POST /api/v1/users/invitations` + accept endpoint + locked Russian template — *why essential: the operator-onboarding gap is the headline of the milestone*
-- [ ] **Multi-user admin — password reset (anti-oracle)** — request + complete endpoints, 1h TTL, constant-time response — *why essential: without it, the owner becomes a permanent helpdesk for forgotten passwords*
-- [ ] **Multi-user admin — deactivate user + atomic logout-all** — owner-only PATCH/DELETE, families revoked in same UoW — *why essential: the "fired receptionist still has session" scenario is a hard security gap*
-- [ ] **Multi-user audit traceability** — 7 new LOCKED events, verification that all 56 existing emits carry correct `actor_user_id` — *why essential: regulatory + forensic hygiene; cheap because most callsites are already correct*
-- [ ] **OpenAPI drift gate refresh** — `openapi.json` + `schema.d.ts` regenerated, forward-guards for new paths — *why essential: handoff invariant since v1.1*
+### FM-03: Client provides no email
+**What happens:** Receipt cannot be sent; "Чеки от ЮKassa" requires email.
+**Mitigation:** FIS-05 gate blocks online payment creation at API level with 422.
+Reception must update client record before retrying.
+**Confidence:** HIGH (email-only confirmed for "Чеки от ЮKassa")
 
-### Add After Validation (v1.7+)
+### FM-04: Duplicate `payment.succeeded` webhook
+**What happens:** ЮKassa retries webhook if merchant responds non-200 (e.g., during processing).
+**Mitigation:** WH-04 Redis dedup key `sz:webhook:payment.succeeded:{payment_id}` (TTL 48h).
+DB-level UNIQUE on `(yookassa_payment_id)` in `online_payments` as second guard.
+**Confidence:** HIGH (ЮKassa 24h retry + Redis dedup pattern from v1.2)
 
-Features to add once core is working and we've seen real email volume.
+### FM-05: `refund.succeeded` webhook not received
+**What happens:** Refund succeeded at ЮKassa side but CRM never gets the webhook.
+**Mitigation:** REF-03 ARQ poll after 30 min on refunds stuck in `pending` status.
+**Confidence:** MEDIUM (poll pattern is standard; timing tunable)
 
-- [ ] **Weekly digest to owner** (bounces, deactivations, send failures summary) — *trigger: after v1.6 produces ≥1 month of `email_send_log` rows so we know what's worth summarizing*
-- [ ] **Per-client `preferred_channel` override UI** — *trigger: owner asks "client X wants email only, not Telegram"; cheap to add but no compelling reason day-1*
-- [ ] **Bounce auto-flag in admin-web `/clients/{id}`** (badge "email may be invalid" after 1 hard bounce) — *trigger: after first real-world hard bounce; until then it's speculative*
-- [ ] **Audit log read API** (`GET /api/v1/audit-log` with filter by actor) — *scheduled for v1.8 (existing roadmap); now that multi-user is real, "who did what" is meaningful to query*
-
-### Future Consideration (v2+)
-
-Features to defer until product-market fit is established or a second tenant exists.
-
-- [ ] **Marketing/campaign email** — *why defer: out of scope through v2.0; entirely different product surface and probably a different ESP*
-- [ ] **Custom RBAC roles beyond owner/reception** — *why defer: 26-entry frozenset already handles every observed case; custom roles is enterprise SaaS scope creep*
-- [ ] **TOTP / WebAuthn second factor** — *why defer: email + Telegram OTP already provide step-up; hardware factors only matter at higher attack-value targets*
-- [ ] **Per-client email preference centre (client-facing)** — *why defer: gym has ~100 clients, admin-web edit is enough*
-- [ ] **Email preference centre for operators** — *why defer: transactional only, nothing to unsubscribe from*
-- [ ] **SMS as a third channel** — *why defer: РФ SMS gateways are expensive and Telegram OTP already covers passwordless; revisit only if a hard requirement emerges*
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Email integration scaffold + DKIM/SPF/DMARC runbook | HIGH (gate for everything else) | MEDIUM | **P1** |
-| Email OTP fallback for login | MEDIUM | MEDIUM | **P1** |
-| Email expiring-soon (7+3+1) | HIGH (revenue retention) | MEDIUM | **P1** |
-| Email payment receipt (sale + refund) | HIGH (operator habit) | MEDIUM | **P1** |
-| Email booking confirmed + 24h reminder | MEDIUM | MEDIUM | **P1** |
-| Multi-user invite-token flow | HIGH (milestone headline) | MEDIUM | **P1** |
-| Password reset (anti-oracle) | HIGH | MEDIUM | **P1** |
-| Deactivate user + atomic logout-all | HIGH (security) | LOW | **P1** |
-| Multi-user audit traceability | MEDIUM (hygiene) | LOW | **P1** |
-| OpenAPI drift gate refresh | HIGH (handoff invariant) | LOW | **P1** |
-| Dual-channel resolution (`clients.preferred_channel`) | MEDIUM | LOW | **P2** |
-| Locked email copy + owner sign-off per template | MEDIUM (consistency) | LOW | **P1** (mandated by quality gate) |
-| Anti-oracle A/B variant on expiring + booking emails | LOW (matches existing invariant) | LOW | **P1** (consistency with v1.3/v1.5) |
-| Invite-link copy-paste fallback (URL in response) | MEDIUM | LOW | **P2** |
-| DMARC `rua` weekly reports → owner | LOW | LOW (DNS only) | **P2** |
-| Bounce/complaint webhook + `email_send_log` | HIGH (operational sanity) | MEDIUM | **P1** |
-| Plaintext + HTML dual-part templates | MEDIUM | LOW | **P1** |
-| Owner weekly digest of bounces/deactivations | LOW (early) | MEDIUM | **P3** (v1.7+) |
-| Email preference centre (clients) | LOW | HIGH | **P3** (anti-feature for now) |
-| Marketing campaigns | NEGATIVE (off-strategy) | HIGH | **P3** (out of scope through v2.0) |
-
-**Priority key:**
-- **P1:** Must have for v1.6 launch
-- **P2:** Should have, add if time permits within v1.6
-- **P3:** Future consideration
-
----
-
-## Competitor Feature Analysis
-
-(Indicative — single-gym CRM segment in РФ; data points from public marketing pages, not deep audit.)
-
-| Feature | 1С:Фитнес-клуб (incumbent) | Mobifitness (mid-market SaaS) | FitBase (cheap-SaaS) | Sportzal (our approach) |
-|---------|----------------------------|-------------------------------|----------------------|--------------------------|
-| Notification channels | SMS + email | SMS + email + push (mobile app) | SMS + email | **Telegram-primary + email fallback** (cheaper + higher engagement in RU 18-35) |
-| Operator multi-user | Yes (Windows-style user mgmt) | Yes (web invite-token) | Yes (admin-set password — anti-pattern) | **Invite-token flow** (industry-standard) |
-| Email receipts | Yes (PDF attachment) | Yes (HTML inline) | Yes (HTML inline) | **HTML inline + plaintext fallback**; no PDF (deferred to 54-ФЗ v1.7) |
-| Anti-oracle on forgot-password | Inconsistent (likely leaks) | Unknown | Likely leaks | **Explicit invariant**, constant-time floor + 202 for all |
-| Locked Russian copy | No (operator-editable) | No (operator-editable) | No (operator-editable) | **Yes, owner-sign-off per template** — consistency + brand control |
-| Bounce/complaint logging | Hidden in SMTP logs | ESP dashboard only | None | **First-class `email_send_log` table** queryable from admin-web |
-| DKIM/SPF/DMARC | Owner-handled, no docs | ESP-managed | Owner-handled, no docs | **Owner runbook in milestone close**, dedicated sending subdomain recommended |
-| Marketing campaigns | Yes (bundled — feature bloat) | Yes (separate tier) | Yes (bundled) | **No** (explicitly out of scope) |
-| Custom RBAC roles | Yes (Windows AD-style) | Limited | No | **No** (2 hard-coded roles, frozenset-gated) |
-
-**Strategic positioning:** Sportzal is the **opinionated minimal** option — fewer features, but every feature is correct (locked copy, anti-oracle, race-safe at DB layer, append-only audit). Target buyer is a single-gym owner who values not getting hacked / sued / spammed over having a Christmas-tree feature list.
-
----
-
-## Complexity Reference (S/M/L per quality gate)
-
-- **S (Small, ≤1 day)** — single migration + service method + audit emit; reuses existing machinery; e.g. deactivate user, anti-oracle A/B variant on existing copy, `actor_display_name` in receipt
-- **M (Medium, 2-4 days)** — new table + new endpoints + new locked template + new audit events; bridges to external service or extends idempotency contract; e.g. invite-token flow, email OTP fallback, payment-receipt hook
-- **L (Large, ≥5 days)** — net-new subsystem requiring research; not present in v1.6 scope (the milestone is intentionally bridging, not greenfield)
-
-Aggregate v1.6 weight ≈ 7 × M + 4 × S ≈ 18-26 working days (consistent with v1.3's 6-day / 44-req shape and v1.5's 18-day / 57-req shape — v1.6 sits between).
-
----
-
-## Quality-Gate Checklist (re-applied)
-
-- [x] **Categories clear** — Email-Templates / Multi-User-Admin / Audit-Traceability separated above
-- [x] **Complexity noted per feature** — S/M/L column in every table
-- [x] **Dependencies on existing modules called out** — payments (v1.4), bookings (v1.5), memberships (v1.3), auth/users (v1.1), audit_log (v1.1+)
-- [x] **Anti-features explicitly listed** — 11 anti-features documented, each with rationale and alternative
-- [x] **Locked Russian copy + owner sign-off pattern preserved** — explicit in Table Stakes (last row of multi-channel section) and Differentiators (locked copy row); mirrors `D-20-9` / `D-27-OWNER-COPY-LOCK`
-- [x] **Anti-oracle invariant on forgot-password** — flagged as quality-gate-mandated invariant in Table Stakes (password reset row) and Dependency Notes; same 202 for known + unknown email, constant-time floor
+### FM-06: ЮKassa API call fails (5xx or network timeout) during payment creation
+**What happens:** CRM created `online_payments` row but ЮKassa payment object not created.
+**Mitigation:** Same `Idempotency-Key` on retry gives same ЮKassa result if they received it.
+If ЮKassa never received it: new attempt with same key is a new request after 24h (ЮKassa TTL).
+Store `yookassa_payment_id` as nullable; NULL = creation pending. ARQ cleanup task marks
+stuck `pending` rows (no `yookassa_payment_id` after 5 min) as `failed`.
+**Confidence:** MEDIUM (idempotency behavior confirmed; cleanup pattern is standard)
 
 ---
 
 ## Sources
 
-- [OWASP Forgot Password Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html) — anti-enumeration ("If an account exists for this email…") + constant-time response patterns + reset-token TTL guidance (single-use, 1h floor) — **HIGH confidence**, authoritative
-- [OWASP WSTG — Testing for Weak Password Change or Reset Functionalities](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/04-Authentication_Testing/09-Testing_for_Weak_Password_Change_or_Reset_Functionalities) — verification methodology applied to anti-oracle quality gate — **HIGH**
-- [Vaadata — Exploring Password Reset Vulnerabilities and Security Best Practices](https://www.vaadata.com/blog/exploring-password-reset-vulnerabilities-and-security-best-practices/) — confirms token-in-URL avoidance, single-use + rate-limit patterns — **MEDIUM**
-- [Mailgun — Implementing SPF, DKIM, and DMARC for Reliable Email Delivery](https://www.mailgun.com/blog/dev-life/how-to-setup-email-authentication/) — confirms dedicated-subdomain pattern + DKIM/SPF/DMARC owner runbook shape — **MEDIUM**
-- [Brevo — SPF, DKIM, and DMARC explained](https://www.brevo.com/blog/understanding-spf-dkim-dmarc/) — confirms 2.7× inbox-placement uplift for fully-authenticated senders — **MEDIUM**
-- [Postmark — What is transactional email and what is it used for?](https://postmarkapp.com/blog/what-is-transactional-email-and-how-is-it-used) — confirms category boundary between transactional (no unsubscribe) and marketing (mandatory unsubscribe) — **HIGH**
-- [Klaviyo — What Is a Transactional Email? 7 Types and How to Use Them](https://www.klaviyo.com/blog/transactional-email) — confirms 7-type taxonomy maps cleanly to v1.6 scope (OTP, receipt, account-activity, notification) — **MEDIUM**
-- [Specops — Scripting new user onboarding with First Day Password](https://specopssoft.com/blog/scripting-new-user-onboarding-initial-password/) — explicit warning that "sending passwords via email is no longer supported" — anchors anti-feature "admin-set initial password" — **HIGH**
-- [WSO2 — Invite user to set password](https://is.docs.wso2.com/en/latest/guides/account-configurations/user-onboarding/invite-user-to-set-password/) — confirms invite-token flow as industry-standard pattern with TTL-bounded acceptance — **MEDIUM**
-- [Auth0 — User Onboarding Strategies in a B2B SaaS Application](https://auth0.com/blog/user-onboarding-strategies-b2b-saas/) — admin-provisioning vs self-service distinction; aligns with Sportzal's single-tenant private CRM (owner-only invitation, no public signup) — **MEDIUM**
-- [TechTarget — Enumeration Attacks: What They Are and How to Prevent Them](https://www.techtarget.com/searchsecurity/tip/What-enumeration-attacks-are-and-how-to-prevent-them) — broader enumeration-attack taxonomy beyond just password reset (login error messages, OTP "user exists" leaks) — informs constant-time invariant on login deactivation 401 — **MEDIUM**
-
-Existing project artefacts (HIGH confidence — local sources):
-- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — `LOCKED_AUDIT_EVENTS` 56-entry frozenset, `OWNER_ONLY` 26-entry RBAC, anti-oracle DM patterns, `D-27-OWNER-COPY-LOCK` sign-off mechanism, `membership_notifications` / `booking_notifications` idempotency table shapes
-- `/Users/andre/Workspace/Development/clubcore/.planning/MILESTONES.md` — v1.1 refresh-rotation family + revoke-family machinery; v1.3 expiring-soon cron + per-client A/B variant; v1.4 payments append-only ledger; v1.5 booking notifications
-
----
-*Feature research for: v1.6 Email channel + Multi-user admin (Sportzal gym CRM, РФ/СНГ, single-gym pet-project)*
-*Researched: 2026-05-18*
+- [ЮKassa Payment Process FSM](https://yookassa.ru/developers/payment-acceptance/getting-started/payment-process) — HIGH confidence
+- [ЮKassa Webhooks](https://yookassa.ru/developers/using-api/webhooks) — HIGH confidence
+- [ЮKassa Checkout Widget](https://yookassa.ru/developers/payment-acceptance/integration-scenarios/widget/basics) — HIGH confidence
+- [ЮKassa Refunds](https://yookassa.ru/developers/payment-acceptance/after-the-payment/refunds) — HIGH confidence
+- [ЮKassa Recurring Payments Basics](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/basics) — HIGH confidence
+- [ЮKassa Receipts (ЮKassa's own)](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics) — HIGH confidence
+- [ЮKassa Receipt Parameters (third-party)](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/other-services/parameters-values) — HIGH confidence
+- [ЮKassa 54-ФЗ Solutions](https://yookassa.ru/54fz/) — HIGH confidence
+- [ЮKassa API Interaction Format (idempotency)](https://yookassa.ru/developers/using-api/interaction-format) — HIGH confidence
+- [54-ФЗ Receipt Timing Myth](https://kassa.komtet.ru/blog/moment-rascheta) — MEDIUM confidence
+- [Confirmation Types (redirect/embedded/qr/mobile)](https://yookassa.ru/developers/payment-acceptance/overview) — HIGH confidence (inferred from search snippet)

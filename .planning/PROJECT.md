@@ -58,10 +58,10 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 **Target features:**
 
-- **ЮKassa payment intake** — создание платежа, redirect/embedded confirmation, webhook FSM (`pending → waiting_for_capture → succeeded / canceled`), `Idempotency-Key` mandatory, HMAC signature verification on webhook, retry-safe processing
+- **ЮKassa payment intake** — создание платежа, redirect-based confirmation, webhook FSM (`pending → waiting_for_capture → succeeded / canceled`), `Idempotency-Key` mandatory, **IP-allowlist webhook verification + status re-fetch** (ЮKassa не использует HMAC — security model = published CIDR list + `GET /payments/{id}` re-confirm), retry-safe processing
 - **Online sales (memberships + PT-packages)** — orchestrator слой над v1.4 `payment_recorder` Protocol slot; `payment_method='online'`; зачисление абонемента/PT-пакета ТОЛЬКО по `succeeded` webhook (не на redirect)
 - **Online refunds** — `POST .../refund` (reception+owner) routes to ЮKassa Refund API; awaits webhook; FSM-guarded; partial UNIQUE on `refund_of` preserved; full-only (B-02 still deferred)
-- **54-ФЗ fiscal receipts** — ЮKassa `/receipts` integration (АТОЛ-Онлайн / Чек.ОФД path); receipt на email/SMS клиента; идемпотентность fiscal-send via UNIQUE на `(payment_id, kind)` (mirrors v1.6 cross-channel discriminator); fiscal-status FSM (`pending → sent → succeeded / failed`); атомарный audit chain
+- **54-ФЗ fiscal receipts** — "Чеки от ЮKassa" managed path (embed receipt items в payment creation request — НЕ отдельный АТОЛ/Чек.ОФД adapter); receipt на email клиента (ЮKassa receipts path не поддерживает SMS — email становится обязательным для online-sale); идемпотентность fiscal-send via UNIQUE на `(payment_id, kind)` (mirrors v1.6 cross-channel discriminator); fiscal-status FSM (`pending → sent → succeeded / failed`); атомарный audit chain
 - **Cross-channel notification** — payment success / refund / receipt-issued DMs via Telegram + email mirrors (v1.6 `LOCKED_EMAIL_TEMPLATES` ladder extended)
 - **v1.6 carry-out** — DEFER-46-01 live RU email-deliverability probe (yandex.ru + mail.ru + rambler.ru `Authentication-Results` headers) + DEFER-46-02 owner 15-template countersign on `LOCKED_EMAIL_TEMPLATES`
 
@@ -71,7 +71,8 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 - 54-ФЗ обязателен для онлайн-приёма с физлица: чек должен уходить в ОФД и клиенту до/в момент расчёта
 - v1.4 `payments` ledger (append-only, CHECK signed-amount, atomic audit chain) — bedrock; online flows консумируют `payment_recorder` Protocol slot, НЕ форкают ledger
 - v1.6 cross-channel idempotency pattern (UNIQUE с `channel` discriminator) — переносится на fiscal receipts
-- Webhook security: ЮKassa `Notification-Sign` HMAC verification — single AST gate target like `LOCKED_AUDIT_EVENTS`
+- Webhook security: ЮKassa IP allowlist (`YOOKASSA_TRUSTED_IPS: frozenset[str]`, 6 published CIDR ranges) + always re-fetch payment status via `GET /payments/{id}` — AST gate target on the IP frozenset (mirror `LOCKED_AUDIT_EVENTS` discipline). Membership/PT-package activation LOCKED to webhook path; redirect-back-to-app shows "ожидаем подтверждение" only
+- Async SDK: official `yookassa` Python SDK is synchronous (uses `requests`) — wrap in our own `app/integrations/yookassa/` adapter via `httpx.AsyncClient` (or `async_yookassa` community lib); no event-loop blocking allowed
 - Новые LOCKED audit events для online payments + fiscal receipts регистрируются ДО любого callsite (v1.3 INFRA-15 discipline)
 
 ## Next Milestone Goals

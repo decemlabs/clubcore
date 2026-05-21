@@ -1,472 +1,553 @@
-# Pitfalls Research — v1.6 Email channel + Multi-user admin
+# Domain Pitfalls: v1.7 Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
 
-**Domain:** Adding email-channel + multi-user admin to a Russian-market single-gym CRM that already has Telegram channel, anti-oracle invariants, locked-Russian-copy, idempotency tables, refresh-rotation families, and an AST-gated audit-event taxonomy.
-**Researched:** 2026-05-18
-**Confidence:** HIGH (system-specific pitfalls grounded in PROJECT.md / RETROSPECTIVE.md / MILESTONES.md patterns) + MEDIUM (Russian-locale + provider deliverability surface)
-
-> All pitfalls below are framed against **existing** invariants. The hardest v1.6 mistakes will be the ones that quietly weaken an invariant the codebase already enforces (anti-oracle DM equality, AST `audit.emit` gate, partial-UNIQUE idempotency, locked-copy owner sign-off, refresh-family race tolerance). Generic "use SPF" advice is intentionally minimised.
+**Domain:** Adding ЮKassa online payment intake + 54-ФЗ fiscal receipts to Sportzal gym CRM (FastAPI / SQLAlchemy 2.0 async / ARQ / Postgres 16 / Redis 7)
+**Researched:** 2026-05-21
+**Milestone context:** v1.7, continuing from v1.6 (email/webhook HMAC discipline, anti-oracle) and v1.4 (append-only cash ledger, SHA-256 row hash, partial UNIQUE on refund_of)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Email channel breaks the anti-oracle invariant that Telegram channel pays for
+### Pitfall 1: Webhook IP-Only Authentication — No HMAC Signature on ЮKassa Notifications
+
+**Severity:** BLOCKER
 
 **What goes wrong:**
-The Telegram `/checkin` and `/book` handlers spend code complexity to enforce D-20-9: stranger / expired-membership / inactive-client / frozen-membership all receive the **same** DM — no oracle leak (see `apps/backend/app/modules/bookings/notifications.py:35` `_BOT_BOOK_DENIED_DM`, `_DM_NO_MEMBERSHIP` in visits). When email is added as a parallel channel, the natural reflex is "use a different template per failure reason" because email is verbose and "feels safe." That reflex turns email into the oracle that Telegram refused to be: an attacker can probe an email-address by triggering a flow (e.g. password-reset, expiring-soon trigger after admin-poke) and reading either the response code or the bounce signal.
+Unlike Stripe or Telegram, ЮKassa's webhook security model does NOT include an HMAC signature header (there is no `Notification-Sign` or equivalent). The official documentation recommends two weaker methods only: IP address whitelisting (CIDR ranges: `185.71.76.0/27`, `185.71.77.0/27`, `77.75.153.0/25`, `77.75.156.11`, `77.75.156.35`, `77.75.154.128/25`, `2a02:5180::/32`) and status re-confirmation via GET to the ЮKassa API.
+
+A developer who mirrors the v1.6 email bounce-webhook HMAC discipline (HMAC-SHA256-before-parse) will find no such mechanism exists for ЮKassa. This is not a missing feature to implement — it is the actual ЮKassa security model.
 
 **Why it happens:**
-1. Email feels like "private one-to-one" so developers relax the constraint that was obvious in Telegram (where one DM string protected six failure modes).
-2. The Telegram anti-oracle rule is encoded as locked Russian DM constants in `app/modules/*/notifications.py`; email templates will live somewhere else (probably `app/integrations/email/templates/`) and the constant-level proximity is lost.
-3. Provider features (Resend tags, SES configuration sets) tempt per-reason templating because it improves analytics — at the cost of the oracle.
+ЮKassa's authentication relies on network-layer IP whitelisting rather than cryptographic message authentication. The IP list is published and stable, but IP spoofing in a proxied environment (reverse proxy, load balancer, CDN) can present `X-Forwarded-For` vectors if not handled correctly.
 
-**How to avoid:**
-- Mirror the bookings/notifications.py pattern: put email subject + body as **`Final[str]` constants** in `app/modules/<module>/email_notifications.py` next to the existing Telegram DM constants, not in `integrations/email/`. The proximity makes the equality auditable.
-- For password-reset / invitation-accept flows: **always return HTTP 202 + identical generic copy** regardless of whether the email exists, is deactivated, is owner-only, or is the same user re-requesting. Send the email asynchronously via ARQ; the HTTP response carries no oracle.
-- Extend the `LOCKED_AUDIT_EVENTS` AST gate concept to email: a `LOCKED_EMAIL_TEMPLATES` frozenset listing every (subject, body) constant identifier, with a sibling AST test that forbids `mailer.send(subject=...)` with a string-literal subject that isn't in the frozenset.
-- For account-enumeration paths specifically: a single integration test `test_password_reset_no_oracle.py` that triggers reset for `(existing-active, existing-deactivated, owner-account, non-existent)` and asserts (a) identical 202 response, (b) identical response headers minus `x-request-id`, (c) bounded-equal response timing (±50ms) so timing doesn't leak.
+**Consequences:**
+- If IP validation is misconfigured at the proxy layer (trusting `X-Forwarded-For` without `trusted_proxies` or `X-Real-IP` pinning), a forged webhook can trigger membership activation or refund processing.
+- Parse-before-validate: if the webhook body is parsed (and business logic is run) before IP is checked, a spoofed request can partially corrupt state even if ultimately rejected.
+- Without status re-confirmation (GET `/payments/{id}` from ЮKassa API), there is no cryptographic proof that the webhook is genuine.
+
+**Prevention:**
+1. **Validate IP first, parse body second** — middleware extracts `request.client.host` (or trusted proxy header) and rejects with 403 before body parsing. This is structurally parallel to v1.6 "HMAC-before-parse" but at the IP layer. Apply `import-linter` contract if possible, or an AST gate checking that the webhook router calls `validate_yookassa_ip(request)` before any `await request.json()`.
+2. **Always re-confirm status** — after receiving a `payment.succeeded` notification, always call `GET /payments/{object.id}` from ЮKassa API and check the returned status before activating memberships. This provides the cryptographic anchor that HMAC would otherwise provide (ЮKassa API authentication is HTTP Basic Auth: shopId + secretKey, not spoofable by a third party).
+3. **Register the validation function name as a frozenset constant** (`YOOKASSA_IP_RANGES`) to make it AST-gateable and grep-able. Treat this like the `LOCKED_AUDIT_EVENTS` discipline — pre-register before any callsite.
+4. Do NOT use the `yookassa` official Python SDK as the sole webhook handler — its `SecurityHelper.is_ip_trusted()` is the right tool but the SDK uses synchronous `requests` library internally; use `async_yookassa` or a direct `httpx.AsyncClient` wrapper.
 
 **Warning signs:**
-- A pull request adds a "user not found" email template, or a "this account has been deactivated" email template.
-- A `/auth/password-reset` endpoint returns 404 on unknown email.
-- Provider analytics dashboard segments by `failure_reason` tag — that segmentation IS the oracle.
+- Webhook handler function reads `request.body()` or `request.json()` before any IP check
+- No `GET /payments/{id}` re-confirmation before `membership_activated` event
+- Reverse proxy passes `X-Forwarded-For` through without stripping/restricting to ЮKassa IP range
 
-**Phase to address:** **Phase 41 (spec/foundations)** before any email integration code lands. The locked-template AST gate and the `test_password_reset_no_oracle.py` contract must exist before the first reset-flow endpoint is committed, mirroring how `LOCKED_AUDIT_EVENTS` was pre-registered in v1.3 Phase 24 (RETROSPECTIVE.md key lesson #1 from v1.3).
+**Phase hint:** Bedrock phase (first phase of v1.7). Gate must be in place before any webhook consumer lands.
 
 ---
 
-### Pitfall 2: Cross-channel double-pings (idempotency taxonomy was per-channel, not per-event)
+### Pitfall 2: Webhook Idempotency Without Dedup Key — Double Membership Activation
+
+**Severity:** BLOCKER
 
 **What goes wrong:**
-`membership_notifications` has `UNIQUE (membership_id, kind)` and `booking_notifications` has the same shape — but `kind` was implicitly "telegram kind" because there was only one channel. When email lands, the obvious wrong move is to write `kind='expiring_7d'` from both the Telegram cron and the email cron — and now the same row blocks the email send (because Telegram already ran), or worse, the email cron writes its own row with the same `kind` and a UNIQUE violation crashes the cron silently (or the cron retries forever via ARQ). The opposite wrong move — different `kind` per channel — lets a client receive a Telegram DM **and** an email for the same event, which is double-pinging and undermines the 06:15 single-tick discipline.
+ЮKassa retries webhook delivery for 24 hours on any non-200 response. There is no guaranteed single-delivery. The `object.id` field (payment UUID) inside the notification body is the natural dedup key, but ЮKassa does not provide a separate stable "notification ID" — the same `payment.succeeded` event will be resent with the same `object.id`.
+
+If the webhook handler activates a membership, records a payment row, and emits audit events without dedup, the second retry will attempt to activate the same membership twice — creating a second `payments` row, a second `membership_activated` audit event, and potentially a duplicate `membership` row.
 
 **Why it happens:**
-v1.3 / v1.5 designed idempotency tables assuming Telegram as the only channel. The taxonomy was implicit. Without an explicit `channel` discriminator, the schema can't represent "the same event went out via two channels" coherently.
+Developers unfamiliar with ЮKassa's retry model assume webhooks are delivered once. The `Idempotency-Key` header that governs outgoing API requests (payment creation) is a different concept from incoming webhook dedup.
 
-**How to avoid:**
-- Migrate idempotency tables to a `(subject_id, kind, channel)` composite UNIQUE where `channel ∈ {'telegram','email'}`. Make this a single Alembic migration in Phase 41 before any provider integration: `0024_notification_channel_discriminator`.
-- Notification dispatch becomes **per-client preference**: each client has a `notification_channel` preference (default: telegram if linked + email-fallback; email-only if Telegram not linked). The cron consults the preference and inserts exactly one idempotency row matching the channel actually used.
-- Define a small `NotificationDispatcher` Protocol in `core/dependencies.py` (mirroring `ActiveMembershipResolver` and `HandlerContext`) with method `dispatch(client_id, kind, payload) -> Channel`; concrete implementations registered from `app/main.py` composition root. Cron writes the idempotency row using the returned `Channel`.
-- Cross-channel **fallback semantics** must be explicit: if Telegram send fails 403 (user blocked bot), the cron may try email IF the client has a verified email AND the kind is allow-listed for fallback. Insert the idempotency row only for the channel that **succeeded** (preserves the v1.3 Phase 27 lesson: "insert idempotency row only on successful send").
+**Consequences:**
+- Double membership activation: client gets two overlapping active memberships
+- Double payment row: v1.4 ledger integrity violated (append-only invariant holds structurally, but logical correctness breaks)
+- Double audit events: payment audit chain becomes ambiguous
+
+**Prevention:**
+1. **Redis dedup gate** — on receipt of `payment.{event}` webhook, `SET NX EX 86400 sz:wh:event:{event_type}:{object.id}` before any DB write. If the key already exists, return 200 immediately (idempotent). Mirror the v1.2 Telegram `update_id` dedup pattern (`sz:bot:update:{update_id}` TTL 1h), extended to 24h to cover ЮKassa's retry window.
+2. **DB-level idempotency guard** — `online_payments` table has `UNIQUE (yookassa_payment_id)`. A second attempt to insert the same ЮKassa payment ID will fail with `IntegrityError` → service returns 200 (dedup, not error). DB wins the race if Redis is unavailable (fail-safe, not fail-open).
+3. **State-machine guard** — membership activation is only triggered if `online_payments.status` is currently `pending` or `waiting_for_capture` (transition to `succeeded`). A second webhook on an already-`succeeded` payment is a no-op at the state machine layer even if Redis dedup is bypassed.
+4. Dedup key is `(event_type, object.id)` — NOT just `object.id`, because `payment.canceled` and `payment.succeeded` are distinct events for the same payment object.
 
 **Warning signs:**
-- A unit test or migration touches `*_notifications` table without adding a `channel` column.
-- ARQ logs show `IntegrityError: duplicate key value violates unique constraint` for notification tables after email rollout.
-- A client reports receiving both Telegram DM and email for the same `expiring_3d` event (double-ping bug report).
+- Webhook handler has no Redis `SET NX` before DB write
+- No `UNIQUE (yookassa_payment_id)` constraint on the payments table
+- Membership activation not guarded by status transition check
 
-**Phase to address:** **Phase 41 (spec) for the schema decision + Phase 42-or-43 (notification dispatcher) for the Protocol slot**. The migration `0024_notification_channel_discriminator` must land before any email cron is written. The dispatcher Protocol is the same pattern as v1.2 `register_active_membership_resolver` (Decisions table entry "Cross-module callbacks via Protocol").
+**Phase hint:** Bedrock phase. UNIQUE constraint is a migration-level requirement; Redis dedup is an integration-phase requirement.
 
 ---
 
-### Pitfall 3: Provider 5xx + ARQ retry storm collides with the 06:xx cron window
+### Pitfall 3: Webhook Race — Redirect Arrives Before Webhook, Activating Membership on Redirect
+
+**Severity:** BLOCKER
 
 **What goes wrong:**
-ARQ cron `send_expiring_notifications` runs at 06:15 MSK with `unique=True, keep_result=60`. If Resend / SES returns 5xx (provider degraded), the SDK retries internally; the ARQ job retries on exception. Cascading: a single 06:15 tick spawns 50 retry attempts in 60s, each holding a worker slot for the SDK timeout (default ~30s on most providers), and **blocks the 06:25 `expire_pt_packages` cron and 06:35 `send_booking_reminders` cron** because the same `arq-worker` container has finite concurrency (typically 10). The single failing provider takes down the whole 06:xx cron chain.
+After a user completes payment on ЮKassa's redirect page, two things happen in parallel:
+1. The browser is redirected to `return_url` (arrives in seconds — synchronous from the user's perspective)
+2. ЮKassa sends a webhook to your server (asynchronous — may arrive milliseconds or minutes later)
+
+A developer who activates the membership on the `return_url` handler (because "the user has paid") will activate the membership BEFORE the `payment.succeeded` webhook is processed. The redirect only proves the user completed the payment flow on ЮKassa's side — it does not prove the payment actually succeeded (the user could have bookmarked `return_url` and opened it directly, or the payment may still be in `waiting_for_capture` state).
 
 **Why it happens:**
-1. Provider SDKs (`resend-python`, `boto3 sesv2`) ship with their own retry logic that's invisible to ARQ. Result: layered exponential backoff that wedges the worker.
-2. ARQ retry defaults assume idempotent transient failures, not "provider is down for 30 minutes."
-3. The current cron chain (06:05 expire → 06:15 expiring → 06:25 pt-expire → 06:35 booking-reminder) has 10-minute buffers but no per-job circuit breaker; one slow job eats the next window.
+The `return_url` redirect creates a "it worked" UX signal that developers mistake for a "payment succeeded" business signal.
 
-**How to avoid:**
-- Set provider SDK retry counts to **0 or 1 max** (e.g. `resend.Client(retries=0)` or boto3 `Config(retries={'max_attempts': 1})`); let ARQ + the per-event idempotency row be the only retry mechanism.
-- Add per-job `max_tries=2, retry_delay=30s` to the new email cron; after 2 attempts, fail the job loudly. The next 06:15 tick (24h later) is the retry — no thundering herd on the same morning.
-- **Move email sends out of the cron path** into a fire-and-forget queued task: cron writes a row to `email_outbox` (status='pending'), a separate `send_outbox_emails` job drains it on a 1-minute schedule with bounded concurrency `max_jobs=3`. Cron tick stays under 60s even when the provider is degraded.
-- Set an explicit per-job timeout `timeout=20` on the email-dispatcher job so a hung SDK call doesn't wedge the worker.
-- Add a per-provider circuit breaker in Redis: key `sz:email:circuit:open`, TTL 5m, opened on 5xx, checked at the head of the dispatcher job — when open, the dispatcher returns immediately and the outbox row is untouched.
+**Consequences:**
+- Membership activated for a payment that is actually `waiting_for_capture`, `canceled`, or `pending` — gym gives away membership for free
+- Double activation if both redirect AND webhook handler activate the membership
+
+**Prevention:**
+1. **return_url handler shows ONLY a "pending" status screen** — "Оплата получена, проверяем платёж..." with a polling endpoint or WebSocket. No membership activation at this layer.
+2. **Membership activation is LOCKED to the `payment.succeeded` webhook handler** — single code path, no exceptions. Use an AST gate or import-linter contract: the membership activation function may only be called from the webhook module.
+3. **Polling endpoint** — `GET /payments/online/{internal_payment_id}/status` re-confirms against ЮKassa API (status re-confirmation from Pitfall 1 serves double duty here). Returns `pending`, `succeeded`, or `failed`. Frontend polls until terminal state.
+4. Register `membership_activated` as a `LOCKED_AUDIT_EVENT` that can ONLY be emitted from the webhook processing path (AST literal-string gate already prevents ad-hoc strings; the callsite constraint is enforced by `import-linter`).
 
 **Warning signs:**
-- ARQ structlog `job_id`/`job_name` contextvars (Pitfall 14 mirror from v1.2 Phase 18) show overlapping `send_expiring_notifications` and `expire_pt_packages` jobs.
-- Worker container memory creeps up overnight (queued retries holding HTTP clients open).
-- Operator runbook scenarios time out at the 06:xx window (Phase 29 / Phase 36 verification regression class).
+- `return_url` handler calls any membership activation, payment recording, or audit emission function
+- Frontend navigates directly to membership detail on redirect without polling
 
-**Phase to address:** **Phase 43 (cron + worker integration)**, with the `email_outbox` table introduced in the same Alembic migration. The circuit-breaker + max_tries discipline is a CI-level concern: add an `assert` in the worker startup that `WorkerSettings.functions['send_outbox_emails']` has `max_tries <= 2` and `timeout <= 30`, mirroring the v1.2 `on_startup` cron-resolution invariant.
+**Phase hint:** Bedrock phase — this constraint shapes the payment FSM design before any integration code lands.
 
 ---
 
-### Pitfall 4: Password-reset / invitation token replay or account hijack via email re-claim
+### Pitfall 4: Payment-Status Oracle via Redirect URL or Timing
+
+**Severity:** BLOCKER (mirrors v1.6 anti-oracle discipline)
 
 **What goes wrong:**
-Three concrete failure modes, all subtle:
-
-1. **Replay:** Reset token is single-use in spec but the "mark consumed" UPDATE runs after `commit()` of the password change, so a concurrent request can use the same token twice (race). This is the v1.1 Phase 12.1 commit-gate bug class — audit emits looked fine but the row wasn't durable.
-2. **Account hijack via email re-claim:** Owner deactivates reception user `alice@gym.ru`. Later, owner invites a new user with email `alice@gym.ru` (legitimate — Alice's replacement at front desk). The new invite-accept flow finds the existing soft-deleted user row and **reactivates it** (because the email already exists with UNIQUE) — the new operator now inherits Alice's `actor_user_id` in historical audit. Worse: if refresh-token family rows survive `is_active=False`, the new operator inherits Alice's sessions.
-3. **Reset-link leak:** The link includes the token as a path parameter (`/auth/reset/{token}`); the token leaks via HTTP `Referer:` when the user opens the link and clicks any external link in the success page, or via proxy logs at the gym network, or via shoulder-surf if reception clicks the link on the front-desk terminal.
+The `return_url` differentiates between success and failure by including a status parameter (`?status=success` vs `?status=failed`) or by redirecting to different URLs. This leaks the payment decision to the URL (logs, browser history, referrer headers) and creates a timing oracle: the time difference between a fast "already succeeded" vs. a slow "still waiting" response reveals payment state to a passive observer.
 
 **Why it happens:**
-- (1) The auth module already learned this lesson in Phase 12.1 (RETROSPECTIVE.md Key Lessons v1.1 #3, "Verify-on-the-wire, not verify-by-types") but the SVC001 commit-gate AST walker is scoped to `app/modules/auth/service.py` — a new `password_reset_service.py` file may be added at the same module level and the walker won't include it without an explicit scope extension.
-- (2) The `users` table has `UNIQUE (email)` (auth/models.py:34) with no soft-delete partial-unique. The codebase pattern for `clients.phone` is `WHERE deleted_at IS NULL` (v1.1 Phase 8 decision); `users.email` is unconstrained on this axis because v1.1 didn't anticipate multi-user.
-- (3) Standard webapp mistake; the gym front-desk terminal makes it worse (semi-public screen).
+Copy-pasting tutorials that use `?payment_id=xxx&status=success` patterns, or implementing separate success/error return URLs.
 
-**How to avoid:**
-- (1) Reset tokens stored hashed in a new `password_reset_tokens` table with columns `(id, user_id, token_hash, expires_at, consumed_at, created_at)` and a partial UNIQUE `(user_id) WHERE consumed_at IS NULL` so only one outstanding token per user. Token consumption is `UPDATE ... SET consumed_at = now() WHERE token_hash = :h AND consumed_at IS NULL RETURNING id` — the SQL is its own race arbiter; 0-row return → 409 `token_already_used`. Extend SVC001 AST walker to include any file matching `app/modules/auth/*.py` (not just `service.py`).
-- (2) Two-fold defence: (a) Add Alembic migration adding partial UNIQUE `(lower(email)) WHERE deleted_at IS NULL` to `users` so soft-deleted emails can be reused **as new rows** (not by reactivating the old row); the invitation-accept flow MUST insert a new `users` row, never update an existing `is_active=False`. (b) Soft-delete a user must REVOKE all refresh-token families and INSERT a sentinel audit row `user_deactivated` — re-activation (if ever supported) requires explicit owner action with a new audit row. Forbid invitation-accept from touching an existing user row period: invitation-accept either inserts new or 409 `email_already_active`.
-- (3) Token in `POST` body, not URL path. The reset link points to a tokenless landing page (`/auth/reset?id=<opaque-reset-session-id>`); the page reads the token from a `localStorage`/sessionStorage seeded by a one-time `GET /auth/reset/session/{id}` call that the SPA performs once. Better yet: token in URL fragment (`#token=...`) so it never hits any HTTP referer or proxy log; SPA reads `window.location.hash`.
+**Consequences:**
+- Payment status in browser history and server access logs
+- Timing differential (immediate "success" page vs. "checking..." page) reveals payment outcome to side-channel attackers
+- Mirrors the exact anti-oracle concern from v1.6 email OTP: byte-identical responses across verified/unverified
+
+**Prevention:**
+1. **Single `return_url`** — one URL regardless of payment outcome: `GET /payments/return?payment_id={internal_id}`. No `status` parameter.
+2. **Constant-time floor** — the return URL handler ALWAYS responds with the same "checking payment..." page, regardless of whether payment has already succeeded in the DB. Applies `_constant_time_floor` try/finally pattern from v1.6 email OTP: even if DB lookup takes 0ms (already succeeded) or 200ms (still pending), the response time is floored to a fixed minimum.
+3. **Audit both paths** — `payment_return_received` audit event emitted regardless of outcome, with only `payment_id` (not status) in the payload.
 
 **Warning signs:**
-- A code review on the invite-accept path uses `UPDATE users SET is_active=true` (instead of INSERT).
-- The reset URL appears in any HTTP access log.
-- A test reuses the same reset token twice and the second attempt succeeds.
-- `audit_log` has rows where `actor_user_id` belongs to a user with `is_active=False` (post-invite-accept anomaly).
+- `return_url` contains `?status=` or `?success=`
+- Different redirect targets for success vs failure
+- Return handler response time is correlated with payment state
 
-**Phase to address:** **Phase 42 (user-management + invitation/reset flow)**. The partial-UNIQUE migration on `users.email` and the `password_reset_tokens` table should be in Phase 42's foundations plan; the SVC001 scope extension is a one-line change but must land in Phase 41 spec.
+**Phase hint:** Bedrock phase. Return URL contract must be defined before frontend integration.
 
 ---
 
-### Pitfall 5: `actor_user_id` historical interpretation breaks under multi-user
+### Pitfall 5: Off-by-100 Currency Conversion — Kopecks vs ЮKassa Decimal Format
+
+**Severity:** BLOCKER
 
 **What goes wrong:**
-The audit-log infrastructure was effectively single-actor: there was one owner and ad-hoc DB-poked reception. Queries reasoned as "actor is either THE owner or a vanishingly small set of reception users." With multi-user, three things break:
+The v1.4 `payments` table stores amounts as `INTEGER` kopecks (e.g., 50000 = 500.00 RUB). ЮKassa API uses a `{"value": "500.00", "currency": "RUB"}` string format for amounts. A developer who passes the kopeck integer directly to ЮKassa sends 50000 RUB instead of 500.00 RUB — charging the client 100× the correct amount.
 
-1. **Audit traceability survives operator soft-delete only if FK is `ON DELETE RESTRICT` or `SET NULL`** — but the migration writer copies the `clients.created_by_user_id` shape (which is `RESTRICT`, per `apps/backend/app/modules/auth/models.py:4`) without checking that **the operator is a *gym staff* User, not a client**. RESTRICT on a deactivated user blocks the soft-delete; SET NULL loses traceability. The trade-off was never explicitly chosen — the v1.0 default leaked through.
-2. **Idempotency-via-actor leaks across operators.** Currently some payment idempotency relies on `Idempotency-Key` header per-request, but cron-emitted audits use `actor_user_id=None`. If a future "owner-scoped idempotency" leaks into multi-user (e.g. "this owner already sold this membership today"), reception inheriting the same scope would replay-deny legitimate work.
-3. **Refresh-family reactivation race.** Deactivated user logs in via still-valid refresh cookie before the family is revoked: the auth path checks `is_active` only on `/login`, not on `/refresh`. The deactivated operator gets a fresh access token. v1.1 Phase 5 `refresh-rotation family with ~5s reuse-window race tolerance` doesn't help — it tolerates by design.
+The reverse is equally dangerous: parsing the ЮKassa `"500.00"` string as an integer for storage yields 500 kopecks (5.00 RUB) instead of 50000 kopecks (500 RUB).
 
 **Why it happens:**
-- (1) `models.py` comments say `ON DELETE RESTRICT on clients.created_by_user_id is acceptable because soft-delete-after-data-export is the supported flow` — that contract was for clients, but audit_log was implicit. No one documented the audit_log FK choice explicitly.
-- (2) Idempotency taxonomy was per-request-key, not per-actor — but the boundary isn't enforced anywhere.
-- (3) `/refresh` is the hot path; auth dependencies (`require_user`) check `is_active` on access tokens but the refresh path uses cookie + token_hash lookup without joining `users.is_active`.
+Two separate type systems for money: internal (integer kopecks) vs. ЮKassa (decimal string rubles). The conversion is `kopecks / 100` on send, `Decimal(value) * 100` (rounded) on receive.
 
-**How to avoid:**
-- (1) Pick `audit_log.actor_user_id` FK behaviour **explicitly and in writing**: `ON DELETE SET NULL` for audit_log + soft-delete-on-users (so operator can be deactivated and historical audits survive with `actor_user_id=NULL`, plus a `actor_email_snapshot` column denormalised at audit-write time, mirroring the v1.2 mandatory-snapshot pricing pattern). Migration `0023_audit_actor_snapshot` adds `actor_email_snapshot TEXT` and backfills it from current rows; emit-time validation in the canonical Pydantic `audit_payloads.py` registry enforces the snapshot.
-- (2) Define explicitly: idempotency keys are **request-scoped, not actor-scoped**. Document this as a Key Decision row. Add an integration test `test_idempotency_key_cross_actor.py` that proves two operators using the same `Idempotency-Key` value get isolated results.
-- (3) Add `users.is_active` check to the `/auth/refresh` path AND to the `require_user` access-token dependency. On deactivation, **revoke all refresh-token families immediately** (the existing per-family revoke from v1.2 Phase 23 HYG-03 already exists; deactivation calls it for every family of the deactivated user). Audit event `user_deactivated` fires the family revoke as part of the same UoW (caller-owns-txn pattern from v1.3 freeze).
+**Consequences:**
+- 100× overcharge: client is billed 50 000 RUB for a 500 RUB membership — card declines or extreme customer complaint
+- 100× underrecord: internal ledger shows 5 RUB received for a 500 RUB payment — revenue tracking catastrophically wrong
+
+**Prevention:**
+1. **Dedicated converter functions** — `kopecks_to_yookassa(kopecks: int) -> str` (divides by 100, formats to 2 decimal places) and `yookassa_to_kopecks(value: str) -> int` (parses Decimal, multiplies by 100, rounds to int). No inline conversion — these are the ONLY conversion paths.
+2. **Unit tests** — `test_kopecks_to_yookassa`: assert `kopecks_to_yookassa(50000) == "500.00"`, `kopecks_to_yookassa(1) == "0.01"`. `test_yookassa_to_kopecks`: assert `yookassa_to_kopecks("500.00") == 50000`, handling edge case `"0.10"` → 10.
+3. **Pydantic validator** on `OnlinePaymentCreate` schema: `amount_kopecks: int` field, validated > 0, and the converter is called in the service layer, never in the schema.
+4. **mypy strict** — `kopecks_to_yookassa` has return type `str`, not `int`. Any caller passing the return value to an integer field will fail type-check.
+5. Add `KOPECKS_TO_YOOKASSA_CONVERSION` as a named test fixture constant so tests never hardcode raw amounts.
 
 **Warning signs:**
-- An Alembic migration touches `audit_log` foreign keys without an explicit `ON DELETE` clause.
-- A user is deactivated and 10 minutes later their access token still works.
-- `audit_log.actor_user_id` is NULL on rows that should have an actor (vs cron rows which legitimately have NULL).
+- Inline `amount / 100` or `str(amount)` in payment creation code
+- No dedicated conversion module
+- Test that asserts `amount == 50000` without checking the ЮKassa-side format
 
-**Phase to address:** **Phase 42 (user management)** for the FK + `actor_email_snapshot` decision and the `/refresh` `is_active` join. Migration `0023_audit_actor_snapshot` lands in Phase 41 foundations alongside the locked-template gate (it's a schema decision, not user-mgmt code).
+**Phase hint:** Bedrock phase. Converter must exist and be tested before any payment creation code lands.
 
 ---
 
-### Pitfall 6: Locked Russian copy lock breaks under email's richer surface
+### Pitfall 6: Double-Tap Payment — Parallel Payment Initiations for Same Membership Sale
+
+**Severity:** BLOCKER
 
 **What goes wrong:**
-Telegram DMs are short plain-text. Email has subject + plain-text body + (likely) HTML body + footer + sender-name. Each surface is an independent point of locked-copy compromise:
-
-- **Subject lines in Cyrillic** must be RFC 2047 encoded-word (`=?UTF-8?B?...?=` base64 or `=?UTF-8?Q?...?=` quoted-printable). Forgetting this breaks display on older Outlook / mail.ru clients; doing it wrong (e.g. exceeding the 75-char encoded-word limit, splitting in the middle of a multi-byte UTF-8 character) breaks rendering on yandex.ru. mail.ru in particular has known display quirks for non-encoded Cyrillic subjects.
-- **NBSP (U+00A0) handling differs across clients.** The `formatMoney` helper produces NBSPs for ru-RU currency (`shared/lib/money.ts` CLAUDE.md note); Outlook for Windows renders them as `?` in some HTML contexts; Gmail web renders them correctly. Locked Russian copy that interpolates money will look broken to one of the two most-used desktop clients in РФ.
-- **From: header with Cyrillic name** (e.g. `From: "Спортзал" <no-reply@sportzal.ru>`) requires RFC 2047 encoding of the display name; provider SDKs (Resend, SES, Mailgun) handle this inconsistently — some auto-encode, some pass through as raw UTF-8 and silently break.
-- **Footer is jurisdictionally required** for РФ commercial mail (Закон "О рекламе" 38-ФЗ Art. 18 for marketing; transactional is exempt but the line is blurry — booking reminders skirt it). Forgetting the footer is a regulatory miss; adding the wrong footer is a locked-copy compromise.
-- **D-27-OWNER-COPY-LOCK precedent:** owner sign-off is the gate, not a nice-to-have (RETROSPECTIVE.md v1.2 key lesson #2). Email surface multiplies the number of strings under that gate by ~3-4× (subject + body + footer + alt-text).
+Reception clicks "Оплатить онлайн" twice in rapid succession (double-tap, network lag, browser retry). Two ЮKassa payment objects are created for the same membership sale. Both may succeed independently. The first `payment.succeeded` webhook activates the membership; the second `payment.succeeded` webhook finds the membership already active but still records a second payment — creating an orphaned payment row with no linked membership activation.
 
 **Why it happens:**
-The Telegram-locked-copy pattern (single `Final[str]` constant, owner sign-off in plan SUMMARY) doesn't compose with multi-part email content. The natural reflex is to put templates in Jinja2 files outside the codebase — at which point the AST gate that protects Telegram copy no longer protects email copy.
+No idempotency key discipline on the payment creation API call, or the Idempotency-Key is regenerated on each button click.
 
-**How to avoid:**
-- Email templates are **Python data classes (or `Final[str]` constants for each part)** in `app/modules/<module>/email_notifications.py`, NOT external Jinja files. Subject + plain-body + html-body are sibling constants; one owner-sign-off row covers the tuple as a unit.
-- AST gate `LOCKED_EMAIL_TEMPLATES`: same shape as `LOCKED_AUDIT_EVENTS`, a frozenset of `(subject_constant_name, body_constant_name, html_body_constant_name)` triples. `email_mailer.send(...)` must take a `LockedEmailTemplate` enum, not raw strings.
-- Subject encoding: use Python stdlib `email.headerregistry.Address` + `EmailMessage.set_content()` rather than provider SDK string interpolation. Stdlib does RFC 2047 correctly; provider SDKs vary. Unit test `test_email_headers_rfc2047.py` round-trips a known-Cyrillic subject through the rendering path and asserts the wire form starts with `=?UTF-8?`.
-- NBSP discipline: HTML body templates render NBSPs as `&nbsp;` entities, not literal U+00A0; plain-text body keeps literal NBSP. Snapshot test renders one money-formatted template and diffs against a checked-in golden file.
-- Footer: a single `RU_FOOTER_HTML` + `RU_FOOTER_PLAIN` constant interpolated automatically by the mailer. Owner sign-off on the footer is one row, not one per template.
-- Owner sign-off discipline: same `D-XX-OWNER-COPY-LOCK` decision-row mechanism as D-27. Auto-advance under `workflow.auto_advance` is fine — the v1.3 precedent stands. But the sign-off row must enumerate **every locked constant identifier**, not say "all email templates."
+**Consequences:**
+- Two payment rows for one membership (ledger integrity broken)
+- Double charge: client's card debited twice
+- Orphaned payment with no membership linkage (reconciliation nightmare)
 
-**Warning signs:**
-- A PR adds a `templates/*.html` file outside `app/modules/`.
-- A subject line includes raw Cyrillic and the test suite doesn't probe wire-encoded form.
-- Outlook screenshot in a Phase verification log shows `?` characters in money amounts.
-- A SUMMARY.md sign-off row says "all v1.6 email templates" without enumeration.
-
-**Phase to address:** **Phase 41 (spec) for the locked-template gate**, **Phase 43 (templates + rendering)** for the actual templates with explicit per-template owner sign-off. The footer + From: header decisions should be in Phase 41 because they affect the integration's API surface (mailer interface), not just template content.
-
----
-
-### Pitfall 7: ARQ cron eager-import regression class repeats (REG-29-04 mirror)
-
-**What goes wrong:**
-v1.3 Phase 29 caught REG-29-04: the one-shot expiring-cron runner missed eager ORM-model import → first invocation returned `count=0` because SQLAlchemy hadn't seen the model. v1.5 Phase 36 caught REG-36-01: arq-worker compose `uv run arq` vs `arq` directly. v1.5 Phase 40 verification needed 4 hotfixes during runbook attempt. **Email integration will repeat this class** because: (a) a new email worker may be added (6th docker-compose service), (b) the email cron creates new ORM tables (`email_outbox`, `password_reset_tokens`, `notification_preferences`) that aren't imported by the worker module unless explicitly added, (c) the Resend / SES / Mailgun SDKs do their own module-level config that interacts with `on_startup` ordering.
-
-**Why it happens:**
-The `app/main.py` composition root imports modules transitively for the FastAPI process, but `app/workers/__init__.py` (or wherever `WorkerSettings` lives) has its **own** transitive closure. New tables added in a different module than where the cron lives are invisible unless eagerly imported.
-
-**How to avoid:**
-- Add Phase 41 / Phase 43 a verification step that explicitly mirrors the v1.3 REG-29-04 lesson: a 1-line `from app.modules.<new_module> import models  # noqa: F401` in `app/workers/__init__.py` for every new business module that the worker touches.
-- Add an `on_startup` invariant: at worker boot, log the set of mapped table names (`Base.metadata.tables.keys()`) and assert that the set contains every table the cron functions query. Failure-to-import is loud, not silent.
-- One-shot script discipline: `scripts/run_<cron>_once.py` files MUST import models eagerly. Codify as a test: a `tests/test_oneshot_scripts_eager_import.py` that introspects each `scripts/run_*_once.py` file's AST for the eager-import block.
-- Milestone-verification-as-phase (v1.3 Phase 29 model, v1.5 Phase 36 model): one of the v1.6 phases is the verification phase against live docker-compose. Budget ≥1 day for it.
+**Prevention:**
+1. **Deterministic Idempotency-Key** on payment creation: `Idempotency-Key = sha256(f"sell-membership:{membership_plan_id}:{client_id}:{today_date}")`. The key is computed from stable business identifiers, not from a per-request UUID. A second creation attempt within 24h returns the same ЮKassa payment object without creating a new charge.
+2. **DB partial UNIQUE** — `UNIQUE (client_id, membership_plan_id, DATE(initiated_at))` on `online_payments WHERE status != 'canceled'` — prevents two simultaneous pending payments for the same product. The `WHERE status != 'canceled'` predicate allows a retry after explicit cancellation. This mirrors v1.3 `(membership_id) WHERE ended_at IS NULL` freeze discipline.
+3. **Frontend single-submission guard** — the "Оплатить" button is disabled on click until terminal state is reached (standard TanStack Query mutation `isPending`). Backend constraint is the authoritative guard; frontend guard reduces noise.
 
 **Warning signs:**
-- A Phase verification scenario reports "cron returned 0 first run, then non-0 after restart" (REG-29-04 signature).
-- arq-worker logs at boot don't list one of the new email-related tables.
-- A `scripts/run_*_once.py` file lacks `import app.modules.<x>.models`.
+- `Idempotency-Key: str(uuid4())` generated fresh on each request
+- No partial UNIQUE on the online_payments table
+- Button remains enabled during payment pending state
 
-**Phase to address:** **Phase 41 (spec)** for the eager-import test discipline, **Phase 43 (cron integration)** for the per-cron implementation, **Phase 45-ish (milestone verification)** for live-stack proof.
-
----
-
-### Pitfall 8: Provider secret + domain + sandbox mode rotting at the env boundary
-
-**What goes wrong:**
-Email providers have multi-part credentials: API key + verified sending domain + (sometimes) region + sandbox flag. Storing them as `EMAIL_PROVIDER_API_KEY` alone fails because:
-
-- Sandbox mode (Resend `re_sandbox_...`, SES sandbox-mode account) silently allows sends to **only verified addresses** — works in dev, fails in prod for any unknown client email.
-- Domain not in env: production accidentally sends from `acme.sandbox.resend.dev` because the prod env forgot `EMAIL_FROM_DOMAIN`; mail.ru DMARC rejects; Telegram channel keeps working so the bug stays hidden for days.
-- Key rotation: the SDK caches the key at module import (Resend Python SDK pattern); rotating the key requires restart, not env reload. Phase 27 expiring-cron tick at 06:15 will still use the stale key for the full 24h until the next deploy.
-
-**Why it happens:**
-v1.1+ env discipline has `.env.example` as single source of truth (Decisions table CR-01) but email providers expand the secret surface 4× (API key + domain + region + webhook signing secret for bounces).
-
-**How to avoid:**
-- Pydantic Settings adds a `class EmailProviderSettings` block with required fields: `api_key`, `from_domain`, `from_address`, `webhook_signing_secret`, `sandbox_mode: bool = False`. Settings validation **fails at boot** if `from_domain` is empty in non-sandbox mode.
-- A boot-time integration check (gated behind `EMAIL_PROVIDER_PROBE_AT_BOOT=true`, default off in test) sends a probe to the provider's `/domains` or equivalent endpoint and asserts the configured `from_domain` is verified. Loud failure on misconfig.
-- Webhook signing secret is mandatory for bounce + complaint webhooks (all major providers sign these). Verify signature in `app/api/v1/webhooks/email/bounce.py` before processing — defends against attackers POSTing fake bounces to mark legitimate clients as undeliverable.
-- `.env.example` enumerates every email-related variable with placeholder values + a comment indicating sandbox vs prod (e.g. `EMAIL_API_KEY=re_test_...  # sandbox: re_test_..., prod: re_prod_...`).
-
-**Warning signs:**
-- A production deploy sends from `sportzal.test.local` or a provider sandbox domain.
-- A bounce webhook is processed without signature verification.
-- The settings module hard-codes the email region (e.g. `eu-central-1` for SES).
-
-**Phase to address:** **Phase 41 (spec / provider selection + settings)**. Provider choice itself is a STACK.md / SUMMARY.md decision; this pitfall is about the settings surface once the choice is made.
+**Phase hint:** Bedrock phase (UNIQUE constraint in migration) + integration phase (deterministic key computation in service).
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 9: Bounce / complaint webhooks silently degrade client deliverability over time
+### Pitfall 7: 54-ФЗ Fiscal Receipt Timing — Receipt Must Be Issued "At the Moment of Payment"
+
+**Severity:** WARN
 
 **What goes wrong:**
-Provider sends `email.bounced` or `email.complained` webhook. Backend receives it but doesn't act → keeps sending to the bounced address → provider gradually throttles the sender domain → all deliverability suffers (including transactional OTP). This is the standard email-deliverability decay path.
+54-ФЗ requires the fiscal receipt to be sent to ФНС via ОФД and to the customer "at the moment of payment" (в момент совершения расчёта) for online transactions with remote interaction. The 5-minute tolerance in the law applies to the fiscal register's clock accuracy, NOT to a 5-minute grace period for receipt issuance. If the ARQ task queue is backlogged or ЮKassa's `/receipts` endpoint is slow, receipts can be delayed significantly — potentially triggering 14.5 КоАП penalties (up to 10 000 RUB per undelivered receipt for legal entities).
 
-**How to avoid:**
-- Add `clients.email_deliverable: BOOL DEFAULT TRUE` column (or `email_status: TEXT` with `{'unknown','verified','bounced','complained'}`).
-- Bounce webhook handler transitions `bounced` (hard bounce) → `email_deliverable=False`; subsequent sends skipped at the dispatcher level (returns Channel.SKIPPED, idempotency row not written, audit event `email_send_skipped_bounced`).
-- Soft bounces (4xx-class) tracked with retry count; flip to hard after 3.
-- Complaint webhook → immediate `email_deliverable=False` + audit `email_complaint_received` (compliance evidence).
-- Owner UI surface (deferred to v2.0): "X clients have undeliverable email" filter for outreach via Telegram.
+**Why it happens:**
+Treating the fiscal receipt as a "nice to have" async notification rather than a legally mandated synchronous-equivalent step. The ARQ `dispatch_receipt` task may queue behind other work and not execute immediately.
 
-**Phase to address:** Phase 43 (provider integration) — webhook handlers + status column.
+**Consequences:**
+- Receipt delivered minutes or hours after payment — legal violation per 54-ФЗ
+- Penalties: up to 10 000 RUB per receipt for юрлицо (Article 14.5 КоАП РФ)
+- ОФД rejection if receipt timestamp deviates significantly from payment timestamp
+
+**Prevention:**
+1. **Priority queue** — `dispatch_receipt` ARQ task gets higher queue priority than other background tasks. ARQ supports separate queues via `queue_name` parameter; create a `receipts_high_priority` queue with a dedicated worker.
+2. **Embed receipt data in payment creation request** — ЮKassa Scenario 1 (simultaneous payment + receipt) is preferred over Scenario 3 (separate `/receipts` call after payment). When receipt data is in the payment creation payload, ЮKassa handles timing synchronously.
+3. **Fiscal receipt status monitoring** — `online_receipts` table with `fiscal_status` FSM (`pending → succeeded / failed / canceled`); an ARQ cron scans for `pending` rows older than 90 seconds and alerts (structlog ERROR + Telegram operator DM).
+4. **Receipt-failure does NOT rollback payment** — the v1.6 email payment receipt discipline is preserved: "payment commit NOT rolled back on send failure". Receipt failure is an operational problem to fix; revoking an already-settled payment creates a worse legal problem.
+
+**Warning signs:**
+- `dispatch_receipt` is enqueued in the same queue as non-urgent background work
+- No monitoring for `fiscal_status = 'pending'` receipts older than 2 minutes
+- Receipt data not included in the payment creation payload
+
+**Phase hint:** Integration phase. Priority queue and monitoring are post-integration-bedrock concerns.
 
 ---
 
-### Pitfall 10: OTP email fallback path repeats the Telegram OTP flow's TTL/attempt design without recheck
+### Pitfall 8: Wrong 54-ФЗ Subject/Method Tags — Voiding the Receipt
+
+**Severity:** WARN (legal consequences if wrong)
 
 **What goes wrong:**
-Telegram OTP design (Phase 7): 6-digit, TTL 5 min, max 5 attempts. Email OTP fallback copy-pastes these numbers. But email delivery has **30-second to 5-minute latency variance** (provider queueing + spam-filter scrubbing) — 5-minute TTL with provider lag of 4 minutes leaves 60 seconds of usable window. User retries → second OTP arrives → user enters first OTP → expired → user enters second → first one's expiry race makes both look invalid.
+The fiscal receipt must carry correct `payment_subject` (тег 1212, "признак предмета расчёта") and `payment_mode` (тег 1214, "признак способа расчёта"). Using wrong values voids the receipt's legal compliance even if it is technically accepted by ЮKassa.
 
-**How to avoid:**
-- Email OTP TTL = 10 minutes (Telegram TTL × 2 to absorb provider lag).
-- "Resend OTP" button enforces 60s cooldown server-side; second OTP invalidates the first (only one active per user-channel).
-- Email OTP attempts = 5 (same as Telegram) but `otp_codes` table needs `channel` column to prevent cross-channel reuse and to scope rate-limiting per channel.
+For Sportzal's services:
+- Gym membership (абонемент): `payment_subject = "service"` (услуга), `payment_mode = "full_payment"` (полный расчёт) — the client pays in full for a fixed-duration membership. NOT `"commodity"` (товар).
+- PT package (персональные тренировки): also `payment_subject = "service"`, `payment_mode = "full_payment"`. NOT `"full_prepayment"` (предоплата 100%) unless sessions have not yet been scheduled at payment time — in that case `"full_prepayment"` may apply per ФФД 1.05/1.2 rules.
+- ЮKassa's "Чеки от ЮKassa" integration only supports `"full_prepayment"` and `"full_payment"` — partial prepayment, advances, and credit are explicitly NOT supported.
 
-**Phase to address:** Phase 42 (multi-channel auth + OTP table extension).
+**Why it happens:**
+Cargo-culting `payment_subject = "commodity"` from e-commerce tutorials, or confusing "предоплата" with "partial advance".
+
+**Consequences:**
+- Tax authority can invalidate the receipt → fine per Article 14.5 КоАП
+- Client's receipt carries wrong product classification → consumer rights complaints
+
+**Prevention:**
+1. **Locked constants** — `RECEIPT_SUBJECT_MEMBERSHIP = "service"`, `RECEIPT_SUBJECT_PT_PACKAGE = "service"`, `RECEIPT_MODE_FULL = "full_payment"` as named constants in `app/modules/billing/constants.py`. These are NOT configurable at runtime.
+2. **Pydantic schema validation** — `payment_subject: Literal["service", "commodity", "job", "payment"]`, `payment_mode: Literal["full_payment", "full_prepayment"]` (ЮKassa's supported subset). mypy strict will catch any assignment outside the Literal type.
+3. **Owner sign-off row** — like the `D-27-OWNER-COPY-LOCK` mechanism for Telegram copy, create a `D-47-RECEIPT-TAG-LOCK` record in planning artifacts documenting that `service + full_payment` was chosen for memberships and PT packages with the tax rationale.
+4. **Verification test** — integration test asserts that the receipt payload sent to ЮKassa mock contains `payment_subject == "service"` and `payment_mode == "full_payment"` for both membership and PT-package sale paths.
+
+**Warning signs:**
+- `payment_subject` is a string parameter passed by the caller at runtime
+- No Pydantic Literal type narrowing on the field
+- Tutorial-derived `"commodity"` value in any fixture or test data
+
+**Phase hint:** Integration phase (receipt creation). Tag values must be decided and locked before the first receipt endpoint is built.
 
 ---
 
-### Pitfall 11: Multi-user invitation token TTL collides with onboarding reality
+### Pitfall 9: Email/Phone Mandatory for Fiscal Receipt — Client Has Neither
+
+**Severity:** WARN
 
 **What goes wrong:**
-Invitation token TTL set to 24h (security-conscious default) — but the typical gym owner adds reception ahead of their start date by 3-5 days. User receives invite, doesn't open until day 3, token expired, has to ask owner to re-send. Operator friction → owner extends TTL to 30 days → token is now a long-lived secret in inboxes → password-reset-style replay attacks.
+54-ФЗ requires at least one customer contact (email OR phone) for electronic receipt delivery. ЮKassa delivers receipts only to email (SMS is not available). If a client in the Sportzal `clients` table has neither `email` nor `phone` populated (phone is soft-delete-safe via partial UNIQUE but may be NULL in edge cases; email is not yet a required field), ЮKassa will reject the receipt creation request with a validation error.
 
-**How to avoid:**
-- Invitation TTL = 7 days (covers typical onboarding lag).
-- Invitation token consumption invalidates the token immediately on first successful POST (regardless of password-set success — separate the steps with a short-lived intermediate session).
-- "Token expired" path triggers an owner-action workflow, not a user-action one (the user can't self-rescue; they ping the owner via Telegram).
+**Why it happens:**
+v1.1–v1.6 client CRUD did not require email for client records (email was not a client field; only operators/users have email). The payment flow encounters a null-contact client and the receipt API rejects it.
 
-**Phase to address:** Phase 42 (user management).
+**Consequences:**
+- Receipt cannot be issued → 54-ФЗ violation
+- Payment succeeds but membership is activated without fiscal compliance
+- Either block the payment (client experience) or skip the receipt (legal risk)
+
+**Prevention:**
+1. **Gate payment initiation on contact data** — `POST /memberships/{id}/pay-online` validates that the client has at least `phone` or `email` before creating the ЮKassa payment object. Return 422 `client_missing_contact_for_receipt` with a descriptive message.
+2. **Fallback policy (documented, NOT automatic)** — the owner may manually provide a contact before initiating. The system does NOT silently fall back to the gym's own email — this would be legally incorrect (the receipt must go to the paying customer, not the business).
+3. **`clients` schema addition** — add optional `email` field to the `clients` table in v1.7 (separate from `users.email` which is the operator's email). Gate is enforced at service layer, not schema layer (email remains optional for non-paying clients).
+4. **Phone preference** — since ЮKassa sends only to email (not SMS), prefer `client.email` over `client.phone` for receipt delivery. If only phone is available: ЮKassa receipt `customer.phone` field populates the receipt record but ЮKassa will not deliver the email (they note "SMS not available") — still legally valid as long as the phone is provided in the fiscal record.
+
+**Warning signs:**
+- Payment creation proceeds when `client.email IS NULL AND client.phone IS NULL`
+- Gym's own email appears anywhere in the `customer` object of a receipt payload
+- No validation error returned when contact is missing
+
+**Phase hint:** Integration phase. Client schema migration for `email` field is a bedrock-level migration requirement.
 
 ---
 
-### Pitfall 12: Provider rate limits (429) interact badly with OTP burst sends
+### Pitfall 10: Refund Webhook Dedup + v1.4 Partial UNIQUE Preservation
+
+**Severity:** WARN
 
 **What goes wrong:**
-Provider rate-limit is typically 10 req/s sustained for new accounts. Multi-user invitation flow + bulk OTP send + expiring-soon batch (50 clients × 06:15 tick) can burst above 10 req/s and trigger 429. Provider 429 is opaque to ARQ → cron job sees an exception, retries the whole batch, queues more retries, never drains.
+ЮKassa retries `refund.succeeded` webhooks for 24 hours just like payment webhooks. The v1.4 `payments` table has `partial UNIQUE on refund_of WHERE refund_of IS NOT NULL` — this correctly prevents a second DB-level refund row. However, the webhook handler may run twice and emit two `refund_issued` + `payment_refunded` audit events before the DB constraint fires on the second attempt.
 
-**How to avoid:**
-- `email_outbox` table + 1-minute dispatcher job with bounded concurrency = natural rate limiter (3 workers × 1 send each = 3 req/s peak).
-- Explicit `asyncio.Semaphore(5)` at the dispatcher entry to cap concurrent provider calls.
-- 429 response → exponential backoff (5s, 30s, 5m) inside dispatcher, NOT inside the per-send job (so the burst gets paced, not dropped).
+Separately: `refund.succeeded` is NOT automatically enabled when setting up a ЮKassa integration — it must be explicitly subscribed to as a separate webhook event. Missing this subscription means refunds are never confirmed server-side.
 
-**Phase to address:** Phase 43 (cron + worker integration).
+**Why it happens:**
+Assuming refund webhook subscription is implicit; not applying the same Redis dedup gate to `refund.succeeded` that is applied to `payment.succeeded`.
+
+**Consequences:**
+- Double audit events for single refund — audit chain becomes ambiguous
+- v1.4 `partial UNIQUE` stops the second DB row but exception handling around the IntegrityError must be clean (not swallowed as a generic 500)
+- Missing `refund.succeeded` subscription: refund status never transitions, membership never un-activated, fiscal refund receipt never triggered
+
+**Prevention:**
+1. **Explicit `refund.succeeded` subscription** — webhook configuration creates subscriptions for: `payment.succeeded`, `payment.canceled`, `payment.waiting_for_capture`, and `refund.succeeded`. Document this as a deployment checklist item.
+2. **Same Redis dedup gate** — `SET NX EX 86400 sz:wh:event:refund.succeeded:{refund_id}`. The dedup key uses the ЮKassa refund object ID, not the payment ID.
+3. **v1.4 partial UNIQUE remains the DB-level backstop** — `UNIQUE (refund_of) WHERE refund_of IS NOT NULL` catches any dedup bypass. `IntegrityError` → service returns 200 (idempotent). Do NOT raise a 500; a second identical webhook must be acknowledged with 200 to stop ЮKassa retries.
+4. **Fiscal refund receipt is part of the refund flow** — a `refund.succeeded` event must trigger a "возврат прихода" receipt via ЮKassa `/receipts`. For full refunds, ЮKassa uses the original payment data automatically. For partial refunds, the receipt data must be in the refund request payload.
+
+**Warning signs:**
+- `refund.succeeded` not in the webhook subscription list
+- No Redis dedup on refund webhook handler
+- `IntegrityError` on second refund webhook causes a 500 rather than a 200
+
+**Phase hint:** Integration phase. Webhook subscription list is a deployment-configuration requirement documented in operator runbook.
+
+---
+
+### Pitfall 11: ARQ Retry Storm on ЮKassa /receipts Rate Limit
+
+**Severity:** WARN
+
+**What goes wrong:**
+ЮKassa `/receipts` API may rate-limit under load (specific limits not published, but standard API rate limits apply). If ARQ's `dispatch_receipt` task fails with a 429 or 500 and retries aggressively (default ARQ retry behavior: immediate retry, `max_tries=5`), multiple concurrent `dispatch_receipt` tasks will hammer the ЮKassa endpoint simultaneously, causing a cascade failure. Each retry schedules another retry, amplifying load.
+
+This mirrors the v1.6 email circuit breaker: `sz:email:circuit:{provider}` TTL 5m with atomic `record_failure` pipeline.
+
+**Why it happens:**
+Copying ARQ task configuration from simple fire-and-forget tasks without considering external API backpressure.
+
+**Consequences:**
+- ЮKassa may blacklist the shop's IP for repeated abusive retries
+- All receipts in the queue fail simultaneously rather than one at a time
+- ARQ result store fills with failed jobs, obscuring which receipts need manual recovery
+
+**Prevention:**
+1. **Redis circuit breaker** — `sz:yookassa:circuit:receipts` with the same atomic pipeline pattern as v1.6 email: `record_failure` increments counter + sets TTL; `is_open` checks counter against threshold (e.g., 5 failures in 60s → open for 300s). `dispatch_receipt` checks circuit before calling ЮKassa.
+2. **Exponential backoff** — ARQ task uses `defer_by` on retry: first retry at 30s, second at 120s, third at 600s. Set `max_tries=3` (not 5+).
+3. **Dead letter queue** — after `max_tries` exceeded, insert a `fiscal_failed` row in `online_receipts` table and emit a `LOCKED_AUDIT_EVENT` `fiscal_receipt_permanently_failed`. An operator cron alerts on these rows (structlog ERROR + Telegram DM to owner).
+4. **Jitter** — add random jitter (±10%) to retry delays to prevent thundering herd across multiple concurrent receipt tasks.
+
+**Warning signs:**
+- `max_tries` > 3 without exponential backoff
+- No circuit breaker on ЮKassa API calls
+- No dead letter / alert mechanism for permanently failed receipts
+
+**Phase hint:** Integration phase. Circuit breaker is the same pattern as v1.6 email; the implementation can be extracted from `app/integrations/email/circuit_breaker.py` and generalized.
+
+---
+
+### Pitfall 12: Audit-Event Chain Ordering — Atomic Commit Scope for Multi-Step Online Payment Flow
+
+**Severity:** WARN
+
+**What goes wrong:**
+The v1.4 audit chain is `payment_recorded → membership_sold → membership_activated`. For online payments, the chain is longer: `payment_initiated → yookassa_payment_created → payment_succeeded_webhook → membership_activated → fiscal_receipt_queued → fiscal_receipt_sent`. Each step involves a separate DB write and/or external API call. If step 4 (`membership_activated`) commits but step 5 (`fiscal_receipt_queued`) fails before commit, the system is in a state where membership is active but no receipt task exists — a silent compliance hole.
+
+**Why it happens:**
+Each step is independently committed, not wrapped in a single Unit of Work.
+
+**Consequences:**
+- Membership active, no fiscal receipt ever sent → 54-ФЗ violation
+- Audit chain has gap: `membership_activated` row exists but no `fiscal_receipt_queued` row
+- No operational alert for the gap
+
+**Prevention:**
+1. **Atomic Unit of Work** — the webhook handler that processes `payment.succeeded` wraps ALL of these in a single `async with session.begin()`:
+   - Insert `online_payments` row with `status = 'succeeded'`
+   - Activate membership (status transition)
+   - Insert `online_receipts` row with `fiscal_status = 'pending'`
+   - Emit all LOCKED audit events (payment_succeeded, membership_activated, fiscal_receipt_queued)
+   - Enqueue `dispatch_receipt` ARQ task (via `arq.create_pool().enqueue_job(...)` inside the transaction — ARQ enqueue is Redis-based, not transactional, so enqueue inside the `finally` block AFTER the DB commit to avoid phantom tasks on rollback)
+2. **Transactional outbox pattern** — the `online_receipts` table row with `fiscal_status = 'pending'` acts as the outbox. The ARQ cron scans for `pending` receipts not yet picked up by the queue and re-enqueues them. This decouples DB durability from ARQ enqueue reliability.
+3. **SVC001 AST commit gate** — extend the existing `BusinessService` commit gate to cover `billing_service.py` and ensure all write paths explicitly `await session.commit()`.
+
+**Warning signs:**
+- `dispatch_receipt` ARQ task is enqueued BEFORE `session.commit()`
+- No `online_receipts` row inserted in the same transaction as membership activation
+- Gap between `membership_activated` and `fiscal_receipt_queued` audit events is not monitored
+
+**Phase hint:** Integration phase. UoW discipline is architectural and must be designed before the first webhook handler is built.
+
+---
+
+### Pitfall 13: Official yookassa-sdk-python is Synchronous — Blocks the Event Loop
+
+**Severity:** WARN
+
+**What goes wrong:**
+The official ЮKassa Python SDK (`yookassa` on PyPI, maintained by YooMoney) uses the `requests` library internally — it is synchronous. Calling `Payment.create(...)` from a FastAPI async endpoint or ARQ async task will block the entire event loop for the duration of the HTTP call (typically 50–300ms). Under load, this degrades all concurrent requests/tasks.
+
+**Why it happens:**
+The official SDK is the most documented option; developers install it without checking if it is async-compatible with their stack.
+
+**Consequences:**
+- Event loop blocked during every ЮKassa API call
+- ARQ task throughput degraded proportionally to ЮKassa API latency
+- Under high load: starvation of all other async work during payment creation
+
+**Prevention:**
+1. **Use `async_yookassa`** (`async_yookassa` on PyPI, `proDreams/async_yookassa`) — unofficial but actively maintained; uses `httpx.AsyncClient` natively; supports Pydantic v2; accepts a custom `AsyncClient` instance (injectable for testing with `respx`).
+2. **Alternatively, direct `httpx.AsyncClient`** — implement a thin `YookassaHttpClient` wrapper in `app/integrations/yookassa/` that performs raw HTTP Basic Auth calls using the project's own `httpx.AsyncClient`. This avoids third-party SDK coupling and integrates cleanly with `respx` for unit tests.
+3. **Never use `asyncio.to_thread(sdk_call)`** as a workaround — while it unblocks the event loop, it creates thread pool pressure and makes testing harder.
+4. **import-linter gate** — add a `integrations/yookassa/` module; ban direct imports of the `yookassa` (synchronous) package from `app/` outside this integration module.
+
+**Warning signs:**
+- `import yookassa` (the official sync SDK) in any `service.py` or `router.py`
+- `from yookassa import Payment` in ARQ task code
+- No `async with YookassaClient() as client:` pattern
+
+**Phase hint:** Bedrock phase. SDK choice shapes the integration module design.
+
+---
+
+### Pitfall 14: ЮKassa Credentials in Git — shopId + secretKey Leakage
+
+**Severity:** WARN
+
+**What goes wrong:**
+ЮKassa authentication uses HTTP Basic Auth: `shopId` as username, `secretKey` as password. Both are configured via the `yookassa.Configuration` object or passed as request parameters. If hardcoded or committed to `.env` files checked into git, they provide full access to create payments, issue refunds, and retrieve all transaction data.
+
+The v1.6 email integration established the pattern: `YANDEX_SES_ACCESS_KEY_ID` and `YANDEX_SES_SECRET_ACCESS_KEY` as `SecretStr` fields in `app/core/config.py` (Pydantic BaseSettings). The same discipline applies.
+
+**Why it happens:**
+Quick local testing with hardcoded test shop credentials; `.env` accidentally committed.
+
+**Consequences:**
+- Full financial access to the ЮKassa shop account
+- Unauthorized payment creation, refund issuance, transaction data exfiltration
+
+**Prevention:**
+1. **Pydantic Settings `SecretStr`** — `YOOKASSA_SHOP_ID: SecretStr` and `YOOKASSA_SECRET_KEY: SecretStr` in `app/core/config.py`. `SecretStr` prevents value from appearing in `repr()`, logs, or Pydantic validation errors.
+2. **`.env.example`** — add placeholder values: `YOOKASSA_SHOP_ID=000000` and `YOOKASSA_SECRET_KEY=test_xxx`. `.env` stays in `.gitignore`.
+3. **Test/production separation** — ЮKassa provides test shop credentials (`live=false`) that work against a sandbox. All CI tests use test credentials from environment variables injected by CI, never from committed files.
+4. **Webhook endpoint secret** (if a future ЮKassa version adds HMAC signing) — add `YOOKASSA_WEBHOOK_SECRET: SecretStr` as a pre-placeholder now, even if unused, to establish the pattern.
+
+**Warning signs:**
+- `shopId = "123456"` literal in any Python file
+- `.env` file added to git
+- `SecretStr` not used for credential fields
+
+**Phase hint:** Bedrock phase. Config additions in the first migration phase.
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 13: `audit.emit` event-name overflow without taxonomy planning
+### Pitfall 15: Test Infrastructure — No Official ЮKassa ASGI Fixture
 
-`LOCKED_AUDIT_EVENTS` is currently 56-entry frozenset. v1.6 adds ~10-12 events (`email_sent`, `email_bounced`, `email_complained`, `user_invited`, `user_invitation_accepted`, `user_deactivated`, `password_reset_requested`, `password_reset_completed`, `email_verification_sent`, `email_verification_completed`, `notification_preference_changed`). Pre-register in Phase 41 foundations (RETROSPECTIVE.md v1.3 key lesson #1 — pre-registration discipline).
+**Severity:** INFO
 
-**Phase to address:** Phase 41.
+**What goes wrong:**
+ЮKassa has no official ASGI transport-compatible test fixture analogous to the project's existing `httpx ASGITransport` pattern. The official Python SDK uses `requests`; there is no `YooKassaASGITransport`. Tests that call real ЮKassa endpoints in CI break on network unavailability and introduce flakiness.
 
----
+**Prevention:**
+1. **`respx` for outgoing ЮKassa API calls** — `respx.mock` patches `httpx.AsyncClient` at the transport layer without network calls. With `async_yookassa` (which accepts a custom `AsyncClient`), inject a `respx`-mocked client into tests: `async with httpx.AsyncClient(transport=respx.MockTransport(...)) as client: ...`
+2. **Webhook delivery in tests** — webhook handler tests use `httpx ASGITransport` (already the project standard) to POST the webhook payload directly to `POST /api/v1/billing/webhooks/yookassa`. Construct the payload manually from ЮKassa's documented structure; no need for a real ЮKassa instance.
+3. **FSM tests without external calls** — payment FSM state machine tests run against in-memory state with no HTTP calls at all; isolate the FSM logic from HTTP concerns.
+4. **Sandbox for manual verification only** — ЮKassa provides a test shop (`shopId = 100500`, `secretKey = test_...`) for manual operator verification phases. Not for automated CI.
 
-### Pitfall 14: New email worker becomes 7th docker-compose service vs ARQ-batch
+**Warning signs:**
+- Tests that call `yookassa.ru` directly
+- CI tests that depend on network availability
+- No `respx` fixtures for ЮKassa outgoing calls
 
-`docker-compose.yml` is at 6 services. Adding a 7th for email (e.g. a separate Resend webhook receiver if hosted) creates ops surface area. Prefer: email send + bounce-webhook receive both live inside `web` + `arq-worker` containers; webhook receiver is just a FastAPI endpoint at `/api/v1/webhooks/email/*` with signature verification.
-
-**Phase to address:** Phase 43.
-
----
-
-### Pitfall 15: SPF-aligned domain ≠ DMARC-aligned domain when From: uses different subdomain
-
-If `EMAIL_FROM_DOMAIN=mail.sportzal.ru` but SPF record is on `sportzal.ru`, DMARC alignment can fail on strict policy. Document the explicit DNS layout in Phase 41 spec (probably: SPF + DKIM + DMARC all on `mail.sportzal.ru`, with `_dmarc.sportzal.ru` policy in `p=quarantine` for the parent).
-
-**Phase to address:** Phase 41 (DNS spec is a precondition to provider selection).
+**Phase hint:** Integration phase. Test fixtures are part of the TDD setup for each ЮKassa integration point.
 
 ---
 
-### Pitfall 16: mail.ru lacks DKIM/SPF outbound but is the dominant recipient
+### Pitfall 16: LOCKED_AUDIT_EVENTS Not Pre-Registered Before Callsites — v1.3 INFRA-15 Discipline
 
-mail.ru does not publish SPF/DKIM for **outbound** sender authentication (per mxtoolbox / dmarc-research). That doesn't affect us — but it means: mail.ru users **receive** from us, and their inbound spam filter is weaker on alignment heuristics. Don't optimise solely for mail.ru deliverability; yandex.ru is the stricter inbox and the right deliverability tuning target.
+**Severity:** INFO
 
-**Phase to address:** Phase 41 (provider + DNS spec).
+**What goes wrong:**
+The v1.3 INFRA-15 discipline requires new `LOCKED_AUDIT_EVENTS` entries to be pre-registered in the frozenset BEFORE any callsite that uses them. For v1.7, online payment events will be: `payment_initiated`, `yookassa_payment_created`, `payment_succeeded`, `payment_failed`, `payment_canceled`, `membership_activated_online`, `refund_initiated`, `yookassa_refund_created`, `refund_succeeded`, `fiscal_receipt_queued`, `fiscal_receipt_sent`, `fiscal_receipt_failed`. At minimum 12 new event strings.
 
----
+If a developer adds a callsite that uses a new event string before adding it to the frozenset, the AST gate CI check fails and blocks the entire PR chain.
 
-## Technical Debt Patterns
+**Prevention:**
+1. **First commit of v1.7 bedrock phase** extends `LOCKED_AUDIT_EVENTS` frozenset with all 12+ online-payment event strings — before any callsite exists.
+2. **Naming convention** — online payment events use `payment_*` prefix; fiscal events use `fiscal_receipt_*` prefix; no collision with existing `membership_*` events.
+3. **Count test** — extend the existing `len(LOCKED_AUDIT_EVENTS) == N` assertion in tests to the new expected count after bedrock phase.
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Store reset tokens in plain text in DB | Simpler debugging | Full DB read = full account takeover via token reuse | Never. Hash with SHA-256 minimum (faster than Argon2 and acceptable for short-lived tokens). |
-| Reuse Telegram `notifications.py` constants for email | Less duplication | Couples two channels' copy; anti-oracle harder to audit per-channel | Never. Sibling `email_notifications.py` per module. |
-| Skip the `channel` column on idempotency tables, use `kind='telegram_expiring_7d'` vs `kind='email_expiring_7d'` | One less migration | Doubles taxonomy; analytics + audit queries fork per channel; cross-channel dedup impossible | Never. Add the column in Phase 41 schema migration. |
-| Pass through to provider SDK retry/timeout defaults | Less config | Provider degradation cascades into worker wedge (Pitfall 3) | Never for cron-path code. Acceptable only for one-shot scripts that have human supervision. |
-| Send password-reset email with token in URL path | Simpler SPA | Token leaks via Referer, proxy logs, shoulder-surf | Never. Token in `#fragment` or POST body only. |
-| Skip `users.email` partial-UNIQUE on `WHERE deleted_at IS NULL` | Less migration churn | Email reuse hijacks deactivated operator's audit trail (Pitfall 4 case 2) | Never. Mirror the `clients.phone` partial-unique pattern. |
-| Single From: domain across transactional + marketing | One DNS setup | Marketing complaints poison transactional reputation | Acceptable for v1.6 (transactional only); revisit if marketing emails are added later. |
-| Inline email template HTML in `Final[str]` constants | AST gate works | Hard to preview in dev; designers can't iterate | Acceptable in v1.6 — design team is external; locked copy is owner-signed-off; preview is a CI step (snapshot test). |
+**Warning signs:**
+- `audit.emit("payment_succeeded", ...)` callsite in service code before the frozenset includes `"payment_succeeded"`
+- CI gate fails with "unknown audit event string" error
 
----
-
-## Integration Gotchas
-
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Resend Python SDK | Module-level `resend.api_key = ...` cached at import → key rotation requires restart | Wrap SDK in a thin `EmailClient` class that reads settings per-call; cache only client builder, not credentials |
-| AWS SES (boto3) | Default `retries.max_attempts=3` (or 10 on legacy mode) compounds with ARQ retries | `Config(retries={'max_attempts': 1, 'mode': 'standard'})` |
-| Mailgun | Webhooks signed with HMAC-SHA256 of `timestamp + token` — easy to verify wrong field order | Use Mailgun's official webhook-verification function or a tested helper; never roll your own |
-| Yandex Postmaster Tools | Domain reputation reports need DMARC `rua=` to point at a yandex-friendly endpoint | Use the provider's DMARC aggregation feature (Resend, SES all offer it) — don't build a parser |
-| Provider sandbox mode | Sends succeed to verified addresses, silently drop to unverified — works in CI, fails in prod | Pydantic Settings flag `sandbox_mode: bool` + assertion at boot that prod env is non-sandbox |
-| Webhook receiver behind nginx | nginx default body size 1MB → bounce webhooks with full original message attached can exceed | Set explicit `client_max_body_size 4M;` for `/api/v1/webhooks/email/*` location (infra/nginx) |
-| Provider DKIM key rotation | New key published in DNS but provider not signaled → in-flight sends signed with old key fail alignment | Coordinate via provider's "key rotation" workflow; gate switch with a CI smoke test (probe a known address, check DKIM-Signature header) |
-| Python `email.headerregistry.Address` with Cyrillic display-name | Library auto-encodes display name; provider SDK may **re-encode** the already-encoded string → double-encoded `=?UTF-8?B?PT9VVEYtO...` garbage | Pass display-name as raw Python `str` to provider SDK; let SDK encode; round-trip test on the wire form |
+**Phase hint:** Bedrock phase, first task.
 
 ---
 
-## Performance Traps
+### Pitfall 17: Telegram WebApp Payments — Separate Pitfall Set, Defer to Post-v1.7
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Send loop without dispatcher concurrency cap | First 50 sends queue, last 200 timeout | `asyncio.Semaphore` + outbox table | At ~50 clients (early prod) — i.e. immediately |
-| ARQ job per-email vs per-batch | Redis queue depth balloons; ARQ admin dashboard unusable | Outbox row + one drainer job that processes N rows per tick | At ~500 emails/day (v1.7+) |
-| Synchronous bounce-webhook processing | Provider retries the webhook on 5xx → cascade | Webhook handler accepts → enqueues → returns 200 immediately | Always (providers retry within seconds) |
-| Render HTML body inside the SQL transaction | Long-held connection during Jinja render | Render outside the txn (in service layer); txn holds only the outbox INSERT | At ~10 concurrent sends |
-| `SELECT * FROM email_outbox WHERE status='pending'` without LIMIT | Drainer scans full table after a backlog spike | `SELECT ... ORDER BY created_at LIMIT 100 FOR UPDATE SKIP LOCKED` | At ~1000 backlog rows |
-| Bounce status checked on send-side (read full table) | Every send does `SELECT clients.email_deliverable WHERE id=...` — N+1 | Join at outbox-row write time, denormalise `email_deliverable_at_send_time` snapshot | At ~100 concurrent sends |
+**Severity:** INFO (DEFER)
 
----
+**What goes wrong:**
+Telegram WebApp payments (Telegram Stars, TON, or direct card payments via Telegram Pay) use a completely different integration: `initData` verification (HMAC-SHA256 of `window.Telegram.WebApp.initData`), invoice creation via `bot.send_invoice()`, `pre_checkout_query` handling, and `successful_payment` update processing. Currency is in Stars (integer) or kopecks depending on provider. This is an entirely separate integration from ЮKassa redirect/webhook flow.
 
-## Security Mistakes
+**Prevention:**
+- Defer Telegram WebApp payments to v1.8+ or a separate milestone
+- v1.7 scope is strictly ЮKassa redirect flow for the admin panel (reception/owner initiating payment on behalf of client)
+- If Telegram self-service payment is needed later, the `initData` HMAC verification pattern is NOT the same as ЮKassa IP validation — document separately
 
-| Mistake | How Users Suffer | What to Do Instead |
-|---------|-------------------|---------------------|
-| Reset token in URL path | Leaks via Referer / proxy / browser history / shoulder-surf | Token in URL fragment (`#token=...`) consumed by SPA without server round-trip |
-| Different response for "email exists" vs "email not found" on reset | Account enumeration → targeted phishing | Single 202 response with single generic body for all four cases |
-| Webhook receiver without signature verification | Attacker forges bounces, marks legitimate clients undeliverable → silent client lockout | HMAC verify with timing-safe compare (`hmac.compare_digest`) before any processing |
-| Plain text reset tokens in DB | DB read = account-takeover-at-scale | SHA-256 hash; verify by hash; cleanup expired rows nightly |
-| Invitation token survives password set | Replay invitation → second account-set | Invalidate token atomically on first POST regardless of password set success; intermediate short-lived session for the form |
-| `password_reset_tokens` without rate limit per-email | Attacker triggers 1000 emails to `victim@target.ru` to fill inbox | Rate-limit POST /auth/password-reset by email (1/min, 5/hour); insert hashed-email-only row to detect; same generic 202 response |
-| Bot DM oracle replicated in email subject | "Your gym membership has expired" subject leaks status to anyone with email access | Generic subject "Сообщение от Спортзал" + body carries detail; consistent across all states |
-| OTP attempt-count reset on resend | Attacker forces fresh OTP every 30s, brute-forces in parallel | Attempt counter scoped per `(user_id, channel, current_active_otp_id)` — resend doesn't reset |
-| Email verification stores raw token instead of hash | Mirror of reset-token issue | SHA-256 hash for verification tokens too |
-| Permitting `From: alice@gym.ru` (same as a real client's email) | Phishing via spoofed sender | `From:` must always be on verified domain; display name can vary but local-part is fixed |
+**Warning signs:**
+- `successful_payment` update handler added to `telegram_bot.py` in v1.7
+- Any `Telegram.WebApp` JavaScript in the admin panel during v1.7
+
+**Phase hint:** DEFER. Not in v1.7 scope.
 
 ---
 
-## "Looks Done But Isn't" Checklist
+## Phase-Specific Warnings
 
-- [ ] **Password reset:** Often missing → returns same response regardless of email-existence (anti-enumeration) — verify with `test_password_reset_no_oracle.py` triggering all 4 cases (existing-active, existing-deactivated, owner-account, non-existent) and asserting identical 202 + body + bounded timing.
-- [ ] **Password reset:** Often missing → token consumption is single-SQL atomic with `RETURNING` (not check-then-update) — grep the service for `WHERE ... AND consumed_at IS NULL RETURNING`.
-- [ ] **Invitation:** Often missing → soft-deleted user with same email cannot be reactivated by re-invitation — verify with an integration test that soft-deletes Alice, invites Alice's-email-again, asserts new `users.id` (not the old one).
-- [ ] **Email send:** Often missing → bounce webhook actually updates `email_deliverable=False` — verify with a webhook fixture POST and a follow-up send-attempt that returns SKIPPED.
-- [ ] **Email send:** Often missing → RFC 2047 encoding of Cyrillic subject — verify by capturing the raw outgoing SMTP via provider's "sandbox" mode or by snapshotting the assembled `MIMEMessage` and asserting subject starts with `=?UTF-8?`.
-- [ ] **OTP via email:** Often missing → TTL extended vs Telegram (10min vs 5min) — verify settings.
-- [ ] **OTP via email:** Often missing → `otp_codes` table has `channel` column and UNIQUE includes `channel` — verify Alembic migration.
-- [ ] **Audit traceability:** Often missing → `actor_email_snapshot` denormalised at audit-write time — verify in `audit_payloads.py` registry that the snapshot field is required.
-- [ ] **Multi-user deactivation:** Often missing → revokes all refresh-token families synchronously — verify with an integration test that logs in user, deactivates, and asserts both `/refresh` and access-token use return 401.
-- [ ] **Email cron:** Often missing → outbox + dispatcher pattern, not direct send from cron — verify by grepping `app/workers/tasks/` for `mailer.send(` outside the dispatcher file.
-- [ ] **Email cron:** Often missing → eager-import of new ORM models in `app/workers/__init__.py` — verify with `tests/test_workers_eager_import.py`.
-- [ ] **Idempotency:** Often missing → `(subject_id, kind, channel)` composite — verify Alembic migration `0024_notification_channel_discriminator`.
-- [ ] **Provider config:** Often missing → boot-time assertion that `from_domain` is verified — verify with a settings validator that fails on empty `from_domain` in non-sandbox mode.
-- [ ] **DNS / DMARC:** Often missing → DMARC alignment between `From:` domain and SPF/DKIM signing domain — verify by sending one probe email and reading the receiving server's Authentication-Results header.
-- [ ] **Locked copy:** Often missing → owner sign-off enumerates every constant identifier, not "all v1.6 templates" — verify in plan SUMMARY.md.
-- [ ] **Refresh path:** Often missing → `users.is_active` join — grep `/auth/refresh` handler for the join or for an explicit `is_active=True` check.
-- [ ] **Email rate-limit:** Often missing → per-email rate limit on `/auth/password-reset` — verify with an integration test hitting the endpoint 10× rapid-fire and asserting 429 after N.
-- [ ] **Webhook:** Often missing → signature verification BEFORE body parsing — read the route handler and check that signature check is the first await.
-- [ ] **From: header:** Often missing → display name encoded once, not twice — capture wire form and grep for `=?UTF-8?B?=?UTF-8?` double-encoding.
-- [ ] **AST gate:** Often missing → `LOCKED_EMAIL_TEMPLATES` frozenset + `email_mailer.send(...)` literal-string gate — verify by adding a synthetic violation fixture (mirrors the v1.2 `audit.emit` AST gate pattern).
-
----
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Email channel leaks oracle on reset (Pitfall 1) | MEDIUM | Lock all reset/invite endpoints behind a feature flag; ship corrected anti-oracle response; audit-log all reset attempts in the leak window; owner DM to affected clients only if probe-pattern detected. |
-| Cross-channel double-ping (Pitfall 2) | LOW (early) → HIGH (after many sends) | Add `channel` column via online ALTER (Postgres 16 supports it); backfill existing rows with `channel='telegram'`; lock the migration with a partial UNIQUE recreation. Acceptable downtime: cron window (06:14–06:16 MSK). |
-| Worker wedge from provider 5xx (Pitfall 3) | LOW | Manual SIGINT the arq-worker container; restart with circuit-breaker key pre-set; provider 5xx still ongoing → cron skips the window; next 06:15 tick recovers. |
-| Account hijack via email re-claim (Pitfall 4 case 2) | HIGH | Audit-log scan for `user_invitation_accepted` rows where the resulting `user_id` had prior audit rows under a different name; revoke all such users' tokens; force re-invite with new email aliases. |
-| Audit traceability lost (Pitfall 5) | HIGH (irreversible for past rows) | Cannot retroactively recover `actor_user_id`; going forward, add `actor_email_snapshot` and accept the gap on legacy rows. Document the cutover date in PROJECT.md. |
-| Locked-copy compromise (Pitfall 6) | LOW | Revert PR; owner re-signs new copy under a new D-XX-OWNER-COPY-LOCK row; redeploy. |
-| Eager-import regression (Pitfall 7) | LOW | Add the missing import; redeploy worker; verify with one-shot script. |
-| Provider sandbox in prod (Pitfall 8) | MEDIUM | Restart with corrected settings; messages already sent are lost (sandbox doesn't deliver); inform affected users to expect a re-trigger (e.g. re-request expiring-soon notification — though the next 06:15 tick auto-handles it). |
-| Bounce webhook unverified (security mistake) | MEDIUM | Add signature verification, deploy, scan audit_log for `email_send_skipped_bounced` rows in the unverified window, manually verify each via provider's UI to confirm not attacker-forged. |
-| Reset-token leak via URL (security mistake) | HIGH | Invalidate all outstanding reset tokens (UPDATE all WHERE consumed_at IS NULL SET consumed_at=now()); deploy fragment-based URL; force-resend invitations for any in-flight onboarding. |
-
----
-
-## Pitfall-to-Phase Mapping
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| 1. Email breaks anti-oracle invariant | Phase 41 (spec) | `test_password_reset_no_oracle.py` + `LOCKED_EMAIL_TEMPLATES` AST gate + synthetic-violation fixture |
-| 2. Cross-channel double-ping (idempotency taxonomy) | Phase 41 (schema migration `0024_notification_channel_discriminator`) | Integration test sends same-event Telegram + email, asserts only one channel actually fires per client preference |
-| 3. Provider 5xx wedges worker | Phase 43 (cron integration) | `WorkerSettings` boot assertion `max_tries<=2, timeout<=30`; chaos test with provider stub returning 5xx for 5 minutes asserts cron next-tick recovery |
-| 4. Token replay / email hijack | Phase 41 (foundations: SVC001 scope + partial-UNIQUE migration) + Phase 42 (impl: reset/invite endpoints) | Three integration tests: token-replay → 409, soft-deleted email re-invitation → new user_id, soft-deleted refresh-token revocation |
-| 5. Audit `actor_user_id` semantics break | Phase 41 (schema migration `0023_audit_actor_snapshot`) + Phase 42 (deactivation flow) | Test deactivates user, asserts (a) `actor_email_snapshot` populated on past rows after backfill, (b) `/refresh` returns 401, (c) `/me` returns 401 within session lifetime |
-| 6. Locked-copy lock breaks under email surface | Phase 41 (gate) + Phase 43 (templates with per-template sign-off) | RFC 2047 round-trip test, NBSP HTML snapshot test, footer existence assertion in every template render |
-| 7. ARQ cron eager-import regression | Phase 41 (test discipline) + Phase 43 (cron impl) + Phase 45-ish (verification) | `tests/test_workers_eager_import.py` + Phase-N verification scenario "run cron one-shot, assert non-zero on first call" |
-| 8. Provider secret/domain rotting | Phase 41 (settings + boot probe) | Settings validator + boot-time `/domains` probe in non-sandbox mode |
-| 9. Bounce / complaint webhook silent decay | Phase 43 (webhook handlers + status column) | Webhook fixture POST → status flips → next send returns SKIPPED |
-| 10. Email-OTP TTL/attempt collision | Phase 42 (OTP table migration) | TTL = 10min asserted in test; cross-channel reuse blocked at UNIQUE constraint |
-| 11. Invitation TTL onboarding friction | Phase 42 (invitation impl) | Operator runbook scenario: invite, wait 3 days (mock clock), accept successfully |
-| 12. Provider 429 burst | Phase 43 (outbox dispatcher) | Load test fires 50 sends, asserts dispatcher caps at ≤5 concurrent |
-| 13. `LOCKED_AUDIT_EVENTS` overflow | Phase 41 (pre-register) | Frozenset extended in foundations plan; AST gate stays green across Phases 42/43 |
-| 14. 7th docker-compose service drift | Phase 43 (deployment shape decision) | Architecture decision record: webhook receiver lives in `web`, dispatcher in `arq-worker`; explicit reject of 7th service |
-| 15. DMARC alignment for subdomain | Phase 41 (DNS spec) | DNS records committed to `infra/dns/sportzal.ru.zone`; probe-send verifies alignment in operator runbook |
-| 16. mail.ru vs yandex.ru deliverability asymmetry | Phase 41 (provider selection) + Phase 45 (verification) | Probe-send to one yandex.ru and one mail.ru recipient during milestone verification; check Authentication-Results headers on both |
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Bedrock — migrations + event registration | Missing `LOCKED_AUDIT_EVENTS` pre-registration | First commit: extend frozenset before any service code |
+| Bedrock — currency converter | Off-by-100 kopecks/rubles conversion | Dedicated converter module + unit tests before payment creation |
+| Bedrock — SDK choice | Official sync SDK blocking event loop | Mandate `async_yookassa` or direct `httpx.AsyncClient` wrapper |
+| Bedrock — config | Credentials in git | `SecretStr` fields added to `app/core/config.py` in bedrock phase |
+| Integration — payment creation | Double-tap parallel payments | Deterministic `Idempotency-Key` + DB partial UNIQUE |
+| Integration — webhook handler | IP validation after body parse | IP check middleware runs before `request.json()` — import-linter or AST gate |
+| Integration — webhook handler | No Redis dedup | `SET NX EX 86400` on `(event_type, object.id)` before any DB write |
+| Integration — return URL | Membership activated on redirect | return_url handler is read-only status screen; activation only on webhook |
+| Integration — return URL | Payment status oracle via URL | Single return URL, `_constant_time_floor` pattern, no `?status=` param |
+| Integration — receipt | Wrong payment_subject/payment_mode | Locked `Literal` constants; owner sign-off record |
+| Integration — receipt | Client missing email/phone | Gate payment initiation on contact data; clear 422 error |
+| Integration — receipt | Receipt timing violation | Priority queue + Scenario 1 (embed receipt in payment payload) |
+| Integration — refund | Missing `refund.succeeded` subscription | Explicit subscription in deployment runbook |
+| Integration — refund | Double audit on refund webhook retry | Same Redis dedup gate; `IntegrityError` → 200 (not 500) |
+| Verification | No ЮKassa ASGI fixture | `respx` for outgoing + `ASGITransport` for incoming webhooks |
+| Verification | ARQ receipt retry storm | Circuit breaker test with `respx` simulating 429 from ЮKassa |
 
 ---
 
 ## Sources
 
-### System-grounded (HIGH confidence)
-- `.planning/PROJECT.md` — D-20-9 anti-oracle, D-27-OWNER-COPY-LOCK, `LOCKED_AUDIT_EVENTS` frozenset, idempotency table patterns (`membership_notifications`, `booking_notifications`), refresh-rotation family race tolerance, cross-module Protocol slots, SVC001 AST commit gate
-- `.planning/RETROSPECTIVE.md` — v1.1 Phase 12.1 commit-gate bug (key lesson #3), v1.2 locked Russian copy lesson (#2), v1.3 `LOCKED_AUDIT_EVENTS` pre-registration (#1), v1.3 milestone-verification-as-phase (#1)
-- `.planning/MILESTONES.md` — REG-29-01 dev-proxy, REG-29-03 worker resolver registration, REG-29-04 cron eager-import; REG-36-01..05 verification-time regression class; v1.5 Phase 40 verification 4-hotfix pattern (DEFER-40-01)
-- `apps/backend/app/modules/auth/models.py:32-60` — `users` table shape (no soft-delete partial-UNIQUE on email; `telegram_chat_id BIGINT NULL UNIQUE`)
-- `apps/backend/app/modules/bookings/notifications.py:35` — `_BOT_BOOK_DENIED_DM` constant pattern (locked Russian copy + anti-oracle in one `Final[str]`)
-
-### Russian-locale / deliverability (MEDIUM confidence)
-- [mail.ru SPF & DKIM Setup — mxtoolbox](https://mxtoolbox.com/c/outboundemailsources?public=Mail.ru) — confirms mail.ru's weak outbound authentication posture relative to yandex
-- [Yandex SPF & DKIM Setup — mxtoolbox](https://mxtoolbox.com/c/outboundemailsources?public=Yandex-Mail) — confirms yandex's stricter alignment requirements
-- [Understanding Yandex Mail DMARC Reports — Skysnag](https://www.skysnag.com/blog/dmarc-report-received-from-yandex-mail-what-you-need-to-know/) — yandex postmaster tooling
-- [RFC 2047 — IETF](https://datatracker.ietf.org/doc/html/rfc2047) — encoded-word format for Cyrillic in `Subject` + `From` display names; 75-char limit per encoded-word; `=?UTF-8?B?...?=` syntax
-- [Yandex SPF and DKIM set up — OnDMARC](https://knowledge.ondmarc.redsift.com/en/articles/1962212-yandex-spf-and-dkim-set-up) — alignment requirements
-
-### Pattern references (training-data, MEDIUM confidence — verify with Context7 / provider docs at Phase 41 spec time)
-- Resend Python SDK module-level `resend.api_key = ...` pattern (verify against current docs)
-- AWS SES boto3 retry defaults (verify against current SDK docs)
-- Mailgun HMAC-SHA256 webhook signature format
-- Postgres 16 partial UNIQUE + `WHERE` clause syntax (well-established)
-- `asyncio.Semaphore` rate-limit pattern (stdlib)
-
----
-
-*Pitfalls research for: v1.6 Email channel + Multi-user admin*
-*Researched: 2026-05-18*
-*Grounded in Sportzal-specific patterns from v1.0–v1.5; provider-specific items flagged for Phase 41 spec-time validation against current provider docs (Context7).*
+- [ЮKassa Webhooks documentation](https://yookassa.ru/developers/using-api/webhooks) — IP ranges, retry behavior, no HMAC (HIGH confidence, official)
+- [ЮKassa Interaction Format](https://yookassa.ru/developers/using-api/interaction-format) — Idempotence-Key header, 24h window (HIGH confidence, official)
+- [ЮKassa 54-ФЗ receipts (YooMoney path)](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics) — receipt API overview (HIGH confidence, official)
+- [ЮKassa receipt parameter values](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/parameters-values) — payment_subject, payment_mode values (HIGH confidence, official)
+- [ЮKassa third-party receipt basics](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/other-services/basics) — timing scenarios, 5-minute window, failure handling (HIGH confidence, official)
+- [ЮKassa refund receipts](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/refunds) — возврат прихода, full vs partial refund (HIGH confidence, official)
+- [54-ФЗ receipt timing analysis (klerk.ru)](https://www.klerk.ru/buh/articles/476136/) — 5-minute tolerance on clock, not on issuance; "at the moment of payment" (MEDIUM confidence, verified analyst source)
+- [Electronic receipt delivery requirements](https://astral.ru/info/operator-fiskalnykh-dannykh/otpravka-elektronnogo-cheka-klientu/) — email/phone mandatory; no gym-email fallback (MEDIUM confidence)
+- [async_yookassa (GitHub)](https://github.com/proDreams/async_yookassa) — httpx-based async ЮKassa client (MEDIUM confidence, community-maintained)
+- [respx documentation](https://lundberg.github.io/respx/) — httpx mock transport for testing (HIGH confidence, official)
+- [ЮKassa Python SDK (official)](https://github.com/yoomoney/yookassa-sdk-python) — synchronous requests-based SDK (HIGH confidence, official)

@@ -1,455 +1,599 @@
-# Architecture Research — v1.6 Email Channel + Multi-User Admin
+# Architecture: v1.7 Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
 
-**Domain:** Modular-monolith extension (FastAPI / SQLAlchemy 2.0 async / ARQ)
-**Researched:** 2026-05-18
-**Confidence:** HIGH — entirely grounded in the existing v1.0–v1.5 codebase patterns; no speculative external research required.
-
----
-
-## TL;DR — Five Architectural Decisions
-
-1. **Email transport** lives in `app/integrations/email/` (mirrors `app/integrations/telegram/`). Single thin outbound boundary `send_email(...)` returns a typed `EmailSendResult` (mirror of `SendResult` in `app/integrations/telegram/sender.py:17`). **No new import-linter contract needed** — `integrations-not-depend-on-modules` already covers this.
-2. **Email send is always async via ARQ**, never inline in the request handler. A new task `dispatch_email` is added to `WorkerSettings.functions`; the existing `arq-worker` container runs it. **No 6th docker-compose service.**
-3. **`app/modules/notifications/` stays a placeholder.** Per-domain template ownership wins (the v1.5 D-39-02 precedent: `app/modules/bookings/notifications.py` owns booking DM copy). Email templates for each domain live next to their Telegram counterparts (`app/modules/{auth,memberships,bookings,payments}/email_templates.py`). The `integrations/email/` layer is **channel-agnostic transport only** — it knows nothing about Russian copy or business events.
-4. **New `app/modules/users/` module** (not an extension of `auth`). Auth keeps login/refresh/OTP/sessions; users gets CRUD + invitation + reset-password. **One new edge in `modules-independent` contract** (users joins the list); cross-module wiring via composition-root Protocol slots only.
-5. **Reset-password tokens** live in a new DB table `password_reset_tokens` (NOT Redis). Mirrors the `refresh_tokens` discipline: hash-at-rest, server-side single-use, with auditability. Single-use enforcement is a partial unique on `(user_id, purpose) WHERE consumed_at IS NULL`. (Note: the STACK research recommends `itsdangerous`-signed stateless tokens — this is an open question for the spec phase; both approaches preserve the audit invariant.) Redis is wrong here because we need post-mortem auditability for any password-reset abuse.
+**Researched:** 2026-05-21
+**Confidence:** HIGH (codebase read + official ЮKassa docs + v1.4–v1.6 pattern precedents)
 
 ---
 
-## Standard Architecture (Existing — confirmed via inspection)
+## 1. New Module(s): Sibling vs Extension
+
+**Decision: new sibling `app/modules/online_payments/` alongside existing `app/modules/payments/`.**
+
+Rationale:
+
+The v1.4 `payments/` module is an **append-only ledger**. Its two public surfaces are `record_payment` and `issue_refund`, both decorated `# noqa: SVC001 caller-owns-txn` and intentionally commit-free. The module has AST-enforced append-only discipline (`test_payments_appendonly.py` bans `update(Payment)` / `delete(Payment)` anywhere in the module). Extending it with mutable FSM columns, webhook-state transitions, and ЮKassa-specific status tracking would require lifting that ban or creating two tiers of logic inside one module — architectural debt. The v1.4 CHECK constraints on `payments` (`subject_kind IN ('membership','pt_package','refund')`, signed-amount) would need new subject_kind values OR explicit exceptions, complicating the bedrock invariants.
+
+The sibling pattern keeps `payments/` frozen and purpose-pure: it records the **final committed transaction** (cash or online). `online_payments/` owns the **lifecycle up to commitment** — the pending/captured/succeeded/canceled states live there until `succeeded` triggers a `record_payment` call through the existing Protocol slot.
+
+Concrete boundary:
 
 ```
-                                  ┌─────────────────────────────────────┐
-                                  │       app/api/v1/router.py          │
-                                  │       (HTTP entry — FastAPI)        │
-                                  └──────────────────┬──────────────────┘
-                                                     │
-                            ┌────────────────────────┼────────────────────────┐
-                            │                        │                        │
-                            ▼                        ▼                        ▼
-        ┌────────────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
-        │  app/modules/<domain>/      │  │  app/core/            │  │  app/api/v1/          │
-        │  router / service / models  │◄─┤  dependencies.py      │◄─┤  endpoint glue        │
-        │  schemas / repository       │  │  (Protocol slots —    │  │                       │
-        │                             │  │  register_*)          │  │                       │
-        └─────────────────────────────┘  └───────────────────────┘  └───────────────────────┘
-                                                     │
-                                                     ▼
-                                         ┌───────────────────────┐
-                                         │  app/main.py          │
-                                         │  create_app()         │
-                                         │  ─── composition ───  │
-                                         │  register_user_loader │
-                                         │  register_*resolver*  │
-                                         │  register_payment_*   │
-                                         │  register_booking_*   │
-                                         └──────────┬────────────┘
-                                                    │
-                                                    ▼
-                        ┌─────────────────────────────────────────────────────────┐
-                        │  app/integrations/  (transport — channel-specific)      │
-                        │   telegram/  email/  (← currently placeholder)          │
-                        └───────────────────┬─────────────────────────────────────┘
-                                            │
-                                            ▼
-                        ┌─────────────────────────────────────────────────────────┐
-                        │  app/workers/  (separate processes)                     │
-                        │   telegram_bot.py  (4th compose service — long-polling) │
-                        │   __init__.py:WorkerSettings  (5th compose service —    │
-                        │                                 ARQ scheduled jobs)     │
-                        └─────────────────────────────────────────────────────────┘
+app/modules/online_payments/
+  models.py          # OnlinePayment (FSM columns), OnlineRefund
+  schemas.py         # create/response Pydantic schemas
+  repository.py      # get/insert/update helpers — caller-owns-txn
+  service.py         # orchestrator: create_online_payment, capture, handle_webhook_event
+  constants.py       # ONLINE_PAYMENT_STATUS_TRANSITIONS, SUBJECT_KIND_* (mirrors payments/constants.py)
+  notifications.py   # DM template constants: PAYMENT_SUCCESS_DM, REFUND_ISSUED_DM (mirrors bookings/notifications.py D-39-02)
+  email_templates.py # EMAIL_PAYMENT_ONLINE_SUCCESS, EMAIL_ONLINE_REFUND — extends payments/ ladder
+  permissions.py     # RBAC gates for online-payment create / refund
+  router.py          # /online-payments/* endpoints
 ```
 
-**import-linter contracts:**
+The `payments/email_templates.py` already has `EMAIL_PAYMENT_RECEIPT_SALE` / `EMAIL_PAYMENT_RECEIPT_REFUND` for cash receipts. Online payments get separate template IDs (`EMAIL_PAYMENT_ONLINE_SUCCESS_SALE`, `EMAIL_PAYMENT_ONLINE_SUCCESS_REFUND`) in a new file inside `online_payments/` — keeping the domain-ownership convention (D-39-02).
 
-1. `core-not-depend-on-modules` — `app.core` ⊥ `app.modules.*`
-2. `modules-independent` — listed modules cannot import each other (currently 12 modules: auth, clients, memberships, visits, trainers, schedule, bookings, billing, notifications, payments, pt_packages, pt_sessions)
-3. `integrations-not-depend-on-modules` — `app.integrations` ⊥ `app.modules.*`
-
-Documented narrative exceptions:
-- **D-06** (Phase 7) — `app/workers/telegram_bot.py` may import `app.modules.auth.telegram_service`
-- **D-09** (Phase 18) — each `app/workers/scheduled/<job>.py` may import ONE owning module's service
-- **D-10** (Phase 20) — workers may consume cross-module slots via `HandlerContext`
-- **D-39-02** (Phase 39) — `app/modules/bookings/notifications.py` may be imported by both bookings/workers AND the telegram bot worker (locked DM copy lives in the owning module, not in `integrations/telegram/copy.py`)
+**What gets modified in `payments/`:** Zero. The `Payment` ORM model, its CHECK constraints, and `record_payment` / `issue_refund` are untouched. The only cross-module allowance needed (see §10) is `online_payments/service.py → payments/models.py` for writing `PaymentReceipt` rows (same pattern as the Phase 45 `memberships/service.py → payments/models.py` ignore).
 
 ---
 
-## Recommended v1.6 Structure (Additions in **bold**)
+## 2. New Integration: `app/integrations/yookassa/`
+
+Shape mirrors `app/integrations/email/` exactly: config, client, factory, types.
 
 ```
-apps/backend/app/
-├── core/
-│   ├── audit.py                              # LOCKED_AUDIT_EVENTS 56 → 56 + ~11 (add up-front per v1.3 INFRA-15 lesson)
-│   ├── audit_payloads.py                     # extra='forbid' Pydantic registry (extend per new event)
-│   └── dependencies.py                       # + register_email_dispatcher, + register_user_session_invalidator (Protocol slots)
-├── integrations/
-│   ├── telegram/                             # unchanged
-│   └── email/                                # ALREADY EXISTS as placeholder
-│       ├── __init__.py                       # module docstring (mirror telegram/__init__.py shape)
-│       ├── client.py                         # **REPLACE placeholder** → async provider adapter (see STACK.md for provider)
-│       ├── factory.py                        # **NEW** — `build_email_client(*, api_key, from_addr)` mirrors `telegram/bot.py:build_bot`
-│       └── templates/                        # **KEEP EMPTY.** No business copy here (D-39-02 lesson — copy lives in modules).
-├── modules/
-│   ├── auth/                                 # **EXTEND** (not split)
-│   │   ├── service.py                        # + `invalidate_all_families_for_user(user_id)` — exported via Protocol slot
-│   │   ├── email_templates.py                # **NEW** — locked Russian email copy for OTP-fallback (when Telegram blocked)
-│   │   ├── password_reset_service.py         # **NEW** — issue + consume reset token + audit chain
-│   │   ├── password_reset_email_templates.py # **NEW** — locked Russian copy for reset-link email
-│   │   └── models.py                         # + `PasswordResetToken` ORM model (or — per STACK.md — skip table if itsdangerous-stateless)
-│   ├── users/                                # **NEW MODULE** — owner-managed admin onboarding
-│   │   ├── __init__.py
-│   │   ├── router.py                         # POST /api/v1/users, PATCH /api/v1/users/{id}, DELETE, GET
-│   │   ├── service.py                        # create_user, deactivate_user, soft_delete_user, list_users, send_invitation_email
-│   │   ├── invitation_service.py             # invitation-token issuance + consumption
-│   │   ├── email_templates.py                # **NEW** — locked Russian copy: USER_INVITATION_EMAIL_*
-│   │   ├── repository.py                     # User CRUD (does NOT touch refresh_tokens — auth's domain via slot)
-│   │   ├── schemas.py
-│   │   ├── permissions.py                    # owner-only via existing `require_permission` + new (CREATE, USERS) etc.
-│   │   └── constants.py                      # USER_STATUS_TRANSITIONS (active ↔ deactivated; → soft-deleted absorbing)
-│   ├── memberships/
-│   │   └── email_templates.py                # **NEW** — locked Russian email copy for EXPIRING_{7D,3D,1D} email variant
-│   ├── bookings/
-│   │   └── email_templates.py                # **NEW** — locked Russian email copy for booking confirm + reminder
-│   ├── payments/
-│   │   └── email_templates.py                # **NEW** — locked Russian email copy for cash payment receipt
-│   └── notifications/                        # **STAYS A PLACEHOLDER.** Per-domain template ownership is the rule.
-├── workers/
-│   ├── __init__.py                           # + `dispatch_email` in `WorkerSettings.functions`
-│   ├── scheduled/
-│   │   ├── send_expiring_notifications.py    # **EXTEND** — after Telegram-DM branch, enqueue email fallback if user has email + Telegram blocked
-│   │   └── send_booking_reminders.py         # **EXTEND** — same dual-channel pattern
-│   ├── tasks/
-│   │   └── dispatch_email.py                 # **NEW** — ARQ task; consumes `EmailEnvelope`; calls integrations/email/client.send_email
-│   └── telegram_bot.py                       # unchanged
-└── main.py                                   # + register_email_dispatcher
-                                              # + register_user_session_invalidator
-                                              # Double-wire to BOTH create_app() AND WorkerSettings.on_startup (v1.3 REG-29-03 lesson)
+app/integrations/yookassa/
+  __init__.py
+  types.py          # YooKassaPaymentResult, YooKassaReceiptResult (frozen dataclasses)
+  client.py         # YooKassaClient (async httpx), SandboxYooKassaClient
+  factory.py        # build_yookassa_client(settings) -> async
+  webhook_verifier.py  # verify_yookassa_ip(request) — IP-allowlist check (NOT HMAC, see §3)
 ```
 
-**Why this shape:**
-- **`integrations/email/` parallels `integrations/telegram/` exactly** — D-39-02 confirmed channels are transport-only; business copy lives in modules. No cycle risk because `integrations` cannot import `modules` per contract 3.
-- **No new `notifications` module.** v1.3 Phase 27 (`send_expiring_notifications`) and v1.5 Phase 39 (booking DMs) both prove per-domain template ownership is the working pattern. (Note: the FEATURES research suggests creating one — this is an open conflict resolved in favour of the v1.5 D-39-02 precedent.)
-- **`users` is a new module, not an `auth` extension.** Auth's responsibility is "credential verification + session lifecycle." Users' responsibility is "operator roster + invitation + role assignment." These are different lifecycles.
+**What lives in `integrations/yookassa/` vs in `modules/online_payments/`:**
 
----
+| Concern | Location | Reason |
+|---------|----------|--------|
+| HTTP transport (POST /payments, POST /refunds, POST /receipts) | `integrations/yookassa/client.py` | Pure I/O adapter, no domain knowledge |
+| Sandbox stub | `integrations/yookassa/client.py:SandboxYooKassaClient` | Mirrors `SandboxEmailClient` pattern |
+| Boot-time API probe | `integrations/yookassa/factory.py` | Same pattern as email factory D-42-30 |
+| IP allowlist verification | `integrations/yookassa/webhook_verifier.py` | Transport-level gate, domain-agnostic |
+| FSM state transitions, audit chains | `modules/online_payments/service.py` | Domain logic, must not live at integrations layer |
+| ЮKassa payment-object → domain FSM mapping | `modules/online_payments/service.py` | Domain logic |
+| 54-ФЗ receipt dispatch orchestration | `modules/online_payments/service.py` | Domain orchestration, not transport |
 
-## New Protocol Slots (composition-root registrations in `app/main.py`)
+**`types.py` shape:**
 
 ```python
-# In app/core/dependencies.py — add new Protocol slots:
+@dataclass(frozen=True)
+class YooKassaPaymentResult:
+    ok: bool
+    classification: Literal["ok", "transient_error", "permanent_error"]
+    payment_id: str | None = None       # ЮKassa UUID string
+    status: str | None = None           # "pending" | "waiting_for_capture" | "succeeded" | "canceled"
+    confirmation_url: str | None = None
+    error: str | None = None
 
-class EmailDispatcher(Protocol):
-    """Enqueue an email-send for async fanout via ARQ.
+@dataclass(frozen=True)
+class YooKassaReceiptResult:
+    ok: bool
+    classification: Literal["ok", "transient_error", "permanent_error"]
+    receipt_id: str | None = None       # ЮKassa receipt UUID
+    status: str | None = None           # "pending" | "succeeded" | "canceled"
+    error: str | None = None
+```
 
-    Implementation lives in app.workers.tasks.dispatch_email (queue helper).
-    Synchronous return: just schedules the job; returns immediately.
-    """
+**`client.py` shape:**
+
+```python
+class YooKassaClient:
+    """Async httpx adapter for ЮKassa API v3. NEVER re-raises — every outcome is a value."""
+
+    async def create_payment(
+        self,
+        *,
+        idempotency_key: str,           # UUID string, MANDATORY
+        amount_kopecks: int,
+        description: str,
+        return_url: str,
+        customer_email: str | None,
+        receipt_items: list[dict],       # 54-ФЗ items
+        capture: bool = True,
+    ) -> YooKassaPaymentResult: ...
+
+    async def capture_payment(
+        self,
+        *,
+        payment_id: str,
+        idempotency_key: str,
+        amount_kopecks: int,
+    ) -> YooKassaPaymentResult: ...
+
+    async def cancel_payment(
+        self,
+        *,
+        payment_id: str,
+        idempotency_key: str,
+    ) -> YooKassaPaymentResult: ...
+
+    async def create_refund(
+        self,
+        *,
+        idempotency_key: str,
+        payment_id: str,
+        amount_kopecks: int,
+        description: str,
+    ) -> YooKassaPaymentResult: ...
+
+    async def create_receipt(
+        self,
+        *,
+        idempotency_key: str,
+        payment_id: str,
+        customer_email: str | None,
+        customer_phone: str | None,
+        items: list[dict],
+        type: Literal["payment", "refund"],
+    ) -> YooKassaReceiptResult: ...
+```
+
+**Config (`app/core/config.py` extension — new `YooKassaSettings` nested model):**
+
+```python
+class YooKassaSettings(BaseModel):
+    shop_id: str
+    secret_key: SecretStr
+    provider: Literal["yookassa", "sandbox"] = "sandbox"
+    sandbox_mode: bool = True
+    api_base_url: str = "https://api.yookassa.ru/v3"
+    # IP allowlist for webhook verification (from ЮKassa docs — static since 2024)
+    webhook_allowed_ips: list[str] = [
+        "185.71.76.0/27", "185.71.77.0/27",
+        "77.75.153.0/25", "77.75.156.11",
+        "77.75.156.35", "77.75.154.128/25",
+    ]
+```
+
+---
+
+## 3. Webhook Endpoint: Router Location and Signature Verification
+
+**Location:** `app/api/v1/_internal/yookassa/router.py`, mounted at `POST /api/v1/_internal/yookassa/webhook`.
+
+This follows the established `_internal` namespace convention introduced in Phase 42 for the email bounce webhook. The comment in `app/api/v1/router.py` at the email mount explicitly names "ЮKassa, SMS providers, ..." as future inhabitants of `/_internal/*`.
+
+**Verification method — IP allowlist, NOT HMAC.**
+
+ЮKassa's documented security model uses source-IP validation (six published CIDRs). They do not publish a shared-secret HMAC header equivalent to `X-Email-Webhook-Signature`. Attempting to invent an HMAC gate would be security theater — there is no server secret that can be verified against a header ЮKassa does not send.
+
+The project constraint that says "Webhook security: ЮKassa `Notification-Sign` HMAC verification" in PROJECT.md reflects a common misconception from blog posts. The official ЮKassa documentation (verified) confirms IP-based allowlisting as the authentication mechanism.
+
+**Implementation:**
+
+```python
+# app/integrations/yookassa/webhook_verifier.py
+import ipaddress
+from fastapi import Request
+
+_YOOKASSA_CIDRS: frozenset[ipaddress.IPv4Network | ipaddress.IPv6Network] = frozenset({
+    ipaddress.ip_network("185.71.76.0/27"),
+    ipaddress.ip_network("185.71.77.0/27"),
+    ipaddress.ip_network("77.75.153.0/25"),
+    ipaddress.ip_network("77.75.156.11/32"),
+    ipaddress.ip_network("77.75.156.35/32"),
+    ipaddress.ip_network("77.75.154.128/25"),
+    ipaddress.ip_network("2a02:5180::/32"),
+})
+
+def verify_yookassa_ip(request: Request) -> None:
+    """Verify request originated from ЮKassa IP range. Raise HTTPException(401) on fail."""
+    # Read X-Forwarded-For if behind a proxy, else request.client.host
+    ...
+```
+
+This is a `Depends()` callable, usable as `Depends(verify_yookassa_ip)` on the webhook endpoint. There is no AST gate needed (no shared secret constant to enforce — verification is structural/network-layer). In **production** deployments, supplement with network-layer firewall rules. In **dev/test**, the verifier accepts `127.0.0.1` unconditionally via a `settings.yookassa.sandbox_mode` bypass flag.
+
+**Router shape:**
+
+```python
+# app/api/v1/_internal/yookassa/router.py
+router = APIRouter()
+
+@router.post("/webhook", status_code=200, response_class=Response)
+async def yookassa_webhook(
+    request: Request,
+    _ip: Annotated[None, Depends(verify_yookassa_ip)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """ЮKassa payment lifecycle notifications. IP-verified before parse."""
+    ...
+```
+
+No `Depends(get_current_user)`, no CSRF — this is a machine-to-machine callback. Response is always 200 (ЮKassa will retry on non-200).
+
+---
+
+## 4. Async Webhook Processing: Synchronous vs Queued
+
+**Decision: synchronous processing (verify + process + 200 in webhook handler).**
+
+Tradeoff analysis:
+
+| Criterion | Sync (verify+process+200) | Queued (verify+200, ARQ processes) |
+|-----------|--------------------------|-------------------------------------|
+| ЮKassa retry semantics | ЮKassa retries if it gets non-200. If processing fails after enqueue, we already sent 200, so ЮKassa won't retry — we must handle our own retry. | Requires internal retry mechanism for every failure mode that could occur between enqueue and completion. |
+| Visibility of failures | Error surfaces immediately in request logs + structlog. Failure → non-200 → ЮKassa retries with backoff. | Error buried in ARQ job logs. ARQ has `max_tries` but retry failure is silent from ЮKassa's perspective. |
+| Idempotency surface | One UoW per webhook. DB UNIQUE constraint on `(yookassa_payment_id, event)` rejects duplicate processing at the DB layer — idempotent re-runs are safe. | Adds queue as second idempotency surface; complicates "exactly once" reasoning across Postgres + Redis. |
+| Timeout risk | ЮKassa timeout is not published but webhook consumers typically have 5–30 seconds. The webhook handler does: 1 DB write + 1 audit emit + 1 ARQ enqueue for notifications (fast). NOT the ЮKassa outbound call. | No timeout risk for the acknowledgement, but adds queue lag before membership activates. |
+| Membership activation latency | Zero extra latency: succeeded → membership activated in the same transaction, then enqueue DM. | Activation delayed by ARQ queue depth (typically seconds, but unpredictable under load). |
+| Consistency | Single Postgres commit covers: FSM transition + ledger row (`record_payment`) + `payment_receipt` idempotency row + audit chain. | Decoupled commits — if ARQ job fails after enqueue, the 200 is already sent but activation hasn't happened. Requires compensating saga. |
+
+**Winner: synchronous.** The webhook handler is fast (no outbound HTTP, just DB writes). Failure → non-200 → ЮKassa retries with its own backoff. Idempotency is enforced by DB UNIQUE. The only jobs enqueued inside the webhook handler are non-critical DM/email notifications (fire-and-forget, already the pattern for v1.5 booking notifications).
+
+**Exception:** fiscal receipt dispatch is also enqueued as an ARQ job after commit (same `dispatch_fiscal_receipt` task pattern as `dispatch_email`). The receipt send is best-effort; failure does NOT roll back the payment commit (same decision as v1.6 Phase 45 D-45-08 for `PaymentReceipt` post-commit fanout).
+
+---
+
+## 5. FSM Placement: Where Does the ЮKassa Payment State Live?
+
+**Decision: new `online_payments` table with FK into `payments`, NOT new columns on existing `payments`.**
+
+Rationale:
+
+The `payments` table has a DB-level CHECK: `subject_kind IN ('membership','pt_package','refund')`. Online payment rows during their `pending` / `waiting_for_capture` phase are NOT yet recorded in the ledger — they only become ledger rows on `succeeded`. Adding a `yookassa_payment_id` or `status` column to `payments` would require either:
+- Allowing NULL values for cash rows (violates NOT NULL discipline)
+- Widening the CHECK to allow a `pending_online` subject_kind (which would then require signed-amount semantics before the amount is confirmed)
+
+Both are wrong. The correct model is:
+
+```
+online_payments                    payments (append-only ledger)
+─────────────────────            ───────────────────────────────
+id (PK, UUID)                    id (PK, UUID)
+yookassa_payment_id (TEXT, UNIQUE)
+subject_kind TEXT                subject_kind TEXT (CHECK: membership|pt_package|refund)
+subject_id UUID                  subject_id UUID
+amount_kopecks INT               amount_kopecks INT (signed CHECK)
+status TEXT (FSM col)            method TEXT ('online'|'cash')
+idempotency_key TEXT (UNIQUE)    received_at TIMESTAMPTZ
+created_at TIMESTAMPTZ           received_by_user_id UUID (FK users)
+updated_at TIMESTAMPTZ           refund_of UUID (partial UNIQUE)
+payment_id UUID (FK payments, NULL until succeeded)
+audit_log_id UUID (FK audit_log)
+```
+
+The `online_payments.payment_id` FK to `payments` is NULL until `succeeded` — at that point the webhook handler calls `record_payment()` through the existing Protocol slot, commits a `Payment` row, and backfills `online_payments.payment_id`.
+
+**FSM states and transitions (declarative constant, same as `MEMBERSHIP_STATUS_TRANSITIONS`):**
+
+```python
+ONLINE_PAYMENT_STATUS_TRANSITIONS: dict[str, frozenset[str]] = {
+    "pending":              frozenset({"waiting_for_capture", "succeeded", "canceled"}),
+    "waiting_for_capture":  frozenset({"succeeded", "canceled"}),
+    "succeeded":            frozenset(),   # terminal
+    "canceled":             frozenset(),   # terminal
+}
+```
+
+**CHECK constraint on `online_payments.status`:**
+`status IN ('pending','waiting_for_capture','succeeded','canceled')`
+
+**v1.4 invariants preserved:** The existing `payments` CHECK constraints, partial UNIQUE on `refund_of`, and audit chain remain untouched. `record_payment(method='online', ...)` creates the ledger row — the only change to `payments/service.py` would be widening the `method` TEXT default from `'cash'` to allow `'online'` (no constraint change, `method` is an unconstrained TEXT column per the model).
+
+---
+
+## 6. Fiscal Receipt Model
+
+**New table: `fiscal_receipts`.**
+
+```sql
+CREATE TABLE fiscal_receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE RESTRICT,
+    kind TEXT NOT NULL,         -- 'payment' | 'refund'
+    yookassa_receipt_id TEXT,   -- populated after ЮKassa /receipts call
+    status TEXT NOT NULL DEFAULT 'pending',  -- FSM: pending→sent→succeeded|failed
+    idempotency_key TEXT NOT NULL UNIQUE,    -- deterministic from payment_id + kind
+    attempts INT NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT ck_fiscal_receipts_kind CHECK (kind IN ('payment','refund')),
+    CONSTRAINT ck_fiscal_receipts_status CHECK (status IN ('pending','sent','succeeded','failed')),
+    CONSTRAINT uq_fiscal_receipts_payment_kind UNIQUE (payment_id, kind)
+);
+```
+
+**Idempotency invariant:** `UNIQUE (payment_id, kind)` — one fiscal receipt per payment per direction. This mirrors the v1.6 `UNIQUE (payment_id, channel)` on `payment_receipts` but is semantically different: `fiscal_receipts` tracks the OFD registration status of the 54-ФЗ fiscal document, not notification delivery.
+
+**FK is to `payments.id`, not `online_payments.id`.** The fiscal receipt is an obligation that attaches to the committed ledger row. This means the `fiscal_receipts` row is created inside the same transaction as `record_payment()` on webhook `succeeded` — atomically. The `online_payments.payment_id` backfill also happens in this commit.
+
+**Status FSM:**
+
+```
+pending ──[ARQ dispatch_fiscal_receipt called]──► sent
+  sent  ──[ЮKassa webhook receipt.succeeded]────► succeeded  (terminal)
+  sent  ──[ЮKassa webhook receipt.canceled / max_tries exceeded]──► failed
+```
+
+**Retry policy:** ARQ task `dispatch_fiscal_receipt` with `_max_tries=3, _expires=30`. On transient failure (5xx from ЮKassa) the ARQ retry reschedules. On `failed` terminal state, alert is emitted via structlog WARNING + `fiscal_receipt_failed` audit event. No silent discard.
+
+**Note on ЮKassa ЧеKassa path:** ЮKassa's own `/receipts` API handles the 54-ФЗ obligation if receipt data is included in the original payment creation request. In that case, ЮKassa itself sends the receipt to the OFD and notifies via `receipt.succeeded` / `receipt.canceled` webhook events. The `fiscal_receipts` table tracks the local view of that lifecycle. The receipt is not a second outbound call — it is created as part of the payment creation request (items + customer data). The `sent` → `succeeded` transition is driven by the `receipt.succeeded` webhook event. This means: the `fiscal_receipts` row is created on payment `succeeded`, with `status='sent'` (ЮKassa has already accepted the receipt data in the payment request), and transitions to `succeeded` / `failed` via webhook.
+
+---
+
+## 7. Cross-Channel DM Template Constants
+
+**Pattern: per-module ownership (D-39-02), same as bookings.**
+
+Template IDs live in:
+- `app/modules/online_payments/notifications.py` — Telegram DM constants (locked Russian strings)
+- `app/modules/online_payments/email_templates.py` — email template registry, added to `LOCKED_EMAIL_TEMPLATES`
+
+These do NOT go into `app/modules/payments/` because they belong to the online payment lifecycle, not the cash ledger. The cash receipt templates (`EMAIL_PAYMENT_RECEIPT_SALE`, `EMAIL_PAYMENT_RECEIPT_REFUND`) in `payments/email_templates.py` remain for cash flows.
+
+New template IDs to add to `LOCKED_EMAIL_TEMPLATES` (frozenset must grow from 15 to accommodate):
+
+```python
+# Online payment success
+"EMAIL_ONLINE_PAYMENT_SUCCESS"   # "Оплата прошла успешно"
+"EMAIL_ONLINE_REFUND_SUCCESS"    # "Возврат оформлен"
+# Fiscal receipt confirmation (optional — ЮKassa sends receipt to client directly;
+# this template is for an admin-facing audit confirmation, not duplicate receipt)
+```
+
+Telegram DM constants in `online_payments/notifications.py`:
+
+```python
+PAYMENT_SUCCESS_DM: Final[str] = "..."     # "Оплата прошла. Абонемент активирован."
+REFUND_ISSUED_DM: Final[str] = "..."       # "Возврат оформлен."
+```
+
+**Dispatcher walker update:** `app/integrations/email/dispatcher.py:_resolve_template()` must get a new `from app.modules.online_payments.email_templates import TEMPLATES as ONLINE_PAYMENTS_TEMPLATES` branch — one new import, one new `if template_id in ONLINE_PAYMENTS_TEMPLATES:` check. New `.importlinter` `ignore_imports` entry required: `app.integrations.email.dispatcher -> app.modules.online_payments.email_templates`.
+
+---
+
+## 8. Protocol Slots at Composition Root
+
+Two new Protocol slots are needed. Both are **defensive-raise** (not silent-None) because their absence is hard misconfiguration.
+
+**Slot 1: `YooKassaClientProvider`**
+
+```python
+# app/core/dependencies.py
+class YooKassaClientProvider(Protocol):
+    async def __call__(self) -> Any: ...  # returns YooKassaClient | SandboxYooKassaClient
+
+_yookassa_client_provider: YooKassaClientProvider | None = None
+
+def register_yookassa_client_provider(provider: YooKassaClientProvider) -> None: ...
+def get_yookassa_client() -> YooKassaClientProvider: ...  # defensive raise
+```
+
+Wired from `app/main.py:create_app()` AND `app/workers/__init__.py:on_startup` (REG-29-03 double-wire — the ARQ `dispatch_fiscal_receipt` task needs the client in the worker process).
+
+**Slot 2: `FiscalReceiptDispatcher`**
+
+```python
+class FiscalReceiptDispatcher(Protocol):
     async def __call__(
         self,
         *,
-        to: str,
-        subject: str,
-        html: str,
-        text: str,
-        audit_correlation_id: str,
+        payment_id: UUID,
+        kind: Literal["payment", "refund"],
+        idempotency_key: str,
+        audit_correlation_id: UUID | None,
     ) -> None: ...
 
+_fiscal_receipt_dispatcher: FiscalReceiptDispatcher | None = None
 
-class UserSessionInvalidator(Protocol):
-    """Invalidate all refresh-token families for a user.
-
-    Used by users.service.deactivate_user — must kill all active sessions.
-    Reaches into auth.service.invalidate_all_families_for_user via this slot
-    so users module never imports auth.
-    """
-    async def __call__(
-        self, session: AsyncSession, *, user_id: UUID, actor_user_id: UUID, reason: str,
-    ) -> None: ...
+def register_fiscal_receipt_dispatcher(impl: FiscalReceiptDispatcher) -> None: ...
+def get_fiscal_receipt_dispatcher() -> FiscalReceiptDispatcher: ...  # defensive raise
 ```
 
-**Composition-root wiring in `app/main.py:create_app()`** AND **`app/workers/__init__.py:WorkerSettings.on_startup`** (double-wire per REG-29-03 lesson):
+Wired from `app/main.py:create_app()` — the concrete implementation enqueues an ARQ job `dispatch_fiscal_receipt`, mirroring the `enqueue_email_dispatch` pattern.
+
+**Slot 3: `OnlinePaymentCreator` (optional — may live entirely in module scope)**
+
+The `online_payments/service.py` `create_online_payment()` function does not cross module boundaries — it is called from `online_payments/router.py` directly. No cross-module Protocol slot needed unless a future module (e.g., `bookings/`) needs to initiate an online payment without importing `online_payments`. Defer this slot to the phase where the need arises.
+
+**Summary of new composition-root registrations in `app/main.py`:**
 
 ```python
-from app.workers.tasks.dispatch_email import enqueue_email_dispatch
-register_email_dispatcher(enqueue_email_dispatch)
+# Phase 47+ additions
+from app.integrations.yookassa.factory import build_yookassa_client
+from app.modules.online_payments.service import enqueue_fiscal_receipt_dispatch
 
-from app.modules.auth.service import invalidate_all_families_for_user
-register_user_session_invalidator(invalidate_all_families_for_user)
+# Lifespan: build client once per process (async factory)
+# create_app(): register slots
+register_yookassa_client_provider(lambda: yookassa_client)  # client built in lifespan
+register_fiscal_receipt_dispatcher(enqueue_fiscal_receipt_dispatch)
 ```
 
-**Key invariant:** `users.service` never has `import app.modules.auth` anywhere. It calls `get_user_session_invalidator()(session, user_id=...)` exactly as `memberships.service` calls `get_payment_recorder()` today (proven pattern from v1.4 Phase 32).
+---
+
+## 9. Migration Order: Alembic Revisions (~0033 onwards)
+
+Current head: `0032_booking_notifications_widen_kind.py`.
+
+| Revision | Name | Depends On | Content |
+|----------|------|-----------|---------|
+| 0033 | `yookassa_config_probe` | 0032 | No schema change. Adds `YooKassaSettings` to `app/core/config.py`. Migration is a sentinel to mark the bedrock phase. |
+| 0034 | `online_payments` | 0033 | New `online_payments` table: FSM columns, `yookassa_payment_id UNIQUE`, `idempotency_key UNIQUE`, FK to `payments` (nullable until succeeded), `audit_log_id FK`. CHECK on status + subject_kind. Indexes: `(status)`, `(yookassa_payment_id)`, `(subject_kind, subject_id)`. |
+| 0035 | `fiscal_receipts` | 0034 | New `fiscal_receipts` table: FK to `payments` (NOT `online_payments` — attaches to the committed ledger row). UNIQUE `(payment_id, kind)`. CHECK on kind + status. Index `(status)` for retry worker query. |
+| 0036 | `locked_audit_events_v17` | 0035 | No schema change. Extends `LOCKED_AUDIT_EVENTS` frozenset (new events: `online_payment_created`, `online_payment_succeeded`, `online_payment_canceled`, `online_payment_webhook_received`, `fiscal_receipt_sent`, `fiscal_receipt_succeeded`, `fiscal_receipt_failed`, `online_refund_created`, `online_refund_succeeded`). This is a code-only migration sentinel — the frozenset is in `app/core/audit.py`, not DB. |
+
+**Safe rollout order:**
+
+1. Deploy 0033 (config probe, no schema). Boot-fail-fast validates ЮKassa credentials before any endpoint accepts traffic.
+2. Deploy 0034 (`online_payments` table). Safe to run before any route uses it — empty table.
+3. Deploy 0035 (`fiscal_receipts` table). Depends on `payments` existing (0012) — safe.
+4. Code deploys for `modules/online_payments/`, `integrations/yookassa/`, `_internal/yookassa/` router.
+5. Code deploy extends `LOCKED_AUDIT_EVENTS` (must precede any callsite — INFRA-15 discipline).
+
+**Rollback:** Tables 0034+0035 are addable/droppable independently. No modification to existing tables means zero risk to v1.4 ledger integrity.
 
 ---
 
-## import-linter Impact
+## 10. import-linter Contract Update
 
-### Contract 2 (`modules-independent`) — ONE mechanical addition
+New module additions to `.importlinter:contract:modules-independent` (independence list):
 
-Add `app.modules.users` to the `modules` list in `.importlinter`. The contract is `type = independence`, so users automatically becomes mutually-forbidden with all other 12 listed modules. **No exceptions needed** — all cross-module interactions go through the composition-root slots.
-
-### Contract 3 (`integrations-not-depend-on-modules`) — NO change
-
-`app/integrations/email/` only imports stdlib + chosen provider SDK + `app.core.config`. The ARQ task (`app/workers/tasks/dispatch_email.py`) is the gluing layer — and workers are NOT in any forbidden-imports contract.
-
-### Documented narrative exceptions
-
-- **D-41-01** — `send_expiring_notifications.py` extension to call email-fallback branch via composition-root `email_dispatcher` slot (no new module import).
-- **D-41-02** — `send_booking_reminders.py` extension, same reasoning.
-- **D-41-03** — `app/workers/tasks/dispatch_email.py` must NOT import any `app.modules.*` — by design. Receives pre-rendered `EmailEnvelope` (HTML/text already substituted by the calling service before enqueue). **Modules render templates; workers transport bytes.**
-
----
-
-## Email-Sending Path — Data Flow
-
-### Sync request paths (signup invitation, password reset request)
-
-```
-1. Owner: POST /api/v1/users   (admin-web HTTP)
-            │
-            ▼
-2. app/modules/users/router.py → users.service.create_user(...)
-            │
-            ▼
-3. users.service:
-   - INSERT into users (status='pending_invitation')
-   - INSERT into password_reset_tokens (purpose='invitation', user_id, token_hash, expires_at, consumed_at=NULL)
-     [OR — per STACK.md — issue itsdangerous-signed token, no DB row]
-   - audit.emit("user_invited", actor_user_id=current_owner.id, resource_type="user", ...)
-   - await session.commit()  # SVC001 commit-gate
-   - get_email_dispatcher()(  # ← composition-root slot
-        to=new_user.email,
-        subject=...,           # from app/modules/users/email_templates.py
-        html=...,
-        text=...,
-        audit_correlation_id=<UUID of users.user_invited audit row>,
-     )
-            │
-            ▼
-4. dispatch_email.enqueue_email_dispatch:
-   - arq.create_pool().enqueue_job("dispatch_email", EmailEnvelope(...))
-            │
-            ▼
-5. ARQ worker picks up job → app/workers/tasks/dispatch_email.py:
-   - get email client from worker ctx (built by on_startup)
-   - await integrations.email.client.send_email(...)
-   - On EmailSendResult.ok → audit.emit("email_sent", resource_type="email", correlation_id=...)
-   - On EmailSendResult.blocked → audit.emit("email_send_failed", ...)
-            │
-            ▼
-6. HTTP response to owner returns 201 created (does NOT block on email send)
+```ini
+[importlinter:contract:modules-independent]
+modules =
+    ...existing 13 modules...
+    app.modules.online_payments    # NEW
 ```
 
-**Why async even for "request-time" emails:** Blocking the HTTP request on a third-party API call costs us a request worker for the duration AND couples our 200-OK semantics to the email provider's uptime. The ARQ-task pattern means email-provider-down is a delivery delay (retried via ARQ's `max_tries`), not a 500.
+New `ignore_imports` entries required:
 
-### Async / scheduled paths (expiring-soon, booking reminder)
+```ini
+# Phase 47 — online_payments orchestrator writes PaymentReceipt rows (fiscal
+# receipt idempotency) via payments/models.py, mirroring Phase 45 memberships
+# → payments pattern (Plans 45-09 / 45-10). Narrow scope: only
+# online_payments/service.py → payments/models.py.
+app.modules.online_payments.service -> app.modules.payments.models
 
-Mirror v1.3 Phase 27 and v1.5 Phase 39 exactly. The cron job already enumerates affected rows; we add a per-row Telegram-first attempt; on `SendResult.blocked` AND the user has `email_verified=True`, enqueue the email dispatch.
+# Phase 47 — online_payments/service.py needs format_actor_display for
+# notification rendering. Mirrors Phase 45 memberships → users pattern.
+app.modules.online_payments.service -> app.modules.users.display
 
----
-
-## Idempotency Table Shape (Decision)
-
-**Recommendation: extend existing per-domain tables with a `channel` column rather than create a new `email_notifications` table.**
-
-Current state:
-- `membership_notifications` — `UNIQUE (membership_id, kind)` where `kind ∈ {expiring_7d, expiring_3d, expiring_1d}`
-- `booking_notifications` — `UNIQUE (booking_id, kind)` where `kind ∈ {reminder_24h}`
-
-**Proposed extension:**
-- Add `channel TEXT NOT NULL DEFAULT 'telegram'` column with CHECK `channel IN ('telegram','email')`
-- Change UNIQUE to `(membership_id, kind, channel)` — a 7-day expiry can fire once on Telegram AND once on email
-- Backfill existing rows to `channel='telegram'` (zero-row migration since data is reproducible by next cron run)
-
-**Why per-domain not per-channel:**
-- Audit-correlation is naturally per-business-event ("did we tell client X about their expiring membership Y?", not "what's in our email log?")
-- Mirrors v1.5 D-39-02 module-ownership decision
-- New event tracking added without inventing a new table — every existing query pattern keeps working with an added `WHERE channel='telegram'` filter
-
-**Exception:** owner-targeted ops emails (user-invitation, password-reset) are NOT business-event-keyed — they belong on the token row itself (`sent_at` populated by worker on success), OR in a separate generic `email_send_attempts` table per STACK.md.
-
----
-
-## Multi-User Admin Module — Detailed Shape
-
-### `app/modules/users/` — directory layout
-
-```
-users/
-├── __init__.py
-├── router.py                  # POST /users, PATCH /users/{id}, DELETE /users/{id}, GET /users
-├── service.py                 # business logic; calls Protocol slots only
-├── invitation_service.py      # invitation-token issuance + acceptance
-├── repository.py              # User CRUD; partial unique on email WHERE deleted_at IS NULL
-├── schemas.py                 # camelCase aliasing
-├── models.py                  # IMPORTANT: do NOT redefine `User` — see "who owns the table" below
-├── permissions.py             # local actions if needed
-├── constants.py               # USER_STATUS_TRANSITIONS, locked role-set
-├── email_templates.py         # locked Russian copy
-└── _negative_importlinter_fixture.py
+# Phase 47 — email dispatcher walker gains new online_payments template registry.
+app.integrations.email.dispatcher -> app.modules.online_payments.email_templates
 ```
 
-### Critical: who owns the `users` table?
-
-**Two viable paths (resolve in spec phase):**
-
-**Path A (cleaner) — hoist `User` ORM from `auth/models.py` to `app/core/models.py`:**
-- Pro: Eliminates the cross-module-import question entirely.
-- Con: No direct ORM-hoist precedent; touches all 729 tests' imports.
-- Mirrors v1.2 Phase 15 hoist of `escape_like_pattern` (but that was a function, not an ORM model).
-
-**Path B (lighter) — leave `User` in `auth/models.py`; `users` accesses via `UserLookup` Protocol slot:**
-- Pro: No mass test rewrites; smaller blast radius.
-- Con: One extra Protocol slot for trivial reads.
-- Mirrors existing `register_user_loader` pattern.
-
-### RBAC additions
-
-- `Resource.USERS` — new
-- `OWNER_ONLY` frozenset adds: `(CREATE, USERS)`, `(UPDATE, USERS)`, `(DELETE, USERS)`, `(LIST, USERS)` — all four owner-locked
-- Three-way byte-parity test (backend `RBAC` ↔ admin-web `can.ts` ↔ `registry.ts`) extended
-
-### Audit events (extend LOCKED_AUDIT_EVENTS frozenset 56 → ~67)
-
-New `(event, resource_type)` pairs (final set TBD in Phase 41 — could narrow to ~7-8 per FEATURES.md):
-- `("user_invited", "user")`
-- `("user_invitation_accepted", "user")`
-- `("user_invitation_expired", "user")` / `("user_invitation_revoked", "user")`
-- `("user_deactivated", "user")`
-- `("user_reactivated", "user")`
-- `("user_soft_deleted", "user")`
-- `("password_reset_requested", "user")` — emitted on BOTH branches (known + unknown email) per anti-oracle invariant
-- `("password_reset_completed", "user")`
-- `("email_sent", "email")` — generic; correlation_id points to triggering audit row
-- `("email_send_failed", "email")` — transient/blocked classification in payload
-
-Each pair gets a corresponding Pydantic model in `app/core/audit_payloads.py` with `extra='forbid'`. Add to `LOCKED_AUDIT_EVENTS` in **Phase 41 INFRA up-front** before any callsite lands.
+**No new `core-not-depend-on-modules` exemptions.** The new Protocol slots live in `app/core/dependencies.py` (Protocol type only, no import of `app.modules.*`). The concrete implementations wired at `app/main.py` are in the composition root, which is already outside the `source_modules = app.core` scope.
 
 ---
 
-## Reset-Password Token Storage (Decision — TWO PATHS)
+## Integration Map: Client Clicks "Оплатить" → DM + Fiscal Receipt
 
-**Path A (this researcher's recommendation): DB table `password_reset_tokens`.**
+```
+CLIENT BROWSER                  SPORTZAL BACKEND                    ЮKASSA API
+─────────────────               ──────────────────────────────────  ──────────────────
 
-```sql
-CREATE TABLE password_reset_tokens (
-    id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash VARCHAR(64) NOT NULL,
-    purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('reset','invitation')),
-    issued_at TIMESTAMPTZ NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    consumed_at TIMESTAMPTZ NULL,
-    sent_at TIMESTAMPTZ NULL,
-    audit_correlation_id UUID NULL REFERENCES audit_log(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE UNIQUE INDEX uq_password_reset_tokens_user_id_active
-    ON password_reset_tokens(user_id, purpose) WHERE consumed_at IS NULL;
+[1] POST /online-payments/memberships/{plan_id}/sell
+    {idempotency_key, amount_kopecks, return_url, customer_email}
+                         ↓
+                 online_payments/router.py
+                 → online_payments/service.create_online_payment()
+                     ├─ INSERT online_payments (status='pending', idempotency_key)
+                     ├─ call yookassa_client.create_payment(
+                     │       idempotency_key=...,
+                     │       receipt_items=[{membership plan name, amount, vat_code=1}],
+                     │       customer={email}
+                     │  )  ──────────────────────────────────────────► POST /v3/payments
+                     │                                              ◄── {id, status:'pending',
+                     │                                                   confirmation_url}
+                     ├─ UPDATE online_payments SET yookassa_payment_id=..., status='pending'
+                     ├─ audit.emit("online_payment_created", ...)
+                     └─ COMMIT
+                         ↓
+                 return {confirmation_url} → 201
+
+[2] Client browser REDIRECT to confirmation_url (ЮKassa hosted page)
+    Client confirms payment on ЮKassa side
+
+[3]             ЮKassa calls POST /api/v1/_internal/yookassa/webhook
+                {type:"notification", event:"payment.succeeded", object:{id, status, ...}}
+                         ↓
+                 _internal/yookassa/router.py
+                 → Depends(verify_yookassa_ip)  [IP allowlist gate]
+                 → read raw body (already received)
+                 → json.loads(body)
+                 → online_payments/service.handle_webhook_event(event="payment.succeeded", yookassa_id=...)
+                     ├─ SELECT online_payments WHERE yookassa_payment_id=...
+                     │       [UPSERT-idempotent: if already 'succeeded', return 200 early]
+                     ├─ _assert_can_transition(current='pending', next='succeeded')
+                     ├─ call get_payment_recorder()(session, subject_kind='membership',
+                     │       subject_id=plan_id, amount_kopecks=..., method='online',
+                     │       received_by_user_id=SYSTEM_ACTOR_ID,
+                     │       audit_actor=SYSTEM_ACTOR)
+                     │   → payments/service.record_payment()  [appends to ledger]
+                     │   → audit.emit("payment_recorded", method='online', ...)
+                     ├─ UPDATE memberships SET status='active' via memberships Protocol slot
+                     │       [OR: service.activate_membership_for_online_payment(session, ...)]
+                     ├─ UPDATE online_payments SET status='succeeded', payment_id=<new payment row id>
+                     ├─ audit.emit("online_payment_succeeded", ...)
+                     ├─ INSERT fiscal_receipts (payment_id=..., kind='payment',
+                     │       idempotency_key=f"{payment_id}:payment", status='sent')
+                     │   [ЮKassa already has receipt data from step [1] — row captures local view]
+                     ├─ INSERT payment_receipts (payment_id, channel='telegram', ...)
+                     │   [idempotency row for DM]
+                     ├─ INSERT payment_receipts (payment_id, channel='email', ...)
+                     │   [idempotency row for email receipt]
+                     └─ COMMIT
+                              ↓ post-commit fanout (best-effort, payment NOT rolled back on failure)
+                     ├─ pool.enqueue_job("dispatch_email", template="EMAIL_ONLINE_PAYMENT_SUCCESS", ...)
+                     ├─ Telegram bot DM via PAYMENT_SUCCESS_DM constant
+                     └─ return Response(200)   ← ЮKassa sees 200, stops retrying
+
+[4] ARQ worker: dispatch_email task delivers email to client
+
+[5] ЮKassa calls POST /api/v1/_internal/yookassa/webhook
+    {event:"receipt.succeeded", object:{id, status:'succeeded', payment_id:...}}
+                         ↓
+                 → online_payments/service.handle_receipt_webhook(...)
+                     ├─ SELECT fiscal_receipts WHERE payment_id=... AND kind='payment'
+                     ├─ UPDATE fiscal_receipts SET status='succeeded'
+                     ├─ audit.emit("fiscal_receipt_succeeded", ...)
+                     └─ COMMIT
+                         ↓
+                 return Response(200)
 ```
 
-Single-use partial unique mirrors `membership_freeze_periods` discipline. Auditable forever.
+**Refund flow (abbreviated):**
 
-**Path B (STACK.md researcher's recommendation): itsdangerous stateless signed tokens.**
-
-Embed `password_changed_at` in the signed payload; single-use enforced because any password change bumps that timestamp and invalidates older signed tokens. No DB row, no cleanup cron.
-
-**Resolution:** Spec phase decides. Path B is simpler infra but loses immutable audit-trail of token issuance. Path A is heavier but matches `refresh_tokens` discipline byte-for-byte. **Both preserve the anti-oracle invariant.**
-
----
-
-## Deployment Shape (Decision)
-
-**Recommendation: NO 6th docker-compose service. Email-fanout runs inside the existing ARQ worker (5th service).**
-
-- New ARQ task `dispatch_email` registered in `app/workers/__init__.py:WorkerSettings.functions`
-- Existing `arq-worker` container also runs it
-- On startup, `WorkerSettings.on_startup` builds the email client via `app/integrations/email/factory.py:build_email_client(...)` and stashes in `ctx['email_client']` — mirror of how the DB engine is stashed
-- ARQ's `max_tries` + retry-with-backoff handles transient provider failures for free
-
-**Why not a 6th service:** Email is not long-polling. Sending is one-shot HTTPS calls. A separate service adds operational complexity. ARQ already does fire-and-forget with retries.
+```
+POST /online-payments/{id}/refund
+  → online_payments/service.create_online_refund()
+      ├─ call yookassa_client.create_refund(payment_id=yookassa_payment_id, ...)
+      ├─ call get_payment_refunder()(session, subject_kind='membership', ...)
+      │       → payments/service.issue_refund() [appends negative-amount row]
+      ├─ INSERT fiscal_receipts (kind='refund', status='sent')
+      ├─ audit.emit("online_refund_succeeded", ...)
+      └─ COMMIT → DM + email fanout
+```
 
 ---
 
-## Architectural Patterns to Follow
+## Build Order for Phases 47–53
 
-### Pattern 1: Module-owned locked-copy templates
-
-Locked Russian email subject/html/text strings live in `app/modules/<domain>/email_templates.py`. Single source of truth per business event (matches D-39-02 lesson). Owner sign-off lives next to the code that triggers it.
-
-### Pattern 2: Pre-rendered envelopes cross the integration boundary
-
-The ARQ `dispatch_email` task receives an already-rendered `EmailEnvelope(to, subject, html, text, audit_correlation_id)` and is forbidden from importing anything in `app.modules.*`. Substitution happens at the calling service. Worker stays generic.
-
-### Pattern 3: Audit-correlation via `audit_correlation_id` foreign key
-
-Every email-send audit row carries an FK to the **business** audit row that triggered it. Mirrors `payment_row_hash` SHA-256 traceability locked in v1.4 Phase 32.
-
-### Pattern 4: SVC001 commit-gate applies to new users.service
-
-The AST commit-gate walker (currently scope=6 services) extends to 7. Add `app/modules/users/service.py` to the tracked-services list.
-
-### Pattern 5: Double-wire Protocol slot registrations
-
-Per v1.3 REG-29-03 lesson: any new resolver/dispatcher slot must be registered in BOTH `app/main.py:create_app()` AND `app/workers/__init__.py:WorkerSettings.on_startup`. ARQ worker is a separate process; it does NOT see registrations from `create_app()`.
-
-### Anti-Pattern to AVOID: a "real" notifications module
-
-D-39-02 (Phase 39) is the canonical rejection. Resurrecting `app/modules/notifications/` as a channel-multiplexer would create cross-module fan-in and tempt ad-hoc magic-string event names, breaking the AST LOCKED-events gate.
-
----
-
-## Build Order for v1.6 Phases (suggested)
-
-Mirrors v1.3 (Phase 24 INFRA bedrock → 25/26/27 feature phases → 28 OpenAPI drift → 29 verification) and v1.5 (Phase 37 INFRA bedrock → 38/39/40 feature phases).
-
-| Phase | Theme | Why this order |
-|---|---|---|
-| **Phase 41 — Foundations bedrock** | Extend `LOCKED_AUDIT_EVENTS` 56 → ~67 up-front; hoist `User` ORM (or add `UserLookup` slot); extend `Action`/`Resource`/`OWNER_ONLY` for `Resource.USERS`; declare new Protocol slots; add `app.modules.users` to `.importlinter`; extend SVC001 commit-gate; resolve reset-token-store decision (Path A vs B) | Up-front infrastructure prevents per-phase churn (v1.3 INFRA-15 lesson). |
-| **Phase 42 — Email integration layer** | Replace `app/integrations/email/client.py` placeholder with real provider adapter; add `factory.py`; add `app/workers/tasks/dispatch_email.py` ARQ task; wire dispatcher slot double-wired; LOCKED audit pair `email_sent`/`email_send_failed` first callsites; DNS/SPF/DKIM/DMARC owner-runbook | Transport must exist before any module can call it. |
-| **Phase 43 — Users module (CRUD + RBAC)** | New `app/modules/users/`; users-table schema additions; `UserSessionInvalidator` slot wired; audit events | Depends on Phase 41. Independent of email. |
-| **Phase 44 — Invitation + password-reset flow** | `password_reset_tokens` table (or itsdangerous stateless); `password_reset_service.py`; `invitation_service.py`; endpoints; locked Russian email copy with owner sign-off (D-27 lineage); cron expiry job | Depends on Phase 42 + 43. |
-| **Phase 45 — Email fallback for expiring/booking notifications** | Extend `send_expiring_notifications.py` and `send_booking_reminders.py`; extend idempotency tables with `channel` column; locked email copy | Depends on Phases 41 + 42. Mirrors v1.3 Phase 27. |
-| **Phase 46 — Payment-receipt email** | `payments/service.py` hook on `record_payment` success; locked email copy; LOCKED `payment_receipt_emailed` event | Standalone — only depends on Phase 42. Can be parallel with Phase 45. |
-| **Phase 47 — OpenAPI drift gate refresh** | Atomic byte-stable regen + `AssertNonNever` forward-guards (61 → ~73) | After all feature phases land. Mirrors v1.3 Phase 28 + v1.5 Phase 36. |
-| **Phase 48 — Milestone verification** | Operator scenarios via curl + sandbox email; race tests; CI gates | Mirrors v1.3 Phase 29 + v1.4 Phase 36 + v1.5 Phase 40 verification discipline. |
-
-**Critical ordering invariant:** Phase 41 unblocks Phases 42 + 43 in parallel. Phase 44 has hard dependencies on both. Phases 45 + 46 are then parallel. Phase 47 is a serialization point. Phase 48 is the gate.
-
----
-
-## Open Questions to Resolve in Spec Phase
-
-1. **Email provider selection** — owned by STACK.md (recommendation: Yandex Cloud Postbox primary, Unisender Go fallback).
-2. **Email rendering library** — STACK.md recommends Jinja2 SandboxedEnvironment; this researcher leans toward f-string-locked templates per D-39-04 anti-magic. Spec phase decides.
-3. **Reset-token store** — Path A (DB table) vs Path B (itsdangerous stateless). Both preserve anti-oracle.
-4. **`User` ORM hoist** — Path A (hoist to core) vs Path B (UserLookup Protocol slot).
-5. **Email verification flow for owner-added operator accounts** — trust owner-entered addresses, or click-to-verify? Recommendation: trust (single zal, owner knows their staff).
-6. **Bounce/complaint webhook handling** — Recommendation: defer to v1.7. v1.6 records send-attempt outcomes only.
-7. **`actor_display_name` formatting** in email copy (multi-user audit) — full name vs first-name-last-initial.
+| Phase | Deliverable | DB Dependencies | Notes |
+|-------|-------------|----------------|-------|
+| **47 — Bedrock** | `LOCKED_AUDIT_EVENTS` extended (9+ new events), `YooKassaSettings` config, Protocol slots declared in `core/dependencies.py`, `YooKassaClientProvider` + `FiscalReceiptDispatcher` slots; `app/integrations/yookassa/` skeleton (types + client + factory + webhook_verifier); 0033 sentinel migration | None (no table changes) | AST gate covers new event literals before any callsite; matches INFRA-15 discipline |
+| **48 — ЮKassa Integration Adapter** | `integrations/yookassa/client.py` (real + sandbox), `factory.py` boot probe, `webhook_verifier.py` IP gate, tests for each transport path | None | Parallels Phase 42 (email client) |
+| **49 — Online Sales Orchestrator** | `modules/online_payments/` full module: models (0034), repository, service `create_online_payment()`, router `POST /online-payments/memberships/{plan_id}/sell` + `POST /online-payments/pt-packages/{plan_id}/sell`; composition root wiring; `import-linter` update | 0034 `online_payments` | `record_payment(method='online')` is the only change to existing code path |
+| **50 — Webhook + FSM** | `_internal/yookassa/router.py` with IP-verify Depends; `handle_webhook_event()` FSM; membership activation via new Protocol slot; `fiscal_receipts` table (0035); `fiscal_receipts` INSERT on succeeded; `INSERT payment_receipts` idempotency rows | 0035 `fiscal_receipts` | Fiscal receipt row created here (status='sent') because receipt data was bundled in payment creation |
+| **51 — Fiscal Receipt FSM + Receipt Webhook** | `handle_receipt_webhook()` handler; `receipt.succeeded` / `receipt.canceled` event routing; `dispatch_fiscal_receipt` ARQ task with retry; `fiscal_receipt_succeeded` / `fiscal_receipt_failed` audit events | 0035 | ARQ task checks `fiscal_receipts.status` before calling ЮKassa — idempotent |
+| **52 — Cross-Channel Notifications + Online Refunds** | `online_payments/notifications.py` Telegram DM constants; `online_payments/email_templates.py` new templates; `LOCKED_EMAIL_TEMPLATES` extended; dispatcher walker updated; `.importlinter` email dispatcher ignore added; `POST /online-payments/{id}/refund` endpoint; `handle_refund_webhook` | None | Mirrors Phase 45 (NOTIFY-11/12/13) pattern; same post-commit best-effort fanout |
+| **53 — Milestone Verification** | Phase 36/40/46 discipline: operator runbook (curl + Telegram sandbox + cron sweeps); live-Postgres race tests (concurrent webhook double-delivery, duplicate `succeeded` events); DEFER-46-01 live RU email deliverability probe; DEFER-46-02 owner template countersign | None | Gate: 0/0 inline regressions above hard cap |
 
 ---
 
 ## Confidence Assessment
 
-| Area | Confidence | Rationale |
-|---|---|---|
-| Module placement (integrations/email mirror integrations/telegram) | HIGH | Direct precedent — `app/integrations/email/` already exists as placeholder; D-39-02 |
-| Per-domain template ownership | HIGH | v1.5 Phase 39 D-39-02 |
-| Async-via-ARQ for email send (no 6th docker service) | HIGH | Pattern matches v1.3 Phase 27 expiring-soon DM dispatch and v1.5 Phase 39/40 booking reminder |
-| New `users` module vs auth extension | HIGH | Auth module size already at upper bound; separation matches v1.4 splitting payments from memberships |
-| `User` model hoist vs `UserLookup` slot | MEDIUM | Both viable. Hoist is cleaner; slot is lower-risk. |
-| Reset-token DB table vs itsdangerous stateless | MEDIUM | DB matches `refresh_tokens` discipline; itsdangerous is simpler infra. Spec phase resolves. |
-| Idempotency table extension via `channel` column | HIGH | Minimum-invasive; backfill is trivial; matches v1.5 `booking_notifications` shape |
-| import-linter contracts preserved | HIGH | No new contract needed; only one mechanical change (add `users` to `modules-independent`); narrative D-41-XX exceptions documented |
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Module boundary (sibling vs extend) | HIGH | Directly derived from existing `payments/` AST gate + CHECK constraints — codebase read |
+| Protocol slot pattern | HIGH | 12 prior slots all follow identical pattern — direct code read |
+| Webhook security (IP allowlist) | MEDIUM-HIGH | Official ЮKassa docs confirm IP allowlisting; no HMAC header documented. Project constraint in PROJECT.md that says "HMAC" is a common misconception — the constraint should be restated as IP-allowlist enforcement |
+| ЮKassa payment FSM states | HIGH | Confirmed from official payment process docs |
+| Fiscal receipt FSM | MEDIUM | ЮKassa docs say receipt data is bundled in payment request; exact `receipt.succeeded` / `receipt.canceled` event names need live testing in Phase 53 |
+| 54-ФЗ receipt via ЮKassa hosted path | HIGH | ЮKassa handles OFD registration internally when receipt items bundled in payment creation — no separate `/receipts` call needed at payment time |
+| ARQ task pattern for receipt dispatch | HIGH | Directly mirrors `dispatch_email` — same per-enqueue `_max_tries` / `_expires` pattern |
+| import-linter additions | HIGH | Pattern established in Phase 45 for the same narrow cross-module access |
 
 ---
 
-## Roadmap Implications (Summary for SUMMARY.md)
+## Open Questions for Phase-Specific Research
 
-**Phases:** 8 phases (41–48), suggested order above
-**Critical invariants preserved:** anti-oracle (no email leaks user-existence information; `password_reset_requested` emitted in both branches; constant-time response floor), audit-AST-gate (all ~11 new events added to LOCKED_AUDIT_EVENTS in Phase 41 up-front), SVC001 commit-gate (extended to `users/service.py` and `auth/password_reset_service.py`), `modules-independent` contract (one mechanical addition, zero new edges), Protocol-slot double-wiring (REG-29-03)
-**Risk flags for deeper research:** Phase 42 (provider selection + DNS/SPF/DKIM/DMARC owner-runbook) and Phase 44 (locked Russian email copy — needs owner sign-off mechanism mirrored from D-27-OWNER-COPY-LOCK)
-**Open conflicts surfaced for spec phase:**
-- FEATURES.md suggests creating a "real" `app/modules/notifications/`; ARCHITECTURE.md rejects (D-39-02 precedent)
-- STACK.md recommends itsdangerous stateless tokens; ARCHITECTURE.md recommends DB table — spec phase chooses
+1. **ЮKassa webhook IP range stability:** The published CIDRs should be treated as stable but need verification against the live dashboard at Phase 48 time. Storing them in config (not hardcoded) allows updates without code change.
+
+2. **Receipt event names:** `receipt.succeeded` / `receipt.canceled` are inferred from the pattern. Verify exact event strings against ЮKassa webhook subscription docs during Phase 50 implementation.
+
+3. **`SYSTEM_ACTOR_ID` for webhook-triggered `record_payment`:** Online payments have no human operator at `succeeded` time. The `payments` table has `received_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT`. Either: (a) use the owner's user ID as a placeholder system actor (requires a seeded "system" user row), or (b) make `received_by_user_id` nullable for `method='online'` (migration 0034 must include this as a conditional nullable). Option (b) is architecturally cleaner but requires widening the NOT NULL constraint. Recommend option (b): nullable `received_by_user_id` for online-only payments, with a CHECK `(method='cash' AND received_by_user_id IS NOT NULL) OR method='online'`.
+
+4. **Membership activation cross-module call:** The webhook handler in `online_payments/service.py` needs to activate a membership. This requires either a new Protocol slot `MembershipActivator` (wired at composition root) OR the FK back-reference through `online_payments.subject_id` + subject_kind to call the memberships module indirectly. A `MembershipActivator` Protocol slot follows established precedent and keeps the import contract clean.
+
+5. **`DEFER-46-01/02` carry-out in Phase 53:** The v1.6 deferred items (live RU email deliverability probe + owner 15-template countersign) should run as the first task of Phase 53 before the v1.7 operator scenarios, since the email channel is a transport dependency for online payment receipts.
