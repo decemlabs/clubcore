@@ -34,7 +34,6 @@ import pytest
 
 from app.integrations.yookassa._money import kopecks_to_yookassa, yookassa_to_kopecks
 
-
 # ---------- kopecks_to_yookassa ----------
 
 def test_kopecks_to_yookassa_zero() -> None:
