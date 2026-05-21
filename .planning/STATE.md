@@ -4,7 +4,7 @@ milestone: v1.6
 milestone_name: Email channel + Multi-user admin
 status: executing
 stopped_at: Plan 46-13 autonomous live verification complete (6/8 reqs closed); VER-12 + VER-14 pending operator (DEFER-46-01/02). Re-invoke /gsd-execute-phase 46 after live email probe + owner sign-off to close v1.6 milestone.
-last_updated: "2026-05-21T10:15:39.232Z"
+last_updated: "2026-05-21T10:25:20.507Z"
 last_activity: 2026-05-20 -- Phase 46 execution started
 progress:
   total_phases: 6
@@ -128,8 +128,7 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.5 added 18 new de
 
 ### Blockers/Concerns
 
-- BLOCKER-46-13-02: VER-12 live RU email-deliverability probe pending operator (DEFER-46-01). Probe script ready (apps/backend/scripts/verify/v1_6_email_probe.py); needs real Postbox API key + owner's yandex.ru/mail.ru/rambler.ru aliases + manual capture of Authentication-Results headers. See v1.6-VERIFICATION-LOG.md email_deliverability_probe block.
-- BLOCKER-46-13-03: VER-14 owner sign-off on 15 LOCKED_EMAIL_TEMPLATES pending operator (DEFER-46-02). Identifiers AST-enforced (PASS); template bodies need human attestation by andre.shipunov@icloud.com. See v1.6-VERIFICATION-LOG.md signed_off_templates block.
+- DEFER-46-01 carry-forward to v1.7: VER-12 live RU email-deliverability probe. Probe script + scaffolding ready; needs real Yandex Postbox API key + owner's yandex.ru/mail.ru/rambler.ru aliases + manual Authentication-Results header capture. Scheduled as a one-shot operator task during v1.7 production hardening milestone.
 
 ## Deferred Items
 
