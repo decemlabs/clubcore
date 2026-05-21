@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Email channel + Multi-user admin
-status: shipped
-stopped_at: v1.6 shipped 2026-05-21. Awaiting /gsd-new-milestone to open v1.7.
-last_updated: "2026-05-21T11:00:00Z"
-last_activity: 2026-05-21 — Milestone v1.6 completed and archived
+milestone: v1.7
+milestone_name: Online Payments + 54-ФЗ
+status: planning
+last_updated: "2026-05-21T10:59:51.407Z"
+last_activity: 2026-05-21
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 82
-  completed_plans: 82
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
 
 ## Current Position
 
-Phase: — (v1.6 shipped)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-21 — Milestone v1.6 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-21 — Milestone v1.7 started
 
 ## Accumulated Context
 

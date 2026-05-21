@@ -50,17 +50,36 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Current Milestone: TBD (next: v1.7 Online Payments + 54-ФЗ)
+## Current Milestone: v1.7 Online Payments + 54-ФЗ
+
+**Goal:** Закрыть последний коммерческий gap MVP — приём онлайн-платежей через ЮKassa с фискальной 54-ФЗ-compliant отдачей чека клиенту, без переписывания v1.4 cash-ledger discipline. Bundled: online sales по РФ нельзя запускать без фискальных чеков, поэтому payment intake и `/receipts` интеграция идут в одном milestone.
 
 **Phase numbering:** v1.6 ended at Phase 46 → v1.7 starts at **Phase 47** (continued).
 
+**Target features:**
+
+- **ЮKassa payment intake** — создание платежа, redirect/embedded confirmation, webhook FSM (`pending → waiting_for_capture → succeeded / canceled`), `Idempotency-Key` mandatory, HMAC signature verification on webhook, retry-safe processing
+- **Online sales (memberships + PT-packages)** — orchestrator слой над v1.4 `payment_recorder` Protocol slot; `payment_method='online'`; зачисление абонемента/PT-пакета ТОЛЬКО по `succeeded` webhook (не на redirect)
+- **Online refunds** — `POST .../refund` (reception+owner) routes to ЮKassa Refund API; awaits webhook; FSM-guarded; partial UNIQUE on `refund_of` preserved; full-only (B-02 still deferred)
+- **54-ФЗ fiscal receipts** — ЮKassa `/receipts` integration (АТОЛ-Онлайн / Чек.ОФД path); receipt на email/SMS клиента; идемпотентность fiscal-send via UNIQUE на `(payment_id, kind)` (mirrors v1.6 cross-channel discriminator); fiscal-status FSM (`pending → sent → succeeded / failed`); атомарный audit chain
+- **Cross-channel notification** — payment success / refund / receipt-issued DMs via Telegram + email mirrors (v1.6 `LOCKED_EMAIL_TEMPLATES` ladder extended)
+- **v1.6 carry-out** — DEFER-46-01 live RU email-deliverability probe (yandex.ru + mail.ru + rambler.ru `Authentication-Results` headers) + DEFER-46-02 owner 15-template countersign on `LOCKED_EMAIL_TEMPLATES`
+
+**Key constraints:**
+
+- Stripe запрещён под РФ — only ЮKassa (CLAUDE.md regional constraint)
+- 54-ФЗ обязателен для онлайн-приёма с физлица: чек должен уходить в ОФД и клиенту до/в момент расчёта
+- v1.4 `payments` ledger (append-only, CHECK signed-amount, atomic audit chain) — bedrock; online flows консумируют `payment_recorder` Protocol slot, НЕ форкают ledger
+- v1.6 cross-channel idempotency pattern (UNIQUE с `channel` discriminator) — переносится на fiscal receipts
+- Webhook security: ЮKassa `Notification-Sign` HMAC verification — single AST gate target like `LOCKED_AUDIT_EVENTS`
+- Новые LOCKED audit events для online payments + fiscal receipts регистрируются ДО любого callsite (v1.3 INFRA-15 discipline)
+
 ## Next Milestone Goals
 
-Постлинейка milestone'ов после v1.6 close:
+Постлинейка milestone'ов после v1.7:
 
 | Milestone | Focus |
 |---|---|
-| **v1.7 — Online Payments (ЮKassa) + 54-ФЗ fiscal receipts (next)** | ЮKassa payment intake (memberships + PT-packages) + webhook state machine + online refunds; ЮKassa `/receipts` integration (АТОЛ-Онлайн / Чек.ОФД path) для 54-ФЗ-compliant фискальных чеков на email/SMS клиенту. **Bundled** — online sales по РФ нельзя запускать без фискальных чеков. **+ v1.6 carry-out:** DEFER-46-01 live RU email-deliverability probe (yandex.ru + mail.ru + rambler.ru); DEFER-46-02 owner 15-template countersign |
 | **v1.8 — Reports + Audit Log read API** | Owner-dashboard backend: revenue by day/month, active/expiring clients, top trainers, PT-session usage; `GET /api/v1/audit-log` с owner-only RBAC + фильтры (actor / resource / time-window / event-kind / `actor_email_snapshot`) |
 | **v1.9 — API Handoff + Production Hardening** | Curated Postman v2.1 collection + Newman CLI runner; auth runbook expansion; OpenAPI doc site + versioned spec URL; `@sportzal/api-client` publish to npm; OpenAPI tag curation + explicit `operation_id=`; idempotency hardening (CR-01/02/02b carry-over from Phase 33); residual DEFER-36-04-A (11 failures) + DEFER-36-04-B (ruff format 123 files); **DEFER-40-01 full v1.5 operator runbook execution + run.sh hardening**; **DEFER-46-03 VER-09 scenario 08 circuit-breaker fixture re-run**; **DEFER-46-04 v1.6 CI tech-debt sweep (ruff 79 + format 205 + mypy attr-defined)**; **DEFER-46-05 optional MailHog docker-compose `--profile dev` integration**; doc-debt sweep |
 | **v2.0 — Frontend Integration + Launch** | Design team integrates production admin + client apps against the frozen v1.9 contract; integration tests at the seam (live backend + real frontends); coexistence with frozen `apps/admin-web` (mock reference); launch checklist + production deploy story |
@@ -283,4 +302,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-21 — Milestone v1.6 Email channel + Multi-user admin shipped (6 phases 41-46, 82 plans, 48/48 reqs satisfied; VER-12 + VER-14 deferred to v1.7 as DEFER-46-01/02). v1.6 closes the last infra-pillar before v1.7 ЮKassa + 54-ФЗ online payments. Phase numbering continues from Phase 46 → next milestone (v1.7) starts at Phase 47.*
+*Last updated: 2026-05-21 — Milestone v1.7 Online Payments + 54-ФЗ opened. Carries DEFER-46-01 (live RU email-deliverability probe) + DEFER-46-02 (owner 15-template countersign) from v1.6 close. Phase numbering continues from Phase 46 → v1.7 starts at Phase 47.*
