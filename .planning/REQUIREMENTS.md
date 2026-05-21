@@ -18,7 +18,7 @@
 - [ ] **INFRA-38**: Protocol slot declarations at composition root: `YooKassaClientProvider` (double-wired to FastAPI app + ARQ worker per REG-29-03), `FiscalReceiptDispatcher` (post-commit enqueue)
 - [ ] **INFRA-39**: `app/integrations/yookassa/_money.py` with `kopecks_to_yookassa(int) -> str` and `yookassa_to_kopecks(str) -> int` converters + unit tests covering ≥10 edge cases (0, 1, 99, 100, 9999999, rounding, negative, leading zeros)
 - [ ] **INFRA-40**: `.importlinter` updated — `app.modules.online_payments` added to `modules-independent` contract; targeted ignore entries for `online_payments → payments.models`, `online_payments → users.display`, `email.dispatcher → online_payments.email_templates`
-- [ ] **INFRA-41**: Alembic 0033 adds `clients.email VARCHAR(255) NULL` (idempotent for clients without email); partial UNIQUE `(lower(email)) WHERE email IS NOT NULL AND deleted_at IS NULL` for case-insensitive uniqueness
+- [ ] **INFRA-41**: Alembic 0033 adds partial UNIQUE `(lower(email)) WHERE email IS NOT NULL AND deleted_at IS NULL` on the existing `clients.email` column (column already exists since Alembic 0002 per v1.1; 0033 does NOT add or narrow it). Migration runs a pre-flight duplicate check (D-47-05) and aborts with `RuntimeError` listing offenders if any case-insensitive collision exists.
 
 ### ADAPTER (ЮKassa integration layer — Phase 48)
 
