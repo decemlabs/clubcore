@@ -27,6 +27,16 @@ modules =
     app.modules.pt_packages
     app.modules.pt_sessions
     app.modules.users
+    # Phase 47 INFRA-40 — Option A deferral (2026-05-21):
+    # `app.modules.online_payments` MUST be appended to `modules =` as the
+    # first commit of Phase 49 (alongside the module body). import-linter
+    # 2.11 rejects `modules =` entries that don't resolve to a real on-disk
+    # package, so preemptive registration was not possible in Phase 47. The
+    # 3 INFRA-40 ignore edges below + the email dispatcher edge in the
+    # integrations contract are registered now under
+    # `unmatched_ignore_imports_alerting = warn`; once Phase 49 appends the
+    # `modules =` line, the contract becomes fully active. See
+    # .planning/phases/47-bedrock/47-07-SUMMARY.md for the full rationale.
 ignore_imports =
     # Phase 43 USERS-02 / D-43-13 / D-43-19 — Phase 41 0025 password_reset_tokens
     # row (purpose='invitation') is shared infrastructure consumed by both the
@@ -68,6 +78,24 @@ ignore_imports =
     # format_actor_display. Both narrowly scoped to pt_packages/service.py.
     app.modules.pt_packages.service -> app.modules.payments.models
     app.modules.pt_packages.service -> app.modules.users.display
+    # Phase 47 INFRA-40 — preemptive ignores for v1.7 online-payments module.
+    # The module body ships in Phase 49; contract entries land now per INFRA-15
+    # discipline so misplaced imports fail fast at import-linter time. Each
+    # cross-module edge is narrowly scoped to the online_payments service layer
+    # and mirrors the Phase 45 NOTIFY-11/12/13 precedent.
+    #   - record_payment(method='online') needs payments.models for the
+    #     ledger-row return type (mirrors memberships.service → payments.models).
+    #   - users.display for the operator display name in receipt context
+    #     (mirrors memberships.service → users.display).
+    app.modules.online_payments.service -> app.modules.payments.models
+    app.modules.online_payments.service -> app.modules.users.display
+# Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
+# online_payments edges above do not fail the build before Phase 49 ships the
+# module body. Once 49 lands and the imports materialise, the warnings clear
+# automatically; if a pre-existing edge ever stops matching, a CI warning
+# still surfaces. Discipline: never raise this to `none` — the warning is the
+# signal that the contract layer and the code are drifting.
+unmatched_ignore_imports_alerting = warn
 
 [importlinter:contract:integrations-not-depend-on-modules]
 name = integrations must not import modules
@@ -89,3 +117,12 @@ ignore_imports =
     app.integrations.email.dispatcher -> app.modules.memberships.email_templates
     app.integrations.email.dispatcher -> app.modules.bookings.email_templates
     app.integrations.email.dispatcher -> app.modules.payments.email_templates
+    # Phase 47 INFRA-40 — central email dispatcher walker must resolve v1.7
+    # online-payment template IDs (mirrors the Phase 45 dispatcher → modules
+    # email_templates allowlist).
+    app.integrations.email.dispatcher -> app.modules.online_payments.email_templates
+# Phase 47 INFRA-40 — see modules-independent rationale; `warn` keeps the
+# preemptive online_payments.email_templates edge green before Phase 52 ships
+# the template module body, without losing the unused-ignore signal for the
+# pre-existing 5 dispatcher entries.
+unmatched_ignore_imports_alerting = warn
