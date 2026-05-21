@@ -904,6 +904,14 @@ class YookassaWebhookReceivedPayload(BaseModel):
     (caller-generated UUID) is the chain ROOT for all downstream
     webhook-driven events; the caller passes ``None`` here so the
     audit_log's own row id can be used as the seed.
+
+    The ``rejected_ip`` variant is reserved for the Phase 50 webhook
+    route handler when the source IP fails the ``YOOKASSA_TRUSTED_IPS``
+    allowlist check (the upstream Phase 48 ``verify_yookassa_ip``
+    Depends() runs BEFORE the route body without an ``AsyncSession`` in
+    scope, so it logs to structlog only; Phase 50 emits the audit DB
+    row with sentinel ``event_type`` / ``object_id`` after the IP check
+    fails).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -911,7 +919,7 @@ class YookassaWebhookReceivedPayload(BaseModel):
     audit_correlation_id: UUID | None
     event_type: str
     object_id: str
-    idempotency_outcome: Literal["new", "duplicate_blocked"]
+    idempotency_outcome: Literal["new", "duplicate_blocked", "rejected_ip"]
 
 
 # ---------------------------------------------------------------------------
