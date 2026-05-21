@@ -140,7 +140,14 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
   3. `YOOKASSA_TRUSTED_IPS` frozenset is present and the AST gate rejects any non-literal `verify_yookassa_ip` callsite
   4. `kopecks_to_yookassa` and `yookassa_to_kopecks` converters pass ≥10 unit tests covering edge cases (0, 1, 99, 100, 9999999, rounding, negative, leading zeros)
   5. Alembic 0033 applies cleanly: `clients.email` column exists with a partial UNIQUE on `lower(email) WHERE email IS NOT NULL AND deleted_at IS NULL`
-**Plans**: TBD
+**Plans**: 7 plans
+  - [ ] 47-01-PLAN.md — LOCKED_AUDIT_EVENTS v1.7 extension + 9 payload classes (INFRA-34, INFRA-35)
+  - [ ] 47-02-PLAN.md — YooKassaSettings + .env.example placeholders (INFRA-36)
+  - [ ] 47-03-PLAN.md — YOOKASSA_TRUSTED_IPS + verify_yookassa_ip skeleton + AST gate (INFRA-37)
+  - [ ] 47-04-PLAN.md — 4 Protocol slots + composition-root wiring + parity test (INFRA-38)
+  - [ ] 47-05-PLAN.md — kopecks ↔ ЮKassa wire-format converters + ≥10 edge tests (INFRA-39)
+  - [ ] 47-06-PLAN.md — Alembic 0033 partial UNIQUE on lower(email) + INFRA-41 wording (INFRA-41)
+  - [ ] 47-07-PLAN.md — .importlinter preemptive online_payments registration + ignores (INFRA-40)
 
 ### Phase 48: ЮKassa Integration Adapter
 **Goal**: Ship the complete async ЮKassa integration layer — httpx client, boot probe, receipt builder, IP verifier, and test fixtures — with no domain module consuming it yet
@@ -224,7 +231,7 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 47. Bedrock | 0/TBD | Not started | - |
+| 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 0/TBD | Not started | - |
 | 49. Online Sales Orchestrator | 0/TBD | Not started | - |
 | 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |

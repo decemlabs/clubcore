@@ -93,7 +93,7 @@ The user did not select the following gray areas; defaults apply. Downstream age
 - **Frozen Pydantic v2 audit payloads with `extra='forbid'`** + mandatory `audit_correlation_id: UUID | None` field.
 
 ### Integration Points
-- `app/integrations/yookassa/` (new) — populated as skeletons only in Phase 47; full client lands in Phase 48.
+- `app/integrations/yookassa/` (new) — package directory + settings/_money/webhook_verifier landed in Phase 47; types.py / client.py / factory.py / circuit_breaker.py / receipt.py land in Phase 48 as part of ADAPTER-01..04 + ADAPTER-06 (no value in shipping empty NotImplementedError stubs ahead of time).
 - `app/core/audit.py` `LOCKED_AUDIT_EVENTS` — extension point (9 new tuples).
 - `app/core/audit_payloads.py` — 9 new payload classes.
 - `app/core/dependencies.py` — 4 new Protocol slots (`YooKassaClientProvider`, `FiscalReceiptDispatcher`, `MembershipActivator`, `PtPackageActivator`) using defensive-raise accessor pattern (mirrors `get_email_dispatcher` / `get_payment_recorder`). `YooKassaClientProvider` + `FiscalReceiptDispatcher` are double-wired (FastAPI + ARQ worker per REG-29-03); `MembershipActivator` + `PtPackageActivator` are HTTP-only single-wire.
