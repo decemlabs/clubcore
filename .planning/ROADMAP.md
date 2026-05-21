@@ -9,6 +9,7 @@
 - ✅ **v1.4 Cash Sales + PT Packages** — Phases 30-36 (shipped 2026-05-16) — see [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 Schedule + Bookings (PT slots)** — Phases 37-40 (shipped 2026-05-18) — see [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
 - ✅ **v1.6 Email channel + Multi-user admin** — Phases 41-46 (shipped 2026-05-21) — see [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
+- 🔄 **v1.7 Online Payments + 54-ФЗ** — Phases 47-53 (active)
 
 ## Phases
 
@@ -115,13 +116,130 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 
 </details>
 
+### v1.7 Online Payments + 54-ФЗ (Phases 47-53) — ACTIVE
+
+- [ ] **Phase 47: Bedrock** — INFRA-15 discipline applied first: audit events, credentials, money converters, Protocol slots, and Alembic 0033 before any ЮKassa callsite
+- [ ] **Phase 48: ЮKassa Integration Adapter** — Pure async httpx wrapper, IP verifier, receipt helpers, and `respx` test fixtures (parallels v1.6 Phase 42 email adapter)
+- [ ] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring
+- [ ] **Phase 50: Webhook FSM + Fiscal Foundation** — Webhook handler, payment FSM, `record_payment(method='online')`, `fiscal_receipts` table, and atomic UoW in a single phase
+- [ ] **Phase 51: Fiscal FSM + Refunds** — Receipt webhook FSM, ARQ dispatch with circuit breaker, and online refund endpoints
+- [ ] **Phase 52: Cross-Channel Notifications + v1.6 Carry-out** — Telegram + email DMs wired post-commit; DEFER-46-01 (live RU email probe) and DEFER-46-02 (15-template countersign) closed
+- [ ] **Phase 53: Milestone Verification** — Operator runbook, race tests, DEFER-46-03 re-run, ≤5 inline regressions hard cap
+
 ---
 
-*Roadmap last updated: 2026-05-21 — v1.6 Email channel + Multi-user admin shipped. Email transport (Yandex Postbox provider adapter + ARQ dispatch + Redis circuit breaker + HMAC-guarded bounce webhook), email OTP fallback, owner-managed users module (CRUD + deactivate + soft-delete + multi-user audit), invitation + anti-oracle password-reset flow, email mirrors for expiring + booking + payment-receipt with cross-channel idempotency, byte-stable OpenAPI regen + 12 new contract forward-guards, 6 real-Postgres race tests + 8-scenario operator runbook (7 PASS + 1 PARTIAL). DEFER-46-01 (live RU email-deliverability probe) + DEFER-46-02 (15-template owner countersign) carry to v1.7. Phase numbering: v1.6 ended at Phase 46; v1.7 starts at Phase 47.*
+## Phase Details
+
+### Phase 47: Bedrock
+**Goal**: Establish all v1.7 infrastructure primitives — audit events, settings, constants, converters, and Protocol slots — before any ЮKassa callsite exists
+**Depends on**: Phase 46
+**Requirements**: INFRA-34, INFRA-35, INFRA-36, INFRA-37, INFRA-38, INFRA-39, INFRA-40, INFRA-41
+**Success Criteria** (what must be TRUE):
+  1. `LOCKED_AUDIT_EVENTS` contains all 9 new v1.7 identifiers and the AST gate rejects any non-literal callsite
+  2. `YooKassaSettings` loads from `.env` with `SecretStr` for `secret_key`; `.env.example` documents every field; no real credentials appear in git
+  3. `YOOKASSA_TRUSTED_IPS` frozenset is present and the AST gate rejects any non-literal `verify_yookassa_ip` callsite
+  4. `kopecks_to_yookassa` and `yookassa_to_kopecks` converters pass ≥10 unit tests covering edge cases (0, 1, 99, 100, 9999999, rounding, negative, leading zeros)
+  5. Alembic 0033 applies cleanly: `clients.email` column exists with a partial UNIQUE on `lower(email) WHERE email IS NOT NULL AND deleted_at IS NULL`
+**Plans**: TBD
+
+### Phase 48: ЮKassa Integration Adapter
+**Goal**: Ship the complete async ЮKassa integration layer — httpx client, boot probe, receipt builder, IP verifier, and test fixtures — with no domain module consuming it yet
+**Depends on**: Phase 47
+**Requirements**: ADAPTER-01, ADAPTER-02, ADAPTER-03, ADAPTER-04, ADAPTER-05, ADAPTER-06
+**Success Criteria** (what must be TRUE):
+  1. `YooKassaClient.create_payment` and `create_refund` return typed result variants (success/error) and never re-raise SDK exceptions
+  2. Boot-time factory logs a structured startup probe result via structlog; a failed probe does not prevent application startup (degraded mode)
+  3. `build_receipt_item()` produces items with `payment_subject="service"` and `payment_mode="full_payment"` as Literal constants; AST gate rejects non-literal values
+  4. `verify_yookassa_ip` `Depends()` callable returns 403 for IPs outside `YOOKASSA_TRUSTED_IPS`; sandbox flag bypasses the check when `YooKassaSettings.sandbox=True`
+  5. `respx` fixtures provide 6 canonical responses (create-success, create-422, get-pending, get-succeeded, refund-success, webhook-payload) usable by all downstream tests
+**Plans**: TBD
+
+### Phase 49: Online Sales Orchestrator
+**Goal**: Operator can initiate a redirect-based or QR online membership/PT-package sale and receive a `confirmation_url` back from the API
+**Depends on**: Phase 48
+**Requirements**: PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07, PAY-08
+**Success Criteria** (what must be TRUE):
+  1. `POST /api/v1/online-payments/memberships/{plan_id}/sell` returns `{ confirmation_url, online_payment_id }` when `clients.email IS NOT NULL`
+  2. `POST /api/v1/online-payments/memberships/{plan_id}/sell-qr` returns a QR payload string; both sell variants share the same webhook path
+  3. Either sell endpoint returns 422 `client_email_required_for_online_payment` when the client has no email address on file
+  4. `GET /api/v1/online-payments/return` displays a static "ожидаем подтверждение" screen for all redirect outcomes with no payment-status information exposed
+  5. Alembic 0034 applies cleanly: `online_payments` table exists with UNIQUE `(yookassa_payment_id)`, UNIQUE `(idempotency_key)`, and the double-tap partial UNIQUE guard
+  6. Startup integration test asserts `YooKassaClientProvider` and `FiscalReceiptDispatcher` slots are non-None (AST parity test)
+**Plans**: TBD
+
+### Phase 50: Webhook FSM + Fiscal Foundation
+**Goal**: `payment.succeeded` webhook activates a membership/PT-package, records a ledger payment, inserts a `fiscal_receipts` row, and commits atomically; `payment.canceled` records the cancellation reason
+**Depends on**: Phase 49
+**Requirements**: WH-01, WH-02, WH-03, WH-04, WH-05, WH-06, FISCAL-01, FISCAL-02, FISCAL-03
+**Success Criteria** (what must be TRUE):
+  1. `POST /api/v1/_internal/yookassa/webhook` returns 403 for requests from IPs outside `YOOKASSA_TRUSTED_IPS`; the AST gate test confirms the IP dependency runs before body parse
+  2. A simulated `payment.succeeded` event causes the handler to re-fetch the payment via `GET /v3/payments/{id}` before writing to the DB (re-fetch-before-write verified by test)
+  3. Redis `SET NX EX 86400` deduplication blocks a second identical webhook delivery from reaching the DB; the DB UNIQUE `(yookassa_payment_id)` provides a second layer of defense
+  4. On `payment.succeeded`: `online_payments.status` is `succeeded`, a `payments` ledger row with `method='online'` is inserted, the membership/PT-package is activated, and a `fiscal_receipts(status='sent')` row is inserted — all in the same commit
+  5. On `payment.canceled`: `online_payments.status` is `canceled` and the audit payload contains `cancellation_party` and `cancellation_reason` from the webhook body
+  6. Alembic 0035 applies cleanly: `fiscal_receipts` table exists with UNIQUE `(payment_id, kind)` and FK to `payments.id`
+**Plans**: TBD
+
+### Phase 51: Fiscal FSM + Refunds
+**Goal**: Fiscal receipt status is tracked end-to-end with ARQ retry and a circuit breaker; operator can initiate a full online refund that completes when `refund.succeeded` arrives
+**Depends on**: Phase 50
+**Requirements**: FISCAL-04, FISCAL-05, FISCAL-06, FISCAL-07, REFUND-01, REFUND-02, REFUND-03, REFUND-04
+**Success Criteria** (what must be TRUE):
+  1. `receipt.succeeded` webhook transitions `fiscal_receipts.status` from `sent` to `succeeded`; `receipt.canceled` transitions it to `failed`
+  2. `dispatch_fiscal_receipt` ARQ task retries up to 3 times with exponential backoff; the Redis circuit breaker `sz:yookassa:circuit:receipts` opens on repeated failures and short-circuits subsequent dispatch attempts
+  3. ARQ cron `monitor_stale_fiscal_receipts` detects `fiscal_receipts.status = 'pending'` rows older than 90 seconds and emits a `fiscal_receipt_failed` audit event
+  4. `POST /api/v1/online-payments/memberships/{id}/refund` returns 202 and a refund row is created; the endpoint is analogous for PT-packages
+  5. `refund.succeeded` webhook atomically: writes a refund row to `payments`, transitions membership/PT-package to `refunded`, inserts `fiscal_receipts(kind='refund')`, and enqueues a notification post-commit
+  6. ARQ task `poll_pending_refunds` runs every 30 minutes and reconciles any refund row with `status='pending'` older than 30 minutes by calling `GET /v3/refunds/{id}`
+**Plans**: TBD
+
+### Phase 52: Cross-Channel Notifications + v1.6 Carry-out
+**Goal**: Payment and refund outcomes are communicated to clients via Telegram DM and email; two v1.6 operator deferrals (live email probe + template countersign) are formally closed
+**Depends on**: Phase 51
+**Requirements**: NOTIFY-01, NOTIFY-02, NOTIFY-03, NOTIFY-04, NOTIFY-05, CARRY-01, CARRY-02
+**Success Criteria** (what must be TRUE):
+  1. On `payment.succeeded`, client receives a Telegram DM and an email; UNIQUE `(payment_id, kind, channel)` prevents duplicate notifications across restarts
+  2. On `refund.succeeded`, client receives a Telegram DM and an email via the same idempotency pattern
+  3. When `fiscal_receipts.status` transitions to `failed`, the owner receives a `FISCAL_RECEIPT_FAILED_DM` Telegram alert and a best-effort owner email
+  4. `LOCKED_EMAIL_TEMPLATES` frozenset is extended from 15 to 19 entries; AST gate continues to reject non-literal `template_id` arguments
+  5. DEFER-46-01 is closed: live RU email-deliverability probe run against yandex.ru + mail.ru + rambler.ru; `Authentication-Results` headers captured to `.planning/handoff/v1.7-email-deliverability-evidence/`
+  6. DEFER-46-02 is closed: owner countersigns all 15 v1.6 `LOCKED_EMAIL_TEMPLATES`; `signed_off_at` timestamp recorded in `.planning/handoff/v1.6-template-countersign.md`
+**Plans**: TBD
+
+### Phase 53: Milestone Verification
+**Goal**: The complete v1.7 online-payment + fiscal-receipt flow is verified end-to-end via operator runbook and race tests; no more than 5 inline regressions are accepted
+**Depends on**: Phase 52
+**Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05
+**Success Criteria** (what must be TRUE):
+  1. Operator runbook `v1_7_runbook.sh` executes all curl scenarios (sell → `payment.succeeded` webhook → membership activated → fiscal_receipts row confirmed → refund → idempotency-key replay) without manual intervention and all return expected status codes
+  2. Race tests confirm: concurrent double-delivery of `payment.succeeded` is deduplicated by Redis + DB UNIQUE; a webhook arriving after Redis restart is caught by DB UNIQUE; concurrent refund + manual refund command is arbitrated by the partial UNIQUE on `refund_of`
+  3. ЮKassa sandbox walkthrough evidence (owner-recorded membership sale + refund session) is captured to `.planning/handoff/v1.7-yookassa-sandbox-evidence/`
+  4. DEFER-46-03 is closed: VER-09 scenario 08 cron-chain circuit-breaker fixture re-run confirms parity with the new `FISCAL-05` circuit breaker
+  5. Total inline regressions discovered during this phase does not exceed 5; any excess is rolled to v1.8 DEFER list
+**Plans**: TBD
+
+---
+
+## Progress Table
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 47. Bedrock | 0/TBD | Not started | - |
+| 48. ЮKassa Integration Adapter | 0/TBD | Not started | - |
+| 49. Online Sales Orchestrator | 0/TBD | Not started | - |
+| 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |
+| 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
+| 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
+| 53. Milestone Verification | 0/TBD | Not started | - |
+
+---
+
+*Roadmap last updated: 2026-05-21 — v1.7 Online Payments + 54-ФЗ roadmap created. Phases 47-53 covering 51 requirements across 7 phases. v1.6 ended at Phase 46; v1.7 starts at Phase 47.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
 *v1.3 Coverage: 44/44 v1.3 requirements satisfied (1 mock-mode UX deferred to v1.4 — closed in Phase 30 DEBT-05)*
 *v1.4 Coverage: 61/61 v1.4 in-scope requirements satisfied (8 INFRA/DEBT + 8 TRN + 18 PAY/REF + 13 PT-package + 9 PT-session + 1 FE-10 + 4 VER). FE-11..18 (8 reqs) descoped to v2.0.*
 *v1.5 Coverage: 57/57 v1.5 requirements mapped.*
-*v1.6 Coverage: 48/48 v1.6 requirements satisfied (8 INFRA + 11 EMAIL/AUTH-EM + 7 USERS + 5 RESET + 9 NOTIFY + 8 HANDOFF/VER). VER-12 (live RU-domain email-deliverability probe) + VER-14 (15-template owner countersign) ratification deferred to v1.7 as DEFER-46-01/02 (scaffolding ready; requires operator-controlled credentials + manual header capture). Structural attestation by claude-opus-4-7 covers regression-relevant invariants.*
+*v1.6 Coverage: 48/48 v1.6 requirements satisfied (8 INFRA + 11 EMAIL/AUTH-EM + 7 USERS + 5 RESET + 9 NOTIFY + 8 HANDOFF/VER). VER-12 (live RU-domain email-deliverability probe) + VER-14 (15-template owner countersign) ratification deferred to v1.7 as DEFER-46-01/02.*
+*v1.7 Coverage: 51/51 v1.7 requirements mapped (8 INFRA + 6 ADAPTER + 8 PAY + 9 WH/FISCAL-foundation + 8 FISCAL-FSM/REFUND + 7 NOTIFY/CARRY + 5 VER).*

@@ -117,4 +117,54 @@
 
 | REQ-ID | Phase | Status |
 |---|---|---|
-| (to be filled by roadmapper) | | |
+| INFRA-34 | Phase 47 | Pending |
+| INFRA-35 | Phase 47 | Pending |
+| INFRA-36 | Phase 47 | Pending |
+| INFRA-37 | Phase 47 | Pending |
+| INFRA-38 | Phase 47 | Pending |
+| INFRA-39 | Phase 47 | Pending |
+| INFRA-40 | Phase 47 | Pending |
+| INFRA-41 | Phase 47 | Pending |
+| ADAPTER-01 | Phase 48 | Pending |
+| ADAPTER-02 | Phase 48 | Pending |
+| ADAPTER-03 | Phase 48 | Pending |
+| ADAPTER-04 | Phase 48 | Pending |
+| ADAPTER-05 | Phase 48 | Pending |
+| ADAPTER-06 | Phase 48 | Pending |
+| PAY-01 | Phase 49 | Pending |
+| PAY-02 | Phase 49 | Pending |
+| PAY-03 | Phase 49 | Pending |
+| PAY-04 | Phase 49 | Pending |
+| PAY-05 | Phase 49 | Pending |
+| PAY-06 | Phase 49 | Pending |
+| PAY-07 | Phase 49 | Pending |
+| PAY-08 | Phase 49 | Pending |
+| WH-01 | Phase 50 | Pending |
+| WH-02 | Phase 50 | Pending |
+| WH-03 | Phase 50 | Pending |
+| WH-04 | Phase 50 | Pending |
+| WH-05 | Phase 50 | Pending |
+| WH-06 | Phase 50 | Pending |
+| FISCAL-01 | Phase 50 | Pending |
+| FISCAL-02 | Phase 50 | Pending |
+| FISCAL-03 | Phase 50 | Pending |
+| FISCAL-04 | Phase 51 | Pending |
+| FISCAL-05 | Phase 51 | Pending |
+| FISCAL-06 | Phase 51 | Pending |
+| FISCAL-07 | Phase 51 | Pending |
+| REFUND-01 | Phase 51 | Pending |
+| REFUND-02 | Phase 51 | Pending |
+| REFUND-03 | Phase 51 | Pending |
+| REFUND-04 | Phase 51 | Pending |
+| NOTIFY-01 | Phase 52 | Pending |
+| NOTIFY-02 | Phase 52 | Pending |
+| NOTIFY-03 | Phase 52 | Pending |
+| NOTIFY-04 | Phase 52 | Pending |
+| NOTIFY-05 | Phase 52 | Pending |
+| CARRY-01 | Phase 52 | Pending |
+| CARRY-02 | Phase 52 | Pending |
+| VER-01 | Phase 53 | Pending |
+| VER-02 | Phase 53 | Pending |
+| VER-03 | Phase 53 | Pending |
+| VER-04 | Phase 53 | Pending |
+| VER-05 | Phase 53 | Pending |
