@@ -101,7 +101,7 @@ apps/backend/app/integrations/yookassa/
 **No `circuit_breaker.py` in Phase 48.** Circuit breaker for ЮKassa lives on the *fiscal-receipt dispatch* path (Phase 51 FISCAL-05 — `sz:yookassa:circuit:receipts` Redis key). The adapter itself is breaker-less in Phase 48; Phase 49 orchestrator wraps it with retry/breaker semantics for the outbound payment-create path if SUMMARY.md scope demands it.
 
 ### Composition-root wiring (Phase 48 vs Phase 49 split)
-- **D-48-25:** Phase 48 changes the `YooKassaClientProvider` Protocol slot from the no-op stub (`yookassa_client_provider_noop_stub` in `_stubs.py`) to the **real** `build_yookassa_client`-returned instance. ARQ worker `on_startup` mirror (REG-29-03 double-wire). This is a one-line composition-root edit in `app/main.py` + `app/worker.py`.
+- **D-48-25:** Phase 48 changes the `YooKassaClientProvider` Protocol slot from the no-op stub (`yookassa_client_provider_noop_stub` in `_stubs.py`) to the **real** `build_yookassa_client`-returned instance. ARQ worker `on_startup` mirror (REG-29-03 double-wire). This is a one-line composition-root edit in `app/main.py` + `app/workers/__init__.py`.
 - **D-48-26:** The other three Protocol slots (`FiscalReceiptDispatcher`, `MembershipActivator`, `PtPackageActivator`) **stay no-op** through Phase 48. Phase 49 wires `MembershipActivator` + `PtPackageActivator`; Phase 50 wires `FiscalReceiptDispatcher`.
 
 ### Claude's Discretion
@@ -187,12 +187,12 @@ Downstream agents may settle the following without re-asking:
 
 ### Integration Points
 - `app/integrations/yookassa/types.py` (new) — 4 frozen dataclasses; importable from anywhere; **do not** import from `app.modules.*` (integration-layer invariant).
-- `app/integrations/yookassa/client.py` (new) — owns the single `httpx.AsyncClient` instance; consumed by `app/main.py` lifespan + `app/worker.py` `on_startup` (REG-29-03 double-wire).
+- `app/integrations/yookassa/client.py` (new) — owns the single `httpx.AsyncClient` instance; consumed by `app/main.py` lifespan + `app/workers/__init__.py` `on_startup` (REG-29-03 double-wire).
 - `app/integrations/yookassa/factory.py` (new) — single entrypoint `build_yookassa_client`; called from FastAPI lifespan and ARQ worker startup.
 - `app/integrations/yookassa/receipt.py` (new) — pure function; consumed by Phase 49 orchestrator + Phase 50 fiscal-receipt dispatcher (the latter via Phase 51 wiring).
 - `app/integrations/yookassa/webhook_verifier.py` (existing skeleton) — body filled; FastAPI `Depends()` consumer lives in Phase 50.
 - `app/main.py` composition root — one-line edit: replace `yookassa_client_provider_noop_stub` with `await build_yookassa_client(settings=...)`.
-- `app/worker.py` (`on_startup`) — mirror the composition-root edit for ARQ.
+- `app/workers/__init__.py` (`WorkerSettings.on_startup`) — mirror the composition-root edit for ARQ.
 - `apps/backend/tests/integrations/yookassa/conftest.py` (new) — 6 respx fixtures + 1 dict fixture (ADAPTER-06).
 - `apps/backend/tests/integrations/yookassa/_responses/*.json` (new) — captured ЮKassa response bodies.
 - `apps/backend/tests/unit/test_locked_yookassa_constants_ast.py` (existing from Phase 47) — extended with 2 new test functions.
@@ -228,7 +228,7 @@ Downstream agents may settle the following without re-asking:
       yield respx_mock
   ```
 - **Webhook payload canonical fixture** must include `event="payment.succeeded"`, `object.id` (UUID), `object.status="succeeded"`, `object.amount`, `object.receipt_registration="succeeded"`, `object.metadata` (correlation hook for Phase 50).
-- **`yookassa_webhook_received` audit emission** from `verify_yookassa_ip` on rejected_ip: payload carries `outcome="rejected_ip"`, `source_ip=<extracted>`, `audit_correlation_id=None` (no upstream correlation on rejected requests).
+- **`yookassa_webhook_received` emission split — Phase 48 vs Phase 50:** `verify_yookassa_ip` runs as a FastAPI `Depends()` BEFORE the route body, so it has NO `AsyncSession` in scope. Phase 48's verifier therefore emits via **structlog ONLY** — the structlog warning carries `event="yookassa_webhook_received"`, `outcome="rejected_ip"`, `source_ip=<extracted>` (source_ip as a structlog kwarg). The structured **audit DB row** (`audit.emit(session, "yookassa_webhook_received", ..., idempotency_outcome="rejected_ip")`) is emitted by the **Phase 50 webhook route handler** which has the session in scope. The widened Literal in `YookassaWebhookReceivedPayload.idempotency_outcome` (added by Plan 48-01) exists for that Phase 50 consumer — Phase 48 itself never calls `audit.emit`. Note: `source_ip` is NOT a field on `YookassaWebhookReceivedPayload` (Pydantic `extra="forbid"` would reject it); it lives only in the structlog log line. Audit DB row deferred to Phase 50 webhook route.
 
 </specifics>
 

@@ -159,7 +159,22 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
   3. `build_receipt_item()` produces items with `payment_subject="service"` and `payment_mode="full_payment"` as Literal constants; AST gate rejects non-literal values
   4. `verify_yookassa_ip` `Depends()` callable returns 403 for IPs outside `YOOKASSA_TRUSTED_IPS`; sandbox flag bypasses the check when `YooKassaSettings.sandbox=True`
   5. `respx` fixtures provide 6 canonical responses (create-success, create-422, get-pending, get-succeeded, refund-success, webhook-payload) usable by all downstream tests
-**Plans**: TBD
+**Plans**: 7 plans
+Plans:
+**Wave 1**
+- [ ] 48-01-PLAN.md — types.py (4 frozen dataclasses) + widen YookassaWebhookReceivedPayload Literal for rejected_ip
+- [ ] 48-04-PLAN.md — receipt.py build_receipt_item + 3 locked enums + AST gate extension (SC3)
+- [ ] 48-06-PLAN.md — conftest.py with 6 respx fixtures + _responses/*.json (SC5)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 48-02-PLAN.md — client.py async httpx adapter with classified result chain + Idempotence-Key header + respx dev dep
+- [ ] 48-05-PLAN.md — webhook_verifier.py body (sandbox bypass + CIDR check + 403 + audit) (SC4)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 48-03-PLAN.md — factory.py build_yookassa_client + non-fatal GET /v3/me probe (SC2)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 48-07-PLAN.md — composition-root rewire: main.py + workers/__init__.py + parity-test update
 
 ### Phase 49: Online Sales Orchestrator
 **Goal**: Operator can initiate a redirect-based or QR online membership/PT-package sale and receive a `confirmation_url` back from the API
