@@ -164,7 +164,7 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 9 v1.7 = 80 locked pairs.
+    """Sanity belt — 18+12+6+17+5+13+9 = 80 locked pairs (v1.1+v1.2+v1.3+v1.4+v1.5+v1.6+v1.7).
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:

@@ -720,6 +720,201 @@ class RefreshFailedPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# v1.7 (Phase 47 lock — INFRA-35; emitted in Phases 49/50/51)
+#
+# Online-payments + 54-ФЗ fiscal receipts + ЮKassa webhook intake surface.
+# Every v1.7 payload below carries `audit_correlation_id: UUID | None` as
+# its FIRST field (D-41-20 lineage) — chain-starters pass None, downstream
+# emits (webhook → fiscal → notification) propagate the UUID so the
+# forensic trail reconstructs from `audit_log` alone. Per D-41-09,
+# `actor_email_snapshot` stays a COLUMN on `audit_log`, never a payload
+# field (the `extra="forbid"` config below rejects it at validate time).
+# ---------------------------------------------------------------------------
+
+
+# Online payment lifecycle (Phase 49 PAY-03..05 / Phase 50 WH-04..06):
+
+
+class OnlinePaymentInitiatedPayload(BaseModel):
+    """Payload schema for ("online_payment_initiated", "online_payment") — Phase 49 PAY-03.
+
+    Emitted synchronously when the operator (or client self-service flow)
+    starts an online sale. `audit_correlation_id` is the chain ROOT — the
+    caller passes ``None`` so subsequent ЮKassa-created / succeeded /
+    canceled / refunded / fiscal events can carry the row's UUID through
+    their own `audit_correlation_id`. `subject_kind` discriminates which
+    activator the eventual webhook handler dispatches to (D-47-01 — both
+    `MembershipActivator` and `PtPackageActivator` Protocol slots).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_payment_id: UUID
+    client_id: UUID
+    amount_kopecks: int
+    subject_kind: Literal["membership", "pt_package"]
+    subject_id: UUID
+
+
+class YookassaPaymentCreatedPayload(BaseModel):
+    """Payload schema for ("yookassa_payment_created", "online_payment") — Phase 49 PAY-04.
+
+    Emitted after a successful ``POST /payments`` to the ЮKassa API. The
+    `idempotency_key` is the value sent in the ``Idempotency-Key`` header
+    (locked at row-creation time so retries dedupe deterministically).
+    `confirmation_type` discriminates the return-URL flow (redirect) from
+    the QR-code flow. `audit_correlation_id` carries the initiated-event
+    chain UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_payment_id: UUID
+    yookassa_payment_id: str
+    idempotency_key: str
+    confirmation_type: Literal["redirect", "qr"]
+
+
+class OnlinePaymentSucceededPayload(BaseModel):
+    """Payload schema for ("online_payment_succeeded", "online_payment") — Phase 50 WH-04.
+
+    Emitted from the ЮKassa webhook handler on ``payment.succeeded`` AFTER
+    the `PaymentRecorder` Protocol writes the ledger row. `payment_id` is
+    the resulting `payments` table row UUID (D-30-04 lineage — ledger row
+    UUID, distinct from the ЮKassa-side `yookassa_payment_id` string).
+    `audit_correlation_id` carries the webhook-intake UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_payment_id: UUID
+    yookassa_payment_id: str
+    amount_kopecks: int
+    payment_id: UUID
+
+
+class OnlinePaymentCanceledPayload(BaseModel):
+    """Payload schema for ("online_payment_canceled", "online_payment") — Phase 50 WH-05.
+
+    Emitted from the ЮKassa webhook handler on ``payment.canceled``.
+    `cancellation_party` and `cancellation_reason` carry the upstream
+    ЮKassa cancellation details (both ``None`` when ЮKassa omits them).
+    Phase 52 NOTIFY-05 reuses this schema for the cancellation
+    notification fan-out (no re-declaration). `audit_correlation_id`
+    carries the webhook-intake UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_payment_id: UUID
+    yookassa_payment_id: str
+    cancellation_party: str | None
+    cancellation_reason: str | None
+
+
+class OnlinePaymentRefundedPayload(BaseModel):
+    """Payload schema for ("online_payment_refunded", "online_payment") — Phase 50 WH-06.
+
+    Emitted from the refund webhook AFTER the refund `PaymentRecorder`
+    row is written. `refund_payment_id` is the ledger row UUID of the
+    refund (negative-amount sibling of the original sale row).
+    `audit_correlation_id` carries the webhook-intake UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_payment_id: UUID
+    refund_payment_id: UUID
+    amount_kopecks: int
+
+
+# Fiscal receipt lifecycle (Phase 50 FISCAL-01 / Phase 51 FISCAL-04..06):
+
+
+class FiscalReceiptDispatchedPayload(BaseModel):
+    """Payload schema for ("fiscal_receipt_dispatched", "fiscal_receipt") — Phase 50 FISCAL-01.
+
+    Emitted when the ARQ fiscal-dispatch task posts the receipt to the
+    ЮKassa 54-ФЗ endpoint. `kind` discriminates sale vs refund receipts
+    (drives parameter selection at the dispatch callsite). `customer_email`
+    is the recipient email captured at sale time (RF requirement: every
+    fiscal receipt MUST be delivered to the customer). `audit_correlation_id`
+    carries the originating online-payment chain UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    fiscal_receipt_id: UUID
+    payment_id: UUID
+    kind: Literal["payment", "refund"]
+    customer_email: str
+
+
+class FiscalReceiptSucceededPayload(BaseModel):
+    """Payload schema for ("fiscal_receipt_succeeded", "fiscal_receipt") — Phase 51 FISCAL-04.
+
+    Emitted from the fiscal-receipt webhook on success. `yookassa_receipt_id`
+    is the upstream receipt handle for downstream operator-side reconciliation.
+    `audit_correlation_id` carries the dispatch-event UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    fiscal_receipt_id: UUID
+    yookassa_receipt_id: str
+
+
+class FiscalReceiptFailedPayload(BaseModel):
+    """Payload for ("fiscal_receipt_failed", "fiscal_receipt") — Phase 51 FISCAL-05/06.
+
+    Emitted after retry exhaustion or terminal upstream error.
+    `failure_reason` is operator-readable diagnostic text — keeps the
+    payload minimal at the v1.7 baseline; Phase 51 may extend with
+    structured discriminators if dashboards require them.
+    `audit_correlation_id` carries the dispatch-event UUID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    fiscal_receipt_id: UUID
+    failure_reason: str
+
+
+# Webhook intake audit trail (Phase 50 WH-01):
+
+
+class YookassaWebhookReceivedPayload(BaseModel):
+    """Payload schema for ("yookassa_webhook_received", "yookassa_webhook") — Phase 50 WH-01.
+
+    Emitted at the webhook entry point BEFORE any business-logic dispatch.
+    `event_type` is the upstream ЮKassa event identifier (e.g.
+    ``payment.succeeded``, ``refund.succeeded``). `object_id` is the
+    ЮKassa-side object reference (payment_id or refund_id depending on
+    `event_type`). `idempotency_outcome` discriminates first-delivery
+    from duplicate-blocked replay so ops dashboards can quantify
+    webhook redelivery noise. The row's own `audit_correlation_id`
+    (caller-generated UUID) is the chain ROOT for all downstream
+    webhook-driven events; the caller passes ``None`` here so the
+    audit_log's own row id can be used as the seed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    event_type: str
+    object_id: str
+    idempotency_outcome: Literal["new", "duplicate_blocked"]
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -777,4 +972,17 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("expiring_notification_sent_7d", "membership"): ExpiringNotificationSentPayload,
     ("expiring_notification_sent_3d", "membership"): ExpiringNotificationSentPayload,
     ("expiring_notification_sent_1d", "membership"): ExpiringNotificationSentPayload,
+    # v1.7 (Phase 47 lock — INFRA-35; emitted in Phases 49/50/51)
+    # Online payment lifecycle (Phase 49/50):
+    ("online_payment_initiated", "online_payment"): OnlinePaymentInitiatedPayload,
+    ("yookassa_payment_created", "online_payment"): YookassaPaymentCreatedPayload,
+    ("online_payment_succeeded", "online_payment"): OnlinePaymentSucceededPayload,
+    ("online_payment_canceled", "online_payment"): OnlinePaymentCanceledPayload,
+    ("online_payment_refunded", "online_payment"): OnlinePaymentRefundedPayload,
+    # Fiscal receipt lifecycle (Phase 50/51):
+    ("fiscal_receipt_dispatched", "fiscal_receipt"): FiscalReceiptDispatchedPayload,
+    ("fiscal_receipt_succeeded", "fiscal_receipt"): FiscalReceiptSucceededPayload,
+    ("fiscal_receipt_failed", "fiscal_receipt"): FiscalReceiptFailedPayload,
+    # Webhook intake audit trail (Phase 50):
+    ("yookassa_webhook_received", "yookassa_webhook"): YookassaWebhookReceivedPayload,
 }
