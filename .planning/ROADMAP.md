@@ -320,7 +320,7 @@ Plans:
 - [x] 46-12-PLAN.md — apps/backend/scripts/verify/v1_6_email_probe.py (VER-12)
 
 **Wave 5** *(live verification session; SERIAL, depends on all prior; autonomous: false)*
-- [ ] 46-13-PLAN.md — Execute 8-scenario runbook + email probe + anti-oracle re-run + CI evidence capture + v1.6-VERIFICATION-LOG.md + 15-template owner sign-off (VER-09, VER-11, VER-12, VER-13, VER-14)
+- [x] 46-13-PLAN.md — Execute 8-scenario runbook + email probe + anti-oracle re-run + CI evidence capture + v1.6-VERIFICATION-LOG.md + 15-template owner sign-off (VER-09, VER-11, VER-12, VER-13, VER-14)
 
 </details>
 
@@ -339,7 +339,7 @@ Plans:
 | 43. Multi-User Admin Module | 18/18 | Complete   | 2026-05-19 |
 | 44. Invitation + Password-Reset Flow | 11/11 | Complete | 2026-05-20 |
 | 45. Email Notification Mirrors | 13/13 | Complete   | 2026-05-20 |
-| 46. OpenAPI Handoff + Milestone Verification | 12/13 | In Progress|  |
+| 46. OpenAPI Handoff + Milestone Verification | 13/13 | Complete   | 2026-05-21 |
 
 ---
 
