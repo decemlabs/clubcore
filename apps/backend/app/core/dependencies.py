@@ -919,3 +919,276 @@ async def verify_csrf(
             has_header=header_val is not None,
         )
         raise CsrfMismatch("csrf_mismatch")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 47 INFRA-38 / D-47-01 — YooKassaClientProvider Protocol slot (v1.7 online payments).
+#
+# Thirteenth composition-root carve-out. Phase 48 ADAPTER-02 wires the real
+# implementation (returns the configured ``YooKassaClient`` instance) in BOTH
+# ``app.main.create_app()`` AND
+# ``app.workers.__init__.WorkerSettings.on_startup`` (REG-29-03 double-wire
+# parity — mirrors the v1.6 ``register_email_dispatcher`` precedent).
+# Phase 47 ships the slot declaration + a no-op stub wiring; no callsite yet.
+#
+# Defensive-raise accessor (mirrors get_email_dispatcher at line ~665) — a
+# missing YooKassa client provider in the online-payment-create flow is a hard
+# misconfiguration, not an expected state.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class YooKassaClientProvider(Protocol):
+    """Structural type for the ЮKassa client accessor (Phase 47 D-47-01).
+
+    Return type ``Any`` is intentional: the concrete return is
+    ``app.integrations.yookassa.client.YooKassaClient``, but pinning the
+    concrete type here would force an ``app.integrations.*`` import inside
+    ``app.core`` which is forbidden by the
+    ``core-not-depend-on-integrations`` importlinter contract (mirrors
+    ``PaymentRecorder``'s Any-return reasoning at line ~339).
+
+    Phase 48 ADAPTER-02 wires the real implementation; Phase 47 wires only a
+    no-op stub that raises ``NotImplementedError`` at call time so the
+    defensive accessor returns non-None during request handling.
+    """
+
+    async def __call__(self) -> Any: ...
+
+
+_yookassa_client_provider: YooKassaClientProvider | None = None
+
+
+def register_yookassa_client_provider(impl: YooKassaClientProvider) -> None:
+    """Composition-root setter (Phase 47 D-47-01).
+
+    Phase 47 wires a no-op stub from BOTH the FastAPI composition root
+    (``app.main.create_app``) AND ARQ ``WorkerSettings.on_startup``
+    (REG-29-03 double-wire parity). Idempotent: re-registering replaces
+    the slot (mirrors WR-05 reasoning; useful for tests that inject a
+    stub provider via ``create_app(...)``).
+    """
+    global _yookassa_client_provider
+    _yookassa_client_provider = impl
+
+
+def get_yookassa_client_provider() -> YooKassaClientProvider:
+    """Defensive accessor (Phase 47 D-47-01) — raises if slot not registered.
+
+    Mirrors ``get_email_dispatcher`` defensive-raise pattern (line ~665);
+    a missing YooKassa client provider in an online-payment flow is a hard
+    misconfiguration, not a recoverable state.
+    """
+    if _yookassa_client_provider is None:
+        raise RuntimeError(
+            "YooKassaClientProvider slot not registered — register via "
+            "app.core.dependencies.register_yookassa_client_provider() in "
+            "app/main.py:create_app() AND app/workers/__init__.py "
+            "WorkerSettings.on_startup (REG-29-03 double-wire)."
+        )
+    return _yookassa_client_provider
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 47 INFRA-38 / D-47-01 — FiscalReceiptDispatcher Protocol slot (v1.7 54-ФЗ).
+#
+# Fourteenth composition-root carve-out. Phase 50 FISCAL-01 / Phase 51 FISCAL-05
+# wire the real implementation (enqueues ``dispatch_fiscal_receipt`` ARQ task
+# post-commit) in BOTH ``app.main.create_app()`` AND
+# ``app.workers.__init__.WorkerSettings.on_startup`` (REG-29-03 double-wire
+# parity — the enqueue happens FastAPI-side via ArqRedis but the worker also
+# needs the slot for the consumer-side guard).
+# Phase 47 ships the slot declaration + a no-op stub wiring; no callsite yet.
+#
+# Defensive-raise accessor — a missing fiscal-receipt dispatcher in the
+# fiscal-receipt-enqueue flow is a hard misconfiguration, not an expected
+# state.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class FiscalReceiptDispatcher(Protocol):
+    """Structural type for the fiscal-receipt dispatch callable (Phase 47 D-47-01).
+
+    Phase 50 FISCAL-01 / Phase 51 FISCAL-05 wire the real implementation
+    (enqueues ``dispatch_fiscal_receipt`` ARQ task post-commit). The
+    callsite passes ``fiscal_receipt_id`` (DB row PK) and an optional
+    ``audit_correlation_id`` for cross-event correlation in the audit_log
+    table — same pattern as ``EmailDispatcher.audit_correlation_id``.
+    """
+
+    async def __call__(
+        self,
+        *,
+        fiscal_receipt_id: UUID,
+        audit_correlation_id: UUID | None,
+    ) -> None: ...
+
+
+_fiscal_receipt_dispatcher: FiscalReceiptDispatcher | None = None
+
+
+def register_fiscal_receipt_dispatcher(impl: FiscalReceiptDispatcher) -> None:
+    """Composition-root setter (Phase 47 D-47-01).
+
+    Phase 50/51 wires the real implementation from BOTH the FastAPI
+    composition root (``app.main.create_app``) AND ARQ
+    ``WorkerSettings.on_startup`` (REG-29-03 double-wire parity).
+    Idempotent: re-registering replaces the slot.
+    """
+    global _fiscal_receipt_dispatcher
+    _fiscal_receipt_dispatcher = impl
+
+
+def get_fiscal_receipt_dispatcher() -> FiscalReceiptDispatcher:
+    """Defensive accessor (Phase 47 D-47-01) — raises if slot not registered.
+
+    Mirrors ``get_email_dispatcher`` defensive-raise pattern (line ~665);
+    a missing fiscal-receipt dispatcher in a 54-ФЗ-enqueue flow is a hard
+    misconfiguration, not a recoverable state.
+    """
+    if _fiscal_receipt_dispatcher is None:
+        raise RuntimeError(
+            "FiscalReceiptDispatcher slot not registered — register via "
+            "app.core.dependencies.register_fiscal_receipt_dispatcher() in "
+            "app/main.py:create_app() AND app/workers/__init__.py "
+            "WorkerSettings.on_startup (REG-29-03 double-wire)."
+        )
+    return _fiscal_receipt_dispatcher
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 47 INFRA-38 / D-47-01 — MembershipActivator Protocol slot (v1.7 online payments).
+#
+# Fifteenth composition-root carve-out. Phase 50 WH-05 wires the real
+# implementation (activates a membership atomically inside the YooKassa
+# webhook unit-of-work) in ``app.main.create_app()`` ONLY — HTTP-only
+# single-wire, no ARQ entry path (the webhook handler is HTTP and the
+# activation must run inside the request session's transaction).
+# Phase 47 ships the slot declaration + a no-op stub wiring; no callsite yet.
+#
+# Defensive-raise accessor — a missing membership activator in the
+# webhook-handling flow is a hard misconfiguration, not an expected state.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class MembershipActivator(Protocol):
+    """Structural type for the membership-activation callable (Phase 47 D-47-01).
+
+    Return type ``Any`` is intentional: the concrete return is
+    ``app.modules.memberships.models.Membership``, but pinning the
+    concrete type here would force an ``app.modules.*`` import inside
+    ``app.core`` which is forbidden by the
+    ``core-not-depend-on-modules`` importlinter contract (mirrors
+    ``PaymentRecorder``'s Any-return reasoning at line ~339).
+
+    Phase 50 WH-05 wires the real implementation; the call site is the
+    YooKassa webhook handler running inside an HTTP request session — the
+    activator MUST run inside the SAME ``AsyncSession`` so the activation
+    + audit row commit atomically.
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        *,
+        membership_id: UUID,
+        audit_correlation_id: UUID | None,
+    ) -> Any: ...
+
+
+_membership_activator: MembershipActivator | None = None
+
+
+def register_membership_activator(impl: MembershipActivator) -> None:
+    """Composition-root setter (Phase 47 D-47-01).
+
+    Phase 50 calls this from ``app.main.create_app`` ONLY (HTTP-only
+    single-wire — no ARQ entry path). Idempotent: re-registering replaces
+    the slot.
+    """
+    global _membership_activator
+    _membership_activator = impl
+
+
+def get_membership_activator() -> MembershipActivator:
+    """Defensive accessor (Phase 47 D-47-01) — raises if slot not registered.
+
+    Mirrors ``get_email_dispatcher`` defensive-raise pattern (line ~665);
+    a missing membership activator in the webhook-activation flow is a
+    hard misconfiguration, not a recoverable state.
+    """
+    if _membership_activator is None:
+        raise RuntimeError(
+            "MembershipActivator slot not registered — register via "
+            "app.core.dependencies.register_membership_activator() in "
+            "app/main.py:create_app() (HTTP-only single-wire — no ARQ entry path)."
+        )
+    return _membership_activator
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 47 INFRA-38 / D-47-01 — PtPackageActivator Protocol slot (v1.7 online payments).
+#
+# Sixteenth composition-root carve-out. Phase 50 WH-05 wires the real
+# implementation (activates a PT-package atomically inside the YooKassa
+# webhook unit-of-work) in ``app.main.create_app()`` ONLY — HTTP-only
+# single-wire, no ARQ entry path (same reasoning as MembershipActivator).
+# Phase 47 ships the slot declaration + a no-op stub wiring; no callsite yet.
+#
+# Defensive-raise accessor — a missing PT-package activator in the
+# webhook-handling flow is a hard misconfiguration, not an expected state.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PtPackageActivator(Protocol):
+    """Structural type for the PT-package-activation callable (Phase 47 D-47-01).
+
+    Return type ``Any`` is intentional: the concrete return is
+    ``app.modules.pt_packages.models.PtPackage``, but pinning the concrete
+    type here would force an ``app.modules.*`` import inside ``app.core``
+    which is forbidden by the ``core-not-depend-on-modules`` importlinter
+    contract (mirrors ``PaymentRecorder``'s Any-return reasoning at line
+    ~339).
+
+    Phase 50 WH-05 wires the real implementation; the call site is the
+    YooKassa webhook handler running inside an HTTP request session — the
+    activator MUST run inside the SAME ``AsyncSession`` so the activation
+    + audit row commit atomically.
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        *,
+        pt_package_id: UUID,
+        audit_correlation_id: UUID | None,
+    ) -> Any: ...
+
+
+_pt_package_activator: PtPackageActivator | None = None
+
+
+def register_pt_package_activator(impl: PtPackageActivator) -> None:
+    """Composition-root setter (Phase 47 D-47-01).
+
+    Phase 50 calls this from ``app.main.create_app`` ONLY (HTTP-only
+    single-wire — no ARQ entry path). Idempotent: re-registering replaces
+    the slot.
+    """
+    global _pt_package_activator
+    _pt_package_activator = impl
+
+
+def get_pt_package_activator() -> PtPackageActivator:
+    """Defensive accessor (Phase 47 D-47-01) — raises if slot not registered.
+
+    Mirrors ``get_email_dispatcher`` defensive-raise pattern (line ~665);
+    a missing PT-package activator in the webhook-activation flow is a
+    hard misconfiguration, not a recoverable state.
+    """
+    if _pt_package_activator is None:
+        raise RuntimeError(
+            "PtPackageActivator slot not registered — register via "
+            "app.core.dependencies.register_pt_package_activator() in "
+            "app/main.py:create_app() (HTTP-only single-wire — no ARQ entry path)."
+        )
+    return _pt_package_activator
