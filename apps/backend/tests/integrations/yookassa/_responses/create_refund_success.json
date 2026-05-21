@@ -1,0 +1,9 @@
+{
+  "id": "44e12f66-1234-5000-8000-aabbccddeeff",
+  "payment_id": "9b1f5cf6-1111-5000-8000-2d3b4e5f6789",
+  "status": "succeeded",
+  "amount": {"value": "1990.00", "currency": "RUB"},
+  "created_at": "2026-05-22T11:00:00.000Z",
+  "description": "Возврат за абонемент",
+  "receipt_registration": "pending"
+}

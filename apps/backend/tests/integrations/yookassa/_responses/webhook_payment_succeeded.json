@@ -1,0 +1,20 @@
+{
+  "type": "notification",
+  "event": "payment.succeeded",
+  "object": {
+    "id": "9b1f5cf6-1111-5000-8000-2d3b4e5f6789",
+    "status": "succeeded",
+    "amount": {"value": "1990.00", "currency": "RUB"},
+    "income_amount": {"value": "1932.30", "currency": "RUB"},
+    "description": "Месячный абонемент в зал",
+    "recipient": {"account_id": "123456", "gateway_id": "gw-test-001"},
+    "payment_method": {"type": "bank_card", "id": "0eda4234-0001-5000-a000-1d8b1d6e5c45", "saved": false},
+    "captured_at": "2026-05-21T10:02:00.000Z",
+    "created_at": "2026-05-21T10:00:05.000Z",
+    "test": false,
+    "paid": true,
+    "refundable": true,
+    "receipt_registration": "succeeded",
+    "metadata": {"sportzal_payment_id": "f1234567-89ab-4cde-8000-111111111111"}
+  }
+}
