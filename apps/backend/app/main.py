@@ -59,12 +59,16 @@ from app.core.dependencies import (
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
     register_email_dispatcher,
+    register_fiscal_receipt_dispatcher,  # Phase 47 D-47-01 — double-wire.
+    register_membership_activator,  # Phase 47 D-47-01 — HTTP-only single-wire.
     register_payment_recorder,
     register_payment_refunder,
+    register_pt_package_activator,  # Phase 47 D-47-01 — HTTP-only single-wire.
     register_slot_by_id_resolver,
     register_trainer_by_id_resolver,
     register_user_loader,
     register_user_session_invalidator,  # Phase 43 D-43-26/27 — single-wire.
+    register_yookassa_client_provider,  # Phase 47 D-47-01 — double-wire.
 )
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -73,6 +77,12 @@ from app.core.redis import redis_lifespan
 from app.integrations.email.dispatcher import (
     enqueue_email_dispatch,
     register_arq_pool,
+)
+from app.integrations.yookassa._stubs import (
+    fiscal_receipt_dispatcher_noop_stub,
+    membership_activator_noop_stub,
+    pt_package_activator_noop_stub,
+    yookassa_client_provider_noop_stub,
 )
 from app.modules.auth.service import (
     invalidate_all_families_for_user,
@@ -268,6 +278,22 @@ def create_app() -> FastAPI:
     # double-wire above).
     set_auth_redis_factory(lambda: app.state.redis)
     register_user_session_invalidator(invalidate_all_families_for_user)
+
+    # Phase 47 INFRA-38 / D-47-01 — v1.7 ЮKassa + fiscal + activator slots.
+    # YooKassaClientProvider + FiscalReceiptDispatcher are REG-29-03 double-wired
+    # (same byte-equal stub object registered in
+    # app/workers/__init__.py:WorkerSettings.on_startup so the parity test in
+    # tests/unit/test_yookassa_protocol_slot_parity.py sees identical refs in
+    # both processes — mirrors the v1.6 EmailDispatcher precedent).
+    # MembershipActivator + PtPackageActivator are HTTP-only single-wire
+    # (D-47-02 — webhook handler runs in an HTTP request session; no ARQ
+    # entry path). Phase 47 wires no-op stubs (D-47-01 Option A) — the real
+    # implementations land in Phase 48 (YooKassaClient) and Phase 50
+    # (activators + fiscal dispatcher).
+    register_yookassa_client_provider(yookassa_client_provider_noop_stub)
+    register_fiscal_receipt_dispatcher(fiscal_receipt_dispatcher_noop_stub)
+    register_membership_activator(membership_activator_noop_stub)
+    register_pt_package_activator(pt_package_activator_noop_stub)
 
     app.include_router(api)
     return app

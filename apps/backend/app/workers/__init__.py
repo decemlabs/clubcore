@@ -249,12 +249,20 @@ class WorkerSettings:
         # email integration code in cron-only worker invocations that never
         # dequeue a dispatch_email job.
         from app.core.config import get_settings as _get_settings_local
-        from app.core.dependencies import register_email_dispatcher
+        from app.core.dependencies import (
+            register_email_dispatcher,
+            register_fiscal_receipt_dispatcher,  # Phase 47 D-47-01 — REG-29-03 double-wire.
+            register_yookassa_client_provider,  # Phase 47 D-47-01 — REG-29-03 double-wire.
+        )
         from app.integrations.email.dispatcher import (
             enqueue_email_dispatch,
             register_arq_pool,
         )
         from app.integrations.email.factory import build_email_client
+        from app.integrations.yookassa._stubs import (
+            fiscal_receipt_dispatcher_noop_stub,
+            yookassa_client_provider_noop_stub,
+        )
 
         settings_local = _get_settings_local()
 
@@ -264,6 +272,17 @@ class WorkerSettings:
         ctx["email_client"] = await build_email_client(settings=settings_local.email)
 
         register_email_dispatcher(enqueue_email_dispatch)
+
+        # Phase 47 INFRA-38 / D-47-01 — REG-29-03 double-wire: the IDENTICAL
+        # no-op stub objects passed here are also wired in
+        # app/main.py:create_app() so the Phase 47 parity test (plan 47-04)
+        # sees byte-equal callables in both processes (mirrors the v1.6
+        # EmailDispatcher precedent above). MembershipActivator +
+        # PtPackageActivator are HTTP-only single-wire — NOT registered here.
+        # Real implementations land in Phase 48 (YooKassaClient) / Phase 50
+        # (FiscalReceiptDispatcher).
+        register_yookassa_client_provider(yookassa_client_provider_noop_stub)
+        register_fiscal_receipt_dispatcher(fiscal_receipt_dispatcher_noop_stub)
 
         # ARQ 0.28 exposes the in-worker ArqRedis pool to job bodies via
         # ctx["redis"] (the standard ARQ convention). The worker's own pool
