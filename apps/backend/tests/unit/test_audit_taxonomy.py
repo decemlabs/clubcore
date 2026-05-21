@@ -164,7 +164,7 @@ def test_every_audit_emit_pair_is_in_locked_set() -> None:
 
 
 def test_locked_audit_events_has_expected_count() -> None:
-    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 11 v1.6 = 69 locked pairs.
+    """Sanity belt — 18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 9 v1.7 = 80 locked pairs.
 
     Original Plan 15-03 expected 16 v1.1 + 10 v1.2 = 26. Plan executor verified
     against actual callsites and added 2 v1.1 events the docstring had omitted:
@@ -209,10 +209,20 @@ def test_locked_audit_events_has_expected_count() -> None:
     soft-deleted user (USERS-06). HTTP response is identical to the
     invalid_session branch; only the audit row discriminates. The 12-v1.6
     count becomes 13 and the frozenset total becomes 58 + 13 = 71.
+
+    Phase 47 (INFRA-34 / D-47) added 9 v1.7 pairs pre-registered for Phases
+    49/50/51 — the online-payments + 54-ФЗ + ЮKassa webhook lock. 5 online
+    payment lifecycle pairs under ``online_payment`` (``online_payment_initiated``,
+    ``yookassa_payment_created``, ``online_payment_succeeded``,
+    ``online_payment_canceled``, ``online_payment_refunded``) + 3 fiscal-receipt
+    lifecycle pairs under ``fiscal_receipt`` (``fiscal_receipt_dispatched``,
+    ``fiscal_receipt_succeeded``, ``fiscal_receipt_failed``) + 1 webhook intake
+    audit-trail pair (``yookassa_webhook_received`` under ``yookassa_webhook``).
+    The frozenset total becomes 71 + 9 = 80. See 47-01-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 71, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 71 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6), "
+    assert len(LOCKED_AUDIT_EVENTS) == 80, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 80 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 9 v1.7), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
 

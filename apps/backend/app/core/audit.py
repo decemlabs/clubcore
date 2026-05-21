@@ -113,6 +113,71 @@ booking is signalled by the EXISTING `pt_session_recorded` event carrying
 the booking reference — there is no separate `booking_completed` event.
 The frozenset size grows 53 → 58.
 
+  ## v1.7 (Phase 47 lock — emitted in Phases 49/50/51 per INFRA-34 / D-47)
+  Online-payments + 54-ФЗ fiscal receipts + ЮKassa webhook intake. Every v1.7
+  payload class declares `audit_correlation_id: UUID | None` as its FIRST
+  field (D-41-20 lineage) so the forensic chain reconstructs across the
+  synchronous sale-init → ЮKassa webhook → fiscal-receipt → notification
+  fan-out from `audit_log` alone.
+
+  Online payment lifecycle (Phase 49 PAY-03..05 / Phase 50 WH-04..06):
+  - online_payment_initiated            {online_payment_id, client_id, amount_kopecks,
+                                         subject_kind, subject_id}
+                                        # 'online_payment' — `OnlinePaymentInitiatedPayload`;
+                                        # emitted synchronously when the operator/client
+                                        # starts the sale flow; `audit_correlation_id`
+                                        # is the chain root (caller passes None).
+  - yookassa_payment_created            {online_payment_id, yookassa_payment_id,
+                                         idempotency_key, confirmation_type}
+                                        # 'online_payment' — `YookassaPaymentCreatedPayload`;
+                                        # emitted after a successful `POST /payments` to
+                                        # ЮKassa; `audit_correlation_id` carries the
+                                        # initiated-event UUID.
+  - online_payment_succeeded            {online_payment_id, yookassa_payment_id,
+                                         amount_kopecks, payment_id}
+                                        # 'online_payment' — `OnlinePaymentSucceededPayload`;
+                                        # emitted from the ЮKassa webhook on `payment.succeeded`
+                                        # after the PaymentRecorder writes the ledger row;
+                                        # `audit_correlation_id` carries the webhook-intake UUID.
+  - online_payment_canceled             {online_payment_id, yookassa_payment_id,
+                                         cancellation_party, cancellation_reason}
+                                        # 'online_payment' — `OnlinePaymentCanceledPayload`;
+                                        # emitted from the ЮKassa webhook on `payment.canceled`;
+                                        # `audit_correlation_id` carries the webhook-intake UUID.
+                                        # Phase 52 NOTIFY-05 reuses this schema for the
+                                        # cancellation notification fan-out (no re-declaration).
+  - online_payment_refunded             {online_payment_id, refund_payment_id,
+                                         amount_kopecks}
+                                        # 'online_payment' — `OnlinePaymentRefundedPayload`;
+                                        # emitted from the refund webhook after the refund
+                                        # PaymentRecorder row is written; `audit_correlation_id`
+                                        # carries the webhook-intake UUID.
+
+  Fiscal receipt lifecycle (Phase 50 FISCAL-01 / Phase 51 FISCAL-04..06):
+  - fiscal_receipt_dispatched           {fiscal_receipt_id, payment_id, kind,
+                                         customer_email}
+                                        # 'fiscal_receipt' — `FiscalReceiptDispatchedPayload`;
+                                        # emitted when the ARQ task posts the receipt to
+                                        # ЮKassa 54-ФЗ; `audit_correlation_id` carries the
+                                        # originating payment's online_payment chain UUID.
+  - fiscal_receipt_succeeded            {fiscal_receipt_id, yookassa_receipt_id}
+                                        # 'fiscal_receipt' — `FiscalReceiptSucceededPayload`;
+                                        # emitted from the receipt webhook on success;
+                                        # `audit_correlation_id` carries the dispatch UUID.
+  - fiscal_receipt_failed               {fiscal_receipt_id, failure_reason}
+                                        # 'fiscal_receipt' — `FiscalReceiptFailedPayload`;
+                                        # emitted after retry exhaustion or terminal error;
+                                        # `audit_correlation_id` carries the dispatch UUID.
+
+  Webhook intake audit trail (Phase 50 WH-01):
+  - yookassa_webhook_received           {event_type, object_id, idempotency_outcome}
+                                        # 'yookassa_webhook' — `YookassaWebhookReceivedPayload`;
+                                        # emitted at the webhook entry point BEFORE any business
+                                        # logic dispatch; `idempotency_outcome` discriminates
+                                        # first-delivery vs duplicate-blocked replay; the row's
+                                        # `audit_correlation_id` (caller-generated UUID) is the
+                                        # chain root for all downstream webhook-driven events.
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -257,6 +322,19 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("password_reset_completed", "user"),
         # Payment receipt email (Phase 45 NOTIFY-12):
         ("payment_receipt_emailed", "payment"),
+        # v1.7 (Phase 47 lock — emitted in Phases 49/50/51 per INFRA-34)
+        # Online payment lifecycle (Phase 49 PAY-03..05 / Phase 50 WH-04..06):
+        ("online_payment_initiated", "online_payment"),
+        ("yookassa_payment_created", "online_payment"),
+        ("online_payment_succeeded", "online_payment"),
+        ("online_payment_canceled", "online_payment"),
+        ("online_payment_refunded", "online_payment"),
+        # Fiscal receipt lifecycle (Phase 50 FISCAL-01 / Phase 51 FISCAL-04..06):
+        ("fiscal_receipt_dispatched", "fiscal_receipt"),
+        ("fiscal_receipt_succeeded", "fiscal_receipt"),
+        ("fiscal_receipt_failed", "fiscal_receipt"),
+        # Webhook intake audit trail (Phase 50 WH-01):
+        ("yookassa_webhook_received", "yookassa_webhook"),
     }
 )
 
