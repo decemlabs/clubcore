@@ -118,7 +118,7 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 
 ### v1.7 Online Payments + 54-ФЗ (Phases 47-53) — ACTIVE
 
-- [ ] **Phase 47: Bedrock** — INFRA-15 discipline applied first: audit events, credentials, money converters, Protocol slots, and Alembic 0033 before any ЮKassa callsite
+- [x] **Phase 47: Bedrock** (7/7 plans) — completed 2026-05-21 — INFRA-34..41 *(1 scope adjustment: `app.modules.online_payments` modules= entry deferred to Phase 49 commit-1 per import-linter 2.11 limitation, user-approved Option A; 47-VERIFICATION.md: 5/5 success criteria + 8/8 reqs PASSED)*
 - [ ] **Phase 48: ЮKassa Integration Adapter** — Pure async httpx wrapper, IP verifier, receipt helpers, and `respx` test fixtures (parallels v1.6 Phase 42 email adapter)
 - [ ] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring
 - [ ] **Phase 50: Webhook FSM + Fiscal Foundation** — Webhook handler, payment FSM, `record_payment(method='online')`, `fiscal_receipts` table, and atomic UoW in a single phase
