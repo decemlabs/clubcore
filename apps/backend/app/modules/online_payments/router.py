@@ -32,10 +32,12 @@ Permission mapping (D-49-24 — both reception+owner; no new ``OWNER_ONLY``):
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import time
 from collections.abc import Awaitable, Callable
-from typing import Annotated
+from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -68,6 +70,27 @@ from app.modules.online_payments.constants import (
 from app.modules.online_payments.schemas import SellRequest, SellResponse
 
 router = APIRouter()
+
+
+# ─── Phase 49 PAY-07 / D-49-17 — Anti-oracle return-screen constants ────────
+
+_RETURN_HTML: Final[str] = (
+    '<!doctype html><html lang="ru"><head>'
+    '<meta charset="utf-8"><title>Оплата</title>'
+    "</head><body>"
+    "<h1>Оплата получена</h1>"
+    "<p>Ожидаем подтверждение от платёжной системы. "
+    "Эту страницу можно закрыть.</p>"
+    "</body></html>"
+)
+
+# Phase 49 D-49-18 (revised per W3) — constant-time floor (PITFALLS Pitfall 4).
+# Original D-49-18 specified 50 ms; W3 raised the floor to 60 ms to give the
+# test (20 ms tolerance = 40 ms minimum assertion) headroom for CI scheduler
+# jitter without sacrificing UX (60 ms is well below the 100 ms human
+# perception threshold). Mirrors the anti-oracle uniformity discipline of
+# auth/service.py:_constant_time_floor.
+_RETURN_FLOOR_SECONDS: Final[float] = 0.060
 
 
 async def _outer_idempotency_replay_or_run(
@@ -331,3 +354,35 @@ async def sell_pt_package_qr(
         redis=redis,
         runner=_runner,
     )
+
+
+# ─── Phase 49 PAY-07 / D-49-17, D-49-18, D-49-26 — Anti-oracle return screen ─
+
+
+@router.get(
+    "/return",
+    include_in_schema=False,  # PAY-07 — not documented; browser-target URL
+)
+async def online_payment_return() -> Response:
+    """PAY-07 anonymous-by-design return-URL screen (D-49-17 / D-49-18 / W3).
+
+    NO auth, NO CSRF, NO DB. Response body is static HTML with no payment
+    status, payment ID, client name, or amount — eliminates the payment-
+    status oracle. ЮKassa may append ``?payment_id=...`` to the URL on
+    redirect; the handler accepts query params via request.query_params
+    but discards them (D-49-17 — never bind as path/query model because
+    that creates differential rendering).
+
+    Constant-time floor (D-49-18 / W3, 60 ms) mirrors auth/service.py
+    _constant_time_floor discipline. Phase 49 has exactly one callsite
+    so the floor is embedded; extract to a helper if Phase 50+ adds more.
+    """
+    start = time.perf_counter()
+    response = Response(
+        content=_RETURN_HTML,
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+    elapsed = time.perf_counter() - start
+    await asyncio.sleep(max(0.0, _RETURN_FLOOR_SECONDS - elapsed))
+    return response

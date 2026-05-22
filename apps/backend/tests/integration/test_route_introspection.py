@@ -33,6 +33,11 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/telegram/status",  # Phase 7 — pre-auth poll
         "/api/v1/auth/telegram/verify",  # Phase 7 — body carries token + code
         "/api/v1/auth/otp/request",  # Phase 42 D-42-22 — pre-auth OTP bootstrap (telegram + email channels)
+        # Phase 49 D-49-26 — PAY-07 anonymous-by-design return-URL screen.
+        # No auth, no CSRF; reveals no data (static HTML only). The handler
+        # MUST stay this way — adding any DB lookup or query-param branching
+        # re-introduces the oracle that Plan 49-05 was designed to eliminate.
+        "/api/v1/online-payments/return",
         # FastAPI built-ins:
         "/openapi.json",
         "/docs",

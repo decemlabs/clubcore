@@ -31,3 +31,22 @@ so inserts hit NOT-NULL on `id`. Fix shipped in this plan:
 - Live test DB patched via one-shot `ALTER TABLE` (no formal migration
   bump — the column was new in 0034 and no production deploy has shipped
   Phase 49 yet, so amending the migration in place is safe).
+
+## Plan 49-05 — Out-of-scope discoveries (executor)
+
+### Pre-existing E501 line-too-long in test_route_introspection.py:35
+Line 35 (`/api/v1/auth/otp/request` comment) is 108 chars; pre-dates plan 49-05.
+Confirmed via `git stash && ruff check` on base. Not modified by this plan.
+
+### Pre-existing mypy errors in app/modules/online_payments/router.py (4 errors)
+Errors at lines 185/234/280/323 (now shifted to 208/257/303/346 due to ADDITIVE edits below)
+about `confirmation_type: str` not matching `Literal['redirect', 'qr']`. Originate from
+Plan 49-04; confirmed via `git stash && mypy` on base. The /return handler added by
+this plan introduces ZERO new mypy errors.
+
+### Pre-existing test failure: test_every_protected_route_declares_a_gate
+Failing for `/api/v1/auth/password-reset/{request,confirm}` and `/api/v1/users/invitations/accept`
+on the base commit (confirmed via `git stash && pytest`). Plan 49-05's EXCLUDED_PATHS
+addition for `/api/v1/online-payments/return` works correctly — `/return` does NOT appear
+in the missing-gate failure list. Sanity-belt tests
+(`test_excluded_paths_set_is_locked`, `test_gate_prefixes_match_factory_names`) pass.
