@@ -74,6 +74,10 @@ def _payment_row_dict(payment: Payment) -> dict[str, object]:
     amount_kopecks + method + received_at + received_by_user_id + refund_of.
     ``audit_log_id`` is intentionally OMITTED — it is mutated post-INSERT when
     the audit row latches on, so including it would defeat determinism.
+
+    Phase 50 Plan 50-03 / Blocker #2 — ``received_by_user_id`` may be NULL
+    for ЮKassa-webhook-originated rows; the hash still includes the field
+    (None hashes deterministically just like any other value).
     """
     return {
         "id": payment.id,
@@ -94,8 +98,8 @@ async def record_payment(  # noqa: SVC001 caller-owns-txn — sale orchestrator 
     subject_id: UUID,
     amount_kopecks: int,
     method: str = "cash",
-    received_by_user_id: UUID,
-    audit_actor: CurrentUser,
+    received_by_user_id: UUID | None = None,  # Phase 50 Plan 50-03 Blocker #2
+    audit_actor: CurrentUser | None = None,  # Phase 50 Plan 50-03 Blocker #2
 ) -> Payment:
     """Append a sale-side Payment row (Phase 32 PAY-03..05).
 
@@ -103,6 +107,20 @@ async def record_payment(  # noqa: SVC001 caller-owns-txn — sale orchestrator 
     compute row hash → emit ``payment_recorded`` audit event with the
     PaymentRecordedPayload. The CALLER (sale-flow orchestrator in
     ``memberships.service.create_membership``) owns the commit.
+
+    Phase 50 Plan 50-03 / Blocker #2 — ``audit_actor`` and
+    ``received_by_user_id`` are widened to Optional. The ЮKassa webhook
+    flow (Plan 50-04) is anonymous; the recorder is invoked with both as
+    ``None``. Body handles both None branches:
+      - ``received_by_user_id=None`` is passed straight through to the
+        ledger row (Alembic 0036 made the column nullable).
+      - ``audit_actor=None`` causes the ``payment_recorded`` audit row to
+        be a SYSTEM EMIT (``actor_user_id=None`` per D-41-10 / INFRA-39).
+      - Audit payload ``received_by_user_id`` is emitted as None when
+        no operator UUID is present; ``PaymentRecordedPayload`` accepts
+        ``UUID | None`` after Plan 50-03 widening.
+    Existing in-person sale callers continue to pass non-None values for
+    BOTH kwargs and exercise the same code path with no behavior change.
     """
     payment = await repository.insert_payment(
         session,
@@ -123,10 +141,15 @@ async def record_payment(  # noqa: SVC001 caller-owns-txn — sale orchestrator 
     # serializable"). Cast to str so Postgres JSONB roundtrips cleanly.
     # Pydantic UUID fields accept both UUID and well-formed str on
     # validation, so PaymentRecordedPayload still passes.
+    #
+    # Phase 50 Plan 50-03 / Blocker #2 — guard the audit_actor.id and the
+    # str(received_by_user_id) accesses; either may be None for the
+    # webhook flow. The audit emit becomes a SYSTEM EMIT
+    # (actor_user_id=None) when no operator is present.
     await audit.emit(
         session,
         "payment_recorded",
-        actor_user_id=audit_actor.id,
+        actor_user_id=audit_actor.id if audit_actor is not None else None,
         resource_type="payment",
         resource_id=payment.id,
         payment_id=str(payment.id),
@@ -134,7 +157,9 @@ async def record_payment(  # noqa: SVC001 caller-owns-txn — sale orchestrator 
         subject_id=str(subject_id),
         amount_kopecks=amount_kopecks,
         method=method,
-        received_by_user_id=str(received_by_user_id),
+        received_by_user_id=(
+            str(received_by_user_id) if received_by_user_id is not None else None
+        ),
         payment_row_hash=row_hash,
     )
     return payment

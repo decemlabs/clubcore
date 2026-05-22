@@ -90,6 +90,13 @@ class PaymentRecordedPayload(BaseModel):
 
     `payment_row_hash` (D-30-04): SHA-256 canonical-JSON of the payment row,
     prefixed `sha256:` — pattern `^sha256:[0-9a-f]{64}$`.
+
+    Phase 50 Plan 50-03 / Blocker #2 — ``received_by_user_id`` is widened
+    to ``UUID | None``. The ЮKassa webhook flow (Plan 50-04) is anonymous;
+    ``record_payment`` with ``audit_actor=None`` emits ``received_by_user_id``
+    as NULL in both the ledger row (Alembic 0036 made the column nullable)
+    AND this audit payload. Existing in-person sale callers continue to
+    pass non-None values — the widening is additive.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -99,7 +106,7 @@ class PaymentRecordedPayload(BaseModel):
     subject_id: UUID
     amount_kopecks: int
     method: str
-    received_by_user_id: UUID
+    received_by_user_id: UUID | None  # Phase 50 Plan 50-03 Blocker #2
     # D-30-04: SHA-256 of canonical-JSON of the original payment row.
     payment_row_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
