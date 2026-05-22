@@ -220,7 +220,7 @@ Plans:
 - [x] 50-02-PLAN.md — ONLINE_PAYMENT_STATUS_TRANSITIONS + 2 new LOCKED audit events + payload classes (WH-04 prep)
 - [x] 50-03-PLAN.md — Activator Protocol kwarg rename + PaymentRecorder Protocol widening + activator body fills (WH-05, Blockers #2/#3/#6/#7)
 - [x] 50-04-PLAN.md — Webhook router + handlers + atomic UoW (WH-01..06, Blockers #1/#4)
-- [ ] 50-05-PLAN.md — WH-02 AST ordering gate (WH-02, Blocker #5)
+- [x] 50-05-PLAN.md — WH-02 AST ordering gate (WH-02, Blocker #5)
 - [ ] 50-06-PLAN.md — E2E integration tests + EXCLUDED_PATHS + deferred-items.md + regression sweep (Blocker #8)
 
 ### Phase 51: Fiscal FSM + Refunds
@@ -270,7 +270,7 @@ Plans:
 | 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
 | 49. Online Sales Orchestrator | 7/7 | Complete    | 2026-05-22 |
-| 50. Webhook FSM + Fiscal Foundation | 4/6 | In Progress|  |
+| 50. Webhook FSM + Fiscal Foundation | 5/6 | In Progress|  |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
 | 53. Milestone Verification | 0/TBD | Not started | - |
