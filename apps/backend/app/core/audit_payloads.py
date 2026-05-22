@@ -816,6 +816,46 @@ class OnlinePaymentCanceledPayload(BaseModel):
     cancellation_reason: str | None
 
 
+class MembershipActivatedOnlinePayload(BaseModel):
+    """Payload schema for ("membership_activated_online", "membership") — Phase 50 D-50-23.
+
+    Emitted from app/modules/memberships/service.py:activate_membership_from_webhook
+    inside the ЮKassa webhook UoW (Plan 50-03 fills the body that Phase 49
+    shipped as a NotImplementedError stub). CHILD audit emit per D-50-18:
+    `audit_correlation_id` carries the webhook-intake UUID so the activation
+    row chains back to the YookassaWebhookReceived row.
+
+    `online_payment_id` is the upstream OnlinePayment row that triggered
+    activation — NOT the ledger ``payments.id`` (the activator runs BEFORE
+    the audit emit inside the webhook UoW, but online_payment_id is the
+    durable upstream seed of the activation chain).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    membership_id: UUID
+    client_id: UUID
+    online_payment_id: UUID
+
+
+class PtPackageActivatedOnlinePayload(BaseModel):
+    """Payload schema for ("pt_package_activated_online", "pt_package") — Phase 50 D-50-23.
+
+    Mirror of `MembershipActivatedOnlinePayload` for the PT-package
+    activation path. Emitted from
+    app/modules/pt_packages/service.py:activate_pt_package_from_webhook
+    inside the ЮKassa webhook UoW (Plan 50-03).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    pt_package_id: UUID
+    client_id: UUID
+    online_payment_id: UUID
+
+
 class OnlinePaymentRefundedPayload(BaseModel):
     """Payload schema for ("online_payment_refunded", "online_payment") — Phase 50 WH-06.
 
@@ -993,4 +1033,7 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("fiscal_receipt_failed", "fiscal_receipt"): FiscalReceiptFailedPayload,
     # Webhook intake audit trail (Phase 50):
     ("yookassa_webhook_received", "yookassa_webhook"): YookassaWebhookReceivedPayload,
+    # Webhook-driven activation (Phase 50 WH-05 / D-50-23):
+    ("membership_activated_online", "membership"): MembershipActivatedOnlinePayload,
+    ("pt_package_activated_online", "pt_package"): PtPackageActivatedOnlinePayload,
 }
