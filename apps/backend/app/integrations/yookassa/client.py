@@ -62,10 +62,7 @@ import structlog
 # point keeps the secret out of every other module's grep surface (D-48-07).
 from app.integrations.yookassa._money import kopecks_to_yookassa, yookassa_to_kopecks
 from app.integrations.yookassa.settings import YooKassaSettings
-from app.integrations.yookassa.types import (
-    YooKassaPaymentResult,
-    YooKassaRefundResult,  # noqa: F401 — consumed by create_refund / get_refund in Task 2b
-)
+from app.integrations.yookassa.types import YooKassaPaymentResult, YooKassaRefundResult
 
 # Per ЮKassa interaction spec: header name has ONE 't' — "Idempotence-Key".
 # Do NOT rename to the standards-conformant double-t spelling — ЮKassa
@@ -105,9 +102,32 @@ class YooKassaClient:
         self,
         exc: httpx.HTTPStatusError,
     ) -> tuple[Literal["validation_error", "transient_error", "permanent_error"], int, str | None]:
-        # Task 2b fills the body. The stub is acceptable transient state
-        # between Tasks 2a and 2b (ruff accepts NotImplementedError as a body).
-        raise NotImplementedError  # filled in Task 2b
+        """Map an httpx HTTPStatusError to the closed classification taxonomy.
+
+        Extracts ``error_code`` from the ЮKassa error envelope
+        (``{"type":"error","code":"...","description":"..."}``) when the body
+        parses; otherwise leaves it ``None``. The mapping itself is the
+        canonical D-48-10 split:
+
+        - 422 → ``classification="validation_error"``
+        - 5xx → ``classification="transient_error"``
+        - all other 4xx → ``classification="permanent_error"``
+        """
+        status = exc.response.status_code
+        error_code: str | None = None
+        try:
+            body = exc.response.json()
+            if isinstance(body, dict):
+                raw = body.get("code")
+                if isinstance(raw, str):
+                    error_code = raw
+        except (json.JSONDecodeError, ValueError):
+            error_code = None
+        if status == 422:
+            return ("validation_error", status, error_code)
+        if status >= 500:
+            return ("transient_error", status, error_code)
+        return ("permanent_error", status, error_code)
 
     async def create_payment(
         self,
@@ -282,6 +302,175 @@ class YooKassaClient:
                 reason=type(exc).__name__,
             )
             return YooKassaPaymentResult(
+                ok=False,
+                classification="transient_error",
+                idempotency_key=None,
+                error=str(exc),
+            )
+
+    async def create_refund(
+        self,
+        *,
+        payment_id: str,
+        amount_kopecks: int,
+        idempotency_key: UUID,
+        receipt_items: list[dict[str, Any]] | None = None,
+    ) -> YooKassaRefundResult:
+        """POST /v3/refunds — caller-owned idempotency_key (D-48-11).
+
+        Optionally accepts ``receipt_items`` (54-ФЗ fiscalization needs a
+        refund receipt for membership/PT refunds — Phase 51). Sends the
+        ``Idempotence-Key`` header (ONE 't' — D-48-12). Never re-raises.
+        """
+        body: dict[str, Any] = {
+            "payment_id": payment_id,
+            "amount": {"value": kopecks_to_yookassa(amount_kopecks), "currency": "RUB"},
+        }
+        if receipt_items is not None:
+            body["receipt"] = {
+                "items": receipt_items,
+                "tax_system_code": int(self._settings.tax_system_code),
+            }
+        try:
+            response = await self._http.post(
+                "refunds",
+                json=body,
+                headers={IDEMPOTENCE_KEY_HEADER: str(idempotency_key)},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            _log.info(
+                "yookassa_create_refund_ok",
+                refund_id=payload["id"],
+                payment_id=payload["payment_id"],
+                status=payload["status"],
+            )
+            return YooKassaRefundResult(
+                ok=True,
+                classification="ok",
+                refund_id=payload["id"],
+                payment_id=payload["payment_id"],
+                status=payload["status"],
+                amount_kopecks=yookassa_to_kopecks(payload["amount"]["value"]),
+                idempotency_key=idempotency_key,
+            )
+        except httpx.HTTPStatusError as exc:
+            classification, status, error_code = self._classify_http_status_error(exc)
+            _log.warning(
+                f"yookassa_create_refund_{classification}",
+                http_status=status,
+                error_code=error_code,
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification=classification,
+                http_status=status,
+                error_code=error_code,
+                idempotency_key=idempotency_key,
+                error=str(exc),
+            )
+        except (httpx.TimeoutException, httpx.RequestError) as exc:
+            _log.warning(
+                "yookassa_create_refund_transient_error",
+                reason=type(exc).__name__,
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification="transient_error",
+                idempotency_key=idempotency_key,
+                error=str(exc),
+            )
+        except json.JSONDecodeError as exc:
+            _log.warning(
+                "yookassa_create_refund_permanent_error",
+                reason="malformed_json",
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification="permanent_error",
+                idempotency_key=idempotency_key,
+                error=str(exc),
+            )
+        except Exception as exc:
+            _log.warning(
+                "yookassa_create_refund_transient_error",
+                reason=type(exc).__name__,
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification="transient_error",
+                idempotency_key=idempotency_key,
+                error=str(exc),
+            )
+
+    async def get_refund(self, refund_id: str) -> YooKassaRefundResult:
+        """GET /v3/refunds/{id} — read-only, idempotent by HTTP semantics.
+
+        No ``Idempotence-Key`` header; ``idempotency_key`` is ``None`` on
+        the returned result variants.
+        """
+        try:
+            response = await self._http.get(f"refunds/{refund_id}")
+            response.raise_for_status()
+            payload = response.json()
+            _log.info(
+                "yookassa_get_refund_ok",
+                refund_id=payload["id"],
+                payment_id=payload["payment_id"],
+                status=payload["status"],
+            )
+            return YooKassaRefundResult(
+                ok=True,
+                classification="ok",
+                refund_id=payload["id"],
+                payment_id=payload["payment_id"],
+                status=payload["status"],
+                amount_kopecks=yookassa_to_kopecks(payload["amount"]["value"]),
+                idempotency_key=None,
+            )
+        except httpx.HTTPStatusError as exc:
+            classification, status, error_code = self._classify_http_status_error(exc)
+            _log.warning(
+                f"yookassa_get_refund_{classification}",
+                http_status=status,
+                error_code=error_code,
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification=classification,
+                http_status=status,
+                error_code=error_code,
+                idempotency_key=None,
+                error=str(exc),
+            )
+        except (httpx.TimeoutException, httpx.RequestError) as exc:
+            _log.warning(
+                "yookassa_get_refund_transient_error",
+                reason=type(exc).__name__,
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification="transient_error",
+                idempotency_key=None,
+                error=str(exc),
+            )
+        except json.JSONDecodeError as exc:
+            _log.warning(
+                "yookassa_get_refund_permanent_error",
+                reason="malformed_json",
+            )
+            return YooKassaRefundResult(
+                ok=False,
+                classification="permanent_error",
+                idempotency_key=None,
+                error=str(exc),
+            )
+        except Exception as exc:
+            _log.warning(
+                "yookassa_get_refund_transient_error",
+                reason=type(exc).__name__,
+            )
+            return YooKassaRefundResult(
                 ok=False,
                 classification="transient_error",
                 idempotency_key=None,
