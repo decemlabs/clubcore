@@ -31,14 +31,14 @@
 
 ### PAY (Online sales orchestrator — Phase 49)
 
-- [ ] **PAY-01**: Alembic 0034 creates `online_payments` table — UUIDv4 PK, `client_id` FK, `membership_plan_id`/`pt_package_plan_id` FK (XOR via CHECK), `yookassa_payment_id TEXT NOT NULL`, `idempotency_key TEXT NOT NULL`, `amount_kopecks INTEGER NOT NULL`, `status TEXT CHECK ∈ {pending, succeeded, canceled}`, `confirmation_url TEXT`, `initiated_at`/`succeeded_at`/`canceled_at` timestamps, `created_by_user_id` FK NULL (reception/owner initiating sale)
-- [ ] **PAY-02**: `online_payments` UNIQUE `(yookassa_payment_id)` + UNIQUE `(idempotency_key)` + partial UNIQUE `(client_id, membership_plan_id, DATE(initiated_at)) WHERE status != 'canceled'` (double-tap guard for memberships; analogous for pt_packages)
-- [ ] **PAY-03**: `POST /api/v1/online-payments/memberships/{plan_id}/sell` (reception + owner) — validates `client_id`, asserts `clients.email IS NOT NULL`, computes deterministic `Idempotency-Key = sha256(f"sell-membership:{plan_id}:{client_id}:{today_iso}")`, calls ЮKassa with embedded receipt items, returns `{ confirmation_url, online_payment_id }`
-- [ ] **PAY-04**: `POST /api/v1/online-payments/pt-packages/{plan_id}/sell` — analogous to PAY-03 for PT-package sales
-- [ ] **PAY-05**: `POST /api/v1/online-payments/memberships/{plan_id}/sell-qr` (and pt-packages variant) — `confirmation_type='qr'` differentiator; returns QR payload string; same webhook path (PAY-03 from research SUMMARY)
-- [ ] **PAY-06**: 422 `client_email_required_for_online_payment` returned when `clients.email IS NULL` (FIS-05 gate — fiscal receipt requires email)
-- [ ] **PAY-07**: `GET /api/v1/online-payments/return` handler — displays "ожидаем подтверждение" screen ONLY; never displays payment status (anti-oracle); `_constant_time_floor` try/finally on response duration to prevent timing oracle on lookup
-- [ ] **PAY-08**: Composition root wires `YooKassaClientProvider` + `FiscalReceiptDispatcher` slots; AST test asserts both slots non-None at startup (parity-test pattern from v1.6 USERS)
+- [x] **PAY-01**: Alembic 0034 creates `online_payments` table — UUIDv4 PK, `client_id` FK, `membership_plan_id`/`pt_package_plan_id` FK (XOR via CHECK), `yookassa_payment_id TEXT NOT NULL`, `idempotency_key TEXT NOT NULL`, `amount_kopecks INTEGER NOT NULL`, `status TEXT CHECK ∈ {pending, succeeded, canceled}`, `confirmation_url TEXT`, `initiated_at`/`succeeded_at`/`canceled_at` timestamps, `created_by_user_id` FK NULL (reception/owner initiating sale)
+- [x] **PAY-02**: `online_payments` UNIQUE `(yookassa_payment_id)` + UNIQUE `(idempotency_key)` + partial UNIQUE `(client_id, membership_plan_id, DATE(initiated_at)) WHERE status != 'canceled'` (double-tap guard for memberships; analogous for pt_packages)
+- [x] **PAY-03**: `POST /api/v1/online-payments/memberships/{plan_id}/sell` (reception + owner) — validates `client_id`, asserts `clients.email IS NOT NULL`, computes deterministic `Idempotency-Key = sha256(f"sell-membership:{plan_id}:{client_id}:{today_iso}")`, calls ЮKassa with embedded receipt items, returns `{ confirmation_url, online_payment_id }`
+- [x] **PAY-04**: `POST /api/v1/online-payments/pt-packages/{plan_id}/sell` — analogous to PAY-03 for PT-package sales
+- [x] **PAY-05**: `POST /api/v1/online-payments/memberships/{plan_id}/sell-qr` (and pt-packages variant) — `confirmation_type='qr'` differentiator; returns QR payload string; same webhook path (PAY-03 from research SUMMARY)
+- [x] **PAY-06**: 422 `client_email_required_for_online_payment` returned when `clients.email IS NULL` (FIS-05 gate — fiscal receipt requires email)
+- [x] **PAY-07**: `GET /api/v1/online-payments/return` handler — displays "ожидаем подтверждение" screen ONLY; never displays payment status (anti-oracle); `_constant_time_floor` try/finally on response duration to prevent timing oracle on lookup
+- [x] **PAY-08**: Composition root wires `YooKassaClientProvider` + `FiscalReceiptDispatcher` slots; AST test asserts both slots non-None at startup (parity-test pattern from v1.6 USERS)
 
 ### WH (Webhook handler + FSM — Phase 50)
 
@@ -131,14 +131,14 @@
 | ADAPTER-04 | Phase 48 | Pending |
 | ADAPTER-05 | Phase 48 | Pending |
 | ADAPTER-06 | Phase 48 | Pending |
-| PAY-01 | Phase 49 | Pending |
-| PAY-02 | Phase 49 | Pending |
-| PAY-03 | Phase 49 | Pending |
-| PAY-04 | Phase 49 | Pending |
-| PAY-05 | Phase 49 | Pending |
-| PAY-06 | Phase 49 | Pending |
-| PAY-07 | Phase 49 | Pending |
-| PAY-08 | Phase 49 | Pending |
+| PAY-01 | Phase 49 | Complete |
+| PAY-02 | Phase 49 | Complete |
+| PAY-03 | Phase 49 | Complete |
+| PAY-04 | Phase 49 | Complete |
+| PAY-05 | Phase 49 | Complete |
+| PAY-06 | Phase 49 | Complete |
+| PAY-07 | Phase 49 | Complete |
+| PAY-08 | Phase 49 | Complete |
 | WH-01 | Phase 50 | Pending |
 | WH-02 | Phase 50 | Pending |
 | WH-03 | Phase 50 | Pending |

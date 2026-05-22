@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Online Payments + 54-ФЗ
-status: executing
+status: ready_to_plan
 stopped_at: Phase 49 context gathered
 last_updated: "2026-05-22T11:15:19.878Z"
 last_activity: 2026-05-22 -- Phase 49 execution started
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 21
   completed_plans: 14
-  percent: 67
+  percent: 43
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
 
 ## Current Position
 
-Phase: 49 (Online Sales Orchestrator) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 49
-Last activity: 2026-05-22 -- Phase 49 execution started
+Phase: 50
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-22
 
 ## Accumulated Context
 
