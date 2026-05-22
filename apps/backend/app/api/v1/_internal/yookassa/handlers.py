@@ -332,18 +332,22 @@ async def handle_payment_succeeded(
         )
 
         # CHILD audit emit — online_payment_succeeded chained to
-        # webhook_intake_corr (D-50-18 step 7).
+        # webhook_intake_corr (D-50-18 step 7). UUIDs are cast to str for
+        # JSONB-serialisability (audit.emit writes payload kwargs directly
+        # into a JSONB column; Pydantic ``model_validate`` only validates
+        # the shape — it does not transform). Mirrors
+        # ``memberships/service.py:1925`` pattern.
         await audit.emit(
             session,
             "online_payment_succeeded",
             actor_user_id=None,
             resource_type="online_payment",
             resource_id=row.id,
-            audit_correlation_id=webhook_intake_corr,
-            online_payment_id=row.id,
+            audit_correlation_id=str(webhook_intake_corr),
+            online_payment_id=str(row.id),
             yookassa_payment_id=object_id,
             amount_kopecks=row.amount_kopecks,
-            payment_id=ledger_payment_id,
+            payment_id=str(ledger_payment_id),
         )
 
         # ROOT audit emit — D-50-18 step 8, REVERSE order from Phase 49
@@ -467,14 +471,18 @@ async def handle_payment_canceled(
         row.canceled_at = datetime.now(UTC)
 
         # CHILD audit emit — online_payment_canceled chained to webhook_intake_corr.
+        # UUIDs cast to str for JSONB-serialisability (audit.emit stores
+        # payload kwargs directly into a JSONB column; Pydantic
+        # ``model_validate`` only validates shape, it does not transform).
+        # Mirrors ``memberships/service.py:1925`` pattern.
         await audit.emit(
             session,
             "online_payment_canceled",
             actor_user_id=None,
             resource_type="online_payment",
             resource_id=row.id,
-            audit_correlation_id=webhook_intake_corr,
-            online_payment_id=row.id,
+            audit_correlation_id=str(webhook_intake_corr),
+            online_payment_id=str(row.id),
             yookassa_payment_id=object_id,
             cancellation_party=cancellation_party,
             cancellation_reason=cancellation_reason,
