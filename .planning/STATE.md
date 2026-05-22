@@ -4,8 +4,8 @@ milestone: v1.7
 milestone_name: Online Payments + 54-ФЗ
 status: executing
 stopped_at: Phase 49 context gathered
-last_updated: "2026-05-22T11:13:45.594Z"
-last_activity: 2026-05-22 -- Phase 49 planning complete
+last_updated: "2026-05-22T11:15:19.878Z"
+last_activity: 2026-05-22 -- Phase 49 execution started
 progress:
   total_phases: 7
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 48 — ЮKassa Integration Adapter
+**Current focus:** Phase 49 — Online Sales Orchestrator
 
 ## Current Position
 
-Phase: 48 — COMPLETE
+Phase: 49 (Online Sales Orchestrator) — EXECUTING
 Plan: 1 of 7
-Status: Ready to execute
-Last activity: 2026-05-22 -- Phase 49 planning complete
+Status: Executing Phase 49
+Last activity: 2026-05-22 -- Phase 49 execution started
 
 ## Accumulated Context
 
