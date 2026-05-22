@@ -42,18 +42,18 @@
 
 ### WH (Webhook handler + FSM — Phase 50)
 
-- [ ] **WH-01**: `POST /api/v1/_internal/yookassa/webhook` route mounted under `_internal` namespace (no CSRF, no auth cookie); IP allowlist `Depends(verify_yookassa_ip)` runs BEFORE body parse (FastAPI dependency ordering enforces this; AST gate test verifies)
-- [ ] **WH-02**: Webhook handler re-fetches payment via `GET /v3/payments/{id}` BEFORE any DB write (never trusts webhook body as authoritative status)
-- [ ] **WH-03**: Redis idempotency `SET NX EX 86400 sz:yookassa:webhook:{event_type}:{object_id}` BEFORE DB write (ЮKassa retries up to 24h)
-- [ ] **WH-04**: Payment FSM `pending → succeeded / canceled` — central `_assert_can_transition` guard + declarative `ONLINE_PAYMENT_STATUS_TRANSITIONS` constant (parallels v1.3 `MEMBERSHIP_STATUS_TRANSITIONS`)
-- [ ] **WH-05**: On `payment.succeeded`: atomic UoW writes to `online_payments` (status update), calls `payment_recorder.record_payment(method='online')` (v1.4 ledger row), activates membership/PT-package via `MembershipActivator` Protocol slot, INSERTs `fiscal_receipts` row (`status='sent'`), commits, then enqueues notifications post-commit
-- [ ] **WH-06**: On `payment.canceled`: status update + audit emit; NOT-05 logs `cancellation_details.reason` from webhook payload (differentiator)
+- [x] **WH-01**: `POST /api/v1/_internal/yookassa/webhook` route mounted under `_internal` namespace (no CSRF, no auth cookie); IP allowlist `Depends(verify_yookassa_ip)` runs BEFORE body parse (FastAPI dependency ordering enforces this; AST gate test verifies)
+- [x] **WH-02**: Webhook handler re-fetches payment via `GET /v3/payments/{id}` BEFORE any DB write (never trusts webhook body as authoritative status)
+- [x] **WH-03**: Redis idempotency `SET NX EX 86400 sz:yookassa:webhook:{event_type}:{object_id}` BEFORE DB write (ЮKassa retries up to 24h)
+- [x] **WH-04**: Payment FSM `pending → succeeded / canceled` — central `_assert_can_transition` guard + declarative `ONLINE_PAYMENT_STATUS_TRANSITIONS` constant (parallels v1.3 `MEMBERSHIP_STATUS_TRANSITIONS`)
+- [x] **WH-05**: On `payment.succeeded`: atomic UoW writes to `online_payments` (status update), calls `payment_recorder.record_payment(method='online')` (v1.4 ledger row), activates membership/PT-package via `MembershipActivator` Protocol slot, INSERTs `fiscal_receipts` row (`status='sent'`), commits, then enqueues notifications post-commit
+- [x] **WH-06**: On `payment.canceled`: status update + audit emit; NOT-05 logs `cancellation_details.reason` from webhook payload (differentiator)
 
 ### FISCAL (54-ФЗ receipts — Phase 50+51)
 
-- [ ] **FISCAL-01**: Alembic 0035 creates `fiscal_receipts` table — UUIDv4 PK, `payment_id` FK to `payments.id` (NOT `online_payments.id` — fiscal obligation attaches to committed ledger row), `kind TEXT CHECK ∈ {payment, refund}`, `status TEXT CHECK ∈ {pending, sent, succeeded, failed}`, `yookassa_receipt_id TEXT NULL`, `customer_email TEXT NOT NULL`, `sent_at`/`succeeded_at`/`failed_at` timestamps, `failure_reason TEXT NULL`
-- [ ] **FISCAL-02**: UNIQUE `(payment_id, kind)` on `fiscal_receipts` (cross-channel discriminator pattern from v1.6 — same `payment_id` may have both `payment` AND `refund` receipts but not duplicates)
-- [ ] **FISCAL-03**: Receipt object embedded in `POST /v3/payments` body (Scenario 1) — receipt items composed via `build_receipt_item()` from ADAPTER-04; `customer.email` populated from `clients.email`; `payment_subject="service"` + `payment_mode="full_payment"` as `Literal` constants (AST gate rejects non-literal values)
+- [x] **FISCAL-01**: Alembic 0035 creates `fiscal_receipts` table — UUIDv4 PK, `payment_id` FK to `payments.id` (NOT `online_payments.id` — fiscal obligation attaches to committed ledger row), `kind TEXT CHECK ∈ {payment, refund}`, `status TEXT CHECK ∈ {pending, sent, succeeded, failed}`, `yookassa_receipt_id TEXT NULL`, `customer_email TEXT NOT NULL`, `sent_at`/`succeeded_at`/`failed_at` timestamps, `failure_reason TEXT NULL`
+- [x] **FISCAL-02**: UNIQUE `(payment_id, kind)` on `fiscal_receipts` (cross-channel discriminator pattern from v1.6 — same `payment_id` may have both `payment` AND `refund` receipts but not duplicates)
+- [x] **FISCAL-03**: Receipt object embedded in `POST /v3/payments` body (Scenario 1) — receipt items composed via `build_receipt_item()` from ADAPTER-04; `customer.email` populated from `clients.email`; `payment_subject="service"` + `payment_mode="full_payment"` as `Literal` constants (AST gate rejects non-literal values)
 - [ ] **FISCAL-04**: `handle_receipt_webhook()` processes `receipt.succeeded` and `receipt.canceled` event types (exact strings verified against ЮKassa dashboard in Phase 50); FSM `sent → succeeded / failed`
 - [ ] **FISCAL-05**: `dispatch_fiscal_receipt` ARQ task (`max_tries=3`, `timeout=20s`, exponential backoff with jitter); Redis circuit breaker `sz:yookassa:circuit:receipts` (atomic pipeline `record_failure` + TTL 5m); mirrors v1.6 email circuit breaker
 - [ ] **FISCAL-06**: ARQ cron `monitor_stale_fiscal_receipts` runs every 15 min Europe/Moscow — scans for `fiscal_receipts.status = 'pending'` rows older than 90s; emits `fiscal_receipt_failed` audit + operator Telegram alert via NOT-04
@@ -139,15 +139,15 @@
 | PAY-06 | Phase 49 | Complete |
 | PAY-07 | Phase 49 | Complete |
 | PAY-08 | Phase 49 | Complete |
-| WH-01 | Phase 50 | Pending |
-| WH-02 | Phase 50 | Pending |
-| WH-03 | Phase 50 | Pending |
-| WH-04 | Phase 50 | Pending |
-| WH-05 | Phase 50 | Pending |
-| WH-06 | Phase 50 | Pending |
-| FISCAL-01 | Phase 50 | Pending |
-| FISCAL-02 | Phase 50 | Pending |
-| FISCAL-03 | Phase 50 | Pending |
+| WH-01 | Phase 50 | Complete |
+| WH-02 | Phase 50 | Complete |
+| WH-03 | Phase 50 | Complete |
+| WH-04 | Phase 50 | Complete |
+| WH-05 | Phase 50 | Complete |
+| WH-06 | Phase 50 | Complete |
+| FISCAL-01 | Phase 50 | Complete |
+| FISCAL-02 | Phase 50 | Complete |
+| FISCAL-03 | Phase 50 | Complete |
 | FISCAL-04 | Phase 51 | Pending |
 | FISCAL-05 | Phase 51 | Pending |
 | FISCAL-06 | Phase 51 | Pending |

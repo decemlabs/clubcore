@@ -270,7 +270,7 @@ Plans:
 | 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
 | 49. Online Sales Orchestrator | 7/7 | Complete    | 2026-05-22 |
-| 50. Webhook FSM + Fiscal Foundation | 6/6 | Complete   | 2026-05-22 |
+| 50. Webhook FSM + Fiscal Foundation | 6/6 | Complete    | 2026-05-22 |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
 | 53. Milestone Verification | 0/TBD | Not started | - |

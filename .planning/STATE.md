@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Online Payments + 54-ФЗ
-status: executing
+status: ready_to_plan
 stopped_at: Phase 50 context gathered
 last_updated: "2026-05-22T16:39:24.942Z"
 last_activity: 2026-05-22 -- Phase 50 execution started
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 27
   completed_plans: 21
-  percent: 78
+  percent: 57
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
 
 ## Current Position
 
-Phase: 50 (Webhook FSM + Fiscal Foundation) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 50
-Last activity: 2026-05-22 -- Phase 50 execution started
+Phase: 51
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-22
 
 ## Accumulated Context
 
