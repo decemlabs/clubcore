@@ -50,3 +50,38 @@ on the base commit (confirmed via `git stash && pytest`). Plan 49-05's EXCLUDED_
 addition for `/api/v1/online-payments/return` works correctly — `/return` does NOT appear
 in the missing-gate failure list. Sanity-belt tests
 (`test_excluded_paths_set_is_locked`, `test_gate_prefixes_match_factory_names`) pass.
+
+## Plan 49-07 — Out-of-scope discoveries + future-phase markers
+
+### Wave-3 fixture-location refactor (resolved in 49-07)
+`tests/modules/online_payments/test_router_sell_endpoints.py` was reduced to a
+single skipped placeholder in Wave 3 because the executor placed the file
+under `tests/modules/` (no `authed_client_*` cookie-jar fixtures inherited).
+Plan 49-07 lands the 10-test E2E suite under
+`tests/integration/online_payments/` with a proper conftest mirroring
+`tests/integration/memberships/conftest.py` (full cookie-jar + login machinery).
+The skipped placeholder is intentionally left in place as a "see also" pointer.
+
+### Future phases — markers for downstream work
+- **Phase 53 reconcile cron** — `reconcile_orphan_yookassa_payments` ARQ task
+  walks ЮKassa's payment list and creates missing `online_payments` rows for
+  the "ЮKassa created, DB INSERT failed mid-flow" rare case (D-49-11).
+  Phase 49 ships nothing here — replay check by `idempotency_key` covers the
+  same-day retry path.
+- **Phase 50 `yookassa_call_failed` audit event** — Phase 49 emits NO audit on
+  ЮKassa-side failures (D-49-20). Phase 50 may add the event to
+  `LOCKED_AUDIT_EVENTS` if operational visibility demands.
+- **Phase 50 `X-Forwarded-For` trust toggle** — Phase 48 verifier reads
+  `request.client.host` only. Behind-reverse-proxy support deferred to
+  Phase 50 (`# TODO Phase 50:` in `webhook_verifier.py`).
+- **Phase 50 `users.display` import** — Plan 49-03 service does NOT import
+  `app.modules.users.display` (D-49-30 marker). Phase 50 may add operator
+  display name to `OnlinePaymentSucceededPayload` and flip the
+  `online_payments.service → users.display` import-linter ignore from
+  unmatched-warn to matched.
+- **Phase 50 `payments.models` runtime import** — Phase 49 ships
+  `payments.models` as `TYPE_CHECKING`-only (D-49-29 / W8). Phase 50 needs
+  runtime for `record_payment(method='online')`.
+- **v2.0 saved-card / recurring autopayment columns** — SUMMARY.md flags
+  v2.0 as the right phase to retro-add `payment_method_id`. Phase 49 does NOT
+  preemptively add it (would change migration shape + complicate FSM).
