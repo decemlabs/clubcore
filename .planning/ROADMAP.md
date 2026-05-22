@@ -215,7 +215,13 @@ Plans:
   4. On `payment.succeeded`: `online_payments.status` is `succeeded`, a `payments` ledger row with `method='online'` is inserted, the membership/PT-package is activated, and a `fiscal_receipts(status='sent')` row is inserted — all in the same commit
   5. On `payment.canceled`: `online_payments.status` is `canceled` and the audit payload contains `cancellation_party` and `cancellation_reason` from the webhook body
   6. Alembic 0035 applies cleanly: `fiscal_receipts` table exists with UNIQUE `(payment_id, kind)` and FK to `payments.id`
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 50-01-PLAN.md — Alembic 0035 fiscal_receipts table + module skeleton (FISCAL-01, FISCAL-02)
+- [ ] 50-02-PLAN.md — ONLINE_PAYMENT_STATUS_TRANSITIONS + 2 new LOCKED audit events + payload classes (WH-04 prep)
+- [ ] 50-03-PLAN.md — Activator Protocol kwarg rename + PaymentRecorder Protocol widening + activator body fills (WH-05, Blockers #2/#3/#6/#7)
+- [ ] 50-04-PLAN.md — Webhook router + handlers + atomic UoW (WH-01..06, Blockers #1/#4)
+- [ ] 50-05-PLAN.md — WH-02 AST ordering gate (WH-02, Blocker #5)
+- [ ] 50-06-PLAN.md — E2E integration tests + EXCLUDED_PATHS + deferred-items.md + regression sweep (Blocker #8)
 
 ### Phase 51: Fiscal FSM + Refunds
 **Goal**: Fiscal receipt status is tracked end-to-end with ARQ retry and a circuit breaker; operator can initiate a full online refund that completes when `refund.succeeded` arrives
