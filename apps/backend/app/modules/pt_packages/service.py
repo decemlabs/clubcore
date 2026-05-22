@@ -1192,19 +1192,122 @@ async def refund_pt_package(
 # ─── Phase 49 PAY-08 / D-49-21 — Composition-root activator stub ───────────
 
 
-async def activate_pt_package_from_webhook(
+async def activate_pt_package_from_webhook(  # noqa: SVC001 caller-owns-txn — webhook handler owns UoW
     session: AsyncSession,
     *,
     online_payment_id: UUID,
     audit_correlation_id: UUID | None,
-) -> Any:
-    """PtPackageActivator slot implementation (Phase 49 D-49-21 STUB).
+) -> PtPackage:
+    """Activate a PT-package from a successful ЮKassa webhook (Phase 50 D-50-24 / WH-05).
 
-    Phase 49 shipped the wiring + signature; Phase 50 Plan 50-03 Task 1
-    renames the kwarg from ``pt_package_id`` to ``online_payment_id``
-    (Blocker #3 — mirror of the Membership activator). Plan 50-03 Task 2
-    fills the body.
+    Mirror of ``memberships.service.activate_membership_from_webhook``
+    against ``PtPackage`` + ``PtPackagePlan``. Phase 49 shipped this as a
+    ``NotImplementedError`` stub registered via
+    ``register_pt_package_activator()`` in ``app/main.py:create_app()``;
+    Plan 50-03 Task 2 fills the body. Runs INSIDE the caller's
+    ``async with session.begin()`` (the YooKassa webhook handler in
+    Plan 50-04 owns the transaction). Caller-owns-txn discipline: NO
+    ``session.commit()`` inside this body except the one
+    ``await session.flush()`` needed to populate ``pt_package.id`` before
+    the audit emit.
+
+    Body order (mirror ``create_pt_package`` lines 686-810 — simplified
+    because the webhook path has no operator pre-flight, no idempotency
+    key, no payment-recorder call from this scope):
+      1. SELECT the OnlinePayment row via narrow raw-SQL projection
+         (D-49-13 lineage — avoids importing online_payments ORM, which
+         would cross the modules-independent contract).
+      2. Precondition: row exists; OnlinePayment.pt_package_plan_id is
+         NOT NULL (this is a PT-package sale, not a membership sale).
+      3. SELECT PtPackagePlan via ``repository.get_plan_alive``.
+      4. Server-compute dates in Europe/Moscow.
+      5. INSERT PtPackage row directly with full snapshot suite +
+         ``sessions_remaining = plan.session_count``.
+      6. ``await session.flush()`` so ``pt_package.id`` is populated.
+      7. Emit exactly ONE locked event ``pt_package_activated_online``
+         (NOT ``pt_package_sold`` — Blocker #6 enforcement, one canonical
+         emit per locked event).
+      8. Return the PtPackage row.
+
+    System emit (``actor_user_id=None``) per D-41-10 / INFRA-39.
     """
-    raise NotImplementedError(
-        "Plan 50-03 Task 2 fills this body — Task 1 only completes the kwarg rename."
+    # 1: narrow SELECT against online_payments (raw-SQL avoids
+    # modules-independent contract violation per D-49-13).
+    op_stmt = text(
+        """
+        SELECT client_id, membership_plan_id, pt_package_plan_id,
+               amount_kopecks, succeeded_at
+        FROM online_payments
+        WHERE id = :online_payment_id
+        """
     )
+    op_row = (
+        await session.execute(op_stmt, {"online_payment_id": online_payment_id})
+    ).mappings().one_or_none()
+
+    # 2: preconditions.
+    if op_row is None:
+        raise PtPackageNotFoundError(
+            f"online_payment_not_found: {online_payment_id}"
+        )
+    if op_row["pt_package_plan_id"] is None:
+        raise ConflictError(
+            "online_payment_not_pt_package_sale",
+        )
+
+    # 3: resolve plan.
+    plan = await repository.get_plan_alive(session, op_row["pt_package_plan_id"])
+    if plan is None:
+        raise PtPackagePlanNotFoundError("pt_package_plan_not_found")
+
+    # 4: server-compute dates (Europe/Moscow business day; inclusive end;
+    # бессрочный plans skip end_date — mirror create_pt_package).
+    start_date = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    end_date: date | None = (
+        start_date + timedelta(days=plan.validity_days - 1)
+        if plan.validity_days is not None
+        else None
+    )
+
+    # 5: INSERT PtPackage directly with full snapshot (mirror
+    # repository.insert_pt_package's constructor but flat — we have the
+    # OnlinePayment seed, not a PtPackageCreateRequest, and the webhook
+    # path does not carry a trainer_id selection).
+    pt_package = PtPackage(
+        client_id=op_row["client_id"],
+        plan_id=plan.id,
+        trainer_id=None,  # webhook path has no operator-selected trainer
+        plan_name_snapshot=plan.name,
+        session_count_snapshot=plan.session_count,
+        price_kopecks_snapshot=plan.price_kopecks,
+        validity_days_snapshot=plan.validity_days,
+        sessions_remaining=plan.session_count,
+        status="active",
+        start_date=start_date,
+        end_date=end_date,
+    )
+    session.add(pt_package)
+
+    # 6: flush so pt_package.id is populated for the audit emit.
+    await session.flush()
+
+    # 7: emit the NEW locked event (Plan 50-02 shipped the registration +
+    # payload schema). System emit — actor_user_id=None per audit.py
+    # INFRA-39 (the webhook has no CurrentUser). Payload kwargs cast to
+    # str for JSONB-serialisability.
+    await audit.emit(
+        session,
+        "pt_package_activated_online",  # LITERAL (INFRA-11 AST gate)
+        actor_user_id=None,  # system emit (D-41-10 / INFRA-39)
+        resource_type="pt_package",  # LITERAL
+        resource_id=pt_package.id,
+        audit_correlation_id=(
+            str(audit_correlation_id) if audit_correlation_id is not None else None
+        ),
+        pt_package_id=str(pt_package.id),
+        client_id=str(pt_package.client_id),
+        online_payment_id=str(online_payment_id),
+    )
+
+    # 8: return (caller owns commit via async with session.begin()).
+    return pt_package

@@ -1811,19 +1811,125 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
 # ─── Phase 49 PAY-08 / D-49-21 — Composition-root activator stub ───────────
 
 
-async def activate_membership_from_webhook(
+async def activate_membership_from_webhook(  # noqa: SVC001 caller-owns-txn — webhook handler owns UoW
     session: AsyncSession,
     *,
     online_payment_id: UUID,
     audit_correlation_id: UUID | None,
-) -> Any:
-    """MembershipActivator slot implementation (Phase 49 D-49-21 STUB).
+) -> Membership:
+    """Activate a membership from a successful ЮKassa webhook (Phase 50 D-50-22 / WH-05).
 
-    Phase 49 shipped the wiring + signature; Phase 50 Plan 50-03 Task 1
-    renames the kwarg from ``membership_id`` to ``online_payment_id``
-    (Blocker #3 — the activator receives the OnlinePayment row id and
-    CREATES the Membership). Plan 50-03 Task 2 fills the body.
+    Phase 49 shipped this as a ``NotImplementedError`` stub registered via
+    ``register_membership_activator()`` in ``app/main.py:create_app()``;
+    Plan 50-03 Task 2 fills the body. Runs INSIDE the caller's
+    ``async with session.begin()`` — the YooKassa webhook handler (Plan
+    50-04) owns the transaction. Caller-owns-txn discipline: NO
+    ``session.commit()`` / ``session.flush()`` inside this body except the
+    one ``await session.flush()`` needed to populate ``membership.id``
+    before the audit emit.
+
+    Body order (mirror ``create_membership`` lines 712-766):
+      1. SELECT the OnlinePayment row via narrow raw-SQL projection
+         (D-49-13 lineage — avoids importing online_payments ORM, which
+         would cross the modules-independent contract).
+      2. Precondition: row exists; OnlinePayment.membership_plan_id is
+         NOT NULL (this is a membership sale, not a PT-package sale).
+      3. SELECT MembershipPlan via ``repository.get_alive`` (404 path if
+         missing/archived; the webhook UoW propagates the error so the
+         caller can decide whether to ack or NACK back to ЮKassa).
+      4. Server-compute dates in Europe/Moscow (mirror create_membership).
+      5. INSERT Membership row directly (NOT via insert_membership which
+         requires MembershipCreateRequest; we have the OnlinePayment seed
+         and want a narrow flat constructor).
+      6. ``await session.flush()`` so ``membership.id`` is populated for
+         the audit emit ``resource_id``.
+      7. Emit exactly ONE locked event ``membership_activated_online``
+         (NOT ``membership_created`` — Blocker #6 enforcement, one
+         canonical emit per locked event; ``membership_created`` is
+         reserved for the in-person sell flow).
+      8. Return the Membership row to the caller.
+
+    Audit emit is a SYSTEM emit (``actor_user_id=None``) per D-41-10 /
+    INFRA-39 — the webhook flow is anonymous. ``audit_correlation_id``
+    threads the activation row back to the webhook intake chain
+    (D-50-18 step 7).
     """
-    raise NotImplementedError(
-        "Plan 50-03 Task 2 fills this body — Task 1 only completes the kwarg rename."
+    # 1: narrow SELECT against online_payments (raw-SQL avoids
+    # modules-independent contract violation per D-49-13). Cast through
+    # sa.text to keep mypy happy; bind by name.
+    op_stmt = text(
+        """
+        SELECT client_id, membership_plan_id, pt_package_plan_id,
+               amount_kopecks, succeeded_at
+        FROM online_payments
+        WHERE id = :online_payment_id
+        """
     )
+    op_row = (
+        await session.execute(op_stmt, {"online_payment_id": online_payment_id})
+    ).mappings().one_or_none()
+
+    # 2: preconditions.
+    if op_row is None:
+        raise MembershipNotFoundError(
+            f"online_payment_not_found: {online_payment_id}"
+        )
+    if op_row["membership_plan_id"] is None:
+        raise ConflictError(
+            "online_payment_not_membership_sale",
+        )
+
+    # 3: resolve plan (uses existing repository helper — owner of the
+    # MembershipPlan ORM import per memberships/repository.py:1 doctrine).
+    plan = await repository.get_alive(session, op_row["membership_plan_id"])
+    if plan is None:
+        raise PlanNotFoundError("plan_not_found")
+
+    # 4: server-compute dates (Europe/Moscow business day; inclusive end —
+    # mirror create_membership line 720-721).
+    start_date = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    end_date = start_date + timedelta(days=plan.duration_days - 1)
+
+    # 5: INSERT Membership directly with full snapshot (mirror
+    # repository.insert_membership but flat — we have the OnlinePayment
+    # seed, not a MembershipCreateRequest).
+    membership = Membership(
+        client_id=op_row["client_id"],
+        plan_id=plan.id,
+        plan_name_snapshot=plan.name,
+        duration_days_snapshot=plan.duration_days,
+        price_kopecks_snapshot=plan.price_kopecks,
+        freeze_days_limit_snapshot=plan.freeze_days_limit,
+        start_date=start_date,
+        end_date=end_date,
+        status="active",
+        paid_at=op_row["succeeded_at"],
+        notes=None,
+    )
+    session.add(membership)
+
+    # 6: flush so membership.id is populated for the audit emit.
+    await session.flush()
+
+    # 7: emit the NEW locked event (Plan 50-02 shipped the registration +
+    # payload schema). System emit — actor_user_id=None per audit.py
+    # INFRA-39 (the webhook has no CurrentUser). Payload kwargs cast to
+    # str for JSONB-serialisability (same pattern as create_membership
+    # line 759-763).
+    await audit.emit(
+        session,
+        "membership_activated_online",  # LITERAL (Phase 15 INFRA-11 AST gate)
+        actor_user_id=None,  # system emit (D-41-10 / INFRA-39)
+        resource_type="membership",  # LITERAL
+        resource_id=membership.id,
+        audit_correlation_id=(
+            str(audit_correlation_id) if audit_correlation_id is not None else None
+        ),
+        membership_id=str(membership.id),
+        client_id=str(membership.client_id),
+        online_payment_id=str(online_payment_id),
+    )
+
+    # 8: return the row (caller — the webhook handler — owns commit via
+    # the surrounding ``async with session.begin()`` block).
+    return membership
