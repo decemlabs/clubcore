@@ -8,6 +8,7 @@ business modules.
 from fastapi import APIRouter
 
 from app.api.v1._internal.email.router import router as email_webhook_router
+from app.api.v1._internal.yookassa.router import router as yookassa_webhook_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bookings.router import bookings_router, client_scoped_bookings_router
 from app.modules.clients.router import router as clients_router
@@ -83,5 +84,14 @@ v1.include_router(visits_router, prefix="/visits", tags=["visits"])
 v1.include_router(
     email_webhook_router,
     prefix="/_internal/email",
+    tags=["_internal"],
+)
+
+# Phase 50 WH-01 / D-50-03 — ЮKassa webhook intake. Second /_internal/* inhabitant.
+# Anonymous-by-design (IP allowlist only — see router.py module docstring + the
+# Phase 48-shipped verify_yookassa_ip Depends).
+v1.include_router(
+    yookassa_webhook_router,
+    prefix="/_internal/yookassa",
     tags=["_internal"],
 )

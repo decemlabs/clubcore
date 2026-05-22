@@ -966,7 +966,31 @@ class YookassaWebhookReceivedPayload(BaseModel):
     audit_correlation_id: UUID | None
     event_type: str
     object_id: str
-    idempotency_outcome: Literal["new", "duplicate_blocked", "rejected_ip"]
+    # Phase 50 Plan 50-04 (D-50-17): widened to discriminate the four webhook-intake
+    # branches the handler must record:
+    #   - "new"                  : first delivery (kept for back-compat; not emitted
+    #                              by Plan 50-04 handlers — they use "processed").
+    #   - "duplicate_blocked"    : Redis dedup short-circuit (reserved; current
+    #                              handler returns BEFORE the audit emit on dedup
+    #                              hits — structlog only — but the literal is kept
+    #                              for future audit-on-dedup paths).
+    #   - "rejected_ip"          : Phase 50 IP allowlist miss (emitted by Phase 48
+    #                              structlog warning + a follow-up audit row from
+    #                              the Phase 50 handler when an in-scope session
+    #                              is available; reserved).
+    #   - "processed"            : Plan 50-04 success path — FSM transition applied,
+    #                              ledger row + activator + fiscal_receipt INSERT
+    #                              committed atomically.
+    #   - "illegal_transition"   : Plan 50-04 D-50-17 — webhook re-fetch contradicts
+    #                              current row state (e.g., payment.succeeded for a
+    #                              row already canceled); audit-as-forensic + 200.
+    idempotency_outcome: Literal[
+        "new",
+        "duplicate_blocked",
+        "rejected_ip",
+        "processed",
+        "illegal_transition",
+    ]
 
 
 # ---------------------------------------------------------------------------
