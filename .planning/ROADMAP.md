@@ -187,7 +187,22 @@ Plans:
   4. `GET /api/v1/online-payments/return` displays a static "ожидаем подтверждение" screen for all redirect outcomes with no payment-status information exposed
   5. Alembic 0034 applies cleanly: `online_payments` table exists with UNIQUE `(yookassa_payment_id)`, UNIQUE `(idempotency_key)`, and the double-tap partial UNIQUE guard
   6. Startup integration test asserts `YooKassaClientProvider` and `FiscalReceiptDispatcher` slots are non-None (AST parity test)
-**Plans**: TBD
+**Plans**: 7 plans
+
+**Wave 1** *(sequential — bedrock)*
+- [ ] 49-01-PLAN.md — Phase 48 adapter patch (qr_payload + UUID|str idempotency) + Alembic 0034 online_payments table (PAY-01, PAY-02, PAY-05)
+- [ ] 49-02-PLAN.md — online_payments package skeleton + ORM + repository + .importlinter + 3 exception subclasses (PAY-01, PAY-02, PAY-06)
+
+**Wave 2** *(parallel after Wave 1)*
+- [ ] 49-03-PLAN.md — service.sell_membership / sell_pt_package + schemas + FIS-05 email gate + Phase-49 fiscal stub (PAY-03, PAY-04, PAY-05, PAY-06)
+- [ ] 49-04-PLAN.md — router with 4 POST sell endpoints + v1 mount + RBAC-04 ordering + HTTP tests (PAY-03, PAY-04, PAY-05, PAY-06)
+
+**Wave 3** *(parallel — 49-05 appends to router.py from 49-04; 49-06 imports phase49_fiscal_dispatcher_stub from 49-03)*
+- [ ] 49-05-PLAN.md — GET /return anti-oracle screen + constant-time floor + EXCLUDED_PATHS (PAY-07)
+- [ ] 49-06-PLAN.md — composition-root wiring: 4 v1.7 Protocol slots non-None + parity-test decommission + new SC#6 parity test (PAY-08)
+
+**Wave 4** *(sequential — full Phase 49 e2e)*
+- [ ] 49-07-PLAN.md — end-to-end sell-flow + double-tap + audit-chain tests + deferred-items.md + Phase 49 regression sweep (PAY-01..PAY-08)
 
 ### Phase 50: Webhook FSM + Fiscal Foundation
 **Goal**: `payment.succeeded` webhook activates a membership/PT-package, records a ledger payment, inserts a `fiscal_receipts` row, and commits atomically; `payment.canceled` records the cancellation reason
@@ -248,7 +263,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
-| 49. Online Sales Orchestrator | 0/TBD | Not started | - |
+| 49. Online Sales Orchestrator | 0/7 | Planned | - |
 | 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
