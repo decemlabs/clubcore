@@ -344,6 +344,17 @@ class PaymentRecorder(Protocol):
     ``app.core`` which is forbidden from importing ``app.modules.*``
     (importlinter `core-not-depend-on-modules` contract). Callers in the
     modules layer that need typed access cast the result locally.
+
+    Phase 50 Plan 50-03 Blocker #2 — ``audit_actor`` and ``received_by_user_id``
+    are widened to ``... | None`` with default ``None``. The ЮKassa webhook
+    flow (Plan 50-04) is anonymous: there is no ``CurrentUser`` and no
+    operator UUID. Existing in-person sale callers
+    (``memberships/service.py:create_membership`` and the PT-package analog)
+    continue to pass non-None values — the widening is purely additive.
+    ``record_payment`` body handles both ``None`` branches: ``actor_user_id``
+    is emitted as ``None`` (system emit per ``audit.py:404`` INFRA-39
+    discipline) and ``received_by_user_id`` is written as ``NULL`` to the
+    ``payments`` ledger row (Alembic 0036 flips the column to nullable).
     """
 
     async def __call__(
@@ -354,8 +365,8 @@ class PaymentRecorder(Protocol):
         subject_id: UUID,
         amount_kopecks: int,
         method: str = "cash",
-        received_by_user_id: UUID,
-        audit_actor: CurrentUser,
+        received_by_user_id: UUID | None = None,  # Phase 50 Plan 50-03 Blocker #2
+        audit_actor: CurrentUser | None = None,  # Phase 50 Plan 50-03 Blocker #2
     ) -> Any: ...
 
 
@@ -1084,13 +1095,21 @@ class MembershipActivator(Protocol):
     YooKassa webhook handler running inside an HTTP request session — the
     activator MUST run inside the SAME ``AsyncSession`` so the activation
     + audit row commit atomically.
+
+    Phase 50 Plan 50-03 Blocker #3 RENAMES the kwarg from ``membership_id``
+    to ``online_payment_id``. The activator CREATES a fresh Membership row
+    from the OnlinePayment seed (Phase 49 sell flow does NOT pre-INSERT a
+    Membership; Membership.status CHECK at memberships/models.py:171 has no
+    ``'pending'`` value, so a "stage row then transition" pattern is not
+    available). The activator body SELECTs the OnlinePayment by id and
+    uses ``client_id`` + ``membership_plan_id`` as the seed for the new row.
     """
 
     async def __call__(
         self,
         session: AsyncSession,
         *,
-        membership_id: UUID,
+        online_payment_id: UUID,  # Phase 50 Plan 50-03 Blocker #3 (was: membership_id)
         audit_correlation_id: UUID | None,
     ) -> Any: ...
 
@@ -1153,13 +1172,22 @@ class PtPackageActivator(Protocol):
     YooKassa webhook handler running inside an HTTP request session — the
     activator MUST run inside the SAME ``AsyncSession`` so the activation
     + audit row commit atomically.
+
+    Phase 50 Plan 50-03 Blocker #3 RENAMES the kwarg from ``pt_package_id``
+    to ``online_payment_id`` (mirror of MembershipActivator). The activator
+    CREATES a fresh PtPackage row from the OnlinePayment seed; PtPackage
+    status CHECK at pt_packages/models.py:153 is
+    ``IN ('active','exhausted','expired','cancelled')`` — no ``'pending'``,
+    so no stage-then-transition pattern. The activator body SELECTs the
+    OnlinePayment by id and uses ``client_id`` + ``pt_package_plan_id`` as
+    the seed for the new row.
     """
 
     async def __call__(
         self,
         session: AsyncSession,
         *,
-        pt_package_id: UUID,
+        online_payment_id: UUID,  # Phase 50 Plan 50-03 Blocker #3 (was: pt_package_id)
         audit_correlation_id: UUID | None,
     ) -> Any: ...
 

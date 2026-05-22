@@ -66,14 +66,17 @@ class Payment(Base, UUIDPkMixin):
         nullable=False,
         server_default=func.now(),
     )
-    received_by_user_id: Mapped[UUIDType] = mapped_column(
+    received_by_user_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey(
             "users.id",
             ondelete="RESTRICT",
             name="fk_payments_received_by_user_id_users",
         ),
-        nullable=False,
+        nullable=True,  # Phase 50 Plan 50-03 / Blocker #2 — Alembic 0036.
+        # NULL marks an anonymous ЮKassa webhook payment (Plan 50-04 flow);
+        # the v1.4..v1.6 invariant of "every payment has an operator" no
+        # longer holds because online payments have no in-person operator.
     )
     refund_of: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),

@@ -23,3 +23,8 @@ discovering plan but should be addressed in a future plan or phase.
 - **Owner:** Hygiene cleanup; can be folded into any subsequent phase that
   touches `alembic/env.py` (e.g., when the next module model import is
   added).
+
+## Plan 50-03 — out-of-scope deviations
+
+- `apps/backend/app/core/audit_payloads.py:541` E501 line too long (148 > 100) — pre-existing ruff issue unrelated to Plan 50-03 changes. Logged here per executor scope-boundary discipline; not fixed.
+- `apps/backend/tests/integration/memberships/test_freeze_resolver.py::test_telegram_checkin_frozen_oracle_safe_dm` failing on base commit (pre-existing — `HandlerContext.__new__()` missing positional args `bookings_service` and `schedule_service`). Unrelated to Plan 50-03 changes; verified by running on base before any plan edits.

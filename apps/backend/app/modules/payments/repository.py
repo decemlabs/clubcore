@@ -69,7 +69,7 @@ async def insert_payment(
     subject_id: UUID,
     amount_kopecks: int,
     method: str,
-    received_by_user_id: UUID,
+    received_by_user_id: UUID | None,
     refund_of: UUID | None = None,
 ) -> Payment:
     """Insert a Payment row; caller owns flush + audit emit (D-32-10).
@@ -77,6 +77,11 @@ async def insert_payment(
     NO ``session.flush()`` here — the service-layer caller flushes to surface
     FK and partial-UNIQUE conflicts as typed AppError subclasses. Returns the
     transient Payment instance with server-side defaults pending RETURNING.
+
+    Phase 50 Plan 50-03 / Blocker #2 — ``received_by_user_id`` is widened
+    to ``UUID | None``. The ЮKassa webhook flow (Plan 50-04) records
+    online payments without a CurrentUser; Alembic 0036 made the column
+    nullable to match.
     """
     payment = Payment(
         subject_kind=subject_kind,
