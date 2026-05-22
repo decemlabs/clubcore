@@ -194,8 +194,8 @@ Plans:
 - [x] 49-02-PLAN.md — online_payments package skeleton + ORM + repository + .importlinter + 3 exception subclasses (PAY-01, PAY-02, PAY-06)
 
 **Wave 2** *(parallel after Wave 1)*
-- [ ] 49-03-PLAN.md — service.sell_membership / sell_pt_package + schemas + FIS-05 email gate + Phase-49 fiscal stub (PAY-03, PAY-04, PAY-05, PAY-06)
-- [ ] 49-04-PLAN.md — router with 4 POST sell endpoints + v1 mount + RBAC-04 ordering + HTTP tests (PAY-03, PAY-04, PAY-05, PAY-06)
+- [x] 49-03-PLAN.md — service.sell_membership / sell_pt_package + schemas + FIS-05 email gate + Phase-49 fiscal stub (PAY-03, PAY-04, PAY-05, PAY-06)
+- [x] 49-04-PLAN.md — router with 4 POST sell endpoints + v1 mount + RBAC-04 ordering + HTTP tests (PAY-03, PAY-04, PAY-05, PAY-06)
 
 **Wave 3** *(parallel — 49-05 appends to router.py from 49-04; 49-06 imports phase49_fiscal_dispatcher_stub from 49-03)*
 - [ ] 49-05-PLAN.md — GET /return anti-oracle screen + constant-time floor + EXCLUDED_PATHS (PAY-07)
@@ -263,7 +263,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
-| 49. Online Sales Orchestrator | 2/7 | In Progress|  |
+| 49. Online Sales Orchestrator | 4/7 | In Progress|  |
 | 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
