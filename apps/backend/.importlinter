@@ -23,20 +23,15 @@ modules =
     app.modules.bookings
     app.modules.billing
     app.modules.notifications
+    app.modules.online_payments
     app.modules.payments
     app.modules.pt_packages
     app.modules.pt_sessions
     app.modules.users
-    # Phase 47 INFRA-40 — Option A deferral (2026-05-21):
-    # `app.modules.online_payments` MUST be appended to `modules =` as the
-    # first commit of Phase 49 (alongside the module body). import-linter
-    # 2.11 rejects `modules =` entries that don't resolve to a real on-disk
-    # package, so preemptive registration was not possible in Phase 47. The
-    # 3 INFRA-40 ignore edges below + the email dispatcher edge in the
-    # integrations contract are registered now under
-    # `unmatched_ignore_imports_alerting = warn`; once Phase 49 appends the
-    # `modules =` line, the contract becomes fully active. See
-    # .planning/phases/47-bedrock/47-07-SUMMARY.md for the full rationale.
+    # Phase 47 INFRA-40 — Option A deferral closed by Phase 49 D-49-02
+    # (2026-05-22): `app.modules.online_payments` is registered above, the
+    # 3 INFRA-40 ignore edges + the email dispatcher edge resolve to matched
+    # imports, and the contract is fully active.
 ignore_imports =
     # Phase 43 USERS-02 / D-43-13 / D-43-19 — Phase 41 0025 password_reset_tokens
     # row (purpose='invitation') is shared infrastructure consumed by both the
@@ -89,6 +84,12 @@ ignore_imports =
     #     (mirrors memberships.service → users.display).
     app.modules.online_payments.service -> app.modules.payments.models
     app.modules.online_payments.service -> app.modules.users.display
+    # Phase 49 PAY-06 / D-49-13 — clients.email gate read; service-layer
+    # scoped; no widening to repository. Mirrors Phase 45 NOTIFY-11/12/13
+    # narrow-scope precedent at lines 63-80 above. BLOCKER #3 / D-49-03:
+    # NO additional cross-module ignores beyond clients models — Plan 49-03
+    # reads other subject tables via raw SQL `text()` SELECT (no ORM import).
+    app.modules.online_payments.service -> app.modules.clients.models
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear

@@ -50,6 +50,32 @@ class ValidationAppError(AppError):
     status_code = 422
 
 
+class ClientEmailRequiredForOnlinePaymentError(ValidationAppError):
+    """Raised by online_payments.service.sell_* when clients.email IS NULL.
+
+    Phase 49 PAY-06 / D-49-12. Error code is LOCKED LITERAL per
+    REQUIREMENTS.md PAY-06 + ROADMAP.md Phase 49 success-criterion #3:
+    ``client_email_required_for_online_payment``.
+    """
+
+    code = "client_email_required_for_online_payment"
+    status_code = 422
+
+
+class ServiceUnavailableAppError(AppError):
+    """503 — upstream integration transient failure (Phase 49 D-49-10)."""
+
+    code = "service_unavailable"
+    status_code = 503
+
+
+class BadGatewayAppError(AppError):
+    """502 — upstream integration permanent failure (Phase 49 D-49-10)."""
+
+    code = "bad_gateway"
+    status_code = 502
+
+
 class InvalidAccessToken(AppError):  # noqa: N818
     """JWT decode/expire failure (Phase 4 — used by app.core.security.decode_access_token)."""
 
