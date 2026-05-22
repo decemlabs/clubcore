@@ -120,7 +120,7 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 
 - [x] **Phase 47: Bedrock** (7/7 plans) — completed 2026-05-21 — INFRA-34..41 *(1 scope adjustment: `app.modules.online_payments` modules= entry deferred to Phase 49 commit-1 per import-linter 2.11 limitation, user-approved Option A; 47-VERIFICATION.md: 5/5 success criteria + 8/8 reqs PASSED)*
 - [x] **Phase 48: ЮKassa Integration Adapter** — Pure async httpx wrapper, IP verifier, receipt helpers, and `respx` test fixtures (parallels v1.6 Phase 42 email adapter) (completed 2026-05-22)
-- [ ] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring
+- [x] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring (completed 2026-05-22)
 - [ ] **Phase 50: Webhook FSM + Fiscal Foundation** — Webhook handler, payment FSM, `record_payment(method='online')`, `fiscal_receipts` table, and atomic UoW in a single phase
 - [ ] **Phase 51: Fiscal FSM + Refunds** — Receipt webhook FSM, ARQ dispatch with circuit breaker, and online refund endpoints
 - [ ] **Phase 52: Cross-Channel Notifications + v1.6 Carry-out** — Telegram + email DMs wired post-commit; DEFER-46-01 (live RU email probe) and DEFER-46-02 (15-template countersign) closed
@@ -202,7 +202,7 @@ Plans:
 - [x] 49-06-PLAN.md — composition-root wiring: 4 v1.7 Protocol slots non-None + parity-test decommission + new SC#6 parity test (PAY-08)
 
 **Wave 4** *(sequential — full Phase 49 e2e)*
-- [ ] 49-07-PLAN.md — end-to-end sell-flow + double-tap + audit-chain tests + deferred-items.md + Phase 49 regression sweep (PAY-01..PAY-08)
+- [x] 49-07-PLAN.md — end-to-end sell-flow + double-tap + audit-chain tests + deferred-items.md + Phase 49 regression sweep (PAY-01..PAY-08)
 
 ### Phase 50: Webhook FSM + Fiscal Foundation
 **Goal**: `payment.succeeded` webhook activates a membership/PT-package, records a ledger payment, inserts a `fiscal_receipts` row, and commits atomically; `payment.canceled` records the cancellation reason
@@ -263,7 +263,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
-| 49. Online Sales Orchestrator | 6/7 | In Progress|  |
+| 49. Online Sales Orchestrator | 7/7 | Complete   | 2026-05-22 |
 | 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
