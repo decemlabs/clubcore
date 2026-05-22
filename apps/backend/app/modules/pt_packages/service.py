@@ -1187,3 +1187,25 @@ async def refund_pt_package(
 
     # 9. Return response.
     return PtPackageResponse.model_validate(pt_package, from_attributes=True)
+
+
+# ─── Phase 49 PAY-08 / D-49-21 — Composition-root activator stub ───────────
+
+
+async def activate_pt_package_from_webhook(
+    session: AsyncSession,
+    *,
+    pt_package_id: UUID,
+    audit_correlation_id: UUID | None,
+) -> Any:
+    """PtPackageActivator slot implementation (Phase 49 D-49-21 STUB).
+
+    Phase 49 ships the wiring + signature ONLY; body raises
+    NotImplementedError so the success-criterion #6 parity test sees a
+    non-None slot. Phase 50 WH-05 fills the body with the real activation
+    logic that runs inside the YooKassa webhook handler's AsyncSession.
+    """
+    raise NotImplementedError(
+        "Phase 50 WH-05 wires the activation body — Phase 49 only registers "
+        "the slot so the parity test passes."
+    )
