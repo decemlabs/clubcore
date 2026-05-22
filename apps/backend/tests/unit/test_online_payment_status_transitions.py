@@ -13,49 +13,36 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
+from app.modules.online_payments import constants
+from app.modules.online_payments.constants import (
+    ONLINE_PAYMENT_STATUS_TRANSITIONS,
+    STATUS_CANCELED,
+    STATUS_PENDING,
+    STATUS_SUCCEEDED,
+)
+
 
 def test_online_payment_status_transitions_importable() -> None:
-    from app.modules.online_payments.constants import ONLINE_PAYMENT_STATUS_TRANSITIONS  # noqa: F401
+    assert ONLINE_PAYMENT_STATUS_TRANSITIONS is not None
 
 
 def test_pending_edges_to_succeeded_and_canceled() -> None:
-    from app.modules.online_payments.constants import (
-        ONLINE_PAYMENT_STATUS_TRANSITIONS,
-        STATUS_CANCELED,
-        STATUS_PENDING,
-        STATUS_SUCCEEDED,
-    )
-
     assert ONLINE_PAYMENT_STATUS_TRANSITIONS[STATUS_PENDING] == frozenset(
         {STATUS_SUCCEEDED, STATUS_CANCELED}
     )
 
 
 def test_succeeded_is_terminal() -> None:
-    from app.modules.online_payments.constants import (
-        ONLINE_PAYMENT_STATUS_TRANSITIONS,
-        STATUS_SUCCEEDED,
-    )
-
     assert ONLINE_PAYMENT_STATUS_TRANSITIONS[STATUS_SUCCEEDED] == frozenset()
 
 
 def test_canceled_is_terminal() -> None:
-    from app.modules.online_payments.constants import (
-        ONLINE_PAYMENT_STATUS_TRANSITIONS,
-        STATUS_CANCELED,
-    )
-
     assert ONLINE_PAYMENT_STATUS_TRANSITIONS[STATUS_CANCELED] == frozenset()
 
 
 def test_constant_is_mapping_proxy_immutable() -> None:
-    from app.modules.online_payments.constants import ONLINE_PAYMENT_STATUS_TRANSITIONS
-
     assert isinstance(ONLINE_PAYMENT_STATUS_TRANSITIONS, MappingProxyType)
 
 
 def test_constant_listed_in_dunder_all() -> None:
-    from app.modules.online_payments import constants
-
     assert "ONLINE_PAYMENT_STATUS_TRANSITIONS" in constants.__all__

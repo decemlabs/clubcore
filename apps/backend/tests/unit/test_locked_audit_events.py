@@ -27,7 +27,6 @@ from app.core.audit_payloads import (
     PtPackageActivatedOnlinePayload,
 )
 
-
 # --- LOCKED_AUDIT_EVENTS membership ----------------------------------------
 
 

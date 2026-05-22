@@ -219,10 +219,16 @@ def test_locked_audit_events_has_expected_count() -> None:
     ``fiscal_receipt_succeeded``, ``fiscal_receipt_failed``) + 1 webhook intake
     audit-trail pair (``yookassa_webhook_received`` under ``yookassa_webhook``).
     The frozenset total becomes 71 + 9 = 80. See 47-01-SUMMARY.md.
+
+    Phase 50 Plan 50-02 (D-50-23) ADDS 2 webhook-driven activation pairs:
+    ``('membership_activated_online', 'membership')`` and
+    ``('pt_package_activated_online', 'pt_package')`` — CHILD audit emits
+    inside the ЮKassa webhook UoW (D-50-18). The v1.7 count grows 9 → 11
+    and the frozenset total becomes 80 + 2 = 82. See 50-02-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 80, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 80 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 9 v1.7), "
+    assert len(LOCKED_AUDIT_EVENTS) == 82, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 82 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 11 v1.7), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
 

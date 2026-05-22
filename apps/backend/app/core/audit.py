@@ -178,6 +178,22 @@ The frozenset size grows 53 → 58.
                                         # `audit_correlation_id` (caller-generated UUID) is the
                                         # chain root for all downstream webhook-driven events.
 
+  Webhook-driven activation (Phase 50 WH-05 / D-50-23):
+  - membership_activated_online         {audit_correlation_id, membership_id,
+                                         client_id, online_payment_id}
+                                        # 'membership' — `MembershipActivatedOnlinePayload`;
+                                        # emitted from app/modules/memberships/service.py
+                                        # :activate_membership_from_webhook inside the
+                                        # ЮKassa webhook UoW (Plan 50-03). CHILD emit:
+                                        # `audit_correlation_id` carries the webhook intake
+                                        # UUID so the activation row chains back to the
+                                        # YookassaWebhookReceived row.
+  - pt_package_activated_online         {audit_correlation_id, pt_package_id,
+                                         client_id, online_payment_id}
+                                        # 'pt_package' — `PtPackageActivatedOnlinePayload`;
+                                        # mirror of membership_activated_online for the
+                                        # PT-package activation branch (Plan 50-03).
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -335,6 +351,13 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("fiscal_receipt_failed", "fiscal_receipt"),
         # Webhook intake audit trail (Phase 50 WH-01):
         ("yookassa_webhook_received", "yookassa_webhook"),
+        # Membership / PT-package activation via webhook (Phase 50 WH-05 / D-50-23):
+        # Plan 50-03 fills the activator bodies that currently ship as
+        # NotImplementedError stubs from Phase 49; emit is a CHILD audit (D-50-18)
+        # inside the ЮKassa webhook UoW and carries the webhook intake's
+        # audit_correlation_id.
+        ("membership_activated_online", "membership"),
+        ("pt_package_activated_online", "pt_package"),
     }
 )
 
