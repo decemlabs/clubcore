@@ -119,7 +119,7 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 ### v1.7 Online Payments + 54-ФЗ (Phases 47-53) — ACTIVE
 
 - [x] **Phase 47: Bedrock** (7/7 plans) — completed 2026-05-21 — INFRA-34..41 *(1 scope adjustment: `app.modules.online_payments` modules= entry deferred to Phase 49 commit-1 per import-linter 2.11 limitation, user-approved Option A; 47-VERIFICATION.md: 5/5 success criteria + 8/8 reqs PASSED)*
-- [ ] **Phase 48: ЮKassa Integration Adapter** — Pure async httpx wrapper, IP verifier, receipt helpers, and `respx` test fixtures (parallels v1.6 Phase 42 email adapter)
+- [x] **Phase 48: ЮKassa Integration Adapter** — Pure async httpx wrapper, IP verifier, receipt helpers, and `respx` test fixtures (parallels v1.6 Phase 42 email adapter) (completed 2026-05-22)
 - [ ] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring
 - [ ] **Phase 50: Webhook FSM + Fiscal Foundation** — Webhook handler, payment FSM, `record_payment(method='online')`, `fiscal_receipts` table, and atomic UoW in a single phase
 - [ ] **Phase 51: Fiscal FSM + Refunds** — Receipt webhook FSM, ARQ dispatch with circuit breaker, and online refund endpoints
@@ -162,19 +162,19 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 **Plans**: 7 plans
 Plans:
 **Wave 1**
-- [ ] 48-01-PLAN.md — types.py (4 frozen dataclasses) + widen YookassaWebhookReceivedPayload Literal for rejected_ip
-- [ ] 48-04-PLAN.md — receipt.py build_receipt_item + 3 locked enums + AST gate extension (SC3)
-- [ ] 48-06-PLAN.md — conftest.py with 6 respx fixtures + _responses/*.json (SC5)
+- [x] 48-01-PLAN.md — types.py (4 frozen dataclasses) + widen YookassaWebhookReceivedPayload Literal for rejected_ip
+- [x] 48-04-PLAN.md — receipt.py build_receipt_item + 3 locked enums + AST gate extension (SC3)
+- [x] 48-06-PLAN.md — conftest.py with 6 respx fixtures + _responses/*.json (SC5)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 48-02-PLAN.md — client.py async httpx adapter with classified result chain + Idempotence-Key header + respx dev dep
-- [ ] 48-05-PLAN.md — webhook_verifier.py body (sandbox bypass + CIDR check + 403 + audit) (SC4)
+- [x] 48-02-PLAN.md — client.py async httpx adapter with classified result chain + Idempotence-Key header + respx dev dep
+- [x] 48-05-PLAN.md — webhook_verifier.py body (sandbox bypass + CIDR check + 403 + audit) (SC4)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 48-03-PLAN.md — factory.py build_yookassa_client + non-fatal GET /v3/me probe (SC2)
+- [x] 48-03-PLAN.md — factory.py build_yookassa_client + non-fatal GET /v3/me probe (SC2)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 48-07-PLAN.md — composition-root rewire: main.py + workers/__init__.py + parity-test update
+- [x] 48-07-PLAN.md — composition-root rewire: main.py + workers/__init__.py + parity-test update
 
 ### Phase 49: Online Sales Orchestrator
 **Goal**: Operator can initiate a redirect-based or QR online membership/PT-package sale and receive a `confirmation_url` back from the API
@@ -247,7 +247,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 47. Bedrock | 0/7 | Planned | - |
-| 48. ЮKassa Integration Adapter | 0/TBD | Not started | - |
+| 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
 | 49. Online Sales Orchestrator | 0/TBD | Not started | - |
 | 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
