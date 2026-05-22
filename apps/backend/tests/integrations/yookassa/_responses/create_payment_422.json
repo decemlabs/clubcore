@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "id": "ade2dc1a-7e51-4f7c-9aec-2a18b66a8a4b",
+  "code": "invalid_credentials",
+  "description": "Authentication failed: invalid shop credentials."
+}

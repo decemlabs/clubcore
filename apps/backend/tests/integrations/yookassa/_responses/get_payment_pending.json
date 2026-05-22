@@ -1,0 +1,17 @@
+{
+  "id": "9b1f5cf6-1111-5000-8000-2d3b4e5f6789",
+  "status": "pending",
+  "amount": {"value": "1990.00", "currency": "RUB"},
+  "description": "Месячный абонемент в зал",
+  "recipient": {"account_id": "123456", "gateway_id": "gw-test-001"},
+  "created_at": "2026-05-21T10:00:05.000Z",
+  "confirmation": {
+    "type": "redirect",
+    "return_url": "https://example.com/return",
+    "confirmation_url": "https://yoomoney.ru/checkout/payments/v2/contract?orderId=9b1f5cf6-1111-5000-8000-2d3b4e5f6789"
+  },
+  "test": false,
+  "paid": false,
+  "refundable": false,
+  "metadata": {}
+}
