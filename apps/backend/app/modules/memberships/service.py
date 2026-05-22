@@ -1814,17 +1814,16 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
 async def activate_membership_from_webhook(
     session: AsyncSession,
     *,
-    membership_id: UUID,
+    online_payment_id: UUID,
     audit_correlation_id: UUID | None,
 ) -> Any:
     """MembershipActivator slot implementation (Phase 49 D-49-21 STUB).
 
-    Phase 49 ships the wiring + signature ONLY; body raises
-    NotImplementedError so the success-criterion #6 parity test sees a
-    non-None slot. Phase 50 WH-05 fills the body with the real activation
-    logic that runs inside the YooKassa webhook handler's AsyncSession.
+    Phase 49 shipped the wiring + signature; Phase 50 Plan 50-03 Task 1
+    renames the kwarg from ``membership_id`` to ``online_payment_id``
+    (Blocker #3 — the activator receives the OnlinePayment row id and
+    CREATES the Membership). Plan 50-03 Task 2 fills the body.
     """
     raise NotImplementedError(
-        "Phase 50 WH-05 wires the activation body — Phase 49 only registers "
-        "the slot so the parity test passes."
+        "Plan 50-03 Task 2 fills this body — Task 1 only completes the kwarg rename."
     )
