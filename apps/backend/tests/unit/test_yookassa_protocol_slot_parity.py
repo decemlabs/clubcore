@@ -20,6 +20,15 @@ sites register a closure named ``_yookassa_client_provider`` (NOT
 ``yookassa_client_provider_noop_stub``). The other 3 stubs
 (FiscalReceiptDispatcher, MembershipActivator, PtPackageActivator) retain
 Phase 47 byte-equal parity per D-48-26.
+
+Phase 49 D-49-22 — FiscalReceiptDispatcher swapped from
+``fiscal_receipt_dispatcher_noop_stub`` to ``phase49_fiscal_dispatcher_stub``
+(a Phase-49-only bridge stub living in
+``app.modules.online_payments.service``). Byte-equal parity preserved against
+the new target. Phase 50 FISCAL-01 will swap to the real ARQ-enqueue body.
+MembershipActivator + PtPackageActivator swapped from no-op stubs to the
+Phase 49 ``activate_*_from_webhook`` stub-body callables in
+``app.modules.{memberships,pt_packages}.service``.
 """
 
 from __future__ import annotations
@@ -27,12 +36,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import app.core.dependencies as deps
-from app.integrations.yookassa._stubs import (
-    fiscal_receipt_dispatcher_noop_stub,
-    membership_activator_noop_stub,
-    pt_package_activator_noop_stub,
-)
 from app.main import create_app
+from app.modules.memberships.service import activate_membership_from_webhook
+from app.modules.online_payments.service import phase49_fiscal_dispatcher_stub
+from app.modules.pt_packages.service import activate_pt_package_from_webhook
 
 # Resolve source files relative to this test module so pytest cwd does not
 # matter (project convention is `cd apps/backend && uv run pytest`, but the
@@ -58,14 +65,16 @@ def _worker_register_double_wired_slots() -> None:
     Phase 48 swaps to a real closure that reads from ``ctx["yookassa_client"]``
     — driving that closure from a unit test would require a real httpx client.
     Test B now validates the wiring STRUCTURALLY by reading
-    ``app/workers/__init__.py`` source instead. This helper only registers the
-    surviving Phase 47 byte-equal stub (fiscal_receipt_dispatcher) for Test C's
-    reference.
+    ``app/workers/__init__.py`` source instead.
+
+    Phase 49 D-49-22 — the surviving Phase 47 byte-equal stub
+    (fiscal_receipt_dispatcher_noop_stub) is replaced by the Phase-49-only
+    bridge stub ``phase49_fiscal_dispatcher_stub`` so the byte-equal parity
+    assertion now targets the new symbol.
     """
     from app.core.dependencies import register_fiscal_receipt_dispatcher
-    from app.integrations.yookassa import _stubs
 
-    register_fiscal_receipt_dispatcher(_stubs.fiscal_receipt_dispatcher_noop_stub)
+    register_fiscal_receipt_dispatcher(phase49_fiscal_dispatcher_stub)
 
 
 def test_fastapi_create_app_wires_all_four_slots() -> None:
@@ -92,10 +101,18 @@ def test_fastapi_create_app_wires_all_four_slots() -> None:
         "Phase 47 no-op stub registration MUST be removed from main.py (D-48-25)."
     )
 
-    # Other 3 stubs — Phase 47 byte-equal preserved (D-48-26).
-    assert deps.get_fiscal_receipt_dispatcher() is fiscal_receipt_dispatcher_noop_stub
-    assert deps.get_membership_activator() is membership_activator_noop_stub
-    assert deps.get_pt_package_activator() is pt_package_activator_noop_stub
+    # Other 3 stubs — Phase 49 D-49-22 swaps the byte-equal targets:
+    #   - FiscalReceiptDispatcher now points at phase49_fiscal_dispatcher_stub
+    #     (Phase 50 FISCAL-01 will swap to the real ARQ-enqueue body).
+    #   - Membership / PT-package activators now point at
+    #     activate_*_from_webhook stub bodies (Phase 50 WH-05 fills the body).
+    assert deps.get_fiscal_receipt_dispatcher() is phase49_fiscal_dispatcher_stub, (
+        "Phase 49 D-49-22 — FiscalReceiptDispatcher must point at "
+        "phase49_fiscal_dispatcher_stub after create_app(); Phase 50 FISCAL-01 "
+        "will swap to the real ARQ-enqueue body."
+    )
+    assert deps.get_membership_activator() is activate_membership_from_webhook
+    assert deps.get_pt_package_activator() is activate_pt_package_from_webhook
 
 
 def test_arq_worker_startup_wires_double_wired_slots() -> None:
@@ -120,8 +137,8 @@ def test_arq_worker_startup_wires_double_wired_slots() -> None:
         "Phase 47 no-op stub registration MUST be removed from workers/__init__.py (D-48-25)."
     )
 
-    # fiscal_receipt_dispatcher — Phase 47 byte-equal preserved (D-48-26).
-    assert deps.get_fiscal_receipt_dispatcher() is fiscal_receipt_dispatcher_noop_stub
+    # fiscal_receipt_dispatcher — Phase 49 D-49-22 byte-equal swap target.
+    assert deps.get_fiscal_receipt_dispatcher() is phase49_fiscal_dispatcher_stub
 
 
 def test_arq_worker_does_not_wire_single_wired_slots() -> None:
@@ -185,9 +202,11 @@ def test_byte_equal_parity_between_fastapi_and_worker() -> None:
     _worker_register_double_wired_slots()  # registers fiscal stub only
     worker_fiscal = deps._fiscal_receipt_dispatcher
 
-    # fiscal_receipt_dispatcher — Phase 47 byte-equal preserved (D-48-26).
-    assert fastapi_fiscal is worker_fiscal is fiscal_receipt_dispatcher_noop_stub, (
-        "fiscal_receipt_dispatcher MUST stay Phase-47 byte-equal until Phase 50 swaps it."
+    # fiscal_receipt_dispatcher — Phase 49 D-49-22 byte-equal swap target.
+    assert fastapi_fiscal is worker_fiscal is phase49_fiscal_dispatcher_stub, (
+        "Phase 49 D-49-22 — both composition roots must register the SAME "
+        "phase49_fiscal_dispatcher_stub object (REG-29-03 byte-equal parity). "
+        "Phase 50 FISCAL-01 will swap to the real ARQ-enqueue body."
     )
 
     # Closure-name invariant on the worker side — STRUCTURAL parity guard.

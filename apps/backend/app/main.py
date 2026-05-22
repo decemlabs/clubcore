@@ -78,11 +78,6 @@ from app.integrations.email.dispatcher import (
     enqueue_email_dispatch,
     register_arq_pool,
 )
-from app.integrations.yookassa._stubs import (
-    fiscal_receipt_dispatcher_noop_stub,
-    membership_activator_noop_stub,
-    pt_package_activator_noop_stub,
-)
 from app.integrations.yookassa.client import YooKassaClient
 from app.integrations.yookassa.factory import build_yookassa_client
 from app.integrations.yookassa.settings import YooKassaSettings
@@ -321,10 +316,17 @@ def create_app() -> FastAPI:
 
     register_yookassa_client_provider(_yookassa_client_provider)
 
-    # Phase 47 wiring preserved (D-48-26 — only YooKassaClientProvider swaps in Phase 48).
-    register_fiscal_receipt_dispatcher(fiscal_receipt_dispatcher_noop_stub)
-    register_membership_activator(membership_activator_noop_stub)
-    register_pt_package_activator(pt_package_activator_noop_stub)
+    # Phase 49 PAY-08 / D-49-21 — HTTP-only single-wire activators (no ARQ entry path).
+    from app.modules.memberships.service import activate_membership_from_webhook
+    from app.modules.online_payments.service import phase49_fiscal_dispatcher_stub
+    from app.modules.pt_packages.service import activate_pt_package_from_webhook
+
+    register_membership_activator(activate_membership_from_webhook)
+    register_pt_package_activator(activate_pt_package_from_webhook)
+    # Phase 49 D-49-22 — FiscalReceiptDispatcher Phase-49-only bridge stub
+    # (REG-29-03 double-wire; mirror in workers/__init__.py). Phase 50 FISCAL-01
+    # replaces this with the real ARQ-enqueue body.
+    register_fiscal_receipt_dispatcher(phase49_fiscal_dispatcher_stub)
 
     app.include_router(api)
     return app
