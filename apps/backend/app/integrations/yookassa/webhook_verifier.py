@@ -5,7 +5,8 @@ https://yookassa.ru/developers/using-api/webhooks (verified 2026-05-21).
 
 Phase 47 shipped:
   - ``YOOKASSA_TRUSTED_IPS`` Final[frozenset[str]] — locked constant.
-  - ``verify_yookassa_ip`` Depends()-callable SKELETON — raised NotImplementedError.
+  - ``verify_yookassa_ip`` Depends()-callable SKELETON (stub-only; body
+    deferred to Phase 48, filled by this module).
 
 Phase 48 ADAPTER-05 fills the real body (this module):
   1. ``if settings.sandbox: return`` — sandbox bypass per D-47-07.
@@ -18,11 +19,12 @@ Phase 48 ADAPTER-05 fills the real body (this module):
 Phase 48 emission policy: ``verify_yookassa_ip`` runs as a FastAPI ``Depends()``
 BEFORE the route body, so it has NO ``AsyncSession`` in scope. Rejection events
 are emitted via ``structlog.warning(...)`` ONLY. The structured audit-DB row
-(``audit.emit(session, "yookassa_webhook_received", ..., idempotency_outcome=
-"rejected_ip")``) is emitted by the Phase 50 webhook route handler, which has
-the session. The widened Literal in ``YookassaWebhookReceivedPayload.
-idempotency_outcome`` (Plan 48-01) exists for that Phase 50 consumer; this
-module never constructs the payload.
+(canonical event ``yookassa_webhook_received`` with ``idempotency_outcome=
+"rejected_ip"``) is emitted by the Phase 50 webhook route handler via the
+``app.core.audit`` canonical writer, which has the session. The widened
+Literal in ``YookassaWebhookReceivedPayload.idempotency_outcome``
+(Plan 48-01) exists for that Phase 50 consumer; this module never
+constructs the payload.
 
 AST-gate contract (test_locked_yookassa_constants_ast.py):
   - Every ``Depends(verify_yookassa_ip)`` callsite uses the literal name.
@@ -120,8 +122,9 @@ def _emit_rejected_ip_log(*, source_ip: str) -> None:
 
     Phase 48 emission policy (see module docstring): structlog ONLY. The
     audit DB row is emitted by Phase 50's webhook route handler, which
-    has an AsyncSession in scope and can call ``audit.emit(session,
-    "yookassa_webhook_received", ..., idempotency_outcome="rejected_ip")``.
+    has an AsyncSession in scope and invokes the canonical
+    ``app.core.audit`` writer with event ``yookassa_webhook_received``
+    and ``idempotency_outcome="rejected_ip"``.
 
     ``source_ip`` is a structlog kwarg here, NOT a field on
     ``YookassaWebhookReceivedPayload`` (Pydantic v2 ``extra="forbid"``
@@ -129,9 +132,10 @@ def _emit_rejected_ip_log(*, source_ip: str) -> None:
     ``outcome="rejected_ip"`` without IP; IP forensics come from this
     structlog log line.
     """
-    # TODO Phase 50: Phase 50 webhook route will emit audit.emit(...) row
-    # with the same `outcome` literal after the IP check passes/fails.
-    # This structlog warning is the Phase 48 record of the rejection.
+    # TODO Phase 50: Phase 50 webhook route will emit the canonical audit DB
+    # row (via app.core.audit) with the same `outcome` literal after the IP
+    # check passes/fails. This structlog warning is the Phase 48 record of
+    # the rejection.
     _log.warning(
         "yookassa_webhook_received",
         outcome="rejected_ip",
