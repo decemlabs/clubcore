@@ -190,7 +190,7 @@ Plans:
 **Plans**: 7 plans
 
 **Wave 1** *(sequential — bedrock)*
-- [ ] 49-01-PLAN.md — Phase 48 adapter patch (qr_payload + UUID|str idempotency) + Alembic 0034 online_payments table (PAY-01, PAY-02, PAY-05)
+- [x] 49-01-PLAN.md — Phase 48 adapter patch (qr_payload + UUID|str idempotency) + Alembic 0034 online_payments table (PAY-01, PAY-02, PAY-05)
 - [ ] 49-02-PLAN.md — online_payments package skeleton + ORM + repository + .importlinter + 3 exception subclasses (PAY-01, PAY-02, PAY-06)
 
 **Wave 2** *(parallel after Wave 1)*
@@ -263,7 +263,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 47. Bedrock | 0/7 | Planned | - |
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
-| 49. Online Sales Orchestrator | 0/7 | Planned | - |
+| 49. Online Sales Orchestrator | 1/7 | In Progress|  |
 | 50. Webhook FSM + Fiscal Foundation | 0/TBD | Not started | - |
 | 51. Fiscal FSM + Refunds | 0/TBD | Not started | - |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
