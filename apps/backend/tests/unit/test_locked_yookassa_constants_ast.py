@@ -68,6 +68,28 @@ _DYNAMIC_CONTAINER_BUILTINS: frozenset[str] = frozenset(
 )
 
 
+def _is_build_receipt_item_call(node: ast.Call) -> bool:
+    """True iff ``node`` is a direct ``build_receipt_item(...)`` call (D-48-18)."""
+    return isinstance(node.func, ast.Name) and node.func.id == "build_receipt_item"
+
+
+def _extract_kwarg(call: ast.Call, name: str) -> ast.expr | None:
+    """Return the value-AST of keyword arg ``name`` on ``call``, or None."""
+    for kw in call.keywords:
+        if kw.arg == name:
+            return kw.value
+    return None
+
+
+def _is_enum_member_literal(arg: ast.expr | None, enum_name: str) -> bool:
+    """True iff ``arg`` is ``EnumName.<MEMBER>`` (ast.Attribute on ast.Name)."""
+    return (
+        isinstance(arg, ast.Attribute)
+        and isinstance(arg.value, ast.Name)
+        and arg.value.id == enum_name
+    )
+
+
 def _is_depends_call(node: ast.Call) -> bool:
     """True iff ``node`` is ``Depends(...)`` — ``Name(id='Depends')`` as func."""
     return isinstance(node.func, ast.Name) and node.func.id == "Depends"
@@ -247,3 +269,80 @@ def test_frozenset_has_six_entries() -> None:
         assert isinstance(cidr, str) and cidr, (
             f"YOOKASSA_TRUSTED_IPS entry is not a non-empty str: {cidr!r}"
         )
+
+
+def test_payment_subject_literal_at_callsites() -> None:
+    """D-48-18 / SC3: every ``build_receipt_item(payment_subject=...)`` callsite
+    MUST pass a ``PaymentSubject.<MEMBER>`` enum literal. Phase 48 ships ZERO
+    real callsites — Phase 49 orchestrator lands the first. Walker collects 0
+    violations against the production tree today.
+    """
+    violations: list[str] = []
+    for py in sorted(_BACKEND_APP.rglob("*.py")):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and _is_build_receipt_item_call(node):
+                arg = _extract_kwarg(node, "payment_subject")
+                if arg is None:
+                    continue  # mypy catches missing kwarg
+                if not _is_enum_member_literal(arg, "PaymentSubject"):
+                    violations.append(
+                        f"{py.relative_to(_REPO_ROOT)}:{node.lineno} — "
+                        "payment_subject must be a PaymentSubject.<MEMBER> literal."
+                    )
+    assert not violations, "\n".join(violations)
+
+
+def test_payment_mode_literal_at_callsites() -> None:
+    """D-48-18 / SC3: every ``build_receipt_item(payment_mode=...)`` callsite
+    MUST pass a ``PaymentMode.<MEMBER>`` enum literal. Same scope rule as
+    ``test_payment_subject_literal_at_callsites``.
+    """
+    violations: list[str] = []
+    for py in sorted(_BACKEND_APP.rglob("*.py")):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and _is_build_receipt_item_call(node):
+                arg = _extract_kwarg(node, "payment_mode")
+                if arg is None:
+                    continue
+                if not _is_enum_member_literal(arg, "PaymentMode"):
+                    violations.append(
+                        f"{py.relative_to(_REPO_ROOT)}:{node.lineno} — "
+                        "payment_mode must be a PaymentMode.<MEMBER> literal."
+                    )
+    assert not violations, "\n".join(violations)
+
+
+def test_non_literal_payment_subject_fixture_is_rejected() -> None:
+    """Synthetic violation fixture exercises the walker — must collect 1 violation."""
+    fixture = (
+        _REPO_ROOT
+        / "apps/backend/tests/unit/fixtures/yookassa_ast_violations"
+        / "non_literal_payment_subject.py"
+    )
+    tree = ast.parse(fixture.read_text(encoding="utf-8"))
+    detected = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _is_build_receipt_item_call(node):
+            arg = _extract_kwarg(node, "payment_subject")
+            if arg is not None and not _is_enum_member_literal(arg, "PaymentSubject"):
+                detected += 1
+    assert detected >= 1
+
+
+def test_non_literal_payment_mode_fixture_is_rejected() -> None:
+    """Synthetic violation fixture exercises the walker — must collect 1 violation."""
+    fixture = (
+        _REPO_ROOT
+        / "apps/backend/tests/unit/fixtures/yookassa_ast_violations"
+        / "non_literal_payment_mode.py"
+    )
+    tree = ast.parse(fixture.read_text(encoding="utf-8"))
+    detected = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _is_build_receipt_item_call(node):
+            arg = _extract_kwarg(node, "payment_mode")
+            if arg is not None and not _is_enum_member_literal(arg, "PaymentMode"):
+                detected += 1
+    assert detected >= 1
