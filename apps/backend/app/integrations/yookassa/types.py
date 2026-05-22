@@ -55,7 +55,8 @@ class YooKassaPaymentResult:
     ``classification`` is the closed taxonomy the orchestrator switches on:
 
     - ``ok``: provider accepted (2xx). ``payment_id`` / ``status`` /
-      ``confirmation_url`` / ``amount_kopecks`` are populated; ``error`` is None.
+      ``confirmation_url`` OR ``qr_payload`` / ``amount_kopecks`` are
+      populated; ``error`` is None.
     - ``validation_error``: provider returned 422. Request was malformed
       (e.g. ``invalid_credentials``, ``parameter_required``). DO NOT retry
       — fix the request.
@@ -66,6 +67,15 @@ class YooKassaPaymentResult:
 
     Failure variants carry ``error_code`` + ``http_status`` for forensic
     audit; the ``error`` string preserves the upstream message.
+
+    ``qr_payload`` (Phase 49 PAY-05 + BLOCKER #1) is populated only when
+    ``confirmation_type='qr'`` was requested at ``create_payment`` time,
+    OR when ``get_payment`` re-fetches a QR-style payment and the upstream
+    ``confirmation.type == "qr"``. For ``confirmation_type='redirect'``
+    flows (the default), ``qr_payload`` is ``None`` and ``confirmation_url``
+    is populated. Exactly one of ``confirmation_url`` / ``qr_payload`` is
+    populated on a successful create or successful get for QR-style
+    payments.
     """
 
     ok: bool
@@ -78,6 +88,7 @@ class YooKassaPaymentResult:
     error_code: str | None = None
     http_status: int | None = None
     error: str | None = None
+    qr_payload: str | None = None
 
 
 @dataclass(frozen=True)

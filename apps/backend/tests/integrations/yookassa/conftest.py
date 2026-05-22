@@ -13,9 +13,9 @@ Fixture index (D-48-22 + Phase 49 PAY-05 / BLOCKER #1):
     4. yookassa_get_payment_succeeded     — GET /payments/{id} → 200 succeeded
     5. yookassa_create_refund_success     — POST /refunds → 200 succeeded
     6. yookassa_webhook_payload           — NOT a respx route — plain dict (Phase 50 webhook tests)
-    7. yookassa_create_payment_qr_success — POST /payments → 200 pending + confirmation_data (Phase 49 PAY-05)
-    8. yookassa_create_payment_qr_422     — POST /payments → 422 validation error (QR branch, Phase 49 PAY-05)
-    9. yookassa_get_payment_qr_pending    — GET /payments/{id} → 200 QR-style pending (BLOCKER #1 re-fetch)
+    7. yookassa_create_payment_qr_success — POST /payments → 200 + confirmation_data (PAY-05)
+    8. yookassa_create_payment_qr_422     — POST /payments → 422 (QR branch, PAY-05)
+    9. yookassa_get_payment_qr_pending    — GET /payments/{id} → 200 QR-style (BLOCKER #1)
 """
 from __future__ import annotations
 

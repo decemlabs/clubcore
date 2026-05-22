@@ -37,10 +37,12 @@ Divergences from the email adapter pattern:
   redirect URL contract in one place (settings) and prevents per-callsite
   drift.
 
-Idempotency contract (D-48-11): caller-owned ``idempotency_key: UUID``.
-The adapter MUST NOT generate the key — the Phase 49 orchestrator persists
-the key in ``online_payments`` BEFORE the HTTP call so ARQ retries replay
-the same key (Pitfall 2 prevention).
+Idempotency contract (D-48-11 + Phase 49 D-49-08 widening): caller-owned
+``idempotency_key: UUID | str``. UUID form is the Phase 48 default; sha256
+hex string form is the Phase 49 deterministic-key shape. The adapter MUST
+NOT generate the key — the Phase 49 orchestrator persists the key in
+``online_payments`` BEFORE the HTTP call so ARQ retries replay the same
+key (Pitfall 2 prevention).
 
 Layer invariant: lives at ``integrations`` layer and MUST NOT import any
 module under the per-domain modules package (importlinter contract
@@ -136,24 +138,44 @@ class YooKassaClient:
         description: str,
         receipt_items: list[dict[str, Any]],
         customer_email: str,
-        idempotency_key: UUID,
+        idempotency_key: UUID | str,
+        confirmation_type: Literal["redirect", "qr"] = "redirect",
         metadata: dict[str, str] | None = None,
     ) -> YooKassaPaymentResult:
-        """POST /v3/payments — caller-owned idempotency_key (D-48-11).
+        """POST /v3/payments — caller-owned idempotency_key (D-48-11 + D-49-08).
 
-        Auto-injects ``confirmation.return_url`` from
-        ``settings.return_url`` (Claude's Discretion). The
-        ``Idempotence-Key`` header (ONE 't' — D-48-12) is set on every call.
+        ``confirmation_type`` (Phase 49 PAY-05) selects the confirmation
+        method ЮKassa returns: ``'redirect'`` (default — adapter auto-injects
+        ``return_url`` from settings, Claude's Discretion) or ``'qr'``
+        (provider returns ``confirmation.confirmation_data`` instead of
+        ``confirmation_url``).
+
+        ``idempotency_key`` is ``UUID`` (Phase 48 default) or ``str`` (Phase
+        49 sha256 hex shape, D-49-08). The ``Idempotence-Key`` header (ONE
+        't' — D-48-12) carries the value verbatim — ЮKassa accepts any
+        opaque ASCII string. For string keys the returned
+        ``result.idempotency_key`` is ``None`` (the typed dataclass field
+        is ``UUID | None``); the caller already owns the key.
+
         Returns ``YooKassaPaymentResult`` — never re-raises (SC1).
         """
+        # Preserved key for echo into the result dataclass (UUID-typed only).
+        result_idempotency_key: UUID | None = (
+            idempotency_key if isinstance(idempotency_key, UUID) else None
+        )
+        confirmation_body: dict[str, Any]
+        if confirmation_type == "redirect":
+            confirmation_body = {
+                "type": "redirect",
+                "return_url": str(self._settings.return_url),
+            }
+        else:  # "qr"
+            confirmation_body = {"type": "qr"}
         body: dict[str, Any] = {
             "amount": {"value": kopecks_to_yookassa(amount_kopecks), "currency": "RUB"},
             "description": description,
             "capture": True,
-            "confirmation": {
-                "type": "redirect",
-                "return_url": str(self._settings.return_url),
-            },
+            "confirmation": confirmation_body,
             "receipt": {
                 "customer": {"email": customer_email},
                 "items": receipt_items,
@@ -163,6 +185,9 @@ class YooKassaClient:
         if metadata:
             body["metadata"] = metadata
         try:
+            # idempotency_key may be a UUID (Phase 48 callsite) or a sha256 hex
+            # string (Phase 49 D-49-08 deterministic key). ЮKassa Idempotence-Key
+            # accepts any opaque ASCII string — both forms are wire-compatible.
             response = await self._http.post(
                 "payments",
                 json=body,
@@ -171,6 +196,9 @@ class YooKassaClient:
             response.raise_for_status()
             payload = response.json()
             confirmation = payload.get("confirmation") or {}
+            qr_payload: str | None = None
+            if confirmation_type == "qr":
+                qr_payload = confirmation.get("confirmation_data")
             _log.info(
                 "yookassa_create_payment_ok",
                 payment_id=payload["id"],
@@ -183,7 +211,8 @@ class YooKassaClient:
                 status=payload["status"],
                 confirmation_url=confirmation.get("confirmation_url"),
                 amount_kopecks=yookassa_to_kopecks(payload["amount"]["value"]),
-                idempotency_key=idempotency_key,
+                idempotency_key=result_idempotency_key,
+                qr_payload=qr_payload,
             )
         except httpx.HTTPStatusError as exc:
             classification, status, error_code = self._classify_http_status_error(exc)
@@ -197,7 +226,7 @@ class YooKassaClient:
                 classification=classification,
                 http_status=status,
                 error_code=error_code,
-                idempotency_key=idempotency_key,
+                idempotency_key=result_idempotency_key,
                 error=str(exc),
             )
         except (httpx.TimeoutException, httpx.RequestError) as exc:
@@ -208,7 +237,7 @@ class YooKassaClient:
             return YooKassaPaymentResult(
                 ok=False,
                 classification="transient_error",
-                idempotency_key=idempotency_key,
+                idempotency_key=result_idempotency_key,
                 error=str(exc),
             )
         except json.JSONDecodeError as exc:
@@ -219,7 +248,7 @@ class YooKassaClient:
             return YooKassaPaymentResult(
                 ok=False,
                 classification="permanent_error",
-                idempotency_key=idempotency_key,
+                idempotency_key=result_idempotency_key,
                 error=str(exc),
             )
         except Exception as exc:  # outbound boundary — classify all transport failures
@@ -230,7 +259,7 @@ class YooKassaClient:
             return YooKassaPaymentResult(
                 ok=False,
                 classification="transient_error",
-                idempotency_key=idempotency_key,
+                idempotency_key=result_idempotency_key,
                 error=str(exc),
             )
 
@@ -245,6 +274,15 @@ class YooKassaClient:
             response.raise_for_status()
             payload = response.json()
             confirmation = payload.get("confirmation") or {}
+            # BLOCKER #1 (Phase 49 D-49-04 + D-49-09): re-fetch path for QR-style
+            # payments must surface the upstream confirmation_data so the
+            # service-layer QR-replay returns a SellResponse that satisfies
+            # the Pydantic XOR validator. The row stores no qr_payload — ЮKassa
+            # server-side dedup returns the original payment object with the
+            # current confirmation_data on every GET /payments/{id}.
+            qr_payload: str | None = None
+            if confirmation.get("type") == "qr":
+                qr_payload = confirmation.get("confirmation_data")
             _log.info(
                 "yookassa_get_payment_ok",
                 payment_id=payload["id"],
@@ -258,6 +296,7 @@ class YooKassaClient:
                 confirmation_url=confirmation.get("confirmation_url"),
                 amount_kopecks=yookassa_to_kopecks(payload["amount"]["value"]),
                 idempotency_key=None,
+                qr_payload=qr_payload,
             )
         except httpx.HTTPStatusError as exc:
             classification, status, error_code = self._classify_http_status_error(exc)
