@@ -22,6 +22,8 @@ type only.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from pydantic import HttpUrl, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -48,3 +50,20 @@ class YooKassaSettings(BaseSettings):
     tax_system_code: int
     default_vat_code: int
     sandbox: bool = False
+
+
+@lru_cache(maxsize=1)
+def get_yookassa_settings() -> YooKassaSettings:
+    """Process-scoped YooKassaSettings factory (Phase 49 BLOCKER #5 / D-49-14).
+
+    pydantic-settings reads ``.env`` on instantiation; ``@lru_cache`` ensures
+    the FastAPI ``Depends(get_yookassa_settings)`` callsite (Plan 49-04 router)
+    receives the same instance on every request. Mirrors the module-level
+    ``_settings: Final[YooKassaSettings] = YooKassaSettings()`` pattern used
+    by ``app/integrations/yookassa/webhook_verifier.py:60``.
+
+    NOT a substitute for the composition-root instantiation in
+    ``app.main.create_app`` (lifespan-managed for shared http client). Use
+    this factory ONLY where a stateless ``Depends(...)`` target is needed.
+    """
+    return YooKassaSettings()
