@@ -261,8 +261,10 @@ class WorkerSettings:
         from app.integrations.email.factory import build_email_client
         from app.integrations.yookassa._stubs import (
             fiscal_receipt_dispatcher_noop_stub,
-            yookassa_client_provider_noop_stub,
         )
+        from app.integrations.yookassa.client import YooKassaClient
+        from app.integrations.yookassa.factory import build_yookassa_client
+        from app.integrations.yookassa.settings import YooKassaSettings
 
         settings_local = _get_settings_local()
 
@@ -273,15 +275,20 @@ class WorkerSettings:
 
         register_email_dispatcher(enqueue_email_dispatch)
 
-        # Phase 47 INFRA-38 / D-47-01 — REG-29-03 double-wire: the IDENTICAL
-        # no-op stub objects passed here are also wired in
-        # app/main.py:create_app() so the Phase 47 parity test (plan 47-04)
-        # sees byte-equal callables in both processes (mirrors the v1.6
-        # EmailDispatcher precedent above). MembershipActivator +
-        # PtPackageActivator are HTTP-only single-wire — NOT registered here.
-        # Real implementations land in Phase 48 (YooKassaClient) / Phase 50
-        # (FiscalReceiptDispatcher).
-        register_yookassa_client_provider(yookassa_client_provider_noop_stub)
+        # Phase 48 D-48-25 — REG-29-03 mirror of main.py: construct the
+        # YooKassaClient inside on_startup so the worker process owns its
+        # own httpx.AsyncClient. The parity test (Plan 48-07) now asserts
+        # "real wiring in both processes" rather than object identity.
+        yookassa_settings = YooKassaSettings()
+        ctx["yookassa_client"] = await build_yookassa_client(settings=yookassa_settings)
+
+        async def _yookassa_client_provider() -> YooKassaClient:
+            client: YooKassaClient = ctx["yookassa_client"]
+            return client
+
+        register_yookassa_client_provider(_yookassa_client_provider)
+
+        # Phase 47 D-48-26 — fiscal dispatcher stays no-op until Phase 50.
         register_fiscal_receipt_dispatcher(fiscal_receipt_dispatcher_noop_stub)
 
         # ARQ 0.28 exposes the in-worker ArqRedis pool to job bodies via
@@ -295,7 +302,19 @@ class WorkerSettings:
 
     @staticmethod
     async def on_shutdown(ctx: dict[str, Any]) -> None:
-        """Close the AsyncExitStack stored in ctx — disposes engine + sessionmaker."""
+        """Close YooKassaClient (Phase 48 D-48-25) + DB AsyncExitStack.
+
+        Closes the long-lived httpx.AsyncClient owned by the worker's
+        YooKassaClient BEFORE the DB stack so the event loop is still
+        healthy when httpx drains in-flight requests. Then disposes the
+        SQLAlchemy engine + sessionmaker via the AsyncExitStack stored in
+        ctx.
+        """
+        # Phase 48 D-48-25 — close the long-lived httpx client cleanly.
+        yookassa_client = ctx.get("yookassa_client")
+        if yookassa_client is not None:
+            await yookassa_client.aclose()
+
         stack: AsyncExitStack | None = ctx.get("_db_stack")
         if stack is not None:
             await stack.aclose()
