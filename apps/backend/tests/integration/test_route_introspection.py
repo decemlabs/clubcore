@@ -38,6 +38,16 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         # MUST stay this way — adding any DB lookup or query-param branching
         # re-introduces the oracle that Plan 49-05 was designed to eliminate.
         "/api/v1/online-payments/return",
+        # Phase 50 D-50-39 / D-50-40 — WH-01 anonymous-by-design ЮKassa webhook
+        # intake. The route declares ``dependencies=[Depends(verify_yookassa_ip)]``
+        # at the decorator level (D-50-04, B-1 AST gate) — IP allowlist is the
+        # ONLY auth, NOT a require_permission/require_authenticated gate, so
+        # this introspection-based test cannot see it. The EXCLUDED_PREFIXES
+        # tuple "/api/v1/_internal/" below already excludes this route at
+        # runtime; the explicit enumeration here is the audit-trail diff
+        # (D-19 — diff-to-the-set is the deliberate-decision marker, mirror
+        # of the Phase 49 ``/api/v1/online-payments/return`` precedent above).
+        "/api/v1/_internal/yookassa/webhook",
         # FastAPI built-ins:
         "/openapi.json",
         "/docs",
