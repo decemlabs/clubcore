@@ -34,7 +34,8 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Annotated, Literal
+from collections.abc import Awaitable, Callable
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -69,18 +70,12 @@ from app.modules.online_payments.schemas import SellRequest, SellResponse
 router = APIRouter()
 
 
-async def _run_sell_with_outer_idempotency(
+async def _outer_idempotency_replay_or_run(
     *,
     request: Request,
     idempotency_key: str,
     redis: Redis,
-    session: AsyncSession,
-    actor: CurrentUser,
-    plan_id: UUID,
-    payload: SellRequest,
-    subject_kind: Literal["membership", "pt_package"],
-    confirmation_type: Literal["redirect", "qr"],
-    yookassa_settings: YooKassaSettings,
+    runner: Callable[[], Awaitable[SellResponse]],
 ) -> Response:
     """Outer-layer (HTTP) Idempotency-Key replay dance (D-49-16).
 
@@ -95,9 +90,8 @@ async def _run_sell_with_outer_idempotency(
     Step 2: ``SET NX`` claims the key with a placeholder; first caller wins.
     Step 3: if NOT first, replay the cached envelope OR raise
             ``idempotency_in_flight`` / ``idempotency_key_reuse``.
-    Step 4: run the service, build the response envelope, cache it for
-            ``IDEMPOTENCY_TTL_SECONDS`` so subsequent identical-body retries
-            replay verbatim.
+    Step 4: invoke ``runner`` (the per-endpoint service call), build the
+            response envelope, and cache it for ``IDEMPOTENCY_TTL_SECONDS``.
     """
     incoming_body = await request.body()
     incoming_hash = body_sha256(incoming_body)
@@ -116,24 +110,7 @@ async def _run_sell_with_outer_idempotency(
             media_type="application/json",
         )
 
-    if subject_kind == "membership":
-        sell_response = await service.sell_membership(
-            session,
-            plan_id=plan_id,
-            client_id=payload.client_id,
-            confirmation_type=confirmation_type,
-            actor=actor,
-            yookassa_settings=yookassa_settings,
-        )
-    else:
-        sell_response = await service.sell_pt_package(
-            session,
-            plan_id=plan_id,
-            client_id=payload.client_id,
-            confirmation_type=confirmation_type,
-            actor=actor,
-            yookassa_settings=yookassa_settings,
-        )
+    sell_response = await runner()
 
     response_envelope = envelope(sell_response)
     body_bytes = json.dumps(
@@ -199,17 +176,22 @@ async def sell_membership_redirect(
     422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,
     502 ``yookassa_permanent_error``.
     """
-    return await _run_sell_with_outer_idempotency(
+
+    async def _runner() -> SellResponse:
+        return await service.sell_membership(
+            session,
+            plan_id=plan_id,
+            client_id=payload.client_id,
+            confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+            actor=actor,
+            yookassa_settings=yookassa_settings,
+        )
+
+    return await _outer_idempotency_replay_or_run(
         request=request,
         idempotency_key=idempotency_key,
         redis=redis,
-        session=session,
-        actor=actor,
-        plan_id=plan_id,
-        payload=payload,
-        subject_kind="membership",
-        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
-        yookassa_settings=yookassa_settings,
+        runner=_runner,
     )
 
 
@@ -243,17 +225,22 @@ async def sell_membership_qr(
     upstream so the second click also receives a valid ``qr_payload``
     (D-49-09 + Plan 49-03 BLOCKER #1).
     """
-    return await _run_sell_with_outer_idempotency(
+
+    async def _runner() -> SellResponse:
+        return await service.sell_membership(
+            session,
+            plan_id=plan_id,
+            client_id=payload.client_id,
+            confirmation_type=CONFIRMATION_TYPE_QR,
+            actor=actor,
+            yookassa_settings=yookassa_settings,
+        )
+
+    return await _outer_idempotency_replay_or_run(
         request=request,
         idempotency_key=idempotency_key,
         redis=redis,
-        session=session,
-        actor=actor,
-        plan_id=plan_id,
-        payload=payload,
-        subject_kind="membership",
-        confirmation_type=CONFIRMATION_TYPE_QR,
-        yookassa_settings=yookassa_settings,
+        runner=_runner,
     )
 
 
@@ -284,17 +271,22 @@ async def sell_pt_package_redirect(
     yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
 ) -> Response:
     """PAY-04 — PT-package redirect flow. Same shape as membership variant."""
-    return await _run_sell_with_outer_idempotency(
+
+    async def _runner() -> SellResponse:
+        return await service.sell_pt_package(
+            session,
+            plan_id=plan_id,
+            client_id=payload.client_id,
+            confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+            actor=actor,
+            yookassa_settings=yookassa_settings,
+        )
+
+    return await _outer_idempotency_replay_or_run(
         request=request,
         idempotency_key=idempotency_key,
         redis=redis,
-        session=session,
-        actor=actor,
-        plan_id=plan_id,
-        payload=payload,
-        subject_kind="pt_package",
-        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
-        yookassa_settings=yookassa_settings,
+        runner=_runner,
     )
 
 
@@ -322,15 +314,20 @@ async def sell_pt_package_qr(
     yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
 ) -> Response:
     """PAY-05 — PT-package QR flow. Same shape as membership QR variant."""
-    return await _run_sell_with_outer_idempotency(
+
+    async def _runner() -> SellResponse:
+        return await service.sell_pt_package(
+            session,
+            plan_id=plan_id,
+            client_id=payload.client_id,
+            confirmation_type=CONFIRMATION_TYPE_QR,
+            actor=actor,
+            yookassa_settings=yookassa_settings,
+        )
+
+    return await _outer_idempotency_replay_or_run(
         request=request,
         idempotency_key=idempotency_key,
         redis=redis,
-        session=session,
-        actor=actor,
-        plan_id=plan_id,
-        payload=payload,
-        subject_kind="pt_package",
-        confirmation_type=CONFIRMATION_TYPE_QR,
-        yookassa_settings=yookassa_settings,
+        runner=_runner,
     )
