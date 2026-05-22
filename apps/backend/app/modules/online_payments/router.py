@@ -1,0 +1,336 @@
+"""Online payments router (Phase 49 PAY-03..06 / D-49-14, D-49-25).
+
+Four POST sell endpoints (membership x {redirect, qr}, pt-package x
+{redirect, qr}) mounted under ``/api/v1/online-payments/*``. Plan 49-05
+appends the anonymous ``GET /return`` handler (separate file section to keep
+the threat-model surface bounded — D-49-26).
+
+RBAC-04 ordering (D-49-25 — enforced statically by
+``tests/integration/test_route_introspection.py``):
+``Depends(require_permission(...))`` → ``Depends(verify_csrf)`` →
+``Depends(verify_idempotency)``. The 401→403→422 invariant is preserved by
+FastAPI's signature-order dependency resolution.
+
+Two-layer idempotency model (D-49-16):
+- Outer (this router): operator-supplied ``Idempotency-Key`` header,
+  validated + Redis-deduped via ``app.core.idempotency`` (5-second window
+  via TTL on the placeholder; full replay via the cached envelope).
+- Inner (service-layer): deterministic key derived from
+  ``(subject_kind, plan_id, client_id, today_iso)`` passed to ЮKassa as
+  ``Idempotence-Key`` header (D-49-08).
+
+Settings DI (BLOCKER #5 — Plan 49-02): ``Depends(get_yookassa_settings)``
+imports the ``@lru_cache(maxsize=1)`` factory shipped by Plan 49-02 at
+``app/integrations/yookassa/settings.py``. The factory is process-scoped
+and parallel to the lifespan-managed ``YooKassaSettings`` instantiated by
+``create_app()`` for the shared ``http_client``.
+
+Permission mapping (D-49-24 — both reception+owner; no new ``OWNER_ONLY``):
+- ``/memberships/*``  → ``require_permission(CREATE, MEMBERSHIPS)``
+- ``/pt-packages/*``  → ``require_permission(CREATE, PT_PACKAGES)``
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+from typing import Annotated, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Request, Response, status
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.dependencies import CurrentUser, require_permission, verify_csrf
+from app.core.exceptions import ConflictError, ValidationAppError
+from app.core.idempotency import (
+    IDEMPOTENCY_REDIS_PREFIX,
+    IDEMPOTENCY_TTL_SECONDS,
+    begin_idempotency,
+    body_sha256,
+    load_idempotency_response,
+    verify_idempotency,
+)
+from app.core.permissions import Action, Resource
+from app.core.redis import get_redis
+from app.core.schemas import ResponseEnvelope, envelope
+from app.integrations.yookassa.settings import (
+    YooKassaSettings,
+    get_yookassa_settings,
+)
+from app.modules.online_payments import service
+from app.modules.online_payments.constants import (
+    CONFIRMATION_TYPE_QR,
+    CONFIRMATION_TYPE_REDIRECT,
+)
+from app.modules.online_payments.schemas import SellRequest, SellResponse
+
+router = APIRouter()
+
+
+async def _run_sell_with_outer_idempotency(
+    *,
+    request: Request,
+    idempotency_key: str,
+    redis: Redis,
+    session: AsyncSession,
+    actor: CurrentUser,
+    plan_id: UUID,
+    payload: SellRequest,
+    subject_kind: Literal["membership", "pt_package"],
+    confirmation_type: Literal["redirect", "qr"],
+    yookassa_settings: YooKassaSettings,
+) -> Response:
+    """Outer-layer (HTTP) Idempotency-Key replay dance (D-49-16).
+
+    Mirrors ``app.modules.memberships.router.create_membership:301-373`` —
+    the canonical Sportzal two-phase Redis claim + envelope replay used by
+    every POST mutation that accepts an operator-supplied ``Idempotency-Key``
+    header. The inner ЮKassa-side idempotency layer is the deterministic key
+    derived by the service (D-49-08) — independent of this outer layer.
+
+    Step 1: read the incoming body bytes (cached by Starlette) and hash for
+            collision detection on replay.
+    Step 2: ``SET NX`` claims the key with a placeholder; first caller wins.
+    Step 3: if NOT first, replay the cached envelope OR raise
+            ``idempotency_in_flight`` / ``idempotency_key_reuse``.
+    Step 4: run the service, build the response envelope, cache it for
+            ``IDEMPOTENCY_TTL_SECONDS`` so subsequent identical-body retries
+            replay verbatim.
+    """
+    incoming_body = await request.body()
+    incoming_hash = body_sha256(incoming_body)
+
+    is_first = await begin_idempotency(redis, idempotency_key)
+    if not is_first:
+        stored = await load_idempotency_response(redis, idempotency_key)
+        if stored is None or isinstance(stored, str):
+            # placeholder still set OR entry evicted while we lost the race
+            raise ConflictError("idempotency_in_flight")
+        if stored["body_hash"] != incoming_hash:
+            raise ValidationAppError("idempotency_key_reuse")
+        return Response(
+            content=base64.b64decode(stored["body_b64"]),
+            status_code=stored["status_code"],
+            media_type="application/json",
+        )
+
+    if subject_kind == "membership":
+        sell_response = await service.sell_membership(
+            session,
+            plan_id=plan_id,
+            client_id=payload.client_id,
+            confirmation_type=confirmation_type,
+            actor=actor,
+            yookassa_settings=yookassa_settings,
+        )
+    else:
+        sell_response = await service.sell_pt_package(
+            session,
+            plan_id=plan_id,
+            client_id=payload.client_id,
+            confirmation_type=confirmation_type,
+            actor=actor,
+            yookassa_settings=yookassa_settings,
+        )
+
+    response_envelope = envelope(sell_response)
+    body_bytes = json.dumps(
+        response_envelope.model_dump(mode="json", by_alias=True),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    # Replay envelope: body_hash is the REQUEST body hash (collision detect);
+    # body_b64 is the RESPONSE body bytes (replayed verbatim on matching-body
+    # retry). Same shape as memberships/router.py:355-368.
+    envelope_json = json.dumps(
+        {
+            "status_code": status.HTTP_201_CREATED,
+            "body_hash": incoming_hash,
+            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    await redis.set(
+        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
+        envelope_json,
+        ex=IDEMPOTENCY_TTL_SECONDS,
+    )
+    return Response(
+        content=body_bytes,
+        status_code=status.HTTP_201_CREATED,
+        media_type="application/json",
+    )
+
+
+# ─── Membership sell endpoints ──────────────────────────────────────────────
+
+
+@router.post(
+    "/memberships/{plan_id}/sell",
+    response_model=ResponseEnvelope[SellResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary=(
+        "Sell a membership online (redirect flow); reception+owner; "
+        "CSRF + Idempotency-Key required"
+    ),
+)
+async def sell_membership_redirect(
+    plan_id: UUID,
+    payload: SellRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
+) -> Response:
+    """PAY-03 — membership redirect flow.
+
+    Returns 201 + ``ResponseEnvelope[SellResponse]`` with
+    ``confirmation_url`` populated and ``qr_payload`` NULL on success.
+    Error mapping (service layer): 422 ``client_email_required_for_online_payment``,
+    422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,
+    502 ``yookassa_permanent_error``.
+    """
+    return await _run_sell_with_outer_idempotency(
+        request=request,
+        idempotency_key=idempotency_key,
+        redis=redis,
+        session=session,
+        actor=actor,
+        plan_id=plan_id,
+        payload=payload,
+        subject_kind="membership",
+        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+        yookassa_settings=yookassa_settings,
+    )
+
+
+@router.post(
+    "/memberships/{plan_id}/sell-qr",
+    response_model=ResponseEnvelope[SellResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary=(
+        "Sell a membership online (QR flow); reception+owner; "
+        "CSRF + Idempotency-Key required"
+    ),
+)
+async def sell_membership_qr(
+    plan_id: UUID,
+    payload: SellRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
+) -> Response:
+    """PAY-05 — membership QR flow.
+
+    Returns 201 + ``ResponseEnvelope[SellResponse]`` with ``qr_payload``
+    populated and ``confirmation_url`` NULL on success. QR replays re-fetch
+    upstream so the second click also receives a valid ``qr_payload``
+    (D-49-09 + Plan 49-03 BLOCKER #1).
+    """
+    return await _run_sell_with_outer_idempotency(
+        request=request,
+        idempotency_key=idempotency_key,
+        redis=redis,
+        session=session,
+        actor=actor,
+        plan_id=plan_id,
+        payload=payload,
+        subject_kind="membership",
+        confirmation_type=CONFIRMATION_TYPE_QR,
+        yookassa_settings=yookassa_settings,
+    )
+
+
+# ─── PT-package sell endpoints ──────────────────────────────────────────────
+
+
+@router.post(
+    "/pt-packages/{plan_id}/sell",
+    response_model=ResponseEnvelope[SellResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary=(
+        "Sell a PT-package online (redirect flow); reception+owner; "
+        "CSRF + Idempotency-Key required"
+    ),
+)
+async def sell_pt_package_redirect(
+    plan_id: UUID,
+    payload: SellRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.PT_PACKAGES)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
+) -> Response:
+    """PAY-04 — PT-package redirect flow. Same shape as membership variant."""
+    return await _run_sell_with_outer_idempotency(
+        request=request,
+        idempotency_key=idempotency_key,
+        redis=redis,
+        session=session,
+        actor=actor,
+        plan_id=plan_id,
+        payload=payload,
+        subject_kind="pt_package",
+        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+        yookassa_settings=yookassa_settings,
+    )
+
+
+@router.post(
+    "/pt-packages/{plan_id}/sell-qr",
+    response_model=ResponseEnvelope[SellResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary=(
+        "Sell a PT-package online (QR flow); reception+owner; "
+        "CSRF + Idempotency-Key required"
+    ),
+)
+async def sell_pt_package_qr(
+    plan_id: UUID,
+    payload: SellRequest,
+    request: Request,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.CREATE, Resource.PT_PACKAGES)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
+) -> Response:
+    """PAY-05 — PT-package QR flow. Same shape as membership QR variant."""
+    return await _run_sell_with_outer_idempotency(
+        request=request,
+        idempotency_key=idempotency_key,
+        redis=redis,
+        session=session,
+        actor=actor,
+        plan_id=plan_id,
+        payload=payload,
+        subject_kind="pt_package",
+        confirmation_type=CONFIRMATION_TYPE_QR,
+        yookassa_settings=yookassa_settings,
+    )

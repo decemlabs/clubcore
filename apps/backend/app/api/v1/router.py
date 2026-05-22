@@ -17,6 +17,7 @@ from app.modules.memberships.router import (
 from app.modules.memberships.router import (
     router as plans_router,
 )
+from app.modules.online_payments.router import router as online_payments_router
 from app.modules.payments.router import router as payments_router
 from app.modules.pt_packages.router import (
     plans_router as pt_package_plans_router,
@@ -40,6 +41,11 @@ v1.include_router(auth_router, prefix="/auth", tags=["auth"])
 v1.include_router(clients_router, prefix="/clients", tags=["clients"])
 v1.include_router(plans_router, prefix="/membership-plans", tags=["membership-plans"])
 v1.include_router(memberships_router, prefix="/memberships", tags=["memberships"])
+v1.include_router(
+    online_payments_router,
+    prefix="/online-payments",
+    tags=["online-payments"],
+)
 v1.include_router(payments_router, prefix="/payments", tags=["payments"])
 v1.include_router(
     pt_package_plans_router,
