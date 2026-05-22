@@ -8,7 +8,9 @@ app/modules/payments/constants.py lineage).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from types import MappingProxyType
 
 
 class ErrorCode(StrEnum):
@@ -39,11 +41,27 @@ SUBJECT_KIND_VALUES: tuple[str, ...] = (
     SUBJECT_KIND_PT_PACKAGE,
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 50 D-50-15 / WH-04 — Declarative FSM transitions for online_payments.
+# Byte-for-byte mirror of MEMBERSHIP_STATUS_TRANSITIONS (Phase 16 / Phase 24)
+# consumed by app/api/v1/_internal/yookassa/handlers.py:_assert_can_transition
+# (D-50-16). Terminal states are explicit (empty frozenset) so the guard
+# rejects re-transitions of finalised rows.
+# ─────────────────────────────────────────────────────────────────────────────
+ONLINE_PAYMENT_STATUS_TRANSITIONS: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        STATUS_PENDING: frozenset({STATUS_SUCCEEDED, STATUS_CANCELED}),
+        STATUS_SUCCEEDED: frozenset(),  # terminal
+        STATUS_CANCELED: frozenset(),  # terminal
+    }
+)
+
 
 __all__ = (
     "CONFIRMATION_TYPE_QR",
     "CONFIRMATION_TYPE_REDIRECT",
     "CONFIRMATION_TYPE_VALUES",
+    "ONLINE_PAYMENT_STATUS_TRANSITIONS",
     "STATUS_CANCELED",
     "STATUS_PENDING",
     "STATUS_SUCCEEDED",
