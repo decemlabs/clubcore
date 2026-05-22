@@ -82,8 +82,10 @@ from app.integrations.yookassa._stubs import (
     fiscal_receipt_dispatcher_noop_stub,
     membership_activator_noop_stub,
     pt_package_activator_noop_stub,
-    yookassa_client_provider_noop_stub,
 )
+from app.integrations.yookassa.client import YooKassaClient
+from app.integrations.yookassa.factory import build_yookassa_client
+from app.integrations.yookassa.settings import YooKassaSettings
 from app.modules.auth.service import (
     invalidate_all_families_for_user,
     load_user_by_id,
@@ -111,14 +113,31 @@ async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
     ``create_app`` so the REG-29-03 parity test sees a literal identical
     symbol reference in both processes — the per-process pool is a
     separate concern.
+
+    Phase 48 D-48-25 — YooKassaClient slot:
+        The long-lived httpx.AsyncClient inside YooKassaClient (D-48-06)
+        is created HERE so the FastAPI lifespan teardown can close it via
+        ``client.aclose()``. The provider closure registered in create_app()
+        reads ``app.state.yookassa_client`` lazily, mirroring the
+        ``set_auth_redis_factory(lambda: app.state.redis)`` pattern
+        established at Phase 43 D-43-26. The worker process owns its own
+        client instance (REG-29-03 mirror in app/workers/__init__.py); the
+        parity test (Plan 48-07 Task 3) now asserts STRUCTURAL parity
+        between the two composition roots rather than byte-equal object
+        identity (each process owns its own httpx pool).
     """
     async with db_lifespan(app), redis_lifespan(app):
         settings = get_settings()
         arq_pool = await create_pool(RedisSettings.from_dsn(str(settings.redis_url)))
         register_arq_pool(arq_pool)
+        # Phase 48 D-48-25 — construct the long-lived YooKassaClient.
+        yookassa_settings = YooKassaSettings()
+        app.state.yookassa_client = await build_yookassa_client(settings=yookassa_settings)
         try:
             yield
         finally:
+            # Reverse-order teardown — yookassa client first, then arq pool.
+            await app.state.yookassa_client.aclose()
             await arq_pool.aclose()
 
 
@@ -281,16 +300,28 @@ def create_app() -> FastAPI:
 
     # Phase 47 INFRA-38 / D-47-01 — v1.7 ЮKassa + fiscal + activator slots.
     # YooKassaClientProvider + FiscalReceiptDispatcher are REG-29-03 double-wired
-    # (same byte-equal stub object registered in
-    # app/workers/__init__.py:WorkerSettings.on_startup so the parity test in
-    # tests/unit/test_yookassa_protocol_slot_parity.py sees identical refs in
-    # both processes — mirrors the v1.6 EmailDispatcher precedent).
-    # MembershipActivator + PtPackageActivator are HTTP-only single-wire
-    # (D-47-02 — webhook handler runs in an HTTP request session; no ARQ
-    # entry path). Phase 47 wires no-op stubs (D-47-01 Option A) — the real
-    # implementations land in Phase 48 (YooKassaClient) and Phase 50
-    # (activators + fiscal dispatcher).
-    register_yookassa_client_provider(yookassa_client_provider_noop_stub)
+    # (the worker registers a parallel provider in
+    # app/workers/__init__.py:WorkerSettings.on_startup). MembershipActivator +
+    # PtPackageActivator are HTTP-only single-wire (D-47-02 — webhook handler
+    # runs in an HTTP request session; no ARQ entry path).
+    #
+    # Phase 48 D-48-25 swaps the YooKassaClientProvider stub for the real
+    # client; the other three stubs stay no-op (D-48-26) — wired in Phase 49
+    # (activators) and Phase 50 (fiscal dispatcher).
+    #
+    # Phase 48 D-48-25 — YooKassaClientProvider swap.
+    # The closure resolves the client lazily from app.state (populated by
+    # combined_lifespan above). Mirrors set_auth_redis_factory(lambda: app.state.redis)
+    # at Phase 43 D-43-26. NOT the same byte-equal symbol reference as the worker's
+    # closure (each process owns its own httpx.AsyncClient instance) — the parity
+    # test (Plan 48-07 update) now asserts "real wiring in both processes",
+    # not object identity.
+    async def _yookassa_client_provider() -> YooKassaClient:
+        return app.state.yookassa_client  # type: ignore[no-any-return]
+
+    register_yookassa_client_provider(_yookassa_client_provider)
+
+    # Phase 47 wiring preserved (D-48-26 — only YooKassaClientProvider swaps in Phase 48).
     register_fiscal_receipt_dispatcher(fiscal_receipt_dispatcher_noop_stub)
     register_membership_activator(membership_activator_noop_stub)
     register_pt_package_activator(pt_package_activator_noop_stub)

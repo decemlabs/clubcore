@@ -11,18 +11,35 @@ function patches the worker's heavy on_startup steps and replaces them with
 direct calls to the two Phase 47 register_* lines. The byte-equal-parity
 assertion still holds because the SAME stub objects are imported from
 ``app.integrations.yookassa._stubs`` in both processes.
+
+Phase 48 D-48-25 — YooKassaClientProvider parity is RELAXED from
+object-identity to structural (each process owns its own httpx.AsyncClient
+closure, so the closures cannot be the same object). The parity check is
+now: both sites import the real ``build_yookassa_client`` factory AND both
+sites register a closure named ``_yookassa_client_provider`` (NOT
+``yookassa_client_provider_noop_stub``). The other 3 stubs
+(FiscalReceiptDispatcher, MembershipActivator, PtPackageActivator) retain
+Phase 47 byte-equal parity per D-48-26.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import app.core.dependencies as deps
 from app.integrations.yookassa._stubs import (
     fiscal_receipt_dispatcher_noop_stub,
     membership_activator_noop_stub,
     pt_package_activator_noop_stub,
-    yookassa_client_provider_noop_stub,
 )
 from app.main import create_app
+
+# Resolve source files relative to this test module so pytest cwd does not
+# matter (project convention is `cd apps/backend && uv run pytest`, but the
+# Path is computed from __file__ to stay robust).
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_MAIN_PY = _BACKEND_ROOT / "app" / "main.py"
+_WORKERS_INIT_PY = _BACKEND_ROOT / "app" / "workers" / "__init__.py"
 
 
 def _reset_v17_slots() -> None:
@@ -34,41 +51,76 @@ def _reset_v17_slots() -> None:
 
 
 def _worker_register_double_wired_slots() -> None:
-    """Mirror of the 2 Phase 47 register_* lines in WorkerSettings.on_startup.
+    """Phase 48 D-48-25: structural parity replaces runtime byte-equal.
 
-    A unit test cannot call ``await WorkerSettings.on_startup({})`` directly
-    because that opens a real DB engine + Redis pool + email-client probe.
-    The parity contract we care about is byte-equal stub identity — the
-    stub symbols are imported from the SAME module
-    (``app.integrations.yookassa._stubs``) by both processes, so the
-    in-test invocation here is provably byte-equal to the worker-process
-    call (identical attribute lookup on the same module object).
+    Phase 47 simulated the worker by registering the no-op stub directly so the
+    parity test could assert ``provider is yookassa_client_provider_noop_stub``.
+    Phase 48 swaps to a real closure that reads from ``ctx["yookassa_client"]``
+    — driving that closure from a unit test would require a real httpx client.
+    Test B now validates the wiring STRUCTURALLY by reading
+    ``app/workers/__init__.py`` source instead. This helper only registers the
+    surviving Phase 47 byte-equal stub (fiscal_receipt_dispatcher) for Test C's
+    reference.
     """
-    from app.core.dependencies import (
-        register_fiscal_receipt_dispatcher,
-        register_yookassa_client_provider,
-    )
+    from app.core.dependencies import register_fiscal_receipt_dispatcher
     from app.integrations.yookassa import _stubs
 
-    register_yookassa_client_provider(_stubs.yookassa_client_provider_noop_stub)
     register_fiscal_receipt_dispatcher(_stubs.fiscal_receipt_dispatcher_noop_stub)
 
 
 def test_fastapi_create_app_wires_all_four_slots() -> None:
-    """Test A — create_app() registers all 4 slots with non-None values."""
+    """Test A — create_app() wires all 4 slots; Phase 48 swaps YooKassaClientProvider only.
+
+    D-48-25: structural source-grep check for the YooKassaClientProvider wiring
+    (each process owns its own httpx.AsyncClient closure — runtime byte-equal is
+    impossible). D-48-26: the other 3 stubs stay Phase-47 byte-equal — runtime
+    identity check preserved for fiscal / membership / pt_package.
+    """
     _reset_v17_slots()
     create_app()
-    assert deps.get_yookassa_client_provider() is yookassa_client_provider_noop_stub
+
+    # YooKassaClientProvider — STRUCTURAL check (Phase 48 D-48-25).
+    main_src = _MAIN_PY.read_text(encoding="utf-8")
+    assert "from app.integrations.yookassa.factory import build_yookassa_client" in main_src, (
+        "main.py must import build_yookassa_client (Phase 48 D-48-25)."
+    )
+    assert "register_yookassa_client_provider(_yookassa_client_provider)" in main_src, (
+        "main.py must register the lazy _yookassa_client_provider closure (D-48-25)."
+    )
+    _noop_main = "register_yookassa_client_provider(yookassa_client_provider_noop_stub)"
+    assert _noop_main not in main_src, (
+        "Phase 47 no-op stub registration MUST be removed from main.py (D-48-25)."
+    )
+
+    # Other 3 stubs — Phase 47 byte-equal preserved (D-48-26).
     assert deps.get_fiscal_receipt_dispatcher() is fiscal_receipt_dispatcher_noop_stub
     assert deps.get_membership_activator() is membership_activator_noop_stub
     assert deps.get_pt_package_activator() is pt_package_activator_noop_stub
 
 
 def test_arq_worker_startup_wires_double_wired_slots() -> None:
-    """Test B — worker on_startup registers the 2 double-wired slots."""
+    """Test B — worker on_startup wires the 2 double-wired slots.
+
+    D-48-25: structural source-grep check for the YooKassaClientProvider wiring
+    on the worker side. D-48-26: fiscal_receipt_dispatcher stays Phase-47 byte-equal.
+    """
     _reset_v17_slots()
-    _worker_register_double_wired_slots()
-    assert deps.get_yookassa_client_provider() is yookassa_client_provider_noop_stub
+    _worker_register_double_wired_slots()  # registers fiscal stub only (see helper)
+
+    # YooKassaClientProvider — STRUCTURAL check (Phase 48 D-48-25).
+    worker_src = _WORKERS_INIT_PY.read_text(encoding="utf-8")
+    assert "build_yookassa_client" in worker_src, (
+        "workers/__init__.py must import build_yookassa_client (D-48-25)."
+    )
+    assert "register_yookassa_client_provider(_yookassa_client_provider)" in worker_src, (
+        "workers/__init__.py must register the lazy _yookassa_client_provider closure (D-48-25)."
+    )
+    _noop_worker = "register_yookassa_client_provider(yookassa_client_provider_noop_stub)"
+    assert _noop_worker not in worker_src, (
+        "Phase 47 no-op stub registration MUST be removed from workers/__init__.py (D-48-25)."
+    )
+
+    # fiscal_receipt_dispatcher — Phase 47 byte-equal preserved (D-48-26).
     assert deps.get_fiscal_receipt_dispatcher() is fiscal_receipt_dispatcher_noop_stub
 
 
@@ -100,24 +152,54 @@ def test_arq_worker_does_not_wire_single_wired_slots() -> None:
 
 
 def test_byte_equal_parity_between_fastapi_and_worker() -> None:
-    """Test D — same stub object is registered by FastAPI and ARQ paths.
+    """Test D — Phase 48 D-48-25: closure-name parity + fiscal byte-equal preserved.
 
-    REG-29-03 byte-equal parity: the IDENTICAL ``yookassa_client_provider_noop_stub``
-    + ``fiscal_receipt_dispatcher_noop_stub`` module-level symbols are used in
-    both ``app/main.py:create_app()`` AND
-    ``app/workers/__init__.py:WorkerSettings.on_startup``. ``is`` identity
-    (not equality) confirms there is exactly one stub object per slot
-    shared across both wiring sites.
+    Phase 47 asserted ``provider is yookassa_client_provider_noop_stub`` for the
+    YooKassaClientProvider slot in BOTH processes. Phase 48 swaps to a per-process
+    closure (each process owns its own httpx.AsyncClient instance) — Python
+    object identity is now intentionally impossible.
+
+    Updated invariants:
+      - FastAPI side: after create_app(), deps._yookassa_client_provider is a
+        closure (not the no-op stub). Its ``__name__`` is ``_yookassa_client_provider``
+        — both composition roots (main.py + workers/__init__.py) name the closure
+        identically per Plan 48-07 Tasks 1 and 2.
+      - fiscal_receipt_dispatcher slot: Phase 47 byte-equal invariant preserved
+        (D-48-26 — fiscal dispatcher stays no-op until Phase 50).
     """
+    # FastAPI side — closure name parity for YooKassaClientProvider.
     _reset_v17_slots()
     create_app()
     fastapi_yookassa = deps._yookassa_client_provider
     fastapi_fiscal = deps._fiscal_receipt_dispatcher
 
+    assert fastapi_yookassa is not None, "create_app() must register YooKassaClientProvider"
+    assert callable(fastapi_yookassa), "registered provider must be callable"
+    assert getattr(fastapi_yookassa, "__name__", None) == "_yookassa_client_provider", (
+        "FastAPI side must register the closure named '_yookassa_client_provider' "
+        "(Phase 48 D-48-25 — main.py Task 1)."
+    )
+
+    # Worker side — same closure name (Plan 48-07 Task 2 enforces the literal name).
     _reset_v17_slots()
-    _worker_register_double_wired_slots()
-    worker_yookassa = deps._yookassa_client_provider
+    _worker_register_double_wired_slots()  # registers fiscal stub only
     worker_fiscal = deps._fiscal_receipt_dispatcher
 
-    assert fastapi_yookassa is worker_yookassa is yookassa_client_provider_noop_stub
-    assert fastapi_fiscal is worker_fiscal is fiscal_receipt_dispatcher_noop_stub
+    # fiscal_receipt_dispatcher — Phase 47 byte-equal preserved (D-48-26).
+    assert fastapi_fiscal is worker_fiscal is fiscal_receipt_dispatcher_noop_stub, (
+        "fiscal_receipt_dispatcher MUST stay Phase-47 byte-equal until Phase 50 swaps it."
+    )
+
+    # Closure-name invariant on the worker side — STRUCTURAL parity guard.
+    # We do not register the worker's real closure from this unit test (it would
+    # require driving a real httpx client). Instead we read the source and assert
+    # both sites name the closure identically.
+    main_src = _MAIN_PY.read_text(encoding="utf-8")
+    worker_src = _WORKERS_INIT_PY.read_text(encoding="utf-8")
+    assert "async def _yookassa_client_provider" in main_src, (
+        "main.py must define the closure as 'async def _yookassa_client_provider'."
+    )
+    assert "async def _yookassa_client_provider" in worker_src, (
+        "workers/__init__.py must define the closure with the SAME name "
+        "'_yookassa_client_provider' (Phase 48 D-48-25 closure-name parity)."
+    )
