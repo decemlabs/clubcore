@@ -77,7 +77,13 @@ async def build_yookassa_client(*, settings: YooKassaSettings) -> YooKassaClient
             password=settings.secret_key.get_secret_value(),
         ),
         timeout=httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0),
-        headers={"User-Agent": "Sportzal/1.7 ЮKassa-Adapter"},
+        # User-Agent must be ASCII-safe — httpx normalises header values via
+        # value.encode("ascii") (httpx._models._normalize_header_value).
+        # Cyrillic glyphs (e.g. "ЮKassa") raise UnicodeEncodeError at
+        # AsyncClient construction time. We keep the Latinised "YooKassa"
+        # form for the wire header; the docstring / log messages still use
+        # the original "ЮKassa" spelling.
+        headers={"User-Agent": "Sportzal/1.7 YooKassa-Adapter"},
     )
     # D-48-13: boot probe via GET /v3/me. D-48-15: single attempt, no retry.
     try:
