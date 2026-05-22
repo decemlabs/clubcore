@@ -27,6 +27,34 @@ from typing import Any
 import httpx
 import pytest
 import respx
+import structlog
+
+
+@pytest.fixture(autouse=True)
+def _reset_structlog_for_capture() -> Generator[None, None, None]:
+    """Phase 49 — restore default config + invalidate cached loggers.
+
+    ``app/core/logging.py:configure_logging`` (called from the FastAPI
+    lifespan that ``test_alembic_0034_online_payments.py`` triggers via the
+    ``db_session`` fixture) sets ``cache_logger_on_first_use=True``. After
+    that, ``app.integrations.yookassa.factory.logger`` (a module-level
+    ``BoundLoggerLazyProxy``) latches the production processor chain, which
+    bypasses ``structlog.testing.capture_logs()``. ``reset_defaults()``
+    alone is insufficient because the cached proxy is already bound;
+    re-importing the factory module re-binds the proxy to the now-default
+    (uncached) configuration so ``capture_logs()`` can intercept.
+    """
+    import importlib
+
+    structlog.reset_defaults()
+    try:
+        import app.integrations.yookassa.factory as _factory_mod
+
+        importlib.reload(_factory_mod)
+    except Exception:  # noqa: BLE001 — best-effort isolation, do not fail tests
+        pass
+    yield
+
 
 _RESPONSES_DIR: Path = Path(__file__).parent / "_responses"
 _YOOKASSA_BASE_URL: str = "https://api.yookassa.ru/v3/"
