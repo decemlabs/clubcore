@@ -259,9 +259,6 @@ class WorkerSettings:
             register_arq_pool,
         )
         from app.integrations.email.factory import build_email_client
-        from app.integrations.yookassa._stubs import (
-            fiscal_receipt_dispatcher_noop_stub,
-        )
         from app.integrations.yookassa.client import YooKassaClient
         from app.integrations.yookassa.factory import build_yookassa_client
         from app.integrations.yookassa.settings import YooKassaSettings
@@ -288,8 +285,12 @@ class WorkerSettings:
 
         register_yookassa_client_provider(_yookassa_client_provider)
 
-        # Phase 47 D-48-26 — fiscal dispatcher stays no-op until Phase 50.
-        register_fiscal_receipt_dispatcher(fiscal_receipt_dispatcher_noop_stub)
+        # Phase 49 D-49-22 — FiscalReceiptDispatcher Phase-49-only bridge stub
+        # (REG-29-03 double-wire mirror of app/main.py). Phase 50 FISCAL-01
+        # replaces this with the real ARQ-enqueue body.
+        from app.modules.online_payments.service import phase49_fiscal_dispatcher_stub
+
+        register_fiscal_receipt_dispatcher(phase49_fiscal_dispatcher_stub)
 
         # ARQ 0.28 exposes the in-worker ArqRedis pool to job bodies via
         # ctx["redis"] (the standard ARQ convention). The worker's own pool
