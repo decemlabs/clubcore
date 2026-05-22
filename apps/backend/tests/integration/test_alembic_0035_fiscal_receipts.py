@@ -32,6 +32,7 @@ analog in test_payment_receipt_race.py:34-35 (NOT app.modules.users.*).
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -99,15 +100,15 @@ async def test_0035_fiscal_receipts_has_unique_payment_id_kind(
 ) -> None:
     """FISCAL-02 — cross-channel-discriminator UNIQUE(payment_id, kind) ships in 0035."""
 
-    def _uq_constraints(sync_conn: object) -> list[dict[str, object]]:
+    def _uq_constraints(sync_conn: Any) -> list[dict[str, Any]]:
         inspector = inspect(sync_conn)
         return inspector.get_unique_constraints("fiscal_receipts")
 
     conn = await db_session.connection()
     uqs = await conn.run_sync(_uq_constraints)
-    by_name = {uc["name"]: uc for uc in uqs}
+    by_name: dict[str | None, dict[str, Any]] = {uc["name"]: uc for uc in uqs}
     assert "uq_fiscal_receipts_payment_id_kind" in by_name
-    cols = sorted(by_name["uq_fiscal_receipts_payment_id_kind"]["column_names"])  # type: ignore[arg-type]
+    cols = sorted(cast(list[str], by_name["uq_fiscal_receipts_payment_id_kind"]["column_names"]))
     assert cols == ["kind", "payment_id"]
 
 
@@ -116,7 +117,7 @@ async def test_0035_fiscal_receipts_has_check_constraints(
 ) -> None:
     """D-50-30 — kind + status DB-enforced enum CHECKs ship in 0035."""
 
-    def _checks(sync_conn: object) -> set[str | None]:
+    def _checks(sync_conn: Any) -> set[str | None]:
         inspector = inspect(sync_conn)
         return {cc["name"] for cc in inspector.get_check_constraints("fiscal_receipts")}
 
@@ -131,7 +132,7 @@ async def test_0035_fiscal_receipts_fk_points_at_payments(
 ) -> None:
     """T-50-01-01 mitigation — payment_id FK targets payments.id (NOT online_payments.id)."""
 
-    def _fks(sync_conn: object) -> list[dict[str, object]]:
+    def _fks(sync_conn: Any) -> list[dict[str, Any]]:
         inspector = inspect(sync_conn)
         return inspector.get_foreign_keys("fiscal_receipts")
 
