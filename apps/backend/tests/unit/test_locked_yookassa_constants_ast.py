@@ -346,3 +346,201 @@ def test_non_literal_payment_mode_fixture_is_rejected() -> None:
             if arg is not None and not _is_enum_member_literal(arg, "PaymentMode"):
                 detected += 1
     assert detected >= 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 50 D-50-14 / WH-02 — Re-fetch-before-write ordering AST gate.
+#
+# Structural enforcement that handle_payment_succeeded calls
+# `await yookassa_client.get_payment(...)` BEFORE any
+# `await session.execute|add|flush|commit` call. The webhook handler must
+# never trust the webhook body as authoritative status — the re-fetch is
+# the cryptographic anchor (PITFALLS Pitfall 1). This gate prevents
+# accidental reordering by future maintainers.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_HANDLERS_PATH = _BACKEND_APP / "api" / "v1" / "_internal" / "yookassa" / "handlers.py"
+_ROUTER_PATH = _BACKEND_APP / "api" / "v1" / "_internal" / "yookassa" / "router.py"
+
+_DB_WRITE_PREFIXES = ("session.execute", "session.add", "session.flush", "session.commit")
+
+
+def _find_async_function(tree: ast.AST, name: str) -> ast.AsyncFunctionDef:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"async def {name} not found in module")
+
+
+def _is_get_payment_call(node: ast.AST) -> bool:
+    """Match `await yookassa_client.get_payment(...)` (Await wrapping a Call)."""
+    if not isinstance(node, ast.Await):
+        return False
+    call = node.value
+    if not isinstance(call, ast.Call):
+        return False
+    unparsed = ast.unparse(call)
+    return "yookassa_client.get_payment" in unparsed
+
+
+def _is_db_write_call(node: ast.AST) -> bool:
+    """Match ``session.execute|add|flush|commit(...)`` calls.
+
+    Both direct calls (``session.add(row)``) and ``await session.execute(stmt)`` count.
+    Does NOT match ``session.begin()`` (transaction opener — not a write per se,
+    though it implicitly commits on exit; the ordering invariant is about
+    STATEMENTS that mutate, and ``begin()`` itself doesn't issue SQL).
+    """
+    call = node.value if isinstance(node, ast.Await) else node
+    if not isinstance(call, ast.Call):
+        return False
+    unparsed = ast.unparse(call)
+    first_line = unparsed.split("\n")[0][:120]
+    return any(prefix + "(" in first_line for prefix in _DB_WRITE_PREFIXES)
+
+
+def test_payment_succeeded_handler_calls_get_payment_before_any_db_write() -> None:
+    """WH-02 (D-50-14): re-fetch must precede any DB mutation.
+
+    Walks handle_payment_succeeded; asserts the first
+    `await yookassa_client.get_payment(...)` lineno is STRICTLY LESS than
+    the first `session.execute|add|flush|commit(...)` lineno.
+    """
+    source = _HANDLERS_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    fn = _find_async_function(tree, "handle_payment_succeeded")
+
+    get_payment_linenos: list[int] = []
+    db_write_linenos: list[int] = []
+    for node in ast.walk(fn):
+        if not isinstance(node, (ast.Await, ast.Call)):
+            continue
+        if _is_get_payment_call(node):
+            get_payment_linenos.append(node.lineno)
+        if _is_db_write_call(node):
+            db_write_linenos.append(node.lineno)
+
+    assert get_payment_linenos, (
+        "WH-02 violated: handle_payment_succeeded does NOT call "
+        "`await yookassa_client.get_payment(...)` at all. The re-fetch-before-write "
+        "discipline (D-50-11/12, PITFALLS Pitfall 1) requires the handler to "
+        "verify status via outbound GET /v3/payments/{id} before any DB mutation."
+    )
+    if not db_write_linenos:
+        return
+
+    first_get_payment = min(get_payment_linenos)
+    first_db_write = min(db_write_linenos)
+    assert first_get_payment < first_db_write, (
+        f"WH-02 violated: handle_payment_succeeded performs a DB write at line "
+        f"{first_db_write} BEFORE the re-fetch at line {first_get_payment}. "
+        f"Re-fetch (`await yookassa_client.get_payment(...)`) MUST appear "
+        f"before any session.execute|add|flush|commit call. See D-50-11/12 + "
+        f"PITFALLS Pitfall 1 for the cryptographic-anchor rationale."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 50 D-50-05 / WH-01 — IP dependency at decorator level AST gate (B-1).
+#
+# ROADMAP success-criterion #1 + CONTEXT.md D-50-05 mandate this AST test:
+# parse router.py; find the `@router.post("/webhook", ...)` decorator;
+# assert `dependencies` keyword is present and contains
+# `Depends(verify_yookassa_ip)` as a literal Call.
+#
+# Why decorator-level (not signature-level): FastAPI runs route-level
+# `dependencies=[...]` BEFORE body parse, so a 403 short-circuits without
+# the handler ever seeing the JSON body. A signature-level Depends would
+# run AFTER body parse, leaking a body-parsing surface to unauthenticated
+# callers. This gate prevents that demotion.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _find_webhook_post_decorator(tree: ast.AST) -> ast.Call:
+    """Locate the `@router.post("/webhook", ...)` decorator Call node.
+
+    Searches every async function in the module for a decorator that is a
+    Call whose func is an Attribute `router.post` and whose first positional
+    arg is the string literal "/webhook".
+    """
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AsyncFunctionDef):
+            continue
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call):
+                continue
+            func = dec.func
+            if not isinstance(func, ast.Attribute):
+                continue
+            if func.attr != "post":
+                continue
+            # Match the path arg "/webhook"
+            if not dec.args:
+                continue
+            first_arg = dec.args[0]
+            if isinstance(first_arg, ast.Constant) and first_arg.value == "/webhook":
+                return dec
+    raise AssertionError(
+        "D-50-05 violated: no `@router.post(\"/webhook\", ...)` decorator found in router.py. "
+        "ROADMAP success-criterion #1 requires the ЮKassa webhook intake at this path."
+    )
+
+
+def test_webhook_route_has_verify_ip_dependency_at_decorator_level() -> None:
+    """D-50-05 (B-1): `dependencies=[Depends(verify_yookassa_ip)]` MUST be on the decorator.
+
+    Parses router.py AST. Finds the `@router.post("/webhook", ...)` decorator.
+    Asserts a `dependencies` keyword argument is present. Asserts the keyword
+    value is a list with at least one `Call` node where `func.id == "Depends"`
+    and `args[0].id == "verify_yookassa_ip"`.
+
+    This is a STRUCTURAL gate — not a runtime test. It catches the failure
+    mode where a maintainer demotes the IP check into the function signature
+    (which would run AFTER body parse, leaking the surface) or removes it
+    entirely.
+    """
+    source = _ROUTER_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    decorator = _find_webhook_post_decorator(tree)
+
+    # 1. Locate the `dependencies` keyword on the decorator Call.
+    deps_kwarg: ast.keyword | None = None
+    for kw in decorator.keywords:
+        if kw.arg == "dependencies":
+            deps_kwarg = kw
+            break
+    assert deps_kwarg is not None, (
+        "D-50-05 violated: @router.post(\"/webhook\", ...) decorator has NO "
+        "`dependencies=` keyword argument. WH-01 requires the IP allowlist to "
+        "run BEFORE body parse via route-level dependencies=[Depends(verify_yookassa_ip)]; "
+        "a signature-level Depends would run AFTER body parse and is forbidden."
+    )
+
+    # 2. Assert the keyword value is a List literal.
+    deps_value = deps_kwarg.value
+    assert isinstance(deps_value, ast.List), (
+        f"D-50-05 violated: `dependencies=` value is {type(deps_value).__name__}, "
+        f"expected ast.List literal so the AST gate can structurally verify its contents."
+    )
+
+    # 3. Assert at least one element is `Depends(verify_yookassa_ip)`.
+    found_verify_ip = False
+    for elt in deps_value.elts:
+        if not isinstance(elt, ast.Call):
+            continue
+        func = elt.func
+        if not isinstance(func, ast.Name) or func.id != "Depends":
+            continue
+        if not elt.args:
+            continue
+        first_arg = elt.args[0]
+        if isinstance(first_arg, ast.Name) and first_arg.id == "verify_yookassa_ip":
+            found_verify_ip = True
+            break
+
+    assert found_verify_ip, (
+        "D-50-05 violated: @router.post(\"/webhook\", ...) decorator's `dependencies=[...]` "
+        "list does NOT contain `Depends(verify_yookassa_ip)` as a literal. ROADMAP "
+        "success-criterion #1 + CONTEXT.md D-50-05 require this structural gate so the "
+        "IP allowlist cannot silently be demoted, replaced, or removed."
+    )
