@@ -26,8 +26,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import app.core.dependencies as deps
 from app.integrations.yookassa._stubs import (
     fiscal_receipt_dispatcher_noop_stub,
@@ -154,16 +152,54 @@ def test_arq_worker_does_not_wire_single_wired_slots() -> None:
 
 
 def test_byte_equal_parity_between_fastapi_and_worker() -> None:
-    """Test D — Phase 48 D-48-25: rewritten in Plan 48-07 Task 3b.
+    """Test D — Phase 48 D-48-25: closure-name parity + fiscal byte-equal preserved.
 
-    Phase 48 Task 3a (this file): the Phase 47 import of
-    ``yookassa_client_provider_noop_stub`` is removed because Tests A + B
-    no longer assert identity against it. The original Test D body asserted
-    ``fastapi_yookassa is worker_yookassa is yookassa_client_provider_noop_stub``
-    — that assertion is fundamentally incompatible with the closure-per-process
-    wiring shipped in Tasks 1 + 2. Task 3b replaces this body with the new
-    closure-name + structural parity check.
+    Phase 47 asserted ``provider is yookassa_client_provider_noop_stub`` for the
+    YooKassaClientProvider slot in BOTH processes. Phase 48 swaps to a per-process
+    closure (each process owns its own httpx.AsyncClient instance) — Python
+    object identity is now intentionally impossible.
 
-    Skipped here so the test module remains lint + type clean between 3a and 3b.
+    Updated invariants:
+      - FastAPI side: after create_app(), deps._yookassa_client_provider is a
+        closure (not the no-op stub). Its ``__name__`` is ``_yookassa_client_provider``
+        — both composition roots (main.py + workers/__init__.py) name the closure
+        identically per Plan 48-07 Tasks 1 and 2.
+      - fiscal_receipt_dispatcher slot: Phase 47 byte-equal invariant preserved
+        (D-48-26 — fiscal dispatcher stays no-op until Phase 50).
     """
-    pytest.skip("Rewritten in Plan 48-07 Task 3b — closure-name parity check.")
+    # FastAPI side — closure name parity for YooKassaClientProvider.
+    _reset_v17_slots()
+    create_app()
+    fastapi_yookassa = deps._yookassa_client_provider
+    fastapi_fiscal = deps._fiscal_receipt_dispatcher
+
+    assert fastapi_yookassa is not None, "create_app() must register YooKassaClientProvider"
+    assert callable(fastapi_yookassa), "registered provider must be callable"
+    assert getattr(fastapi_yookassa, "__name__", None) == "_yookassa_client_provider", (
+        "FastAPI side must register the closure named '_yookassa_client_provider' "
+        "(Phase 48 D-48-25 — main.py Task 1)."
+    )
+
+    # Worker side — same closure name (Plan 48-07 Task 2 enforces the literal name).
+    _reset_v17_slots()
+    _worker_register_double_wired_slots()  # registers fiscal stub only
+    worker_fiscal = deps._fiscal_receipt_dispatcher
+
+    # fiscal_receipt_dispatcher — Phase 47 byte-equal preserved (D-48-26).
+    assert fastapi_fiscal is worker_fiscal is fiscal_receipt_dispatcher_noop_stub, (
+        "fiscal_receipt_dispatcher MUST stay Phase-47 byte-equal until Phase 50 swaps it."
+    )
+
+    # Closure-name invariant on the worker side — STRUCTURAL parity guard.
+    # We do not register the worker's real closure from this unit test (it would
+    # require driving a real httpx client). Instead we read the source and assert
+    # both sites name the closure identically.
+    main_src = _MAIN_PY.read_text(encoding="utf-8")
+    worker_src = _WORKERS_INIT_PY.read_text(encoding="utf-8")
+    assert "async def _yookassa_client_provider" in main_src, (
+        "main.py must define the closure as 'async def _yookassa_client_provider'."
+    )
+    assert "async def _yookassa_client_provider" in worker_src, (
+        "workers/__init__.py must define the closure with the SAME name "
+        "'_yookassa_client_provider' (Phase 48 D-48-25 closure-name parity)."
+    )
