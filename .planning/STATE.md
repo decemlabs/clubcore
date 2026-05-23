@@ -4,8 +4,8 @@ milestone: v1.7
 milestone_name: Online Payments + 54-ФЗ
 status: executing
 stopped_at: Phase 51 context gathered
-last_updated: "2026-05-23T04:48:00.402Z"
-last_activity: 2026-05-23 -- Phase 51 planning complete
+last_updated: "2026-05-23T04:48:51.131Z"
+last_activity: 2026-05-23 -- Phase 51 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 50 — Webhook FSM + Fiscal Foundation
+**Current focus:** Phase 51 — fiscal-fsm-refunds
 
 ## Current Position
 
-Phase: 51
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-23 -- Phase 51 planning complete
+Phase: 51 (fiscal-fsm-refunds) — EXECUTING
+Plan: 1 of 10
+Status: Executing Phase 51
+Last activity: 2026-05-23 -- Phase 51 execution started
 
 ## Accumulated Context
 
