@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     otp_code_ttl_seconds: int = 300       # 5 min  — AUTH-TG-02
     otp_max_attempts: int = 5             # AUTH-TG-02
 
+    # Phase 52 additions (D-52-09, NOT-04): Owner operator-alert recipients.
+    # Consumed by the dispatch_payment_notification task for the payment_canceled
+    # and fiscal_failed notification kinds — routes operator-actionable content
+    # (payment_id, failure reasons) to the owner only, NEVER to client channels.
+    # When unset (None), the dispatch task logs ERROR only and never raises or
+    # blocks the financial commit (best-effort, D-52-09 / D-52-07).
+    # Env-var documentation lives in the Phase 53 deployment runbook (VER-01).
+    owner_alert_telegram_chat_id: int | None = None
+    owner_alert_email: str | None = None
+
     # Phase 42 addition (D-42-28): Email transport settings nested block.
     # Defaults are sandbox-safe so fresh-clone dev boot does NOT require setting
     # email credentials first (mirrors Telegram block discipline above).
