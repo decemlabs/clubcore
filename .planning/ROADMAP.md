@@ -263,7 +263,7 @@ Plans:
 - [x] 52-02-PLAN.md — 4 email identifiers + LOCKED_EMAIL_TEMPLATES 15->19 + owner-alert settings (NOTIFY-02, NOTIFY-04)
 - [x] 52-03-PLAN.md — CARRY-01 email-probe scaffolding + evidence-dir README + CARRY-02 15-template countersign register (CARRY-01, CARRY-02)
 - [x] 52-04-PLAN.md — dispatch_payment_notification ARQ task + worker registration + AST positive fixtures (NOTIFY-01, NOTIFY-02, NOTIFY-04)
-- [ ] 52-05-PLAN.md — _post_commit_enqueue seam fill + AST gate lockstep + 5 enqueue sites (succeeded/refund/canceled/fiscal-failed) (NOTIFY-01, NOTIFY-04)
+- [x] 52-05-PLAN.md — _post_commit_enqueue seam fill + AST gate lockstep + 5 enqueue sites (succeeded/refund/canceled/fiscal-failed) (NOTIFY-01, NOTIFY-04)
 - [ ] 52-06-PLAN.md — e2e dual-channel idempotency-across-restart + owner-alert routing + NOTIFY-05 cancellation regression (NOTIFY-01..05)
 
 ### Phase 53: Milestone Verification
@@ -289,7 +289,7 @@ Plans:
 | 49. Online Sales Orchestrator | 7/7 | Complete    | 2026-05-22 |
 | 50. Webhook FSM + Fiscal Foundation | 6/6 | Complete    | 2026-05-22 |
 | 51. Fiscal FSM + Refunds | 10/10 | Complete    | 2026-05-23 |
-| 52. Cross-Channel Notifications + v1.6 Carry-out | 4/6 | In Progress|  |
+| 52. Cross-Channel Notifications + v1.6 Carry-out | 5/6 | In Progress|  |
 | 53. Milestone Verification | 0/TBD | Not started | - |
 
 ---
