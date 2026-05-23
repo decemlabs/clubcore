@@ -1,4 +1,6 @@
 """Phase 46 / VER-12 — live email-deliverability probe (Plan 46-12 / D-46-19..22).
+Updated for Phase 52 CARRY-01: evidence captured to
+``.planning/handoff/v1.7-email-deliverability-evidence/`` per D-52-13.
 
 One-shot throwaway probe. Sends one email each to a yandex.ru + mail.ru +
 rambler.ru recipient via the PRODUCTION-shape email transport (the real
@@ -6,9 +8,10 @@ rambler.ru recipient via the PRODUCTION-shape email transport (the real
 ``SandboxEmailClient`` stub). Captures the per-send ``provider_message_id``
 and prints them. The operator then manually fetches the
 ``Authentication-Results:`` header line from each recipient's mailbox
-("show original" / "view source") and pastes the redacted form into
-``.planning/milestones/v1.6-VERIFICATION-LOG.md`` under the
-``email_deliverability_probe:`` YAML block.
+("show original" / "view source") and saves the captured evidence to
+``.planning/handoff/v1.7-email-deliverability-evidence/`` per D-52-13 /
+CARRY-01 (DEFER-46-01). See the README in that directory for the full
+operator capture procedure.
 
 NO IMAP automation per D-46-19 — keeps the probe tiny + avoids credential
 plumbing for 3 mailbox providers.
@@ -29,8 +32,8 @@ only the queue hop is elided.
 Recipient redaction (T-46-12-01): the script prints recipient addresses
 ONLY in domain-only form (``***@yandex.ru``) to stdout. The full address
 is never echoed. The operator captures the actual address in their own
-local notes; the committed VERIFICATION-LOG.md only carries the redacted
-form per D-46-20.
+local notes; the committed evidence files carry only the redacted form per
+D-46-20 / T-52-08.
 
 Run from ``apps/backend/``:
 
@@ -41,6 +44,12 @@ Run from ``apps/backend/``:
     AWS_ACCESS_KEY_ID=<real-yandex-postbox-access-key-id> \\
     EMAIL_FROM_DOMAIN=mail.sportzal.ru \\
     uv run python -m scripts.verify.v1_6_email_probe
+
+After a successful run, capture the per-provider ``Authentication-Results``
+headers from each mailbox's "show original" view and save them to:
+    .planning/handoff/v1.7-email-deliverability-evidence/
+See the README in that directory for the full capture procedure.
+This closes DEFER-46-01 / CARRY-01 when the operator has saved the evidence.
 
 Exit codes:
   0 — all 3 sends returned ok=True with a provider_message_id.
@@ -212,11 +221,14 @@ async def main() -> int:
 
     # Summary block — operator copies + completes the Authentication-Results
     # fields by hand from each recipient mailbox's "show original" view.
-    # D-46-20: only the redacted form lands in the committed log.
+    # D-46-20 / T-52-08: only the redacted form lands in committed evidence.
+    # Phase 52 CARRY-01: save captured evidence to
+    #   .planning/handoff/v1.7-email-deliverability-evidence/
+    # per D-52-13. See the README in that directory for the full procedure.
     print()
     print(
-        "--- copy into .planning/milestones/v1.6-VERIFICATION-LOG.md "
-        "`email_deliverability_probe:` block ---"
+        "--- save into .planning/handoff/v1.7-email-deliverability-evidence/ "
+        "(see README for capture procedure) ---"
     )
     print("email_deliverability_probe:")
     for provider_domain, addr in RECIPIENTS.items():
