@@ -16,6 +16,9 @@ Fixture index (D-48-22 + Phase 49 PAY-05 / BLOCKER #1):
     7. yookassa_create_payment_qr_success — POST /payments → 200 + confirmation_data (PAY-05)
     8. yookassa_create_payment_qr_422     — POST /payments → 422 (QR branch, PAY-05)
     9. yookassa_get_payment_qr_pending    — GET /payments/{id} → 200 QR-style (BLOCKER #1)
+   10. yookassa_create_receipt_ok         — POST /receipts → 200 pending (51-03 FISCAL-05)
+   11. yookassa_create_receipt_429        — POST /receipts → 429 permanent (51-03)
+   12. yookassa_create_receipt_500        — POST /receipts → 500 transient (51-03)
 """
 from __future__ import annotations
 
@@ -185,6 +188,51 @@ def yookassa_create_refund_success() -> Generator[respx.MockRouter, None, None]:
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
         router.post("refunds").mock(
             return_value=httpx.Response(200, json=_load("create_refund_success"))
+        )
+        yield router
+
+
+@pytest.fixture
+def yookassa_create_receipt_ok() -> Generator[respx.MockRouter, None, None]:
+    """51-03 — POST /v3/receipts → 200 with status:pending (ok classification).
+
+    Drives YooKassaClient.create_receipt happy path; consumer plan 51-05
+    will reuse this fixture to drive dispatch_fiscal_receipt through the
+    'ok' branch.
+    """
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
+        router.post("receipts").mock(
+            return_value=httpx.Response(200, json=_load("create_receipt_success"))
+        )
+        yield router
+
+
+@pytest.fixture
+def yookassa_create_receipt_429() -> Generator[respx.MockRouter, None, None]:
+    """51-03 — POST /v3/receipts → 429 too-many-requests.
+
+    Per ``_classify_http_status_error`` (client.py line 130), 4xx other than
+    422 maps to ``permanent_error`` (operator alert) — the rate-limit
+    fixture drives the permanent-error path for the create_receipt method.
+    """
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
+        router.post("receipts").mock(
+            return_value=httpx.Response(429, json=_load("create_receipt_429"))
+        )
+        yield router
+
+
+@pytest.fixture
+def yookassa_create_receipt_500() -> Generator[respx.MockRouter, None, None]:
+    """51-03 — POST /v3/receipts → 500 internal-server-error (transient_error).
+
+    Per ``_classify_http_status_error`` (client.py line 130), status >= 500
+    maps to ``transient_error`` — same as the create_payment/create_refund
+    convention.
+    """
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
+        router.post("receipts").mock(
+            return_value=httpx.Response(500, json=_load("create_receipt_500"))
         )
         yield router
 

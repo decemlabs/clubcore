@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "code": "too_many_requests",
+  "description": "Too many requests."
+}

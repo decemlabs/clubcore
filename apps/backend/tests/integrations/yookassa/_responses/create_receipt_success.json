@@ -1,0 +1,6 @@
+{
+  "id": "rcpt_test_001",
+  "type": "payment",
+  "status": "pending",
+  "fiscal_provider_id": "ofd_provider_x"
+}
