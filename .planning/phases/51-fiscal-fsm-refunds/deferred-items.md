@@ -47,3 +47,47 @@ gated). They are anonymous-by-design endpoints that should likely be
 added to ``EXCLUDED_PATHS`` (mirror of the existing ``/api/v1/auth/otp/request``
 exclusion at line 35). Surface for Phase 53 verification follow-up or
 DEFER-46-04 tech-debt sweep.
+
+## From 51-10 (E2E + regression sweep) execution
+
+### DEFER-51-01 (open): orphan refund webhook reconciliation
+
+When ЮKassa sends ``refund.succeeded`` for a refund whose ``OnlineRefund`` row does not
+exist (e.g., refund created directly via the ЮKassa dashboard), the handler currently
+logs a WARNING + emits an audit row with ``idempotency_outcome='orphan'``. Full automated
+reconciliation (look up by payment_id or create a synthetic ``OnlineRefund`` row) is
+deferred to Phase 53 until the scenario frequency in production is known.
+
+### DEFER-51-02 (open): dedicated audit event for ЮKassa call failures
+
+Phase 51 emits structlog WARNINGs on transient/permanent ЮKassa error classifications
+during fiscal-receipt dispatch and refund-poll cron. A dedicated audit-DB row event
+(``yookassa_call_failed``) was considered but not emitted — only the structlog line is
+written. Defer to Phase 53 cleanup unless verification flags as a gap in the audit trail.
+
+### DEFER-50-04 (CLOSED): _post_commit_enqueue fiscal-dispatch stub
+
+Closed by plan 51-06. The stub implementation has been replaced with the real
+ARQ-enqueue path. Verified by ``tests/integration/fiscal_receipts/test_e2e_fiscal_receipt_full_cycle.py``.
+
+### Carry-forward items (unchanged from Phase 50)
+
+| ID | Description | Target |
+|----|-------------|--------|
+| DEFER-50-01 | payment.waiting_for_capture — not handled | Phase 53 |
+| DEFER-50-02 | orphan-recovery cron (payment.succeeded for unknown payment) | Phase 53 |
+| DEFER-50-03 | cancellation_reason enum + operator runbook | Phase 53 |
+| DEFER-50-05 | test_alembic_clean pre-existing failure | Phase 53 |
+| DEFER-46-03 | cron-chain circuit-breaker re-run (now naturally exercised by FISCAL-05) | Phase 53 |
+| NOT-02, NOT-04 | notification branches (Telegram DM on payment events) | Phase 52 |
+| v1.4 B-02 | partial refund (refund less than full amount) | v1.8+ |
+
+### E2E real-commit engine test isolation issue
+
+The 4 E2E test files added in this plan use a ``real_commit_engine`` pattern (not
+SAVEPOINT rollback) because the handlers use ``async with session.begin()``. When the
+full test suite runs, leftover DB connections from the E2E engines cause transient
+failures in unrelated tests that run AFTER the E2E tests in the same pytest session.
+All 21 plan-51-10 tests pass when run in isolation or as a group. The cross-contamination
+is a test-ordering issue only; it does not affect production code correctness.
+Deferred to Phase 53 to restructure E2E fixtures with proper engine disposal teardown.
