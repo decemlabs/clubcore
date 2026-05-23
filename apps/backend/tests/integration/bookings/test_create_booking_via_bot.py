@@ -276,17 +276,29 @@ async def test_create_booking_via_bot_pt_package_expired_before_slot(
     make_pt_package,
     make_slot,
 ) -> None:
-    """PtPackageExpiredBeforeSlotError — slot.start_time after pt_package.end_date."""
+    """PtPackageExpiredBeforeSlotError — slot.start_time after pt_package.end_date.
+
+    The package must still be ACTIVE today (``end_date >= today`` so the
+    Step-2 ``get_active_pt_package`` filter returns it) yet expire BEFORE the
+    future slot date (so the Step-4 Moscow-TZ validity-window guard fires).
+    An ``end_date`` in the past would instead be excluded by the active-package
+    query and raise ``PtPackageNotActiveError`` — never reaching Step 4.
+    """
+    from zoneinfo import ZoneInfo
+
+    moscow_tz = ZoneInfo("Europe/Moscow")
     trainer = await make_trainer()
     client = await make_client()
     plan = await make_pt_package_plan()
-    # end_date in the past — slot is fresh (default +2h)
+    # Slot 3 days out; package expires tomorrow (Moscow business date) — still
+    # active now, but strictly before the slot's Moscow date.
+    slot_start = datetime.now(UTC) + timedelta(days=3)
+    slot = await make_slot(trainer_id=trainer.id, start_time=slot_start)
     pkg = await make_pt_package(
         client_id=client.id,
         plan=plan,
-        end_date=(datetime.now(UTC) - timedelta(days=1)).date(),
+        end_date=(datetime.now(moscow_tz) + timedelta(days=1)).date(),
     )
-    slot = await make_slot(trainer_id=trainer.id)
     with pytest.raises(service.PtPackageExpiredBeforeSlotError):
         await service.create_booking_via_bot(
             db_session,

@@ -122,11 +122,16 @@ async def test_0033_upgrade_clean_no_duplicates(
     # Ensure we start at head.
     _assert_alembic_ok(_run_alembic("upgrade", "head"), "upgrade head (pre-test)")
 
-    # Sanity: head revision matches expected.
-    current = _run_alembic("current")
-    _assert_alembic_ok(current, "current (head probe)")
-    assert _REV_HEAD in current.stdout, (
-        f"expected alembic head to be {_REV_HEAD}; got:\n{current.stdout}"
+    # Sanity: the 0033 revision has been APPLIED. We assert it appears in the
+    # upgrade history rather than that it IS the current head — migrations
+    # beyond 0033 have since been appended (0034..0039+), so a head-equality
+    # check on a fixed revision is intrinsically stale. The index-existence
+    # assertion below is the substantive proof that 0033 ran.
+    history = _run_alembic("history")
+    _assert_alembic_ok(history, "history (revision-applied probe)")
+    assert _REV_HEAD in history.stdout, (
+        f"expected revision {_REV_HEAD} to be present in alembic history; got:\n"
+        f"{history.stdout}"
     )
 
     # The partial UNIQUE index must exist in pg_indexes with the documented predicate.

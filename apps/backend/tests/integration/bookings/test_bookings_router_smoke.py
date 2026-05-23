@@ -99,9 +99,30 @@ def test_repository_no_direct_schedule_import() -> None:
         / "repository.py"
     )
     src = repo_path.read_text(encoding="utf-8")
-    assert "from app.modules.schedule" not in src, (
+
+    # Parse the AST and inspect only real `import` / `from ... import` nodes.
+    # A naive substring check matches the module's own docstring that EXPLAINS
+    # why it uses ``importlib.import_module`` instead of a static import
+    # (PATTERNS.md §5 Option A). import-linter is the runtime source of truth;
+    # this AST walk is the cheap static mirror of the same D-38-11 contract.
+    import ast
+
+    tree = ast.parse(src)
+    schedule_imports: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.module and node.module.startswith("app.modules.schedule"):
+                schedule_imports.append(node.module)
+        elif isinstance(node, ast.Import):
+            schedule_imports.extend(
+                alias.name
+                for alias in node.names
+                if alias.name.startswith("app.modules.schedule")
+            )
+
+    assert not schedule_imports, (
         "bookings repository must NOT import from app.modules.schedule "
-        "(D-38-11 modules-independent contract)"
+        f"(D-38-11 modules-independent contract); found: {schedule_imports}"
     )
 
 
