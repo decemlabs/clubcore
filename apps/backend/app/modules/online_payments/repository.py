@@ -6,6 +6,12 @@ transactional moment so the audit rows co-write with the
 online_payments INSERT in a single UoW.
 
 No UPDATE methods in Phase 49 — status transitions are Phase 50 (webhook FSM).
+
+Phase 52 (NOT-03 / D-52-05): ``claim_payment_notification`` is the exception —
+it owns its own session + txn (fresh session via the session factory) so the
+cross-restart idempotency INSERT happens outside the financial UoW. The helper
+uses ``session_factory()`` directly so callers (ARQ task) need not hold an
+open session when calling it.
 """
 
 from __future__ import annotations
@@ -13,9 +19,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import Select, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.modules.online_payments.models import OnlinePayment
+from app.modules.online_payments.models import OnlinePayment, PaymentNotification
 
 
 async def insert_online_payment(
@@ -71,3 +78,56 @@ async def get_online_payment_by_idempotency_key(
     )
     result: OnlinePayment | None = await session.scalar(stmt)
     return result
+
+
+async def claim_payment_notification(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    kind: str,
+    channel: str,
+    payment_id: UUID | None = None,
+    online_payment_id: UUID | None = None,
+) -> bool:
+    """Claim a payment notification channel slot for idempotent dedup (D-52-05).
+
+    Inserts a ``PaymentNotification`` row for the given ``(subject, kind, channel)``
+    tuple BEFORE the notification is sent (claim-before-send, at-most-once leaning —
+    D-52-02 / D-52-Discretion). Returns ``True`` on successful insert (channel
+    claimed) or ``False`` if the partial-UNIQUE index fires (already claimed — the
+    notification was sent in a prior invocation or concurrent task; idempotent replay).
+
+    Exactly one of ``payment_id`` / ``online_payment_id`` must be supplied — the
+    XOR mirrors the ``payment_notifications.subject_xor`` CHECK constraint (D-52-10).
+    A programmer error (both null or both non-null) surfaces as ``AssertionError``
+    rather than a deferred FK/CHECK violation, so the bug appears at the callsite
+    rather than at flush time.
+
+    NOTE: ``payment_canceled`` kind passes ``online_payment_id=`` (NOT
+    ``payment_id=``) because a canceled online payment has no ``payments`` ledger
+    row. The XOR CHECK + online-payment partial-unique index handle its dedup.
+
+    This helper opens a FRESH session + transaction via the session factory so
+    the claim is independent of the caller's (ARQ task) outer UoW. The
+    ``IntegrityError`` is caught here — the transaction rolls back automatically
+    when the context manager exits — and ``False`` is returned; no re-raise.
+    """
+    assert (payment_id is None) != (online_payment_id is None), (
+        f"claim_payment_notification: exactly one of payment_id / online_payment_id "
+        f"must be non-None (got payment_id={payment_id!r}, online_payment_id={online_payment_id!r})"
+    )
+    try:
+        async with session_factory() as session, session.begin():
+            session.add(
+                PaymentNotification(
+                    payment_id=payment_id,
+                    online_payment_id=online_payment_id,
+                    kind=kind,
+                    channel=channel,
+                )
+            )
+    except IntegrityError:
+        # Partial-UNIQUE violation — this (subject, kind, channel) was already
+        # claimed. The txn rolls back inside the context manager exit; return False
+        # so the caller can log idempotent-replay and skip the send.
+        return False
+    return True

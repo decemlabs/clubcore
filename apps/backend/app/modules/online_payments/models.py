@@ -1,10 +1,16 @@
-"""OnlinePayment ORM model (Phase 49 PAY-01 / D-49-04).
+"""OnlinePayment + PaymentNotification ORM models (Phase 49 PAY-01 / Phase 52 NOT-03).
 
-Mirrors the 0034 migration column-for-column. Class composition is
+OnlinePayment mirrors the 0034 migration column-for-column. Class composition is
 ``Base + UUIDPkMixin`` ONLY — no TimestampMixin, no SoftDeleteMixin —
 because the FSM tracks lifecycle via explicit ``initiated_at`` /
 ``succeeded_at`` / ``canceled_at`` columns (single-temporal-column
 discipline per payments/models.py:46-49).
+
+PaymentNotification (Phase 52 NOT-03 / D-52-04) is the cross-restart dedup
+arbiter for cross-channel client notifications and owner operator alerts.
+Composition: Base + UUIDPkMixin + TimestampMixin (NO SoftDeleteMixin — rows
+are append-only; the partial-unique indexes per subject FK are the single
+source of truth for cross-restart idempotency per D-52-04).
 
 Constraint naming discipline (NAMING_CONVENTION):
 - CheckConstraints use BARE suffixes (``"amount_kopecks_positive"``)
@@ -13,13 +19,17 @@ Constraint naming discipline (NAMING_CONVENTION):
   Plan 49-02 originally specified full names — that would have
   double-prefixed to ``ck_online_payments_ck_online_payments_*``,
   the exact bug fixed by Plan 49-01 deviation #2.
-- ForeignKey + UniqueConstraint + Index pass full literal names
-  (no convention-expansion for those families when explicit).
+- ForeignKey + Index pass full literal names (no convention-expansion
+  for those families when explicit).
 - Partial UNIQUE per-day expression uses
   ``((initiated_at AT TIME ZONE 'Europe/Moscow')::date)`` — IMMUTABLE
   per Postgres rules; ``DATE(timestamptz)`` is rejected on the
   partial-index predicate. Matches migration 0034 verbatim
   (Plan 49-01 deviation #1).
+- PaymentNotification partial-unique indexes use full literal names
+  (mirrors the ``uq_online_payments_*_double_tap`` Index blocks at
+  lines 138-157 — NOT UniqueConstraint, because partial index predicates
+  require ``Index(postgresql_where=...)``).
 """
 
 from __future__ import annotations
@@ -33,6 +43,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
     Text,
     UniqueConstraint,
     func,
@@ -41,7 +52,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base, UUIDPkMixin
+from app.core.database import Base, TimestampMixin, UUIDPkMixin
 
 
 class OnlinePayment(Base, UUIDPkMixin):
@@ -155,4 +166,104 @@ class OnlinePayment(Base, UUIDPkMixin):
                 "status != 'canceled' AND pt_package_plan_id IS NOT NULL"
             ),
         ),
+    )
+
+
+class PaymentNotification(Base, UUIDPkMixin, TimestampMixin):
+    """Idempotency record for cross-channel payment notifications (Phase 52 NOT-03).
+
+    Composition: Base + UUIDPkMixin + TimestampMixin (NO SoftDeleteMixin —
+    rows are append-only; the partial-unique indexes per subject FK are the
+    single source of truth for cross-restart idempotency per D-52-04).
+
+    Polymorphic subject (D-52-10 — Option A, DB-UNIQUE across all kinds):
+    ``payment_id`` is used for payment_succeeded / refund_succeeded / fiscal_failed
+    (the ledger row exists for these kinds).
+    ``online_payment_id`` is used for payment_canceled (no payments ledger row —
+    activation is webhook-gated; canceled payments never write a ledger row).
+    Exactly one must be non-null; the XOR CHECK enforces this.
+
+    DB-level invariants:
+    - XOR CHECK (payment_id IS NOT NULL) <> (online_payment_id IS NOT NULL)
+      → ck_payment_notifications_subject_xor
+    - FK fk_payment_notifications_payment_id_payments ON DELETE RESTRICT
+    - FK fk_payment_notifications_online_payment_id_online_payments ON DELETE RESTRICT
+    - kind CHECK IN ('payment_succeeded', 'refund_succeeded', 'payment_canceled',
+      'fiscal_failed') → ck_payment_notifications_kind
+    - channel CHECK IN ('telegram', 'email') → ck_payment_notifications_channel
+    - PARTIAL UNIQUE (payment_id, kind, channel) WHERE payment_id IS NOT NULL
+      → uq_payment_notifications_payment_kind_channel
+    - PARTIAL UNIQUE (online_payment_id, kind, channel) WHERE online_payment_id IS NOT NULL
+      → uq_payment_notifications_online_payment_kind_channel
+    """
+
+    __tablename__ = "payment_notifications"
+
+    # Polymorphic subject FKs — exactly one must be non-null (XOR CHECK in __table_args__).
+    payment_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "payments.id",
+            ondelete="RESTRICT",
+            name="fk_payment_notifications_payment_id_payments",
+        ),
+        nullable=True,
+    )
+    online_payment_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "online_payments.id",
+            ondelete="RESTRICT",
+            name="fk_payment_notifications_online_payment_id_online_payments",
+        ),
+        nullable=True,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    channel: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("now()"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('payment_succeeded', 'refund_succeeded', "
+            "'payment_canceled', 'fiscal_failed')",
+            # NAMING_CONVENTION expands to ck_payment_notifications_kind
+            name="kind",
+        ),
+        CheckConstraint(
+            "channel IN ('telegram', 'email')",
+            # NAMING_CONVENTION expands to ck_payment_notifications_channel
+            name="channel",
+        ),
+        CheckConstraint(
+            "(payment_id IS NOT NULL) <> (online_payment_id IS NOT NULL)",
+            # NAMING_CONVENTION expands to ck_payment_notifications_subject_xor
+            # Mirrors the D-49-04 exactly_one_subject_fk pattern on OnlinePayment.
+            name="subject_xor",
+        ),
+        # Two partial UNIQUE indexes — one per subject FK — because a single
+        # all-columns UNIQUE cannot span a NULL column in Postgres.
+        # Full literal names (not NAMING_CONVENTION expansion) to match Alembic 0039.
+        Index(
+            "uq_payment_notifications_payment_kind_channel",
+            "payment_id",
+            "kind",
+            "channel",
+            unique=True,
+            postgresql_where=text("payment_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_payment_notifications_online_payment_kind_channel",
+            "online_payment_id",
+            "kind",
+            "channel",
+            unique=True,
+            postgresql_where=text("online_payment_id IS NOT NULL"),
+        ),
+        # Lookup indexes for FK columns.
+        Index("ix_payment_notifications_payment_id", "payment_id"),
+        Index("ix_payment_notifications_online_payment_id", "online_payment_id"),
     )
