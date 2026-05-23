@@ -321,3 +321,164 @@ def test_password_reset_email_literal_at_password_reset_service_callsite() -> No
         "requires anti-oracle review (D-44-06 / D-44-09 envelope parity) "
         "before this assertion is updated."
     )
+
+
+def test_email_online_payment_succeeded_literal_at_tasks_callsite() -> None:
+    """Phase 52 D-52-07 — positive-fixture for EMAIL_ONLINE_PAYMENT_SUCCEEDED.
+
+    Plan 52-04 shipped the first ``get_email_dispatcher()(template_id=...)``
+    callsite in ``app/modules/online_payments/tasks.py`` inside
+    ``_dispatch_email``. This test pins the contract that the literal
+    ``"EMAIL_ONLINE_PAYMENT_SUCCEEDED"`` exists as an ``ast.Constant(str)``
+    directly at a callsite in ``online_payments/tasks.py``.
+
+    A future refactor that extracts the identifier to a constant reference
+    (e.g. ``template_id=EMAIL_ONLINE_PAYMENT_SUCCEEDED_CONST``) would silently
+    bypass ``test_real_callsites_pass`` — the global gate rejects only
+    non-Constant nodes. This test catches that refactor (D-52-07 anti-weakening
+    discipline; mirrors D-43-33 + D-44-36 positive-fixture patterns).
+
+    Walker logic mirrored locally (not delegated to ``_iter_dispatcher_calls``)
+    so a refactor of the production walker cannot silently weaken this gate.
+    """
+    tasks_py = _BACKEND_APP / "modules" / "online_payments" / "tasks.py"
+    tree = ast.parse(tasks_py.read_text(encoding="utf-8"))
+
+    found_literal_template_ids: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "template_id"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
+                found_literal_template_ids.append(kw.value.value)
+
+    assert "EMAIL_ONLINE_PAYMENT_SUCCEEDED" in found_literal_template_ids, (
+        "Phase 52 D-52-07 violation: literal EMAIL_ONLINE_PAYMENT_SUCCEEDED "
+        "template_id callsite not found in "
+        "app/modules/online_payments/tasks.py. "
+        "If you refactored the callsite to read template_id from a constant "
+        "or f-string, revert — the AST walker (D-41-11) only accepts "
+        "ast.Constant(str). "
+        f"Got literal template_ids: {found_literal_template_ids}"
+    )
+
+
+def test_email_online_payment_refunded_literal_at_tasks_callsite() -> None:
+    """Phase 52 D-52-07 — positive-fixture for EMAIL_ONLINE_PAYMENT_REFUNDED.
+
+    Mirrors ``test_email_online_payment_succeeded_literal_at_tasks_callsite``
+    for the refund-succeeded notification kind. The literal
+    ``"EMAIL_ONLINE_PAYMENT_REFUNDED"`` must appear as an ``ast.Constant(str)``
+    directly at a ``get_email_dispatcher()(template_id=...)`` callsite inside
+    ``online_payments/tasks.py``.
+
+    A future refactor extracting this to a constant reference would bypass
+    ``test_real_callsites_pass`` — this test catches it (D-52-07 anti-weakening
+    discipline; mirrors D-43-33 + D-44-36 positive-fixture patterns).
+    """
+    tasks_py = _BACKEND_APP / "modules" / "online_payments" / "tasks.py"
+    tree = ast.parse(tasks_py.read_text(encoding="utf-8"))
+
+    found_literal_template_ids: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "template_id"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
+                found_literal_template_ids.append(kw.value.value)
+
+    assert "EMAIL_ONLINE_PAYMENT_REFUNDED" in found_literal_template_ids, (
+        "Phase 52 D-52-07 violation: literal EMAIL_ONLINE_PAYMENT_REFUNDED "
+        "template_id callsite not found in "
+        "app/modules/online_payments/tasks.py. "
+        "If you refactored the callsite to read template_id from a constant "
+        "or f-string, revert — the AST walker (D-41-11) only accepts "
+        "ast.Constant(str). "
+        f"Got literal template_ids: {found_literal_template_ids}"
+    )
+
+
+def test_email_online_payment_canceled_literal_at_tasks_callsite() -> None:
+    """Phase 52 D-52-07 — positive-fixture for EMAIL_ONLINE_PAYMENT_CANCELED.
+
+    Mirrors the payment_succeeded/refunded fixtures for the owner-alert
+    payment_canceled kind. The literal ``"EMAIL_ONLINE_PAYMENT_CANCELED"``
+    must appear as an ``ast.Constant(str)`` directly at a callsite inside
+    ``online_payments/tasks.py``.
+
+    OWNER-ALERT: this email routes to ``settings.owner_alert_email``, NOT
+    to the client (NOT-05 — no client DM on cancellation). A future refactor
+    to a constant reference would bypass ``test_real_callsites_pass``; this
+    test catches it (D-52-07 anti-weakening discipline).
+    """
+    tasks_py = _BACKEND_APP / "modules" / "online_payments" / "tasks.py"
+    tree = ast.parse(tasks_py.read_text(encoding="utf-8"))
+
+    found_literal_template_ids: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "template_id"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
+                found_literal_template_ids.append(kw.value.value)
+
+    assert "EMAIL_ONLINE_PAYMENT_CANCELED" in found_literal_template_ids, (
+        "Phase 52 D-52-07 violation: literal EMAIL_ONLINE_PAYMENT_CANCELED "
+        "template_id callsite not found in "
+        "app/modules/online_payments/tasks.py. "
+        "If you refactored the callsite to read template_id from a constant "
+        "or f-string, revert — the AST walker (D-41-11) only accepts "
+        "ast.Constant(str). "
+        f"Got literal template_ids: {found_literal_template_ids}"
+    )
+
+
+def test_email_fiscal_receipt_failed_literal_at_tasks_callsite() -> None:
+    """Phase 52 D-52-07 — positive-fixture for EMAIL_FISCAL_RECEIPT_FAILED.
+
+    Mirrors the other Phase 52 positive-fixture tests for the owner-alert
+    fiscal_failed kind. The literal ``"EMAIL_FISCAL_RECEIPT_FAILED"`` must
+    appear as an ``ast.Constant(str)`` directly at a callsite inside
+    ``online_payments/tasks.py``.
+
+    OWNER-ALERT: this email routes to ``settings.owner_alert_email`` (NOT-04).
+    A future refactor to a constant reference would bypass
+    ``test_real_callsites_pass`` — this test catches it (D-52-07 anti-weakening
+    discipline; mirrors D-43-33 + D-44-36 positive-fixture patterns).
+    """
+    tasks_py = _BACKEND_APP / "modules" / "online_payments" / "tasks.py"
+    tree = ast.parse(tasks_py.read_text(encoding="utf-8"))
+
+    found_literal_template_ids: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "template_id"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
+                found_literal_template_ids.append(kw.value.value)
+
+    assert "EMAIL_FISCAL_RECEIPT_FAILED" in found_literal_template_ids, (
+        "Phase 52 D-52-07 violation: literal EMAIL_FISCAL_RECEIPT_FAILED "
+        "template_id callsite not found in "
+        "app/modules/online_payments/tasks.py. "
+        "If you refactored the callsite to read template_id from a constant "
+        "or f-string, revert — the AST walker (D-41-11) only accepts "
+        "ast.Constant(str). "
+        f"Got literal template_ids: {found_literal_template_ids}"
+    )
