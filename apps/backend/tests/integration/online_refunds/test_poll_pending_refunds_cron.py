@@ -249,7 +249,7 @@ async def test_poll_pending_refunds_marks_canceled_when_yookassa_reports_cancele
     count = await poll_pending_refunds(ctx)
     assert count == 1
 
-    await poll_db_session.expire_all()
+    poll_db_session.expire_all()
     row = await poll_db_session.get(OnlineRefund, refund_id)
     assert row is not None
     assert row.status == STATUS_CANCELED
@@ -291,7 +291,7 @@ async def test_poll_pending_refunds_leaves_row_pending_when_yookassa_still_pendi
     count = await poll_pending_refunds(ctx)
     assert count == 0
 
-    await poll_db_session.expire_all()
+    poll_db_session.expire_all()
     row = await poll_db_session.get(OnlineRefund, refund_id)
     assert row is not None
     assert row.status == STATUS_PENDING
@@ -322,7 +322,7 @@ async def test_poll_pending_refunds_handles_yookassa_transient_error_without_wri
     count = await poll_pending_refunds(ctx)
     assert count == 0
 
-    await poll_db_session.expire_all()
+    poll_db_session.expire_all()
     row = await poll_db_session.get(OnlineRefund, refund_id)
     assert row is not None
     assert row.status == STATUS_PENDING
@@ -350,7 +350,7 @@ async def test_poll_pending_refunds_skips_rows_younger_than_30min(
     count = await poll_pending_refunds(ctx)
     assert count == 0
 
-    await poll_db_session.expire_all()
+    poll_db_session.expire_all()
     row = await poll_db_session.get(OnlineRefund, refund_id)
     assert row is not None
     assert row.status == STATUS_PENDING

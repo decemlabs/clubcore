@@ -115,7 +115,7 @@ async def test_monitor_stale_fiscal_receipts_emits_failed_audit_on_90s_stale_pen
     assert count == 1
 
     # Verify row flipped.
-    await fiscal_db_session.expire_all()
+    fiscal_db_session.expire_all()
     row = await fiscal_db_session.get(FiscalReceipt, fr_id)
     assert row is not None
     assert row.status == STATUS_FAILED
@@ -146,7 +146,7 @@ async def test_monitor_stale_fiscal_receipts_skips_rows_younger_than_90s(
     count = await monitor_stale_fiscal_receipts(cron_ctx)
     assert count == 0
 
-    await fiscal_db_session.expire_all()
+    fiscal_db_session.expire_all()
     row = await fiscal_db_session.get(FiscalReceipt, fr_id)
     assert row is not None
     assert row.status == STATUS_PENDING
@@ -170,17 +170,20 @@ async def test_monitor_stale_fiscal_receipts_skips_non_pending_rows(
     )
     fiscal_db_session.add(fr)
     await fiscal_db_session.flush()
+    # Capture id before commit — commit expires the ORM instance and accessing
+    # fr.id afterwards would trigger an implicit refresh under async I/O.
+    fr_id = fr.id
     await fiscal_db_session.execute(
         text("UPDATE fiscal_receipts SET created_at = :ts WHERE id = :id"),
-        {"ts": datetime.now(UTC) - timedelta(seconds=200), "id": fr.id},
+        {"ts": datetime.now(UTC) - timedelta(seconds=200), "id": fr_id},
     )
     await fiscal_db_session.commit()
 
     count = await monitor_stale_fiscal_receipts(cron_ctx)
     assert count == 0
 
-    await fiscal_db_session.expire_all()
-    row = await fiscal_db_session.get(FiscalReceipt, fr.id)
+    fiscal_db_session.expire_all()
+    row = await fiscal_db_session.get(FiscalReceipt, fr_id)
     assert row is not None
     assert row.status == STATUS_SENT
 
@@ -190,8 +193,10 @@ async def test_monitor_stale_fiscal_receipts_respects_loop_budget_50_per_tick(
     cron_ctx: dict[str, Any],
 ) -> None:
     """Seed 60 stale pending rows; first tick flips 50, second tick flips the remaining 10."""
-    payment_id = await _seed_owner_and_payment(fiscal_db_session)
     for _ in range(60):
+        # Each fiscal_receipts row needs a distinct (payment_id, kind) pair
+        # because of the uq_fiscal_receipts_payment_id_kind UNIQUE constraint.
+        payment_id = await _seed_owner_and_payment(fiscal_db_session)
         await _seed_pending_fr(
             fiscal_db_session, payment_id=payment_id, created_at_offset_seconds=200
         )
@@ -210,8 +215,9 @@ async def test_monitor_stale_fiscal_receipts_returns_count(
     cron_ctx: dict[str, Any],
 ) -> None:
     """Return value matches number of rows flipped."""
-    payment_id = await _seed_owner_and_payment(fiscal_db_session)
     for _ in range(3):
+        # Distinct (payment_id, kind) per row — see uq_fiscal_receipts_payment_id_kind.
+        payment_id = await _seed_owner_and_payment(fiscal_db_session)
         await _seed_pending_fr(
             fiscal_db_session, payment_id=payment_id, created_at_offset_seconds=200
         )
