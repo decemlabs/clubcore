@@ -324,8 +324,8 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
                 if fr_row.audit_correlation_id is not None
                 else None
             ),
-            fiscal_receipt_id=fr_row.id,
-            payment_id=fr_row.payment_id,
+            fiscal_receipt_id=str(fr_row.id),
+            payment_id=str(fr_row.payment_id),
             kind=fr_row.kind,
             customer_email=fr_row.customer_email,
         )
