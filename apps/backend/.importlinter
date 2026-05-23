@@ -24,6 +24,7 @@ modules =
     app.modules.billing
     app.modules.notifications
     app.modules.online_payments
+    app.modules.online_refunds
     app.modules.payments
     app.modules.pt_packages
     app.modules.pt_sessions
@@ -32,6 +33,11 @@ modules =
     # (2026-05-22): `app.modules.online_payments` is registered above, the
     # 3 INFRA-40 ignore edges + the email dispatcher edge resolve to matched
     # imports, and the contract is fully active.
+    # Phase 51 — `app.modules.online_refunds` registered above (D-51-08).
+    # The refund module owns refund-specific FSM, schemas, and the operator
+    # endpoint's service body. URL space lives in `online_payments/router.py`
+    # (Phase 49 surface) but delegates to `online_refunds.service`, mirroring
+    # the Phase 44 users.router → auth.password_reset_service precedent.
 ignore_imports =
     # Phase 43 USERS-02 / D-43-13 / D-43-19 — Phase 41 0025 password_reset_tokens
     # row (purpose='invitation') is shared infrastructure consumed by both the
@@ -90,6 +96,49 @@ ignore_imports =
     # NO additional cross-module ignores beyond clients models — Plan 49-03
     # reads other subject tables via raw SQL `text()` SELECT (no ORM import).
     app.modules.online_payments.service -> app.modules.clients.models
+    # Phase 51 REFUND-01..04 — online_refunds is its own bounded module
+    # (registered above). The refund FSM lives in `online_refunds.service`,
+    # but legitimately reads:
+    #   - memberships.{constants,models,repository,service}: subject-row FSM
+    #     gates (Phase 32 guards) + Phase-30 renewal-descendant lookup +
+    #     CannotRefundRenewedSourceError / MustUnfreezeFirstError exception
+    #     types — refund is the inverse of sell; sell is owned by memberships.
+    #   - pt_packages.{constants,models}: same role for the pt_package subject.
+    #   - payments.{constants,models}: SUBJECT_KIND_MEMBERSHIP / _PT_PACKAGE +
+    #     Payment ORM row needed to compose the ledger-side refund write.
+    #   - online_payments.models: OnlinePayment row needed to read
+    #     yookassa_payment_id when calling ЮKassa /v3/refunds (REFUND-04).
+    # The operator URL space is /api/v1/online-payments/.../refund, so the
+    # router lives in online_payments and crosses into online_refunds.service —
+    # mirrors Phase 44 RESET-04 users.router → auth.password_reset_service.
+    app.modules.online_payments.router -> app.modules.online_refunds.service
+    app.modules.online_payments.router -> app.modules.online_refunds.schemas
+    app.modules.online_refunds.service -> app.modules.memberships.constants
+    app.modules.online_refunds.service -> app.modules.memberships.models
+    app.modules.online_refunds.service -> app.modules.memberships.repository
+    app.modules.online_refunds.service -> app.modules.memberships.service
+    app.modules.online_refunds.service -> app.modules.online_payments.models
+    app.modules.online_refunds.service -> app.modules.payments.constants
+    app.modules.online_refunds.service -> app.modules.payments.models
+    app.modules.online_refunds.service -> app.modules.pt_packages.constants
+    app.modules.online_refunds.service -> app.modules.pt_packages.models
+    # Phase 51 FISCAL-05 — refund.succeeded webhook UoW lives in
+    # `online_refunds.settle` (the atomic post-handler that flips subject
+    # rows + inserts the refund-kind fiscal_receipts row + emits 4 audits).
+    # Same narrow-scope rationale as `online_refunds.service` above.
+    # `online_refunds.cron` (poll_pending_refunds) reads payments.repository
+    # for ledger lookups when reconciling pending refund rows.
+    app.modules.online_refunds.settle -> app.modules.clients.models
+    app.modules.online_refunds.settle -> app.modules.memberships.constants
+    app.modules.online_refunds.settle -> app.modules.memberships.models
+    app.modules.online_refunds.settle -> app.modules.memberships.repository
+    app.modules.online_refunds.settle -> app.modules.online_payments.models
+    app.modules.online_refunds.settle -> app.modules.payments.constants
+    app.modules.online_refunds.settle -> app.modules.payments.models
+    app.modules.online_refunds.settle -> app.modules.pt_packages.constants
+    app.modules.online_refunds.settle -> app.modules.pt_packages.models
+    app.modules.online_refunds.settle -> app.modules.pt_packages.repository
+    app.modules.online_refunds.cron -> app.modules.payments.repository
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear
