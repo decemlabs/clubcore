@@ -83,44 +83,105 @@ async def _resolve_yookassa_object_id(
 ) -> str | None:
     """Resolve the ЮKassa-side object_id (payment_id or refund_id) for a fiscal_receipt.
 
-    Walks the audit_log chain: the Phase 50 webhook UoW emits
-    ``online_payment_succeeded`` audits whose payload includes both
-    ``audit_correlation_id`` (== fiscal_receipts.audit_correlation_id) and
-    ``yookassa_payment_id``. For refunds the analogous audit row is
-    ``online_refund_polled_settled`` / ``online_refund_initiated`` with
-    ``yookassa_refund_id``.
+    For kind='payment': walks audit_log for ``online_payment_succeeded`` whose
+    payload.audit_correlation_id matches fr_row.audit_correlation_id.
 
-    Returns None if no matching audit row is found (the dispatch task treats
-    this as a permanent error — a fiscal_receipt without a payment chain is a
-    misconfiguration).
+    For kind='refund': two paths are tried in order:
+      1. Audit-log path: ``online_refund_polled_settled`` whose
+         payload.audit_correlation_id matches fr_row.audit_correlation_id.
+         This covers the poll-cron settle path (plan 51-09).
+      2. DB-join path: walk
+         FiscalReceipt.payment_id → refund Payment.refund_of
+         → OnlineRefund.original_payment_id == original_payment.id
+         to read OnlineRefund.yookassa_refund_id directly.
+         This covers the webhook settle path (plan 51-07) where the fiscal
+         receipt's audit_correlation_id is the webhook_intake_corr UUID, not
+         the online_refund_initiated chain UUID.
+
+    Returns None if no matching record is found (dispatch task treats this
+    as a permanent error — a fiscal_receipt without a resolvable payment chain
+    is a misconfiguration).
     """
+    from app.modules.online_refunds.models import OnlineRefund
+    from app.modules.payments.models import Payment as PaymentModel
+
     if fr_row.audit_correlation_id is None:
+        # Try DB-join path for refund even without audit_correlation_id.
+        if fr_row.kind == KIND_REFUND:
+            return await _resolve_refund_id_via_db_join(session, fr_row)
         return None
 
     corr_str = str(fr_row.audit_correlation_id)
     if fr_row.kind == KIND_PAYMENT:
         action = "online_payment_succeeded"
         payload_key = "yookassa_payment_id"
+        stmt = (
+            select(AuditLog.payload)
+            .where(AuditLog.action == action)
+            .where(AuditLog.payload["audit_correlation_id"].astext == corr_str)
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        row = result.first()
+        if row is None:
+            return None
+        payload = row[0] or {}
+        value = payload.get(payload_key)
+        return str(value) if value is not None else None
     elif fr_row.kind == KIND_REFUND:
-        action = "online_refund_polled_settled"
-        payload_key = "yookassa_refund_id"
+        # Path 1: audit-log via online_refund_polled_settled (poll-cron path).
+        stmt = (
+            select(AuditLog.payload)
+            .where(AuditLog.action == "online_refund_polled_settled")
+            .where(AuditLog.payload["audit_correlation_id"].astext == corr_str)
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        row = result.first()
+        if row is not None:
+            payload = row[0] or {}
+            value = payload.get("yookassa_refund_id")
+            if value is not None:
+                return str(value)
+        # Path 2: DB-join via payments/online_refunds (webhook settle path).
+        return await _resolve_refund_id_via_db_join(session, fr_row)
     else:  # pragma: no cover — defended by DB CHECK ck_fiscal_receipts_kind
         return None
 
-    stmt = (
-        select(AuditLog.payload)
-        .where(AuditLog.action == action)
-        .where(AuditLog.payload["audit_correlation_id"].astext == corr_str)
-        .order_by(AuditLog.created_at.desc())
-        .limit(1)
+
+async def _resolve_refund_id_via_db_join(
+    session: Any,
+    fr_row: FiscalReceipt,
+) -> str | None:
+    """Resolve yookassa_refund_id for kind='refund' fiscal receipts via DB join.
+
+    Walk: FiscalReceipt.payment_id → refund Payment (amount < 0)
+          → refund Payment.refund_of → OnlineRefund.original_payment_id
+
+    Used for webhook-settle path receipts where the audit_correlation_id is
+    the webhook_intake_corr UUID, not the online_refund chain UUID.
+    """
+    from app.modules.online_refunds.models import OnlineRefund
+    from app.modules.payments.models import Payment as PaymentModel
+
+    # Load the refund Payment row (the negative payment linked to the FR).
+    refund_payment = await session.scalar(
+        select(PaymentModel).where(PaymentModel.id == fr_row.payment_id)
     )
-    result = await session.execute(stmt)
-    row = result.first()
-    if row is None:
+    if refund_payment is None or refund_payment.refund_of is None:
         return None
-    payload = row[0] or {}
-    value = payload.get(payload_key)
-    return str(value) if value is not None else None
+
+    # Find the OnlineRefund whose original_payment_id matches the original payment.
+    online_refund = await session.scalar(
+        select(OnlineRefund).where(
+            OnlineRefund.original_payment_id == refund_payment.refund_of
+        )
+    )
+    if online_refund is None:
+        return None
+    return online_refund.yookassa_refund_id
 
 
 async def _resolve_amount_kopecks(
