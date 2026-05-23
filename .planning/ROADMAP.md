@@ -122,7 +122,7 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 - [x] **Phase 48: ЮKassa Integration Adapter** — Pure async httpx wrapper, IP verifier, receipt helpers, and `respx` test fixtures (parallels v1.6 Phase 42 email adapter) (completed 2026-05-22)
 - [x] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring (completed 2026-05-22)
 - [x] **Phase 50: Webhook FSM + Fiscal Foundation** — Webhook handler, payment FSM, `record_payment(method='online')`, `fiscal_receipts` table, and atomic UoW in a single phase (completed 2026-05-22)
-- [ ] **Phase 51: Fiscal FSM + Refunds** — Receipt webhook FSM, ARQ dispatch with circuit breaker, and online refund endpoints
+- [x] **Phase 51: Fiscal FSM + Refunds** — Receipt webhook FSM, ARQ dispatch with circuit breaker, and online refund endpoints (completed 2026-05-23)
 - [ ] **Phase 52: Cross-Channel Notifications + v1.6 Carry-out** — Telegram + email DMs wired post-commit; DEFER-46-01 (live RU email probe) and DEFER-46-02 (15-template countersign) closed
 - [ ] **Phase 53: Milestone Verification** — Operator runbook, race tests, DEFER-46-03 re-run, ≤5 inline regressions hard cap
 
@@ -235,16 +235,16 @@ Plans:
   5. `refund.succeeded` webhook atomically: writes a refund row to `payments`, transitions membership/PT-package to `refunded`, inserts `fiscal_receipts(kind='refund')`, and enqueues a notification post-commit
   6. ARQ task `poll_pending_refunds` runs every 30 minutes and reconciles any refund row with `status='pending'` older than 30 minutes by calling `GET /v3/refunds/{id}`
 **Plans**: 10 plans
-  - [ ] 51-01-PLAN.md — Alembic 0037 online_refunds table + UNIQUEs (REFUND-01 schema, REFUND-03 partial-UNIQUE backstop)
-  - [ ] 51-02-PLAN.md — online_refunds module skeleton + 3 new LOCKED audit events + payload classes (REFUND-01, REFUND-03)
-  - [ ] 51-03-PLAN.md — YooKassaClient.create_receipt + YooKassaReceiptResult + respx fixtures (FISCAL-05 client extension)
-  - [ ] 51-04-PLAN.md — app/integrations/yookassa/circuit_breaker.py copy-and-adapt (FISCAL-05 breaker)
-  - [ ] 51-05-PLAN.md — dispatch_fiscal_receipt ARQ task + real FiscalReceiptDispatcher impl + REG-29-03 double-wire (FISCAL-05, FISCAL-07)
-  - [ ] 51-06-PLAN.md — _post_commit_enqueue body fill + AST gate lockstep flip (FISCAL-05 DEFER-50-04 closure)
-  - [ ] 51-07-PLAN.md — handle_refund_succeeded + handle_receipt_succeeded + handle_receipt_canceled + router elif branches (FISCAL-04, REFUND-02, REFUND-03)
-  - [ ] 51-08-PLAN.md — POST /refund endpoints + initiate_online_refund service (REFUND-01)
-  - [ ] 51-09-PLAN.md — monitor_stale_fiscal_receipts + poll_pending_refunds crons + _settle_online_refund shared helper (FISCAL-06, REFUND-04)
-  - [ ] 51-10-PLAN.md — end-to-end tests + route introspection + audit-chain invariants + regression sweep (all 8 requirements)
+  - [x] 51-01-PLAN.md — Alembic 0037 online_refunds table + UNIQUEs (REFUND-01 schema, REFUND-03 partial-UNIQUE backstop)
+  - [x] 51-02-PLAN.md — online_refunds module skeleton + 3 new LOCKED audit events + payload classes (REFUND-01, REFUND-03)
+  - [x] 51-03-PLAN.md — YooKassaClient.create_receipt + YooKassaReceiptResult + respx fixtures (FISCAL-05 client extension)
+  - [x] 51-04-PLAN.md — app/integrations/yookassa/circuit_breaker.py copy-and-adapt (FISCAL-05 breaker)
+  - [x] 51-05-PLAN.md — dispatch_fiscal_receipt ARQ task + real FiscalReceiptDispatcher impl + REG-29-03 double-wire (FISCAL-05, FISCAL-07)
+  - [x] 51-06-PLAN.md — _post_commit_enqueue body fill + AST gate lockstep flip (FISCAL-05 DEFER-50-04 closure)
+  - [x] 51-07-PLAN.md — handle_refund_succeeded + handle_receipt_succeeded + handle_receipt_canceled + router elif branches (FISCAL-04, REFUND-02, REFUND-03)
+  - [x] 51-08-PLAN.md — POST /refund endpoints + initiate_online_refund service (REFUND-01)
+  - [x] 51-09-PLAN.md — monitor_stale_fiscal_receipts + poll_pending_refunds crons + _settle_online_refund shared helper (FISCAL-06, REFUND-04)
+  - [x] 51-10-PLAN.md — end-to-end tests + route introspection + audit-chain invariants + regression sweep (all 8 requirements)
 
 ### Phase 52: Cross-Channel Notifications + v1.6 Carry-out
 **Goal**: Payment and refund outcomes are communicated to clients via Telegram DM and email; two v1.6 operator deferrals (live email probe + template countersign) are formally closed
@@ -281,7 +281,7 @@ Plans:
 | 48. ЮKassa Integration Adapter | 7/7 | Complete   | 2026-05-22 |
 | 49. Online Sales Orchestrator | 7/7 | Complete    | 2026-05-22 |
 | 50. Webhook FSM + Fiscal Foundation | 6/6 | Complete    | 2026-05-22 |
-| 51. Fiscal FSM + Refunds | 0/10 | Planned | - |
+| 51. Fiscal FSM + Refunds | 10/10 | Complete   | 2026-05-23 |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 0/TBD | Not started | - |
 | 53. Milestone Verification | 0/TBD | Not started | - |
 
