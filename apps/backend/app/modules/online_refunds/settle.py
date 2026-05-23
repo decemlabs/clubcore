@@ -129,9 +129,11 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
             "pt_package_plan_id — DB CHECK constraint violated"
         )
 
-    # Step 4: load ORIGINAL sale-side Payment to extract the activated
-    # Membership/PtPackage row id (Payment.subject_id is that row id, NOT the
-    # plan id — recorded by Phase 50 record_payment from inside the activator).
+    # Step 4: load ORIGINAL sale-side Payment to read its subject_id (used as
+    # the PaymentRefunder lookup key — refunder filters
+    # ``Payment WHERE subject_kind=:k AND subject_id=:id AND amount > 0``).
+    # Phase 50 webhook records ``subject_id = membership_plan_id`` (the PLAN
+    # id, not the activated instance id) so the PaymentRefunder lookup matches.
     original_payment = await session.get(Payment, row.original_payment_id)
     if original_payment is None:
         raise RuntimeError(
@@ -149,12 +151,25 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         audit_actor=None,  # type: ignore[arg-type]
     )
 
-    # Step 6: direct subject transition (Errata #4 — NOT activator).
+    # Step 6: direct subject transition (Errata #4 — NOT activator). The
+    # activated Membership / PtPackage row is looked up via (client_id, plan_id)
+    # — the Phase 50 activator stores ``plan_id`` on the row but does NOT carve
+    # an FK from the instance back to OnlinePayment. The OnlinePayment carries
+    # both client_id and ``{membership,pt_package}_plan_id``, so the pair is
+    # the canonical join key. Only one ALIVE instance per (client_id, plan_id)
+    # should exist at a given moment (Phase 32 D-32-08 + Membership FSM
+    # discipline); we filter active/exhausted rows to skip already-cancelled
+    # historical rows on the same plan.
     if subject_kind == SUBJECT_KIND_MEMBERSHIP:
-        membership = await session.get(Membership, subject_id)
+        membership_stmt = select(Membership).where(
+            Membership.client_id == op.client_id,
+            Membership.plan_id == op.membership_plan_id,
+            Membership.status.in_(("active", "frozen", "expired")),
+        )
+        membership = await session.scalar(membership_stmt)
         if membership is None:
             raise RuntimeError(
-                f"Membership {subject_id} missing — Payment.subject_id stale"
+                f"no live Membership for client={op.client_id} plan={op.membership_plan_id}"
             )
         await memberships_repo.update_membership_status(
             session,
@@ -176,10 +191,15 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         subject_resource_id: UUID = membership.id
         subject_client_id: UUID = membership.client_id
     else:
-        pt_package = await session.get(PtPackage, subject_id)
+        pt_package_stmt = select(PtPackage).where(
+            PtPackage.client_id == op.client_id,
+            PtPackage.plan_id == op.pt_package_plan_id,
+            PtPackage.status.in_(("active", "exhausted", "expired")),
+        )
+        pt_package = await session.scalar(pt_package_stmt)
         if pt_package is None:
             raise RuntimeError(
-                f"PtPackage {subject_id} missing — Payment.subject_id stale"
+                f"no live PtPackage for client={op.client_id} plan={op.pt_package_plan_id}"
             )
         await pt_packages_repo.update_pt_package_status(
             session,
