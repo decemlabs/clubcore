@@ -54,17 +54,17 @@
 - [x] **FISCAL-01**: Alembic 0035 creates `fiscal_receipts` table — UUIDv4 PK, `payment_id` FK to `payments.id` (NOT `online_payments.id` — fiscal obligation attaches to committed ledger row), `kind TEXT CHECK ∈ {payment, refund}`, `status TEXT CHECK ∈ {pending, sent, succeeded, failed}`, `yookassa_receipt_id TEXT NULL`, `customer_email TEXT NOT NULL`, `sent_at`/`succeeded_at`/`failed_at` timestamps, `failure_reason TEXT NULL`
 - [x] **FISCAL-02**: UNIQUE `(payment_id, kind)` on `fiscal_receipts` (cross-channel discriminator pattern from v1.6 — same `payment_id` may have both `payment` AND `refund` receipts but not duplicates)
 - [x] **FISCAL-03**: Receipt object embedded in `POST /v3/payments` body (Scenario 1) — receipt items composed via `build_receipt_item()` from ADAPTER-04; `customer.email` populated from `clients.email`; `payment_subject="service"` + `payment_mode="full_payment"` as `Literal` constants (AST gate rejects non-literal values)
-- [ ] **FISCAL-04**: `handle_receipt_webhook()` processes `receipt.succeeded` and `receipt.canceled` event types (exact strings verified against ЮKassa dashboard in Phase 50); FSM `sent → succeeded / failed`
-- [ ] **FISCAL-05**: `dispatch_fiscal_receipt` ARQ task (`max_tries=3`, `timeout=20s`, exponential backoff with jitter); Redis circuit breaker `sz:yookassa:circuit:receipts` (atomic pipeline `record_failure` + TTL 5m); mirrors v1.6 email circuit breaker
-- [ ] **FISCAL-06**: ARQ cron `monitor_stale_fiscal_receipts` runs every 15 min Europe/Moscow — scans for `fiscal_receipts.status = 'pending'` rows older than 90s; emits `fiscal_receipt_failed` audit + operator Telegram alert via NOT-04
-- [ ] **FISCAL-07**: `YOOKASSA_TAX_SYSTEM_CODE` (1=ОСН, 2=УСН доходы, 3=УСН доходы-расходы, 6=ПСН, etc.) + `YOOKASSA_VAT_CODE` (1=без НДС, 2=НДС 0%, etc.) read from env via `YooKassaSettings`; never hardcoded; deployment-runbook documents how owner sets per-deployment
+- [x] **FISCAL-04**: `handle_receipt_webhook()` processes `receipt.succeeded` and `receipt.canceled` event types (exact strings verified against ЮKassa dashboard in Phase 50); FSM `sent → succeeded / failed`
+- [x] **FISCAL-05**: `dispatch_fiscal_receipt` ARQ task (`max_tries=3`, `timeout=20s`, exponential backoff with jitter); Redis circuit breaker `sz:yookassa:circuit:receipts` (atomic pipeline `record_failure` + TTL 5m); mirrors v1.6 email circuit breaker
+- [x] **FISCAL-06**: ARQ cron `monitor_stale_fiscal_receipts` runs every 15 min Europe/Moscow — scans for `fiscal_receipts.status = 'pending'` rows older than 90s; emits `fiscal_receipt_failed` audit + operator Telegram alert via NOT-04
+- [x] **FISCAL-07**: `YOOKASSA_TAX_SYSTEM_CODE` (1=ОСН, 2=УСН доходы, 3=УСН доходы-расходы, 6=ПСН, etc.) + `YOOKASSA_VAT_CODE` (1=без НДС, 2=НДС 0%, etc.) read from env via `YooKassaSettings`; never hardcoded; deployment-runbook documents how owner sets per-deployment
 
 ### REFUND (Online refunds — Phase 51)
 
-- [ ] **REFUND-01**: `POST /api/v1/online-payments/memberships/{id}/refund` (reception + owner) — full refund only (v1.4 B-02 partial-refund still deferred); routes to `client.create_refund()`; returns 202 (refund awaits webhook confirmation); analogous endpoint for pt-packages
-- [ ] **REFUND-02**: `handle_refund_webhook()` processes `refund.succeeded` event — atomic UoW: writes refund row to `payments` (signed-amount preserves v1.4 CHECK), updates membership/pt-package status to `refunded`, INSERTs `fiscal_receipts(kind='refund')` row, commits, enqueues NOT-02 DMs post-commit
-- [ ] **REFUND-03**: Partial UNIQUE `(refund_of) WHERE refund_of IS NOT NULL` from v1.4 preserved (prevents double-refund); webhook handler returns 200 on `IntegrityError` (idempotent semantics on retry)
-- [ ] **REFUND-04**: ARQ task `poll_pending_refunds` runs every 30 min — for any refund row with `status='pending'` older than 30 min, calls `GET /v3/refunds/{id}` and reconciles; covers missing `refund.succeeded` webhook subscription (deployment-runbook entry)
+- [x] **REFUND-01**: `POST /api/v1/online-payments/memberships/{id}/refund` (reception + owner) — full refund only (v1.4 B-02 partial-refund still deferred); routes to `client.create_refund()`; returns 202 (refund awaits webhook confirmation); analogous endpoint for pt-packages
+- [x] **REFUND-02**: `handle_refund_webhook()` processes `refund.succeeded` event — atomic UoW: writes refund row to `payments` (signed-amount preserves v1.4 CHECK), updates membership/pt-package status to `refunded`, INSERTs `fiscal_receipts(kind='refund')` row, commits, enqueues NOT-02 DMs post-commit
+- [x] **REFUND-03**: Partial UNIQUE `(refund_of) WHERE refund_of IS NOT NULL` from v1.4 preserved (prevents double-refund); webhook handler returns 200 on `IntegrityError` (idempotent semantics on retry)
+- [x] **REFUND-04**: ARQ task `poll_pending_refunds` runs every 30 min — for any refund row with `status='pending'` older than 30 min, calls `GET /v3/refunds/{id}` and reconciles; covers missing `refund.succeeded` webhook subscription (deployment-runbook entry)
 
 ### NOTIFY (Cross-channel mirrors — Phase 52)
 
@@ -148,14 +148,14 @@
 | FISCAL-01 | Phase 50 | Complete |
 | FISCAL-02 | Phase 50 | Complete |
 | FISCAL-03 | Phase 50 | Complete |
-| FISCAL-04 | Phase 51 | Pending |
-| FISCAL-05 | Phase 51 | Pending |
-| FISCAL-06 | Phase 51 | Pending |
-| FISCAL-07 | Phase 51 | Pending |
-| REFUND-01 | Phase 51 | Pending |
-| REFUND-02 | Phase 51 | Pending |
-| REFUND-03 | Phase 51 | Pending |
-| REFUND-04 | Phase 51 | Pending |
+| FISCAL-04 | Phase 51 | Complete |
+| FISCAL-05 | Phase 51 | Complete |
+| FISCAL-06 | Phase 51 | Complete |
+| FISCAL-07 | Phase 51 | Complete |
+| REFUND-01 | Phase 51 | Complete |
+| REFUND-02 | Phase 51 | Complete |
+| REFUND-03 | Phase 51 | Complete |
+| REFUND-04 | Phase 51 | Complete |
 | NOTIFY-01 | Phase 52 | Pending |
 | NOTIFY-02 | Phase 52 | Pending |
 | NOTIFY-03 | Phase 52 | Pending |
