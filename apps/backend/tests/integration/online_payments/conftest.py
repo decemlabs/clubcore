@@ -41,6 +41,17 @@ from app.modules.clients.models import Client
 from app.modules.memberships.models import MembershipPlan
 from app.modules.pt_packages.models import PtPackagePlan
 
+# Re-export Phase 50 webhook fixtures needed by test_notify05_cancellation_regression.py
+# (pytest conftest discovery is directory-tree-only — explicit re-export is required).
+from tests.integration.webhook_yookassa.conftest import (  # noqa: F401
+    seeded_online_payment_pending,
+    webhook_client,
+    webhook_db_session,
+    webhook_engine,
+    webhook_payment_canceled_body,
+    yookassa_get_payment_canceled,
+)
+
 # Re-export respx fixtures from the Phase 48 / Plan 49-01 base conftest so
 # they're available to tests in this directory (pytest conftest discovery
 # is directory-tree-only; explicit re-import + ``# noqa: F401`` is the
@@ -75,7 +86,7 @@ def _reset_structlog_for_capture_integration() -> Generator[None, None, None]:
         import app.integrations.yookassa.factory as _factory_mod
 
         importlib.reload(_factory_mod)
-    except Exception:  # noqa: BLE001, S110 -- best-effort isolation, do not fail tests
+    except Exception:  # noqa: S110 -- best-effort isolation, do not fail tests
         pass
     yield
 
