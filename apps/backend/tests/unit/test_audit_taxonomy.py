@@ -225,10 +225,19 @@ def test_locked_audit_events_has_expected_count() -> None:
     ``('pt_package_activated_online', 'pt_package')`` — CHILD audit emits
     inside the ЮKassa webhook UoW (D-50-18). The v1.7 count grows 9 → 11
     and the frozenset total becomes 80 + 2 = 82. See 50-02-SUMMARY.md.
+
+    Phase 51 Plan 51-02 (D-51-19) ADDS 3 online-refund lifecycle pairs:
+    ``('online_refund_initiated', 'online_refund')`` — fresh chain root,
+    emitted from POST /online-payments/.../refund (Plan 51-08);
+    ``('online_refund_polled_settled', 'online_refund')`` and
+    ``('online_refund_canceled', 'online_refund')`` — CHILD emits from the
+    poll_pending_refunds cron synthesising a settle UoW after a missed
+    webhook (Plan 51-09 / D-51-17). The v1.7 count grows 11 → 14 and the
+    frozenset total becomes 82 + 3 = 85. See 51-02-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 82, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 82 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 11 v1.7), "
+    assert len(LOCKED_AUDIT_EVENTS) == 85, (
+        f"LOCKED_AUDIT_EVENTS size drifted: expected 85 "
+        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
 
