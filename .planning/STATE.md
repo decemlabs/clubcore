@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Online Payments + 54-ФЗ
-status: planning
+status: executing
 stopped_at: Phase 52 planned (6 plans, plan-check passed)
-last_updated: "2026-05-23T16:27:08.354Z"
-last_activity: 2026-05-23
+last_updated: "2026-05-23T16:28:12.431Z"
+last_activity: 2026-05-23 -- Phase 52 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 51 — fiscal-fsm-refunds
+**Current focus:** Phase 52 — cross-channel-notifications-v1-6-carry-out
 
 ## Current Position
 
-Phase: 52
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-23
+Phase: 52 (cross-channel-notifications-v1-6-carry-out) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 52
+Last activity: 2026-05-23 -- Phase 52 execution started
 
 ## Accumulated Context
 
