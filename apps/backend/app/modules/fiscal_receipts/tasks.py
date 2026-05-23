@@ -207,6 +207,7 @@ async def _terminal_failure(
     session_factory: Any,
     receipt_uuid: UUID,
     failure_reason: str,
+    arq_pool: Any | None = None,
 ) -> str:
     """Open a fresh session, flip the fiscal_receipt to status='failed', emit audit, commit.
 
@@ -214,6 +215,11 @@ async def _terminal_failure(
     max-tries-exhausted-on-transient branch so the FSM `sent → failed` flip
     always lives in a single place. Returns ``"failed"`` so callers can
     propagate the ARQ return value.
+
+    Phase 52 D-52-10: when ``arq_pool`` is non-None, enqueues
+    ``dispatch_payment_notification(kind='fiscal_failed')`` post-commit as a
+    best-effort owner alert. The enqueue is guard-wrapped (arq_pool is not None)
+    so unit tests that pass None are unaffected.
     """
     async with session_factory() as session:
         fr_row = await fiscal_repo.get_fiscal_receipt_by_id(session, receipt_uuid)
@@ -240,7 +246,17 @@ async def _terminal_failure(
             fiscal_receipt_id=str(fr_row.id),
             failure_reason=failure_reason,
         )
+        # Capture payment_id before commit closes the session (row detaches after).
+        fr_payment_id: UUID = fr_row.payment_id
         await session.commit()
+    # Phase 52 D-52-10 — best-effort owner alert, post-commit, None-safe.
+    if arq_pool is not None:
+        await arq_pool.enqueue_job(
+            "dispatch_payment_notification",
+            _kwargs={"payment_id": str(fr_payment_id), "kind": "fiscal_failed"},
+            _max_tries=3,
+            _expires=60,
+        )
     return "failed"
 
 
@@ -292,6 +308,7 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
             session_factory,
             receipt_uuid,
             "permanent_error::missing_yookassa_object_id",
+            arq_pool=redis,
         )
 
     # FISCAL-07: consume settings, NEVER hardcode.
@@ -341,7 +358,9 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
                 f"{result.http_status or ''}:"
                 f"{result.error_code or ''}"
             )
-            return await _terminal_failure(session_factory, receipt_uuid, reason)
+            return await _terminal_failure(
+                session_factory, receipt_uuid, reason, arq_pool=redis
+            )
 
         defer = _backoff_with_jitter(job_try)
         _log.warning(
@@ -358,7 +377,9 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
             f"{result.http_status or ''}:"
             f"{result.error_code or ''}"
         )
-        return await _terminal_failure(session_factory, receipt_uuid, failure_reason)
+        return await _terminal_failure(
+            session_factory, receipt_uuid, failure_reason, arq_pool=redis
+        )
 
     # classification == "ok" — write yookassa_receipt_id + emit dispatched audit.
     # Do NOT flip status to 'succeeded' — the inbound receipt.succeeded webhook
