@@ -112,20 +112,19 @@ async def claim_payment_notification(
     when the context manager exits — and ``False`` is returned; no re-raise.
     """
     assert (payment_id is None) != (online_payment_id is None), (
-        "claim_payment_notification: exactly one of payment_id / online_payment_id "
-        "must be non-None (got payment_id=%r, online_payment_id=%r)" % (payment_id, online_payment_id)
+        f"claim_payment_notification: exactly one of payment_id / online_payment_id "
+        f"must be non-None (got payment_id={payment_id!r}, online_payment_id={online_payment_id!r})"
     )
     try:
-        async with session_factory() as session:
-            async with session.begin():
-                session.add(
-                    PaymentNotification(
-                        payment_id=payment_id,
-                        online_payment_id=online_payment_id,
-                        kind=kind,
-                        channel=channel,
-                    )
+        async with session_factory() as session, session.begin():
+            session.add(
+                PaymentNotification(
+                    payment_id=payment_id,
+                    online_payment_id=online_payment_id,
+                    kind=kind,
+                    channel=channel,
                 )
+            )
     except IntegrityError:
         # Partial-UNIQUE violation — this (subject, kind, channel) was already
         # claimed. The txn rolls back inside the context manager exit; return False
