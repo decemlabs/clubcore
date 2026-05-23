@@ -887,8 +887,21 @@ async def test_handle_refund_succeeded_enqueues_dispatch_fiscal_receipt_post_com
         )
     ).scalar_one()
 
-    spy_pool.enqueue_job.assert_awaited_once()
-    args, kwargs = spy_pool.enqueue_job.call_args
-    assert args[0] == "dispatch_fiscal_receipt"
-    assert args[1] == str(fr_id)
-    assert kwargs == {"_max_tries": 3, "_expires": 60}
+    # Phase 52 (52-05): the refund post-commit seam now enqueues TWO jobs —
+    # dispatch_fiscal_receipt (Phase 51, 54-ФЗ receipt) AND
+    # dispatch_payment_notification (Phase 52, kind='refund_succeeded').
+    assert spy_pool.enqueue_job.await_count == 2
+    calls = spy_pool.enqueue_job.call_args_list
+
+    fiscal_calls = [c for c in calls if c.args and c.args[0] == "dispatch_fiscal_receipt"]
+    assert len(fiscal_calls) == 1
+    assert fiscal_calls[0].args[1] == str(fr_id)
+    assert fiscal_calls[0].kwargs == {"_max_tries": 3, "_expires": 60}
+
+    notify_calls = [
+        c for c in calls if c.args and c.args[0] == "dispatch_payment_notification"
+    ]
+    assert len(notify_calls) == 1
+    assert notify_calls[0].kwargs["_kwargs"]["kind"] == "refund_succeeded"
+    assert notify_calls[0].kwargs["_max_tries"] == 3
+    assert notify_calls[0].kwargs["_expires"] == 60

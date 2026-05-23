@@ -29,6 +29,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -159,11 +160,26 @@ def arq_ctx(
 
     ``job_try`` defaults to 1; tests that exercise the retry-exhaustion
     branch mutate ``ctx["job_try"]`` before invoking the task.
+
+    Phase 52 (52-05): the dispatch task's failure path enqueues a best-effort
+    ``dispatch_payment_notification`` owner alert via ``ctx['redis']``. In the
+    real ARQ worker ``ctx['redis']`` is an ``ArqRedis`` (has ``enqueue_job``);
+    the test's lifespan redis is a plain ``Redis``. Wrap it so circuit-breaker
+    ops still hit the real redis while ``enqueue_job`` is a no-op AsyncMock.
     """
+
+    class _ArqRedisProxy:
+        def __init__(self, redis: Redis) -> None:
+            self._redis = redis
+            self.enqueue_job = AsyncMock()
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._redis, name)
+
     return {
         "sessionmaker": fiscal_session_factory,
         "yookassa_client": fiscal_yookassa_client,
-        "redis": fiscal_redis,
+        "redis": _ArqRedisProxy(fiscal_redis),
         "job_try": 1,
     }
 

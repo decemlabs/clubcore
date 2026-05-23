@@ -29,6 +29,7 @@ import json as _json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -419,10 +420,23 @@ async def test_e2e_fiscal_receipt_dispatch_failure_path_transitions_status_faile
     # Dispatch with 429 → permanent_error.
     yookassa_client = await build_yookassa_client(settings=YooKassaSettings())
     try:
+        # Phase 52 (52-05): the failure path enqueues a best-effort
+        # dispatch_payment_notification owner alert via ctx['redis']. In the
+        # real ARQ worker ctx['redis'] is an ArqRedis (has enqueue_job); the
+        # lifespan redis is a plain Redis. Wrap so circuit-breaker ops still
+        # hit the real redis while enqueue_job is a no-op AsyncMock.
+        class _ArqRedisProxy:
+            def __init__(self, redis: Any) -> None:
+                self._redis = redis
+                self.enqueue_job = AsyncMock()
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._redis, name)
+
         arq_ctx = {
             "sessionmaker": e2e_fiscal_session_factory,
             "yookassa_client": yookassa_client,
-            "redis": app.state.redis,
+            "redis": _ArqRedisProxy(app.state.redis),
             "job_try": 1,
         }
         result = await dispatch_fiscal_receipt(arq_ctx, str(fr_id))
