@@ -112,10 +112,14 @@ def test_worker_settings_functions_registered() -> None:
     Phase 50/51 appended ``dispatch_fiscal_receipt`` (Plan 51-05 ARQ task),
     plus Phase 51 ``monitor_stale_fiscal_receipts`` and
     ``poll_pending_refunds`` (Plan 51-09 crons — both crons AND functions
-    per ARQ contract). List now has 10 entries.
+    per ARQ contract). List had 10 entries.
+
+    Phase 52 (NOT-01..05) appended ``dispatch_payment_notification`` — the
+    request-handler-driven cross-channel client + owner-alert dispatch task.
+    List now has 11 entries.
     """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 10
+    assert len(WorkerSettings.functions) == 11
 
 
 def test_worker_settings_redis_settings_resolved() -> None:

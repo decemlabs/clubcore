@@ -33,6 +33,13 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/telegram/status",  # Phase 7 — pre-auth poll
         "/api/v1/auth/telegram/verify",  # Phase 7 — body carries token + code
         "/api/v1/auth/otp/request",  # Phase 42 D-42-22 — pre-auth OTP bootstrap (telegram + email channels)
+        # Phase 44 D-44-34 — RESET-01/02/04 anonymous-by-design endpoints.
+        # No CSRF, no RBAC: identity is carried by the body (email / opaque
+        # token). Anti-oracle + atomic-consume + rate-limit policy lives wholly
+        # in password_reset_service. The diff-to-the-set IS the audit trail (D-19).
+        "/api/v1/auth/password-reset/request",  # RESET-01
+        "/api/v1/auth/password-reset/confirm",  # RESET-02
+        "/api/v1/users/invitations/accept",  # RESET-04
         # Phase 49 D-49-26 — PAY-07 anonymous-by-design return-URL screen.
         # No auth, no CSRF; reveals no data (static HTML only). The handler
         # MUST stay this way — adding any DB lookup or query-param branching

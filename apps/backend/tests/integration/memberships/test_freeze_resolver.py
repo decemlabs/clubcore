@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date, time, timedelta
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -188,6 +188,10 @@ def _build_ctx(db_session: AsyncSession, redis_client: Any) -> HandlerContext:
         sender=sender_mod,
         visits_service=visits_service,
         redis=redis_client,
+        # Phase 40 D-40-04/06: checkin_handler does not consume these, but the
+        # NamedTuple constructor requires every field — benign placeholders.
+        bookings_service=cast(Any, None),
+        schedule_service=cast(Any, None),
     )
 
 

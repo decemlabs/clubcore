@@ -517,7 +517,7 @@ async def test_book_callback_emits_audit_with_telegram_bot_actor_role(
     rows = (
         (
             await db_session.execute(
-                select(AuditLog).where(AuditLog.event_name == "booking_created")
+                select(AuditLog).where(AuditLog.action == "booking_created")
             )
         )
         .scalars()

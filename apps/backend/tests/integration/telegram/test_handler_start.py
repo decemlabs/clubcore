@@ -111,7 +111,8 @@ def _build_ctx(db_session: AsyncSession) -> HandlerContext:
     async def _factory() -> AsyncIterator[AsyncSession]:
         yield db_session
 
-    # Phase 20: HandlerContext gained visits_service + redis fields. start_handler
+    # Phase 20: HandlerContext gained visits_service + redis fields. Phase 40
+    # (D-40-04/06) appended bookings_service + schedule_service. start_handler
     # does not consume them, but the NamedTuple constructor requires every field —
     # pass benign placeholders so this Phase 7 test continues to construct the ctx.
     return HandlerContext(
@@ -120,6 +121,8 @@ def _build_ctx(db_session: AsyncSession) -> HandlerContext:
         sender=sender_mod,
         visits_service=visits_service,
         redis=cast(Any, None),
+        bookings_service=cast(Any, None),
+        schedule_service=cast(Any, None),
     )
 
 
