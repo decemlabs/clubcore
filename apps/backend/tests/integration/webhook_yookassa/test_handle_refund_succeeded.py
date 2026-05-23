@@ -814,3 +814,81 @@ async def test_handle_refund_succeeded_does_not_leak_customer_email_to_structlog
                 assert client_email not in value, (
                     f"customer_email leaked to structlog event: {entry!r}"
                 )
+
+
+@pytest.mark.asyncio
+async def test_handle_refund_succeeded_enqueues_dispatch_fiscal_receipt_post_commit(
+    webhook_client: Any,
+    webhook_db_session: AsyncSession,
+    seeded_refund_membership: dict[str, Any],
+) -> None:
+    """Verification gap fix — the refund-side fiscal_receipts row MUST be
+    enqueued for dispatch_fiscal_receipt after the UoW commits.
+
+    Without this, fiscal_receipts(kind='refund', status='sent') would sit
+    forever; the worker never POSTs to ЮKassa /v3/receipts and the row never
+    flips to 'succeeded'. That is a 54-ФЗ compliance gap (the refund-side
+    receipt is mandatory for the regulator).
+
+    Mirrors the structural contract of ``handle_payment_succeeded`` →
+    ``_post_commit_enqueue`` enqueue, asserted at the runtime layer via a
+    spy on ``app.state.arq_pool``.
+    """
+    from unittest.mock import AsyncMock
+
+    refund: OnlineRefund = seeded_refund_membership["refund"]
+    op: OnlinePayment = seeded_refund_membership["op"]
+    refund_yookassa_id = refund.yookassa_refund_id
+    op_yookassa_payment_id = op.yookassa_payment_id
+    refund_amount_kopecks = refund.amount_kopecks
+
+    # Mount a spy arq_pool on the live FastAPI app so the production webhook
+    # path threads it into handle_refund_succeeded (see router.py line ~134).
+    spy_pool = AsyncMock()
+    app = webhook_client._transport.app  # type: ignore[attr-defined]
+    prior_pool = getattr(app.state, "arq_pool", None)
+    app.state.arq_pool = spy_pool
+    try:
+        with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
+            router.get(
+                url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
+            ).mock(
+                return_value=httpx.Response(
+                    200,
+                    json=_refund_succeeded_response(
+                        refund_yookassa_id,
+                        op_yookassa_payment_id,
+                        refund_amount_kopecks,
+                    ),
+                )
+            )
+            body = _webhook_refund_succeeded_body(refund_yookassa_id)
+            response = await webhook_client.post(
+                "/api/v1/_internal/yookassa/webhook", json=body
+            )
+            assert response.status_code == 200, response.text
+    finally:
+        if prior_pool is None:
+            delattr(app.state, "arq_pool")
+        else:
+            app.state.arq_pool = prior_pool
+
+    # The settle helper inserted exactly one refund-side fiscal_receipts row;
+    # the post-commit enqueue must have fired exactly once for that row's id.
+    await webhook_db_session.commit()
+    webhook_db_session.expire_all()
+
+    fr_id = (
+        await webhook_db_session.execute(
+            select(FiscalReceipt.id).where(
+                FiscalReceipt.kind == "refund",
+                FiscalReceipt.status == "sent",
+            )
+        )
+    ).scalar_one()
+
+    spy_pool.enqueue_job.assert_awaited_once()
+    args, kwargs = spy_pool.enqueue_job.call_args
+    assert args[0] == "dispatch_fiscal_receipt"
+    assert args[1] == str(fr_id)
+    assert kwargs == {"_max_tries": 3, "_expires": 60}

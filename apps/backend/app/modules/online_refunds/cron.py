@@ -53,6 +53,7 @@ _LOOP_BUDGET_PER_TICK: int = 50
 async def _poll_pending_refunds(
     session_factory: async_sessionmaker[Any],
     yookassa_client: YooKassaClient,
+    arq_pool: Any | None = None,
 ) -> int:
     """Phase 51 REFUND-04 — reconcile pending online_refunds via get_refund.
 
@@ -106,9 +107,10 @@ async def _poll_pending_refunds(
             # the cron-path audit chain is distinct from any webhook chain
             # for the same refund.
             corr = uuid4()
+            settled_locals = None
             async with session_factory() as session, session.begin():
                 try:
-                    await _settle_online_refund(
+                    settled_locals = await _settle_online_refund(
                         session,
                         online_refund_id=refund_row_id,
                         chain_root_corr=corr,
@@ -127,6 +129,17 @@ async def _poll_pending_refunds(
                         )
                         continue
                     raise
+            # Phase 51 verification gap fix — enqueue dispatch_fiscal_receipt
+            # for the just-INSERTed refund-side fiscal_receipts row. Mirrors
+            # the handle_refund_succeeded post-commit hook so cron-path
+            # settles also reach ЮKassa /v3/receipts (54-ФЗ compliance).
+            if settled_locals is not None and arq_pool is not None:
+                await arq_pool.enqueue_job(
+                    "dispatch_fiscal_receipt",
+                    str(settled_locals.fiscal_receipt_id),
+                    _max_tries=3,
+                    _expires=60,
+                )
             processed += 1
 
         elif result.status == "canceled":

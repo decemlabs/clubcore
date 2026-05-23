@@ -127,7 +127,13 @@ async def yookassa_webhook(
     elif event_type == "refund.succeeded":
         # Phase 51 D-51-11 — refund webhook re-fetches via yookassa_client.get_refund
         # before any DB write (D-50-12 doctrine inherited).
-        await handle_refund_succeeded(session, yookassa_client, body=body)
+        # Thread arq_pool so the post-commit hook enqueues
+        # dispatch_fiscal_receipt for the refund-side fiscal_receipts row —
+        # symmetric to the payment.succeeded branch above (verification gap fix).
+        arq_pool = getattr(request.app.state, "arq_pool", None)
+        await handle_refund_succeeded(
+            session, yookassa_client, body=body, arq_pool=arq_pool
+        )
     elif event_type == "receipt.succeeded":
         # Phase 51 D-51-21 — receipt handlers do NOT take yookassa_client
         # (D-51-03 — no re-fetch; receipt status is informational, the body is

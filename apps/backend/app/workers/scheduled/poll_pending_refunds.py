@@ -36,6 +36,10 @@ async def poll_pending_refunds(ctx: dict[str, Any]) -> int:
               populated by ``WorkerSettings.on_startup``.
             - ctx["yookassa_client"]: ``YooKassaClient`` populated by
               ``WorkerSettings.on_startup`` (D-48-25 mirror of main.py).
+            - ctx["redis"] (optional): ARQ pool — ARQ injects this as
+              ``ctx['redis']`` for cron jobs so the helper can enqueue
+              ``dispatch_fiscal_receipt`` for newly-INSERTed refund-side
+              fiscal_receipts rows (verification gap fix).
 
     Returns:
         int — count of rows whose status moved from 'pending' to a terminal
@@ -43,6 +47,9 @@ async def poll_pending_refunds(ctx: dict[str, Any]) -> int:
     """
     session_factory = ctx["sessionmaker"]
     yookassa_client = ctx["yookassa_client"]
-    count = await _poll_pending_refunds(session_factory, yookassa_client)
+    arq_pool = ctx.get("redis")
+    count = await _poll_pending_refunds(
+        session_factory, yookassa_client, arq_pool=arq_pool
+    )
     _log.info("poll_pending_refunds_complete", count=count)
     return count

@@ -644,6 +644,7 @@ async def handle_refund_succeeded(
     yookassa_client: YooKassaClient,
     *,
     body: dict[str, Any],
+    arq_pool: Any | None = None,
 ) -> None:
     """``refund.succeeded`` handler — Phase 51 D-51-11 atomic UoW.
 
@@ -710,6 +711,13 @@ async def handle_refund_succeeded(
 
     webhook_intake_corr = uuid4()
 
+    # Captured by _settle_online_refund when the UoW settles successfully so
+    # the post-commit hook can enqueue dispatch_fiscal_receipt for the
+    # just-INSERTed refund-side fiscal_receipts row. Stays None on orphan /
+    # illegal-transition / idempotent-replay paths (those exit before
+    # _settle_online_refund is called, or roll back the txn).
+    settled_locals = None
+
     try:
         async with session.begin():
             row = await _select_for_update_online_refund(
@@ -759,7 +767,7 @@ async def handle_refund_succeeded(
 
             # D-51-18 — delegate the rest of the UoW (steps 3d-3i) to the shared
             # helper so plan 51-09 poll_pending_refunds can reuse it.
-            await _settle_online_refund(
+            settled_locals = await _settle_online_refund(
                 session,
                 online_refund_id=row.id,
                 chain_root_corr=webhook_intake_corr,
@@ -788,6 +796,23 @@ async def handle_refund_succeeded(
             )
             return
         raise
+
+    # Phase 51 verification gap fix — runs AFTER the ``async with
+    # session.begin():`` commit boundary so an enqueue failure cannot poison
+    # the UoW. Mirrors the handle_payment_succeeded enqueue path (D-51-15).
+    # Only fires when ``_settle_online_refund`` returned (successful UoW
+    # commit) — orphan / illegal-transition / idempotent-replay branches
+    # exit before reaching the helper, so ``settled_locals`` stays None.
+    # Without this hook, the refund-side ``fiscal_receipts(kind='refund',
+    # status='sent')`` row would sit forever — 54-ФЗ compliance gap.
+    if settled_locals is not None:
+        await _post_commit_enqueue(
+            arq_pool,
+            online_payment_id=settled_locals.online_payment_id,
+            subject_kind=settled_locals.subject_kind,
+            subject_id=settled_locals.subject_id,
+            fiscal_receipt_id=settled_locals.fiscal_receipt_id,
+        )
 
 
 async def handle_receipt_succeeded(

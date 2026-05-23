@@ -24,6 +24,7 @@ structlog event kwargs. This module emits no structlog lines with customer_email
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -56,6 +57,23 @@ from app.modules.pt_packages.models import PtPackage
 _log = structlog.get_logger("modules.online_refunds.settle")
 
 
+@dataclass(frozen=True, slots=True)
+class SettledRefundLocals:
+    """Locals captured during the settle UoW that the caller needs after commit.
+
+    The webhook + cron callers thread these into ``_post_commit_enqueue`` so
+    the just-INSERTed refund-side ``fiscal_receipts`` row gets dispatched to
+    ЮKassa ``/v3/receipts`` by the ``dispatch_fiscal_receipt`` ARQ task.
+    Without this, the row would sit at ``status='sent'`` forever and never
+    reach ``succeeded`` — a 54-ФЗ compliance defect.
+    """
+
+    fiscal_receipt_id: UUID
+    online_payment_id: UUID
+    subject_kind: Literal["membership", "pt_package"]
+    subject_id: UUID
+
+
 async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
     session: AsyncSession,
     *,
@@ -65,7 +83,7 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         "yookassa_webhook_received", "online_refund_polled_settled"
     ],
     chain_root_event_payload_kwargs: dict[str, Any] | None = None,
-) -> None:
+) -> SettledRefundLocals:
     """Phase 51 D-51-18 shared settle UoW (D-51-11 steps 3d-3i).
 
     Sequence:
@@ -323,5 +341,16 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         refund_payment_id=str(refund_payment.id),
     )
 
+    # Surface the locals the post-commit hook needs (D-51-15 + verification gap
+    # fix): the webhook + poll-cron callers thread these into
+    # ``_post_commit_enqueue`` so the just-INSERTed refund-side fiscal_receipts
+    # row gets dispatched to ЮKassa /v3/receipts.
+    return SettledRefundLocals(
+        fiscal_receipt_id=fr_row.id,
+        online_payment_id=op.id,
+        subject_kind=subject_kind,
+        subject_id=subject_id,
+    )
 
-__all__ = ("_settle_online_refund",)
+
+__all__ = ("_settle_online_refund", "SettledRefundLocals")
