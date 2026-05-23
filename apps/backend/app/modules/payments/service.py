@@ -172,7 +172,7 @@ async def issue_refund(  # noqa: SVC001 caller-owns-txn — refund orchestrator 
     subject_id: UUID,
     refund_user_id: UUID,
     reason: str,
-    audit_actor: CurrentUser,
+    audit_actor: CurrentUser | None,
 ) -> Payment:
     """Append a refund-side (negative-amount) Payment row (Phase 32 REF-02..04).
 
@@ -227,7 +227,10 @@ async def issue_refund(  # noqa: SVC001 caller-owns-txn — refund orchestrator 
     await audit.emit(
         session,
         "refund_issued",
-        actor_user_id=audit_actor.id,
+        # Phase 51 Plan 51-07 — webhook-driven refund settlement passes
+        # audit_actor=None (anonymous flow, mirrors Plan 50-03 Blocker #2
+        # widening of record_payment).
+        actor_user_id=audit_actor.id if audit_actor is not None else None,
         resource_type="payment",
         resource_id=refund_payment.id,
         payment_id=str(refund_payment.id),

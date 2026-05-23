@@ -38,6 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1._internal.yookassa.handlers import (
     handle_payment_canceled,
     handle_payment_succeeded,
+    handle_receipt_canceled,  # Phase 51 D-51-22 (NEW)
+    handle_receipt_succeeded,  # Phase 51 D-51-21 (NEW)
+    handle_refund_succeeded,  # Phase 51 D-51-11 (NEW)
 )
 from app.core.database import get_db
 from app.core.dependencies import get_yookassa_client_provider
@@ -113,6 +116,18 @@ async def yookassa_webhook(
         await handle_payment_succeeded(session, yookassa_client, body=body)
     elif event_type == "payment.canceled":
         await handle_payment_canceled(session, yookassa_client, body=body)
+    elif event_type == "refund.succeeded":
+        # Phase 51 D-51-11 — refund webhook re-fetches via yookassa_client.get_refund
+        # before any DB write (D-50-12 doctrine inherited).
+        await handle_refund_succeeded(session, yookassa_client, body=body)
+    elif event_type == "receipt.succeeded":
+        # Phase 51 D-51-21 — receipt handlers do NOT take yookassa_client
+        # (D-51-03 — no re-fetch; receipt status is informational, the body is
+        # the authoritative source).
+        await handle_receipt_succeeded(session, body=body)
+    elif event_type == "receipt.canceled":
+        # Phase 51 D-51-22 — same no-refetch shape as receipt.succeeded.
+        await handle_receipt_canceled(session, body=body)
     else:
         _log.info(
             "yookassa_webhook_unsupported_event_type",

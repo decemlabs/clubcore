@@ -984,12 +984,26 @@ class YookassaWebhookReceivedPayload(BaseModel):
     #   - "illegal_transition"   : Plan 50-04 D-50-17 — webhook re-fetch contradicts
     #                              current row state (e.g., payment.succeeded for a
     #                              row already canceled); audit-as-forensic + 200.
+    #   - "orphan"               : Plan 51-07 — webhook references an object_id with
+    #                              no matching DB row (OnlineRefund / FiscalReceipt
+    #                              missing). No state mutation; audit row emitted
+    #                              for chain-completeness so the forensic record of
+    #                              every delivery is preserved (DEFER-51-XX —
+    #                              orphan reconciliation lands in Phase 53).
+    #   - "replay"               : Plan 51-07 D-51-19 — caller (webhook or cron)
+    #                              caught the partial-UNIQUE IntegrityError raised
+    #                              by ``_settle_online_refund``; the prior delivery
+    #                              already settled the refund. Recorded for
+    #                              forensic completeness; silent 200 to the
+    #                              upstream (no client-visible side-effect).
     idempotency_outcome: Literal[
         "new",
         "duplicate_blocked",
         "rejected_ip",
         "processed",
         "illegal_transition",
+        "orphan",
+        "replay",
     ]
 
 

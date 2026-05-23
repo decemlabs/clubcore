@@ -79,6 +79,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
@@ -90,7 +91,18 @@ from app.core.dependencies import (
 from app.core.exceptions import InvalidTransitionError  # Blocker #1 — REUSE existing class
 from app.integrations.yookassa.client import YooKassaClient
 from app.modules.clients.models import Client
-from app.modules.fiscal_receipts.constants import KIND_PAYMENT, STATUS_SENT
+from app.modules.fiscal_receipts.constants import (
+    FISCAL_RECEIPT_STATUS_TRANSITIONS,
+    KIND_PAYMENT,
+    STATUS_SENT,
+)
+from app.modules.fiscal_receipts.constants import (
+    STATUS_FAILED as FR_STATUS_FAILED,
+)
+from app.modules.fiscal_receipts.constants import (
+    STATUS_SUCCEEDED as FR_STATUS_SUCCEEDED,
+)
+from app.modules.fiscal_receipts.models import FiscalReceipt
 from app.modules.fiscal_receipts.repository import insert_fiscal_receipt
 from app.modules.online_payments.constants import (
     ONLINE_PAYMENT_STATUS_TRANSITIONS,
@@ -100,6 +112,16 @@ from app.modules.online_payments.constants import (
     SUBJECT_KIND_PT_PACKAGE,
 )
 from app.modules.online_payments.models import OnlinePayment
+from app.modules.online_refunds.constants import (
+    ONLINE_REFUND_STATUS_TRANSITIONS,
+)
+from app.modules.online_refunds.constants import (
+    STATUS_SUCCEEDED as REFUND_STATUS_SUCCEEDED,
+)
+from app.modules.online_refunds.models import OnlineRefund
+from app.modules.online_refunds.settle import _settle_online_refund
+from app.modules.payments.repository import _is_refund_of_uniqueness_conflict
+from app.modules.payments.service import AlreadyRefundedError
 
 _log = structlog.get_logger("api.v1._internal.yookassa.handlers")
 
@@ -143,6 +165,80 @@ async def _select_for_update_online_payment(
     )
     row: OnlinePayment | None = await session.scalar(stmt)
     return row
+
+
+async def _select_for_update_online_refund(
+    session: AsyncSession, *, yookassa_refund_id: str
+) -> OnlineRefund | None:
+    """SELECT-FOR-UPDATE on the OnlineRefund row by yookassa_refund_id (Phase 51 D-51-11).
+
+    Mirror of ``_select_for_update_online_payment`` for the refund webhook UoW.
+    Same INVARIANT: caller MUST be inside ``async with session.begin()`` so the
+    row lock holds for the duration of the FSM mutation + child audits.
+
+    Returns ``None`` when no row matches (orphan path — caller logs warning +
+    emits ``yookassa_webhook_received`` audit with ``idempotency_outcome='orphan'``;
+    DEFER-51 reconcile cron handles recovery).
+    """
+    stmt = (
+        select(OnlineRefund)
+        .where(OnlineRefund.yookassa_refund_id == yookassa_refund_id)
+        .with_for_update()
+    )
+    row: OnlineRefund | None = await session.scalar(stmt)
+    return row
+
+
+async def _select_for_update_fiscal_receipt(
+    session: AsyncSession, *, yookassa_receipt_id: str
+) -> FiscalReceipt | None:
+    """SELECT-FOR-UPDATE on the FiscalReceipt row by yookassa_receipt_id (Phase 51 D-51-21).
+
+    Same INVARIANT as the other select-for-update helpers: caller MUST be inside
+    ``async with session.begin()``. Returns ``None`` when no row matches (orphan
+    path — D-51-25 orphan-receipt reconciliation deferred to Phase 53).
+    """
+    stmt = (
+        select(FiscalReceipt)
+        .where(FiscalReceipt.yookassa_receipt_id == yookassa_receipt_id)
+        .with_for_update()
+    )
+    row: FiscalReceipt | None = await session.scalar(stmt)
+    return row
+
+
+def _assert_can_transition_refund(row: OnlineRefund, *, target: str) -> None:
+    """Central FSM guard for online_refunds (Phase 51 D-51-11).
+
+    Mirror of ``_assert_can_transition`` against the
+    ``ONLINE_REFUND_STATUS_TRANSITIONS`` MappingProxyType (locked literals
+    pinned to migration 0037 — plan 51-02). Raises ``InvalidTransitionError``
+    (reused class, Blocker #1 lineage); the webhook handler catches and emits
+    ``yookassa_webhook_received`` with ``idempotency_outcome='illegal_transition'``.
+    """
+    allowed = ONLINE_REFUND_STATUS_TRANSITIONS.get(row.status, frozenset())
+    if target not in allowed:
+        raise InvalidTransitionError(
+            "invalid_transition",
+            fields={"from_status": row.status, "to_status": target},
+        )
+
+
+def _assert_can_transition_receipt(row: FiscalReceipt, *, target: str) -> None:
+    """Central FSM guard for fiscal_receipts (Phase 51 D-51-21 / D-51-22).
+
+    Mirror against ``FISCAL_RECEIPT_STATUS_TRANSITIONS`` (Phase 50 D-50-32 locked
+    MappingProxyType — frozen). The receipt webhook handlers catch
+    ``InvalidTransitionError`` and emit ``yookassa_webhook_received`` with
+    ``idempotency_outcome='illegal_transition'`` (no re-fetch — D-51-03 — receipt
+    status is informational; webhook body is authoritative).
+    """
+    allowed = FISCAL_RECEIPT_STATUS_TRANSITIONS.get(row.status, frozenset())
+    if target not in allowed:
+        raise InvalidTransitionError(
+            "invalid_transition",
+            fields={"from_status": row.status, "to_status": target},
+        )
 
 
 async def _read_customer_email(session: AsyncSession, client_id: UUID) -> str:
@@ -503,3 +599,370 @@ async def handle_payment_canceled(
 
     # No _post_commit_enqueue for cancellation in Phase 50 (Phase 52 NOT-05
     # may add a cancellation-DM enqueue here).
+
+
+async def handle_refund_succeeded(
+    session: AsyncSession,
+    yookassa_client: YooKassaClient,
+    *,
+    body: dict[str, Any],
+) -> None:
+    """``refund.succeeded`` handler — Phase 51 D-51-11 atomic UoW.
+
+    Sequence:
+      1. Extract refund object_id from body['object']['id']; defensive guard
+         on missing/malformed body (structlog WARNING + return; never raise).
+      2. **Re-fetch** via ``yookassa_client.get_refund(object_id)`` BEFORE any
+         DB write (D-50-12 / D-51-11 step 2 — cryptographic anchor; the body's
+         claimed status is NEVER trusted, even for refund events).
+      3. Atomic UoW (``async with session.begin():``):
+         a. webhook_intake_corr = uuid4() — chain ROOT.
+         b. SELECT-FOR-UPDATE OnlineRefund by yookassa_refund_id.
+            On None: structlog WARNING + emit ``yookassa_webhook_received`` with
+            ``idempotency_outcome='orphan'``; return.
+         c. FSM guard ``_assert_can_transition_refund(target='succeeded')``.
+            On InvalidTransitionError: emit ``yookassa_webhook_received`` with
+            ``idempotency_outcome='illegal_transition'``; return.
+         d-i. Delegate to ``_settle_online_refund(session, online_refund_id=row.id,
+              chain_root_corr=webhook_intake_corr,
+              chain_root_event='yookassa_webhook_received', ...)``. The helper:
+              - mark_succeeded(row); load OnlinePayment + original Payment;
+              - PaymentRefunder Protocol call (Phase 32 D-32-14); IntegrityError
+                / AlreadyRefundedError on the partial-UNIQUE conflict bubble out
+                of the helper (boundary pinned per checker review iter 1);
+              - direct subject transition with ``CANCELLATION_REASON_REFUNDED``
+                sentinel (Errata #4 — NOT activator; activator slots are
+                forward-only);
+              - INSERT fiscal_receipts(kind='refund', status='sent');
+              - emit ``online_payment_refunded`` + subject_refunded + chain-root
+                ``yookassa_webhook_received`` audits.
+
+    Idempotent-replay semantics (REFUND-03 / D-51-05):
+      - On ``AlreadyRefundedError`` or ``IntegrityError`` where
+        ``_is_refund_of_uniqueness_conflict(exc)`` is True, log
+        ``yookassa_refund_idempotent_replay`` and return silently (200 to ЮKassa).
+      - The in-flight txn was tainted by the rollback inside ``issue_refund``;
+        no further audits emit in this UoW. The Phase 53 reconcile cron can
+        re-walk if needed.
+
+    Returns ``None``; the router returns 200 unconditionally.
+    """
+    object_obj = body.get("object") or {}
+    object_id = object_obj.get("id") if isinstance(object_obj, dict) else None
+    if not isinstance(object_id, str) or not object_id:
+        _log.warning("yookassa_webhook_missing_object_id", yk_event="refund.succeeded")
+        return
+
+    # D-50-12 / D-51-11 step 2 — re-fetch before any DB write.
+    refund_result = await yookassa_client.get_refund(object_id)
+    if refund_result.classification != "ok":
+        _log.warning(
+            "yookassa_refund_refetch_failed",
+            object_id=object_id,
+            classification=refund_result.classification,
+        )
+        return
+    if refund_result.status != REFUND_STATUS_SUCCEEDED:
+        _log.info(
+            "yookassa_refund_pending_skip",
+            object_id=object_id,
+            status=refund_result.status,
+        )
+        return
+
+    webhook_intake_corr = uuid4()
+
+    try:
+        async with session.begin():
+            row = await _select_for_update_online_refund(
+                session, yookassa_refund_id=object_id
+            )
+            if row is None:
+                _log.warning(
+                    "yookassa_refund_webhook_orphan",
+                    object_id=object_id,
+                )
+                # Chain-completeness: emit the root audit even for orphans so the
+                # forensic trail records the delivery (D-51-11).
+                await audit.emit(
+                    session,
+                    "yookassa_webhook_received",
+                    actor_user_id=None,
+                    resource_type="yookassa_webhook",
+                    resource_id=None,
+                    audit_correlation_id=None,
+                    event_type="refund.succeeded",
+                    object_id=object_id,
+                    idempotency_outcome="orphan",
+                )
+                return
+
+            try:
+                _assert_can_transition_refund(row, target=REFUND_STATUS_SUCCEEDED)
+            except InvalidTransitionError:
+                _log.warning(
+                    "yookassa_refund_illegal_transition",
+                    object_id=object_id,
+                    from_status=row.status,
+                    to_status=REFUND_STATUS_SUCCEEDED,
+                )
+                await audit.emit(
+                    session,
+                    "yookassa_webhook_received",
+                    actor_user_id=None,
+                    resource_type="yookassa_webhook",
+                    resource_id=row.id,
+                    audit_correlation_id=None,
+                    event_type="refund.succeeded",
+                    object_id=object_id,
+                    idempotency_outcome="illegal_transition",
+                )
+                return
+
+            # D-51-18 — delegate the rest of the UoW (steps 3d-3i) to the shared
+            # helper so plan 51-09 poll_pending_refunds can reuse it.
+            await _settle_online_refund(
+                session,
+                online_refund_id=row.id,
+                chain_root_corr=webhook_intake_corr,
+                chain_root_event="yookassa_webhook_received",
+                chain_root_event_payload_kwargs={
+                    "event_type": "refund.succeeded",
+                    "object_id": object_id,
+                    "idempotency_outcome": "processed",
+                },
+            )
+    except (AlreadyRefundedError, IntegrityError) as exc:
+        # REFUND-03 / D-51-05 idempotent semantics. The registered
+        # PaymentRefunder implementation (issue_refund) rolls back its failed
+        # flush and re-raises AlreadyRefundedError; defence-in-depth catches
+        # raw IntegrityError too (in case a future PaymentRefunder variant
+        # surfaces the underlying error directly). The discriminator
+        # _is_refund_of_uniqueness_conflict is still consulted on raw
+        # IntegrityError to scope this branch narrowly to the partial-UNIQUE
+        # path — other IntegrityErrors (FK violations etc.) propagate.
+        if isinstance(exc, AlreadyRefundedError) or _is_refund_of_uniqueness_conflict(
+            exc
+        ):
+            _log.warning(
+                "yookassa_refund_idempotent_replay",
+                yookassa_refund_id=object_id,
+            )
+            return
+        raise
+
+
+async def handle_receipt_succeeded(
+    session: AsyncSession,
+    *,
+    body: dict[str, Any],
+) -> None:
+    """``receipt.succeeded`` handler — Phase 51 D-51-21 atomic UoW.
+
+    No re-fetch (D-51-03 — receipt status is informational; webhook body is
+    authoritative). Atomic UoW: SELECT-FOR-UPDATE FiscalReceipt by
+    yookassa_receipt_id, FSM guard target='succeeded', UPDATE status +
+    succeeded_at, emit 2 audits (child fiscal_receipt_succeeded + root
+    yookassa_webhook_received).
+
+    Note signature: receipt handlers do NOT take ``yookassa_client`` (D-51-03 —
+    no re-fetch surface).
+    """
+    object_obj = body.get("object") or {}
+    object_id = object_obj.get("id") if isinstance(object_obj, dict) else None
+    if not isinstance(object_id, str) or not object_id:
+        _log.warning("yookassa_webhook_missing_object_id", yk_event="receipt.succeeded")
+        return
+
+    async with session.begin():
+        row = await _select_for_update_fiscal_receipt(
+            session, yookassa_receipt_id=object_id
+        )
+        if row is None:
+            _log.warning(
+                "yookassa_receipt_webhook_orphan",
+                object_id=object_id,
+                yk_event="receipt.succeeded",
+            )
+            await audit.emit(
+                session,
+                "yookassa_webhook_received",
+                actor_user_id=None,
+                resource_type="yookassa_webhook",
+                resource_id=None,
+                audit_correlation_id=None,
+                event_type="receipt.succeeded",
+                object_id=object_id,
+                idempotency_outcome="orphan",
+            )
+            return
+
+        try:
+            _assert_can_transition_receipt(row, target=FR_STATUS_SUCCEEDED)
+        except InvalidTransitionError:
+            _log.warning(
+                "yookassa_receipt_illegal_transition",
+                object_id=object_id,
+                current_status=row.status,
+                target=FR_STATUS_SUCCEEDED,
+            )
+            await audit.emit(
+                session,
+                "yookassa_webhook_received",
+                actor_user_id=None,
+                resource_type="yookassa_webhook",
+                resource_id=row.id,
+                audit_correlation_id=None,
+                event_type="receipt.succeeded",
+                object_id=object_id,
+                idempotency_outcome="illegal_transition",
+            )
+            return
+
+        row.status = FR_STATUS_SUCCEEDED
+        row.succeeded_at = datetime.now(UTC)
+
+        # CHILD audit — fiscal_receipt_succeeded. The locked payload carries
+        # audit_correlation_id = the originating dispatch chain UUID (Phase 51
+        # plan 51-05 ARQ task records this on the row at INSERT-pending time;
+        # Phase 50 D-50-18 step 5 records the webhook intake corr on the
+        # 'sent' row). Either way row.audit_correlation_id is the chain anchor.
+        await audit.emit(
+            session,
+            "fiscal_receipt_succeeded",
+            actor_user_id=None,
+            resource_type="fiscal_receipt",
+            resource_id=row.id,
+            audit_correlation_id=(
+                str(row.audit_correlation_id)
+                if row.audit_correlation_id is not None
+                else None
+            ),
+            fiscal_receipt_id=str(row.id),
+            yookassa_receipt_id=object_id,
+        )
+
+        # ROOT audit — yookassa_webhook_received.
+        await audit.emit(
+            session,
+            "yookassa_webhook_received",
+            actor_user_id=None,
+            resource_type="yookassa_webhook",
+            resource_id=row.id,
+            audit_correlation_id=None,
+            event_type="receipt.succeeded",
+            object_id=object_id,
+            idempotency_outcome="processed",
+        )
+
+
+async def handle_receipt_canceled(
+    session: AsyncSession,
+    *,
+    body: dict[str, Any],
+) -> None:
+    """``receipt.canceled`` handler — Phase 51 D-51-22 atomic UoW.
+
+    Mirror of ``handle_receipt_succeeded`` with target='failed' and
+    ``failure_reason`` extracted from ``body['object']['cancellation_details']
+    ['reason']`` (D-51-22). Falls back to the literal ``'yookassa_receipt_canceled'``
+    when cancellation_details is missing or malformed.
+
+    Phase 52 NOT-04 owner alert (operator should investigate manually) is OUT
+    OF SCOPE for this plan — the structlog WARNING + audit row is the Phase 51
+    baseline.
+    """
+    object_obj = body.get("object") or {}
+    object_id = object_obj.get("id") if isinstance(object_obj, dict) else None
+    if not isinstance(object_id, str) or not object_id:
+        _log.warning("yookassa_webhook_missing_object_id", yk_event="receipt.canceled")
+        return
+
+    details_obj = (
+        object_obj.get("cancellation_details") if isinstance(object_obj, dict) else None
+    )
+    details: dict[str, Any] = details_obj if isinstance(details_obj, dict) else {}
+    failure_reason_raw = details.get("reason")
+    failure_reason: str = (
+        failure_reason_raw
+        if isinstance(failure_reason_raw, str) and failure_reason_raw
+        else "yookassa_receipt_canceled"
+    )
+
+    async with session.begin():
+        row = await _select_for_update_fiscal_receipt(
+            session, yookassa_receipt_id=object_id
+        )
+        if row is None:
+            _log.warning(
+                "yookassa_receipt_webhook_orphan",
+                object_id=object_id,
+                yk_event="receipt.canceled",
+            )
+            await audit.emit(
+                session,
+                "yookassa_webhook_received",
+                actor_user_id=None,
+                resource_type="yookassa_webhook",
+                resource_id=None,
+                audit_correlation_id=None,
+                event_type="receipt.canceled",
+                object_id=object_id,
+                idempotency_outcome="orphan",
+            )
+            return
+
+        try:
+            _assert_can_transition_receipt(row, target=FR_STATUS_FAILED)
+        except InvalidTransitionError:
+            _log.warning(
+                "yookassa_receipt_illegal_transition",
+                object_id=object_id,
+                current_status=row.status,
+                target=FR_STATUS_FAILED,
+            )
+            await audit.emit(
+                session,
+                "yookassa_webhook_received",
+                actor_user_id=None,
+                resource_type="yookassa_webhook",
+                resource_id=row.id,
+                audit_correlation_id=None,
+                event_type="receipt.canceled",
+                object_id=object_id,
+                idempotency_outcome="illegal_transition",
+            )
+            return
+
+        row.status = FR_STATUS_FAILED
+        row.failed_at = datetime.now(UTC)
+        row.failure_reason = failure_reason
+
+        # CHILD audit — fiscal_receipt_failed.
+        await audit.emit(
+            session,
+            "fiscal_receipt_failed",
+            actor_user_id=None,
+            resource_type="fiscal_receipt",
+            resource_id=row.id,
+            audit_correlation_id=(
+                str(row.audit_correlation_id)
+                if row.audit_correlation_id is not None
+                else None
+            ),
+            fiscal_receipt_id=str(row.id),
+            failure_reason=failure_reason,
+        )
+
+        # ROOT audit — yookassa_webhook_received.
+        await audit.emit(
+            session,
+            "yookassa_webhook_received",
+            actor_user_id=None,
+            resource_type="yookassa_webhook",
+            resource_id=row.id,
+            audit_correlation_id=None,
+            event_type="receipt.canceled",
+            object_id=object_id,
+            idempotency_outcome="processed",
+        )
