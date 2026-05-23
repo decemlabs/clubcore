@@ -650,7 +650,7 @@ async def handle_refund_succeeded(
     object_obj = body.get("object") or {}
     object_id = object_obj.get("id") if isinstance(object_obj, dict) else None
     if not isinstance(object_id, str) or not object_id:
-        _log.warning("yookassa_webhook_missing_object_id", event="refund.succeeded")
+        _log.warning("yookassa_webhook_missing_object_id", yk_event="refund.succeeded")
         return
 
     # D-50-12 / D-51-11 step 2 — re-fetch before any DB write.
@@ -771,7 +771,7 @@ async def handle_receipt_succeeded(
     object_obj = body.get("object") or {}
     object_id = object_obj.get("id") if isinstance(object_obj, dict) else None
     if not isinstance(object_id, str) or not object_id:
-        _log.warning("yookassa_webhook_missing_object_id", event="receipt.succeeded")
+        _log.warning("yookassa_webhook_missing_object_id", yk_event="receipt.succeeded")
         return
 
     async with session.begin():
@@ -782,7 +782,7 @@ async def handle_receipt_succeeded(
             _log.warning(
                 "yookassa_receipt_webhook_orphan",
                 object_id=object_id,
-                event="receipt.succeeded",
+                yk_event="receipt.succeeded",
             )
             await audit.emit(
                 session,
@@ -875,7 +875,7 @@ async def handle_receipt_canceled(
     object_obj = body.get("object") or {}
     object_id = object_obj.get("id") if isinstance(object_obj, dict) else None
     if not isinstance(object_id, str) or not object_id:
-        _log.warning("yookassa_webhook_missing_object_id", event="receipt.canceled")
+        _log.warning("yookassa_webhook_missing_object_id", yk_event="receipt.canceled")
         return
 
     details_obj = (
@@ -897,7 +897,7 @@ async def handle_receipt_canceled(
             _log.warning(
                 "yookassa_receipt_webhook_orphan",
                 object_id=object_id,
-                event="receipt.canceled",
+                yk_event="receipt.canceled",
             )
             await audit.emit(
                 session,

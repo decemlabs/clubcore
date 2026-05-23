@@ -392,7 +392,7 @@ class PaymentRefunder(Protocol):
         subject_id: UUID,
         refund_user_id: UUID,
         reason: str,
-        audit_actor: CurrentUser,
+        audit_actor: CurrentUser | None,
     ) -> Any: ...
 
 

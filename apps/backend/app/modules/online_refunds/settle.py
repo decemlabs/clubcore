@@ -93,7 +93,9 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
          carries it for ЮKassa 54-ФЗ delivery.
       8. INSERT fiscal_receipts(kind='refund', status='sent',
          audit_correlation_id=chain_root_corr).
-      9. Emit child audits: ``online_payment_refunded`` + subject_refunded_event
+      9. Emit child audits: ``online_payment_refunded`` + ``membership_refunded``
+         / ``pt_package_refunded`` (branched per subject_kind to keep literal
+         event/resource_type strings for the static taxonomy gate).
          (``membership_refunded`` OR ``pt_package_refunded``).
      10. Emit chain-root audit with the supplied ``chain_root_event`` and merge
          ``chain_root_event_payload_kwargs`` into the payload.
@@ -184,10 +186,6 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         # (memberships.service.refund_membership:965) sets
         # `membership.cancellation_reason` directly — mirror that here.
         membership.cancellation_reason = CANCELLATION_REASON_REFUNDED
-        subject_refunded_event: Literal[
-            "membership_refunded", "pt_package_refunded"
-        ] = "membership_refunded"
-        subject_resource_type: Literal["membership", "pt_package"] = "membership"
         subject_resource_id: UUID = membership.id
         subject_client_id: UUID = membership.client_id
     else:
@@ -207,8 +205,6 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
             status="cancelled",
             cancellation_reason=PT_CANCELLATION_REASON_REFUNDED,
         )
-        subject_refunded_event = "pt_package_refunded"
-        subject_resource_type = "pt_package"
         subject_resource_id = pt_package.id
         subject_client_id = pt_package.client_id
 
@@ -257,21 +253,35 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
     # 9b — subject_refunded (membership_refunded or pt_package_refunded). The
     # locked payload schema does NOT include audit_correlation_id (REF-07
     # baseline — mirrors memberships.service.refund_membership:974-984).
-    await audit.emit(
-        session,
-        subject_refunded_event,
-        actor_user_id=None,
-        resource_type=subject_resource_type,
-        resource_id=subject_resource_id,
-        **{
-            ("membership_id" if subject_kind == SUBJECT_KIND_MEMBERSHIP else "pt_package_id"): str(
-                subject_resource_id
-            ),
-            "client_id": str(subject_client_id),
-            "refund_payment_id": str(refund_payment.id),
-            "reason": row.reason or "online_refund",
-        },
-    )
+    # The static taxonomy gate (tests/unit/test_audit_taxonomy.py) requires
+    # literal ``event`` and ``resource_type`` strings at every callsite, so we
+    # branch here rather than passing computed names through a single emit
+    # call (Plan 51-07 deviation — pattern mirrors record_payment / Phase 50
+    # boilerplate that also inlines parallel literal branches).
+    if subject_kind == SUBJECT_KIND_MEMBERSHIP:
+        await audit.emit(
+            session,
+            "membership_refunded",
+            actor_user_id=None,
+            resource_type="membership",
+            resource_id=subject_resource_id,
+            membership_id=str(subject_resource_id),
+            client_id=str(subject_client_id),
+            refund_payment_id=str(refund_payment.id),
+            reason=row.reason or "online_refund",
+        )
+    else:
+        await audit.emit(
+            session,
+            "pt_package_refunded",
+            actor_user_id=None,
+            resource_type="pt_package",
+            resource_id=subject_resource_id,
+            pt_package_id=str(subject_resource_id),
+            client_id=str(subject_client_id),
+            refund_payment_id=str(refund_payment.id),
+            reason=row.reason or "online_refund",
+        )
 
     # Step 10: chain-root audit. The caller picks the event label; merge any
     # extra kwargs the caller wants surfaced (e.g. event_type / object_id /
