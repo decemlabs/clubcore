@@ -69,6 +69,24 @@ check "backend reachable on http://localhost:8000/healthz" \
 check "postgres reachable (postgresql://app:app@localhost:5432/sportzal)" \
   'psql "postgresql://app:app@localhost:5432/sportzal" -c "SELECT 1" >/dev/null'
 
+# v1.7 readiness checks (appended per 53-01 Task 2 — do not modify checks 1-8 above).
+
+# 9. Redis reachable — required for webhook dedup SET NX EX (WEBHOOK_DEDUP_KEY_PREFIX).
+check "Redis reachable on localhost:6379 (webhook dedup SET NX EX)" \
+  'redis-cli -h localhost -p 6379 ping | grep -q PONG'
+
+# 10. ARQ worker registered in Redis — required for dispatch_fiscal_receipt task
+#     enqueueing after payment.succeeded webhook processing. ARQ registers the
+#     worker health key in Redis when the worker is alive.
+check "ARQ worker registered in Redis (arq:queues:default)" \
+  'redis-cli -h localhost -p 6379 exists "arq:queues:default" | grep -q "^1$"'
+
+# 11. YOOKASSA_SANDBOX=true — required for verify_yookassa_ip sandbox bypass
+#     (webhook_verifier.py:84-86) so the webhook simulation (D-02) passes from
+#     localhost. Production stacks must NEVER set this flag.
+check "YOOKASSA_SANDBOX=true (sandbox bypass for webhook simulation D-02)" \
+  '[ "${YOOKASSA_SANDBOX:-}" = "true" ]'
+
 echo ""
 echo "Summary: $PASS pass / $FAIL fail"
 if [ "$FAIL" -gt 0 ]; then
