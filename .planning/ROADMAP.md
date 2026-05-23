@@ -257,7 +257,14 @@ Plans:
   4. `LOCKED_EMAIL_TEMPLATES` frozenset is extended from 15 to 19 entries; AST gate continues to reject non-literal `template_id` arguments
   5. DEFER-46-01 is closed: live RU email-deliverability probe run against yandex.ru + mail.ru + rambler.ru; `Authentication-Results` headers captured to `.planning/handoff/v1.7-email-deliverability-evidence/`
   6. DEFER-46-02 is closed: owner countersigns all 15 v1.6 `LOCKED_EMAIL_TEMPLATES`; `signed_off_at` timestamp recorded in `.planning/handoff/v1.6-template-countersign.md`
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 52-01-PLAN.md — Alembic 0039 payment_notifications + PaymentNotification model + claim repo helper + 4 locked Telegram DM templates (NOTIFY-01, NOTIFY-03)
+- [ ] 52-02-PLAN.md — 4 email identifiers + LOCKED_EMAIL_TEMPLATES 15->19 + owner-alert settings (NOTIFY-02, NOTIFY-04)
+- [ ] 52-03-PLAN.md — CARRY-01 email-probe scaffolding + evidence-dir README + CARRY-02 15-template countersign register (CARRY-01, CARRY-02)
+- [ ] 52-04-PLAN.md — dispatch_payment_notification ARQ task + worker registration + AST positive fixtures (NOTIFY-01, NOTIFY-02, NOTIFY-04)
+- [ ] 52-05-PLAN.md — _post_commit_enqueue seam fill + AST gate lockstep + 5 enqueue sites (succeeded/refund/canceled/fiscal-failed) (NOTIFY-01, NOTIFY-04)
+- [ ] 52-06-PLAN.md — e2e dual-channel idempotency-across-restart + owner-alert routing + NOTIFY-05 cancellation regression (NOTIFY-01..05)
 
 ### Phase 53: Milestone Verification
 **Goal**: The complete v1.7 online-payment + fiscal-receipt flow is verified end-to-end via operator runbook and race tests; no more than 5 inline regressions are accepted
