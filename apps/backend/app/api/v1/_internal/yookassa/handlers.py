@@ -530,6 +530,7 @@ async def handle_payment_canceled(
     yookassa_client: YooKassaClient,
     *,
     body: dict[str, Any],
+    arq_pool: Any | None = None,
 ) -> None:
     """``payment.canceled`` handler — D-50-25.
 
@@ -648,8 +649,22 @@ async def handle_payment_canceled(
             idempotency_outcome="processed",
         )
 
-    # No _post_commit_enqueue for cancellation in Phase 50 (Phase 52 NOT-05
-    # may add a cancellation-DM enqueue here).
+        # Capture for post-commit hook — row is detached after commit.
+        op_row_id_canceled: UUID = row.id
+
+    # Phase 52 NOT-05 / D-52-10 — owner operator alert (no client DM on cancellation).
+    # Keyed on online_payments.id (op_row_id_canceled) because a canceled payment
+    # has no ledger payments row (activation is webhook-gated; canceled payments
+    # never activate). The dispatch_payment_notification task routes
+    # kind="payment_canceled" to claim_payment_notification(online_payment_id=...)
+    # via the Plan 01 polymorphic-subject schema — no FK violation occurs.
+    if arq_pool is not None:
+        await arq_pool.enqueue_job(
+            "dispatch_payment_notification",
+            _kwargs={"payment_id": str(op_row_id_canceled), "kind": "payment_canceled"},
+            _max_tries=3,
+            _expires=60,
+        )
 
 
 async def handle_refund_succeeded(
