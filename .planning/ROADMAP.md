@@ -123,7 +123,7 @@ Full details: [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 - [x] **Phase 49: Online Sales Orchestrator** — `online_payments` module, sell + QR endpoints, `return_url` anti-oracle pending screen, email gate, composition root wiring (completed 2026-05-22)
 - [x] **Phase 50: Webhook FSM + Fiscal Foundation** — Webhook handler, payment FSM, `record_payment(method='online')`, `fiscal_receipts` table, and atomic UoW in a single phase (completed 2026-05-22)
 - [x] **Phase 51: Fiscal FSM + Refunds** — Receipt webhook FSM, ARQ dispatch with circuit breaker, and online refund endpoints (completed 2026-05-23)
-- [ ] **Phase 52: Cross-Channel Notifications + v1.6 Carry-out** — Telegram + email DMs wired post-commit; DEFER-46-01 (live RU email probe) and DEFER-46-02 (15-template countersign) closed
+- [x] **Phase 52: Cross-Channel Notifications + v1.6 Carry-out** — Telegram + email DMs wired post-commit; DEFER-46-01 (live RU email probe) and DEFER-46-02 (15-template countersign) closed (completed 2026-05-23)
 - [ ] **Phase 53: Milestone Verification** — Operator runbook, race tests, DEFER-46-03 re-run, ≤5 inline regressions hard cap
 
 ---
@@ -264,7 +264,7 @@ Plans:
 - [x] 52-03-PLAN.md — CARRY-01 email-probe scaffolding + evidence-dir README + CARRY-02 15-template countersign register (CARRY-01, CARRY-02)
 - [x] 52-04-PLAN.md — dispatch_payment_notification ARQ task + worker registration + AST positive fixtures (NOTIFY-01, NOTIFY-02, NOTIFY-04)
 - [x] 52-05-PLAN.md — _post_commit_enqueue seam fill + AST gate lockstep + 5 enqueue sites (succeeded/refund/canceled/fiscal-failed) (NOTIFY-01, NOTIFY-04)
-- [ ] 52-06-PLAN.md — e2e dual-channel idempotency-across-restart + owner-alert routing + NOTIFY-05 cancellation regression (NOTIFY-01..05)
+- [x] 52-06-PLAN.md — e2e dual-channel idempotency-across-restart + owner-alert routing + NOTIFY-05 cancellation regression (NOTIFY-01..05)
 
 ### Phase 53: Milestone Verification
 **Goal**: The complete v1.7 online-payment + fiscal-receipt flow is verified end-to-end via operator runbook and race tests; no more than 5 inline regressions are accepted
@@ -289,7 +289,7 @@ Plans:
 | 49. Online Sales Orchestrator | 7/7 | Complete    | 2026-05-22 |
 | 50. Webhook FSM + Fiscal Foundation | 6/6 | Complete    | 2026-05-22 |
 | 51. Fiscal FSM + Refunds | 10/10 | Complete    | 2026-05-23 |
-| 52. Cross-Channel Notifications + v1.6 Carry-out | 5/6 | In Progress|  |
+| 52. Cross-Channel Notifications + v1.6 Carry-out | 6/6 | Complete   | 2026-05-23 |
 | 53. Milestone Verification | 0/TBD | Not started | - |
 
 ---
