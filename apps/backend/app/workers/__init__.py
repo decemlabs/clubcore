@@ -103,6 +103,8 @@ from app.workers.scheduled.cleanup_password_reset_tokens import cleanup_password
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
 from app.workers.scheduled.mark_no_show_bookings import mark_no_show_bookings
+from app.workers.scheduled.monitor_stale_fiscal_receipts import monitor_stale_fiscal_receipts
+from app.workers.scheduled.poll_pending_refunds import poll_pending_refunds
 from app.workers.scheduled.send_booking_reminders import send_booking_reminders
 from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 from app.workers.tasks.dispatch_email import dispatch_email
@@ -133,6 +135,11 @@ class WorkerSettings:
         # plan 51-05); per-enqueue `_max_tries=3, _expires=60` carries the
         # ARQ retry contract from D-51-Discretion / Pitfall 11 step 2.
         dispatch_fiscal_receipt,
+        # Phase 51 FISCAL-06 / Plan 51-09 — every 15 min stale-pending sweep.
+        monitor_stale_fiscal_receipts,
+        # Phase 51 REFUND-04 / Plan 51-09 — every 30 min ЮKassa-side poll
+        # for pending online_refunds older than 30 min.
+        poll_pending_refunds,
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -211,6 +218,31 @@ class WorkerSettings:
             cleanup_password_reset_tokens,
             hour=0,
             minute=30,
+            unique=True,
+            keep_result=60,
+        ),
+        # Phase 51 FISCAL-06 / Plan 51-09 (D-51-16) — every 15 min sweep
+        # of stale-pending fiscal_receipts. Cadence is independent of the
+        # 90s staleness window — the cron checks 4x/hr regardless of the
+        # per-row age threshold. SQL-level safety via FOR UPDATE SKIP
+        # LOCKED + LIMIT 50 (T-51-09-01 / T-51-09-03); unique=True dedups
+        # concurrent ARQ ticks (Pitfall 4).
+        cron(
+            monitor_stale_fiscal_receipts,
+            minute={0, 15, 30, 45},
+            hour=set(range(24)),
+            unique=True,
+            keep_result=60,
+        ),
+        # Phase 51 REFUND-04 / Plan 51-09 (D-51-17) — every 30 min poll
+        # of pending online_refunds. Cadence independent of the 30-min
+        # pending-age cutoff. Multi-session pattern releases the DB
+        # connection across N HTTPS round-trips to ЮKassa
+        # (T-51-09-02 mitigation).
+        cron(
+            poll_pending_refunds,
+            minute={0, 30},
+            hour=set(range(24)),
             unique=True,
             keep_result=60,
         ),
