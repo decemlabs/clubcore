@@ -276,7 +276,11 @@ Plans:
   3. ЮKassa sandbox walkthrough evidence (owner-recorded membership sale + refund session) is captured to `.planning/handoff/v1.7-yookassa-sandbox-evidence/`
   4. DEFER-46-03 is closed: VER-09 scenario 08 cron-chain circuit-breaker fixture re-run confirms parity with the new `FISCAL-05` circuit breaker
   5. Total inline regressions discovered during this phase does not exceed 5; any excess is rolled to v1.8 DEFER list
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 53-01-PLAN.md — VER-01 operator runbook orchestrator + scenarios 09/10 (sell → webhook → fiscal → refund → idempotent replay) (VER-01)
+  - [ ] 53-02-PLAN.md — VER-02 four real-Postgres race tests (double-delivery, Redis-restart, refund arbitration, kopecks↔rubles precision) (VER-02)
+  - [ ] 53-03-PLAN.md — VER-05 DEFER-46-03 circuit-breaker open-state parity re-run (FISCAL-05) (VER-05)
+  - [ ] 53-04-PLAN.md — VER-03 sandbox-evidence scaffold (operator-pending) + VER-04 regression ledger + consolidated VERIFICATION.md (VER-03, VER-04)
 
 ---
 
@@ -290,7 +294,7 @@ Plans:
 | 50. Webhook FSM + Fiscal Foundation | 6/6 | Complete    | 2026-05-22 |
 | 51. Fiscal FSM + Refunds | 10/10 | Complete    | 2026-05-23 |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 6/6 | Complete   | 2026-05-23 |
-| 53. Milestone Verification | 0/TBD | Not started | - |
+| 53. Milestone Verification | 0/4 | Planned | - |
 
 ---
 
