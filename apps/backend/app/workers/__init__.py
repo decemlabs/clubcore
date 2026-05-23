@@ -96,10 +96,10 @@ from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
 from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt
-from app.modules.online_payments.tasks import dispatch_payment_notification
 from app.modules.online_payments.models import (  # noqa: F401
     PaymentNotification,  # Phase 52 — payment_notifications eager-import (REG-29-04)
 )
+from app.modules.online_payments.tasks import dispatch_payment_notification
 from app.modules.payments.models import (  # noqa: F401
     PaymentReceipt,  # Phase 45 D-45-20 — payment_receipts eager-import (REG-29-04)
 )
