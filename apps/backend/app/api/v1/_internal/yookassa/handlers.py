@@ -65,10 +65,14 @@ B-4 (Plan 50-04 PRD review):
   acceptance-criteria grep gate scans 5 lines preceding each callsite for
   ``session.begin`` to enforce the invariant at CI time.
 
-W-4 (Plan 50-04 PRD review):
-- ``_post_commit_enqueue`` signature matches CONTEXT.md D-50-19 verbatim:
-  ``(arq_pool, *, online_payment_id, subject_kind, subject_id)``. Phase 50
-  passes ``arq_pool=None``; Phase 52 NOT-04/05 will pass the ArqRedis pool.
+W-4 (Plan 50-04 PRD review; extended Plan 51-06 D-51-15):
+- ``_post_commit_enqueue`` signature originally locked by CONTEXT.md D-50-19:
+  ``(arq_pool, *, online_payment_id, subject_kind, subject_id)``. Plan 51-06
+  extended this with ``fiscal_receipt_id: UUID | None = None`` (default None
+  preserves Phase 50 callsite compatibility) so the post-commit branch can
+  enqueue ``dispatch_fiscal_receipt``. The router now threads
+  ``request.app.state.arq_pool`` through to the handler so the enqueue
+  actually fires after a successful webhook UoW.
 """
 
 from __future__ import annotations
@@ -268,21 +272,32 @@ async def _post_commit_enqueue(
     online_payment_id: UUID,
     subject_kind: Literal["membership", "pt_package"],
     subject_id: UUID,
+    fiscal_receipt_id: UUID | None = None,
 ) -> None:
-    """Post-commit notification enqueue — Phase 50 no-op stub; Phase 52 NOT-04/05 fills body.
+    """Post-commit notification enqueue (Phase 50 stub → Phase 51 fiscal-dispatch branch).
 
-    ``arq_pool`` is the ArqRedis pool; Phase 50 passes ``None`` (no enqueue
-    happens). Phase 52 will fetch the pool from ``app.state.arq_pool`` and
-    pass it here.
+    Phase 50 shipped this as a pure no-op (single ``_log.info`` call —
+    DEFER-50-04). Phase 51 (this commit, D-51-15) ADDS the
+    ``fiscal_receipt_id`` branch: when both ``arq_pool`` and
+    ``fiscal_receipt_id`` are non-None, enqueues the ARQ task
+    ``dispatch_fiscal_receipt`` with ``_max_tries=3`` + ``_expires=60``
+    (Pitfall 11 / D-51-Discretion retry contract). Phase 52 will add
+    notification branches (NOT-02 refund DM, NOT-04 fiscal-failure DM) —
+    out of scope for this plan.
 
-    Signature locked by CONTEXT.md D-50-19:
-    ``_post_commit_enqueue(arq_pool, payment_id, subject_kind, subject_id)``
-    — keyword-only-after-arq_pool ergonomics; positional ``arq_pool`` keeps
-    the Phase 52 callsite single-line.
+    Signature lineage:
+      - Phase 50 (D-50-19): ``(arq_pool, *, online_payment_id, subject_kind,
+        subject_id)``.
+      - Phase 51 (D-51-15, this plan): adds ``fiscal_receipt_id: UUID | None
+        = None`` (default ``None`` preserves Phase 50 callsite compatibility
+        and any future caller that has no receipt to dispatch — e.g. the
+        cancellation handler in ``handle_payment_canceled``).
 
-    Pattern mirrors ``app/main.py`` phase49_fiscal_dispatcher_stub: named
-    function, explicit no-op-with-INFO-log. Phase 52 NOT-04/05 will enqueue
-    ``notify_membership_activated`` / ``notify_pt_package_activated`` ARQ tasks.
+    The AST gate at ``tests/integration/webhook_yookassa/test_post_commit_seam.py``
+    asserts the EXACT structural shape of this body (one ``_log.info`` Expr
+    + one guarded ``await arq_pool.enqueue_job(...)`` If). Any structural
+    change requires a lockstep update of that test in the SAME commit
+    (PATTERNS.md errata #3).
     """
     _log.info(
         "webhook_post_commit_enqueue_skip",
@@ -290,7 +305,15 @@ async def _post_commit_enqueue(
         subject_kind=subject_kind,
         subject_id=str(subject_id),
         arq_pool_present=arq_pool is not None,
+        fiscal_receipt_id=str(fiscal_receipt_id) if fiscal_receipt_id is not None else None,
     )
+    if arq_pool is not None and fiscal_receipt_id is not None:
+        await arq_pool.enqueue_job(
+            "dispatch_fiscal_receipt",
+            str(fiscal_receipt_id),
+            _max_tries=3,
+            _expires=60,
+        )
 
 
 async def handle_payment_succeeded(
@@ -298,6 +321,7 @@ async def handle_payment_succeeded(
     yookassa_client: YooKassaClient,
     *,
     body: dict[str, Any],
+    arq_pool: Any | None = None,
 ) -> None:
     """``payment.succeeded`` handler — D-50-18 atomic UoW (8 steps).
 
@@ -417,7 +441,10 @@ async def handle_payment_succeeded(
         )
 
         # fiscal_receipts INSERT — Plan 50-01 repository, caller-owns-txn.
-        await insert_fiscal_receipt(
+        # Phase 51 D-51-15: capture the inserted row + flush so ``fr_row.id``
+        # is populated (server_default=gen_random_uuid()), so the post-commit
+        # hook can enqueue dispatch_fiscal_receipt against the new UUID.
+        fr_row = await insert_fiscal_receipt(
             session,
             payment_id=ledger_payment_id,
             kind=KIND_PAYMENT,
@@ -426,6 +453,8 @@ async def handle_payment_succeeded(
             audit_correlation_id=webhook_intake_corr,
             sent_at=datetime.now(UTC),
         )
+        await session.flush()
+        fiscal_receipt_row_id: UUID = fr_row.id
 
         # CHILD audit emit — online_payment_succeeded chained to
         # webhook_intake_corr (D-50-18 step 7). UUIDs are cast to str for
@@ -465,13 +494,22 @@ async def handle_payment_succeeded(
         op_row_id: UUID = row.id
         subject_kind_local: Literal["membership", "pt_package"] = subject_kind  # type: ignore[assignment]
         subject_id_local: UUID = subject_id
+        fiscal_receipt_row_id_local: UUID = fiscal_receipt_row_id
 
-    # W-4: arq_pool=None in Phase 50; Phase 52 NOT-04/05 will pass
-    # app.state.arq_pool. Runs AFTER the `async with session.begin():`
-    # commit boundary so an enqueue failure cannot poison the UoW.
-    # Phase 50 passes arq_pool=None (no enqueue); Phase 52 NOT-04/05 will pass
-    # app.state.arq_pool — the W-4 signature shape is locked at definition time.
-    await _post_commit_enqueue(None, online_payment_id=op_row_id, subject_kind=subject_kind_local, subject_id=subject_id_local)  # noqa: E501 — single-line W-4 callsite for acceptance grep gate
+    # Phase 51 D-51-15 — runs AFTER the ``async with session.begin():`` commit
+    # boundary so an enqueue failure cannot poison the UoW. ``arq_pool`` is
+    # threaded in from the router (``request.app.state.arq_pool``); when
+    # ``None`` (e.g. in unit tests that bypass the lifespan) the enqueue is
+    # a no-op. ``fiscal_receipt_row_id_local`` is the just-INSERTed
+    # fiscal_receipts row id; the worker reads the full row at task entry
+    # (plan 51-05).
+    await _post_commit_enqueue(
+        arq_pool,
+        online_payment_id=op_row_id,
+        subject_kind=subject_kind_local,
+        subject_id=subject_id_local,
+        fiscal_receipt_id=fiscal_receipt_row_id_local,
+    )
 
 
 async def handle_payment_canceled(
