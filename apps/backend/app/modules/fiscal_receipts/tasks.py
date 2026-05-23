@@ -102,8 +102,6 @@ async def _resolve_yookassa_object_id(
     as a permanent error — a fiscal_receipt without a resolvable payment chain
     is a misconfiguration).
     """
-    from app.modules.online_refunds.models import OnlineRefund
-    from app.modules.payments.models import Payment as PaymentModel
 
     if fr_row.audit_correlation_id is None:
         # Try DB-join path for refund even without audit_correlation_id.
