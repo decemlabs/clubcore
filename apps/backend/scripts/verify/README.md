@@ -1,6 +1,6 @@
-# Phase 36 Verification Scripts
+# Verification Scripts
 
-Operator recipe for the v1.4 backend-only milestone verification sweep.
+Operator recipes for milestone verification sweeps (v1.4 + v1.7).
 
 ## Pre-flight
 
@@ -24,6 +24,35 @@ for s in scripts/verify/0*.sh; do
   bash "$s" || { echo "FAILED: $s — see evidence file"; exit 1; }
 done
 ```
+
+## v1.7 Runbook
+
+One-command entry point for the complete v1.7 online-payment-to-fiscal walkthrough (VER-01):
+
+```bash
+cd apps/backend
+# Additional requirement for v1.7: YOOKASSA_SANDBOX=true in the compose stack env
+# (apps/backend/.env or docker-compose.yml YOOKASSA_SANDBOX env var).
+# This allows the webhook simulation (D-02) to bypass verify_yookassa_ip from localhost.
+export YOOKASSA_SANDBOX=true
+export VERIFY_OWNER_PASSWORD="${SEED_VERIFY_OWNER_PASSWORD}"
+export VERIFY_RECEPTION_PASSWORD="${SEED_VERIFY_RECEPTION_PASSWORD}"
+bash scripts/verify/v1_7_runbook.sh
+```
+
+The runbook drives: sell → `payment.succeeded` webhook → membership activated → `fiscal_receipts`
+row confirmed → refund (202) → idempotency-key replay returns idempotent 2xx.
+
+**YOOKASSA_SANDBOX requirement:** `YOOKASSA_SANDBOX=true` must be set on the backend service
+(in `apps/backend/.env` or as an env var in `docker-compose.yml`). This enables the sandbox
+bypass in `webhook_verifier.py` so raw curl POSTs from localhost are treated as trusted.
+Production deployments must NEVER set this flag.
+
+**Evidence directory:** `.planning/milestones/v1.7-verification-evidence/`  
+Each scenario tees its stdout/stderr to a `.txt` file in that directory.
+
+**Inline-regression hard cap: 5** (D-05). Beyond 5 inline regressions → STOP and roll
+excess to v1.8 DEFER. Do not extend this runbook beyond the cap.
 
 ## Notes
 
