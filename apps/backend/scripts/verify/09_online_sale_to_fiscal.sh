@@ -57,8 +57,10 @@ echo "CLIENT_ID=$CLIENT_ID  PLAN_ID=$PLAN_ID"
 echo "+ cleanup prior online_payments/fiscal_receipts/memberships for verify_sale"
 psql "postgresql://app:app@localhost:5432/sportzal" -c "
 DELETE FROM fiscal_receipts
-  WHERE online_payment_id IN (
-    SELECT id FROM online_payments WHERE client_id='${CLIENT_ID}'
+  WHERE payment_id IN (
+    SELECT id FROM payments
+      WHERE subject_kind='membership'
+        AND subject_id IN (SELECT id FROM memberships WHERE client_id='${CLIENT_ID}')
   );
 DELETE FROM payments
   WHERE subject_id IN (
@@ -143,14 +145,20 @@ echo "step4_activation: PASS — membership $MEMBERSHIP_ID4 active (total=$ACTIV
 rm -f "$B4"
 
 # === step5: confirm fiscal_receipts row ===
-# psql_exec: SELECT fiscal_receipts for this online_payment_id; assert kind='payment' + status='sent'.
+# fiscal_receipts links to the ledger via payment_id -> payments.id; the online
+# membership sale creates payments(subject_kind='membership', subject_id=membership_id),
+# so join through payments on the activated MEMBERSHIP_ID4. Assert kind='payment' + status='sent'.
 # D-36-05: reading DB state directly is the canonical verification pattern for background jobs.
-echo "+ step5_fiscal: psql_exec SELECT fiscal_receipts for ONLINE_PAYMENT_ID=$ONLINE_PAYMENT_ID"
+echo "+ step5_fiscal: psql_exec SELECT fiscal_receipts for MEMBERSHIP_ID=$MEMBERSHIP_ID4"
 FISCAL_ROW="$(psql "postgresql://app:app@localhost:5432/sportzal" -tA -c \
-  "SELECT kind, status FROM fiscal_receipts WHERE online_payment_id='${ONLINE_PAYMENT_ID}' ORDER BY id DESC LIMIT 1;")"
+  "SELECT fr.kind, fr.status
+     FROM fiscal_receipts fr
+     JOIN payments p ON p.id = fr.payment_id
+    WHERE p.subject_kind='membership' AND p.subject_id='${MEMBERSHIP_ID4}' AND fr.kind='payment'
+    ORDER BY fr.created_at DESC LIMIT 1;")"
 echo "  fiscal_receipts row: $FISCAL_ROW"
 if [ -z "$FISCAL_ROW" ]; then
-  echo "result: FAIL — step5: no fiscal_receipts row found for ONLINE_PAYMENT_ID=$ONLINE_PAYMENT_ID"
+  echo "result: FAIL — step5: no fiscal_receipts row found for MEMBERSHIP_ID=$MEMBERSHIP_ID4"
   echo "  Check ARQ worker is running (docker compose ps arq-worker) and YOOKASSA_SANDBOX=true"
   exit 1
 fi

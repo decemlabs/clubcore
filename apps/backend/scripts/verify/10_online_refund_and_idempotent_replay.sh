@@ -51,13 +51,15 @@ echo "CLIENT_ID=$CLIENT_ID  PLAN_ID=$PLAN_ID"
 echo "+ cleanup prior online_payments/fiscal_receipts/memberships for verify_refund"
 psql "postgresql://app:app@localhost:5432/sportzal" -c "
 DELETE FROM fiscal_receipts
-  WHERE online_payment_id IN (
-    SELECT id FROM online_payments WHERE client_id='${CLIENT_ID}'
+  WHERE payment_id IN (
+    SELECT id FROM payments
+      WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${CLIENT_ID}')
+         OR refund_of IN (SELECT id FROM payments WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${CLIENT_ID}'))
   );
 DELETE FROM payments
-  WHERE subject_id IN (
-    SELECT id FROM memberships WHERE client_id='${CLIENT_ID}'
-  );
+  WHERE refund_of IN (SELECT id FROM payments WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${CLIENT_ID}'));
+DELETE FROM payments
+  WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${CLIENT_ID}');
 DELETE FROM memberships WHERE client_id='${CLIENT_ID}';
 DELETE FROM online_payments WHERE client_id='${CLIENT_ID}';
 "
@@ -168,13 +170,15 @@ fi
 # Clean up any leftover online_payments for verify_sale (from scenario 09 or prior run)
 psql "postgresql://app:app@localhost:5432/sportzal" -c "
 DELETE FROM fiscal_receipts
-  WHERE online_payment_id IN (
-    SELECT id FROM online_payments WHERE client_id='${IDEM_CLIENT_ID}'
+  WHERE payment_id IN (
+    SELECT id FROM payments
+      WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${IDEM_CLIENT_ID}')
+         OR refund_of IN (SELECT id FROM payments WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${IDEM_CLIENT_ID}'))
   );
 DELETE FROM payments
-  WHERE subject_id IN (
-    SELECT id FROM memberships WHERE client_id='${IDEM_CLIENT_ID}'
-  );
+  WHERE refund_of IN (SELECT id FROM payments WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${IDEM_CLIENT_ID}'));
+DELETE FROM payments
+  WHERE subject_id IN (SELECT id FROM memberships WHERE client_id='${IDEM_CLIENT_ID}');
 DELETE FROM memberships WHERE client_id='${IDEM_CLIENT_ID}';
 DELETE FROM online_payments WHERE client_id='${IDEM_CLIENT_ID}';
 "
