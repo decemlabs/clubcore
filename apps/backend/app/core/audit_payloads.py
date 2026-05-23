@@ -993,6 +993,67 @@ class YookassaWebhookReceivedPayload(BaseModel):
     ]
 
 
+# Online refund lifecycle (Phase 51 REFUND-01..04 / D-51-19):
+
+
+class OnlineRefundInitiatedPayload(BaseModel):
+    """Payload schema for ("online_refund_initiated", "online_refund") — Phase 51 REFUND-01.
+
+    Emitted from the POST /online-payments/.../refund endpoint inside the
+    initiate UoW (Plan 51-08 / D-51-09). Fresh chain ROOT:
+    ``audit_correlation_id`` is a new uuid4 (not a CHILD of any prior chain) —
+    downstream poll-cron events (``online_refund_polled_settled`` /
+    ``online_refund_canceled``) carry this UUID as their correlation id.
+
+    ``reason`` is operator-supplied free text — documented as operator-internal
+    (no client-facing exposure; T-51-02-02 mitigation).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_refund_id: UUID
+    online_payment_id: UUID
+    original_payment_id: UUID
+    amount_kopecks: int
+    requested_by_user_id: UUID
+    reason: str | None
+
+
+class OnlineRefundPolledSettledPayload(BaseModel):
+    """Payload for ("online_refund_polled_settled", "online_refund") — Phase 51 D-51-17 step 3.
+
+    Emitted from the ``poll_pending_refunds`` cron when synthesizing the settle
+    UoW after a missed webhook. CHILD emit: ``audit_correlation_id`` carries
+    the initiated dispatch UUID so the polled-settle row chains back to the
+    OnlineRefundInitiated row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_refund_id: UUID
+    yookassa_refund_id: str
+    settled_at: datetime
+
+
+class OnlineRefundCanceledPayload(BaseModel):
+    """Payload for ("online_refund_canceled", "online_refund") — Phase 51 D-51-17 step 4.
+
+    Emitted from the ``poll_pending_refunds`` cron when ЮKassa reports the
+    refund canceled. CHILD emit: ``audit_correlation_id`` carries the
+    initiated dispatch UUID. ``cancellation_reason`` is the upstream
+    operator-readable diagnostic — nullable when the upstream payload omits it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_correlation_id: UUID | None
+    online_refund_id: UUID
+    yookassa_refund_id: str
+    cancellation_reason: str | None
+
+
 # ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
@@ -1067,4 +1128,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # Webhook-driven activation (Phase 50 WH-05 / D-50-23):
     ("membership_activated_online", "membership"): MembershipActivatedOnlinePayload,
     ("pt_package_activated_online", "pt_package"): PtPackageActivatedOnlinePayload,
+    # Online refund lifecycle (Phase 51 REFUND-01..04 / D-51-19):
+    ("online_refund_initiated", "online_refund"): OnlineRefundInitiatedPayload,
+    ("online_refund_polled_settled", "online_refund"): OnlineRefundPolledSettledPayload,
+    ("online_refund_canceled", "online_refund"): OnlineRefundCanceledPayload,
 }

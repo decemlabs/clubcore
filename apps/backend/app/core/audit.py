@@ -194,6 +194,30 @@ The frozenset size grows 53 → 58.
                                         # mirror of membership_activated_online for the
                                         # PT-package activation branch (Plan 50-03).
 
+  Online refund lifecycle (Phase 51 REFUND-01..04 / D-51-19):
+  - online_refund_initiated             {audit_correlation_id, online_refund_id,
+                                         online_payment_id, original_payment_id,
+                                         amount_kopecks, requested_by_user_id,
+                                         reason}
+                                        # 'online_refund' — `OnlineRefundInitiatedPayload`;
+                                        # emitted from POST /online-payments/.../refund
+                                        # inside the initiate UoW (Plan 51-08). Fresh
+                                        # chain ROOT — `audit_correlation_id` is a new
+                                        # uuid4 (not a CHILD of any prior chain).
+  - online_refund_polled_settled        {audit_correlation_id, online_refund_id,
+                                         yookassa_refund_id, settled_at}
+                                        # 'online_refund' — `OnlineRefundPolledSettledPayload`;
+                                        # emitted from `poll_pending_refunds` cron
+                                        # when synthesizing the settle UoW after a
+                                        # missed webhook (Plan 51-09 / D-51-17 step 3).
+                                        # CHILD emit: carries the initiate dispatch UUID.
+  - online_refund_canceled              {audit_correlation_id, online_refund_id,
+                                         yookassa_refund_id, cancellation_reason}
+                                        # 'online_refund' — `OnlineRefundCanceledPayload`;
+                                        # emitted from `poll_pending_refunds` cron
+                                        # when ЮKassa reports the refund canceled
+                                        # (Plan 51-09 / D-51-17 step 4). CHILD emit.
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -358,6 +382,16 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # audit_correlation_id.
         ("membership_activated_online", "membership"),
         ("pt_package_activated_online", "pt_package"),
+        # Online refund lifecycle (Phase 51 REFUND-01..04 / D-51-19):
+        # Emitted by Plans 51-07 (webhook handlers), 51-08 (POST endpoint),
+        # 51-09 (poll-pending-refunds cron). `online_refund_initiated` is a
+        # fresh chain root (audit_correlation_id = new uuid4). The two cron
+        # variants (`*_polled_settled`, `*_canceled`) carry the dispatch
+        # chain id from the initiated row when synthesising a settle UoW
+        # after a missed webhook (D-51-17).
+        ("online_refund_initiated", "online_refund"),
+        ("online_refund_polled_settled", "online_refund"),
+        ("online_refund_canceled", "online_refund"),
     }
 )
 
