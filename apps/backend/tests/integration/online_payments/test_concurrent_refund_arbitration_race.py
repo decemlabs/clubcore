@@ -58,7 +58,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
-    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
@@ -146,7 +145,7 @@ async def test_concurrent_refund_loses_at_db_layer_uq_payments_refund_of_alive(
 ) -> None:
     """VER-02(c): N=5 parallel POST /memberships/{id}/refund → uq_payments_refund_of_alive.
 
-    Expected outcome: exactly 1×200 + 4×409 already_refunded.
+    Expected outcome: exactly 1x200 + 4x409 already_refunded.
 
     The partial UNIQUE index ``uq_payments_refund_of_alive`` on
     ``payments(refund_of) WHERE refund_of IS NOT NULL`` is the race arbiter.

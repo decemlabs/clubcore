@@ -183,7 +183,7 @@ async def test_fiscal_receipt_dispatch_short_circuits_when_breaker_open_via_dire
     """DEFER-46-03 parity variant: direct open-marker SET short-circuits dispatch.
 
     This is a secondary parity assertion: directly SET the open-marker key
-    (as tests/unit/test_yookassa_circuit_breaker.py::test_is_circuit_open_returns_true_when_marker_set
+    (as test_yookassa_circuit_breaker.py's test_is_circuit_open_returns_true_when_marker_set
     confirms the EXISTS check), then assert the same short-circuit behaviour
     as the 5-failure variant.
 

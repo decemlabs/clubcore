@@ -29,7 +29,6 @@ Pattern source:
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
@@ -319,8 +318,6 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
             f"got {audit_count}"
         )
 
-    # asyncio.gather is used here for the concurrent pattern consistency check.
-    # VER-02(b) is sequential-not-concurrent by design (the race window is the
-    # dedup-key absence between two sequential deliveries).
-    _results = await asyncio.gather(asyncio.sleep(0))
-    assert _results == [None]
+    # VER-02(b) is sequential-not-concurrent by design: the race window is the
+    # dedup-key absence between two sequential deliveries, so the DB UNIQUE is
+    # the sole catcher (no asyncio.gather needed here).

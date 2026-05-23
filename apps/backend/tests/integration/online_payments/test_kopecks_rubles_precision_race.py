@@ -308,5 +308,5 @@ async def test_kopecks_rubles_db_amount_preserved(
     # each using a distinct (client_id, plan_id) to avoid double-tap UNIQUE.
     await asyncio.gather(*[
         _seed_and_verify(k, owner_client_plan[1], owner_client_plan[2])
-        for k, owner_client_plan in zip(nonzero_edges, fixtures)
+        for k, owner_client_plan in zip(nonzero_edges, fixtures, strict=True)
     ])

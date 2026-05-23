@@ -42,7 +42,7 @@ import pytest
 import pytest_asyncio
 import respx
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -257,7 +257,7 @@ async def test_payment_succeeded_double_delivery_race(
                 )
             )
 
-            async def _post(_idx: int) -> object:
+            async def _post(_idx: int) -> Response:
                 async with AsyncClient(
                     transport=transport, base_url="http://testserver"
                 ) as client:
@@ -269,7 +269,7 @@ async def test_payment_succeeded_double_delivery_race(
     finally:
         app.dependency_overrides.clear()
 
-    statuses = [r.status_code for r in responses]  # type: ignore[union-attr]
+    statuses = [r.status_code for r in responses]
     assert all(s == 200 for s in statuses), (
         f"VER-02(a): expected all 200, got {statuses}"
     )
