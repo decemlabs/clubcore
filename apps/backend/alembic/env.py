@@ -30,6 +30,7 @@ import app.modules.clients.models
 import app.modules.fiscal_receipts.models  # Phase 50 FISCAL-01 / 0035
 import app.modules.memberships.models
 import app.modules.online_payments.models  # Phase 49 PAY-01 / 0034
+import app.modules.online_refunds.models  # Phase 51 REFUND-01 / 0036
 import app.modules.payments.models  # Phase 32 PAY-01
 import app.modules.pt_packages.models  # Phase 33 PT-01 / PT-04
 import app.modules.pt_sessions.models  # Phase 34 PT-14 / 0015

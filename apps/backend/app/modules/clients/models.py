@@ -108,4 +108,13 @@ class Client(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        # Phase / INFRA-41 — partial UNIQUE on lower(email) across live, non-NULL
+        # rows. Mirrors alembic 0033_clients_email_partial_unique. Declared here
+        # so ``alembic check`` autogenerate sees it (model↔migration parity).
+        Index(
+            "ix_clients_email_lower_unique",
+            text("lower(email)"),
+            unique=True,
+            postgresql_where=text("email IS NOT NULL AND deleted_at IS NULL"),
+        ),
     )
