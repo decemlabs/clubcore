@@ -95,6 +95,7 @@ from app.integrations.email.models import (  # noqa: F401
 from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
+from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt
 from app.modules.payments.models import (  # noqa: F401
     PaymentReceipt,  # Phase 45 D-45-20 — payment_receipts eager-import (REG-29-04)
 )
@@ -127,6 +128,11 @@ class WorkerSettings:
         mark_no_show_bookings,  # Phase 39 CRON-01
         dispatch_email,  # Phase 42 EMAIL-03 — request-handler-driven (NOT a cron)
         cleanup_password_reset_tokens,  # Phase 44 D-44-31 — housekeeping
+        # Phase 51 FISCAL-05 — request-handler-driven dispatch task.
+        # Bare callable per the dispatch_email convention (Option B from
+        # plan 51-05); per-enqueue `_max_tries=3, _expires=60` carries the
+        # ARQ retry contract from D-51-Discretion / Pitfall 11 step 2.
+        dispatch_fiscal_receipt,
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -285,12 +291,37 @@ class WorkerSettings:
 
         register_yookassa_client_provider(_yookassa_client_provider)
 
-        # Phase 49 D-49-22 — FiscalReceiptDispatcher Phase-49-only bridge stub
-        # (REG-29-03 double-wire mirror of app/main.py). Phase 50 FISCAL-01
-        # replaces this with the real ARQ-enqueue body.
-        from app.modules.online_payments.service import phase49_fiscal_dispatcher_stub
+        # Phase 51 FISCAL-05 — REAL FiscalReceiptDispatcher closure
+        # (REG-29-03 double-wire mirror of app/main.py:create_app()). Replaces
+        # the Phase 49 phase49_fiscal_dispatcher_stub which raised
+        # NotImplementedError. The closure captures the worker's own
+        # ArqRedis pool exposed at ``ctx["redis"]`` (ARQ 0.28 convention —
+        # workers self-enqueue using the same pool used to dequeue, mirrors
+        # the register_arq_pool(ctx["redis"]) call below for the email
+        # dispatcher). Per-enqueue `_max_tries=3, _expires=60` per
+        # D-51-Discretion / Pitfall 11 step 2 — keeps the retry contract
+        # outside ``WorkerSettings.functions`` (Option B in plan 51-05).
+        from uuid import UUID as _UUID
 
-        register_fiscal_receipt_dispatcher(phase49_fiscal_dispatcher_stub)
+        arq_pool = ctx["redis"]
+
+        async def _real_fiscal_receipt_dispatcher(
+            *,
+            fiscal_receipt_id: _UUID,
+            audit_correlation_id: _UUID | None,
+        ) -> None:
+            # audit_correlation_id is part of the Protocol-pinned signature
+            # but is not carried on the enqueue (the task body re-reads it
+            # from the fiscal_receipts row).
+            del audit_correlation_id
+            await arq_pool.enqueue_job(
+                "dispatch_fiscal_receipt",
+                str(fiscal_receipt_id),
+                _max_tries=3,
+                _expires=60,
+            )
+
+        register_fiscal_receipt_dispatcher(_real_fiscal_receipt_dispatcher)
 
         # ARQ 0.28 exposes the in-worker ArqRedis pool to job bodies via
         # ctx["redis"] (the standard ARQ convention). The worker's own pool
