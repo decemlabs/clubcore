@@ -113,7 +113,15 @@ async def yookassa_webhook(
         return Response(status_code=200, content="ok", media_type="text/plain")
 
     if event_type == "payment.succeeded":
-        await handle_payment_succeeded(session, yookassa_client, body=body)
+        # Phase 51 D-51-15 — thread ``app.state.arq_pool`` so the post-commit
+        # hook can enqueue ``dispatch_fiscal_receipt``. Pool is populated by
+        # ``combined_lifespan`` (app/main.py); tests that bypass the lifespan
+        # leave the attribute unset, in which case the handler receives
+        # ``None`` and the enqueue branch is a no-op.
+        arq_pool = getattr(request.app.state, "arq_pool", None)
+        await handle_payment_succeeded(
+            session, yookassa_client, body=body, arq_pool=arq_pool
+        )
     elif event_type == "payment.canceled":
         await handle_payment_canceled(session, yookassa_client, body=body)
     elif event_type == "refund.succeeded":
