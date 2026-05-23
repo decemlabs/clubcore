@@ -45,7 +45,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, require_permission, verify_csrf
+from app.core.dependencies import (
+    CurrentUser,
+    get_yookassa_client_provider,
+    require_permission,
+    verify_csrf,
+)
 from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
     IDEMPOTENCY_REDIS_PREFIX,
@@ -58,6 +63,7 @@ from app.core.idempotency import (
 from app.core.permissions import Action, Resource
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
+from app.integrations.yookassa.client import YooKassaClient
 from app.integrations.yookassa.settings import (
     YooKassaSettings,
     get_yookassa_settings,
@@ -68,6 +74,11 @@ from app.modules.online_payments.constants import (
     CONFIRMATION_TYPE_REDIRECT,
 )
 from app.modules.online_payments.schemas import SellRequest, SellResponse
+from app.modules.online_refunds import service as online_refunds_service
+from app.modules.online_refunds.schemas import (
+    OnlineRefundRequest,
+    OnlineRefundResponse,
+)
 
 router = APIRouter()
 
@@ -386,3 +397,107 @@ async def online_payment_return() -> Response:
     elapsed = time.perf_counter() - start
     await asyncio.sleep(max(0.0, _RETURN_FLOOR_SECONDS - elapsed))
     return response
+
+
+# ─── Phase 51 REFUND-01 / D-51-08 — Operator-facing refund endpoints ────────
+#
+# Errata #2 Option A (PATTERNS.md): appended to the EXISTING
+# ``app/modules/online_payments/router.py`` rather than a parallel
+# ``app/api/v1/online_payments/`` package — avoids double-mounting at the
+# ``/online-payments`` prefix and keeps the user-facing namespace cohesive.
+#
+# Two endpoints (membership refund + PT-package refund) — RBAC-04 ordering
+# (D-49-25): auth → require_permission → verify_csrf. NO outer Idempotency-
+# Key header here — refunds use a caller-supplied ``idempotency_key`` in the
+# REQUEST BODY (D-51-Discretion) which is forwarded to the ЮKassa
+# ``Idempotence-Key`` header BY the service after the step-1 replay check.
+#
+# Permission mapping (D-51-24 — both reception+owner; no new OWNER_ONLY):
+#   /memberships/{id}/refund   → require_permission(REFUND, MEMBERSHIPS)
+#   /pt-packages/{id}/refund   → require_permission(REFUND, PT_PACKAGES)
+
+
+@router.post(
+    "/memberships/{membership_id}/refund",
+    response_model=ResponseEnvelope[OnlineRefundResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+    summary=(
+        "Initiate online refund of a membership (Phase 51 REFUND-01). "
+        "Full refund only (partial deferred to v1.8 B-02). "
+        "Returns 202; completion awaits ЮKassa refund.succeeded webhook."
+    ),
+)
+async def refund_membership_online(
+    membership_id: UUID,
+    payload: OnlineRefundRequest,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.REFUND, Resource.MEMBERSHIPS)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[OnlineRefundResponse]:
+    """REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.
+
+    RBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →
+    verify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-
+    source / FSM) BEFORE calling ЮKassa; emits the
+    ``online_refund_initiated`` audit row inside the single UoW.
+
+    Error mapping (raised from the service layer):
+      - 404 membership_not_found / online_payment_not_found / original_payment_not_found
+      - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition
+        / refund_already_in_flight
+      - 422 yookassa_validation_error
+      - 503 yookassa_unavailable
+      - 502 yookassa_permanent_error
+    """
+    provider = get_yookassa_client_provider()
+    yookassa_client: YooKassaClient = await provider()
+    resp = await online_refunds_service.initiate_online_refund(
+        session,
+        actor,
+        membership_id=membership_id,
+        idempotency_key=payload.idempotency_key,
+        reason=payload.reason,
+        yookassa_client=yookassa_client,
+    )
+    return envelope(resp)
+
+
+@router.post(
+    "/pt-packages/{pt_package_id}/refund",
+    response_model=ResponseEnvelope[OnlineRefundResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+    summary=(
+        "Initiate online refund of a PT-package (Phase 51 REFUND-01). "
+        "Full refund only. Returns 202; completion awaits ЮKassa "
+        "refund.succeeded webhook."
+    ),
+)
+async def refund_pt_package_online(
+    pt_package_id: UUID,
+    payload: OnlineRefundRequest,
+    actor: Annotated[
+        CurrentUser,
+        Depends(require_permission(Action.REFUND, Resource.PT_PACKAGES)),
+    ],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[OnlineRefundResponse]:
+    """REFUND-01 — POST /api/v1/online-payments/pt-packages/{id}/refund.
+
+    Mirrors ``refund_membership_online``. No freeze / renewed-source guards
+    for PT-packages (no freeze concept, no renewal chain in v1.x).
+    """
+    provider = get_yookassa_client_provider()
+    yookassa_client: YooKassaClient = await provider()
+    resp = await online_refunds_service.initiate_online_refund(
+        session,
+        actor,
+        pt_package_id=pt_package_id,
+        idempotency_key=payload.idempotency_key,
+        reason=payload.reason,
+        yookassa_client=yookassa_client,
+    )
+    return envelope(resp)
