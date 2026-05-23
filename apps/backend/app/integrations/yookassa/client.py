@@ -64,7 +64,11 @@ import structlog
 # point keeps the secret out of every other module's grep surface (D-48-07).
 from app.integrations.yookassa._money import kopecks_to_yookassa, yookassa_to_kopecks
 from app.integrations.yookassa.settings import YooKassaSettings
-from app.integrations.yookassa.types import YooKassaPaymentResult, YooKassaRefundResult
+from app.integrations.yookassa.types import (
+    YooKassaPaymentResult,
+    YooKassaReceiptResult,
+    YooKassaRefundResult,
+)
 
 # Per ЮKassa interaction spec: header name has ONE 't' — "Idempotence-Key".
 # Do NOT rename to the standards-conformant double-t spelling — ЮKassa
@@ -439,6 +443,126 @@ class YooKassaClient:
                 ok=False,
                 classification="transient_error",
                 idempotency_key=idempotency_key,
+                error=str(exc),
+            )
+
+    async def create_receipt(
+        self,
+        *,
+        payment_id: str,
+        customer_email: str,
+        items: list[dict[str, Any]],
+        tax_system_code: int,
+        idempotency_key: str,
+        kind: Literal["payment", "refund"] = "payment",
+    ) -> YooKassaReceiptResult:
+        """POST /v3/receipts — 54-ФЗ fiscalization (Phase 51 FISCAL-05 / D-51-20).
+
+        Caller-owned ``idempotency_key`` (D-48-11 + D-51-20). Mirrors
+        ``create_refund`` (line 350) shape byte-for-byte: same closed
+        classification taxonomy (``ok`` / ``validation_error`` /
+        ``transient_error`` / ``permanent_error``), same ``Idempotence-Key``
+        header (ONE 't' — D-48-12), same never-re-raise discipline.
+
+        ``kind`` discriminates the receipt body:
+
+        - ``"payment"`` — receipt for a successful ``online_payments`` row
+          (``fiscal_receipts.kind='payment'``). Body uses ``"payment_id"``.
+        - ``"refund"`` — receipt for a successful ``refunds`` row
+          (``fiscal_receipts.kind='refund'``). Body uses ``"refund_id"``.
+          The ``payment_id`` parameter carries the refund_id in this branch
+          per ЮKassa /v3/receipts API spec.
+
+        ЮKassa fires a ``receipt.succeeded`` webhook AFTER fiscalization
+        settles. The caller (plan 51-05 dispatch task) MUST NOT mark the
+        ``fiscal_receipts`` row ``succeeded`` on ``classification == 'ok'``
+        — only stash ``result.receipt_id`` into
+        ``fiscal_receipts.yookassa_receipt_id`` and let the webhook FSM
+        transition the row.
+
+        PII discipline (Threat T-51-03-01): structlog events log only
+        ``receipt_id`` / ``status`` / ``classification`` / ``http_status``.
+        ``customer_email`` NEVER appears in any ``_log.info`` /
+        ``_log.warning`` kwarg — audit-DB rows are PII-acceptable; structlog
+        is not.
+
+        Returns ``YooKassaReceiptResult`` — never re-raises (SC1).
+        """
+        link_field = "payment_id" if kind == "payment" else "refund_id"
+        body: dict[str, Any] = {
+            "type": kind,
+            link_field: payment_id,
+            "customer": {"email": customer_email},
+            "items": items,
+            "tax_system_code": int(tax_system_code),
+            "send": True,
+        }
+        try:
+            response = await self._http.post(
+                "receipts",
+                json=body,
+                headers={IDEMPOTENCE_KEY_HEADER: idempotency_key},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            _log.info(
+                "yookassa_create_receipt_ok",
+                receipt_id=payload["id"],
+                status=payload.get("status"),
+                kind=kind,
+                # NO customer_email in logs — PII discipline (Threat T-51-03-01).
+            )
+            return YooKassaReceiptResult(
+                ok=True,
+                classification="ok",
+                receipt_id=payload["id"],
+            )
+        except httpx.HTTPStatusError as exc:
+            classification, status, error_code = self._classify_http_status_error(exc)
+            _log.warning(
+                f"yookassa_create_receipt_{classification}",
+                http_status=status,
+                error_code=error_code,
+                kind=kind,
+            )
+            return YooKassaReceiptResult(
+                ok=False,
+                classification=classification,
+                http_status=status,
+                error_code=error_code,
+                error=str(exc),
+            )
+        except (httpx.TimeoutException, httpx.RequestError) as exc:
+            _log.warning(
+                "yookassa_create_receipt_transient_error",
+                reason=type(exc).__name__,
+                kind=kind,
+            )
+            return YooKassaReceiptResult(
+                ok=False,
+                classification="transient_error",
+                error=str(exc),
+            )
+        except json.JSONDecodeError as exc:
+            _log.warning(
+                "yookassa_create_receipt_permanent_error",
+                reason="malformed_json",
+                kind=kind,
+            )
+            return YooKassaReceiptResult(
+                ok=False,
+                classification="permanent_error",
+                error=str(exc),
+            )
+        except Exception as exc:  # outbound boundary — classify all transport failures
+            _log.warning(
+                "yookassa_create_receipt_transient_error",
+                reason=type(exc).__name__,
+                kind=kind,
+            )
+            return YooKassaReceiptResult(
+                ok=False,
+                classification="transient_error",
                 error=str(exc),
             )
 

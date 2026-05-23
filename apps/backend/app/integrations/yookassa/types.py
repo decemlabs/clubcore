@@ -118,19 +118,23 @@ class YooKassaRefundResult:
 
 @dataclass(frozen=True)
 class YooKassaReceiptResult:
-    """Placeholder for Phase 51 FISCAL-04 (``POST /v3/receipts``).
+    """Outcome of one ``POST /v3/receipts`` attempt (Phase 51 FISCAL-05 / D-51-20).
 
-    Phase 48 ships no client method for receipts — the type exists for
-    forward-compat with the wider classification taxonomy. Phase 51 will
-    populate ``receipt_id`` on success and route failure variants through
-    the same retry/alert disposition as payments/refunds.
+    Mirrors ``YooKassaRefundResult`` shape and classification taxonomy.
+    Populated by ``YooKassaClient.create_receipt`` — the Phase 51
+    ``dispatch_fiscal_receipt`` ARQ task (plan 51-05) reads
+    ``classification`` to drive retry/alert disposition and stashes
+    ``receipt_id`` into ``fiscal_receipts.yookassa_receipt_id`` on
+    success (the ``receipt.succeeded`` webhook later flips the
+    ``fiscal_receipts`` row to ``succeeded`` — caller does NOT mark the
+    row ``succeeded`` on ``classification == 'ok'``).
     """
 
     ok: bool
     classification: Literal["ok", "validation_error", "transient_error", "permanent_error"]
     receipt_id: str | None = None
-    error_code: str | None = None
     http_status: int | None = None
+    error_code: str | None = None
     error: str | None = None
 
 
