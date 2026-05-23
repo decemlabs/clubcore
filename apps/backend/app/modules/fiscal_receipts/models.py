@@ -39,6 +39,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column
@@ -76,6 +77,12 @@ class FiscalReceipt(Base, UUIDPkMixin):
     )
     audit_correlation_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
+    )
+    # Plan 51-09 / D-51-16 — monitor cron age anchor (migration 0038).
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
     __table_args__ = (
