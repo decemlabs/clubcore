@@ -66,12 +66,18 @@ class SettledRefundLocals:
     ЮKassa ``/v3/receipts`` by the ``dispatch_fiscal_receipt`` ARQ task.
     Without this, the row would sit at ``status='sent'`` forever and never
     reach ``succeeded`` — a 54-ФЗ compliance defect.
+
+    Phase 52 (D-52-10): ``refund_payment_id`` is the refund ledger row id
+    (``payments.id`` of the negative-amount row created by the PaymentRefunder
+    Protocol call). Used as the idempotency key for ``dispatch_payment_notification``
+    with ``kind='refund_succeeded'``.
     """
 
     fiscal_receipt_id: UUID
     online_payment_id: UUID
     subject_kind: Literal["membership", "pt_package"]
     subject_id: UUID
+    refund_payment_id: UUID  # Phase 52: ledger row id for refund notification dedup
 
 
 async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
@@ -350,7 +356,8 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         online_payment_id=op.id,
         subject_kind=subject_kind,
         subject_id=subject_id,
+        refund_payment_id=refund_payment.id,
     )
 
 
-__all__ = ("_settle_online_refund", "SettledRefundLocals")
+__all__ = ("SettledRefundLocals", "_settle_online_refund")

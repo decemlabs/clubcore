@@ -133,10 +133,21 @@ async def _poll_pending_refunds(
             # for the just-INSERTed refund-side fiscal_receipts row. Mirrors
             # the handle_refund_succeeded post-commit hook so cron-path
             # settles also reach ЮKassa /v3/receipts (54-ФЗ compliance).
+            # Phase 52 (D-52-10): also enqueue dispatch_payment_notification
+            # with kind='refund_succeeded' so the client receives the refund DM.
             if settled_locals is not None and arq_pool is not None:
                 await arq_pool.enqueue_job(
                     "dispatch_fiscal_receipt",
                     str(settled_locals.fiscal_receipt_id),
+                    _max_tries=3,
+                    _expires=60,
+                )
+                await arq_pool.enqueue_job(
+                    "dispatch_payment_notification",
+                    _kwargs={
+                        "payment_id": str(settled_locals.refund_payment_id),
+                        "kind": "refund_succeeded",
+                    },
                     _max_tries=3,
                     _expires=60,
                 )

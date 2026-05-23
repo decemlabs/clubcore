@@ -273,44 +273,55 @@ async def _post_commit_enqueue(
     subject_kind: Literal["membership", "pt_package"],
     subject_id: UUID,
     fiscal_receipt_id: UUID | None = None,
+    payment_id: UUID | None = None,
+    kind: str | None = None,
 ) -> None:
-    """Post-commit notification enqueue (Phase 50 stub → Phase 51 fiscal-dispatch branch).
+    """Post-commit enqueue (Phase 50 stub → Phase 51 fiscal-dispatch → Phase 52 notification).
 
     Phase 50 shipped this as a pure no-op (single ``_log.info`` call —
-    DEFER-50-04). Phase 51 (this commit, D-51-15) ADDS the
-    ``fiscal_receipt_id`` branch: when both ``arq_pool`` and
-    ``fiscal_receipt_id`` are non-None, enqueues the ARQ task
+    DEFER-50-04). Phase 51 (D-51-15) ADDED the ``fiscal_receipt_id`` branch:
+    when both ``arq_pool`` and ``fiscal_receipt_id`` are non-None, enqueues
     ``dispatch_fiscal_receipt`` with ``_max_tries=3`` + ``_expires=60``
-    (Pitfall 11 / D-51-Discretion retry contract). Phase 52 will add
-    notification branches (NOT-02 refund DM, NOT-04 fiscal-failure DM) —
-    out of scope for this plan.
+    (Pitfall 11 / D-51-Discretion retry contract).
+
+    Phase 52 (D-52-10 / D-52-11, this commit) ADDS the notification branch:
+    when ``arq_pool``, ``payment_id``, and ``kind`` are all non-None, enqueues
+    ``dispatch_payment_notification`` with ``_max_tries=3`` + ``_expires=60``.
 
     Signature lineage:
       - Phase 50 (D-50-19): ``(arq_pool, *, online_payment_id, subject_kind,
         subject_id)``.
-      - Phase 51 (D-51-15, this plan): adds ``fiscal_receipt_id: UUID | None
-        = None`` (default ``None`` preserves Phase 50 callsite compatibility
-        and any future caller that has no receipt to dispatch — e.g. the
-        cancellation handler in ``handle_payment_canceled``).
+      - Phase 51 (D-51-15): adds ``fiscal_receipt_id: UUID | None = None``.
+      - Phase 52 (D-52-10): adds ``payment_id: UUID | None = None`` +
+        ``kind: str | None = None`` (defaults preserve all existing callers).
 
     The AST gate at ``tests/integration/webhook_yookassa/test_post_commit_seam.py``
     asserts the EXACT structural shape of this body (one ``_log.info`` Expr
-    + one guarded ``await arq_pool.enqueue_job(...)`` If). Any structural
+    + two guarded ``await arq_pool.enqueue_job(...)`` Ifs). Any structural
     change requires a lockstep update of that test in the SAME commit
-    (PATTERNS.md errata #3).
+    (PATTERNS.md errata #3 / D-52-11).
     """
     _log.info(
-        "webhook_post_commit_enqueue_skip",
+        "webhook_post_commit_enqueue",
         online_payment_id=str(online_payment_id),
         subject_kind=subject_kind,
         subject_id=str(subject_id),
         arq_pool_present=arq_pool is not None,
         fiscal_receipt_id=str(fiscal_receipt_id) if fiscal_receipt_id is not None else None,
+        payment_id=str(payment_id) if payment_id is not None else None,
+        kind=kind,
     )
     if arq_pool is not None and fiscal_receipt_id is not None:
         await arq_pool.enqueue_job(
             "dispatch_fiscal_receipt",
             str(fiscal_receipt_id),
+            _max_tries=3,
+            _expires=60,
+        )
+    if arq_pool is not None and payment_id is not None and kind is not None:
+        await arq_pool.enqueue_job(
+            "dispatch_payment_notification",
+            _kwargs={"payment_id": str(payment_id), "kind": kind},
             _max_tries=3,
             _expires=60,
         )
@@ -509,6 +520,8 @@ async def handle_payment_succeeded(
         subject_kind=subject_kind_local,
         subject_id=subject_id_local,
         fiscal_receipt_id=fiscal_receipt_row_id_local,
+        payment_id=ledger_payment_id,
+        kind="payment_succeeded",
     )
 
 
@@ -812,6 +825,8 @@ async def handle_refund_succeeded(
             subject_kind=settled_locals.subject_kind,
             subject_id=settled_locals.subject_id,
             fiscal_receipt_id=settled_locals.fiscal_receipt_id,
+            payment_id=settled_locals.refund_payment_id,
+            kind="refund_succeeded",
         )
 
 
