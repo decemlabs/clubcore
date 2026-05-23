@@ -419,6 +419,11 @@ LOCKED_EMAIL_TEMPLATES: frozenset[str] = frozenset(
         # Phase 45 — payment receipts (NOTIFY-12):
         "EMAIL_PAYMENT_RECEIPT_SALE",
         "EMAIL_PAYMENT_RECEIPT_REFUND",
+        # Phase 52 — online payment notifications (NOT-02 / D-52-07):
+        "EMAIL_ONLINE_PAYMENT_SUCCEEDED",
+        "EMAIL_ONLINE_PAYMENT_REFUNDED",
+        "EMAIL_ONLINE_PAYMENT_CANCELED",    # owner operator alert
+        "EMAIL_FISCAL_RECEIPT_FAILED",      # owner operator alert
     }
 )
 """Locked email template identifiers (Phase 41 INFRA-36 / D-41-11 / D-41-12).
