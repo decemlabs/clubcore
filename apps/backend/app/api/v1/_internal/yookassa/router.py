@@ -123,7 +123,10 @@ async def yookassa_webhook(
             session, yookassa_client, body=body, arq_pool=arq_pool
         )
     elif event_type == "payment.canceled":
-        await handle_payment_canceled(session, yookassa_client, body=body)
+        # Phase 52 D-52-10 — thread arq_pool so the owner alert can be enqueued
+        # post-commit. Mirrors the payment.succeeded branch (line 121).
+        arq_pool = getattr(request.app.state, "arq_pool", None)
+        await handle_payment_canceled(session, yookassa_client, body=body, arq_pool=arq_pool)
     elif event_type == "refund.succeeded":
         # Phase 51 D-51-11 — refund webhook re-fetches via yookassa_client.get_refund
         # before any DB write (D-50-12 doctrine inherited).

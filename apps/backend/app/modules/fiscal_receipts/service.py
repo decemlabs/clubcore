@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import structlog
 from sqlalchemy import select
@@ -44,6 +45,7 @@ _LOOP_BUDGET_PER_TICK: int = 50
 
 async def _monitor_stale_fiscal_receipts(
     session_factory: async_sessionmaker[Any],
+    arq_pool: Any | None = None,
 ) -> int:
     """Phase 51 FISCAL-06 — flip stale fiscal_receipts(pending) → failed.
 
@@ -57,10 +59,15 @@ async def _monitor_stale_fiscal_receipts(
 
     Returns count of rows flipped.
 
-    Note: Phase 52 NOT-04 owner-alert wiring is intentionally out-of-scope
-    here — the audit row + structlog summary event are the only side-effects.
+    Phase 52 D-52-10: when ``arq_pool`` is non-None, enqueues
+    ``dispatch_payment_notification(kind='fiscal_failed')`` for each flipped
+    row post-commit as a best-effort owner alert. Enqueues are accumulated
+    during the flip loop and fired after the commit boundary exits (never
+    inside the txn). Guard-wrapped (pool is not None) so unit tests are
+    unaffected.
     """
     flipped = 0
+    failed_payment_ids: list[UUID] = []
     cutoff = datetime.now(UTC) - timedelta(seconds=_STALE_PENDING_SECONDS)
     async with session_factory() as session, session.begin():
         stmt = (
@@ -89,7 +96,18 @@ async def _monitor_stale_fiscal_receipts(
                 fiscal_receipt_id=str(row.id),
                 failure_reason="stale_pending_no_dispatch",
             )
+            # Capture payment_id before commit (rows detach after session.begin() exits).
+            failed_payment_ids.append(row.payment_id)
             flipped += 1
+    # Phase 52 D-52-10 — best-effort owner alerts, post-commit, None-safe.
+    if arq_pool is not None:
+        for payment_id in failed_payment_ids:
+            await arq_pool.enqueue_job(
+                "dispatch_payment_notification",
+                _kwargs={"payment_id": str(payment_id), "kind": "fiscal_failed"},
+                _max_tries=3,
+                _expires=60,
+            )
     return flipped
 
 

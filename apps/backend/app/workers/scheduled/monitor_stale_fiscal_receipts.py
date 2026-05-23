@@ -34,12 +34,19 @@ async def monitor_stale_fiscal_receipts(ctx: dict[str, Any]) -> int:
         ctx: ARQ job context. Required keys:
             - ctx["sessionmaker"]: ``async_sessionmaker[AsyncSession]``
               populated by ``WorkerSettings.on_startup``.
+            - ctx["redis"]: ARQ pool (optional, Phase 52 D-52-10 — used to
+              enqueue dispatch_payment_notification owner alerts post-commit).
 
     Returns:
         int — count of rows whose status flipped from 'pending' to 'failed'.
         ARQ writes this into its result store automatically.
     """
     session_factory = ctx["sessionmaker"]
-    count = await _monitor_stale_fiscal_receipts(session_factory)
+    # Phase 52 D-52-10 — thread ARQ pool so the service helper can enqueue
+    # fiscal_failed owner alerts post-commit. ctx["redis"] is the ARQ pool
+    # (ARQ 0.28 convention — set by WorkerSettings.on_startup; see __init__.py
+    # line 347). Falls back to None if the key is absent (unit-test safety).
+    arq_pool = ctx.get("redis")
+    count = await _monitor_stale_fiscal_receipts(session_factory, arq_pool=arq_pool)
     _log.info("monitor_stale_fiscal_receipts_complete", count=count)
     return count
