@@ -125,6 +125,11 @@ async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings = get_settings()
         arq_pool = await create_pool(RedisSettings.from_dsn(str(settings.redis_url)))
         register_arq_pool(arq_pool)
+        # Phase 51 FISCAL-05 — expose the pool on app.state so the
+        # _real_fiscal_receipt_dispatcher closure registered in create_app()
+        # can read it lazily (mirrors set_auth_redis_factory pattern at
+        # Phase 43 D-43-26 and app.state.yookassa_client below).
+        app.state.arq_pool = arq_pool
         # Phase 48 D-48-25 — construct the long-lived YooKassaClient.
         yookassa_settings = YooKassaSettings()
         app.state.yookassa_client = await build_yookassa_client(settings=yookassa_settings)
@@ -318,15 +323,39 @@ def create_app() -> FastAPI:
 
     # Phase 49 PAY-08 / D-49-21 — HTTP-only single-wire activators (no ARQ entry path).
     from app.modules.memberships.service import activate_membership_from_webhook
-    from app.modules.online_payments.service import phase49_fiscal_dispatcher_stub
     from app.modules.pt_packages.service import activate_pt_package_from_webhook
 
     register_membership_activator(activate_membership_from_webhook)
     register_pt_package_activator(activate_pt_package_from_webhook)
-    # Phase 49 D-49-22 — FiscalReceiptDispatcher Phase-49-only bridge stub
-    # (REG-29-03 double-wire; mirror in workers/__init__.py). Phase 50 FISCAL-01
-    # replaces this with the real ARQ-enqueue body.
-    register_fiscal_receipt_dispatcher(phase49_fiscal_dispatcher_stub)
+    # Phase 51 FISCAL-05 — REAL FiscalReceiptDispatcher closure replacing
+    # the Phase 49 phase49_fiscal_dispatcher_stub (which raised
+    # NotImplementedError). REG-29-03 double-wire mirror with
+    # app/workers/__init__.py:WorkerSettings.on_startup. The closure
+    # captures app.state.arq_pool which is populated by combined_lifespan;
+    # reading it lazily mirrors the set_auth_redis_factory pattern at
+    # Phase 43 D-43-26 and the _yookassa_client_provider closure above.
+    # Per-enqueue _max_tries=3 + _expires=60 carry the ARQ retry contract
+    # from D-51-Discretion / Pitfall 11 step 2.
+    from uuid import UUID as _UUID
+
+    async def _real_fiscal_receipt_dispatcher(
+        *,
+        fiscal_receipt_id: _UUID,
+        audit_correlation_id: _UUID | None,
+    ) -> None:
+        # audit_correlation_id is part of the Protocol-pinned signature
+        # but is not carried on the enqueue (the task body re-reads it
+        # from the fiscal_receipts row).
+        del audit_correlation_id
+        arq_pool = app.state.arq_pool
+        await arq_pool.enqueue_job(
+            "dispatch_fiscal_receipt",
+            str(fiscal_receipt_id),
+            _max_tries=3,
+            _expires=60,
+        )
+
+    register_fiscal_receipt_dispatcher(_real_fiscal_receipt_dispatcher)
 
     app.include_router(api)
     return app
