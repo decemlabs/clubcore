@@ -695,3 +695,26 @@ Downstream agents may settle the following without re-asking:
 *Phase: 51-Fiscal-FSM-Refunds*
 *Context gathered: 2026-05-23*
 *Mode: --auto (recommended defaults applied; deviations from prior phases documented inline)*
+
+## Context Addendum (2026-05-23 revision)
+
+The following supersedes earlier sections of this CONTEXT.md based on PATTERNS.md errata + checker review (revision iteration 1).
+
+### D-51-01 superseded — Option A (extend existing `online_payments` router)
+
+**Original D-51-01:** Refund POST endpoints live in a new `apps/backend/app/api/v1/online_payments/` package (sibling of `_internal/yookassa/`).
+
+**Superseded by:** Plan 51-08 implements **Option A** from PATTERNS.md errata #2 — the 2 new POST refund endpoints (`/memberships/{id}/refund` and `/pt-packages/{id}/refund`) are appended to the **existing** `apps/backend/app/modules/online_payments/router.py` (Phase 49 surface) rather than creating a parallel `app/api/v1/online_payments/` package.
+
+**Rationale:**
+- FastAPI prefix collision — the existing router is already mounted at `/online-payments`; a new `app/api/v1/online_payments/router.py` would double-mount or shadow that prefix.
+- The proposed new package would have been an empty wrapper — the schemas already live in `app/modules/online_refunds/schemas.py` (plan 51-02); the service already lives in `app/modules/online_refunds/service.py` (plan 51-08). The new package would have held only `router.py` with no other content.
+- Less disruption — keeps the online-payments user-facing namespace cohesive.
+
+**Affected fields in CONTEXT.md (now superseded):**
+- D-51-01 (lines 41-61): all mentions of the new `apps/backend/app/api/v1/online_payments/` package.
+- `<code_context>` Integration Points (lines 408-413): the entry for `apps/backend/app/api/v1/online_payments/__init__.py` + `router.py` + `schemas.py` (new package).
+- Codebase contracts to preserve (line 352): `apps/backend/app/api/v1/router.py` — mount new `online_payments_router` at `prefix="/online-payments"` (D-51-01).
+
+**The schemas in `app/modules/online_refunds/schemas.py` (plan 51-02) remain authoritative.** The router additions in plan 51-08 import from there.
+
