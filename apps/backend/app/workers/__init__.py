@@ -96,6 +96,7 @@ from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
 from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt
+from app.modules.online_payments.tasks import dispatch_payment_notification
 from app.modules.online_payments.models import (  # noqa: F401
     PaymentNotification,  # Phase 52 — payment_notifications eager-import (REG-29-04)
 )
@@ -138,6 +139,11 @@ class WorkerSettings:
         # plan 51-05); per-enqueue `_max_tries=3, _expires=60` carries the
         # ARQ retry contract from D-51-Discretion / Pitfall 11 step 2.
         dispatch_fiscal_receipt,
+        # Phase 52 NOT-01..05 — cross-channel client + owner-alert dispatch task.
+        # Bare callable per dispatch_fiscal_receipt convention (Option B);
+        # per-enqueue _max_tries=3, _expires=60 carries the ARQ retry contract
+        # from D-52-Discretion / Pitfall 11 step 2.
+        dispatch_payment_notification,
         # Phase 51 FISCAL-06 / Plan 51-09 — every 15 min stale-pending sweep.
         monitor_stale_fiscal_receipts,
         # Phase 51 REFUND-04 / Plan 51-09 — every 30 min ЮKassa-side poll
