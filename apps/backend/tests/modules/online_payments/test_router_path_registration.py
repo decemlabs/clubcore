@@ -29,6 +29,18 @@ EXPECTED_POST_PATHS: frozenset[str] = frozenset(
 # The 1 GET path Plan 49-05 ships (anonymous /return; D-49-26).
 EXPECTED_GET_PATH: str = "/api/v1/online-payments/return"
 
+# Phase 51 REFUND-01..04 (Plan 51-08) appended the 2 operator refund POST
+# paths to the online_payments router. URL space is /online-payments/.../refund
+# because that's where the operator workflow lives, but the handler delegates
+# to app.modules.online_refunds.service.initiate_online_refund — see the
+# import-linter ignore edge `online_payments.router -> online_refunds.service`.
+EXPECTED_REFUND_PATHS: frozenset[str] = frozenset(
+    {
+        "/api/v1/online-payments/memberships/{membership_id}/refund",
+        "/api/v1/online-payments/pt-packages/{pt_package_id}/refund",
+    }
+)
+
 
 def _all_paths() -> set[str]:
     """Return every ``path`` attribute on the routes registered by ``create_app()``."""
@@ -76,13 +88,14 @@ def test_return_path_registered_when_plan_49_05_has_shipped() -> None:
 def test_no_unexpected_online_payments_paths_registered() -> None:
     """Defensive — fail if any ``/online-payments`` path appears outside the contract.
 
-    Phase 49 ships exactly 5 paths under the ``online_payments`` mount (4 POST
-    sells from Plan 49-04 + 1 GET /return from Plan 49-05). Any additional
-    path under the same prefix is contract drift and must be reviewed.
+    Phase 49 shipped 5 paths under the ``online_payments`` mount (4 POST sells
+    from Plan 49-04 + 1 GET /return from Plan 49-05). Phase 51 Plan 51-08
+    appended 2 POST /refund paths (REFUND-01). Any additional path under the
+    same prefix is contract drift and must be reviewed.
     """
     paths = _all_paths()
     online_payment_paths = {p for p in paths if "/online-payments" in p}
-    expected = EXPECTED_POST_PATHS | {EXPECTED_GET_PATH}
+    expected = EXPECTED_POST_PATHS | EXPECTED_REFUND_PATHS | {EXPECTED_GET_PATH}
     unexpected = online_payment_paths - expected
     assert not unexpected, (
         f"Unexpected /online-payments paths registered (Phase 49 contract drift?): "

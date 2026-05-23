@@ -60,8 +60,14 @@ def test_worker_settings_cron_resolves_to_registered_function() -> None:
     send_booking_reminders at 03:35 UTC / 06:35 MSK BEFORE the no-show entry
     so the final D-39-16 order is memberships -> expiring_notifs ->
     pt_packages -> reminders -> no_show. Earlier indices preserved.
+
+    Phase 44 appended cleanup_password_reset_tokens (index 5).
+
+    Phase 51 (Plan 51-09 FISCAL-06 + REFUND-02) appended two crons:
+    monitor_stale_fiscal_receipts (index 6) and poll_pending_refunds
+    (index 7). cron_jobs now has 8 entries total. Earlier indices preserved.
     """
-    assert len(WorkerSettings.cron_jobs) == 5
+    assert len(WorkerSettings.cron_jobs) == 8
     cron_entry = WorkerSettings.cron_jobs[0]
     assert cron_entry.coroutine.__name__ == "expire_memberships"
     assert cron_entry.coroutine is expire_memberships, (
@@ -99,11 +105,17 @@ def test_worker_settings_functions_registered() -> None:
     send_booking_reminders (Wave 4) — list had 5 entries.
 
     Phase 42 (Plan 09 / EMAIL-03) appended ``dispatch_email`` — the
-    request-handler-driven (NOT cron) email-send job. List now has 6
-    entries.
+    request-handler-driven (NOT cron) email-send job. List grew to 6.
+
+    Phase 44 appended ``cleanup_password_reset_tokens`` (cron).
+
+    Phase 50/51 appended ``dispatch_fiscal_receipt`` (Plan 51-05 ARQ task),
+    plus Phase 51 ``monitor_stale_fiscal_receipts`` and
+    ``poll_pending_refunds`` (Plan 51-09 crons — both crons AND functions
+    per ARQ contract). List now has 10 entries.
     """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 6
+    assert len(WorkerSettings.functions) == 10
 
 
 def test_worker_settings_redis_settings_resolved() -> None:
