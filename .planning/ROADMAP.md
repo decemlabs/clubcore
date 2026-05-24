@@ -227,7 +227,7 @@ Plans:
 
 **Wave 2** *(blocked on 57-02 for shared golden numbers)*
 
-- [ ] 57-03-PLAN.md — Operator runbook `.planning/handoff/v1.8-reports-runbook.md` (5 scenarios, golden-path matches 57-02 fixtures, operator-pending live exec) (VER-01)
+- [x] 57-03-PLAN.md — Operator runbook `.planning/handoff/v1.8-reports-runbook.md` (5 scenarios, golden-path matches 57-02 fixtures, operator-pending live exec) (VER-01)
 
 ---
 
@@ -245,7 +245,7 @@ Plans:
 | 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 3/3 | Complete   | 2026-05-24 |
 | 55. Revenue + Clients + Visits Reports | 2/2 | Complete    | 2026-05-24 |
 | 56. Audit Log Read API + CSV Export | 2/2 | Complete    | 2026-05-24 |
-| 57. OpenAPI Handoff + Milestone Verification | 2/3 | In Progress|  |
+| 57. OpenAPI Handoff + Milestone Verification | 3/3 | Complete   | 2026-05-24 |
 
 ---
 
