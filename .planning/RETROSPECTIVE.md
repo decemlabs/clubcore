@@ -222,6 +222,48 @@ Second notification + auth channel (email) and operator-onboarding gap closed. N
 
 ---
 
+## Milestone: v1.7 — Online Payments + 54-ФЗ
+
+**Shipped:** 2026-05-24
+**Phases:** 7 (47–53) | **Plans:** 47
+
+### What Was Built
+
+A complete ЮKassa online-payment + 54-ФЗ fiscal-receipt path layered on the v1.4 cash ledger without forking it: an async httpx adapter wrapping the synchronous official SDK (frozen-dataclass boundary, never re-raises), redirect + QR sale orchestration over the `payment_recorder` Protocol slot, an IP-allowlist + status-re-fetch webhook handler running an 8-step atomic UoW, a `fiscal_receipts` FSM with ARQ retry + Redis circuit breaker + stale-receipt monitor cron, full online refunds with a reconciliation cron, and cross-channel Telegram + email notification mirrors. Phase 53 verification added 16 tests (14 real-Postgres race + 2 circuit-breaker parity) at 0/5 inline regressions.
+
+### What Worked
+
+- **Bedrock-first sequencing (Phase 47)** — pre-registering 9 `LOCKED_AUDIT_EVENTS`, the `YOOKASSA_TRUSTED_IPS` AST gate, settings, converters, and 4 Protocol slots *before* any callsite meant every downstream phase passed CI from its first commit (v1.3 INFRA-15 discipline paying off a fourth time).
+- **Reusing proven patterns wholesale** — the v1.6 email circuit breaker, the cross-channel `channel`-discriminator UNIQUE, `_constant_time_floor`, and the Protocol-double-wire (REG-29-03) all transplanted directly into the payments domain with near-zero rediscovery cost.
+- **Adapter boundary discipline** — keeping all SDK types behind frozen dataclasses + respx fixtures made the orchestrator and webhook handler fully testable without network, so the 14 race tests could focus on DB/Redis arbitration rather than HTTP mocking.
+- **Operator-deferral pattern matured** — VER-03/CARRY-01/02 were scaffolded + structurally attested then carried, exactly mirroring v1.6 DEFER-46-01/02 and Phase 52 CARRY, so the milestone closed cleanly without waiting on external credentials.
+
+### What Was Inefficient
+
+- **A late real-startup bug surfaced only in the test-debt sweep** — the ЮKassa boot `/v3/me` probe ran live on every startup (and the `online_refunds` model was unregistered in `alembic/env.py`, which would have DROPped the Phase 51 table). These were caught post-execution by DEFER-36-04-A's sweep, not by the phase that introduced them — boot-time side effects deserve an explicit verification step.
+- **The CLI summary-extractor produced noise** — `milestone.complete` grabbed regression bullets and `One-liner:` field labels instead of clean phase one-liners, requiring a manual MILESTONES.md rewrite. The SUMMARY.md `one_liner` field placement isn't consistently parseable across executor agents.
+- **Traceability checkboxes drifted** — REQUIREMENTS.md still showed INFRA/ADAPTER/NOTIFY as `Pending` at close despite the phases being disk-complete; the table was reconciled only at milestone close, not per-phase.
+
+### Patterns Established
+
+- **AST gate on a security-critical frozenset** extended beyond audit events to `YOOKASSA_TRUSTED_IPS` — any non-literal IP-verifier callsite fails CI.
+- **Fiscal obligation attaches to the committed ledger row** — `fiscal_receipts.payment_id → payments.id` (not the payment-intent), with UNIQUE `(payment_id, kind)` carrying both payment and refund receipts.
+- **Value-granting is webhook-only** — redirect-back never activates; the anti-oracle pending screen + `_constant_time_floor` close the timing/oracle surface on payment lookup.
+
+### Key Lessons
+
+1. **Verify boot-time side effects explicitly.** A live external probe at startup is invisible to unit tests and silent in CI until something connects — gate it behind sandbox/degraded-mode flags from the first commit.
+2. **Alembic model registration is load-bearing.** An unregistered model doesn't just skip a table — `--autogenerate` will emit a DROP. The `env.py` eager-import list belongs in the bedrock phase's checklist for every new table.
+3. **Reuse compounds.** The fourth milestone to reuse the LOCKED-frozenset + AST-gate + Protocol-double-wire + circuit-breaker stack spent its budget on domain race-arbitration, not infrastructure — the architectural constraints are now a force multiplier.
+
+### Cost Observations
+
+- Model mix: predominantly Opus 4.7 for orchestration + plan-phase; Sonnet 4.6 for executor + verifier agents; Haiku 4.5 for low-volume worker tasks. Roughly 30% opus / 60% sonnet / 10% haiku.
+- Sessions: ~14, several collapsed via `/gsd-autonomous`; Phase 53 ran 4 parallel executor agents in 2 waves.
+- Notable: 47 plans across 7 phases at 0/5 inline product-code regressions — the highest plan-count-to-regression ratio of any milestone, attributable to bedrock-first sequencing + pattern reuse. The post-milestone test-debt sweep (DEFER-36-04-A) that brought the suite to 1992/0 was the single most valuable cleanup session.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -235,6 +277,7 @@ Second notification + auth channel (email) and operator-onboarding gap closed. N
 | v1.4 Cash Sales + PT Packages | 7 | 22 | Append-only `payments` ledger with AST walker forbidding UPDATE/DELETE/on_conflict; signed-amount/subject CHECK; `payment_row_hash` SHA-256 traceability; pivot to backend-complete + API handoff (frontend descoped to v2.0); inline regression-cap discipline (≤5 hard cap) |
 | v1.5 Schedule + Bookings (PT slots) | 4 | 20 | Race-safe partial UNIQUE `(slot_id) WHERE status='confirmed'`; bot `/book` self-service via `create_booking_via_bot` (NULL actor + `actor_role` Literal); 23:10 no-show cron + 06:35 reminder cron with `booking_notifications` idempotency; module-scope locked DM copy (D-39-02); DEFER pattern for runbook-scaffolding gaps |
 | v1.6 Email channel + Multi-user admin | 6 | 82 | `LOCKED_EMAIL_TEMPLATES` AST gate (parallel to `LOCKED_AUDIT_EVENTS`); INSERT-only re-claim discipline on partial-UNIQUE soft-delete; `actor_email_snapshot` denormalised audit; `_constant_time_floor` try/finally; in-phase gap-closure waves; agent structural attestation for owner-sign-off items; second Protocol-double-wire pattern (EmailDispatcher); 11 Alembic migrations in one milestone |
+| v1.7 Online Payments + 54-ФЗ | 7 | 47 | Async adapter wrapping a synchronous SDK behind frozen-dataclass boundary + respx fixtures; AST gate on `YOOKASSA_TRUSTED_IPS`; webhook security = IP allowlist + status re-fetch (no HMAC) with value-granting locked to the verified webhook; fiscal obligation FK'd to the committed ledger row; circuit-breaker + cross-channel discriminator transplanted from v1.6; 0/5 inline regressions across 47 plans (best ratio yet); operator-deferral pattern for credential-gated verification |
 
 ### Cumulative Quality
 
@@ -247,6 +290,7 @@ Second notification + auth channel (email) and operator-onboarding gap closed. N
 | v1.4 | ~12K LOC backend (+2.1K) | unchanged (frontend descoped) | 61/61 in-scope (FE-11..18 to v2.0) | 1027 passing / 44 carry-over failures → DEFER-36-04-A; 20/20 race tests across 7 files |
 | v1.5 | ~12.6K LOC backend | unchanged | 57/57 mapped (1 runbook deferred) | 1100+ backend (incl. 4 new locked DM templates + booking_notifications idempotency + 2 cron jobs) |
 | v1.6 | ~14K+ LOC backend (new `users/`, `integrations/email/`) | unchanged | 48/48 (VER-12 + VER-14 deferred to v1.7) | 1100+ backend + 76 OpenAPI forward-guards (65 → 76) + 6 real-Postgres race tests + 2 anti-oracle integration tests + 2 AST gates green |
+| v1.7 | ~37.7K LOC backend (new `online_payments/`, `online_refunds/`, `fiscal_receipts/`, `integrations/yookassa/`; Alembic at 0039) | unchanged (frozen mock reference) | 48/51 delivered (CARRY-01/02 + VER-03 operator-deferred) | 1992 passed / 0 failed after test-debt sweep; +16 Phase 53 tests (14 real-Postgres race + 2 circuit-breaker parity); 0/5 inline regressions; DEFER-46-03 + DEFER-36-04-A both CLOSED |
 
 ### Top Lessons (Verified Across Milestones)
 
