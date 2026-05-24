@@ -13,6 +13,7 @@ INVARIANTS (locked):
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,11 +21,17 @@ from app.core.exceptions import ValidationAppError
 from app.modules.reports import repository
 from app.modules.reports.constants import GRAIN_MONTH
 from app.modules.reports.schemas import (
+    ClientsReportQuery,
+    ClientsReportResponse,
     RevenueBucket,
     RevenueBucketByMethod,
     RevenueBucketBySubjectKind,
     RevenueReportQuery,
     RevenueReportResponse,
+    VisitsDailyBucket,
+    VisitsHourlyBucket,
+    VisitsReportQuery,
+    VisitsReportResponse,
 )
 
 
@@ -142,3 +149,90 @@ async def get_revenue_report(
     _validate_date_range(query.from_date, query.to_date)
     rows = await repository.fetch_revenue_buckets(session, query)
     return _pivot_revenue_buckets(rows, query)
+
+
+async def get_clients_report(
+    session: AsyncSession,
+    query: ClientsReportQuery,
+) -> ClientsReportResponse:
+    """Clients snapshot report (CLR-01..04).
+
+    Validates the date range (for the new-clients window; D-05, D-06).
+    Validates `within` bounds 1..30 (D-07) — raised as ValidationAppError for
+    consistent 422 codes (schema layer stores `within` without ge/le to keep
+    error code consistent with other report validations).
+
+    Active/expiring counts are as-of-now (point-in-time, D-05).
+    New clients count is scoped to [from_date, to_date] MSK (CLR-03).
+    All counters exclude soft-deleted clients (CLR-04).
+
+    Read-only: NO session.commit(), NO session.flush().
+    """
+    _validate_date_range(query.from_date, query.to_date)
+    if query.within < 1 or query.within > 30:
+        raise ValidationAppError(
+            f"within must be between 1 and 30, got {query.within}"
+        )
+
+    active = await repository.fetch_active_memberships_count(session)
+    expiring = await repository.fetch_expiring_memberships_count(session, query.within)
+    new_clients = await repository.fetch_new_clients_count(
+        session, query.from_date, query.to_date
+    )
+
+    return ClientsReportResponse(
+        active_count=active,
+        expiring_count=expiring,
+        new_clients_count=new_clients,
+        within_days=query.within,
+    )
+
+
+async def get_visits_report(
+    session: AsyncSession,
+    query: VisitsReportQuery,
+) -> VisitsReportResponse:
+    """Visits report — daily + hourly + averagePerDay (VIS-R-01..04, D-09).
+
+    averagePerDay = total visits in range / calendar days in range (inclusive D-10).
+    Calendar days = (to_date - from_date).days + 1 (counts from_date AND to_date).
+    Returned as a float rounded to 2 decimal places (researcher discretion per D-10).
+
+    Sparse buckets (D-08): only days/hours with visits appear.
+    Daily groups by gym_date directly — no secondary TZ conversion (VIS-R-04, D-04).
+    Hourly groups by MSK hour-of-day across the whole range (VIS-R-02).
+
+    Read-only: NO session.commit(), NO session.flush().
+    """
+    _validate_date_range(query.from_date, query.to_date)
+
+    daily_rows = await repository.fetch_visits_daily(
+        session, query.from_date, query.to_date
+    )
+    hourly_rows = await repository.fetch_visits_hourly(
+        session, query.from_date, query.to_date
+    )
+
+    total = sum(int(r["count"]) for r in daily_rows)  # type: ignore[call-overload]
+    calendar_days = (query.to_date - query.from_date).days + 1
+    average_per_day = round(total / calendar_days, 2)
+
+    return VisitsReportResponse(
+        daily=[
+            VisitsDailyBucket(
+                date=cast(date, r["date"]),
+                count=int(r["count"]),  # type: ignore[call-overload]
+            )
+            for r in daily_rows
+        ],
+        hourly=[
+            VisitsHourlyBucket(
+                hour=int(r["hour"]),  # type: ignore[call-overload]
+                count=int(r["count"]),  # type: ignore[call-overload]
+            )
+            for r in hourly_rows
+        ],
+        average_per_day=average_per_day,
+        from_date=query.from_date,
+        to_date=query.to_date,
+    )
