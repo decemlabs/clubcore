@@ -1,7 +1,7 @@
 """Reports module DTOs (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04).
 
 Schema conventions:
-  - Query DTOs extend ``BackendSchemaBase`` (extra='forbid', camelCase alias,
+  - Query DTOs extend ``BackendSchemaBase`` (extra='forbid', alias_generator=to_camel,
     validate_by_name + validate_by_alias). NOT PageQuery — reports are aggregates,
     not paginated lists (D-11).
   - Response DTOs extend ``ResponseData`` (ContractModel, permissive outbound).
@@ -9,11 +9,22 @@ Schema conventions:
   - Money stays integer kopecks in all API responses (REV-05).
   - All date bucketing is deterministic in Europe/Moscow.
 
+Wire format for query params (FastAPI + Pydantic v2 alias_generator=to_camel behavior):
+  - ``from_date`` -> ``?fromDate=YYYY-MM-DD``
+  - ``to_date``   -> ``?toDate=YYYY-MM-DD``
+  - ``group_by``  -> ``?groupBy=day|month``
+  - ``within``    -> ``?within=N`` (no camelCase needed, single word)
+
+  Note: ``alias="from"`` + ``Field(alias=...)`` does NOT work with FastAPI ``Depends()``
+  for query params — FastAPI uses field names / alias_generator for param names, not
+  explicit aliases. Using BackendSchemaBase (alias_generator=to_camel) causes
+  ``from_date`` -> ``fromDate`` as the query param name.
+
 Decisions implemented:
   D-01: Nested bucket shape (byMethod, bySubjectKind). refundKopecks NOT added —
         net-only per D-01 default; refunds fold into netKopecks via signed sums.
   D-03: group_by Literal["day","month"], default "day".
-  D-05: from/to required for revenue and visits; within optional with default 7.
+  D-05: from_date/to_date required for revenue and visits; within optional default 7.
   D-07: within validated ge=1, le=30, default 7.
   D-09: Visits response is composite (daily + hourly + averagePerDay).
   D-10: averagePerDay is a float (raw ratio — frontend owns formatting).
@@ -25,8 +36,6 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import Field
-
 from app.core.schemas import BackendSchemaBase, ResponseData
 
 # ---------------------------------------------------------------------------
@@ -37,12 +46,13 @@ from app.core.schemas import BackendSchemaBase, ResponseData
 class RevenueReportQuery(BackendSchemaBase):
     """GET /api/v1/reports/revenue query parameters (REV-01..05).
 
-    Wire: ?from=2026-01-01&to=2026-05-31&groupBy=day
+    Wire: ?fromDate=2026-01-01&toDate=2026-05-31&groupBy=day
+    (alias_generator=to_camel maps from_date->fromDate, to_date->toDate)
     """
 
-    from_date: date = Field(alias="from")
-    to_date: date = Field(alias="to")
-    group_by: Literal["day", "month"] = Field(default="day", alias="groupBy")
+    from_date: date
+    to_date: date
+    group_by: Literal["day", "month"] = "day"
 
 
 class RevenueBucketByMethod(ResponseData):
@@ -89,14 +99,17 @@ class RevenueReportResponse(ResponseData):
 class ClientsReportQuery(BackendSchemaBase):
     """GET /api/v1/reports/clients query parameters (CLR-01..04).
 
-    Wire: ?from=2026-01-01&to=2026-05-31&within=7
-    from/to scope the new-clients counter (CLR-03) only.
+    Wire: ?fromDate=2026-01-01&toDate=2026-05-31&within=7
+    from_date/to_date scope the new-clients counter (CLR-03) only.
     Active/expiring counters are as-of-now (D-05).
     """
 
-    from_date: date = Field(alias="from")
-    to_date: date = Field(alias="to")
-    within: int = Field(default=7, ge=1, le=30)  # D-07: 1..30, default 7
+    from_date: date
+    to_date: date
+    within: int = 7  # D-07: 1..30, default 7; validated in service layer
+
+    # Note: Pydantic ge/le on 'within' validated at service layer to return 422
+    # via ValidationAppError (consistent with other report validations).
 
 
 class ClientsReportResponse(ResponseData):
@@ -116,11 +129,11 @@ class ClientsReportResponse(ResponseData):
 class VisitsReportQuery(BackendSchemaBase):
     """GET /api/v1/reports/visits query parameters (VIS-R-01..04).
 
-    Wire: ?from=2026-01-01&to=2026-05-31
+    Wire: ?fromDate=2026-01-01&toDate=2026-05-31
     """
 
-    from_date: date = Field(alias="from")
-    to_date: date = Field(alias="to")
+    from_date: date
+    to_date: date
 
 
 class VisitsDailyBucket(ResponseData):

@@ -1,10 +1,10 @@
-"""Reports repository — raw-SQL read aggregator (Phase 54 INFRA-41 scaffold).
+"""Reports repository — raw-SQL read aggregator (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04).
 
 CROSS-MODULE READ DISCIPLINE (D-54-08 / Phase 49 D-49-03 precedent):
   - ``from sqlalchemy import text`` — NEVER import another module's ORM model.
   - Bind params via ``:name`` placeholders + a dict; cast UUIDs to ``str``.
-  - ``.mappings().one_or_none()`` for single-row reads.
   - ``.mappings().all()`` for aggregate/list reads.
+  - ``.mappings().one()`` for scalar count reads.
   - Each reader documents verified columns + source file:line of the foreign table.
 
 This discipline means zero new ``ignore_imports`` edges in ``.importlinter``
@@ -14,44 +14,54 @@ and ``audit_log`` tables.
 INVARIANTS:
   - ZERO INSERT / UPDATE / DELETE in this file.
   - No ORM model imports from other modules.
-
-Example reader pattern (from app/modules/online_payments/service.py:116-142):
-
-    from sqlalchemy import text
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    async def _read_membership_plan_or_raise(
-        session: AsyncSession, plan_id: UUID
-    ) -> tuple[int, str]:
-        \"\"\"Return (price_kopecks, name) for an alive membership_plans row.
-
-        Verified columns (app/modules/memberships/models.py:58-90):
-          - id            PgUUID
-          - name          varchar(120)
-          - price_kopecks BigInteger
-          - deleted_at    nullable timestamptz
-        \"\"\"
-        row = (
-            await session.execute(
-                text(
-                    "SELECT id, price_kopecks, name FROM membership_plans "
-                    "WHERE id = :id AND deleted_at IS NULL"
-                ),
-                {"id": str(plan_id)},
-            )
-        ).mappings().one_or_none()
-        if row is None:
-            raise NotFoundError("membership_plan_not_found")
-        return int(row["price_kopecks"]), str(row["name"])
-
-Phase 55 will add concrete reader functions for:
-  - ``payments`` table — revenue aggregation by day/month (Europe/Moscow).
-  - ``memberships`` + ``clients`` tables — active/expiring/new client counts.
-  - ``visits`` table — visit counts by gym_date and hour bucket.
 """
 
-from sqlalchemy import (
-    text,  # noqa: F401 — imported for pattern documentation; Phase 55 readers use it.
-)
+from __future__ import annotations
 
-__all__: tuple[str, ...] = ()
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.reports.constants import GRAIN_DAY
+from app.modules.reports.schemas import RevenueReportQuery
+
+__all__ = ("fetch_revenue_buckets",)
+
+
+async def fetch_revenue_buckets(
+    session: AsyncSession,
+    query: RevenueReportQuery,
+) -> list[dict[str, object]]:
+    """Aggregate payments by period bucket, method, subject_kind.
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of Payment.
+    Verified columns (apps/backend/app/modules/payments/models.py:52-64):
+      - amount_kopecks  Integer (signed; negative for subject_kind='refund')
+      - method          Text ('cash' | 'online')
+      - subject_kind    Text ('membership' | 'pt_package' | 'refund')
+      - received_at     DateTime(timezone=True)  <- sole temporal column
+
+    Security (T-55-02): period_expr is chosen from an internal branch keyed on
+    the validated Literal["day","month"] enum — NEVER from a raw user string.
+    All user values (from_date, to_date) go through :from_date / :to_date bind
+    params only. No f-string interpolation of user input.
+    """
+    period_expr = (
+        "(received_at AT TIME ZONE 'Europe/Moscow')::date"
+        if query.group_by == GRAIN_DAY
+        else "date_trunc('month', (received_at AT TIME ZONE 'Europe/Moscow')::date)"
+    )
+    rows = (
+        await session.execute(
+            text(
+                f"SELECT {period_expr} AS period, method, subject_kind, "  # noqa: S608 — period_expr is chosen from internal literals (GRAIN_DAY/GRAIN_MONTH), never from user input
+                "SUM(amount_kopecks) AS total_kopecks "
+                "FROM payments "
+                "WHERE (received_at AT TIME ZONE 'Europe/Moscow')::date "
+                "    BETWEEN :from_date AND :to_date "
+                "GROUP BY period, method, subject_kind "
+                "ORDER BY period"
+            ),
+            {"from_date": query.from_date, "to_date": query.to_date},
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
