@@ -218,7 +218,16 @@ Plans:
   4. RBAC denial is covered by integration tests: reception `GET /api/v1/reports/revenue` and `GET /api/v1/audit-log` both return 403
   5. Operator runbook executes against `docker compose up`: revenue golden-path with known fixture amounts passes, audit log filters narrow as expected, reception 403 confirmed manually, CSV download opens in Excel without mojibake
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+**Wave 1** *(parallel — no file overlap)*
+
+- [ ] 57-01-PLAN.md — Regen openapi.json + schema.d.ts (8 v1.8 paths) + add `_v18Checks` AssertNonNever guards + `toHaveLength(8)` (HND-01, HND-02)
+- [ ] 57-02-PLAN.md — Backend correctness: DST/MSK-offset midnight-boundary golden test (revenue + visits, net-of-refund); verify existing reception-403 + pagination-stability coverage (VER-02)
+
+**Wave 2** *(blocked on 57-02 for shared golden numbers)*
+
+- [ ] 57-03-PLAN.md — Operator runbook `.planning/handoff/v1.8-reports-runbook.md` (5 scenarios, golden-path matches 57-02 fixtures, operator-pending live exec) (VER-01)
 
 ---
 
