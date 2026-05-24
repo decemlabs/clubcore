@@ -29,6 +29,12 @@ modules =
     app.modules.pt_packages
     app.modules.pt_sessions
     app.modules.users
+    app.modules.reports
+    # Phase 54 INFRA-41 / D-54-09 — reports module registered preemptively
+    # (INFRA-15 discipline, mirrors Phases 47/51). Read-only aggregator reads
+    # cross-module data via raw SQL text() SELECTs (D-54-08 / Phase 49 D-49-03),
+    # so it needs ZERO ignore_imports edges. unmatched_ignore_imports_alerting = warn
+    # already cushions any timing gap before Phase 55 bodies land.
     # Phase 47 INFRA-40 — Option A deferral closed by Phase 49 D-49-02
     # (2026-05-22): `app.modules.online_payments` is registered above, the
     # 3 INFRA-40 ignore edges + the email dispatcher edge resolve to matched
