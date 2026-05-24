@@ -5,8 +5,9 @@ queries the SAVEPOINT-rolled `db_session` for the corresponding
 `AuditLog` rows. Assertions cover D-08 payload shapes (PII-aware) and
 D-04 mapping table (resource_type, actor_user_id nullability).
 
-AUDIT-03 is verified by `test_no_audit_log_endpoint_exists` — there must
-not be a route exposing audit_log to clients.
+AUDIT-03 is verified by `test_audit_log_endpoint_requires_auth` — the
+Phase 56 audit-log read endpoint exists but is owner-only; it must never be
+readable by unauthenticated callers or non-owner roles (clients/reception).
 """
 
 from __future__ import annotations
@@ -174,15 +175,21 @@ async def test_client_soft_deleted_writes_audit_row_with_phone_and_full_name(
     assert row.payload["full_name"]
 
 
-async def test_no_audit_log_endpoint_exists(
+async def test_audit_log_endpoint_requires_auth(
     async_client: AsyncClient,
 ) -> None:
-    """AUDIT-03: there is NO public read endpoint for the audit log.
+    """AUDIT-03: the audit log is never readable without authentication.
 
-    Any GET to a plausibly-named audit path should 404 (route absent),
-    NOT 401/403 (route present but gated). FastAPI returns 404 for any
-    path it doesn't know.
+    Phase 56 (AUD-01) introduced the owner-only ``GET /api/v1/audit-log``
+    read endpoint. The earlier route-absence guard is obsolete: the route
+    now exists but is gated by ``require_permission(LIST, AUDIT_LOG)``.
+    An unauthenticated GET must be rejected with 401 (auth required), never
+    served — confirming audit_log is not openly exposed. Reception-role
+    denial (403) is covered by the Phase 56 reports integration suite.
     """
-    for path in ("/api/v1/audit-log", "/api/v1/auditlog"):
-        r = await async_client.get(path)
-        assert r.status_code == 404, f"{path} unexpectedly returned {r.status_code}"
+    r = await async_client.get("/api/v1/audit-log")
+    assert r.status_code == 401, f"audit-log unexpectedly returned {r.status_code}"
+
+    # A genuinely unknown audit path still 404s — guards against typo'd routes.
+    r = await async_client.get("/api/v1/auditlog")
+    assert r.status_code == 404, f"/api/v1/auditlog unexpectedly returned {r.status_code}"
