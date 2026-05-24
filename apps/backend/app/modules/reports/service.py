@@ -1,13 +1,16 @@
-"""Reports service — read-only aggregator (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04).
+"""Reports service — read-only aggregator (Phase 55 REV/CLR/VIS-R; Phase 56 AUD-01..06).
 
 Read-only aggregator role: orchestrates calls to repository.py which reads
 cross-module data via raw SQL ``text()`` SELECTs (D-54-08 / D-49-03 precedent).
+Phase 56 adds the audit-log ORM read path (repository uses ORM select(AuditLog),
+not raw SQL — see CONTEXT.md D-04 for why ORM is appropriate here).
 
 INVARIANTS (locked):
 - ZERO INSERT / UPDATE / DELETE on any business table.
 - SVC001 commit-gate does NOT apply (no write paths, no ``session.commit``).
 - Never imports another module's ORM model — reads go through repository.py
-  raw SQL readers exclusively.
+  raw SQL readers exclusively. (app.core.* is a free import target; AuditLog
+  is imported by repository.py, not here.)
 """
 
 from __future__ import annotations
@@ -17,10 +20,14 @@ from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import LOCKED_AUDIT_EVENTS
 from app.core.exceptions import ValidationAppError
+from app.core.pagination import PaginatedData
 from app.modules.reports import repository
 from app.modules.reports.constants import GRAIN_MONTH
 from app.modules.reports.schemas import (
+    AuditLogItem,
+    AuditLogQuery,
     ClientsReportQuery,
     ClientsReportResponse,
     RevenueBucket,
@@ -34,11 +41,25 @@ from app.modules.reports.schemas import (
     VisitsReportResponse,
 )
 
+# ---------------------------------------------------------------------------
+# Audit-log filter validation sets (Phase 56 AUD-03, D-05)
+# Derived once at module load from LOCKED_AUDIT_EVENTS (69 pairs).
+# ---------------------------------------------------------------------------
+VALID_ACTIONS: frozenset[str] = frozenset(e for e, _ in LOCKED_AUDIT_EVENTS)
+VALID_RESOURCE_TYPES: frozenset[str] = frozenset(r for _, r in LOCKED_AUDIT_EVENTS)
+
 
 class ReportRangeTooLargeError(ValidationAppError):
     """Date range exceeds 366-day cap (D-06). Code LOCKED per CONTEXT.md."""
 
     code = "report_range_too_large"
+    status_code = 422
+
+
+class AuditFilterInvalidError(ValidationAppError):
+    """Unknown action or resource_type filter value (AUD-03, D-05). Code LOCKED."""
+
+    code = "audit_filter_invalid"
     status_code = 422
 
 
@@ -235,4 +256,50 @@ async def get_visits_report(
         average_per_day=average_per_day,
         from_date=query.from_date,
         to_date=query.to_date,
+    )
+
+
+async def list_audit_log(
+    session: AsyncSession,
+    query: AuditLogQuery,
+    *,
+    from_: date | None = None,
+    to: date | None = None,
+) -> PaginatedData[AuditLogItem]:
+    """Paginated audit-log listing with filter validation (AUD-01..06).
+
+    Validates action/resource_type filters against LOCKED_AUDIT_EVENTS (AUD-03, D-05).
+    Validates to < from_ → 422 ValidationAppError (D-06).
+    No 366-day range cap (D-06 — pagination bounds by pageSize).
+
+    from_/to are keyword-only args supplied by the route handler via route-level
+    Query(alias="from")/Query(alias="to") params (NOT model fields on AuditLogQuery).
+
+    Read-only: NO session.commit(), NO session.flush().
+    """
+    # Validate action filter against known event names (AUD-03, D-05).
+    if query.action is not None and query.action not in VALID_ACTIONS:
+        raise AuditFilterInvalidError(
+            f"Unknown action '{query.action}'. Must be one of the 69 LOCKED_AUDIT_EVENTS."
+        )
+
+    # Validate resource_type filter against known resource types (AUD-03, D-05).
+    if query.resource_type is not None and query.resource_type not in VALID_RESOURCE_TYPES:
+        raise AuditFilterInvalidError(
+            f"Unknown resource_type '{query.resource_type}'."
+            " Must be one of the LOCKED_AUDIT_EVENTS resource types."
+        )
+
+    # Validate date window (D-06).
+    if from_ is not None and to is not None and to < from_:
+        raise ValidationAppError("to must be >= from")
+
+    page = await repository.fetch_audit_log_page(session, query, from_=from_, to=to)
+
+    # Convert ORM rows to AuditLogItem DTOs (from_attributes=True on ContractModel).
+    return PaginatedData(
+        items=[AuditLogItem.model_validate(row) for row in page.items],
+        total=page.total,
+        page=page.page,
+        page_size=page.page_size,
     )

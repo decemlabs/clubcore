@@ -1,4 +1,7 @@
-"""Reports repository — raw-SQL read aggregator (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04).
+"""Reports repository — raw-SQL read aggregator + ORM audit-log reader.
+
+Phase 55: REV-01..05, CLR-01..04, VIS-R-01..04.
+Phase 56: AUD-01..06 (ORM read path for audit_log).
 
 CROSS-MODULE READ DISCIPLINE (D-54-08 / Phase 49 D-49-03 precedent):
   - ``from sqlalchemy import text`` — NEVER import another module's ORM model.
@@ -11,23 +14,35 @@ This discipline means zero new ``ignore_imports`` edges in ``.importlinter``
 while reading across ``payments``, ``memberships``, ``clients``, ``visits``,
 and ``audit_log`` tables.
 
+EXCEPTION — AuditLog ORM import (app.core.audit_models):
+  ``app.core`` is NOT a cross-module boundary: audit_models lives in the core
+  package which is a free import target for all modules (only module↔module ORM
+  imports are banned by import-linter). Importing AuditLog from app.core is NOT
+  a violation. See D-04 (Phase 56 CONTEXT.md).
+
 INVARIANTS:
   - ZERO INSERT / UPDATE / DELETE in this file.
-  - No ORM model imports from other modules.
+  - ORM model imports from other modules (app.modules.*): FORBIDDEN.
+  - ORM model imports from app.core.*: ALLOWED (see exception above).
 """
 
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import and_, cast, func, select, text, true
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import Date
 
+from app.core.audit_models import AuditLog  # core is free import target (D-04 / Phase 56)
+from app.core.pagination import PaginatedData
 from app.modules.reports.constants import GRAIN_DAY
-from app.modules.reports.schemas import RevenueReportQuery
+from app.modules.reports.schemas import AuditLogQuery, RevenueReportQuery
 
 __all__ = (
     "fetch_active_memberships_count",
+    "fetch_audit_log_page",
     "fetch_expiring_memberships_count",
     "fetch_new_clients_count",
     "fetch_revenue_buckets",
@@ -215,3 +230,98 @@ async def fetch_visits_hourly(
         )
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Audit-log ORM read path (Phase 56 AUD-01..06)
+# ---------------------------------------------------------------------------
+
+
+def _build_audit_predicates(
+    query: AuditLogQuery,
+    *,
+    from_: date | None = None,
+    to: date | None = None,
+) -> list[Any]:
+    """Build SQLAlchemy predicate list for audit_log filtering (D-05, D-06).
+
+    All filter values flow through ORM column ops (==, .ilike(), cast/func.timezone)
+    which emit parameterized binds — no f-string interpolation into raw SQL (T-56-02).
+
+    Args:
+        query: Non-date filters (actorUserId, actorEmailSnapshot, resourceType, action).
+        from_: Inclusive MSK day lower bound (keyword-only; NOT a query model field).
+        to: Inclusive MSK day upper bound (keyword-only; NOT a query model field).
+    """
+    predicates: list[Any] = []
+
+    if query.actor_user_id is not None:
+        predicates.append(AuditLog.actor_user_id == query.actor_user_id)
+
+    if query.actor_email_snapshot is not None:
+        # Case-insensitive substring match (AUD-02). ORM .ilike() emits parameterized bind.
+        like_pattern = f"%{query.actor_email_snapshot}%"
+        predicates.append(AuditLog.actor_email_snapshot.ilike(like_pattern))
+
+    if query.resource_type is not None:
+        predicates.append(AuditLog.resource_type == query.resource_type)
+
+    if query.action is not None:
+        predicates.append(AuditLog.action == query.action)
+
+    if from_ is not None or to is not None:
+        # D-06: inclusive MSK day bounds on created_at via AT TIME ZONE conversion.
+        msk_date = cast(func.timezone("Europe/Moscow", AuditLog.created_at), Date)
+        if from_ is not None:
+            predicates.append(msk_date >= from_)
+        if to is not None:
+            predicates.append(msk_date <= to)
+
+    return predicates
+
+
+async def fetch_audit_log_page(
+    session: AsyncSession,
+    query: AuditLogQuery,
+    *,
+    from_: date | None = None,
+    to: date | None = None,
+) -> PaginatedData[AuditLog]:
+    """Keyset-paginated audit-log listing via ORM select (AUD-01, AUD-06, D-04, D-08).
+
+    Ordering is always created_at DESC, id DESC — covers ix_audit_log_created_at
+    composite index for stable pagination under concurrent inserts (SC#3, D-08).
+
+    from_/to are keyword-only args (not model fields — see AuditLogQuery docstring).
+
+    Returns PaginatedData.model_construct with ORM AuditLog rows in items
+    (conversion to AuditLogItem happens in the service layer).
+
+    INVARIANT: ZERO INSERT / UPDATE / DELETE. Read-only.
+    """
+    predicates = _build_audit_predicates(query, from_=from_, to=to)
+
+    # COUNT with the same predicates (no ORDER/LIMIT).
+    # Use and_(true(), *predicates) to avoid SADeprecationWarning when predicates is empty.
+    total_stmt = (
+        select(func.count()).select_from(AuditLog).where(and_(true(), *predicates))
+    )
+    total: int = (await session.scalar(total_stmt)) or 0
+
+    # List with keyset ordering and offset/limit.
+    offset = (query.page - 1) * query.page_size
+    list_stmt = (
+        select(AuditLog)
+        .where(and_(true(), *predicates))
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .offset(offset)
+        .limit(query.page_size)
+    )
+    rows = (await session.scalars(list_stmt)).all()
+
+    return PaginatedData.model_construct(
+        items=list(rows),
+        total=total,
+        page=query.page,
+        page_size=query.page_size,
+    )
