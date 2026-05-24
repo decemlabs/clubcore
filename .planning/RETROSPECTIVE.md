@@ -264,6 +264,48 @@ A complete ЮKassa online-payment + 54-ФЗ fiscal-receipt path layered on the v
 
 ---
 
+## Milestone: v1.8 — Reports + Audit Log read API
+
+**Shipped:** 2026-05-24
+**Phases:** 4 (54–57) | **Plans:** 10
+
+### What Was Built
+
+A strictly read-only reporting + audit-read layer over the v1.4–v1.7 tables with zero new business entities. A greenfield `app/modules/reports/` (no `models.py`, raw-SQL `text()` cross-module reads, no writes against business tables) exposes owner-only revenue (day/month, net-of-refund kopecks by method + subject kind), clients (active/expiring/new counters), and visits (daily/hourly/average) reports — all Europe/Moscow-deterministic. `GET /api/v1/audit-log` opens the 69-event write-side outward with keyset-stable pagination and actor/resource/action/time-window filters, plus four UTF-8-BOM CSV endpoints that render Cyrillic in Excel. Alembic 0040 adds three audit-log btree indexes; `Resource.AUDIT_LOG` parity reached admin-web at 33→35; Phase 57 regenerated `openapi.json` + `schema.d.ts` byte-stably with 8 `AssertNonNever` guards and a DST midnight-boundary golden test.
+
+### What Worked
+
+- **Read-only-by-construction kept the architecture honest** — choosing raw-SQL `text()` cross-module reads (D-54-08) over importing other modules' ORM meant the `modules-independent` import-linter contract held with zero new ignores, even while aggregating across five modules' tables.
+- **Smallest milestone yet, no infrastructure churn** — 10 plans across 4 phases because the milestone consumed existing tables/indexes/RBAC machinery rather than building any; the only schema change was three indexes.
+- **DST golden test as the correctness anchor** — pinning a `21:30Z → next MSK calendar day` fixture with a named `NET_KOPECKS` constant gave Phase 57's runbook a shared source of truth, so the operator walkthrough and the automated test assert the same numbers.
+- **Operator-deferral pattern reused cleanly** — VER-01's live runbook walkthrough was authored + structurally attested then carried (D-12), exactly mirroring v1.4/v1.7, so the milestone closed without waiting on a live docker session.
+
+### What Was Inefficient
+
+- **CLI summary-extractor produced noise again** — `milestone.complete` grabbed `One-liner:` field labels and a `[Rule 1 - Bug]` deviation bullet instead of clean phase one-liners, requiring a manual MILESTONES.md rewrite. This is the second consecutive milestone (v1.7, v1.8) hitting the same extractor gap — the SUMMARY.md `one_liner` field placement is still not consistently parseable.
+- **A literal UTF-8 BOM glyph slipped into PROJECT.md docs** — documenting the D-11 CSV-BOM decision, the actual `U+FEFF` character got embedded and tripped the injection-detection hook three times before being replaced with the `U+FEFF` escape notation. Documenting a control character is safer done by name, never by glyph.
+- **Pre-close audit false-positives** — 2 of 4 flagged items were stale (a resolved KB file misread as an open debug session; a completed quick task flagged on non-standard frontmatter), the same noise carried since v1.0. The audit query needs a frontmatter-status normalizer.
+
+### Patterns Established
+
+- **Read-only module discipline** — a module that aggregates across other modules can stay import-linter-clean by reading via raw `text()` rather than importing their ORM; SVC001 commit-gate is N/A but a "no writes against business tables" rule takes its place.
+- **Keyset pagination stability** — `ORDER BY created_at DESC, id DESC` with a matching composite index makes paginated reads immune to concurrent inserts shifting earlier pages.
+- **CSV BOM for Cyrillic** — `U+FEFF` (BOM) prefix + RFC-4180 excel dialect is the locked recipe for Excel-openable Cyrillic exports; ruble formatting lives in the CSV layer (the one terminal artifact), JSON stays integer kopecks.
+
+### Key Lessons
+
+1. **A constraint-respecting milestone is a small milestone.** Choosing read-only over v1.4–v1.7 data (no new entities) made v1.8 the lowest-plan-count milestone since v1.5 — the architectural каркас did the heavy lifting.
+2. **Document control characters by name, not by glyph.** The BOM-in-docs incident cost three hook round-trips; `U+FEFF` conveys the same meaning without polluting context or tripping detectors.
+3. **The CLI one-liner extractor needs fixing or bypassing.** Two milestones running, the auto-generated accomplishments were unusable — either standardize the SUMMARY `one_liner` field or stop trusting the extractor and hand-write the entry.
+
+### Cost Observations
+
+- Model mix: Opus 4.7 for orchestration + plan-phase; Sonnet 4.6 for executor + verifier agents. Roughly 35% opus / 60% sonnet / 5% haiku — slightly more opus-weighted than v1.7 given the smaller, more judgment-heavy milestone.
+- Sessions: few; the milestone's small size (10 plans) meant several phases collapsed into single sessions.
+- Notable: the highest value-per-plan ratio of the project — 30 requirements delivered in 10 plans by consuming, not building, infrastructure.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Reports + Audit Log read API
-status: milestone_complete
-stopped_at: Milestone complete (Phase 57 was final phase)
-last_updated: 2026-05-24T19:06:51.929Z
-last_activity: 2026-05-24
+status: Awaiting next milestone
+stopped_at: Phase 57 context gathered
+last_updated: "2026-05-24T19:14:27.899Z"
+last_activity: 2026-05-24 — Milestone v1.8 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -18,25 +18,25 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-24 after v1.7 milestone close)
+See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Milestone complete
+**Current focus:** Between milestones — v1.8 shipped (tag `v1.8`); next is `/gsd:new-milestone` (v1.9 candidate: API Handoff + Production Hardening)
 
 ## Current Position
 
-Phase: 57
-Plan: Not started
-Status: Milestone complete
-Progress: [██████████] 100%
-Last activity: 2026-05-24
+Phase: Milestone v1.8 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-24 — Milestone v1.8 completed and archived
 
 ## Performance Metrics
 
-| Metric | v1.7 | v1.8 target |
+| Metric | v1.7 | v1.8 actual |
 |--------|------|-------------|
 | Phases | 7 | 4 |
-| Requirements | 48/51 delivered | 30/30 |
+| Plans | 47 | 10 |
+| Requirements | 48/51 delivered | 30/30 delivered (VER-01 live runbook operator-pending) |
 | Phase range | 47-53 | 54-57 |
 
 ## Accumulated Context
@@ -59,6 +59,8 @@ Full decisions log lives in PROJECT.md Key Decisions table. v1.7 added the ЮKas
 None blocking. Three operator-credential-gated follow-ups remain open and acknowledged as deferred at v1.7 close: CARRY-01 (DEFER-46-01 live RU email probe), CARRY-02 (DEFER-46-02 owner countersign), VER-03 (ЮKassa sandbox walkthrough). All need real external credentials the operator runs out-of-band; none block v1.8.
 
 ## Deferred Items
+
+**Acknowledged at v1.8 milestone close (2026-05-24):** the pre-close artifact audit surfaced 4 open items — 2 stale false-positives (the resolved `knowledge-base` debug KB file; the completed `260501-ndi` quick task flagged only on non-standard frontmatter) and 1 genuine operator-pending item counted twice (Phase 57 UAT partial + Phase 57 VERIFICATION `human_needed`, both the VER-04/D-12 live runbook walkthrough). No new functional gaps. Acknowledged and deferred per operator decision; recorded in the v1.8 MILESTONES.md entry.
 
 **Acknowledged at v1.7 milestone close (2026-05-24):** the pre-close artifact audit surfaced 5 open items (2 verification gaps = Phase 52 + Phase 53 human_needed, 1 Phase 53 UAT partial, 1 debug session `knowledge-base`, 1 quick task `260501-ndi`). All map to operator-credential-gated follow-ups or stale artifacts — no new functional gaps. Acknowledged and deferred per operator decision; recorded in the v1.7 MILESTONES.md entry.
 
@@ -87,10 +89,10 @@ Known deferred items: 13 open (2 CLOSED this milestone: DEFER-46-03 + DEFER-36-0
 
 ## Session Continuity
 
-Last session: 2026-05-24T18:56:49.226Z
-Stopped at: Phase 57 context gathered
-Resume: Run `/gsd-plan-phase 54` to begin Phase 54 (Foundations — Module Scaffold + RBAC Parity + Indexes).
+Last session: 2026-05-24 — v1.8 milestone close
+Stopped at: Milestone v1.8 archived + tagged
+Resume: Run `/gsd:new-milestone` to define the next milestone (v1.9 candidate: API Handoff + Production Hardening). `.planning/REQUIREMENTS.md` was removed at close and will be recreated fresh.
 
 ## Operator Next Steps
 
-- Plan Phase 54 with `/gsd-plan-phase 54`
+- Start the next milestone with /gsd-new-milestone

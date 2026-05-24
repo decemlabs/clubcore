@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.8 Reports + Audit Log read API (Shipped: 2026-05-24)
+
+**Phases completed:** 4 phases, 10 plans. **Requirements: 30/30 v1.8 requirements delivered.**
+
+**Delivered:** A read-only reporting + audit-log read API layered over the v1.4–v1.7 tables with zero new business entities — closing the last MVP observability gap (revenue/clients/visits reports, filterable audit-log read, Cyrillic-safe CSV export) on top of the locked architectural каркас.
+
+**Key accomplishments:**
+
+- **Read-only reports module + RBAC parity (Phase 54)** — greenfield `app/modules/reports/` scaffold under strict read-only discipline (D-54-07: no `models.py`, raw-SQL `text()` cross-module reads per D-54-08, zero INSERT/UPDATE/DELETE against business tables, SVC001 commit-gate N/A). New `Resource.AUDIT_LOG` with owner-only `(VIEW, AUDIT_LOG)` + `(LIST, AUDIT_LOG)` pairs mirrored byte-for-byte into admin-web `can.ts` + `registry.ts` (parity 33 → 35, all 4 parity tests green).
+- **Audit-log read indexes (Phase 54)** — Alembic 0040 adds three btree indexes — composite `(created_at DESC, id DESC)` for stable keyset pagination plus single-column `action` and `resource_type` for filter narrowing — with ORM `__table_args__` in lockstep so `alembic check` round-trips clean.
+- **Revenue / Clients / Visits reports (Phase 55)** — three report endpoints over `day`/`month` grain: revenue buckets net-of-refund in integer kopecks (formatting deferred to v2.0 frontend), active-memberships + new-clients counters, and visits aggregations — all owner-only, all date buckets deterministic in Europe/Moscow (mirrors the `visits.gym_date STORED` discipline). Fixed `Field(alias="from")` incompatibility with FastAPI `Depends()`.
+- **Audit-log read API + CSV export (Phase 56)** — filtered paginated audit-log reader (actorUserId / actorEmailSnapshot / resourceType / action AND-combination, page/pageSize bounds ≤100, owner sees full payload JSONB) plus four UTF-8-BOM CSV endpoints (RFC-4180 excel dialect, BOM prefix so Excel renders Cyrillic without mojibake).
+- **OpenAPI handoff (Phase 57)** — byte-stable regen of `openapi.json` + `schema.d.ts` adding all 8 v1.8 reports/audit paths, guarded by 8 `AssertNonNever` compile-time forward guards + a runtime `toHaveLength(8)` assertion in `schema.contract.test.ts`.
+- **Milestone verification (Phase 57)** — DST midnight-boundary golden tests prove a `21:30Z` event buckets to the next MSK calendar day (`NET_KOPECKS=200 000` kop on `2026-01-02`), with named kopeck constants cross-referenced by the operator runbook; reception-403 + pagination-stability coverage verified (VER-02 closed). Operator runbook authored at `.planning/handoff/v1.8-reports-runbook.md` (5 curl scenarios).
+
+**Known deferred items at close: 1 new** — VER-04/D-12 live `docker compose up` runbook walkthrough (revenue golden-path eyeball-match + manual Excel CSV-open Cyrillic check), operator-pending per the v1.4/v1.7 precedent, explicitly NOT a phase-57 completion blocker. All automated VER-02 correctness/RBAC + HND-01/02 contract artifacts verified green. See STATE.md Deferred Items.
+
+---
+
 ## v1.7 Online Payments + 54-ФЗ (Shipped: 2026-05-24)
 
 **Phases completed:** 7 phases, 47 plans, 41 tasks
