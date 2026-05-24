@@ -24,7 +24,14 @@ from app.core.dependencies import CurrentUser, require_permission
 from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.reports import service
-from app.modules.reports.schemas import RevenueReportQuery, RevenueReportResponse
+from app.modules.reports.schemas import (
+    ClientsReportQuery,
+    ClientsReportResponse,
+    RevenueReportQuery,
+    RevenueReportResponse,
+    VisitsReportQuery,
+    VisitsReportResponse,
+)
 
 router = APIRouter()
 
@@ -50,4 +57,55 @@ async def get_revenue_report(
     Range cap: 366 days (D-06); to<from → 422.
     """
     result = await service.get_revenue_report(session, query)
+    return envelope(result)
+
+
+@router.get(
+    "/clients",
+    response_model=ResponseEnvelope[ClientsReportResponse],
+    summary="Active/expiring/new clients summary (owner-only; CLR-01..04)",
+)
+async def get_clients_report(
+    query: Annotated[ClientsReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientsReportResponse]:
+    """Clients snapshot: active memberships, expiring-within-N count, new-clients in range.
+
+    All counters exclude soft-deleted clients (CLR-04).
+    `within` defaults to 7, range 1..30 (D-07); out-of-range → 422.
+    Active/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).
+
+    Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
+    Range cap: 366 days (D-06); toDate<fromDate → 422.
+    """
+    result = await service.get_clients_report(session, query)
+    return envelope(result)
+
+
+@router.get(
+    "/visits",
+    response_model=ResponseEnvelope[VisitsReportResponse],
+    summary="Visits by day/hour + average (owner-only; VIS-R-01..04)",
+)
+async def get_visits_report(
+    query: Annotated[VisitsReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[VisitsReportResponse]:
+    """Visits composite report: daily counts, hourly distribution, averagePerDay.
+
+    Daily groups by gym_date (MSK STORED column — no secondary TZ conversion, VIS-R-04).
+    Hourly groups by hour-of-day across the full range (VIS-R-02).
+    averagePerDay = total visits / calendar days in range inclusive (D-10).
+    Sparse buckets: only days/hours with visits appear (D-08).
+
+    Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
+    Range cap: 366 days (D-06); toDate<fromDate → 422.
+    """
+    result = await service.get_visits_report(session, query)
     return envelope(result)
