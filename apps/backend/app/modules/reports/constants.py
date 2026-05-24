@@ -1,10 +1,17 @@
-"""Reports module literal constants (Phase 54 INFRA-41).
+"""Reports module literal constants (Phase 55 REV-01..05, D-03).
 
-Period-grain and metric-key literals will be defined here when Phase 55
-endpoint bodies land. The ``__all__`` tuple is pre-declared so import-linter
-and tooling can resolve the module cleanly.
+Period-grain and subject-kind literals mirror D-03 and the payments
+CHECK constraint ck_payments_subject_kind.
 """
 
-# Phase 55 will add period-grain constants (e.g. GRAIN_DAY, GRAIN_MONTH)
-# and metric-key constants for revenue / visits / clients report buckets.
-__all__: tuple[str, ...] = ()
+from __future__ import annotations
+
+GRAIN_DAY = "day"
+GRAIN_MONTH = "month"
+GRAIN_VALUES: tuple[str, ...] = (GRAIN_DAY, GRAIN_MONTH)
+
+__all__ = (
+    "GRAIN_DAY",
+    "GRAIN_MONTH",
+    "GRAIN_VALUES",
+)
