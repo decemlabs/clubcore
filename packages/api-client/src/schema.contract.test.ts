@@ -351,6 +351,41 @@ const _v16EmailChecks: [
   _OtpRequestChannelBody,
 ] = [true, true]
 
+// --- v1.8 surface — Reports + Audit Log read API (Phases 54-57) ---------
+// All 8 v1.8 paths are LANDED post-regen (Task 1/Task 2 of Phase 57);
+// hard AssertNonNever guards (no HasPath<> conditional probes).
+// 4 JSON GETs: hard AssertNonNever on the GET operation.
+// 4 CSV GETs: 2xx-reachability anchor via ['get']['responses']['200']
+// following the _v15Checks _TrainerSlotsListOkRealised example.
+type _ReportsRevenueGet = AssertNonNever<paths['/api/v1/reports/revenue']['get']>
+type _ReportsClientsGet = AssertNonNever<paths['/api/v1/reports/clients']['get']>
+type _ReportsVisitsGet = AssertNonNever<paths['/api/v1/reports/visits']['get']>
+type _AuditLogGet = AssertNonNever<paths['/api/v1/audit-log']['get']>
+type _ReportsRevenueCsvGet = AssertNonNever<
+  paths['/api/v1/reports/revenue.csv']['get']['responses']['200']
+>
+type _ReportsClientsCsvGet = AssertNonNever<
+  paths['/api/v1/reports/clients.csv']['get']['responses']['200']
+>
+type _ReportsVisitsCsvGet = AssertNonNever<
+  paths['/api/v1/reports/visits.csv']['get']['responses']['200']
+>
+type _AuditLogCsvGet = AssertNonNever<
+  paths['/api/v1/audit-log.csv']['get']['responses']['200']
+>
+
+// Static checks for v1.8 surface — each must resolve to true at compile time.
+const _v18Checks: [
+  _ReportsRevenueGet,
+  _ReportsClientsGet,
+  _ReportsVisitsGet,
+  _AuditLogGet,
+  _ReportsRevenueCsvGet,
+  _ReportsClientsCsvGet,
+  _ReportsVisitsCsvGet,
+  _AuditLogCsvGet,
+] = [true, true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -380,5 +415,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v1.6 EMAIL surface (Phase 42 + AUTH-EM-01 channel)', () => {
     expect(_v16EmailChecks).toHaveLength(2)
+  })
+
+  it('compiles against the regenerated v1.8 reports/audit surface (Phases 55-57)', () => {
+    expect(_v18Checks).toHaveLength(8)
   })
 })
