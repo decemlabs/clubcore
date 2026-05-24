@@ -172,7 +172,7 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   5. All day/month buckets match Europe/Moscow boundaries (consistent with existing `gym_date STORED` and cron-window discipline)
 **Plans**: 2 plans
 - [x] 55-01-PLAN.md — Module contracts (all-three DTOs, range-validation guard, router mount, test conftest) + revenue endpoint end-to-end (REV-01..05)
-- [ ] 55-02-PLAN.md — Clients snapshot (active/expiring/new, soft-delete excluded) + visits report (daily/hourly/average) endpoints (CLR-01..04, VIS-R-01..04)
+- [x] 55-02-PLAN.md — Clients snapshot (active/expiring/new, soft-delete excluded) + visits report (daily/hourly/average) endpoints (CLR-01..04, VIS-R-01..04)
 
 ### Phase 56: Audit Log Read API + CSV Export
 **Goal**: Owner can browse and filter the full 69-event audit log through a paginated JSON endpoint and download any report or audit log as a UTF-8 BOM CSV suitable for Excel.
@@ -212,7 +212,7 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 6/6 | Complete | 2026-05-23 |
 | 53. Milestone Verification | 4/4 | Complete | 2026-05-23 |
 | 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 3/3 | Complete   | 2026-05-24 |
-| 55. Revenue + Clients + Visits Reports | 1/2 | In Progress|  |
+| 55. Revenue + Clients + Visits Reports | 2/2 | Complete   | 2026-05-24 |
 | 56. Audit Log Read API + CSV Export | 0/TBD | Not started | - |
 | 57. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
