@@ -285,7 +285,17 @@ async def get_audit_log_csv(
     Unknown action/resource_type → 422 audit_filter_invalid (T-56-10, SC#5).
     to < from → 422.
     No try/except — AppError bubbles to _app_error_handler.
+
+    IMPORTANT: validate_audit_filters is called EAGERLY here (before StreamingResponse)
+    so validation errors are raised in the request-response phase where _app_error_handler
+    can intercept them. If validation lived inside the async generator body it would fire
+    after headers are sent (inside StreamingResponse) and could not be intercepted.
     """
+    # Validate filters eagerly in the request phase — must happen before StreamingResponse
+    # is constructed so AuditFilterInvalidError / ValidationAppError are caught by the
+    # registered exception handler (Rule 1 fix: async generator body fires too late).
+    service.validate_audit_filters(query, from_=from_, to=to)
+
     rows = service.audit_log_csv_rows(session, query, from_=from_, to=to)
     return csv_export.make_async_csv_streaming_response(
         rows, CSV_AUDIT_LOG_HEADERS, "audit-log.csv"

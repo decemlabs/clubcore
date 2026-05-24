@@ -261,7 +261,7 @@ async def get_visits_report(
     )
 
 
-def _validate_audit_filters(
+def validate_audit_filters(
     query: AuditLogQuery,
     *,
     from_: date | None = None,
@@ -271,6 +271,10 @@ def _validate_audit_filters(
 
     Shared by list_audit_log (JSON) and audit_log_csv_rows (CSV) so both endpoints
     reject identical bad input (SC#5, EXP-02).
+
+    Called EAGERLY in route handlers (before StreamingResponse) so that validation
+    errors are raised in the request-response phase where the exception handler can
+    intercept them (not inside an async generator body after headers are sent).
 
     Raises:
         AuditFilterInvalidError: unknown action or resource_type value.
@@ -289,6 +293,10 @@ def _validate_audit_filters(
 
     if from_ is not None and to is not None and to < from_:
         raise ValidationAppError("to must be >= from")
+
+
+# Keep private alias for internal callers that pre-dated the public name.
+_validate_audit_filters = validate_audit_filters
 
 
 async def list_audit_log(
@@ -405,8 +413,10 @@ async def audit_log_csv_rows(
     Streams ALL filtered rows (no pagination) row-by-row via stream_scalars — memory
     is bounded regardless of result set size (T-56-08, D-16).
 
-    Validates filters using the SAME _validate_audit_filters as list_audit_log so
-    JSON and CSV reject identical bad input (SC#5, EXP-02).
+    IMPORTANT: filters must be validated BEFORE calling this generator (by the route
+    handler via validate_audit_filters). Validation cannot live inside the generator body
+    because async generator bodies only execute on first iteration — after headers are
+    already sent in the StreamingResponse phase, too late for exception handlers.
 
     from_/to are keyword-only args from route-level Query(alias=...) params (not model
     fields on AuditLogQuery — live-verified pattern from Plan 01).
@@ -419,8 +429,6 @@ async def audit_log_csv_rows(
 
     Read-only: NO session.commit(), NO session.flush().
     """
-    _validate_audit_filters(query, from_=from_, to=to)
-
     async for row in repository.stream_audit_log_rows(session, query, from_=from_, to=to):
         yield [
             csv_export.format_datetime_msk(row.created_at),
