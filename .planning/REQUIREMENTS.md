@@ -53,8 +53,8 @@
 
 ### OpenAPI handoff (HND)
 
-- [ ] **HND-01**: Byte-stable atomic regen `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts`, экспонирующий все v1.8 пути (reports/* + audit-log + CSV variants); CI `git diff --exit-code` green на обоих артефактах
-- [ ] **HND-02**: `packages/api-client/src/schema.contract.test.ts` расширен `AssertNonNever` forward-guards для v1.8 путей (+ runtime count assertion по дисциплине каждого milestone)
+- [x] **HND-01**: Byte-stable atomic regen `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts`, экспонирующий все v1.8 пути (reports/* + audit-log + CSV variants); CI `git diff --exit-code` green на обоих артефактах
+- [x] **HND-02**: `packages/api-client/src/schema.contract.test.ts` расширен `AssertNonNever` forward-guards для v1.8 путей (+ runtime count assertion по дисциплине каждого milestone)
 
 ### Milestone verification (VER)
 
@@ -113,7 +113,7 @@ Which phases cover which requirements. Updated during roadmap creation 2026-05-2
 | EXP-02 | Phase 56 | Pending |
 | EXP-03 | Phase 56 | Pending |
 | EXP-04 | Phase 56 | Pending |
-| HND-01 | Phase 57 | Pending |
-| HND-02 | Phase 57 | Pending |
+| HND-01 | Phase 57 | Complete |
+| HND-02 | Phase 57 | Complete |
 | VER-01 | Phase 57 | Pending |
 | VER-02 | Phase 57 | Pending |
