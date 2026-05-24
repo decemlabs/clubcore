@@ -15,6 +15,8 @@ INVARIANTS (locked):
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
 from datetime import date
 from typing import cast
 
@@ -23,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import LOCKED_AUDIT_EVENTS
 from app.core.exceptions import ValidationAppError
 from app.core.pagination import PaginatedData
-from app.modules.reports import repository
+from app.modules.reports import csv_export, repository
 from app.modules.reports.constants import GRAIN_MONTH
 from app.modules.reports.schemas import (
     AuditLogItem,
@@ -259,6 +261,36 @@ async def get_visits_report(
     )
 
 
+def _validate_audit_filters(
+    query: AuditLogQuery,
+    *,
+    from_: date | None = None,
+    to: date | None = None,
+) -> None:
+    """Validate audit-log filter params; raise 422 on invalid values (AUD-03, D-05, D-06).
+
+    Shared by list_audit_log (JSON) and audit_log_csv_rows (CSV) so both endpoints
+    reject identical bad input (SC#5, EXP-02).
+
+    Raises:
+        AuditFilterInvalidError: unknown action or resource_type value.
+        ValidationAppError: to < from_ date window inversion.
+    """
+    if query.action is not None and query.action not in VALID_ACTIONS:
+        raise AuditFilterInvalidError(
+            f"Unknown action '{query.action}'. Must be one of the 69 LOCKED_AUDIT_EVENTS."
+        )
+
+    if query.resource_type is not None and query.resource_type not in VALID_RESOURCE_TYPES:
+        raise AuditFilterInvalidError(
+            f"Unknown resource_type '{query.resource_type}'."
+            " Must be one of the LOCKED_AUDIT_EVENTS resource types."
+        )
+
+    if from_ is not None and to is not None and to < from_:
+        raise ValidationAppError("to must be >= from")
+
+
 async def list_audit_log(
     session: AsyncSession,
     query: AuditLogQuery,
@@ -277,22 +309,7 @@ async def list_audit_log(
 
     Read-only: NO session.commit(), NO session.flush().
     """
-    # Validate action filter against known event names (AUD-03, D-05).
-    if query.action is not None and query.action not in VALID_ACTIONS:
-        raise AuditFilterInvalidError(
-            f"Unknown action '{query.action}'. Must be one of the 69 LOCKED_AUDIT_EVENTS."
-        )
-
-    # Validate resource_type filter against known resource types (AUD-03, D-05).
-    if query.resource_type is not None and query.resource_type not in VALID_RESOURCE_TYPES:
-        raise AuditFilterInvalidError(
-            f"Unknown resource_type '{query.resource_type}'."
-            " Must be one of the LOCKED_AUDIT_EVENTS resource types."
-        )
-
-    # Validate date window (D-06).
-    if from_ is not None and to is not None and to < from_:
-        raise ValidationAppError("to must be >= from")
+    _validate_audit_filters(query, from_=from_, to=to)
 
     page = await repository.fetch_audit_log_page(session, query, from_=from_, to=to)
 
@@ -303,3 +320,114 @@ async def list_audit_log(
         page=page.page,
         page_size=page.page_size,
     )
+
+
+# ---------------------------------------------------------------------------
+# CSV row-builder helpers (Phase 56 EXP-01..04, D-15)
+# These REUSE the existing Phase 55 aggregation functions (single source of truth).
+# ---------------------------------------------------------------------------
+
+
+async def revenue_csv_rows(
+    session: AsyncSession,
+    query: RevenueReportQuery,
+) -> list[list[object]]:
+    """Build revenue CSV data rows by reusing get_revenue_report (D-15).
+
+    Each row corresponds to one period bucket with money formatted as rubles (D-13).
+    Caller should validate date range before calling this function.
+
+    Returns list of [period, netRubles, cashRubles, onlineRubles, membershipRubles,
+    ptPackageRubles].
+    """
+    r = await get_revenue_report(session, query)
+    return [
+        [
+            b.period,
+            csv_export.format_kopecks_as_rubles(b.net_kopecks),
+            csv_export.format_kopecks_as_rubles(b.by_method.cash),
+            csv_export.format_kopecks_as_rubles(b.by_method.online),
+            csv_export.format_kopecks_as_rubles(b.by_subject_kind.membership),
+            csv_export.format_kopecks_as_rubles(b.by_subject_kind.pt_package),
+        ]
+        for b in r.buckets
+    ]
+
+
+async def clients_csv_rows(
+    session: AsyncSession,
+    query: ClientsReportQuery,
+) -> list[list[object]]:
+    """Build clients CSV data rows by reusing get_clients_report (D-15).
+
+    Single summary row: [fromDate, toDate, within, activeMemberships, expiringWithinN, newClients].
+    Caller should validate date range before calling this function.
+    """
+    r = await get_clients_report(session, query)
+    return [
+        [
+            query.from_date.isoformat(),
+            query.to_date.isoformat(),
+            r.within_days,
+            r.active_count,
+            r.expiring_count,
+            r.new_clients_count,
+        ]
+    ]
+
+
+async def visits_csv_rows(
+    session: AsyncSession,
+    query: VisitsReportQuery,
+) -> list[list[object]]:
+    """Build visits CSV data rows by reusing get_visits_report (D-15).
+
+    One row per daily bucket: [date, count].
+    Daily-only (D-15 discretion: hourly section deferred, daily is primary series).
+    Caller should validate date range before calling this function.
+    """
+    r = await get_visits_report(session, query)
+    return [
+        [d.date.isoformat(), d.count]
+        for d in r.daily
+    ]
+
+
+async def audit_log_csv_rows(
+    session: AsyncSession,
+    query: AuditLogQuery,
+    *,
+    from_: date | None = None,
+    to: date | None = None,
+) -> AsyncIterator[list[object]]:
+    """Async generator yielding audit-log CSV rows for all matching rows (EXP-02, D-16).
+
+    Streams ALL filtered rows (no pagination) row-by-row via stream_scalars — memory
+    is bounded regardless of result set size (T-56-08, D-16).
+
+    Validates filters using the SAME _validate_audit_filters as list_audit_log so
+    JSON and CSV reject identical bad input (SC#5, EXP-02).
+
+    from_/to are keyword-only args from route-level Query(alias=...) params (not model
+    fields on AuditLogQuery — live-verified pattern from Plan 01).
+
+    Each row: [createdAt(MSK), actorUserId, actorEmailSnapshot, action, resourceType,
+               resourceId, payload(compact JSON)].
+
+    Yields:
+        list[object]: One row per AuditLog entry in created_at DESC, id DESC order.
+
+    Read-only: NO session.commit(), NO session.flush().
+    """
+    _validate_audit_filters(query, from_=from_, to=to)
+
+    async for row in repository.stream_audit_log_rows(session, query, from_=from_, to=to):
+        yield [
+            csv_export.format_datetime_msk(row.created_at),
+            str(row.actor_user_id) if row.actor_user_id is not None else "",
+            row.actor_email_snapshot or "",
+            row.action,
+            row.resource_type,
+            str(row.resource_id) if row.resource_id is not None else "",
+            json.dumps(row.payload, ensure_ascii=False, separators=(",", ":")),
+        ]
