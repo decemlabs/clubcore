@@ -1,510 +1,441 @@
-# Feature Landscape: v1.7 Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
+# Feature Research
 
-**Domain:** Online payment intake + fiscal compliance for single-gym CRM (РФ/СНГ market)
-**Researched:** 2026-05-21
-**Milestone context:** Adding ЮKassa payment intake and 54-ФЗ fiscal receipts to existing Sportzal CRM.
-  Existing bedrock: v1.4 cash ledger (append-only `payments` table, `payment_recorder` Protocol slot,
-  `Idempotency-Key`, full-only refund discipline, atomic audit chain), v1.6 cross-channel notifications
-  (Telegram + email with `channel` discriminator idempotency), v1.6 email integration (Yandex Postbox,
-  `LOCKED_EMAIL_TEMPLATES`, circuit breaker).
+**Domain:** Trainer completion for single-gym CRM (payroll ledger, recurring schedule, time-off, trainer-utilization report)
+**Researched:** 2026-05-24
+**Confidence:** HIGH (domain patterns are well-understood; specific design choices align with existing codebase bedrock)
 
 ---
 
-## PAYMENT — Online Payment Intake
+## Context: What Already Exists
 
-### PAY-01: Server-side payment creation (redirect confirmation)
-- **Category:** Table stake
-- **Complexity:** MED
-- **Dependency:** v1.4 `payment_recorder` Protocol slot; `Idempotency-Key` discipline already established
-- **Description:** `POST /api/v1/memberships/{id}/pay-online` and `POST /api/v1/pt-packages/{id}/pay-online`
-  create a ЮKassa payment object via `POST /v3/payments` (HTTP Basic Auth: shop_id + secret_key).
-  Confirmation type `redirect` — API returns `confirmation.confirmation_url`; CRM redirects client browser
-  there. After client action ЮKassa redirects back to `return_url`. Membership/package is credited ONLY
-  on `payment.succeeded` webhook (never on redirect return). `Idempotency-Key` = UUIDv4 stored in local
-  `online_payments` row before the ЮKassa call so retry on network error returns same result.
-- **ЮKassa states:** `pending` (initial) → `succeeded` (final) or `canceled` (final). Single-stage flow
-  skips `waiting_for_capture`.
-- **Sources:** HIGH confidence — official yookassa.ru/developers/payment-acceptance/getting-started/payment-process
+Before defining new features, the existing bedrock constrains every design decision below:
 
-### PAY-02: Embedded checkout widget
-- **Category:** Differentiator
-- **Complexity:** MED
-- **Dependency:** PAY-01 (requires payment token from server); admin-web must load ЮKassa JS SDK
-- **Description:** ЮKassa provides a JS widget (`YooMoneyCheckoutWidget`) that embeds directly on the
-  admin-web page or in a modal. Accepts bank cards, Mir Pay, SberPay, T-Pay, СБП, ЮMoney. No page
-  redirect — widget handles 3-D Secure internally. On success widget displays 10-second confirmation
-  then redirects to `return_url`. Improves UX for reception desk flow where a separate tab redirect is
-  disruptive.
-  Confirmation type: `embedded` (not `redirect`).
-- **Sources:** HIGH confidence — yookassa.ru/developers/payment-acceptance/integration-scenarios/widget/basics
-
-### PAY-03: QR / SBP payment
-- **Category:** Differentiator
-- **Complexity:** LOW
-- **Dependency:** PAY-01; display layer only
-- **Description:** Confirmation type `qr` — server returns `confirmation.confirmation_data` (QR payload).
-  CRM renders QR code (any library). Client scans with bank app. Fires `payment.succeeded` webhook on
-  completion. Useful for mobile-first reception desk (client scans instead of entering card).
-- **Sources:** HIGH confidence — ЮKassa `confirmation_type` docs; SBP QR equated to card payment under
-  54-ФЗ as of Sept 2025.
-
-### PAY-04: Telegram WebApp native invoice
-- **Category:** Anti-feature (v1.7)
-- **Complexity:** HIGH
-- **Dependency:** Telegram Bot Payments API (separate `sendinvoice` flow); no `waiting_for_capture`
-  support; cannot configure payment holds
-- **Description:** ЮKassa does support Telegram Bot Payments API (`sendinvoice` → `answerPreCheckoutQuery`
-  → `SuccessfulPayment` update). However this flow is entirely separate from the REST payment API:
-  no `waiting_for_capture`, no autopayments, no receipt injection via ЮKassa API — receipt must be
-  sent separately. The CRM admin panel is a web SPA, not a Telegram Mini App. Reception desk does not
-  use Telegram-native invoices for selling memberships.
-  DO NOT implement in v1.7. Existing Telegram bot covers check-in and bookings; payment via bot is
-  a separate product feature for a later milestone.
-- **Sources:** MEDIUM confidence — yookassa.ru/docs/support/payments/onboarding/integration/cms-module/telegram
-
-### PAY-05: Mobile application deep-link confirmation
-- **Category:** Anti-feature (v1.7)
-- **Complexity:** MED
-- **Dependency:** Mobile app not in scope
-- **Description:** Confirmation type `mobile_application` redirects to bank app deep-link for
-  confirmation. Only relevant for a native mobile client app. Sportzal v1.7 is admin-web SPA only.
-  Defer until a client-facing mobile app is built.
-- **Sources:** HIGH confidence — ЮKassa confirmation_type docs
+- **`trainers` table** — `id`, `full_name`, `phone`, `is_active`, `deleted_at`. Soft-deactivate via `is_active`; hard-delete via `deleted_at` partial-unique discipline.
+- **`trainer_availability_slots` table** — `trainer_id`, `start_time`, `end_time`, `status` (`active`/`booked`/`cancelled`), `created_by_user_id`, `cancelled_at`, `cancel_reason`. Manual one-off slots only.
+- **`pt_sessions` table** — `pt_package_id`, `trainer_id`, `client_id`, `performed_at`, `trainer_name_snapshot`, `booking_id` (nullable). FK to `bookings`. Index `ix_pt_sessions_trainer_id_performed_at_desc` already exists for load analytics.
+- **`bookings` table** — `slot_id` → `trainer_availability_slots`. FSM: `confirmed → cancelled / no_show / completed`.
+- **`payments` table** — append-only ledger; `subject_kind ∈ ('membership', 'pt_package', 'refund')`, signed `amount_kopecks`, `method`, `received_at`. No `UPDATE`/`DELETE` allowed (AST gate). `subject_kind` CHECK constraint will need extending for payroll accruals.
+- **`audit_log` table** — `LOCKED_AUDIT_EVENTS` frozenset, AST literal-string gate. New events must be pre-registered before callsites.
+- **`app/modules/reports/`** — v1.8 read-only discipline: no `models.py`, raw-SQL `text()` cross-module reads, zero writes.
+- **RBAC** — `Resource`/`Action`/`OWNER_ONLY` with byte-parity across backend + `admin-web/src/shared/session/can.ts` + `registry.ts`.
 
 ---
 
-## WEBHOOK — Payment FSM
+## CATEGORY A — PAYROLL
 
-### WH-01: Webhook endpoint with IP whitelist + object re-fetch verification
-- **Category:** Table stake
-- **Complexity:** MED
-- **Dependency:** None (new module `app/modules/billing/webhooks.py`)
-- **Description:** `POST /api/v1/webhooks/yookassa` receives ЮKassa notifications.
-  Security model (two-layer defense-in-depth):
-  1. IP source check against ЮKassa published CIDR list:
-     `185.71.76.0/27, 185.71.77.0/27, 77.75.153.0/25, 77.75.156.11, 77.75.156.35,
-      77.75.154.128/25, 2a02:5180::/32`
-  2. Re-fetch payment/refund object from ЮKassa API after receiving webhook and verify status
-     matches notification payload (defends against spoofed IP, replay, and stale notifications).
-  ЮKassa does NOT provide `Notification-Sign` HMAC header — IP whitelist + re-fetch is the canonical
-  ЮKassa security model (confirmed in official webhook docs). Respond HTTP 200 immediately; process
-  asynchronously. ЮKassa retries for 24 hours on non-200 response.
-  Must be exempt from CSRF middleware (external caller). Must NOT require auth cookie.
-- **Sources:** HIGH confidence — yookassa.ru/developers/using-api/webhooks
-
-### WH-02: Payment FSM mapping (`pending` → `succeeded` / `canceled`)
+### PAY-01: Per-trainer compensation model configuration
 - **Category:** Table stake
 - **Complexity:** LOW
-- **Dependency:** WH-01, PAY-01, v1.4 `payments` table
-- **Description:** Internal `online_payments.status` maps to ЮKassa payment statuses:
+- **Dependency:** `trainers` table (existing)
+- **Description:** Each trainer needs a configurable compensation model. Industry practice (confirmed): most small gyms use one of three models — % of PT-package revenue, fixed amount per conducted session, or both combined. For Sportzal single-gym scope, all three configurations are needed on a per-trainer basis. Configuration lives on the trainer record itself (two nullable columns: `commission_pct` NUMERIC(5,2) and `session_fee_kopecks` INTEGER). Both columns being NULL means "no payroll computed for this trainer" (e.g., salaried employee managed outside the CRM). Either or both can be set simultaneously (hybrid model). Commission % applies to the `amount_kopecks` of PT-package sale payments linked to sessions this trainer conducted. Session fee applies to each non-cancelled `pt_sessions` row for this trainer.
+- **New schema:** Two nullable columns on `trainers` table via Alembic migration. No new table needed.
+- **RBAC:** Owner-only `PATCH /api/v1/trainers/{id}` already exists; extend schema to include new fields. Reception reads `is_active` only (existing behavior unchanged).
+- **Single-gym scope note:** Tiered commission (e.g., "40% up to $5K/mo, 45% above") is an enterprise feature. Not needed. Single flat rate per trainer.
 
-  | ЮKassa status          | Internal event               | Action                                          |
-  |------------------------|------------------------------|-------------------------------------------------|
-  | `pending`              | payment_initiated            | Row created; no ledger entry yet                |
-  | `waiting_for_capture`  | payment_awaiting_capture     | Two-stage only (not used in v1.7 single-stage)  |
-  | `succeeded`            | payment_online_succeeded     | Call `payment_recorder`; credit membership/pkg  |
-  | `canceled`             | payment_online_canceled      | Mark row canceled; no ledger entry              |
+### PAY-02: Payroll period computation (the "payroll run")
+- **Category:** Table stake
+- **Complexity:** MEDIUM
+- **Dependency:** PAY-01 (compensation config); `pt_sessions` (non-cancelled, `performed_at` in period); `payments` (PT-package sale rows linked to sessions via `pt_package_id`); Europe/Moscow TZ discipline
+- **Description:** Owner requests a payroll computation for a trainer over a date range (e.g., "1–31 May 2026 MSK"). The computation:
+  1. Selects all non-cancelled `pt_sessions` where `trainer_id = ?` AND `performed_at` falls within the period (Europe/Moscow).
+  2. For `session_fee_kopecks`: count × fee = fixed component.
+  3. For `commission_pct`: find the PT-package sale payment for each session's `pt_package_id` (JOIN `payments WHERE subject_kind='pt_package' AND subject_id=pt_package_id`), sum `amount_kopecks`, apply `commission_pct`. Note: one PT-package payment covers multiple sessions; commission is typically computed on the full package sale price attributed to sessions in the period, NOT per-session proration. **Decision for Sportzal:** commission is applied to the total PT-package sale revenue (the payment row) where at least one session from that package falls in the period. This avoids a "proration per session" complexity that has no single right answer. This is the typical small-gym interpretation.
+  4. Total accrual = fixed component + commission component (integer kopecks, no floating-point).
+- **Output:** A computed `TrainerPayrollPreview` response (trainer_id, period_start, period_end, session_count, fixed_kopecks, commission_kopecks, total_kopecks). This is a read-only preview endpoint — no persistence yet.
+- **RBAC:** Owner-only `GET /api/v1/trainers/{id}/payroll/preview?from=&to=`.
 
-  `payment.succeeded` is the ONLY trigger for crediting membership or PT-package.
-  Idempotency: UNIQUE constraint on `(yookassa_payment_id)` in `online_payments` table prevents
-  double-processing. On duplicate webhook: return 200, skip.
-- **Sources:** HIGH confidence — ЮKassa payment-process docs
+### PAY-03: Payroll accrual recording (append-only ledger row)
+- **Category:** Table stake
+- **Complexity:** MEDIUM
+- **Dependency:** PAY-02 (computed amount); `payments` table append-only discipline (v1.4); `LOCKED_AUDIT_EVENTS`; `audit_log`
+- **Description:** Owner confirms the payroll run → system records an **accrual row** as an append-only entry. This is the "commit" step after the preview. Two design options exist:
+  - **Option A:** Reuse the existing `payments` table with a new `subject_kind='trainer_payroll'`. Requires extending the CHECK constraint on `subject_kind` and the sign CHECK (payroll accrual amounts are negative from the gym's perspective, i.e., money owed out). Extends the existing audit chain.
+  - **Option B:** New `trainer_payroll_accruals` table with its own append-only discipline.
 
-### WH-03: Refund FSM mapping (`refund.succeeded`)
+  **Recommendation: Option B (new table).** Reasons: (1) `payments.subject_kind` CHECK constraint is tightly coupled to membership/PT-package revenue semantics — extending it to cover payroll blurs the revenue ledger with the expenses ledger, making revenue reports harder to compute correctly. (2) The v1.4 `amount_sign_matches_subject_kind` CHECK would need a third branch with different sign logic. (3) Payroll accruals have different lifecycle attributes (paid_at, period_start, period_end, session_count_snapshot) that don't fit cleanly in `payments`. (4) The reports module reads `payments` for revenue — mixing payroll there would require all revenue queries to exclude `subject_kind='trainer_payroll'`. New `trainer_payroll_accruals` table keeps revenue ledger clean.
+
+  **New table schema:**
+  - `id` UUID PK
+  - `trainer_id` UUID FK → `trainers.id` ON DELETE RESTRICT
+  - `period_start` DATE NOT NULL (Europe/Moscow calendar date)
+  - `period_end` DATE NOT NULL (inclusive)
+  - `session_count` INTEGER NOT NULL (snapshot at accrual time)
+  - `fixed_kopecks` INTEGER NOT NULL DEFAULT 0
+  - `commission_kopecks` INTEGER NOT NULL DEFAULT 0
+  - `total_kopecks` INTEGER NOT NULL (= fixed + commission, NOT a CHECK — service computes it)
+  - `accrued_at` TIMESTAMPTZ NOT NULL DEFAULT now() (single temporal column, mirrors `payments.received_at` discipline)
+  - `accrued_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT
+  - `paid_at` TIMESTAMPTZ NULL (NULL = not yet paid; filled in by PAY-04)
+  - `paid_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT NULL
+  - `audit_log_id` UUID FK → `audit_log.id` ON DELETE SET NULL
+  - UNIQUE `(trainer_id, period_start, period_end)` — one accrual per trainer per period (prevents duplicate runs). Partial UNIQUE with WHERE `paid_at IS NULL` is an alternative, but a hard UNIQUE is simpler and forces the owner to void + re-run if they made an error.
+
+  Append-only: no UPDATE/DELETE on accrual rows after creation (except `paid_at`/`paid_by_user_id` via PAY-04 pattern). The AST commit-gate pattern should cover this module.
+- **RBAC:** Owner-only `POST /api/v1/trainers/{id}/payroll/accrue`.
+- **Audit events (pre-register before callsites):** `trainer_payroll_accrued`.
+
+### PAY-04: Mark payroll accrual as paid
 - **Category:** Table stake
 - **Complexity:** LOW
-- **Dependency:** WH-01, REFUND-01
-- **Description:** ЮKassa refund statuses:
-  - `succeeded` (final, positive) → fires `refund.succeeded` webhook
-  - `canceled` (final, negative) → fires no webhook; must poll or handle timeout
+- **Dependency:** PAY-03 (accrual row exists)
+- **Description:** Owner records that the accrual was paid out (cash, bank transfer — outside the CRM). This sets `paid_at = now()` and `paid_by_user_id` on the accrual row. This is the **only allowed mutation** on an accrual row after creation (all other fields are immutable). Separate audit event. Not a new ledger row — the accrual row has a `paid_at` column specifically for this lifecycle state.
+  - Idempotency: if `paid_at` is already set, return 409 `already_paid`.
+  - No "unpay" operation — if owner made an error, they need to note it in audit log manually. At single-gym scope, an "undo paid" operation creates more confusion than it solves.
+- **RBAC:** Owner-only `POST /api/v1/trainers/{id}/payroll/accruals/{accrual_id}/mark-paid`.
+- **Audit events:** `trainer_payroll_paid`.
 
-  Internal mapping:
-
-  | ЮKassa refund status | Internal event            | Action                                               |
-  |----------------------|---------------------------|------------------------------------------------------|
-  | `succeeded`          | refund_online_succeeded   | Complete v1.4 atomic audit chain (mirrors cash path) |
-  | `canceled`           | refund_online_canceled    | Alert operator; membership stays credited            |
-
-  Note: `refund.succeeded` webhook is NOT auto-enabled — must be explicitly subscribed during
-  ЮKassa account setup. This is a known pitfall.
-- **Sources:** HIGH confidence — yookassa.ru/developers/using-api/webhooks + refunds docs
-
-### WH-04: Idempotent webhook processing
+### PAY-05: List payroll accruals for a trainer
 - **Category:** Table stake
 - **Complexity:** LOW
-- **Dependency:** WH-01, Redis (already in stack)
-- **Description:** Each webhook notification carries a unique `object.id` (payment or refund UUID).
-  Processing must be idempotent:
-  1. Check Redis key `sz:webhook:{event_type}:{object_id}` (TTL 48h) — if present, return 200 skip.
-  2. Process event transactionally.
-  3. Set Redis key on success.
-  Mirrors `_dedupe_update_id` pattern from v1.2 Telegram bot. Prevents double-credit on webhook
-  delivery retry.
-- **Sources:** MEDIUM confidence — pattern inference from ЮKassa retry behavior + v1.2 precedent
+- **Dependency:** PAY-03
+- **Description:** `GET /api/v1/trainers/{id}/payroll/accruals` — paginated list of accrual rows for a trainer, ordered `accrued_at DESC`. Response includes `paid_at` so owner can see unpaid vs paid history. Standard `{items, total, page, pageSize}` envelope.
+- **RBAC:** Owner-only.
 
 ---
 
-## REFUND — Online Refunds
+### PAY Anti-features
 
-### REF-01: Online refund initiation (full only, v1.7)
-- **Category:** Table stake
-- **Complexity:** MED
-- **Dependency:** v1.4 `payments` table + `refund_of` partial UNIQUE; WH-03; RBAC (reception+owner)
-- **Description:** `POST /api/v1/memberships/{id}/refund` (and pt-packages equivalent) — if the payment
-  was made online, routes to ЮKassa Refund API `POST /v3/refunds` with `payment_id` and full `amount`.
-  `Idempotency-Key` = new UUIDv4 stored before the API call.
-  Flow: CRM creates refund request → ЮKassa processes → `refund.succeeded` webhook arrives →
-  CRM completes v1.4 atomic audit chain (`payment_recorded → refund_issued → payment_refunded →
-  membership_refunded`) with `payment_row_hash`.
-  Payment MUST be in `succeeded` status to initiate refund (enforced by both CRM and ЮKassa API).
-  Refund window: up to 3 years (cards); up to 1 year (Sberbank).
-- **Sources:** HIGH confidence — yookassa.ru/developers/payment-acceptance/after-the-payment/refunds
-
-### REF-02: Partial online refund
-- **Category:** Anti-feature (v1.7)
-- **Complexity:** HIGH
-- **Dependency:** v1.4 B-02 (partial refund) still deferred
-- **Description:** ЮKassa API supports partial refunds (send partial `amount` in refund request).
-  However v1.4 deliberately deferred partial refund (B-02) for both cash and online flows. The
-  constraint `partial UNIQUE on refund_of` allows only one refund per payment row by design.
-  DO NOT implement partial online refund in v1.7 — this would require coordinating amount split
-  with membership partial-cancel semantics that are not yet designed. Defer to v1.8+.
-- **Sources:** HIGH confidence — v1.4 design doc + ЮKassa refunds API
-
-### REF-03: Refund timeout / cancellation handling
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** REF-01
-- **Description:** If `refund.succeeded` webhook does not arrive within N minutes (suggest 30 min),
-  ARQ task polls ЮKassa `GET /v3/refunds/{refund_id}` to check current status. If `canceled`:
-  emit `refund_online_failed` audit event, notify operator via Telegram + email DM.
-  Membership/package is NOT revoked — the original sale stands until refund is confirmed.
-  This covers the case where ЮKassa rejects the refund (e.g., acquirer refusal >15 months for cards).
-- **Sources:** MEDIUM confidence — ЮKassa refund behavior docs + industry pattern
-
----
-
-## FISCAL — 54-ФЗ Fiscal Receipts
-
-### FIS-01: Receipt delivery mechanism choice
-- **Category:** Table stake (legal requirement)
-- **Complexity:** LOW (decision only)
-- **Dependency:** None
-- **Description:** Two options exist:
-  1. **Чеки от ЮKassa** (ЮKassa's built-in receipt service) — ЮKassa acts as the cloud cash register.
-     Zero setup cost, included in commission, no separate fiscal accumulator, connects within 1 day.
-     Limitation: delivery via EMAIL ONLY (no SMS). Requires client email.
-  2. **Third-party cash register** (АТОЛ-Онлайн, Чек.ОФД, etc.) — CRM sends receipt data to ЮKassa
-     which relays to the external cash register. More control, supports phone/SMS delivery.
-
-  RECOMMENDATION: Use "Чеки от ЮKassa" for v1.7. Lowest integration complexity, no separate
-  fiscal accumulator contract, covers the legally required ОФД path. Accept email-only constraint
-  (aligns with v1.6 email integration already in place).
-- **Sources:** HIGH confidence — yookassa.ru/54fz/ + yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics
-
-### FIS-02: Receipt sent alongside payment (simultaneous scenario)
-- **Category:** Table stake (legal requirement)
-- **Complexity:** MED
-- **Dependency:** FIS-01; PAY-01; client must have email on record
-- **Description:** Include `receipt` object in the `POST /v3/payments` creation request.
-  ЮKassa registers receipt with ОФД simultaneously with payment authorization.
-  This is the simplest and legally safest path: receipt is always tied to the payment event.
-
-  Mandatory receipt fields (confirmed via ЮKassa docs):
-  - `customer.email` — client email (REQUIRED for "Чеки от ЮKassa"; no SMS fallback)
-  - `items[]` — array of receipt line items, each with:
-    - `description` — human-readable name (e.g., "Абонемент Безлимит 30 дней")
-    - `quantity` — 1.00 for memberships/packages
-    - `amount.value` — price
-    - `amount.currency` — "RUB"
-    - `vat_code` — 1 (НДС не облагается / без НДС) for ИП on УСН; verify with accountant
-    - `payment_subject` — `"service"` for memberships and PT-packages (услуга; confirmed for
-      online gym service sales)
-    - `payment_mode` — `"full_payment"` when client pays full amount at moment of sale;
-      `"full_prepayment"` if the membership hasn't started yet (future start date).
-      For standard same-day membership sales: `"full_payment"`. For advance booking: `"full_prepayment"`.
-  - `tax_system_code` — matches merchant's tax regime (2 = УСН доходы; 3 = УСН доходы-расходы;
-    6 = ПСН; etc.)
-
-  54-ФЗ timing: the law does not specify a hard second/minute limit for online payments.
-  "Момент расчёта" is defined by the merchant in their public offer (terms).
-  Simultaneous scenario satisfies the legal requirement because ОФД gets the receipt data
-  at the time of payment creation — before the client confirms payment.
-  The "5-minute rule" is a myth based on misreading a 2013 FNS letter.
-- **Sources:** HIGH confidence — ЮKassa receipt docs; MEDIUM confidence on timing rule (kassa.komtet.ru)
-
-### FIS-03: Receipt status FSM + idempotency
-- **Category:** Table stake
-- **Complexity:** MED
-- **Dependency:** FIS-01, FIS-02; mirrors v1.6 `channel` discriminator pattern
-- **Description:** Receipt registration tracked in `fiscal_receipts` table (new):
-  - UNIQUE `(payment_id, kind)` where `kind` IN `('payment', 'refund')` — mirrors v1.6 cross-channel
-    idempotency pattern. Prevents double-send on webhook retry.
-  - `status` column: `pending` → `succeeded` | `canceled`
-    - `pending`: receipt queued for ОФД registration
-    - `succeeded`: ОФД confirmed registration
-    - `canceled`: registration failed (ЮKassa gives up; contact support)
-  - Check `receipt_registration` field on payment object response — `pending` / `succeeded` / `canceled`
-  - If `canceled` after >3 days: trigger alert to operator (structlog ERROR + Telegram DM to owner)
-  - Receipt failure must NOT block or rollback payment — payment commit is atomic, fiscal send is
-    best-effort (mirrors v1.6 `EMAIL_PAYMENT_RECEIPT_*` pattern already shipping).
-- **Sources:** HIGH confidence — ЮKassa receipt status docs (pending/succeeded/canceled confirmed)
-
-### FIS-04: Refund receipt (возврат прихода)
-- **Category:** Table stake (legal requirement)
-- **Complexity:** LOW
-- **Dependency:** FIS-01, REF-01
-- **Description:** When a refund succeeds, a refund receipt (возврат прихода) MUST be sent to the client
-  and ОФД. For "Чеки от ЮKassa": include `receipt` object in refund creation request (`POST /v3/refunds`)
-  with same item structure as payment receipt. Same `customer.email` requirement.
-  `kind='refund'` in `fiscal_receipts` table, UNIQUE `(payment_id, 'refund')`.
-  Items must mirror the original payment receipt items.
-- **Sources:** HIGH confidence — yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics
-
-### FIS-05: Client has no email — pre-validation gate
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** FIS-01, FIS-02; v1.1 Clients CRUD
-- **Description:** "Чеки от ЮKassa" requires `customer.email` in every receipt. If client has no email
-  on record, the online payment flow must be blocked at the point of sale (before creating ЮKassa
-  payment object), not at receipt generation time.
-  Error response: `422 Unprocessable Entity` with `code: "client_email_required_for_online_payment"`.
-  Reception must add email to client record first.
-  DO NOT use phone as fallback — "Чеки от ЮKassa" does not support SMS delivery (email-only).
-  If third-party cash register is adopted later (FIS-01 alternative), phone becomes valid. Flag this
-  as a future relaxation point.
-- **Sources:** HIGH confidence — ЮKassa receipt docs (email-only for ЮKassa receipts, confirmed)
-
-### FIS-06: VAT code and tax system configuration
-- **Category:** Table stake (legal requirement)
-- **Complexity:** LOW
-- **Dependency:** FIS-02; deployment config
-- **Description:** `vat_code` and `tax_system_code` must match the gym's actual tax regime.
-  For most small gyms (ИП or ООО) on УСН: `vat_code=1` (без НДС), `tax_system_code=2` (УСН доходы)
-  or `tax_system_code=3` (УСН доходы-расходы). From Jan 2025 УСН entities that cross the VAT
-  threshold (60M RUB revenue) must indicate 5% or 7% VAT — but a single gym CRM at MVP scale will
-  not hit this threshold. Configure as environment variables, NOT hardcoded in source.
-  Provide `YOOKASSA_TAX_SYSTEM_CODE` and `YOOKASSA_VAT_CODE` in `.env.example`.
-- **Sources:** MEDIUM confidence — search results + ЮKassa parameter-values docs
-
----
-
-## NOTIFY — Cross-Channel Payment Notifications
-
-### NOT-01: Payment success DM (Telegram + email)
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** v1.6 dual-channel notification infrastructure; `LOCKED_EMAIL_TEMPLATES` ladder
-- **Description:** On `payment.succeeded` webhook processing: emit Telegram DM + email notification
-  to client. Content: payment amount, membership/package name, validity period.
-  New locked templates: `PAYMENT_ONLINE_SUCCESS_TG` + `EMAIL_PAYMENT_ONLINE_SUCCESS`.
-  Use v1.6 `channel` discriminator on `payment_notifications` idempotency table (new table mirrors
-  `membership_notifications` pattern). UNIQUE `(payment_id, channel)`.
-  Best-effort: send failure does NOT rollback payment commit (v1.6 discipline).
-- **Sources:** HIGH confidence (pattern from v1.6 `EMAIL_PAYMENT_RECEIPT_*`)
-
-### NOT-02: Refund success DM (Telegram + email)
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** NOT-01; REF-01; WH-03
-- **Description:** On `refund.succeeded` webhook: emit Telegram DM + email to client.
-  Content: refunded amount, membership/package name.
-  New locked templates: `REFUND_ONLINE_SUCCESS_TG` + `EMAIL_REFUND_ONLINE_SUCCESS`.
-  Same `(payment_id, channel)` idempotency row, `kind='refund'`.
-- **Sources:** HIGH confidence (pattern from v1.4 + v1.6 precedent)
-
-### NOT-03: Fiscal receipt email (from ЮKassa, not from CRM)
-- **Category:** Table stake
-- **Complexity:** LOW (configuration, not code)
-- **Dependency:** FIS-01, FIS-02
-- **Description:** When "Чеки от ЮKassa" is used, ЮKassa itself sends the fiscal receipt to the
-  client's email directly from its system. This is separate from the CRM's payment-success email
-  (NOT-01). The CRM's email (NOT-01) is a business confirmation; the ЮKassa email is the legal
-  fiscal document. No CRM code needed for fiscal email delivery — just ensure `customer.email` is
-  passed correctly in the receipt object.
-- **Sources:** HIGH confidence — ЮKassa receipts docs
-
-### NOT-04: Operator alert on fiscal receipt failure
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** FIS-03; structlog; Telegram bot (owner-only DM)
-- **Description:** If `fiscal_receipts.status` transitions to `canceled` (ЮKassa gave up on ОФД
-  registration), alert the owner:
-  1. structlog ERROR with `payment_id`, `client_id`, `amount`
-  2. Telegram DM to owner: "Чек не зарегистрирован в ОФД. Платёж: {amount}. Клиент: {name}."
-  This is a legal obligation — merchant must ensure receipt reaches ОФД. Operator must contact
-  ЮKassa support to resolve.
-- **Sources:** MEDIUM confidence — ЮKassa docs note "contact support if receipt stays pending >3 days"
-
-### NOT-05: Operator alert on payment cancellation
-- **Category:** Differentiator
-- **Complexity:** LOW
-- **Dependency:** WH-02
-- **Description:** On `payment.canceled` webhook: log the `cancellation_details.reason` from
-  ЮKassa response (e.g., `insufficient_funds`, `card_expired`, `3d_secure_failed`). No DM to client
-  (they see the result in the ЮKassa redirect page). Optionally: if initiated by reception, show
-  toast in admin-web. Audit event `payment_online_canceled` with cancellation reason in payload.
-- **Sources:** MEDIUM confidence — ЮKassa cancellation details docs (inferred from search)
-
----
-
-## DIFFERENTIATOR FEATURES (Defer)
-
-### DIFF-01: Recurring autopayments (рекуррентные платежи / saved cards)
-- **Category:** Differentiator
-- **Complexity:** HIGH
-- **Dependency:** ЮKassa manager approval required for production; PAY-01; user consent flow
-- **Description:** ЮKassa supports saving card via `save_payment_method: true` on first payment.
-  Subsequent charges use `payment_method_id`. Merchant must:
-  1. Contact ЮKassa manager to enable autopayments on live account
-  2. Implement user consent flow (legal requirement under 54-ФЗ + Visa/MC rules)
-  3. Build subscription schedule management (when to charge, how to cancel)
-  High legal + implementation complexity. v1.7 reception desk sells memberships manually — no
-  self-service client portal yet. Defer to v2.0+ when client-facing app exists.
-- **Sources:** HIGH confidence — ЮKassa recurring-payments docs
-
-### DIFF-02: Refund without original card (client lost card)
-- **Category:** Differentiator
-- **Complexity:** MED
-- **Dependency:** ЮKassa account configuration; payout module
-- **Description:** ЮKassa supports refunds to a different card or bank account via the Payout API,
-  but this requires a separate Payout agreement with ЮKassa. Standard refund always goes to
-  original payment method. For v1.7, standard refund (to original method) is sufficient.
-  Defer card-change refund to later milestone.
-- **Sources:** MEDIUM confidence — inferred from ЮKassa refund limitations docs
-
----
-
-## ANTI-FEATURES (Explicit Exclusions for v1.7)
-
-| Anti-Feature | Why Avoid | What to Do Instead |
+| Anti-Feature | Why It's Anti-Feature at Single-Gym Scope | What to Do Instead |
 |---|---|---|
-| Partial online refund | B-02 still deferred in v1.4; membership partial-cancel semantics undefined | Full refund only in v1.7 |
-| Telegram WebApp native invoice | Different API path, no receipt injection, no holds; admin SPA not a Telegram Mini App | Use redirect/widget for reception desk |
-| Mobile-app deep-link confirmation | No mobile app in scope | Redirect or widget for web |
-| Recurring autopayments | Requires ЮKassa manager activation + client consent flow + portal | Defer to v2.0 client portal |
-| Third-party cash register (АТОЛ etc.) | Higher setup complexity; email-only is sufficient for v1.7 | ЮKassa built-in receipts |
-| SMS receipt delivery | Not supported by "Чеки от ЮKassa" | Email only (require email on client record) |
-| `waiting_for_capture` two-stage flow | Unnecessary complexity for single-stage membership sale | Single-stage `pending → succeeded` |
-| Partial VAT (5%/7%) calculation | Only applies when УСН revenue >60M RUB; not relevant for single gym MVP | Simple `vat_code=1` (no VAT) + env var for future change |
-| Payout / split payments | Not needed for single-gym, single-merchant model | Standard single-merchant integration |
+| Reuse `payments` table for payroll accruals | Blurs revenue ledger with expense ledger; breaks revenue reports; needs CHECK constraint surgery | New `trainer_payroll_accruals` table |
+| Tiered commission (% changes by revenue threshold) | Enterprise feature; no second gym to compare tiers | Single flat `commission_pct` per trainer |
+| Automatic payroll period detection | No payroll calendar in CRM; owner decides period manually | Manual `from`/`to` params on preview + accrue endpoints |
+| "Void" / reverse accrual row | Creates reconciliation complexity; no accounting module to balance against | Mark accruals as paid or not; corrections are new rows with notes (out of v1.9 scope) |
+| Integration with 1C/external payroll software | No accounting integration in scope | Export via CSV (v1.10 scope) or manual |
+| Per-session commission proration | Ambiguous when a package spans two periods; no single correct answer | Commission on full package sale attributed to period (PAY-02 approach) |
+| Payroll for non-PT-session work (floor time, classes) | No class module; hourly floor tracking not in scope | PT-sessions only; floor time tracked manually |
+
+---
+
+## CATEGORY B — RECURRING SCHEDULE SLOTS
+
+### REC-01: Recurring slot pattern (day-of-week + time)
+- **Category:** Table stake
+- **Complexity:** MEDIUM
+- **Dependency:** `trainers` table; `trainer_availability_slots` (existing); time-off blocks (REC-03, needed before generation to avoid conflicts)
+- **Description:** Owner/reception defines a recurring availability pattern for a trainer: `trainer_id`, `day_of_week` (0=Monday…6=Sunday, per ISO 8601), `start_time` TIME, `end_time` TIME, `valid_from` DATE, `valid_until` DATE (nullable = open-ended). These are patterns, not slot rows yet.
+
+  **Generate-ahead vs expand-on-read decision:**
+  - **Expand-on-read:** Pattern rows only; slots are computed dynamically at query time. Pro: no DB bloat, changes to pattern apply immediately. Con: complex queries, cannot represent exceptions (a specific date cancelled due to time-off), hard to book against a virtual slot.
+  - **Generate-ahead:** Pattern triggers insertion of concrete `trainer_availability_slots` rows for N weeks ahead. Pro: existing booking machinery works unchanged, slots are bookable immediately, time-off blocks can cancel/prevent specific generated slots, audit trail of when slot was created. Con: cron job to materialize future slots, DB rows accumulate.
+
+  **Recommendation: Generate-ahead with a bounded horizon (4–8 weeks ahead).** Reasons for this codebase: (1) `bookings` already reference `trainer_availability_slots.id` (FK); reusing the existing slot table means zero changes to booking logic. (2) The existing race-safe partial UNIQUE on `bookings` slot works on concrete slot IDs. (3) A simple ARQ cron that materializes slots up to 8 weeks ahead runs once daily (trivial). (4) Single-gym pet-project — 1 trainer × 5 days × 2 slots/day × 56 days = ~560 slot rows per trainer, perfectly manageable. (5) Exceptions (time-off) cancel specific generated slot rows — this already works with the existing slot cancellation machinery.
+
+  **New table `trainer_recurring_patterns`:**
+  - `id` UUID PK
+  - `trainer_id` UUID FK → `trainers.id` ON DELETE RESTRICT
+  - `day_of_week` SMALLINT NOT NULL CHECK (0..6)
+  - `start_time` TIME NOT NULL
+  - `end_time` TIME NOT NULL CHECK (end_time > start_time)
+  - `valid_from` DATE NOT NULL
+  - `valid_until` DATE NULL (open-ended)
+  - `is_active` BOOLEAN NOT NULL DEFAULT TRUE (deactivate without deleting; stops future generation)
+  - `created_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT
+  - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
+  - UNIQUE `(trainer_id, day_of_week, start_time, valid_from)` — prevents duplicate patterns for same trainer+day+time starting same date.
+
+- **RBAC:** Owner-only create/update; reception reads trainer patterns (GET).
+
+### REC-02: Slot materialization cron (generate-ahead)
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** REC-01 (patterns exist); `trainer_availability_slots` (existing); REC-03 (time-off blocks must be checked before materializing)
+- **Description:** ARQ daily cron (`materialize_recurring_slots`, e.g. 07:00 MSK) scans all active `trainer_recurring_patterns` with `valid_from <= today + 56 days` and `(valid_until IS NULL OR valid_until >= today)`. For each pattern occurrence (each date that matches `day_of_week` within the window), checks if a slot row already exists for that trainer+datetime (prevents duplicates on re-run). If no slot exists AND no time-off block overlaps that window (REC-03), inserts a new `trainer_availability_slots` row with `status='active'`. Idempotent on re-run (SELECT before INSERT or INSERT...ON CONFLICT DO NOTHING). `unique=True` on ARQ cron (same pattern as other crons in this codebase).
+- **Horizon:** Configurable via env var `RECURRING_SLOT_HORIZON_DAYS` (default 56, i.e., 8 weeks). Not hardcoded.
+- **Audit events:** No per-slot audit event (high volume, low value). Log generation count via structlog INFO.
+
+### REC-03: Trainer time-off / unavailability blocks
+- **Category:** Table stake
+- **Complexity:** LOW–MEDIUM
+- **Dependency:** `trainers` table; `trainer_availability_slots` (existing); bookings (conflict check)
+- **Description:** Owner creates a time-off block for a trainer: `trainer_id`, `block_start` TIMESTAMPTZ, `block_end` TIMESTAMPTZ, `reason` TEXT NULL. Effects:
+  1. **Prevents generation:** The cron (REC-02) skips slot materialization for any pattern occurrence that overlaps the block window.
+  2. **Cancels existing active slots:** When a time-off block is created, any existing `trainer_availability_slots` rows for that trainer that fall within the window AND have `status='active'` are transitioned to `status='cancelled'` with `cancel_reason='trainer_time_off'`. This uses the existing slot cancellation machinery.
+  3. **Blocks that overlap booked slots:** If a slot within the block window has `status='booked'` (i.e., a booking exists), the system returns a conflict warning listing the affected bookings. **Owner must explicitly confirm** with `?force=true` to proceed — this cancels the booking(s) (booking FSM `confirmed → cancelled`) and sends cancellation DMs to clients via the existing booking notification machinery. Alternatively, owner resolves conflicts manually before creating the time-off block.
+
+  **New table `trainer_time_off_blocks`:**
+  - `id` UUID PK
+  - `trainer_id` UUID FK → `trainers.id` ON DELETE RESTRICT
+  - `block_start` TIMESTAMPTZ NOT NULL
+  - `block_end` TIMESTAMPTZ NOT NULL CHECK (block_end > block_start)
+  - `reason` TEXT NULL
+  - `created_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT
+  - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
+  - No soft-delete — time-off blocks can be deleted (hard-delete) if created in error, but only if no slots were already cancelled due to them (or owner accepts the cancelled slots stay cancelled). Simpler: allow hard-delete unconditionally; the already-cancelled slots stay cancelled (trainer re-creates manually if needed).
+
+- **RBAC:** Owner-only create/delete; reception reads (for UI display).
+- **Audit events:** `trainer_time_off_created`, `trainer_time_off_deleted`.
+
+### REC-04: List recurring patterns + time-off blocks for a trainer
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** REC-01, REC-03
+- **Description:** `GET /api/v1/trainers/{id}/recurring-patterns` and `GET /api/v1/trainers/{id}/time-off` — list endpoints for the frontend to render the trainer's schedule configuration. Standard `{items, total, page, pageSize}` envelope or simple list (these sets are small).
+- **RBAC:** Owner + reception (read-only).
+
+---
+
+### REC Anti-features
+
+| Anti-Feature | Why It's Anti-Feature at Single-Gym Scope | What to Do Instead |
+|---|---|---|
+| Expand-on-read recurring slots (virtual slots, no DB rows) | Breaks existing booking FK discipline; complex conflict detection with virtual entities | Generate-ahead concrete slot rows (REC-02) |
+| Per-occurrence exception on a recurring series (RRULE EXDATE pattern) | Full iCalendar RRULE with EXDATE is over-engineering; no external calendar sync needed | Time-off block cancels specific generated slot rows |
+| iCalendar / .ics sync / Google Calendar integration | No external calendar integration in scope for v1.9 | Manual pattern entry in admin UI |
+| Client-facing recurring booking (auto-reserve same slot every week) | No client portal in scope; booking is reception/owner-initiated | Manual booking per session or admin-side recurrence |
+| Pattern templates (copy pattern across trainers) | Only 1–5 trainers at single-gym scale; copy-paste is fine | Per-trainer pattern creation |
+| Unlimited lookahead horizon | Performance risk if misconfigured | Env-var-capped horizon (default 8 weeks) |
+| "Soft-delete" time-off blocks | Unnecessary complexity; just allow hard-delete with conflict guard | Hard-delete with conflict check |
+
+---
+
+## CATEGORY C — TRAINER-UTILIZATION REPORT
+
+### RPT-01: Trainer load report (sessions + hours per trainer per period)
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** `pt_sessions` (non-cancelled, `performed_at`, `trainer_id`); `trainer_name_snapshot`; v1.8 reports module discipline (raw-SQL `text()`, read-only, no `models.py`); Europe/Moscow TZ
+- **Description:** `GET /api/v1/reports/trainers` — owner-only aggregate over `pt_sessions`. Parameters: `from` DATE, `to` DATE (inclusive, Europe/Moscow). Returns per-trainer row:
+  - `trainer_id`, `trainer_name` (from `trainers.full_name` JOIN, not snapshot — for current name display)
+  - `session_count` (non-cancelled sessions in period)
+  - `cancelled_session_count`
+  - `total_hours` (sum of `(end_time - start_time)` from linked `bookings`; NULL when no booking → use a configurable default session duration of 60 min, or 0 if no duration available)
+  - `unique_client_count` (distinct `client_id` values in period)
+  - `utilization_pct` — optional: `session_count / available_slot_count * 100` where `available_slot_count` = total `trainer_availability_slots` for trainer in period. This is the standard "trainer utilization" metric (industry target 65–70%). Note: available_slot_count can be 0 for trainers with no slots → omit or NULL.
+  Ordered by `session_count DESC` (top trainers first).
+- **RBAC:** Owner-only `(VIEW, REPORTS)` (existing permission); reception 403.
+- **New indexes needed:** `trainer_id` on `pt_sessions` already has `ix_pt_sessions_trainer_id_performed_at_desc`. A `performed_at` partial index or the existing composite is sufficient.
+
+### RPT-02: PT-package utilization / revenue attribution per trainer
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** `pt_sessions` (same as RPT-01); `payments` WHERE `subject_kind='pt_package'`; JOIN through `pt_packages` via `pt_sessions.pt_package_id`
+- **Description:** Extends RPT-01 response (or a separate section of the same endpoint) with revenue attribution:
+  - `revenue_kopecks` — sum of `payments.amount_kopecks` for PT-package sale rows whose package had at least one session by this trainer in the period (same attribution logic as PAY-02 commission computation).
+  - `avg_revenue_per_session_kopecks` — `revenue_kopecks / session_count` (integer division).
+  This lets the owner see "which trainer generates the most revenue" vs "which trainer conducts the most sessions" — these can diverge if trainers work with different package tiers.
+- **RBAC:** Same as RPT-01.
+
+### RPT-03: CSV export for trainer report
+- **Category:** Table stake
+- **Complexity:** LOW
+- **Dependency:** RPT-01, RPT-02; v1.8 UTF-8-BOM CSV discipline (RFC-4180 excel dialect)
+- **Description:** `GET /api/v1/reports/trainers.csv` — same data as RPT-01+02 as StreamingResponse, UTF-8 BOM, RFC-4180 excel dialect. Mirrors v1.8 `/reports/revenue.csv` etc. pattern exactly.
+- **RBAC:** Owner-only.
+
+### RPT-04: Payroll accrual summary in trainer report (optional, deferred)
+- **Category:** Differentiator
+- **Complexity:** LOW
+- **Dependency:** PAY-03 (accruals exist); RPT-01
+- **Description:** Optionally include `total_accrued_kopecks` and `total_paid_kopecks` for the period from `trainer_payroll_accruals` in the trainer report response. This makes the "top trainers" view also show what was paid out, closing the revenue→cost view for the owner. Low additional complexity once accruals exist.
+- **Note:** Can be added in the same phase as RPT-01 since both come from new tables.
+
+---
+
+### RPT Anti-features
+
+| Anti-Feature | Why It's Anti-Feature at Single-Gym Scope | What to Do Instead |
+|---|---|---|
+| Real-time live dashboard (WebSocket/SSE) | No frontend integration in v1.9; report is owner-initiated | Simple GET endpoint, same as v1.8 |
+| Per-client breakdown in trainer report | Client-level view belongs to clients module; trainer report is trainer-level aggregate | Separate client-detail endpoint if ever needed |
+| Predictive analytics / forecasting | ML/statistics complexity; no training data volume at single-gym scale | Simple historical aggregates |
+| Write operations inside reports module | D-54-07 discipline: reports are strictly read-only | Raw-SQL reads only |
+| No-show rate in trainer report | No-shows are bookings-level data; trainer report focuses on conducted sessions | Booking-level reports (separate future feature if needed) |
+| Class instructor utilization | No class/group module in Sportzal | PT-session-only scope |
 
 ---
 
 ## Feature Dependencies
 
 ```
-PAY-01 (server payment creation)
-  → WH-01 (webhook endpoint)
-    → WH-02 (payment FSM)
-      → v1.4 payment_recorder (credit membership/pkg)
-        → NOT-01 (payment success DM)
-    → WH-03 (refund FSM)
-      → REF-01 (online refund)
-        → NOT-02 (refund DM)
-        → FIS-04 (refund receipt)
-  → FIS-02 (receipt in payment creation)
-    → FIS-01 (receipt mechanism choice — must decide before PAY-01)
-    → FIS-05 (client email gate)
-    → FIS-06 (VAT/tax config)
-    → FIS-03 (receipt status FSM + idempotency)
-      → NOT-03 (fiscal email — auto from ЮKassa)
-      → NOT-04 (operator alert on failure)
+PAY-01 (compensation config on trainer)
+    └──required by──> PAY-02 (payroll preview computation)
+                          └──required by──> PAY-03 (accrue to ledger)
+                                                └──required by──> PAY-04 (mark paid)
+                                                └──required by──> PAY-05 (list accruals)
+                                                └──enhances──> RPT-04 (payroll in trainer report)
 
-PAY-02 (widget) → PAY-01
-PAY-03 (QR/SBP) → PAY-01
+REC-01 (recurring pattern)
+    └──required by──> REC-02 (materialization cron)
+                          └──depends on──> REC-03 (time-off blocks, checked before materializing)
+REC-03 (time-off blocks)
+    └──uses──> existing slot cancellation machinery (trainer_availability_slots FSM)
+    └──uses──> existing booking cancellation + notification machinery (bookings FSM + DMs)
+
+RPT-01 (trainer load report)
+    └──reads──> pt_sessions (existing, no new FK)
+    └──reads──> trainer_availability_slots (existing, for utilization_pct)
+    └──enhances with──> RPT-02 (revenue attribution)
+RPT-02 (PT revenue attribution)
+    └──reads──> payments WHERE subject_kind='pt_package' (existing)
+RPT-03 (CSV)
+    └──wraps──> RPT-01 + RPT-02
+
+PAY-02 and RPT-02 share the same "PT-package revenue attribution" logic (JOIN pattern);
+    → define a shared raw-SQL fragment or extract to a shared reports helper.
 ```
 
----
+### Dependency Notes
 
-## MVP Recommendation for v1.7
-
-**Must implement (legal + commercial table stakes):**
-1. FIS-01: Choose "Чеки от ЮKassa" receipt mechanism
-2. FIS-05: Client email validation gate before creating payment
-3. FIS-06: Tax system + VAT code environment config
-4. PAY-01: Server-side payment creation with redirect confirmation
-5. WH-01: Webhook endpoint (IP whitelist + re-fetch verification)
-6. WH-02: Payment FSM (pending → succeeded/canceled)
-7. WH-03: Refund FSM (refund.succeeded)
-8. WH-04: Idempotent webhook processing
-9. FIS-02: Receipt sent alongside payment
-10. FIS-03: Receipt status FSM + `fiscal_receipts` table
-11. FIS-04: Refund receipt
-12. REF-01: Online refund (full only)
-13. REF-03: Refund timeout/poll fallback
-14. NOT-01: Payment success DM (Telegram + email)
-15. NOT-02: Refund success DM (Telegram + email)
-16. NOT-03: Fiscal receipt email (configuration, not code)
-17. NOT-04: Operator alert on fiscal failure
-
-**Implement if time allows (differentiators that are LOW complexity):**
-- PAY-03: QR/SBP confirmation type (mostly display-layer work)
-- NOT-05: Operator alert on payment cancellation with reason logging
-
-**Defer:**
-- PAY-02: Widget (MED complexity, frontend work; can ship with redirect in v1.7)
-- DIFF-01: Recurring autopayments (HIGH complexity + external approval)
-- DIFF-02: Refund without card (separate payout agreement needed)
+- **REC-03 before REC-02:** The cron must know about time-off blocks before materializing slots; both should land in the same phase.
+- **PAY-01 before PAY-02/03:** The compensation config must exist on the trainer record before any payroll computation is possible.
+- **RPT can proceed independently of PAY and REC:** The report reads only from existing tables (`pt_sessions`, `bookings`, `payments`, `trainers`) plus the new payroll accruals if RPT-04 is included. RPT can be its own phase.
+- **No dependency between REC and PAY:** Recurring slots don't affect payroll computation (payroll works from `pt_sessions.performed_at`, not from slots directly).
 
 ---
 
-## Failure Mode Catalogue
+## MVP Definition
 
-### FM-01: Webhook arrives but DB is down
-**What happens:** HTTP handler cannot write to Postgres.
-**Industry norm:** Return HTTP 503 (non-200). ЮKassa retries for 24 hours with backoff.
-**Mitigation:** Respond 503 on DB connection failure; do not swallow exception. Once DB recovers,
-next ЮKassa retry delivers the notification. No outbox pattern needed — ЮKassa IS the outbox.
-**Risk:** If DB is down >24h, webhook delivery stops. Mitigation: ARQ poll task on `online_payments`
-rows stuck in `pending` status for >30 min (re-fetch from ЮKassa API).
-**Confidence:** MEDIUM (24h window confirmed in ЮKassa docs; poll fallback is industry pattern)
+### This Milestone (v1.9 — must deliver)
 
-### FM-02: ЮKassa `/receipts` registration fails after payment succeeded
-**What happens:** `receipt_registration = 'canceled'` on payment object.
-**Legal risk:** Merchant is in violation of 54-ФЗ if receipt never reaches ОФД.
-**Mitigation:** Monitor `fiscal_receipts.status`; if `canceled`, emit structlog ERROR and owner DM
-(NOT-04). Operator must manually contact ЮKassa support. Payment is NOT rolled back —
-54-ФЗ violation is an administrative issue, not a payment integrity issue.
-**Confidence:** HIGH (ЮKassa docs explicitly state "payment unaffected by receipt failure")
+- [x] **PAY-01** — compensation model columns on `trainers` (schema + PATCH endpoint extension)
+- [x] **PAY-02** — payroll preview computation endpoint (read-only, no persistence)
+- [x] **PAY-03** — payroll accrual recording (`trainer_payroll_accruals` table, append-only)
+- [x] **PAY-04** — mark accrual as paid (single mutation allowed on accrual row)
+- [x] **PAY-05** — list accruals per trainer
+- [x] **REC-01** — recurring pattern table + CRUD
+- [x] **REC-02** — slot materialization cron (ARQ daily)
+- [x] **REC-03** — time-off blocks (table + create/delete + conflict guard + slot cancellation)
+- [x] **REC-04** — list patterns + time-off blocks
+- [x] **RPT-01** — trainer load report endpoint
+- [x] **RPT-02** — PT-package revenue attribution in trainer report
+- [x] **RPT-03** — trainer report CSV export
 
-### FM-03: Client provides no email
-**What happens:** Receipt cannot be sent; "Чеки от ЮKassa" requires email.
-**Mitigation:** FIS-05 gate blocks online payment creation at API level with 422.
-Reception must update client record before retrying.
-**Confidence:** HIGH (email-only confirmed for "Чеки от ЮKassa")
+### Add After Validation (v1.10+)
 
-### FM-04: Duplicate `payment.succeeded` webhook
-**What happens:** ЮKassa retries webhook if merchant responds non-200 (e.g., during processing).
-**Mitigation:** WH-04 Redis dedup key `sz:webhook:payment.succeeded:{payment_id}` (TTL 48h).
-DB-level UNIQUE on `(yookassa_payment_id)` in `online_payments` as second guard.
-**Confidence:** HIGH (ЮKassa 24h retry + Redis dedup pattern from v1.2)
+- [ ] **RPT-04** — payroll accrual summary in trainer report — easy add once PAY-03 ships
+- [ ] Trainer report frontend integration — v2.0 (frozen `admin-web` not touched in v1.9)
+- [ ] Partial refund for PT-packages (B-02 deferred from v1.4) — affects payroll commission attribution
 
-### FM-05: `refund.succeeded` webhook not received
-**What happens:** Refund succeeded at ЮKassa side but CRM never gets the webhook.
-**Mitigation:** REF-03 ARQ poll after 30 min on refunds stuck in `pending` status.
-**Confidence:** MEDIUM (poll pattern is standard; timing tunable)
+### Future Consideration (v2.0+)
 
-### FM-06: ЮKassa API call fails (5xx or network timeout) during payment creation
-**What happens:** CRM created `online_payments` row but ЮKassa payment object not created.
-**Mitigation:** Same `Idempotency-Key` on retry gives same ЮKassa result if they received it.
-If ЮKassa never received it: new attempt with same key is a new request after 24h (ЮKassa TTL).
-Store `yookassa_payment_id` as nullable; NULL = creation pending. ARQ cleanup task marks
-stuck `pending` rows (no `yookassa_payment_id` after 5 min) as `failed`.
-**Confidence:** MEDIUM (idempotency behavior confirmed; cleanup pattern is standard)
+- [ ] Trainer self-service portal (view own schedule, payroll statements)
+- [ ] Per-session commission proration across period boundaries
+- [ ] 1C / external payroll export
+- [ ] iCal sync for trainer schedules
+- [ ] Recurring client-trainer booking automation
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| PAY-01 (compensation config) | HIGH | LOW | P1 |
+| PAY-02 (payroll preview) | HIGH | MEDIUM | P1 |
+| PAY-03 (accrue to ledger) | HIGH | MEDIUM | P1 |
+| PAY-04 (mark paid) | HIGH | LOW | P1 |
+| PAY-05 (list accruals) | MEDIUM | LOW | P1 |
+| REC-01 (recurring pattern) | HIGH | MEDIUM | P1 |
+| REC-02 (slot materialization cron) | HIGH | LOW | P1 |
+| REC-03 (time-off blocks) | HIGH | MEDIUM | P1 |
+| REC-04 (list patterns + time-off) | MEDIUM | LOW | P1 |
+| RPT-01 (trainer load report) | HIGH | LOW | P1 |
+| RPT-02 (revenue attribution) | HIGH | LOW | P1 |
+| RPT-03 (CSV export) | MEDIUM | LOW | P1 |
+| RPT-04 (payroll in report) | MEDIUM | LOW | P2 |
+
+---
+
+## Behavior Notes and Edge Cases by Category
+
+### PAYROLL edge cases
+
+1. **Trainer with no compensation config (both NULL):** `GET /preview` returns `total_kopecks=0` with a note. `POST /accrue` should still be allowed (owner may want to record a manual amount — or block it and require config first). Recommendation: block with 422 `trainer_has_no_compensation_config`.
+
+2. **PT-package sale payment attribution across period boundaries:** A 10-session package sold in April with sessions running May–June. For May payroll, should the commission be on the full package price or prorated? Recommendation (already stated in PAY-02): commission is on the full package sale payment if ANY session from that package falls in the period. This means a trainer could get commission on a package sold before the period. Document this as a known limitation.
+
+3. **Cancelled sessions:** `pt_sessions` rows with `cancelled_at IS NOT NULL` are excluded from both session count and commission computation. This is table stakes — you don't pay for sessions that didn't happen.
+
+4. **Duplicate accrual attempt (same period):** UNIQUE `(trainer_id, period_start, period_end)` on `trainer_payroll_accruals` returns 409 `accrual_already_exists_for_period`. Owner must explicitly note corrections out-of-band.
+
+5. **Trainer deactivated mid-period:** `is_active=false` trainers still have historical `pt_sessions`; payroll still computes correctly over past sessions. No special handling needed.
+
+6. **Rounding:** All amounts in integer kopecks. Commission = `ROUND(sum_pt_revenue_kopecks * commission_pct / 100)` using Python `round()` (banker's rounding) or `math.ceil()` — pick one and document. Recommendation: `round()` (consistent with Python default; industry standard for financial calculations is half-even). Do not use float arithmetic — multiply then integer-divide.
+
+### RECURRING SCHEDULE edge cases
+
+1. **Pattern created with past `valid_from`:** Cron only materializes slots from `today` forward. Slots for dates before today are not retroactively created. If owner wants historical slots, they create them manually (existing flow).
+
+2. **Two patterns overlap for same trainer (same day+time):** UNIQUE `(trainer_id, day_of_week, start_time, valid_from)` on `trainer_recurring_patterns` prevents exact duplicates, but two patterns for the same trainer on the same day with different `valid_from` dates can coexist. The cron must deduplicate before inserting (SELECT existing slot for exact trainer+datetime before INSERT). The slot table already has no UNIQUE on trainer+time, so overlapping patterns would create duplicate slots. Mitigation: cron checks `EXISTS (SELECT 1 FROM trainer_availability_slots WHERE trainer_id=? AND start_time=? AND status != 'cancelled')` before inserting.
+
+3. **Pattern deactivated (`is_active=false`):** Cron skips it. Already-generated future slots remain `active` unless explicitly cancelled. Owner must cancel them manually or via a time-off block if desired. This is correct behavior — deactivating a pattern stops future generation but doesn't retroactively cancel the slots it already created.
+
+4. **Time-off block applied to already-booked slot:** REC-03 conflict guard checks for `booked` slots in the window. Owner must confirm with `?force=true`. When confirmed: booking is cancelled (existing booking FSM), client DM sent (existing notification machinery). This reuses existing infrastructure with no new code paths for notifications.
+
+5. **Materialization cron race (two containers):** ARQ `unique=True` on the cron job prevents parallel runs. The INSERT...ON CONFLICT DO NOTHING pattern handles the edge case of two slots being materialized for the same trainer+datetime.
+
+6. **`valid_until` in the past:** Cron skips patterns where `valid_until < today`. Owner-visible note: patterns automatically stop generating.
+
+### REPORT edge cases
+
+1. **Trainer with no sessions in period:** Returns a row with all counts at 0. Alternatively, filter out zero-session trainers. Recommendation: include only trainers with `session_count > 0` (configurable via `?include_inactive=true` param). Consistent with "top trainers" framing.
+
+2. **`utilization_pct` computation when slot count is 0:** Return NULL for `utilization_pct` when no slots exist for the trainer in the period (avoid division by zero).
+
+3. **Revenue attribution when a PT-package has multiple trainers:** A client buys a 10-session package and trains with two different trainers (5 sessions each). Both trainers appear in the trainer-level report. Revenue is attributed to both — this means revenue is double-counted at the "total" level. This is a known limitation of attribution by trainer participation, not by package. Document clearly; at single-gym scale where one package typically has one trainer, this is acceptable.
+
+4. **`performed_at` timezone consistency:** Must use Europe/Moscow AT TIME ZONE conversion, same as `visits.gym_date` discipline. `pt_sessions.performed_at` is TIMESTAMPTZ; filter as `performed_at >= period_start AT TIME ZONE 'Europe/Moscow'` and `< (period_end + 1 day) AT TIME ZONE 'Europe/Moscow'`.
+
+---
+
+## New LOCKED_AUDIT_EVENTS to Pre-Register (INFRA-15 discipline)
+
+All of the following must be added to `LOCKED_AUDIT_EVENTS` frozenset **before** any callsite lands (per v1.3 precedent):
+
+- `trainer_payroll_accrued`
+- `trainer_payroll_paid`
+- `trainer_time_off_created`
+- `trainer_time_off_deleted`
+
+Optional (if recurring pattern mutations are audited):
+- `trainer_recurring_pattern_created`
+- `trainer_recurring_pattern_deactivated`
+
+---
+
+## New RBAC Entries Required (three-way parity: backend → admin-web `can.ts` → `registry.ts`)
+
+Existing `Resource.TRAINERS` covers catalog CRUD. New operations stay owner-only:
+
+| Action | Resource | Notes |
+|--------|---------|-------|
+| VIEW | TRAINER_PAYROLL | New resource — payroll preview + accrual list |
+| CREATE | TRAINER_PAYROLL | Accrue + mark paid |
+| VIEW | REPORTS | Already exists (v1.8); trainer report reuses this |
+
+Simplest path: add `Resource.TRAINER_PAYROLL` owner-only (both VIEW and CREATE). The trainer report (`RPT-01`) reuses existing `(VIEW, REPORTS)` permission — no new resource needed.
+
+---
+
+## Suggested Phase Grouping
+
+Based on dependencies and complexity, v1.9 naturally splits into 3–4 phases:
+
+1. **Phase 58 — Payroll foundations:** PAY-01 (compensation config columns + PATCH), PAY-02 (preview endpoint), PAY-03 (accruals table + endpoint), PAY-04 (mark paid), PAY-05 (list). LOCKED_AUDIT_EVENTS pre-registration for payroll events.
+
+2. **Phase 59 — Recurring schedule:** REC-01 (patterns table + CRUD), REC-02 (materialization cron), REC-03 (time-off blocks table + endpoint + conflict guard + slot cancellation), REC-04 (list endpoints). LOCKED_AUDIT_EVENTS pre-registration for time-off events.
+
+3. **Phase 60 — Trainer report:** RPT-01 + RPT-02 + RPT-03 (trainer load + revenue + CSV). Optional: RPT-04 (payroll in report).
+
+4. **Phase 61 — OpenAPI handoff:** Byte-stable regen `openapi.json` + `schema.d.ts` + `AssertNonNever` forward-guards (per-milestone discipline). RBAC three-way parity test green.
+
+Phases 58 and 59 can be ordered either way (no inter-dependency). The report (Phase 60) benefits from coming after payroll (accruals available for RPT-04) but can proceed immediately since RPT-01/02/03 have no payroll dependency.
 
 ---
 
 ## Sources
 
-- [ЮKassa Payment Process FSM](https://yookassa.ru/developers/payment-acceptance/getting-started/payment-process) — HIGH confidence
-- [ЮKassa Webhooks](https://yookassa.ru/developers/using-api/webhooks) — HIGH confidence
-- [ЮKassa Checkout Widget](https://yookassa.ru/developers/payment-acceptance/integration-scenarios/widget/basics) — HIGH confidence
-- [ЮKassa Refunds](https://yookassa.ru/developers/payment-acceptance/after-the-payment/refunds) — HIGH confidence
-- [ЮKassa Recurring Payments Basics](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/basics) — HIGH confidence
-- [ЮKassa Receipts (ЮKassa's own)](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics) — HIGH confidence
-- [ЮKassa Receipt Parameters (third-party)](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/other-services/parameters-values) — HIGH confidence
-- [ЮKassa 54-ФЗ Solutions](https://yookassa.ru/54fz/) — HIGH confidence
-- [ЮKassa API Interaction Format (idempotency)](https://yookassa.ru/developers/using-api/interaction-format) — HIGH confidence
-- [54-ФЗ Receipt Timing Myth](https://kassa.komtet.ru/blog/moment-rascheta) — MEDIUM confidence
-- [Confirmation Types (redirect/embedded/qr/mobile)](https://yookassa.ru/developers/payment-acceptance/overview) — HIGH confidence (inferred from search snippet)
+- [ISSA: Gym Commission Structure for Personal Trainers](https://www.issaonline.com/blog/post/breaking-down-big-gym-pay) — MEDIUM confidence (industry survey)
+- [NESTA: How Do Personal Trainers Get Paid at a Gym?](https://www.nestacertified.com/how-do-personal-trainers-get-paid-at-a-gym/) — MEDIUM confidence
+- [Wellyx: Gym Commission Structure](https://wellyx.com/blog/gym-commission-structure/) — MEDIUM confidence
+- [Gymdesk: Gym Payroll Management](https://gymdesk.com/blog/gym-payroll-management) — MEDIUM confidence
+- [SchedulingKit: Fitness Scheduling Best Practices](https://schedulingkit.com/hub/industry-guides/fitness-scheduling-best-practices) — MEDIUM confidence
+- [Trainerize: Personal Training KPIs](https://www.trainerize.com/blog/key-performance-indicators-for-personal-trainers/) — MEDIUM confidence
+- [SmartHealthClubs: Gym Analytics](https://smarthealthclubs.com/blog/gym-analytics-how-to-use-gym-software-data-for-growth-in-2026/) — MEDIUM confidence
+- Existing codebase: `trainers/models.py`, `schedule/models.py`, `pt_sessions/models.py`, `payments/models.py`, `payments/constants.py` — HIGH confidence (direct code inspection)
+- `.planning/PROJECT.md` v1.9 milestone scope — HIGH confidence (authoritative)
+
+---
+*Feature research for: v1.9 Trainers Complete (trainer payroll, recurring schedule, time-off blocks, trainer-utilization report)*
+*Researched: 2026-05-24*

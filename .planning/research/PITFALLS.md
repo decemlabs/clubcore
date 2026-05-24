@@ -1,553 +1,412 @@
-# Domain Pitfalls: v1.7 Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
+# Pitfalls Research
 
-**Domain:** Adding ЮKassa online payment intake + 54-ФЗ fiscal receipts to Sportzal gym CRM (FastAPI / SQLAlchemy 2.0 async / ARQ / Postgres 16 / Redis 7)
-**Researched:** 2026-05-21
-**Milestone context:** v1.7, continuing from v1.6 (email/webhook HMAC discipline, anti-oracle) and v1.4 (append-only cash ledger, SHA-256 row hash, partial UNIQUE on refund_of)
+**Domain:** Trainer payroll-ledger + recurring schedule + time-off + utilization report — added to existing single-gym CRM (Sportzal v1.9)
+**Researched:** 2026-05-24
+**Confidence:** HIGH (all pitfalls derived directly from the existing system's own Key Decisions in PROJECT.md and the established v1.2–v1.8 discipline)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Webhook IP-Only Authentication — No HMAC Signature on ЮKassa Notifications
-
-**Severity:** BLOCKER
+### Pitfall 1: Recompute Drift — Payroll Run Computed from Live Data That Subsequently Changes
 
 **What goes wrong:**
-Unlike Stripe or Telegram, ЮKassa's webhook security model does NOT include an HMAC signature header (there is no `Notification-Sign` or equivalent). The official documentation recommends two weaker methods only: IP address whitelisting (CIDR ranges: `185.71.76.0/27`, `185.71.77.0/27`, `77.75.153.0/25`, `77.75.156.11`, `77.75.156.35`, `77.75.154.128/25`, `2a02:5180::/32`) and status re-confirmation via GET to the ЮKassa API.
-
-A developer who mirrors the v1.6 email bounce-webhook HMAC discipline (HMAC-SHA256-before-parse) will find no such mechanism exists for ЮKassa. This is not a missing feature to implement — it is the actual ЮKassa security model.
+A payroll run for 2026-05-01..2026-05-31 aggregates `pt_sessions` and `payments` rows at run-time, then marks the trainer as "paid." After the run is marked paid, a client issues a refund against a PT-package sold in May. The original commission that was already paid out is now overstated relative to net revenue. Alternatively, a session is retroactively backdated (reception has a ≤7d backdating window, owner has unlimited per B-11 in v1.4), silently shifting that session across the period boundary after the run has closed.
 
 **Why it happens:**
-ЮKassa's authentication relies on network-layer IP whitelisting rather than cryptographic message authentication. The IP list is published and stable, but IP spoofing in a proxied environment (reverse proxy, load balancer, CDN) can present `X-Forwarded-For` vectors if not handled correctly.
+Treating payroll as a recomputable view over live tables rather than a point-in-time snapshot. Developers assume sessions are immutable — but `payments` (refunds) are not, and backdating shifts sessions out from under a closed period.
 
-**Consequences:**
-- If IP validation is misconfigured at the proxy layer (trusting `X-Forwarded-For` without `trusted_proxies` or `X-Real-IP` pinning), a forged webhook can trigger membership activation or refund processing.
-- Parse-before-validate: if the webhook body is parsed (and business logic is run) before IP is checked, a spoofed request can partially corrupt state even if ultimately rejected.
-- Without status re-confirmation (GET `/payments/{id}` from ЮKassa API), there is no cryptographic proof that the webhook is genuine.
-
-**Prevention:**
-1. **Validate IP first, parse body second** — middleware extracts `request.client.host` (or trusted proxy header) and rejects with 403 before body parsing. This is structurally parallel to v1.6 "HMAC-before-parse" but at the IP layer. Apply `import-linter` contract if possible, or an AST gate checking that the webhook router calls `validate_yookassa_ip(request)` before any `await request.json()`.
-2. **Always re-confirm status** — after receiving a `payment.succeeded` notification, always call `GET /payments/{object.id}` from ЮKassa API and check the returned status before activating memberships. This provides the cryptographic anchor that HMAC would otherwise provide (ЮKassa API authentication is HTTP Basic Auth: shopId + secretKey, not spoofable by a third party).
-3. **Register the validation function name as a frozenset constant** (`YOOKASSA_IP_RANGES`) to make it AST-gateable and grep-able. Treat this like the `LOCKED_AUDIT_EVENTS` discipline — pre-register before any callsite.
-4. Do NOT use the `yookassa` official Python SDK as the sole webhook handler — its `SecurityHelper.is_ip_trusted()` is the right tool but the SDK uses synchronous `requests` library internally; use `async_yookassa` or a direct `httpx.AsyncClient` wrapper.
+**How to avoid:**
+Mirror the v1.4 append-only ledger discipline exactly. A payroll run creates an **immutable accrual row** (`trainer_payroll_entries`) at the moment it executes — not a view. The row records: `period_start`, `period_end`, `run_at` (UTC timestamp), `gross_revenue_kopecks`, `session_count`, `rate_snapshot_numerator`, `rate_snapshot_denominator`, `config_id_snapshot`, `amount_kopecks`, `status='unpaid'|'paid'`. Once the row exists, subsequent refunds and backdated sessions do NOT mutate it. Adjustments appear as new signed-amount rows in the next period — same discipline as the `payments` ledger signed-amount semantics and the `refund_of` partial UNIQUE chain.
 
 **Warning signs:**
-- Webhook handler function reads `request.body()` or `request.json()` before any IP check
-- No `GET /payments/{id}` re-confirmation before `membership_activated` event
-- Reverse proxy passes `X-Forwarded-For` through without stripping/restricting to ЮKassa IP range
+- `SELECT SUM(payments.amount)` is called at payroll run-time but no row is inserted into a payroll entries table
+- No `trainer_payroll_entries` table exists; the "payroll" endpoint only returns a computed total
+- A refund endpoint that does not check whether the original payment appears in an accrual row with `status='paid'`
 
-**Phase hint:** Bedrock phase (first phase of v1.7). Gate must be in place before any webhook consumer lands.
+**Phase to address:**
+Payroll scaffold phase (first payroll phase). The `trainer_payroll_entries` schema must encode immutability at the DB level: no `UPDATE`/`DELETE` allowed by business code, `run_at NOT NULL`, `rate_snapshot_numerator NOT NULL`.
 
 ---
 
-### Pitfall 2: Webhook Idempotency Without Dedup Key — Double Membership Activation
-
-**Severity:** BLOCKER
+### Pitfall 2: Double-Paying a Period — Missing Idempotency Guard on the Run Operation
 
 **What goes wrong:**
-ЮKassa retries webhook delivery for 24 hours on any non-200 response. There is no guaranteed single-delivery. The `object.id` field (payment UUID) inside the notification body is the natural dedup key, but ЮKassa does not provide a separate stable "notification ID" — the same `payment.succeeded` event will be resent with the same `object.id`.
+A payroll run for 2026-05-01..2026-05-31 is triggered twice — cron restart, or the owner double-clicks "Run payroll." Both executions pass the "does a run already exist?" check before either commits, resulting in two run header rows and twice the accrual entries for the same trainer + period.
 
-If the webhook handler activates a membership, records a payment row, and emits audit events without dedup, the second retry will attempt to activate the same membership twice — creating a second `payments` row, a second `membership_activated` audit event, and potentially a duplicate `membership` row.
+A second form: inconsistent period boundary semantics between SQL queries. One query uses `>=start AND <end` (half-open), another uses `>=start AND <=end` (inclusive). A session on the boundary day appears in both the May run and the June run.
 
 **Why it happens:**
-Developers unfamiliar with ЮKassa's retry model assume webhooks are delivered once. The `Idempotency-Key` header that governs outgoing API requests (payment creation) is a different concept from incoming webhook dedup.
+Application-level `SELECT ... WHERE trainer_id = :id AND period_start = :start` followed by `INSERT` is not atomic — classic TOCTOU race. Half-open vs. inclusive date boundary inconsistency is a recurring error pattern when the developer copies from Python `range()` habits.
 
-**Consequences:**
-- Double membership activation: client gets two overlapping active memberships
-- Double payment row: v1.4 ledger integrity violated (append-only invariant holds structurally, but logical correctness breaks)
-- Double audit events: payment audit chain becomes ambiguous
-
-**Prevention:**
-1. **Redis dedup gate** — on receipt of `payment.{event}` webhook, `SET NX EX 86400 sz:wh:event:{event_type}:{object.id}` before any DB write. If the key already exists, return 200 immediately (idempotent). Mirror the v1.2 Telegram `update_id` dedup pattern (`sz:bot:update:{update_id}` TTL 1h), extended to 24h to cover ЮKassa's retry window.
-2. **DB-level idempotency guard** — `online_payments` table has `UNIQUE (yookassa_payment_id)`. A second attempt to insert the same ЮKassa payment ID will fail with `IntegrityError` → service returns 200 (dedup, not error). DB wins the race if Redis is unavailable (fail-safe, not fail-open).
-3. **State-machine guard** — membership activation is only triggered if `online_payments.status` is currently `pending` or `waiting_for_capture` (transition to `succeeded`). A second webhook on an already-`succeeded` payment is a no-op at the state machine layer even if Redis dedup is bypassed.
-4. Dedup key is `(event_type, object.id)` — NOT just `object.id`, because `payment.canceled` and `payment.succeeded` are distinct events for the same payment object.
+**How to avoid:**
+Use `INSERT INTO trainer_payroll_runs ... ON CONFLICT (trainer_id, period_start, period_end) DO NOTHING RETURNING id`. If `RETURNING` yields no row, a run already exists — service returns 409 `payroll_period_already_run`. This is the same DB-wins-the-race pattern as `UNIQUE (client_id, gym_date)` on visits (Phase 19) and `UNIQUE (membership_id) WHERE ended_at IS NULL` on freeze periods (Phase 25). Period boundaries must be canonically **inclusive start, inclusive end** matching the existing `memberships.end_date` and `visits.gym_date` discipline: `session_date >= :period_start AND session_date <= :period_end` in all SQL.
 
 **Warning signs:**
-- Webhook handler has no Redis `SET NX` before DB write
-- No `UNIQUE (yookassa_payment_id)` constraint on the payments table
-- Membership activation not guarded by status transition check
+- No UNIQUE constraint on `(trainer_id, period_start, period_end)` in `trainer_payroll_runs`
+- Two `payroll_runs` rows with identical `(trainer_id, period_start, period_end)` are possible in the schema
+- `pt_sessions.session_date` compared with `<` in one query and `<=` in another across the codebase
 
-**Phase hint:** Bedrock phase. UNIQUE constraint is a migration-level requirement; Redis dedup is an integration-phase requirement.
+**Phase to address:**
+Payroll scaffold phase (schema). UNIQUE key must be in the Alembic migration, not only in the application layer.
 
 ---
 
-### Pitfall 3: Webhook Race — Redirect Arrives Before Webhook, Activating Membership on Redirect
-
-**Severity:** BLOCKER
+### Pitfall 3: Percentage Rounding — Sum-of-Parts Does Not Equal the Whole; Float Arithmetic Errors
 
 **What goes wrong:**
-After a user completes payment on ЮKassa's redirect page, two things happen in parallel:
-1. The browser is redirected to `return_url` (arrives in seconds — synchronous from the user's perspective)
-2. ЮKassa sends a webhook to your server (asynchronous — may arrive milliseconds or minutes later)
-
-A developer who activates the membership on the `return_url` handler (because "the user has paid") will activate the membership BEFORE the `payment.succeeded` webhook is processed. The redirect only proves the user completed the payment flow on ЮKassa's side — it does not prove the payment actually succeeded (the user could have bookmarked `return_url` and opened it directly, or the payment may still be in `waiting_for_capture` state).
+Trainer earns 33% of a PT-package sale of 3333 RUB (333 300 kopecks). `333300 * 0.33 = 110 000.000...` — exact here, but `int(333300 * 0.33)` may produce `109 999` due to IEEE 754 float representation. At scale, accumulated error across many sessions drifts by rubles per period. If two trainers split revenue attribution (e.g. one sold, one conducted), individually rounding each share can produce a sum that does not match the original amount.
 
 **Why it happens:**
-The `return_url` redirect creates a "it worked" UX signal that developers mistake for a "payment succeeded" business signal.
+Using Python float arithmetic (`kopecks * float_rate`) before truncating to integer. Storing `commission_rate` as `FLOAT` or `NUMERIC(5,2)` on the trainer row instead of integer numerator/denominator.
 
-**Consequences:**
-- Membership activated for a payment that is actually `waiting_for_capture`, `canceled`, or `pending` — gym gives away membership for free
-- Double activation if both redirect AND webhook handler activate the membership
-
-**Prevention:**
-1. **return_url handler shows ONLY a "pending" status screen** — "Оплата получена, проверяем платёж..." with a polling endpoint or WebSocket. No membership activation at this layer.
-2. **Membership activation is LOCKED to the `payment.succeeded` webhook handler** — single code path, no exceptions. Use an AST gate or import-linter contract: the membership activation function may only be called from the webhook module.
-3. **Polling endpoint** — `GET /payments/online/{internal_payment_id}/status` re-confirms against ЮKassa API (status re-confirmation from Pitfall 1 serves double duty here). Returns `pending`, `succeeded`, or `failed`. Frontend polls until terminal state.
-4. Register `membership_activated` as a `LOCKED_AUDIT_EVENT` that can ONLY be emitted from the webhook processing path (AST literal-string gate already prevents ad-hoc strings; the callsite constraint is enforced by `import-linter`).
+**How to avoid:**
+Always compute in integer arithmetic. Store rate as `rate_numerator: int` and `rate_denominator: int` (e.g. 33% = 33, 100) — never as a float column. Compute: `math.ceil(amount_kopecks * rate_numerator // rate_denominator)`. Using `ceil` rounds in the trainer's favour, matching the freeze-day ceil discipline from Phase 25 (`_compute_days_used` uses ceil so the client never loses partial days — analogously, the trainer never loses a partial kopeck on rounding). Never use `FLOAT` or `REAL` for money in Postgres. Use `Decimal` only as a transient computation tool. For multi-trainer attribution splits, use the "largest remainder" method: sum the rounded parts, add the residual to the last entry to make the total exact.
 
 **Warning signs:**
-- `return_url` handler calls any membership activation, payment recording, or audit emission function
-- Frontend navigates directly to membership detail on redirect without polling
+- `commission_rate FLOAT` or `NUMERIC(5,2)` column in the trainer config schema
+- `amount = int(kopecks * rate)` using Python float multiplication
+- Two attribution rows whose `amount_kopecks` values do not sum to the original `payment.amount_kopecks`
 
-**Phase hint:** Bedrock phase — this constraint shapes the payment FSM design before any integration code lands.
+**Phase to address:**
+Payroll scaffold phase (schema + `_compute_commission` helper). Write a dedicated unit test: `assert _compute_commission(333300, 33, 100) == 110009` (ceil) and a split test: `assert sum(split_commission(500000, [30, 20])) == 150000`.
 
 ---
 
-### Pitfall 4: Payment-Status Oracle via Redirect URL or Timing
-
-**Severity:** BLOCKER (mirrors v1.6 anti-oracle discipline)
+### Pitfall 4: Refund After Payroll — No Clawback; Paid Commission Is Silently Stale
 
 **What goes wrong:**
-The `return_url` differentiates between success and failure by including a status parameter (`?status=success` vs `?status=failed`) or by redirecting to different URLs. This leaks the payment decision to the URL (logs, browser history, referrer headers) and creates a timing oracle: the time difference between a fast "already succeeded" vs. a slow "still waiting" response reveals payment state to a passive observer.
+A PT-package sold in May is refunded in June. The May payroll was already run and marked paid. The June refund correctly appends a negative payment row to the `payments` ledger (v1.4 signed-amount semantics), but nothing deducts the corresponding commission from the trainer's already-paid May accrual. The trainer has been overpaid relative to net revenue, with no audit trail of the discrepancy.
 
 **Why it happens:**
-Copy-pasting tutorials that use `?payment_id=xxx&status=success` patterns, or implementing separate success/error return URLs.
+The existing refund flow (`refund_issued` → `payment_refunded` audit chain, Phase 34/v1.4) touches `payments`, `memberships`/`pt_packages`, and audit log only. It has no payroll hook. Developers wire up the refund path before the payroll path exists and never revisit it.
 
-**Consequences:**
-- Payment status in browser history and server access logs
-- Timing differential (immediate "success" page vs. "checking..." page) reveals payment outcome to side-channel attackers
-- Mirrors the exact anti-oracle concern from v1.6 email OTP: byte-identical responses across verified/unverified
-
-**Prevention:**
-1. **Single `return_url`** — one URL regardless of payment outcome: `GET /payments/return?payment_id={internal_id}`. No `status` parameter.
-2. **Constant-time floor** — the return URL handler ALWAYS responds with the same "checking payment..." page, regardless of whether payment has already succeeded in the DB. Applies `_constant_time_floor` try/finally pattern from v1.6 email OTP: even if DB lookup takes 0ms (already succeeded) or 200ms (still pending), the response time is floored to a fixed minimum.
-3. **Audit both paths** — `payment_return_received` audit event emitted regardless of outcome, with only `payment_id` (not status) in the payload.
+**How to avoid:**
+The refund endpoint (both cash `POST /memberships/{id}/refund` and online `refund.succeeded` webhook handler) must check whether `original_payment_id` appears in `trainer_payroll_entries.source_payment_id` with `status='paid'`. If yes, emit a **negative accrual adjustment row** in the same atomic UoW as the refund ledger row: `amount_kopecks = -_compute_commission(refund_amount, rate_snapshot_numerator, rate_snapshot_denominator)`, `adjustment_reason='refund_clawback'`, FK to the original accrual row and the refund payment row. This preserves append-only discipline — the May accrual row is never modified; the clawback is a new entry visible in the trainer's ledger. The pattern is identical to how the `payments` ledger handles refunds: new signed-amount row, never an UPDATE.
 
 **Warning signs:**
-- `return_url` contains `?status=` or `?success=`
-- Different redirect targets for success vs failure
-- Return handler response time is correlated with payment state
+- The refund service has no lookup against `trainer_payroll_entries`
+- No `adjustment_reason` concept in the `trainer_payroll_entries` schema
+- The trainer commission view for May shows a positive total with no clawback line after a June refund of a May package
 
-**Phase hint:** Bedrock phase. Return URL contract must be defined before frontend integration.
+**Phase to address:**
+Payroll phase that implements the accrual model. The clawback hook must be designed into the refund integration path before the payroll "paid" status is introduced — not retrofitted.
 
 ---
 
-### Pitfall 5: Off-by-100 Currency Conversion — Kopecks vs ЮKassa Decimal Format
-
-**Severity:** BLOCKER
+### Pitfall 5: Rate Config Changes Mid-Period — No Snapshot, Retroactive Recomputation
 
 **What goes wrong:**
-The v1.4 `payments` table stores amounts as `INTEGER` kopecks (e.g., 50000 = 500.00 RUB). ЮKassa API uses a `{"value": "500.00", "currency": "RUB"}` string format for amounts. A developer who passes the kopeck integer directly to ЮKassa sends 50000 RUB instead of 500.00 RUB — charging the client 100× the correct amount.
-
-The reverse is equally dangerous: parsing the ЮKassa `"500.00"` string as an integer for storage yields 500 kopecks (5.00 RUB) instead of 50000 kopecks (500 RUB).
+Trainer config shows 30% commission. Owner changes it to 25% on May 15. A payroll run for the full month of May now computes all sessions at 25%, silently underpaying the trainer for May 1–14. Alternatively, the rate is stored as a mutable column on the `trainers` row, and any payroll run always reads the current value.
 
 **Why it happens:**
-Two separate type systems for money: internal (integer kopecks) vs. ЮKassa (decimal string rubles). The conversion is `kopecks / 100` on send, `Decimal(value) * 100` (rounded) on receive.
+Treating the compensation rate as a live lookup rather than a point-in-time snapshot — the exact mistake that motivated mandatory snapshot pricing on memberships in v1.2 (Phase 17: `price_kopecks_snapshot NOT NULL`, `plan_name_snapshot NOT NULL`). The lesson was already paid for in the memberships domain and must not be re-learned in the payroll domain.
 
-**Consequences:**
-- 100× overcharge: client is billed 50 000 RUB for a 500 RUB membership — card declines or extreme customer complaint
-- 100× underrecord: internal ledger shows 5 RUB received for a 500 RUB payment — revenue tracking catastrophically wrong
-
-**Prevention:**
-1. **Dedicated converter functions** — `kopecks_to_yookassa(kopecks: int) -> str` (divides by 100, formats to 2 decimal places) and `yookassa_to_kopecks(value: str) -> int` (parses Decimal, multiplies by 100, rounds to int). No inline conversion — these are the ONLY conversion paths.
-2. **Unit tests** — `test_kopecks_to_yookassa`: assert `kopecks_to_yookassa(50000) == "500.00"`, `kopecks_to_yookassa(1) == "0.01"`. `test_yookassa_to_kopecks`: assert `yookassa_to_kopecks("500.00") == 50000`, handling edge case `"0.10"` → 10.
-3. **Pydantic validator** on `OnlinePaymentCreate` schema: `amount_kopecks: int` field, validated > 0, and the converter is called in the service layer, never in the schema.
-4. **mypy strict** — `kopecks_to_yookassa` has return type `str`, not `int`. Any caller passing the return value to an integer field will fail type-check.
-5. Add `KOPECKS_TO_YOOKASSA_CONVERSION` as a named test fixture constant so tests never hardcode raw amounts.
+**How to avoid:**
+Mirror the membership snapshot discipline exactly. Create a `trainer_compensation_configs` table with `valid_from date`, `rate_numerator int`, `rate_denominator int`, `fixed_per_session_kopecks int` (nullable). This table is INSERT-only — a rate change creates a new row with a new `valid_from`; the old row is never updated. When a payroll run executes, it snapshots the config in effect as of `period_end` and stores `rate_snapshot_numerator`, `rate_snapshot_denominator`, and `config_id_snapshot` in the accrual row. The accrual row permanently carries the rate that was in effect — subsequent config changes cannot alter it.
 
 **Warning signs:**
-- Inline `amount / 100` or `str(amount)` in payment creation code
-- No dedicated conversion module
-- Test that asserts `amount == 50000` without checking the ЮKassa-side format
+- `trainers.commission_rate` or similar mutable column on the trainer row used at payroll run-time
+- No `valid_from` or versioned config table for compensation
+- Payroll run SQL: `SELECT commission_rate FROM trainers WHERE id = :id` without a temporal join
 
-**Phase hint:** Bedrock phase. Converter must exist and be tested before any payment creation code lands.
+**Phase to address:**
+Payroll scaffold phase (schema design). The `trainer_compensation_configs` INSERT-only discipline must be established and documented as a Key Decision before any payroll run logic is written.
 
 ---
 
-### Pitfall 6: Double-Tap Payment — Parallel Payment Initiations for Same Membership Sale
-
-**Severity:** BLOCKER
+### Pitfall 6: Revenue Attribution Ambiguity — Who Sold vs. Who Conducted
 
 **What goes wrong:**
-Reception clicks "Оплатить онлайн" twice in rapid succession (double-tap, network lag, browser retry). Two ЮKassa payment objects are created for the same membership sale. Both may succeed independently. The first `payment.succeeded` webhook activates the membership; the second `payment.succeeded` webhook finds the membership already active but still records a second payment — creating an orphaned payment row with no linked membership activation.
+A PT-package is sold by Trainer A (assigned at package creation via `pt_packages.trainer_id`) but two sessions are conducted by Trainer B (recorded in `pt_sessions.trainer_id` via the session recording endpoint). If payroll is computed as "% of PT-package revenue for packages this trainer conducted," Trainer B gets commission on a sale they were not responsible for. If computed as "% of revenue for packages this trainer was assigned to," Trainer A gets commission on sessions they did not conduct.
 
 **Why it happens:**
-No idempotency key discipline on the payment creation API call, or the Idempotency-Key is regenerated on each button click.
+The existing v1.4 data model ties a PT-package to one trainer at sale time (`pt_packages.trainer_id`) and records each session against the conducting trainer (`pt_sessions.trainer_id`). The distinction between selling and conducting was not needed before payroll and was never encoded as a Key Decision. Payroll logic written without this decision produces an ambiguous result.
 
-**Consequences:**
-- Two payment rows for one membership (ledger integrity broken)
-- Double charge: client's card debited twice
-- Orphaned payment with no membership linkage (reconciliation nightmare)
-
-**Prevention:**
-1. **Deterministic Idempotency-Key** on payment creation: `Idempotency-Key = sha256(f"sell-membership:{membership_plan_id}:{client_id}:{today_date}")`. The key is computed from stable business identifiers, not from a per-request UUID. A second creation attempt within 24h returns the same ЮKassa payment object without creating a new charge.
-2. **DB partial UNIQUE** — `UNIQUE (client_id, membership_plan_id, DATE(initiated_at))` on `online_payments WHERE status != 'canceled'` — prevents two simultaneous pending payments for the same product. The `WHERE status != 'canceled'` predicate allows a retry after explicit cancellation. This mirrors v1.3 `(membership_id) WHERE ended_at IS NULL` freeze discipline.
-3. **Frontend single-submission guard** — the "Оплатить" button is disabled on click until terminal state is reached (standard TanStack Query mutation `isPending`). Backend constraint is the authoritative guard; frontend guard reduces noise.
+**How to avoid:**
+Decide and document the attribution model as a Key Decision before writing any payroll SQL. The recommended model for Sportzal's single-gym context: **% of PT-package revenue** → attribute to `pt_packages.trainer_id` (the trainer assigned at sale, who is effectively the responsible trainer in a single-gym model); **fixed per session** → attribute to `pt_sessions.trainer_id` (the conductor). Both models use unambiguous existing columns. Document this as `D-5x-PAYROLL-ATTRIBUTION` in Key Decisions. All payroll queries must carry a `-- attribution: assigned-at-sale trainer` or `-- attribution: conducting trainer` comment to prevent silent drift.
 
 **Warning signs:**
-- `Idempotency-Key: str(uuid4())` generated fresh on each request
-- No partial UNIQUE on the online_payments table
-- Button remains enabled during payment pending state
+- A payroll SQL query JOINs `pt_sessions` with `payments` via trainer without a comment explaining which trainer attribution is intended
+- A single payroll query mixes `pt_packages.trainer_id` and `pt_sessions.trainer_id` without explicit intent
+- No "attribution model" documented in project Key Decisions or phase plans
 
-**Phase hint:** Bedrock phase (UNIQUE constraint in migration) + integration phase (deterministic key computation in service).
+**Phase to address:**
+Payroll design phase (the first payroll phase plan). Attribution model must be a locked decision before the payroll SQL is written — not clarified after tests fail.
 
 ---
 
-## Moderate Pitfalls
-
-### Pitfall 7: 54-ФЗ Fiscal Receipt Timing — Receipt Must Be Issued "At the Moment of Payment"
-
-**Severity:** WARN
+### Pitfall 7: DST Expansion Bugs for Recurring Slots in Europe/Moscow
 
 **What goes wrong:**
-54-ФЗ requires the fiscal receipt to be sent to ФНС via ОФД and to the customer "at the moment of payment" (в момент совершения расчёта) for online transactions with remote interaction. The 5-minute tolerance in the law applies to the fiscal register's clock accuracy, NOT to a 5-minute grace period for receipt issuance. If the ARQ task queue is backlogged or ЮKassa's `/receipts` endpoint is slow, receipts can be delayed significantly — potentially triggering 14.5 КоАП penalties (up to 10 000 RUB per undelivered receipt for legal entities).
+Europe/Moscow has not observed DST since 2014 (permanently UTC+3). However, generating recurring slots by adding `timedelta(weeks=n)` to a naive UTC timestamp instead of expanding `(day_of_week, local_time)` through the Europe/Moscow timezone is architecturally wrong even if it produces correct results today. If the code ever runs in a different TZ context, or Russia re-adopts DST, all stored slot UTC timestamps will be wrong. Additionally, `datetime(year, month, day, hour, minute)` without `tzinfo` creates a naive datetime — comparisons against `TIMESTAMPTZ` Postgres columns will fail or produce silent TZ-offset errors.
 
 **Why it happens:**
-Treating the fiscal receipt as a "nice to have" async notification rather than a legally mandated synchronous-equivalent step. The ARQ `dispatch_receipt` task may queue behind other work and not execute immediately.
+Developers assume "MSK is always UTC+3, so I can just add 3 hours to UTC" and write naive datetime arithmetic instead of using `zoneinfo`. This is architecturally inconsistent with the `gym_date STORED AS (checked_in_at AT TIME ZONE 'Europe/Moscow')::date` discipline that every other date computation in this system follows.
 
-**Consequences:**
-- Receipt delivered minutes or hours after payment — legal violation per 54-ФЗ
-- Penalties: up to 10 000 RUB per receipt for юрлицо (Article 14.5 КоАП РФ)
-- ОФД rejection if receipt timestamp deviates significantly from payment timestamp
-
-**Prevention:**
-1. **Priority queue** — `dispatch_receipt` ARQ task gets higher queue priority than other background tasks. ARQ supports separate queues via `queue_name` parameter; create a `receipts_high_priority` queue with a dedicated worker.
-2. **Embed receipt data in payment creation request** — ЮKassa Scenario 1 (simultaneous payment + receipt) is preferred over Scenario 3 (separate `/receipts` call after payment). When receipt data is in the payment creation payload, ЮKassa handles timing synchronously.
-3. **Fiscal receipt status monitoring** — `online_receipts` table with `fiscal_status` FSM (`pending → succeeded / failed / canceled`); an ARQ cron scans for `pending` rows older than 90 seconds and alerts (structlog ERROR + Telegram operator DM).
-4. **Receipt-failure does NOT rollback payment** — the v1.6 email payment receipt discipline is preserved: "payment commit NOT rolled back on send failure". Receipt failure is an operational problem to fix; revoking an already-settled payment creates a worse legal problem.
+**How to avoid:**
+Use `zoneinfo.ZoneInfo('Europe/Moscow')` for all recurring slot expansion — the same pattern as `gym_date STORED` and the cron `hour=3, minute=5` (UTC) = 06:05 MSK equivalence. Expand `(day_of_week, start_time_local)` to concrete `TIMESTAMPTZ` values using: `datetime(year, month, day, hour, minute, tzinfo=ZoneInfo('Europe/Moscow')).astimezone(timezone.utc)`. Store as `TIMESTAMPTZ` in Postgres (never `TIMESTAMP WITHOUT TIME ZONE`). Never add raw `timedelta` to a naive datetime. Write a golden test: `expand_recurring_slot(day_of_week=MONDAY, local_time=time(10, 0), from_date=date(2026, 3, 30))` must produce `2026-03-30 07:00:00+00:00`.
 
 **Warning signs:**
-- `dispatch_receipt` is enqueued in the same queue as non-urgent background work
-- No monitoring for `fiscal_status = 'pending'` receipts older than 2 minutes
-- Receipt data not included in the payment creation payload
+- `slot_start = datetime(year, month, day, hour, minute)` anywhere in slot expansion code (no `tzinfo`)
+- `next_occurrence = base_dt + timedelta(weeks=n)` without re-normalising through `ZoneInfo('Europe/Moscow')`
+- Slot column declared as `TIMESTAMP` not `TIMESTAMPTZ` in the Alembic migration
 
-**Phase hint:** Integration phase. Priority queue and monitoring are post-integration-bedrock concerns.
+**Phase to address:**
+Recurring slots phase. The golden test must be part of the phase acceptance criteria, mirroring the VER-02 DST/MSK-offset golden test from Phase 57.
 
 ---
 
-### Pitfall 8: Wrong 54-ФЗ Subject/Method Tags — Voiding the Receipt
-
-**Severity:** WARN (legal consequences if wrong)
+### Pitfall 8: Infinite or Excessive Slot Generation — No Horizon Limit
 
 **What goes wrong:**
-The fiscal receipt must carry correct `payment_subject` (тег 1212, "признак предмета расчёта") and `payment_mode` (тег 1214, "признак способа расчёта"). Using wrong values voids the receipt's legal compliance even if it is technically accepted by ЮKassa.
+A recurring rule "every Monday 10:00 until further notice" triggers slot expansion on each cron tick. Without a generation horizon, a single cron run generates years of future Monday slots — O(years * trainers * rules) rows. With no idempotency guard, each cron tick re-inserts duplicate rows, driving contention on `trainer_availability_slots`.
 
-For Sportzal's services:
-- Gym membership (абонемент): `payment_subject = "service"` (услуга), `payment_mode = "full_payment"` (полный расчёт) — the client pays in full for a fixed-duration membership. NOT `"commodity"` (товар).
-- PT package (персональные тренировки): also `payment_subject = "service"`, `payment_mode = "full_payment"`. NOT `"full_prepayment"` (предоплата 100%) unless sessions have not yet been scheduled at payment time — in that case `"full_prepayment"` may apply per ФФД 1.05/1.2 rules.
-- ЮKassa's "Чеки от ЮKassa" integration only supports `"full_prepayment"` and `"full_payment"` — partial prepayment, advances, and credit are explicitly NOT supported.
+Even with a UNIQUE constraint preventing duplicates, the expansion query scans the entire `trainer_recurring_rules` table and attempts an INSERT for every possible future date up to the horizon — O(horizon_in_weeks) per rule per tick.
 
 **Why it happens:**
-Cargo-culting `payment_subject = "commodity"` from e-commerce tutorials, or confusing "предоплата" with "partial advance".
+Forgetting that "generate ongoing" means "generate only a bounded window ahead" — the same issue as unbounded pagination without `LIMIT`. Also, omitting `unique=True` on the ARQ cron job, allowing parallel expansion runs.
 
-**Consequences:**
-- Tax authority can invalidate the receipt → fine per Article 14.5 КоАП
-- Client's receipt carries wrong product classification → consumer rights complaints
-
-**Prevention:**
-1. **Locked constants** — `RECEIPT_SUBJECT_MEMBERSHIP = "service"`, `RECEIPT_SUBJECT_PT_PACKAGE = "service"`, `RECEIPT_MODE_FULL = "full_payment"` as named constants in `app/modules/billing/constants.py`. These are NOT configurable at runtime.
-2. **Pydantic schema validation** — `payment_subject: Literal["service", "commodity", "job", "payment"]`, `payment_mode: Literal["full_payment", "full_prepayment"]` (ЮKassa's supported subset). mypy strict will catch any assignment outside the Literal type.
-3. **Owner sign-off row** — like the `D-27-OWNER-COPY-LOCK` mechanism for Telegram copy, create a `D-47-RECEIPT-TAG-LOCK` record in planning artifacts documenting that `service + full_payment` was chosen for memberships and PT packages with the tax rationale.
-4. **Verification test** — integration test asserts that the receipt payload sent to ЮKassa mock contains `payment_subject == "service"` and `payment_mode == "full_payment"` for both membership and PT-package sale paths.
+**How to avoid:**
+Adopt the ARQ cron `unique=True` + idempotent INSERT discipline. Expansion query generates slots only within `NOW() < slot_start_utc <= NOW() + INTERVAL '4 weeks'` (configurable horizon). SQL: `INSERT INTO trainer_availability_slots ... ON CONFLICT (trainer_id, slot_start_utc) DO NOTHING` — explicit no-op on conflict, mirroring the `membership_notifications` `INSERT ... ON CONFLICT DO NOTHING` cron pattern. ARQ cron: `unique=True, keep_result=60`. On cron restart, the second tick silently skips already-generated slots.
 
 **Warning signs:**
-- `payment_subject` is a string parameter passed by the caller at runtime
-- No Pydantic Literal type narrowing on the field
-- Tutorial-derived `"commodity"` value in any fixture or test data
+- Expansion loop has no `limit_date` or horizon parameter
+- No `UNIQUE (trainer_id, slot_start_utc)` index on `trainer_availability_slots`
+- Slot expansion called synchronously inside an HTTP request instead of via an ARQ task
+- ARQ expansion cron missing `unique=True`
 
-**Phase hint:** Integration phase (receipt creation). Tag values must be decided and locked before the first receipt endpoint is built.
+**Phase to address:**
+Recurring slots phase. UNIQUE constraint and cron horizon limit must be in the schema migration and ARQ config from day one — not optimizations to add after the first performance complaint.
 
 ---
 
-### Pitfall 9: Email/Phone Mandatory for Fiscal Receipt — Client Has Neither
-
-**Severity:** WARN
+### Pitfall 9: Time-Off Overlapping an Already-Confirmed Booking — Silent Orphan or Cascade
 
 **What goes wrong:**
-54-ФЗ requires at least one customer contact (email OR phone) for electronic receipt delivery. ЮKassa delivers receipts only to email (SMS is not available). If a client in the Sportzal `clients` table has neither `email` nor `phone` populated (phone is soft-delete-safe via partial UNIQUE but may be NULL in edge cases; email is not yet a required field), ЮKassa will reject the receipt creation request with a validation error.
+Trainer Ivan has a confirmed booking for Monday 10:00 (`bookings.status = 'confirmed'`). The owner creates a time-off block covering that Monday. Two failure modes:
+
+1. The time-off insertion succeeds silently, leaving the confirmed booking in place. The client arrives Monday morning; the trainer is absent.
+2. The system auto-cancels the booking without notifying the client (or worse, auto-cancels without an audit event).
+
+The inverse: the recurring slot expansion cron generates a new slot for a date that falls inside an existing time-off block, making that slot bookable when it should be blocked.
 
 **Why it happens:**
-v1.1–v1.6 client CRUD did not require email for client records (email was not a client field; only operators/users have email). The payment flow encounters a null-contact client and the receipt API rejects it.
+Time-off blocks and bookings live in different tables. The slot generation cron and the time-off insert path do not cross-check against the bookings FSM. Developers treat time-off as a schedule concern and bookings as a separate concern — missing the invariant that they must be consistent.
 
-**Consequences:**
-- Receipt cannot be issued → 54-ФЗ violation
-- Payment succeeds but membership is activated without fiscal compliance
-- Either block the payment (client experience) or skip the receipt (legal risk)
-
-**Prevention:**
-1. **Gate payment initiation on contact data** — `POST /memberships/{id}/pay-online` validates that the client has at least `phone` or `email` before creating the ЮKassa payment object. Return 422 `client_missing_contact_for_receipt` with a descriptive message.
-2. **Fallback policy (documented, NOT automatic)** — the owner may manually provide a contact before initiating. The system does NOT silently fall back to the gym's own email — this would be legally incorrect (the receipt must go to the paying customer, not the business).
-3. **`clients` schema addition** — add optional `email` field to the `clients` table in v1.7 (separate from `users.email` which is the operator's email). Gate is enforced at service layer, not schema layer (email remains optional for non-paying clients).
-4. **Phone preference** — since ЮKassa sends only to email (not SMS), prefer `client.email` over `client.phone` for receipt delivery. If only phone is available: ЮKassa receipt `customer.phone` field populates the receipt record but ЮKassa will not deliver the email (they note "SMS not available") — still legally valid as long as the phone is provided in the fiscal record.
+**How to avoid:**
+Time-off creation endpoint: before inserting the time-off block, `SELECT` confirmed bookings that overlap: `SELECT b.id FROM bookings b JOIN trainer_availability_slots s ON b.slot_id = s.id WHERE s.trainer_id = :trainer_id AND s.slot_start_utc BETWEEN :off_start AND :off_end AND b.status = 'confirmed'`. If any exist, return **409** with the conflicting booking IDs in the response body — requiring the owner to explicitly cancel those bookings first. The API must not auto-cancel silently; the v1.5 booking FSM (`confirmed → cancelled_by_owner`) is the correct cancellation path, which emits the `booking_cancelled` audit event and triggers client notifications. Recurring slot expansion: the expansion query must add `AND NOT EXISTS (SELECT 1 FROM trainer_time_off_blocks WHERE trainer_id = :trainer_id AND :slot_start_utc BETWEEN off_start AND off_end)` to skip blocked windows.
 
 **Warning signs:**
-- Payment creation proceeds when `client.email IS NULL AND client.phone IS NULL`
-- Gym's own email appears anywhere in the `customer` object of a receipt payload
-- No validation error returned when contact is missing
+- `POST /trainer-time-off` has no query against `bookings` before committing the insert
+- Recurring expansion cron joins only `trainer_recurring_rules`, not `trainer_time_off_blocks`
+- `bookings.status = 'confirmed'` rows whose `slot_start_utc` falls inside a time-off block after insertion
 
-**Phase hint:** Integration phase. Client schema migration for `email` field is a bedrock-level migration requirement.
+**Phase to address:**
+Time-off phase. The conflict check must be part of the time-off creation service, not a post-launch addition.
 
 ---
 
-### Pitfall 10: Refund Webhook Dedup + v1.4 Partial UNIQUE Preservation
-
-**Severity:** WARN
+### Pitfall 10: Report Read-Only Discipline Leak — Importing ORM Models from Other Modules
 
 **What goes wrong:**
-ЮKassa retries `refund.succeeded` webhooks for 24 hours just like payment webhooks. The v1.4 `payments` table has `partial UNIQUE on refund_of WHERE refund_of IS NOT NULL` — this correctly prevents a second DB-level refund row. However, the webhook handler may run twice and emit two `refund_issued` + `payment_refunded` audit events before the DB constraint fires on the second attempt.
-
-Separately: `refund.succeeded` is NOT automatically enabled when setting up a ЮKassa integration — it must be explicitly subscribed to as a separate webhook event. Missing this subscription means refunds are never confirmed server-side.
+The trainer utilization report needs data from `pt_sessions`, `bookings`, `trainer_availability_slots`, `payments`, and `trainers` tables. The natural instinct is to import `app.modules.pt_sessions.models.PTSession` and `app.modules.trainers.models.Trainer` into `app.modules.reports.service`. This violates the `modules-independent` import-linter contract and couples the reports module to the internal ORM of four other modules — the exact mistake D-54-07/D-54-08 was designed to prevent.
 
 **Why it happens:**
-Assuming refund webhook subscription is implicit; not applying the same Redis dedup gate to `refund.succeeded` that is applied to `payment.succeeded`.
+ORM queries feel more natural than raw SQL for developers who know SQLAlchemy. The D-54-07/D-54-08 discipline was established for the v1.8 reports module but must be actively re-applied to the v1.9 trainer report — it is not automatic.
 
-**Consequences:**
-- Double audit events for single refund — audit chain becomes ambiguous
-- v1.4 `partial UNIQUE` stops the second DB row but exception handling around the IntegrityError must be clean (not swallowed as a generic 500)
-- Missing `refund.succeeded` subscription: refund status never transitions, membership never un-activated, fiscal refund receipt never triggered
-
-**Prevention:**
-1. **Explicit `refund.succeeded` subscription** — webhook configuration creates subscriptions for: `payment.succeeded`, `payment.canceled`, `payment.waiting_for_capture`, and `refund.succeeded`. Document this as a deployment checklist item.
-2. **Same Redis dedup gate** — `SET NX EX 86400 sz:wh:event:refund.succeeded:{refund_id}`. The dedup key uses the ЮKassa refund object ID, not the payment ID.
-3. **v1.4 partial UNIQUE remains the DB-level backstop** — `UNIQUE (refund_of) WHERE refund_of IS NOT NULL` catches any dedup bypass. `IntegrityError` → service returns 200 (idempotent). Do NOT raise a 500; a second identical webhook must be acknowledged with 200 to stop ЮKassa retries.
-4. **Fiscal refund receipt is part of the refund flow** — a `refund.succeeded` event must trigger a "возврат прихода" receipt via ЮKassa `/receipts`. For full refunds, ЮKassa uses the original payment data automatically. For partial refunds, the receipt data must be in the refund request payload.
+**How to avoid:**
+Apply D-54-07 / D-54-08 exactly as established in v1.8. `app/modules/reports/` has **no `models.py`** and uses only `sqlalchemy.text()` for all queries. The `.importlinter` config must be verified to reject any cross-module import from `reports`. Write the trainer-usage report as a raw SQL CTE over table names (`pt_sessions`, `bookings`, `trainer_availability_slots`, `payments`, `trainers`), not ORM class names. The zero-new-import-linter-ignores rule (established in Phase 54) must hold for the trainer report.
 
 **Warning signs:**
-- `refund.succeeded` not in the webhook subscription list
-- No Redis dedup on refund webhook handler
-- `IntegrityError` on second refund webhook causes a 500 rather than a 200
+- `from app.modules.trainers.models import Trainer` in any file under `app/modules/reports/`
+- `import-linter` CI gate fails after the trainer report module is extended
+- `models.py` created inside `app/modules/reports/`
 
-**Phase hint:** Integration phase. Webhook subscription list is a deployment-configuration requirement documented in operator runbook.
+**Phase to address:**
+Trainer report phase. The import-linter contract must be verified clean before any report code is merged. Zero new `[importlinter:contracts]` ignores is a hard constraint.
 
 ---
 
-### Pitfall 11: ARQ Retry Storm on ЮKassa /receipts Rate Limit
-
-**Severity:** WARN
+### Pitfall 11: Aggregation Over Soft-Deleted Trainers — Silently Dropping Historical Sessions
 
 **What goes wrong:**
-ЮKassa `/receipts` API may rate-limit under load (specific limits not published, but standard API rate limits apply). If ARQ's `dispatch_receipt` task fails with a 429 or 500 and retries aggressively (default ARQ retry behavior: immediate retry, `max_tries=5`), multiple concurrent `dispatch_receipt` tasks will hammer the ЮKassa endpoint simultaneously, causing a cascade failure. Each retry schedules another retry, amplifying load.
-
-This mirrors the v1.6 email circuit breaker: `sz:email:circuit:{provider}` TTL 5m with atomic `record_failure` pipeline.
+A trainer is deactivated (`trainers.is_active = False` — the existing soft-delete via `is_active` from v1.4). Their historical `pt_sessions` rows remain in the database. The trainer utilization report adds `WHERE trainers.is_active = TRUE` — the correct filter for "who can I book right now" endpoints — but this is wrong for a historical report. All sessions conducted by deactivated trainers are silently excluded. The report understates total PT utilization and omits deactivated trainers from the top-trainer ranking entirely.
 
 **Why it happens:**
-Copying ARQ task configuration from simple fire-and-forget tasks without considering external API backpressure.
+Copying the `is_active = TRUE` filter from live-view endpoints (booking creation, trainer picker) into a historical aggregation query. The v1.8 clients report correctly excludes soft-deleted clients from the "new clients" counter — but historical session counting is a different semantics. The two cases must not be conflated.
 
-**Consequences:**
-- ЮKassa may blacklist the shop's IP for repeated abusive retries
-- All receipts in the queue fail simultaneously rather than one at a time
-- ARQ result store fills with failed jobs, obscuring which receipts need manual recovery
-
-**Prevention:**
-1. **Redis circuit breaker** — `sz:yookassa:circuit:receipts` with the same atomic pipeline pattern as v1.6 email: `record_failure` increments counter + sets TTL; `is_open` checks counter against threshold (e.g., 5 failures in 60s → open for 300s). `dispatch_receipt` checks circuit before calling ЮKassa.
-2. **Exponential backoff** — ARQ task uses `defer_by` on retry: first retry at 30s, second at 120s, third at 600s. Set `max_tries=3` (not 5+).
-3. **Dead letter queue** — after `max_tries` exceeded, insert a `fiscal_failed` row in `online_receipts` table and emit a `LOCKED_AUDIT_EVENT` `fiscal_receipt_permanently_failed`. An operator cron alerts on these rows (structlog ERROR + Telegram DM to owner).
-4. **Jitter** — add random jitter (±10%) to retry delays to prevent thundering herd across multiple concurrent receipt tasks.
+**How to avoid:**
+Historical reports must aggregate over **all** `pt_sessions` rows regardless of current trainer `is_active` status — the session happened and the revenue was collected. Join against `trainers` with `LEFT JOIN` (not `INNER JOIN`) to include the trainer name, and use `pt_sessions.trainer_name_snapshot` (which exists as `NOT NULL` per v1.4 B-05) for display — this is already robust to soft-deletion and does not require any join at all for the name column. If grouping by `trainer_id`, include an `is_active` indicator column for context but never filter on it.
 
 **Warning signs:**
-- `max_tries` > 3 without exponential backoff
-- No circuit breaker on ЮKassa API calls
-- No dead letter / alert mechanism for permanently failed receipts
+- Report SQL includes `JOIN trainers ON ... WHERE trainers.is_active = TRUE`
+- Total session count in the report is less than `SELECT COUNT(*) FROM pt_sessions WHERE session_date BETWEEN :start AND :end`
+- `trainer_name_snapshot` column not used in report aggregation; instead, a JOIN to `trainers.full_name` is the sole name source
 
-**Phase hint:** Integration phase. Circuit breaker is the same pattern as v1.6 email; the implementation can be extracted from `app/integrations/email/circuit_breaker.py` and generalized.
+**Phase to address:**
+Trainer report phase. Golden test: insert a session for a trainer, deactivate the trainer via `is_active = False`, run the report — the session must appear in the results.
 
 ---
 
-### Pitfall 12: Audit-Event Chain Ordering — Atomic Commit Scope for Multi-Step Online Payment Flow
-
-**Severity:** WARN
+### Pitfall 12: Period-Boundary Off-by-One in the Utilization Report
 
 **What goes wrong:**
-The v1.4 audit chain is `payment_recorded → membership_sold → membership_activated`. For online payments, the chain is longer: `payment_initiated → yookassa_payment_created → payment_succeeded_webhook → membership_activated → fiscal_receipt_queued → fiscal_receipt_sent`. Each step involves a separate DB write and/or external API call. If step 4 (`membership_activated`) commits but step 5 (`fiscal_receipt_queued`) fails before commit, the system is in a state where membership is active but no receipt task exists — a silent compliance hole.
+Owner requests "May 2026 utilization." Backend computes `from_date=2026-05-01`, `to_date=2026-05-31`. The SQL uses `WHERE session_date >= :from AND session_date < :to` — this drops all May 31 sessions. The inverse error: `to_date=2026-06-01` with `<=`, double-counting June 1 sessions in both May and June reports.
 
 **Why it happens:**
-Each step is independently committed, not wrapped in a single Unit of Work.
+Python `range()` and `datetime` arithmetic use half-open intervals `[start, end)`. This habit bleeds into SQL `WHERE` clauses. The existing system uses inclusive `end_date` semantics throughout (memberships, visits, reports in v1.8) — the convention is established but must be consciously followed.
 
-**Consequences:**
-- Membership active, no fiscal receipt ever sent → 54-ФЗ violation
-- Audit chain has gap: `membership_activated` row exists but no `fiscal_receipt_queued` row
-- No operational alert for the gap
-
-**Prevention:**
-1. **Atomic Unit of Work** — the webhook handler that processes `payment.succeeded` wraps ALL of these in a single `async with session.begin()`:
-   - Insert `online_payments` row with `status = 'succeeded'`
-   - Activate membership (status transition)
-   - Insert `online_receipts` row with `fiscal_status = 'pending'`
-   - Emit all LOCKED audit events (payment_succeeded, membership_activated, fiscal_receipt_queued)
-   - Enqueue `dispatch_receipt` ARQ task (via `arq.create_pool().enqueue_job(...)` inside the transaction — ARQ enqueue is Redis-based, not transactional, so enqueue inside the `finally` block AFTER the DB commit to avoid phantom tasks on rollback)
-2. **Transactional outbox pattern** — the `online_receipts` table row with `fiscal_status = 'pending'` acts as the outbox. The ARQ cron scans for `pending` receipts not yet picked up by the queue and re-enqueues them. This decouples DB durability from ARQ enqueue reliability.
-3. **SVC001 AST commit gate** — extend the existing `BusinessService` commit gate to cover `billing_service.py` and ensure all write paths explicitly `await session.commit()`.
+**How to avoid:**
+Standardize on the existing inclusive `end_date` semantics from v1.2 and v1.8. All report period filters: `date_column >= :period_start AND date_column <= :period_end`. This matches `memberships.end_date` (inclusive), `visits.gym_date` (inclusive), and the v1.8 revenue/visits report discipline. Write a golden test mirroring the v1.8 VER-02 pattern: a session on `period_end` date must appear in the report; a session on `period_end + 1 day` must not.
 
 **Warning signs:**
-- `dispatch_receipt` ARQ task is enqueued BEFORE `session.commit()`
-- No `online_receipts` row inserted in the same transaction as membership activation
-- Gap between `membership_activated` and `fiscal_receipt_queued` audit events is not monitored
+- `session_date < :to_date` in any report SQL when `to_date` is the last day of the desired period
+- Report total differs by 1 from a direct `SELECT COUNT(*) FROM pt_sessions WHERE session_date BETWEEN :start AND :end`
 
-**Phase hint:** Integration phase. UoW discipline is architectural and must be designed before the first webhook handler is built.
+**Phase to address:**
+Trainer report phase. Must be verified by the same golden-test discipline as VER-02 from Phase 57.
 
 ---
 
-### Pitfall 13: Official yookassa-sdk-python is Synchronous — Blocks the Event Loop
-
-**Severity:** WARN
+### Pitfall 13: Concurrent Payroll Runs — Race Condition Producing Duplicate Accrual Rows
 
 **What goes wrong:**
-The official ЮKassa Python SDK (`yookassa` on PyPI, maintained by YooMoney) uses the `requests` library internally — it is synchronous. Calling `Payment.create(...)` from a FastAPI async endpoint or ARQ async task will block the entire event loop for the duration of the HTTP call (typically 50–300ms). Under load, this degrades all concurrent requests/tasks.
+Two HTTP requests (or two ARQ task invocations after a worker restart) both call the payroll run endpoint for the same trainer and period within milliseconds of each other. Both execute the application-layer "does a run exist?" check before either inserts the header row. Both pass. Both insert duplicate `trainer_payroll_runs` header rows and twice the accrual entries — doubling the payout liability for the period.
 
 **Why it happens:**
-The official SDK is the most documented option; developers install it without checking if it is async-compatible with their stack.
+Application-layer `SELECT ... WHERE` followed by `INSERT` is not atomic — classic TOCTOU. Developers who rely on the "check then act" pattern miss that the gap between the SELECT and INSERT is a valid race window, especially under concurrent requests.
 
-**Consequences:**
-- Event loop blocked during every ЮKassa API call
-- ARQ task throughput degraded proportionally to ЮKassa API latency
-- Under high load: starvation of all other async work during payment creation
-
-**Prevention:**
-1. **Use `async_yookassa`** (`async_yookassa` on PyPI, `proDreams/async_yookassa`) — unofficial but actively maintained; uses `httpx.AsyncClient` natively; supports Pydantic v2; accepts a custom `AsyncClient` instance (injectable for testing with `respx`).
-2. **Alternatively, direct `httpx.AsyncClient`** — implement a thin `YookassaHttpClient` wrapper in `app/integrations/yookassa/` that performs raw HTTP Basic Auth calls using the project's own `httpx.AsyncClient`. This avoids third-party SDK coupling and integrates cleanly with `respx` for unit tests.
-3. **Never use `asyncio.to_thread(sdk_call)`** as a workaround — while it unblocks the event loop, it creates thread pool pressure and makes testing harder.
-4. **import-linter gate** — add a `integrations/yookassa/` module; ban direct imports of the `yookassa` (synchronous) package from `app/` outside this integration module.
+**How to avoid:**
+Do not use check-then-insert. Use `INSERT INTO trainer_payroll_runs ... ON CONFLICT (trainer_id, period_start, period_end) DO NOTHING RETURNING id`. If `RETURNING` yields no row, the run already exists — return 409 `payroll_period_already_run`. This is the DB-wins-the-race discipline applied throughout this system: visits `UNIQUE (client_id, gym_date)` (Phase 19), freeze periods `UNIQUE (membership_id) WHERE ended_at IS NULL` (Phase 25), booking race-safe `UNIQUE (slot_id) WHERE status='confirmed'` (Phase 38/v1.5). If payroll runs are triggered via an ARQ job, set `unique=True` on the task (matches `expire_memberships` and `send_expiring_notifications` discipline).
 
 **Warning signs:**
-- `import yookassa` (the official sync SDK) in any `service.py` or `router.py`
-- `from yookassa import Payment` in ARQ task code
-- No `async with YookassaClient() as client:` pattern
+- `SELECT count(*) FROM trainer_payroll_runs WHERE trainer_id = :id AND period_start = :start` followed by `INSERT` (TOCTOU race)
+- No UNIQUE constraint on `(trainer_id, period_start, period_end)` in the migration
+- ARQ payroll task without `unique=True`
 
-**Phase hint:** Bedrock phase. SDK choice shapes the integration module design.
+**Phase to address:**
+Payroll scaffold phase. UNIQUE constraint and `INSERT ... ON CONFLICT DO NOTHING RETURNING` must be in the first implementation.
 
 ---
 
-### Pitfall 14: ЮKassa Credentials in Git — shopId + secretKey Leakage
-
-**Severity:** WARN
+### Pitfall 14: Slot Generation Race — Concurrent Cron Runs Inserting Duplicate Slots
 
 **What goes wrong:**
-ЮKassa authentication uses HTTP Basic Auth: `shopId` as username, `secretKey` as password. Both are configured via the `yookassa.Configuration` object or passed as request parameters. If hardcoded or committed to `.env` files checked into git, they provide full access to create payments, issue refunds, and retrieve all transaction data.
-
-The v1.6 email integration established the pattern: `YANDEX_SES_ACCESS_KEY_ID` and `YANDEX_SES_SECRET_ACCESS_KEY` as `SecretStr` fields in `app/core/config.py` (Pydantic BaseSettings). The same discipline applies.
+Two ARQ worker processes (or a slow cron tick overlapping with the next scheduled run) both execute slot expansion simultaneously. Without `INSERT ... ON CONFLICT DO NOTHING`, the second run raises an `IntegrityError` from the UNIQUE constraint. If the `IntegrityError` is not caught and treated as idempotent success, the ARQ job fails, triggering retry logic, producing misleading error logs and potentially running a third time.
 
 **Why it happens:**
-Quick local testing with hardcoded test shop credentials; `.env` accidentally committed.
+Slot expansion cron is not declared `unique=True` in `WorkerSettings`. `IntegrityError` from the UNIQUE constraint is not caught as a success condition — it propagates as an unhandled exception and fails the job.
 
-**Consequences:**
-- Full financial access to the ЮKassa shop account
-- Unauthorized payment creation, refund issuance, transaction data exfiltration
-
-**Prevention:**
-1. **Pydantic Settings `SecretStr`** — `YOOKASSA_SHOP_ID: SecretStr` and `YOOKASSA_SECRET_KEY: SecretStr` in `app/core/config.py`. `SecretStr` prevents value from appearing in `repr()`, logs, or Pydantic validation errors.
-2. **`.env.example`** — add placeholder values: `YOOKASSA_SHOP_ID=000000` and `YOOKASSA_SECRET_KEY=test_xxx`. `.env` stays in `.gitignore`.
-3. **Test/production separation** — ЮKassa provides test shop credentials (`live=false`) that work against a sandbox. All CI tests use test credentials from environment variables injected by CI, never from committed files.
-4. **Webhook endpoint secret** (if a future ЮKassa version adds HMAC signing) — add `YOOKASSA_WEBHOOK_SECRET: SecretStr` as a pre-placeholder now, even if unused, to establish the pattern.
+**How to avoid:**
+ARQ cron: `unique=True, keep_result=60` (matches `expire_memberships` / `send_expiring_notifications` / `send_booking_reminders` discipline). SQL: `INSERT INTO trainer_availability_slots ... ON CONFLICT (trainer_id, slot_start_utc) DO NOTHING`. In the service layer: if a batch INSERT raises `IntegrityError` for any other reason (not the expected UNIQUE conflict), re-raise it. Log successful idempotent skips at `DEBUG` not `ERROR`. A cron restart must produce the same slot set — not a larger one.
 
 **Warning signs:**
-- `shopId = "123456"` literal in any Python file
-- `.env` file added to git
-- `SecretStr` not used for credential fields
+- Slot expansion cron missing `unique=True` in `WorkerSettings`
+- `INSERT INTO trainer_availability_slots` without `ON CONFLICT DO NOTHING`
+- ARQ job failure logs showing `UniqueViolation` errors from slot expansion
 
-**Phase hint:** Bedrock phase. Config additions in the first migration phase.
+**Phase to address:**
+Recurring slots phase. Both `unique=True` and `ON CONFLICT DO NOTHING` are day-one requirements, not optimizations.
 
 ---
 
-## Minor Pitfalls
+## Technical Debt Patterns
 
-### Pitfall 15: Test Infrastructure — No Official ЮKassa ASGI Fixture
-
-**Severity:** INFO
-
-**What goes wrong:**
-ЮKassa has no official ASGI transport-compatible test fixture analogous to the project's existing `httpx ASGITransport` pattern. The official Python SDK uses `requests`; there is no `YooKassaASGITransport`. Tests that call real ЮKassa endpoints in CI break on network unavailability and introduce flakiness.
-
-**Prevention:**
-1. **`respx` for outgoing ЮKassa API calls** — `respx.mock` patches `httpx.AsyncClient` at the transport layer without network calls. With `async_yookassa` (which accepts a custom `AsyncClient`), inject a `respx`-mocked client into tests: `async with httpx.AsyncClient(transport=respx.MockTransport(...)) as client: ...`
-2. **Webhook delivery in tests** — webhook handler tests use `httpx ASGITransport` (already the project standard) to POST the webhook payload directly to `POST /api/v1/billing/webhooks/yookassa`. Construct the payload manually from ЮKassa's documented structure; no need for a real ЮKassa instance.
-3. **FSM tests without external calls** — payment FSM state machine tests run against in-memory state with no HTTP calls at all; isolate the FSM logic from HTTP concerns.
-4. **Sandbox for manual verification only** — ЮKassa provides a test shop (`shopId = 100500`, `secretKey = test_...`) for manual operator verification phases. Not for automated CI.
-
-**Warning signs:**
-- Tests that call `yookassa.ru` directly
-- CI tests that depend on network availability
-- No `respx` fixtures for ЮKassa outgoing calls
-
-**Phase hint:** Integration phase. Test fixtures are part of the TDD setup for each ЮKassa integration point.
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| `commission_rate FLOAT` on trainer row | Simple schema, one column | Float rounding errors in kopeck computation; rate change retroactively alters past accruals | Never — use integer numerator/denominator + versioned config rows |
+| Payroll as live query view (no accrual rows) | No new table needed | Refunds, backdated sessions, and rate changes all silently alter amounts reported as "paid" | Never — accrual rows are required for audit chain integrity |
+| `is_active = TRUE` filter in historical session reports | Matches live endpoints | Drops all history from deactivated trainers; understates utilization | Never in historical aggregation — only in live availability queries |
+| Unbounded recurring slot generation | Simpler code, no horizon logic | O(years) slot rows; lock contention; storage waste | Never — cap at configurable horizon (4 weeks default) |
+| Time-off insertion without checking confirmed bookings | Simpler insert | Trainer absent from confirmed appointment; client shows up to empty gym | Never — conflict check is a correctness requirement, not an optimization |
+| Clawback via UPDATE to existing accrual row | Simpler than new adjustment row | Destroys audit chain; violates append-only ledger discipline | Never — signed-amount adjustment rows only |
 
 ---
 
-### Pitfall 16: LOCKED_AUDIT_EVENTS Not Pre-Registered Before Callsites — v1.3 INFRA-15 Discipline
+## Integration Gotchas
 
-**Severity:** INFO
-
-**What goes wrong:**
-The v1.3 INFRA-15 discipline requires new `LOCKED_AUDIT_EVENTS` entries to be pre-registered in the frozenset BEFORE any callsite that uses them. For v1.7, online payment events will be: `payment_initiated`, `yookassa_payment_created`, `payment_succeeded`, `payment_failed`, `payment_canceled`, `membership_activated_online`, `refund_initiated`, `yookassa_refund_created`, `refund_succeeded`, `fiscal_receipt_queued`, `fiscal_receipt_sent`, `fiscal_receipt_failed`. At minimum 12 new event strings.
-
-If a developer adds a callsite that uses a new event string before adding it to the frozenset, the AST gate CI check fails and blocks the entire PR chain.
-
-**Prevention:**
-1. **First commit of v1.7 bedrock phase** extends `LOCKED_AUDIT_EVENTS` frozenset with all 12+ online-payment event strings — before any callsite exists.
-2. **Naming convention** — online payment events use `payment_*` prefix; fiscal events use `fiscal_receipt_*` prefix; no collision with existing `membership_*` events.
-3. **Count test** — extend the existing `len(LOCKED_AUDIT_EVENTS) == N` assertion in tests to the new expected count after bedrock phase.
-
-**Warning signs:**
-- `audit.emit("payment_succeeded", ...)` callsite in service code before the frozenset includes `"payment_succeeded"`
-- CI gate fails with "unknown audit event string" error
-
-**Phase hint:** Bedrock phase, first task.
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| `pt_sessions` + payroll accrual | JOIN on trainer without clarifying conducting vs. selling attribution | Decide and document attribution model first; use `pt_sessions.trainer_id` for fixed-per-session; use `pt_packages.trainer_id` for %-of-revenue |
+| Refund flow + payroll | Refund issued without checking whether accrual row exists for the original payment | Lookup `trainer_payroll_entries.source_payment_id` in refund service; emit signed-amount clawback row in same UoW |
+| Recurring slots + bookings | Slot generation ignores time-off blocks | Expansion cron joins against `trainer_time_off_blocks` to skip blocked windows |
+| Time-off insertion + bookings FSM | Time-off inserted over confirmed booking without conflict check | `SELECT` confirmed bookings in the time range before INSERT; return 409 with conflict list |
+| `trainer_availability_slots` + payroll | Payroll run counts slots (capacity) instead of sessions (actual completed work) | Payroll must aggregate `pt_sessions` (completed), never `trainer_availability_slots` (availability) |
 
 ---
 
-### Pitfall 17: Telegram WebApp Payments — Separate Pitfall Set, Defer to Post-v1.7
+## Performance Traps
 
-**Severity:** INFO (DEFER)
-
-**What goes wrong:**
-Telegram WebApp payments (Telegram Stars, TON, or direct card payments via Telegram Pay) use a completely different integration: `initData` verification (HMAC-SHA256 of `window.Telegram.WebApp.initData`), invoice creation via `bot.send_invoice()`, `pre_checkout_query` handling, and `successful_payment` update processing. Currency is in Stars (integer) or kopecks depending on provider. This is an entirely separate integration from ЮKassa redirect/webhook flow.
-
-**Prevention:**
-- Defer Telegram WebApp payments to v1.8+ or a separate milestone
-- v1.7 scope is strictly ЮKassa redirect flow for the admin panel (reception/owner initiating payment on behalf of client)
-- If Telegram self-service payment is needed later, the `initData` HMAC verification pattern is NOT the same as ЮKassa IP validation — document separately
-
-**Warning signs:**
-- `successful_payment` update handler added to `telegram_bot.py` in v1.7
-- Any `Telegram.WebApp` JavaScript in the admin panel during v1.7
-
-**Phase hint:** DEFER. Not in v1.7 scope.
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Trainer report scans all `pt_sessions` without index on `session_date` | `/reports/trainers` endpoint times out | Add btree index `(session_date, trainer_id)` in the trainer-report Alembic migration — mirrors v1.8 Alembic 0040 audit-log indexes | From day one at small gym scale (no grace period at 500+ sessions) |
+| Slot expansion query has no horizon window | Cron job takes >30s generating slots years into the future | `WHERE slot_start_utc <= NOW() + INTERVAL '4 weeks'` in expansion query | At 5+ trainers each with 3+ recurring rules |
+| Payroll run aggregates all-time sessions without period index | `POST /payroll/run` slow after multi-month operation | Period filter on `session_date` uses the `(session_date, trainer_id)` composite index | After approximately 6 months of daily sessions |
 
 ---
 
-## Phase-Specific Warnings
+## Security Mistakes
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Bedrock — migrations + event registration | Missing `LOCKED_AUDIT_EVENTS` pre-registration | First commit: extend frozenset before any service code |
-| Bedrock — currency converter | Off-by-100 kopecks/rubles conversion | Dedicated converter module + unit tests before payment creation |
-| Bedrock — SDK choice | Official sync SDK blocking event loop | Mandate `async_yookassa` or direct `httpx.AsyncClient` wrapper |
-| Bedrock — config | Credentials in git | `SecretStr` fields added to `app/core/config.py` in bedrock phase |
-| Integration — payment creation | Double-tap parallel payments | Deterministic `Idempotency-Key` + DB partial UNIQUE |
-| Integration — webhook handler | IP validation after body parse | IP check middleware runs before `request.json()` — import-linter or AST gate |
-| Integration — webhook handler | No Redis dedup | `SET NX EX 86400` on `(event_type, object.id)` before any DB write |
-| Integration — return URL | Membership activated on redirect | return_url handler is read-only status screen; activation only on webhook |
-| Integration — return URL | Payment status oracle via URL | Single return URL, `_constant_time_floor` pattern, no `?status=` param |
-| Integration — receipt | Wrong payment_subject/payment_mode | Locked `Literal` constants; owner sign-off record |
-| Integration — receipt | Client missing email/phone | Gate payment initiation on contact data; clear 422 error |
-| Integration — receipt | Receipt timing violation | Priority queue + Scenario 1 (embed receipt in payment payload) |
-| Integration — refund | Missing `refund.succeeded` subscription | Explicit subscription in deployment runbook |
-| Integration — refund | Double audit on refund webhook retry | Same Redis dedup gate; `IntegrityError` → 200 (not 500) |
-| Verification | No ЮKassa ASGI fixture | `respx` for outgoing + `ASGITransport` for incoming webhooks |
-| Verification | ARQ receipt retry storm | Circuit breaker test with `respx` simulating 429 from ЮKassa |
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Payroll endpoints accessible by reception role | Reception can trigger or view payroll, exposing individual trainer compensation | Owner-only RBAC via `OWNER_ONLY` set, `require_permission`, and route-introspection guard; three-way parity test with admin-web `can.ts` (extending `Resource` enum + `OWNER_ONLY` pairs) |
+| Trainer utilization report exposes per-trainer revenue to reception | Revenue attribution data is owner-confidential | Report endpoint uses a new owner-only `Resource` entry mirroring `Resource.AUDIT_LOG` precedent (Phase 54) |
+| `POST /payroll/mark-paid` without CSRF token | Replay attack marks payroll paid without owner action | CSRF dependency on all mutating POST/PATCH/DELETE — existing v1.1 discipline; no exception for payroll endpoints |
+
+---
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Payroll accrual rows:** Looks done when the endpoint returns correct totals — verify that `trainer_payroll_entries` rows are actually written, and that a second call to the same period+trainer returns 409, not a new row
+- [ ] **Rate snapshot:** Looks done when rate is displayed correctly on the run — verify that changing `trainer_compensation_configs` AFTER the run does NOT change the stored `rate_snapshot_numerator` on existing accrual rows
+- [ ] **Clawback:** Looks done when refunds work — verify that a refund issued after a payroll run with `status='paid'` creates a negative accrual adjustment row, not a silent omission
+- [ ] **Time-off conflict check:** Looks done when time-off saves — verify via test that creating time-off over a date with a confirmed booking returns 409 with booking IDs in the response body
+- [ ] **Recurring slots idempotency:** Looks done when slots appear after first cron run — verify that running the expansion cron twice produces the same row count (not double)
+- [ ] **Deactivated trainer in report:** Looks done when active trainer stats are correct — verify that a deactivated trainer's historical `pt_sessions` appear in the utilization report
+- [ ] **LOCKED_AUDIT_EVENTS pre-registration:** Looks done when audit rows appear — verify that all new payroll events (`payroll_accrual_created`, `payroll_marked_paid`, `payroll_adjustment_created`) are added to `LOCKED_AUDIT_EVENTS` in the bedrock phase BEFORE any callsite (INFRA-15 discipline from Phase 24)
+- [ ] **RBAC three-way parity:** Looks done when backend 403s are correct — verify the three-way parity test (backend `OWNER_ONLY` + admin-web `can.ts` + `registry.ts`) is green after adding payroll and trainer-report `Resource` entries
+
+---
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Recompute drift (payroll is a live view, no accrual rows) | HIGH | Schema migration to add `trainer_payroll_entries` + data migration to backfill from historical aggregates using rate snapshots; re-verify all past periods |
+| Double-paid period (missing UNIQUE on runs) | MEDIUM | Add UNIQUE constraint; identify and audit duplicate run rows; write corrective negative adjustment entries to cancel the extra accruals |
+| Wrong rounding mode discovered after payroll run | LOW | Write corrective adjustment entries for the rounding delta; no schema change needed |
+| Missing clawback (refund issued post paid-payroll, no adjustment row) | MEDIUM | Identify all refunds of payments in already-paid payroll periods via SQL; write manual negative adjustment entries; add the clawback hook to the refund service going forward |
+| Time-off inserted over confirmed bookings (bookings orphaned) | MEDIUM | Identify confirmed bookings inside time-off blocks via SQL; cancel them through the booking FSM with audit trail; add the conflict check before time-off insert |
+| Read-only discipline violated (ORM import in reports module) | LOW | Remove the ORM import; rewrite affected query as `text()`; `import-linter` CI gate prevents this from reaching main if enforced from the first commit |
+
+---
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Recompute drift — payroll as view not ledger | Payroll scaffold (Phase 58 est.) | Test: update a payment post-run; verify accrual row unchanged |
+| Double-paying a period — missing UNIQUE | Payroll scaffold | Test: call payroll run twice for same period+trainer; second call returns 409 |
+| Percentage rounding integer error | Payroll scaffold | Unit test: `_compute_commission(333300, 33, 100)` produces `math.ceil` result |
+| Refund-after-payroll clawback | Payroll accrual + refund integration | Test: mark payroll paid, issue refund, verify negative adjustment row created |
+| Rate config mid-period retroactive change | Payroll scaffold (schema) | Test: change config post-run; verify `rate_snapshot_numerator` on accrual unchanged |
+| Revenue attribution (sold vs. conducted) | Payroll design (first payroll phase plan) | Key Decision documented before payroll SQL written |
+| DST expansion bugs for recurring slots | Recurring slots phase | Golden test: `expand_slot(MONDAY, 10:00 MSK)` produces correct UTC timestamp |
+| Infinite/excessive slot generation | Recurring slots phase | Test: two cron runs produce same row count; horizon limits slots to 4 weeks |
+| Time-off vs. confirmed booking conflict | Time-off phase | Test: time-off over confirmed booking returns 409 with conflicting booking IDs |
+| Read-only discipline leak (ORM import in reports) | Trainer report phase | `import-linter` CI gate fails before merge; zero new ignores |
+| Aggregation over soft-deleted trainers | Trainer report phase | Test: deactivated trainer sessions appear in period report |
+| Period-boundary off-by-one | Trainer report phase | Golden test: session on `period_end` appears; session on `period_end + 1` does not |
+| Concurrent payroll run race | Payroll scaffold | Race test: two concurrent run requests; only one succeeds, second returns 409 |
+| Slot generation race | Recurring slots phase | Race test: two concurrent cron ticks; slot count identical after both ticks |
 
 ---
 
 ## Sources
 
-- [ЮKassa Webhooks documentation](https://yookassa.ru/developers/using-api/webhooks) — IP ranges, retry behavior, no HMAC (HIGH confidence, official)
-- [ЮKassa Interaction Format](https://yookassa.ru/developers/using-api/interaction-format) — Idempotence-Key header, 24h window (HIGH confidence, official)
-- [ЮKassa 54-ФЗ receipts (YooMoney path)](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics) — receipt API overview (HIGH confidence, official)
-- [ЮKassa receipt parameter values](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/parameters-values) — payment_subject, payment_mode values (HIGH confidence, official)
-- [ЮKassa third-party receipt basics](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/other-services/basics) — timing scenarios, 5-minute window, failure handling (HIGH confidence, official)
-- [ЮKassa refund receipts](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/refunds) — возврат прихода, full vs partial refund (HIGH confidence, official)
-- [54-ФЗ receipt timing analysis (klerk.ru)](https://www.klerk.ru/buh/articles/476136/) — 5-minute tolerance on clock, not on issuance; "at the moment of payment" (MEDIUM confidence, verified analyst source)
-- [Electronic receipt delivery requirements](https://astral.ru/info/operator-fiskalnykh-dannykh/otpravka-elektronnogo-cheka-klientu/) — email/phone mandatory; no gym-email fallback (MEDIUM confidence)
-- [async_yookassa (GitHub)](https://github.com/proDreams/async_yookassa) — httpx-based async ЮKassa client (MEDIUM confidence, community-maintained)
-- [respx documentation](https://lundberg.github.io/respx/) — httpx mock transport for testing (HIGH confidence, official)
-- [ЮKassa Python SDK (official)](https://github.com/yoomoney/yookassa-sdk-python) — synchronous requests-based SDK (HIGH confidence, official)
+- Sportzal PROJECT.md Key Decisions: snapshot pricing (Phase 17 / v1.2), ceil rounding for freeze (Phase 25 / v1.3), UNIQUE idempotency keys on notifications (Phase 27 / v1.3), DB-wins-the-race pattern for visits and freeze (Phase 19/25), append-only ledger with signed-amount refunds (v1.4), LOCKED_AUDIT_EVENTS pre-registration before callsites (INFRA-15 / Phase 24 / v1.3), read-only reports discipline D-54-07/D-54-08 (Phase 54 / v1.8), `trainer_name_snapshot NOT NULL` on pt_sessions (B-05 / v1.4), `gym_date STORED AT TIME ZONE 'Europe/Moscow'` canonical TZ discipline (Phase 19 / v1.2), `unique=True, keep_result=60` ARQ cron pattern (Phase 18/27/v1.5), booking race-safe `UNIQUE (slot_id) WHERE status='confirmed'` (v1.5), `INSERT ... ON CONFLICT DO NOTHING` idempotency (v1.3/v1.5/v1.6), three-way RBAC parity test (v1.1 through v1.8)
+
+---
+*Pitfalls research for: trainer payroll-ledger + recurring schedule + time-off + utilization report (Sportzal v1.9)*
+*Researched: 2026-05-24*

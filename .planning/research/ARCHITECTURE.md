@@ -1,599 +1,677 @@
-# Architecture: v1.7 Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
+# Architecture Research
 
-**Researched:** 2026-05-21
-**Confidence:** HIGH (codebase read + official ЮKassa docs + v1.4–v1.6 pattern precedents)
-
----
-
-## 1. New Module(s): Sibling vs Extension
-
-**Decision: new sibling `app/modules/online_payments/` alongside existing `app/modules/payments/`.**
-
-Rationale:
-
-The v1.4 `payments/` module is an **append-only ledger**. Its two public surfaces are `record_payment` and `issue_refund`, both decorated `# noqa: SVC001 caller-owns-txn` and intentionally commit-free. The module has AST-enforced append-only discipline (`test_payments_appendonly.py` bans `update(Payment)` / `delete(Payment)` anywhere in the module). Extending it with mutable FSM columns, webhook-state transitions, and ЮKassa-specific status tracking would require lifting that ban or creating two tiers of logic inside one module — architectural debt. The v1.4 CHECK constraints on `payments` (`subject_kind IN ('membership','pt_package','refund')`, signed-amount) would need new subject_kind values OR explicit exceptions, complicating the bedrock invariants.
-
-The sibling pattern keeps `payments/` frozen and purpose-pure: it records the **final committed transaction** (cash or online). `online_payments/` owns the **lifecycle up to commitment** — the pending/captured/succeeded/canceled states live there until `succeeded` triggers a `record_payment` call through the existing Protocol slot.
-
-Concrete boundary:
-
-```
-app/modules/online_payments/
-  models.py          # OnlinePayment (FSM columns), OnlineRefund
-  schemas.py         # create/response Pydantic schemas
-  repository.py      # get/insert/update helpers — caller-owns-txn
-  service.py         # orchestrator: create_online_payment, capture, handle_webhook_event
-  constants.py       # ONLINE_PAYMENT_STATUS_TRANSITIONS, SUBJECT_KIND_* (mirrors payments/constants.py)
-  notifications.py   # DM template constants: PAYMENT_SUCCESS_DM, REFUND_ISSUED_DM (mirrors bookings/notifications.py D-39-02)
-  email_templates.py # EMAIL_PAYMENT_ONLINE_SUCCESS, EMAIL_ONLINE_REFUND — extends payments/ ladder
-  permissions.py     # RBAC gates for online-payment create / refund
-  router.py          # /online-payments/* endpoints
-```
-
-The `payments/email_templates.py` already has `EMAIL_PAYMENT_RECEIPT_SALE` / `EMAIL_PAYMENT_RECEIPT_REFUND` for cash receipts. Online payments get separate template IDs (`EMAIL_PAYMENT_ONLINE_SUCCESS_SALE`, `EMAIL_PAYMENT_ONLINE_SUCCESS_REFUND`) in a new file inside `online_payments/` — keeping the domain-ownership convention (D-39-02).
-
-**What gets modified in `payments/`:** Zero. The `Payment` ORM model, its CHECK constraints, and `record_payment` / `issue_refund` are untouched. The only cross-module allowance needed (see §10) is `online_payments/service.py → payments/models.py` for writing `PaymentReceipt` rows (same pattern as the Phase 45 `memberships/service.py → payments/models.py` ignore).
+**Domain:** v1.9 Trainers Complete — payroll-ledger, recurring slots, time-off, trainer-usage report
+**Researched:** 2026-05-24
+**Confidence:** HIGH (based on direct codebase inspection of all relevant modules)
 
 ---
 
-## 2. New Integration: `app/integrations/yookassa/`
+## System Overview
 
-Shape mirrors `app/integrations/email/` exactly: config, client, factory, types.
+The existing backend is a FastAPI modular monolith with four structural zones enforced by import-linter. The key constraint for v1.9 is that `app.core` may not import `app.modules`, and modules may not import each other directly. All cross-module communication flows through Protocol slots registered in `app/main.py`.
 
 ```
-app/integrations/yookassa/
-  __init__.py
-  types.py          # YooKassaPaymentResult, YooKassaReceiptResult (frozen dataclasses)
-  client.py         # YooKassaClient (async httpx), SandboxYooKassaClient
-  factory.py        # build_yookassa_client(settings) -> async
-  webhook_verifier.py  # verify_yookassa_ip(request) — IP-allowlist check (NOT HMAC, see §3)
+┌─────────────────────────────────────────────────────────────┐
+│                    app/main.py (composition root)            │
+│  register_*(slot) wires Protocol slots at startup            │
+│  only file allowed to import across core ↔ modules          │
+├──────────────────────┬──────────────────────────────────────┤
+│   app/core/          │   app/modules/<domain>/              │
+│   permissions.py     │   router.py  service.py  models.py   │
+│   dependencies.py    │   schemas.py repository.py ...       │
+│   audit.py           │                                      │
+│   (Protocol slots)   │   NO cross-module imports (linter)   │
+├──────────────────────┴──────────────────────────────────────┤
+│   app/integrations/       app/workers/                      │
+│   telegram/               scheduled/ (ARQ crons)             │
+│   email/                  tasks/ (ARQ jobs)                  │
+│   yookassa/               telegram_bot.py                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**What lives in `integrations/yookassa/` vs in `modules/online_payments/`:**
+---
 
-| Concern | Location | Reason |
-|---------|----------|--------|
-| HTTP transport (POST /payments, POST /refunds, POST /receipts) | `integrations/yookassa/client.py` | Pure I/O adapter, no domain knowledge |
-| Sandbox stub | `integrations/yookassa/client.py:SandboxYooKassaClient` | Mirrors `SandboxEmailClient` pattern |
-| Boot-time API probe | `integrations/yookassa/factory.py` | Same pattern as email factory D-42-30 |
-| IP allowlist verification | `integrations/yookassa/webhook_verifier.py` | Transport-level gate, domain-agnostic |
-| FSM state transitions, audit chains | `modules/online_payments/service.py` | Domain logic, must not live at integrations layer |
-| ЮKassa payment-object → domain FSM mapping | `modules/online_payments/service.py` | Domain logic |
-| 54-ФЗ receipt dispatch orchestration | `modules/online_payments/service.py` | Domain orchestration, not transport |
+## Question 1: Where Does Payroll Live?
 
-**`types.py` shape:**
+### Decision: New `app/modules/payroll/` module
+
+Payroll is a new business entity with its own ledger table (`payroll_accruals`), endpoints, and audit chain. It belongs in a new module, not in `trainers` (which is catalog-only reference data with soft-delete, no financial logic) and not in `payments` (which is the generic incoming-money ledger, not an outgoing-wages ledger).
+
+**Module file layout:**
+```
+app/modules/payroll/
+├── __init__.py
+├── models.py           # TrainerCompConfig + PayrollAccrual ORM
+├── schemas.py          # Pydantic request/response + wire shapes
+├── repository.py       # DB reads/writes for payroll tables
+├── service.py          # run_payroll_period, mark_accrual_paid, list_accruals
+├── router.py           # POST /payroll/run, PATCH /{id}/paid, GET /payroll/accruals
+└── constants.py        # comp model literals, LOCKED audit events pre-declared
+```
+
+### The `payroll_accruals` Table (v1.4 payments discipline)
+
+The payroll ledger follows the same append-only discipline as `payments`. Each accrual is an immutable row; marking it paid is a single-column status flip allowed only once (UNIQUE (trainer_id, period_start, period_end) enforces one run per trainer per period).
+
+```
+payroll_accruals
+├── id                UUID PK
+├── trainer_id        FK -> trainers.id ON DELETE RESTRICT
+├── period_start      Date NOT NULL          -- MSK inclusive
+├── period_end        Date NOT NULL          -- MSK inclusive
+├── comp_model        Text NOT NULL          -- 'pct_of_revenue' | 'fixed_per_session' | 'both'
+├── sessions_count    Integer NOT NULL        -- pt_sessions in period (snapshot at run time)
+├── revenue_kopecks   Integer NOT NULL        -- sum of pt_package payments in period (snapshot)
+├── fixed_per_session_kopecks  Integer NOT NULL DEFAULT 0
+├── pct_of_revenue_bps         Integer NOT NULL DEFAULT 0  -- basis points (1% = 100 bps)
+├── accrual_kopecks   Integer NOT NULL CHECK (accrual_kopecks >= 0)
+├── status            Text NOT NULL CHECK IN ('pending','paid')  server_default='pending'
+├── paid_at           DateTime(tz) nullable
+├── paid_by_user_id   FK -> users.id ON DELETE RESTRICT nullable
+├── audit_log_id      FK -> audit_log.id ON DELETE SET NULL nullable
+├── created_at        DateTime(tz) NOT NULL server_default=now()
+│
+── UNIQUE (trainer_id, period_start, period_end)  -- one run per trainer per period
+── INDEX (trainer_id, period_start DESC)
+── INDEX (status, period_start DESC)              -- pending accruals listing
+```
+
+This follows the v1.4 append-only discipline: no `updated_at`, no `deleted_at`, no UPDATE to `accrual_kopecks`. The `status` flip to `paid` is the only mutation allowed (mirrors the `pt_packages.status` single-transition pattern).
+
+### Where Does Trainer Comp Config Live?
+
+**In the `payroll` module, NOT `trainers`.**
+
+Rationale: comp config is payroll domain data (rate settings, compensation model). The `trainers` module is catalog-only reference data (CRUD with soft-delete + active flag). Mixing financial configuration into the catalog module would couple a financial concept into a non-financial module. A new table `trainer_comp_configs` lives under `payroll/models.py`.
+
+```
+trainer_comp_configs
+├── id                UUID PK
+├── trainer_id        FK -> trainers.id ON DELETE RESTRICT UNIQUE  -- one config per trainer
+├── comp_model        Text NOT NULL CHECK IN ('pct_of_revenue','fixed_per_session','both')
+├── fixed_per_session_kopecks  Integer NOT NULL DEFAULT 0 CHECK (>= 0)
+├── pct_of_revenue_bps         Integer NOT NULL DEFAULT 0 CHECK (>= 0, <= 10000)
+├── effective_from    Date NOT NULL
+├── created_at        DateTime(tz) NOT NULL server_default=now()
+├── updated_by_user_id  FK -> users.id ON DELETE RESTRICT nullable
+│
+── INDEX (trainer_id)   -- resolver
+```
+
+`UNIQUE (trainer_id)` enforces one active config per trainer. Owner can `PUT /payroll/trainer-configs/{trainer_id}` to create or overwrite (upsert semantics: INSERT ... ON CONFLICT DO UPDATE SET ...).
+
+### Cross-Module Read for Payroll Calculation
+
+`payroll.service.run_payroll_period` needs two cross-module reads:
+
+1. **PT-package revenue (from `payments`):** How much revenue came in for this trainer's sessions during the period.
+2. **PT-sessions count (from `pt_sessions`):** How many sessions this trainer conducted.
+
+**Mechanism: raw-SQL `text()` reads -- NOT Protocol slots.**
+
+Protocol slots are for callback/write operations (activating memberships, recording payments, completing bookings). Read-only cross-module data is handled with raw-SQL `text()` reads exactly as the v1.8 `reports` module does it (D-54-08 precedent). The payroll service calls a helper in `payroll/repository.py`:
 
 ```python
-@dataclass(frozen=True)
-class YooKassaPaymentResult:
-    ok: bool
-    classification: Literal["ok", "transient_error", "permanent_error"]
-    payment_id: str | None = None       # ЮKassa UUID string
-    status: str | None = None           # "pending" | "waiting_for_capture" | "succeeded" | "canceled"
-    confirmation_url: str | None = None
-    error: str | None = None
-
-@dataclass(frozen=True)
-class YooKassaReceiptResult:
-    ok: bool
-    classification: Literal["ok", "transient_error", "permanent_error"]
-    receipt_id: str | None = None       # ЮKassa receipt UUID
-    status: str | None = None           # "pending" | "succeeded" | "canceled"
-    error: str | None = None
+# payroll/repository.py (cross-module read discipline)
+# CROSS-MODULE READ: pt_sessions + pt_packages + payments
+# Verified columns:
+#   pt_sessions: trainer_id, pt_package_id, performed_at, cancelled_at
+#     (apps/backend/app/modules/pt_sessions/models.py:52-97)
+#   payments: subject_kind, subject_id, amount_kopecks, received_at
+#     (apps/backend/app/modules/payments/models.py:52-64)
+#   pt_packages: id (FK bridge between pt_sessions.pt_package_id and payments.subject_id)
+async def fetch_trainer_session_revenue(
+    session: AsyncSession,
+    trainer_id: UUID,
+    period_start: date,
+    period_end: date,
+) -> dict[str, int]:
+    row = (
+        await session.execute(
+            text(
+                "SELECT "
+                "  COUNT(DISTINCT ps.id) FILTER (WHERE ps.cancelled_at IS NULL) "
+                "    AS session_count, "
+                "  COALESCE(SUM(p.amount_kopecks) FILTER ("
+                "    WHERE p.subject_kind = 'pt_package' AND p.amount_kopecks > 0"
+                "  ), 0) AS revenue_kopecks "
+                "FROM pt_sessions ps "
+                "JOIN pt_packages pkg ON pkg.id = ps.pt_package_id "
+                "JOIN payments p "
+                "  ON p.subject_id = pkg.id "
+                "  AND p.subject_kind = 'pt_package' "
+                "  AND p.amount_kopecks > 0 "
+                "WHERE ps.trainer_id = :trainer_id "
+                "  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date "
+                "      BETWEEN :period_start AND :period_end "
+            ),
+            {
+                "trainer_id": str(trainer_id),
+                "period_start": period_start,
+                "period_end": period_end,
+            },
+        )
+    ).mappings().one()
+    return {"session_count": int(row["session_count"]), "revenue_kopecks": int(row["revenue_kopecks"])}
 ```
 
-**`client.py` shape:**
+No `from app.modules.pt_sessions import ...` or `from app.modules.payments import ...` in `payroll/`. Zero new `ignore_imports` edges in `.importlinter`. The `payroll` module is added to the `modules-independent` contract list before any code lands (INFRA-15 discipline).
+
+**Why not a Protocol slot for this?**
+
+Protocol slots are for bi-directional callbacks where the callee needs to reach back into a different module's write path. The payroll calculation only needs a read-only projection from two tables. Raw-SQL text() reads are cheaper, more direct, and keep the dependency graph flat -- the same choice made for `reports` in v1.8.
+
+### Atomic Audit Chain for Payroll
+
+`payroll.service.run_payroll_period` follows the v1.4 UoW discipline:
+
+```
+1. SELECT trainer comp config (own table, no cross-module)
+2. fetch_trainer_session_revenue (raw SQL, same session)
+3. compute accrual_kopecks
+4. INSERT payroll_accruals row
+5. audit.emit("payroll_accrual_created", resource_type="payroll_accrual", ...)
+6. session.commit()  -- accrual row + audit row atomic
+```
+
+`mark_accrual_paid` is a separate UoW:
+```
+1. SELECT payroll_accrual FOR UPDATE
+2. Verify status == 'pending' (409 if already paid)
+3. UPDATE status='paid', paid_at=now(), paid_by_user_id=actor.id
+4. audit.emit("payroll_accrual_paid", resource_type="payroll_accrual", ...)
+5. session.commit()
+```
+
+---
+
+## Question 2: Recurring Slots and Time-Off Blocks
+
+### Decision: Extend `app/modules/schedule/`, NOT a new module
+
+Both recurring slots and time-off blocks are schedule domain concerns. They reference `trainer_availability_slots` (the existing table) and `trainers`. A new module would require either cross-module imports (violating the linter) or Protocol slots for what is fundamentally schedule data. The schedule module already owns slot creation, overlap detection, and the `restore_slot_to_active` Protocol slot.
+
+### New Tables in `schedule/models.py`
+
+**`recurring_slot_templates`** -- defines the weekly recurrence pattern:
+
+```
+recurring_slot_templates
+├── id                UUID PK
+├── trainer_id        FK -> trainers.id ON DELETE RESTRICT
+├── day_of_week       SmallInteger NOT NULL CHECK (0..6)  -- 0=Mon ISO
+├── start_hour        SmallInteger NOT NULL CHECK (0..23)
+├── start_minute      SmallInteger NOT NULL CHECK (0..59)
+├── duration_minutes  SmallInteger NOT NULL CHECK (> 0)
+├── is_active         Boolean NOT NULL DEFAULT TRUE
+├── created_by_user_id  FK -> users.id ON DELETE RESTRICT
+├── created_at        DateTime(tz) NOT NULL
+├── cancelled_at      DateTime(tz) nullable
+│
+── INDEX (trainer_id, day_of_week)
+── PARTIAL INDEX (trainer_id) WHERE is_active = TRUE
+```
+
+**`trainer_time_off`** -- blocks of unavailability:
+
+```
+trainer_time_off
+├── id              UUID PK
+├── trainer_id      FK -> trainers.id ON DELETE RESTRICT
+├── starts_at       DateTime(tz) NOT NULL
+├── ends_at         DateTime(tz) NOT NULL
+├── reason          Text nullable
+├── created_by_user_id  FK -> users.id ON DELETE RESTRICT
+├── created_at      DateTime(tz) NOT NULL
+├── cancelled_at    DateTime(tz) nullable  -- soft-cancel (keeps history)
+│
+── CHECK (ends_at > starts_at)
+── INDEX (trainer_id, starts_at)
+── PARTIAL INDEX (trainer_id, starts_at, ends_at) WHERE cancelled_at IS NULL
+```
+
+### Recurring Slot Expansion Strategy
+
+**ARQ cron generate-ahead, NOT expand-on-read.**
+
+Expand-on-read would require the slot-listing endpoint to dynamically materialize virtual slots on every GET -- adding virtual/real reconciliation logic, complicating the booking FSM (you cannot book a virtual slot), and breaking the `bookings -> schedule` Protocol slot dependency. The existing `trainer_availability_slots` table is the single source of truth for bookable slots; this must stay.
+
+The `generate_recurring_slots` ARQ cron runs daily (07:00 MSK, after the 06:35 reminder cron) and materializes slots for a rolling 14-day window ahead of the current date. Idempotency is enforced by extending the UNIQUE constraint on `trainer_availability_slots` to include `(trainer_id, start_time)` -- the cron uses INSERT ... ON CONFLICT DO NOTHING.
+
+```
+generate_recurring_slots cron (ARQ, 07:00 MSK):
+  For each active recurring_slot_template:
+    For each day in [today+1 .. today+14]:
+      Compute start_time = date + start_hour:start_minute (MSK -> UTC)
+      Compute end_time = start_time + duration_minutes
+      Check: any active trainer_time_off overlaps (start_time, end_time)?
+        SELECT WHERE trainer_id=? AND cancelled_at IS NULL
+        AND tstzrange(starts_at, ends_at) && tstzrange(start_time, end_time)
+      If overlap: skip
+      INSERT INTO trainer_availability_slots
+        (trainer_id, start_time, end_time, status='active', created_by_user_id=NULL)
+        ON CONFLICT (trainer_id, start_time) DO NOTHING
+      If rowcount == 1: audit.emit("slot_published", ...)  -- only on real insert
+  session.commit()
+```
+
+`created_by_user_id` on `trainer_availability_slots` must become nullable (Alembic migration). System-generated slots carry NULL -- distinguishable from manually published slots.
+
+### Time-Off Interaction with Confirmed Bookings
+
+When a time-off block is created that overlaps with existing `status='booked'` slots, the system blocks time-off creation with a 409 conflict.
+
+**Recommended: 409 conflict listing affected slot IDs, requiring owner to resolve manually.**
+
+Automatic cancellation without notifying clients is operationally dangerous and requires cross-module writes (bookings FSM). The owner should manually cancel conflicting bookings via the existing `PATCH /bookings/{id}/cancel` endpoint, then create the time-off block. The time-off creation service queries:
 
 ```python
-class YooKassaClient:
-    """Async httpx adapter for ЮKassa API v3. NEVER re-raises — every outcome is a value."""
-
-    async def create_payment(
-        self,
-        *,
-        idempotency_key: str,           # UUID string, MANDATORY
-        amount_kopecks: int,
-        description: str,
-        return_url: str,
-        customer_email: str | None,
-        receipt_items: list[dict],       # 54-ФЗ items
-        capture: bool = True,
-    ) -> YooKassaPaymentResult: ...
-
-    async def capture_payment(
-        self,
-        *,
-        payment_id: str,
-        idempotency_key: str,
-        amount_kopecks: int,
-    ) -> YooKassaPaymentResult: ...
-
-    async def cancel_payment(
-        self,
-        *,
-        payment_id: str,
-        idempotency_key: str,
-    ) -> YooKassaPaymentResult: ...
-
-    async def create_refund(
-        self,
-        *,
-        idempotency_key: str,
-        payment_id: str,
-        amount_kopecks: int,
-        description: str,
-    ) -> YooKassaPaymentResult: ...
-
-    async def create_receipt(
-        self,
-        *,
-        idempotency_key: str,
-        payment_id: str,
-        customer_email: str | None,
-        customer_phone: str | None,
-        items: list[dict],
-        type: Literal["payment", "refund"],
-    ) -> YooKassaReceiptResult: ...
+# schedule/repository.py
+# SELECT COUNT(*) FROM trainer_availability_slots
+# WHERE trainer_id = :trainer_id AND status = 'booked'
+# AND tstzrange(start_time, end_time) && tstzrange(:starts_at, :ends_at)
 ```
 
-**Config (`app/core/config.py` extension — new `YooKassaSettings` nested model):**
+If count > 0, raise `409 TimeOffConflictsWithBookings` with affected slot IDs.
+
+The `generate_recurring_slots` cron skips slot generation for any window covered by active `trainer_time_off` rows. It does NOT retroactively cancel already-booked slots that fall within a newly created time-off window; only forward-looking slot generation is blocked.
+
+---
+
+## Question 3: Trainer-Usage Report
+
+### Decision: Extend `app/modules/reports/` -- pure read-only raw-SQL reads
+
+The v1.8 reports module established the D-54-07/D-54-08 discipline: no `models.py`, raw-SQL `text()` cross-module reads, no writes. The trainer-usage report fits exactly in this module with no structural changes to the discipline.
+
+**New endpoint:** `GET /api/v1/reports/trainers` (owner-only)
+**New CSV endpoint:** `GET /api/v1/reports/trainers.csv`
+
+**Report shape:**
 
 ```python
-class YooKassaSettings(BaseModel):
-    shop_id: str
-    secret_key: SecretStr
-    provider: Literal["yookassa", "sandbox"] = "sandbox"
-    sandbox_mode: bool = True
-    api_base_url: str = "https://api.yookassa.ru/v3"
-    # IP allowlist for webhook verification (from ЮKassa docs — static since 2024)
-    webhook_allowed_ips: list[str] = [
-        "185.71.76.0/27", "185.71.77.0/27",
-        "77.75.153.0/25", "77.75.156.11",
-        "77.75.156.35", "77.75.154.128/25",
-    ]
+class TrainerUsageItem(BaseModel):
+    trainer_id: UUID
+    trainer_name: str
+    sessions_count: int           # non-cancelled pt_sessions in period
+    bookings_count: int           # confirmed + completed bookings in period
+    utilization_hours: float      # sum of (end_time - start_time) hours for booked slots
+    revenue_kopecks: int          # sum of positive pt_package payments for trainer's sessions
+
+class TrainerUsageReportResponse(BaseModel):
+    trainers: list[TrainerUsageItem]
+    from_date: date
+    to_date: date
 ```
 
----
-
-## 3. Webhook Endpoint: Router Location and Signature Verification
-
-**Location:** `app/api/v1/_internal/yookassa/router.py`, mounted at `POST /api/v1/_internal/yookassa/webhook`.
-
-This follows the established `_internal` namespace convention introduced in Phase 42 for the email bounce webhook. The comment in `app/api/v1/router.py` at the email mount explicitly names "ЮKassa, SMS providers, ..." as future inhabitants of `/_internal/*`.
-
-**Verification method — IP allowlist, NOT HMAC.**
-
-ЮKassa's documented security model uses source-IP validation (six published CIDRs). They do not publish a shared-secret HMAC header equivalent to `X-Email-Webhook-Signature`. Attempting to invent an HMAC gate would be security theater — there is no server secret that can be verified against a header ЮKassa does not send.
-
-The project constraint that says "Webhook security: ЮKassa `Notification-Sign` HMAC verification" in PROJECT.md reflects a common misconception from blog posts. The official ЮKassa documentation (verified) confirms IP-based allowlisting as the authentication mechanism.
-
-**Implementation:**
+**Cross-module raw-SQL read in `reports/repository.py`:**
 
 ```python
-# app/integrations/yookassa/webhook_verifier.py
-import ipaddress
-from fastapi import Request
-
-_YOOKASSA_CIDRS: frozenset[ipaddress.IPv4Network | ipaddress.IPv6Network] = frozenset({
-    ipaddress.ip_network("185.71.76.0/27"),
-    ipaddress.ip_network("185.71.77.0/27"),
-    ipaddress.ip_network("77.75.153.0/25"),
-    ipaddress.ip_network("77.75.156.11/32"),
-    ipaddress.ip_network("77.75.156.35/32"),
-    ipaddress.ip_network("77.75.154.128/25"),
-    ipaddress.ip_network("2a02:5180::/32"),
-})
-
-def verify_yookassa_ip(request: Request) -> None:
-    """Verify request originated from ЮKassa IP range. Raise HTTPException(401) on fail."""
-    # Read X-Forwarded-For if behind a proxy, else request.client.host
-    ...
+# CROSS-MODULE READ (D-54-08): pt_sessions, bookings, trainer_availability_slots,
+#   payments, pt_packages, trainers
+# Verified columns:
+#   trainers: id, full_name, deleted_at (apps/.../trainers/models.py:24-43)
+#   pt_sessions: trainer_id, pt_package_id, performed_at, cancelled_at, booking_id
+#     (apps/.../pt_sessions/models.py:52-111)
+#   bookings: id, status, slot_id (apps/.../bookings/models.py)
+#   trainer_availability_slots: id, start_time, end_time
+#     (apps/.../schedule/models.py:52-130)
+#   payments: subject_id, subject_kind, amount_kopecks
+#     (apps/.../payments/models.py:52-64)
+#   pt_packages: id (FK bridge)
+async def fetch_trainer_usage(session, from_date, to_date):
+    rows = (await session.execute(
+        text("""
+            SELECT
+                t.id AS trainer_id,
+                t.full_name AS trainer_name,
+                COUNT(DISTINCT ps.id) FILTER (WHERE ps.cancelled_at IS NULL)
+                    AS sessions_count,
+                COUNT(DISTINCT b.id) FILTER (
+                    WHERE b.status IN ('confirmed','completed')
+                ) AS bookings_count,
+                COALESCE(SUM(
+                    EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 3600.0
+                ) FILTER (WHERE b.status IN ('confirmed','completed')), 0.0)
+                    AS utilization_hours,
+                COALESCE(SUM(p.amount_kopecks) FILTER (
+                    WHERE p.subject_kind = 'pt_package' AND p.amount_kopecks > 0
+                ), 0) AS revenue_kopecks
+            FROM trainers t
+            LEFT JOIN pt_sessions ps
+                ON ps.trainer_id = t.id
+                AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date
+                    BETWEEN :from_date AND :to_date
+            LEFT JOIN bookings b ON b.id = ps.booking_id
+            LEFT JOIN trainer_availability_slots s ON s.id = b.slot_id
+            LEFT JOIN pt_packages pkg ON pkg.id = ps.pt_package_id
+            LEFT JOIN payments p
+                ON p.subject_id = pkg.id AND p.subject_kind = 'pt_package'
+            WHERE t.deleted_at IS NULL
+            GROUP BY t.id, t.full_name
+            ORDER BY sessions_count DESC, t.full_name
+        """),
+        {"from_date": from_date, "to_date": to_date},
+    )).mappings().all()
+    return [dict(r) for r in rows]
 ```
 
-This is a `Depends()` callable, usable as `Depends(verify_yookassa_ip)` on the webhook endpoint. There is no AST gate needed (no shared secret constant to enforce — verification is structural/network-layer). In **production** deployments, supplement with network-layer firewall rules. In **dev/test**, the verifier accepts `127.0.0.1` unconditionally via a `settings.yookassa.sandbox_mode` bypass flag.
+No new `ignore_imports` edges needed. The `reports` module already has the infrastructure: date range validation, csv_export.py, StreamingResponse pattern, RBAC owner-only guard. The new trainer-usage endpoint reuses all of it verbatim.
 
-**Router shape:**
+---
 
+## Question 4: New LOCKED Audit Events
+
+All new events must be pre-registered in `LOCKED_AUDIT_EVENTS` in `app/core/audit.py` BEFORE any callsite is added (INFRA-15 discipline). Pre-register in the Phase 58 foundations phase.
+
+**New events (7 total):**
+
+| Event | Resource Type | When Emitted |
+|---|---|---|
+| `payroll_accrual_created` | `payroll_accrual` | `run_payroll_period` -- owner triggers payroll run |
+| `payroll_accrual_paid` | `payroll_accrual` | `mark_accrual_paid` -- owner marks paid |
+| `trainer_comp_config_set` | `trainer` | `set_trainer_comp_config` -- owner sets comp config |
+| `recurring_slot_template_created` | `schedule_slot` | template published |
+| `recurring_slot_template_cancelled` | `schedule_slot` | template deactivated |
+| `trainer_time_off_created` | `trainer` | time-off block created |
+| `trainer_time_off_cancelled` | `trainer` | time-off block cancelled |
+
+`payroll_accrual_created` payload (new `PayrollAccrualCreatedPayload`):
 ```python
-# app/api/v1/_internal/yookassa/router.py
-router = APIRouter()
-
-@router.post("/webhook", status_code=200, response_class=Response)
-async def yookassa_webhook(
-    request: Request,
-    _ip: Annotated[None, Depends(verify_yookassa_ip)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> Response:
-    """ЮKassa payment lifecycle notifications. IP-verified before parse."""
-    ...
+class PayrollAccrualCreatedPayload(AuditPayloadBase):
+    accrual_id: UUID
+    trainer_id: UUID
+    period_start: str       # ISO date
+    period_end: str         # ISO date
+    comp_model: str
+    sessions_count: int
+    revenue_kopecks: int
+    accrual_kopecks: int
 ```
 
-No `Depends(get_current_user)`, no CSRF — this is a machine-to-machine callback. Response is always 200 (ЮKassa will retry on non-200).
-
----
-
-## 4. Async Webhook Processing: Synchronous vs Queued
-
-**Decision: synchronous processing (verify + process + 200 in webhook handler).**
-
-Tradeoff analysis:
-
-| Criterion | Sync (verify+process+200) | Queued (verify+200, ARQ processes) |
-|-----------|--------------------------|-------------------------------------|
-| ЮKassa retry semantics | ЮKassa retries if it gets non-200. If processing fails after enqueue, we already sent 200, so ЮKassa won't retry — we must handle our own retry. | Requires internal retry mechanism for every failure mode that could occur between enqueue and completion. |
-| Visibility of failures | Error surfaces immediately in request logs + structlog. Failure → non-200 → ЮKassa retries with backoff. | Error buried in ARQ job logs. ARQ has `max_tries` but retry failure is silent from ЮKassa's perspective. |
-| Idempotency surface | One UoW per webhook. DB UNIQUE constraint on `(yookassa_payment_id, event)` rejects duplicate processing at the DB layer — idempotent re-runs are safe. | Adds queue as second idempotency surface; complicates "exactly once" reasoning across Postgres + Redis. |
-| Timeout risk | ЮKassa timeout is not published but webhook consumers typically have 5–30 seconds. The webhook handler does: 1 DB write + 1 audit emit + 1 ARQ enqueue for notifications (fast). NOT the ЮKassa outbound call. | No timeout risk for the acknowledgement, but adds queue lag before membership activates. |
-| Membership activation latency | Zero extra latency: succeeded → membership activated in the same transaction, then enqueue DM. | Activation delayed by ARQ queue depth (typically seconds, but unpredictable under load). |
-| Consistency | Single Postgres commit covers: FSM transition + ledger row (`record_payment`) + `payment_receipt` idempotency row + audit chain. | Decoupled commits — if ARQ job fails after enqueue, the 200 is already sent but activation hasn't happened. Requires compensating saga. |
-
-**Winner: synchronous.** The webhook handler is fast (no outbound HTTP, just DB writes). Failure → non-200 → ЮKassa retries with its own backoff. Idempotency is enforced by DB UNIQUE. The only jobs enqueued inside the webhook handler are non-critical DM/email notifications (fire-and-forget, already the pattern for v1.5 booking notifications).
-
-**Exception:** fiscal receipt dispatch is also enqueued as an ARQ job after commit (same `dispatch_fiscal_receipt` task pattern as `dispatch_email`). The receipt send is best-effort; failure does NOT roll back the payment commit (same decision as v1.6 Phase 45 D-45-08 for `PaymentReceipt` post-commit fanout).
-
----
-
-## 5. FSM Placement: Where Does the ЮKassa Payment State Live?
-
-**Decision: new `online_payments` table with FK into `payments`, NOT new columns on existing `payments`.**
-
-Rationale:
-
-The `payments` table has a DB-level CHECK: `subject_kind IN ('membership','pt_package','refund')`. Online payment rows during their `pending` / `waiting_for_capture` phase are NOT yet recorded in the ledger — they only become ledger rows on `succeeded`. Adding a `yookassa_payment_id` or `status` column to `payments` would require either:
-- Allowing NULL values for cash rows (violates NOT NULL discipline)
-- Widening the CHECK to allow a `pending_online` subject_kind (which would then require signed-amount semantics before the amount is confirmed)
-
-Both are wrong. The correct model is:
-
-```
-online_payments                    payments (append-only ledger)
-─────────────────────            ───────────────────────────────
-id (PK, UUID)                    id (PK, UUID)
-yookassa_payment_id (TEXT, UNIQUE)
-subject_kind TEXT                subject_kind TEXT (CHECK: membership|pt_package|refund)
-subject_id UUID                  subject_id UUID
-amount_kopecks INT               amount_kopecks INT (signed CHECK)
-status TEXT (FSM col)            method TEXT ('online'|'cash')
-idempotency_key TEXT (UNIQUE)    received_at TIMESTAMPTZ
-created_at TIMESTAMPTZ           received_by_user_id UUID (FK users)
-updated_at TIMESTAMPTZ           refund_of UUID (partial UNIQUE)
-payment_id UUID (FK payments, NULL until succeeded)
-audit_log_id UUID (FK audit_log)
-```
-
-The `online_payments.payment_id` FK to `payments` is NULL until `succeeded` — at that point the webhook handler calls `record_payment()` through the existing Protocol slot, commits a `Payment` row, and backfills `online_payments.payment_id`.
-
-**FSM states and transitions (declarative constant, same as `MEMBERSHIP_STATUS_TRANSITIONS`):**
-
+`payroll_accrual_paid` payload:
 ```python
-ONLINE_PAYMENT_STATUS_TRANSITIONS: dict[str, frozenset[str]] = {
-    "pending":              frozenset({"waiting_for_capture", "succeeded", "canceled"}),
-    "waiting_for_capture":  frozenset({"succeeded", "canceled"}),
-    "succeeded":            frozenset(),   # terminal
-    "canceled":             frozenset(),   # terminal
-}
-```
-
-**CHECK constraint on `online_payments.status`:**
-`status IN ('pending','waiting_for_capture','succeeded','canceled')`
-
-**v1.4 invariants preserved:** The existing `payments` CHECK constraints, partial UNIQUE on `refund_of`, and audit chain remain untouched. `record_payment(method='online', ...)` creates the ledger row — the only change to `payments/service.py` would be widening the `method` TEXT default from `'cash'` to allow `'online'` (no constraint change, `method` is an unconstrained TEXT column per the model).
-
----
-
-## 6. Fiscal Receipt Model
-
-**New table: `fiscal_receipts`.**
-
-```sql
-CREATE TABLE fiscal_receipts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE RESTRICT,
-    kind TEXT NOT NULL,         -- 'payment' | 'refund'
-    yookassa_receipt_id TEXT,   -- populated after ЮKassa /receipts call
-    status TEXT NOT NULL DEFAULT 'pending',  -- FSM: pending→sent→succeeded|failed
-    idempotency_key TEXT NOT NULL UNIQUE,    -- deterministic from payment_id + kind
-    attempts INT NOT NULL DEFAULT 0,
-    last_error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT ck_fiscal_receipts_kind CHECK (kind IN ('payment','refund')),
-    CONSTRAINT ck_fiscal_receipts_status CHECK (status IN ('pending','sent','succeeded','failed')),
-    CONSTRAINT uq_fiscal_receipts_payment_kind UNIQUE (payment_id, kind)
-);
-```
-
-**Idempotency invariant:** `UNIQUE (payment_id, kind)` — one fiscal receipt per payment per direction. This mirrors the v1.6 `UNIQUE (payment_id, channel)` on `payment_receipts` but is semantically different: `fiscal_receipts` tracks the OFD registration status of the 54-ФЗ fiscal document, not notification delivery.
-
-**FK is to `payments.id`, not `online_payments.id`.** The fiscal receipt is an obligation that attaches to the committed ledger row. This means the `fiscal_receipts` row is created inside the same transaction as `record_payment()` on webhook `succeeded` — atomically. The `online_payments.payment_id` backfill also happens in this commit.
-
-**Status FSM:**
-
-```
-pending ──[ARQ dispatch_fiscal_receipt called]──► sent
-  sent  ──[ЮKassa webhook receipt.succeeded]────► succeeded  (terminal)
-  sent  ──[ЮKassa webhook receipt.canceled / max_tries exceeded]──► failed
-```
-
-**Retry policy:** ARQ task `dispatch_fiscal_receipt` with `_max_tries=3, _expires=30`. On transient failure (5xx from ЮKassa) the ARQ retry reschedules. On `failed` terminal state, alert is emitted via structlog WARNING + `fiscal_receipt_failed` audit event. No silent discard.
-
-**Note on ЮKassa ЧеKassa path:** ЮKassa's own `/receipts` API handles the 54-ФЗ obligation if receipt data is included in the original payment creation request. In that case, ЮKassa itself sends the receipt to the OFD and notifies via `receipt.succeeded` / `receipt.canceled` webhook events. The `fiscal_receipts` table tracks the local view of that lifecycle. The receipt is not a second outbound call — it is created as part of the payment creation request (items + customer data). The `sent` → `succeeded` transition is driven by the `receipt.succeeded` webhook event. This means: the `fiscal_receipts` row is created on payment `succeeded`, with `status='sent'` (ЮKassa has already accepted the receipt data in the payment request), and transitions to `succeeded` / `failed` via webhook.
-
----
-
-## 7. Cross-Channel DM Template Constants
-
-**Pattern: per-module ownership (D-39-02), same as bookings.**
-
-Template IDs live in:
-- `app/modules/online_payments/notifications.py` — Telegram DM constants (locked Russian strings)
-- `app/modules/online_payments/email_templates.py` — email template registry, added to `LOCKED_EMAIL_TEMPLATES`
-
-These do NOT go into `app/modules/payments/` because they belong to the online payment lifecycle, not the cash ledger. The cash receipt templates (`EMAIL_PAYMENT_RECEIPT_SALE`, `EMAIL_PAYMENT_RECEIPT_REFUND`) in `payments/email_templates.py` remain for cash flows.
-
-New template IDs to add to `LOCKED_EMAIL_TEMPLATES` (frozenset must grow from 15 to accommodate):
-
-```python
-# Online payment success
-"EMAIL_ONLINE_PAYMENT_SUCCESS"   # "Оплата прошла успешно"
-"EMAIL_ONLINE_REFUND_SUCCESS"    # "Возврат оформлен"
-# Fiscal receipt confirmation (optional — ЮKassa sends receipt to client directly;
-# this template is for an admin-facing audit confirmation, not duplicate receipt)
-```
-
-Telegram DM constants in `online_payments/notifications.py`:
-
-```python
-PAYMENT_SUCCESS_DM: Final[str] = "..."     # "Оплата прошла. Абонемент активирован."
-REFUND_ISSUED_DM: Final[str] = "..."       # "Возврат оформлен."
-```
-
-**Dispatcher walker update:** `app/integrations/email/dispatcher.py:_resolve_template()` must get a new `from app.modules.online_payments.email_templates import TEMPLATES as ONLINE_PAYMENTS_TEMPLATES` branch — one new import, one new `if template_id in ONLINE_PAYMENTS_TEMPLATES:` check. New `.importlinter` `ignore_imports` entry required: `app.integrations.email.dispatcher -> app.modules.online_payments.email_templates`.
-
----
-
-## 8. Protocol Slots at Composition Root
-
-Two new Protocol slots are needed. Both are **defensive-raise** (not silent-None) because their absence is hard misconfiguration.
-
-**Slot 1: `YooKassaClientProvider`**
-
-```python
-# app/core/dependencies.py
-class YooKassaClientProvider(Protocol):
-    async def __call__(self) -> Any: ...  # returns YooKassaClient | SandboxYooKassaClient
-
-_yookassa_client_provider: YooKassaClientProvider | None = None
-
-def register_yookassa_client_provider(provider: YooKassaClientProvider) -> None: ...
-def get_yookassa_client() -> YooKassaClientProvider: ...  # defensive raise
-```
-
-Wired from `app/main.py:create_app()` AND `app/workers/__init__.py:on_startup` (REG-29-03 double-wire — the ARQ `dispatch_fiscal_receipt` task needs the client in the worker process).
-
-**Slot 2: `FiscalReceiptDispatcher`**
-
-```python
-class FiscalReceiptDispatcher(Protocol):
-    async def __call__(
-        self,
-        *,
-        payment_id: UUID,
-        kind: Literal["payment", "refund"],
-        idempotency_key: str,
-        audit_correlation_id: UUID | None,
-    ) -> None: ...
-
-_fiscal_receipt_dispatcher: FiscalReceiptDispatcher | None = None
-
-def register_fiscal_receipt_dispatcher(impl: FiscalReceiptDispatcher) -> None: ...
-def get_fiscal_receipt_dispatcher() -> FiscalReceiptDispatcher: ...  # defensive raise
-```
-
-Wired from `app/main.py:create_app()` — the concrete implementation enqueues an ARQ job `dispatch_fiscal_receipt`, mirroring the `enqueue_email_dispatch` pattern.
-
-**Slot 3: `OnlinePaymentCreator` (optional — may live entirely in module scope)**
-
-The `online_payments/service.py` `create_online_payment()` function does not cross module boundaries — it is called from `online_payments/router.py` directly. No cross-module Protocol slot needed unless a future module (e.g., `bookings/`) needs to initiate an online payment without importing `online_payments`. Defer this slot to the phase where the need arises.
-
-**Summary of new composition-root registrations in `app/main.py`:**
-
-```python
-# Phase 47+ additions
-from app.integrations.yookassa.factory import build_yookassa_client
-from app.modules.online_payments.service import enqueue_fiscal_receipt_dispatch
-
-# Lifespan: build client once per process (async factory)
-# create_app(): register slots
-register_yookassa_client_provider(lambda: yookassa_client)  # client built in lifespan
-register_fiscal_receipt_dispatcher(enqueue_fiscal_receipt_dispatch)
+class PayrollAccrualPaidPayload(AuditPayloadBase):
+    accrual_id: UUID
+    trainer_id: UUID
+    paid_by_user_id: UUID
+    accrual_kopecks: int
 ```
 
 ---
 
-## 9. Migration Order: Alembic Revisions (~0033 onwards)
+## Question 5: RBAC Resource / OWNER_ONLY Entries
 
-Current head: `0032_booking_notifications_widen_kind.py`.
+The existing `Resource.PAYROLL` and `Resource.COMPENSATION` are already declared in `app/core/permissions.py` (they appear in the existing `OWNER_ONLY` entries `(VIEW, PAYROLL)` and `(VIEW, COMPENSATION)`). v1.9 adds the write-side pairs.
 
-| Revision | Name | Depends On | Content |
-|----------|------|-----------|---------|
-| 0033 | `yookassa_config_probe` | 0032 | No schema change. Adds `YooKassaSettings` to `app/core/config.py`. Migration is a sentinel to mark the bedrock phase. |
-| 0034 | `online_payments` | 0033 | New `online_payments` table: FSM columns, `yookassa_payment_id UNIQUE`, `idempotency_key UNIQUE`, FK to `payments` (nullable until succeeded), `audit_log_id FK`. CHECK on status + subject_kind. Indexes: `(status)`, `(yookassa_payment_id)`, `(subject_kind, subject_id)`. |
-| 0035 | `fiscal_receipts` | 0034 | New `fiscal_receipts` table: FK to `payments` (NOT `online_payments` — attaches to the committed ledger row). UNIQUE `(payment_id, kind)`. CHECK on kind + status. Index `(status)` for retry worker query. |
-| 0036 | `locked_audit_events_v17` | 0035 | No schema change. Extends `LOCKED_AUDIT_EVENTS` frozenset (new events: `online_payment_created`, `online_payment_succeeded`, `online_payment_canceled`, `online_payment_webhook_received`, `fiscal_receipt_sent`, `fiscal_receipt_succeeded`, `fiscal_receipt_failed`, `online_refund_created`, `online_refund_succeeded`). This is a code-only migration sentinel — the frozenset is in `app/core/audit.py`, not DB. |
+**New `OWNER_ONLY` entries to add:**
 
-**Safe rollout order:**
+| Action | Resource | Notes |
+|---|---|---|
+| `(CREATE, PAYROLL)` | | run payroll period |
+| `(EDIT, PAYROLL)` | | mark accrual paid |
+| `(LIST, PAYROLL)` | | list accruals (owner-only visibility) |
+| `(CREATE, COMPENSATION)` | | set comp config |
+| `(EDIT, COMPENSATION)` | | update comp config |
 
-1. Deploy 0033 (config probe, no schema). Boot-fail-fast validates ЮKassa credentials before any endpoint accepts traffic.
-2. Deploy 0034 (`online_payments` table). Safe to run before any route uses it — empty table.
-3. Deploy 0035 (`fiscal_receipts` table). Depends on `payments` existing (0012) — safe.
-4. Code deploys for `modules/online_payments/`, `integrations/yookassa/`, `_internal/yookassa/` router.
-5. Code deploy extends `LOCKED_AUDIT_EVENTS` (must precede any callsite — INFRA-15 discipline).
+`(VIEW, COMPENSATION)` and `(VIEW, PAYROLL)` are already in OWNER_ONLY (pre-existing frontend entries).
 
-**Rollback:** Tables 0034+0035 are addable/droppable independently. No modification to existing tables means zero risk to v1.4 ledger integrity.
+Recurring slots and time-off use the existing `SCHEDULE_SLOTS` resource. Time-off creation/cancellation maps to `(CREATE, SCHEDULE_SLOTS)` and `(CANCEL, SCHEDULE_SLOTS)` which are already owner-only in the existing OWNER_ONLY set.
 
----
-
-## 10. import-linter Contract Update
-
-New module additions to `.importlinter:contract:modules-independent` (independence list):
-
-```ini
-[importlinter:contract:modules-independent]
-modules =
-    ...existing 13 modules...
-    app.modules.online_payments    # NEW
-```
-
-New `ignore_imports` entries required:
-
-```ini
-# Phase 47 — online_payments orchestrator writes PaymentReceipt rows (fiscal
-# receipt idempotency) via payments/models.py, mirroring Phase 45 memberships
-# → payments pattern (Plans 45-09 / 45-10). Narrow scope: only
-# online_payments/service.py → payments/models.py.
-app.modules.online_payments.service -> app.modules.payments.models
-
-# Phase 47 — online_payments/service.py needs format_actor_display for
-# notification rendering. Mirrors Phase 45 memberships → users pattern.
-app.modules.online_payments.service -> app.modules.users.display
-
-# Phase 47 — email dispatcher walker gains new online_payments template registry.
-app.integrations.email.dispatcher -> app.modules.online_payments.email_templates
-```
-
-**No new `core-not-depend-on-modules` exemptions.** The new Protocol slots live in `app/core/dependencies.py` (Protocol type only, no import of `app.modules.*`). The concrete implementations wired at `app/main.py` are in the composition root, which is already outside the `source_modules = app.core` scope.
+**Mandatory three-way parity update:** any new `(Action, Resource)` pairs added to backend `OWNER_ONLY` must be mirrored byte-for-byte in `apps/admin-web/src/shared/session/can.ts` (OWNER_ONLY array) and `apps/admin-web/src/shared/session/registry.ts`. The existing parity test (`tests/unit/test_rbac_parity.py`) enforces this at CI. The admin-web files are updated in Phase 58 even though no UI ships in v1.9 (backend-only milestone).
 
 ---
 
-## Integration Map: Client Clicks "Оплатить" → DM + Fiscal Receipt
+## Component Boundaries Summary
+
+| Component | Status | Type | Cross-Module Access Mechanism |
+|---|---|---|---|
+| `app/modules/payroll/` | NEW | Write + read | Raw-SQL reads from `pt_sessions`, `payments`, `pt_packages` (D-54-08) |
+| `app/modules/schedule/` | EXTENDED | Write | Adds 2 new tables; new service methods; new ARQ cron |
+| `app/modules/reports/` | EXTENDED | Read-only | Adds `fetch_trainer_usage` raw-SQL reader |
+| `app/core/audit.py` | EXTENDED | Core | 7 new events pre-registered |
+| `app/core/permissions.py` | EXTENDED | Core | ~5 new OWNER_ONLY entries |
+| `app/workers/scheduled/generate_recurring_slots.py` | NEW | ARQ cron | Imports `schedule.service` directly |
+| `app/main.py` | NO CHANGE | Composition root | No new Protocol slots needed |
+
+**No new Protocol slots needed for v1.9.** All cross-module access is either raw-SQL text() reads or direct module imports in worker files.
+
+---
+
+## Data Flow Diagrams
+
+### Payroll Run Flow
 
 ```
-CLIENT BROWSER                  SPORTZAL BACKEND                    ЮKASSA API
-─────────────────               ──────────────────────────────────  ──────────────────
-
-[1] POST /online-payments/memberships/{plan_id}/sell
-    {idempotency_key, amount_kopecks, return_url, customer_email}
-                         ↓
-                 online_payments/router.py
-                 → online_payments/service.create_online_payment()
-                     ├─ INSERT online_payments (status='pending', idempotency_key)
-                     ├─ call yookassa_client.create_payment(
-                     │       idempotency_key=...,
-                     │       receipt_items=[{membership plan name, amount, vat_code=1}],
-                     │       customer={email}
-                     │  )  ──────────────────────────────────────────► POST /v3/payments
-                     │                                              ◄── {id, status:'pending',
-                     │                                                   confirmation_url}
-                     ├─ UPDATE online_payments SET yookassa_payment_id=..., status='pending'
-                     ├─ audit.emit("online_payment_created", ...)
-                     └─ COMMIT
-                         ↓
-                 return {confirmation_url} → 201
-
-[2] Client browser REDIRECT to confirmation_url (ЮKassa hosted page)
-    Client confirms payment on ЮKassa side
-
-[3]             ЮKassa calls POST /api/v1/_internal/yookassa/webhook
-                {type:"notification", event:"payment.succeeded", object:{id, status, ...}}
-                         ↓
-                 _internal/yookassa/router.py
-                 → Depends(verify_yookassa_ip)  [IP allowlist gate]
-                 → read raw body (already received)
-                 → json.loads(body)
-                 → online_payments/service.handle_webhook_event(event="payment.succeeded", yookassa_id=...)
-                     ├─ SELECT online_payments WHERE yookassa_payment_id=...
-                     │       [UPSERT-idempotent: if already 'succeeded', return 200 early]
-                     ├─ _assert_can_transition(current='pending', next='succeeded')
-                     ├─ call get_payment_recorder()(session, subject_kind='membership',
-                     │       subject_id=plan_id, amount_kopecks=..., method='online',
-                     │       received_by_user_id=SYSTEM_ACTOR_ID,
-                     │       audit_actor=SYSTEM_ACTOR)
-                     │   → payments/service.record_payment()  [appends to ledger]
-                     │   → audit.emit("payment_recorded", method='online', ...)
-                     ├─ UPDATE memberships SET status='active' via memberships Protocol slot
-                     │       [OR: service.activate_membership_for_online_payment(session, ...)]
-                     ├─ UPDATE online_payments SET status='succeeded', payment_id=<new payment row id>
-                     ├─ audit.emit("online_payment_succeeded", ...)
-                     ├─ INSERT fiscal_receipts (payment_id=..., kind='payment',
-                     │       idempotency_key=f"{payment_id}:payment", status='sent')
-                     │   [ЮKassa already has receipt data from step [1] — row captures local view]
-                     ├─ INSERT payment_receipts (payment_id, channel='telegram', ...)
-                     │   [idempotency row for DM]
-                     ├─ INSERT payment_receipts (payment_id, channel='email', ...)
-                     │   [idempotency row for email receipt]
-                     └─ COMMIT
-                              ↓ post-commit fanout (best-effort, payment NOT rolled back on failure)
-                     ├─ pool.enqueue_job("dispatch_email", template="EMAIL_ONLINE_PAYMENT_SUCCESS", ...)
-                     ├─ Telegram bot DM via PAYMENT_SUCCESS_DM constant
-                     └─ return Response(200)   ← ЮKassa sees 200, stops retrying
-
-[4] ARQ worker: dispatch_email task delivers email to client
-
-[5] ЮKassa calls POST /api/v1/_internal/yookassa/webhook
-    {event:"receipt.succeeded", object:{id, status:'succeeded', payment_id:...}}
-                         ↓
-                 → online_payments/service.handle_receipt_webhook(...)
-                     ├─ SELECT fiscal_receipts WHERE payment_id=... AND kind='payment'
-                     ├─ UPDATE fiscal_receipts SET status='succeeded'
-                     ├─ audit.emit("fiscal_receipt_succeeded", ...)
-                     └─ COMMIT
-                         ↓
-                 return Response(200)
+POST /api/v1/payroll/run  (owner only)
+    |
+    v
+payroll.service.run_payroll_period(trainer_id, period_start, period_end)
+    |
+    +-- payroll.repository.fetch_trainer_comp_config(trainer_id)
+    |       SELECT trainer_comp_configs WHERE trainer_id = ...
+    |
+    +-- payroll.repository.fetch_trainer_session_revenue(trainer_id, period)
+    |       Raw SQL text(): JOIN pt_sessions + pt_packages + payments
+    |
+    +-- compute accrual_kopecks (fixed_per_session * count + pct * revenue)
+    |
+    +-- payroll.repository.insert_accrual(...)
+    |
+    +-- audit.emit("payroll_accrual_created", resource_type="payroll_accrual", ...)
+    |
+    +-- session.commit()  -- accrual + audit row atomic
 ```
 
-**Refund flow (abbreviated):**
+### Recurring Slot Expansion Flow
 
 ```
-POST /online-payments/{id}/refund
-  → online_payments/service.create_online_refund()
-      ├─ call yookassa_client.create_refund(payment_id=yookassa_payment_id, ...)
-      ├─ call get_payment_refunder()(session, subject_kind='membership', ...)
-      │       → payments/service.issue_refund() [appends negative-amount row]
-      ├─ INSERT fiscal_receipts (kind='refund', status='sent')
-      ├─ audit.emit("online_refund_succeeded", ...)
-      └─ COMMIT → DM + email fanout
+ARQ cron: generate_recurring_slots (daily 07:00 MSK)
+    |
+    +-- SELECT active recurring_slot_templates
+    |
+    |   FOR EACH template x day in [today+1 .. today+14]:
+    |       |
+    |       +-- Check: any active trainer_time_off overlaps this window?
+    |       |       SELECT WHERE trainer_id=? AND cancelled_at IS NULL
+    |       |       AND tstzrange overlaps computed slot window
+    |       |
+    |       +-- IF overlap: skip (no insert, no audit)
+    |       |
+    |       +-- INSERT trainer_availability_slots ON CONFLICT DO NOTHING
+    |           IF rowcount == 1:
+    |               audit.emit("slot_published", ...)
+    |
+    +-- session.commit()
+```
+
+### Time-Off Creation Flow
+
+```
+POST /api/v1/trainer-time-off  (owner only)
+    |
+    v
+schedule.service.create_time_off(trainer_id, starts_at, ends_at)
+    |
+    +-- schedule.repository.count_booked_slots_in_window(trainer_id, window)
+    |       SELECT COUNT(*) FROM trainer_availability_slots
+    |       WHERE trainer_id=? AND status='booked'
+    |       AND tstzrange(start_time, end_time) && tstzrange(starts_at, ends_at)
+    |
+    +-- IF count > 0: raise TimeOffConflictsWithBookings (409)
+    |
+    +-- schedule.repository.insert_time_off(...)
+    |
+    +-- audit.emit("trainer_time_off_created", resource_type="trainer", ...)
+    |
+    +-- session.commit()
 ```
 
 ---
 
-## Build Order for Phases 47–53
+## Alembic Migrations Required
 
-| Phase | Deliverable | DB Dependencies | Notes |
-|-------|-------------|----------------|-------|
-| **47 — Bedrock** | `LOCKED_AUDIT_EVENTS` extended (9+ new events), `YooKassaSettings` config, Protocol slots declared in `core/dependencies.py`, `YooKassaClientProvider` + `FiscalReceiptDispatcher` slots; `app/integrations/yookassa/` skeleton (types + client + factory + webhook_verifier); 0033 sentinel migration | None (no table changes) | AST gate covers new event literals before any callsite; matches INFRA-15 discipline |
-| **48 — ЮKassa Integration Adapter** | `integrations/yookassa/client.py` (real + sandbox), `factory.py` boot probe, `webhook_verifier.py` IP gate, tests for each transport path | None | Parallels Phase 42 (email client) |
-| **49 — Online Sales Orchestrator** | `modules/online_payments/` full module: models (0034), repository, service `create_online_payment()`, router `POST /online-payments/memberships/{plan_id}/sell` + `POST /online-payments/pt-packages/{plan_id}/sell`; composition root wiring; `import-linter` update | 0034 `online_payments` | `record_payment(method='online')` is the only change to existing code path |
-| **50 — Webhook + FSM** | `_internal/yookassa/router.py` with IP-verify Depends; `handle_webhook_event()` FSM; membership activation via new Protocol slot; `fiscal_receipts` table (0035); `fiscal_receipts` INSERT on succeeded; `INSERT payment_receipts` idempotency rows | 0035 `fiscal_receipts` | Fiscal receipt row created here (status='sent') because receipt data was bundled in payment creation |
-| **51 — Fiscal Receipt FSM + Receipt Webhook** | `handle_receipt_webhook()` handler; `receipt.succeeded` / `receipt.canceled` event routing; `dispatch_fiscal_receipt` ARQ task with retry; `fiscal_receipt_succeeded` / `fiscal_receipt_failed` audit events | 0035 | ARQ task checks `fiscal_receipts.status` before calling ЮKassa — idempotent |
-| **52 — Cross-Channel Notifications + Online Refunds** | `online_payments/notifications.py` Telegram DM constants; `online_payments/email_templates.py` new templates; `LOCKED_EMAIL_TEMPLATES` extended; dispatcher walker updated; `.importlinter` email dispatcher ignore added; `POST /online-payments/{id}/refund` endpoint; `handle_refund_webhook` | None | Mirrors Phase 45 (NOTIFY-11/12/13) pattern; same post-commit best-effort fanout |
-| **53 — Milestone Verification** | Phase 36/40/46 discipline: operator runbook (curl + Telegram sandbox + cron sweeps); live-Postgres race tests (concurrent webhook double-delivery, duplicate `succeeded` events); DEFER-46-01 live RU email deliverability probe; DEFER-46-02 owner template countersign | None | Gate: 0/0 inline regressions above hard cap |
-
----
-
-## Confidence Assessment
-
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Module boundary (sibling vs extend) | HIGH | Directly derived from existing `payments/` AST gate + CHECK constraints — codebase read |
-| Protocol slot pattern | HIGH | 12 prior slots all follow identical pattern — direct code read |
-| Webhook security (IP allowlist) | MEDIUM-HIGH | Official ЮKassa docs confirm IP allowlisting; no HMAC header documented. Project constraint in PROJECT.md that says "HMAC" is a common misconception — the constraint should be restated as IP-allowlist enforcement |
-| ЮKassa payment FSM states | HIGH | Confirmed from official payment process docs |
-| Fiscal receipt FSM | MEDIUM | ЮKassa docs say receipt data is bundled in payment request; exact `receipt.succeeded` / `receipt.canceled` event names need live testing in Phase 53 |
-| 54-ФЗ receipt via ЮKassa hosted path | HIGH | ЮKassa handles OFD registration internally when receipt items bundled in payment creation — no separate `/receipts` call needed at payment time |
-| ARQ task pattern for receipt dispatch | HIGH | Directly mirrors `dispatch_email` — same per-enqueue `_max_tries` / `_expires` pattern |
-| import-linter additions | HIGH | Pattern established in Phase 45 for the same narrow cross-module access |
+| Migration # | Content |
+|---|---|
+| 0041 | CREATE TABLE `trainer_comp_configs` |
+| 0042 | CREATE TABLE `payroll_accruals` |
+| 0043 | CREATE TABLE `recurring_slot_templates` |
+| 0044 | CREATE TABLE `trainer_time_off` |
+| 0045 | ALTER TABLE `trainer_availability_slots` DROP NOT NULL on `created_by_user_id`; ADD UNIQUE (trainer_id, start_time) if not already present |
+| 0046 | Performance indexes: payroll_accruals (status, period_start) + trainer_time_off partial |
 
 ---
 
-## Open Questions for Phase-Specific Research
+## Suggested Phase Build Order
 
-1. **ЮKassa webhook IP range stability:** The published CIDRs should be treated as stable but need verification against the live dashboard at Phase 48 time. Storing them in config (not hardcoded) allows updates without code change.
+### Phase 58 -- Foundations: RBAC parity + audit pre-registration + comp-config API
 
-2. **Receipt event names:** `receipt.succeeded` / `receipt.canceled` are inferred from the pattern. Verify exact event strings against ЮKassa webhook subscription docs during Phase 50 implementation.
+**Why first:** INFRA-15 discipline requires all new LOCKED_AUDIT_EVENTS and OWNER_ONLY entries to exist before any callsite. RBAC parity test must be green before any protected endpoints land. Comp config is a prerequisite for payroll calculation.
 
-3. **`SYSTEM_ACTOR_ID` for webhook-triggered `record_payment`:** Online payments have no human operator at `succeeded` time. The `payments` table has `received_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT`. Either: (a) use the owner's user ID as a placeholder system actor (requires a seeded "system" user row), or (b) make `received_by_user_id` nullable for `method='online'` (migration 0034 must include this as a conditional nullable). Option (b) is architecturally cleaner but requires widening the NOT NULL constraint. Recommend option (b): nullable `received_by_user_id` for online-only payments, with a CHECK `(method='cash' AND received_by_user_id IS NOT NULL) OR method='online'`.
+Deliverables:
+- 7 new LOCKED_AUDIT_EVENTS pre-registered in `audit.py`
+- New OWNER_ONLY entries in `permissions.py` + admin-web `can.ts`/`registry.ts` parity (3-way parity test green)
+- `app/modules/payroll/` scaffold registered in `.importlinter` modules-independent list
+- `TrainerCompConfig` model + Alembic 0041
+- `GET /payroll/trainer-configs/{trainer_id}` + `PUT /payroll/trainer-configs/{trainer_id}` endpoints
+- `trainer_comp_config_set` audit event wired
 
-4. **Membership activation cross-module call:** The webhook handler in `online_payments/service.py` needs to activate a membership. This requires either a new Protocol slot `MembershipActivator` (wired at composition root) OR the FK back-reference through `online_payments.subject_id` + subject_kind to call the memberships module indirectly. A `MembershipActivator` Protocol slot follows established precedent and keeps the import contract clean.
+### Phase 59 -- Payroll Ledger
 
-5. **`DEFER-46-01/02` carry-out in Phase 53:** The v1.6 deferred items (live RU email deliverability probe + owner 15-template countersign) should run as the first task of Phase 53 before the v1.7 operator scenarios, since the email channel is a transport dependency for online payment receipts.
+**Why second:** depends on comp config from Phase 58.
+
+Deliverables:
+- `payroll_accruals` model + Alembic 0042
+- `payroll/repository.py` cross-module raw-SQL reader (`fetch_trainer_session_revenue`)
+- `payroll.service.run_payroll_period` + `mark_accrual_paid`
+- `POST /api/v1/payroll/run`, `PATCH /api/v1/payroll/accruals/{id}/paid`, `GET /api/v1/payroll/accruals`
+- `payroll_accrual_created` + `payroll_accrual_paid` audit events wired
+
+### Phase 60 -- Recurring Slots + Time-Off
+
+**Why third:** independent of payroll; pure schedule module extension.
+
+Deliverables:
+- `recurring_slot_templates` + `trainer_time_off` models + Alembic 0043/0044
+- Alembic 0045: `created_by_user_id` nullable on `trainer_availability_slots` + UNIQUE (trainer_id, start_time)
+- Template CRUD endpoints (`POST /trainer-slot-templates`, `DELETE /trainer-slot-templates/{id}`, `GET /trainer-slot-templates`)
+- `POST /trainer-time-off`, `DELETE /trainer-time-off/{id}`, `GET /trainer-time-off` endpoints
+- `schedule.service.create_time_off` with conflict check (409 on booked slots overlap)
+- `recurring_slot_template_created/cancelled` + `trainer_time_off_created/cancelled` audit events wired
+
+### Phase 61 -- Recurring Slot ARQ Cron
+
+**Why fourth:** depends on Phase 60 tables and service methods.
+
+Deliverables:
+- `app/workers/scheduled/generate_recurring_slots.py` ARQ cron (07:00 MSK)
+- Alembic 0046 performance indexes
+- `WorkerSettings` cron list extension + structlog summary line convention
+- Integration tests: cron skips time-off windows; idempotent on re-run (ON CONFLICT DO NOTHING); `slot_published` only on actual insert
+
+### Phase 62 -- Trainer-Usage Report
+
+**Why fifth:** depends on pt_sessions/payments data (already exists from v1.4) and schedule data from Phase 60/61. Low risk -- read-only addition to the already-built reports module.
+
+Deliverables:
+- `reports/repository.py`: `fetch_trainer_usage` raw-SQL reader
+- `reports/service.py`: `get_trainer_usage_report` + `trainer_usage_csv_rows`
+- `GET /api/v1/reports/trainers` + `GET /api/v1/reports/trainers.csv`
+- Reuses existing RBAC guard, date range validation, CSV export infrastructure
+
+### Phase 63 -- OpenAPI Handoff + Milestone Verification
+
+**Why last:** all business surfaces must be stable before regenerating the OpenAPI artifact.
+
+Deliverables:
+- `openapi.json` + `schema.d.ts` byte-stable regen with all v1.9 paths
+- `_v19Checks` AssertNonNever guards in `schema.contract.test.ts` (`toHaveLength(N)`)
+- Operator runbook `.planning/handoff/v1.9-trainers-runbook.md`
+- Milestone verification gate
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Payroll ORM Importing pt_sessions or payments ORM
+
+**What people do:** `from app.modules.pt_sessions.models import PtSession` in `payroll/service.py`.
+
+**Why it's wrong:** violates `modules-independent` import-linter contract. Fails CI immediately.
+
+**Do this instead:** raw-SQL `text()` read in `payroll/repository.py` (D-54-08 pattern).
+
+### Anti-Pattern 2: Protocol Slot for Payroll Revenue Read
+
+**What people do:** add a `PayrollRevenueProvider` Protocol slot in `core/dependencies.py` and wire it in `main.py`.
+
+**Why it's wrong:** Protocol slots are for write-callback dependencies. A read-only aggregation does not need the indirection overhead. The v1.8 reports module has proven that raw-SQL reads are the correct pattern for cross-module aggregations.
+
+**Do this instead:** raw-SQL `text()` read in `payroll/repository.py`.
+
+### Anti-Pattern 3: Time-Off Auto-Cancelling Confirmed Bookings
+
+**What people do:** create time-off block and auto-cancel all `status='booked'` slots within the window.
+
+**Why it's wrong:** requires the schedule module to write into the bookings FSM, a cross-module write dependency. The booking FSM is owned by `bookings.service`; calling it from `schedule.service` would require violating import-linter or adding a `BookingCanceller` Protocol slot.
+
+**Do this instead:** 409 conflict response listing affected slot IDs. Owner resolves conflicts manually via existing `/bookings/{id}/cancel` endpoint.
+
+### Anti-Pattern 4: Emitting Audit Events for ON CONFLICT Rows in the Cron
+
+**What people do:** emit `slot_published` for every slot in the template expansion loop, including rows that already existed (ON CONFLICT DO NOTHING).
+
+**Why it's wrong:** creates spurious audit spam on every daily cron run for slots already generated.
+
+**Do this instead:** check `result.rowcount == 1` after each INSERT; only emit audit when a real new insert occurred.
+
+### Anti-Pattern 5: Comp Config Columns on the Trainers Table
+
+**What people do:** add `fixed_per_session_kopecks` and `pct_of_revenue_bps` columns directly onto the `trainers` table.
+
+**Why it's wrong:** mixes financial configuration into a catalog module. Harder to version comp config history. Creates financial coupling in a non-financial module.
+
+**Do this instead:** separate `trainer_comp_configs` table in the `payroll` module, FK'd to `trainers.id`.
+
+### Anti-Pattern 6: Expand-on-Read for Recurring Slots
+
+**What people do:** don't generate real `trainer_availability_slots` rows; instead, compute virtual slots dynamically in the slot-listing endpoint from `recurring_slot_templates`.
+
+**Why it's wrong:** bookings require a real `trainer_availability_slots` row (the booking FSM transitions `status='active' -> 'booked'`). Virtual slots can't be booked. The `resolve_slot_by_id` Protocol slot in `bookings.service` looks up the real table. This would require a parallel virtual-slot system alongside the real one.
+
+**Do this instead:** ARQ cron generate-ahead writes real rows with ON CONFLICT idempotency.
+
+---
+
+## Integration Points Summary
+
+| Cross-Module Boundary | Mechanism | Notes |
+|---|---|---|
+| `payroll` reads `pt_sessions` | Raw-SQL `text()` in `payroll/repository.py` | Zero new linter ignores |
+| `payroll` reads `payments` | Raw-SQL `text()` in `payroll/repository.py` (same query) | Zero new linter ignores |
+| `payroll` reads `pt_packages` | Raw-SQL `text()` in `payroll/repository.py` (JOIN bridge) | Zero new linter ignores |
+| `reports` reads `pt_sessions`, `bookings`, `trainer_availability_slots`, `payments`, `trainers` | Raw-SQL `text()` in `reports/repository.py` | Extends v1.8 repository |
+| `schedule` cron checks `trainer_time_off` | Direct import within schedule module (same module) | No cross-module boundary |
+| `schedule.service` resolves trainer | Existing `resolve_trainer_by_id` Protocol slot | No change needed |
+| Worker cron -> `schedule.service` | Direct import in `generate_recurring_slots.py` | Same pattern as `expire_memberships.py` |
+
+---
+
+## Sources
+
+- Direct codebase: `apps/backend/app/core/dependencies.py` (all 16 Protocol slots, lines 1-1223)
+- Direct codebase: `apps/backend/app/core/permissions.py` (RBAC, OWNER_ONLY, Resource enum)
+- Direct codebase: `apps/backend/app/modules/payments/models.py` (Payment ledger schema)
+- Direct codebase: `apps/backend/app/modules/reports/repository.py` (D-54-08 raw-SQL pattern)
+- Direct codebase: `apps/backend/app/modules/reports/service.py` (D-54-07 read-only discipline)
+- Direct codebase: `apps/backend/app/modules/schedule/models.py` (TrainerAvailabilitySlot)
+- Direct codebase: `apps/backend/app/modules/pt_sessions/models.py` (PtSession, existing indexes)
+- Direct codebase: `apps/backend/app/modules/trainers/models.py` (Trainer catalog model)
+- Direct codebase: `apps/backend/app/workers/scheduled/expire_memberships.py` (ARQ cron pattern)
+- Direct codebase: `apps/backend/app/main.py` (composition root, Protocol slot registrations)
+- Direct codebase: `apps/backend/.importlinter` (all contracts + ignore_imports edges)
+- `.planning/PROJECT.md` (v1.9 scope, architectural decisions log, LOCKED_AUDIT_EVENTS history)
+
+---
+*Architecture research for: v1.9 Trainers Complete (Sportzal FastAPI modular monolith)*
+*Researched: 2026-05-24*
