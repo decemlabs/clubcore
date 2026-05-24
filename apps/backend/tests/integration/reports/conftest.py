@@ -10,6 +10,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.payments.models import Payment
+from app.modules.visits.models import Visit
 
 # Re-export memberships package fixtures (owner / reception clients, factories).
 from tests.integration.memberships.conftest import (  # noqa: F401
@@ -62,8 +63,43 @@ async def make_payment_ledger(
     return _make
 
 
+@pytest_asyncio.fixture
+async def make_visit(
+    db_session: AsyncSession,
+) -> Callable[..., Awaitable[Visit]]:
+    """Insert a Visit row with explicit checked_in_at for deterministic MSK-date tests.
+
+    gym_date is STORED GENERATED (Postgres computes it from checked_in_at via
+    ``(checked_in_at AT TIME ZONE 'Europe/Moscow')::date``) — do NOT pass gym_date.
+
+    Required: client_id, membership_id, checked_in_at (timestamptz).
+    channel defaults to 'reception'.
+    """
+
+    async def _make(
+        *,
+        client_id: UUID,
+        membership_id: UUID,
+        checked_in_at: datetime,
+        channel: str = "reception",
+    ) -> Visit:
+        visit = Visit(
+            client_id=client_id,
+            membership_id=membership_id,
+            checked_in_at=checked_in_at,
+            channel=channel,
+        )
+        db_session.add(visit)
+        await db_session.commit()
+        await db_session.refresh(visit)
+        return visit
+
+    return _make
+
+
 __all__ = (
     "UTC",
     "datetime",
     "make_payment_ledger",
+    "make_visit",
 )

@@ -121,7 +121,8 @@ async def fetch_expiring_memberships_count(session: AsyncSession, within: int) -
                 "  AND c.deleted_at IS NULL "
                 "  AND m.end_date BETWEEN "
                 "    (now() AT TIME ZONE 'Europe/Moscow')::date "
-                "    AND (now() AT TIME ZONE 'Europe/Moscow')::date + :within"
+                "    AND (now() AT TIME ZONE 'Europe/Moscow')::date "
+                "    + CAST(:within AS integer)"
             ),
             {"within": within},
         )
