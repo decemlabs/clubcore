@@ -1,5 +1,25 @@
 # Milestones
 
+## v1.7 Online Payments + 54-ФЗ (Shipped: 2026-05-24)
+
+**Phases completed:** 7 phases, 47 plans, 41 tasks
+
+**Key accomplishments:**
+
+- **ЮKassa async integration layer (Phase 47–48)** — `app/integrations/yookassa/` httpx adapter (`create_payment`/`get_payment`/`create_refund`/`get_refund`, never re-raises), IP-allowlist webhook verifier over 6 published CIDR ranges (AST-gated `verify_yookassa_ip`), boot-time probe (non-fatal degraded mode), "Чеки от ЮKassa" receipt builder with locked `PaymentSubject`/`PaymentMode` literals, respx fixtures for 6 canonical responses, and 4 new Protocol slots double-wired at both composition roots (REG-29-03 parity).
+- **Online sales orchestrator (Phase 49)** — `service.sell_membership` / `service.sell_pt_package` wrap the adapter over the v1.4 `payment_recorder` Protocol slot; redirect + QR (`confirmation_type='qr'`) flows; FIS-05 email-required gate (422 `client_email_required_for_online_payment`); deterministic per-day `Idempotency-Key`; anti-oracle `/return` screen with `_constant_time_floor`. Alembic 0033 (`clients(lower(email))` partial UNIQUE w/ pre-flight guard) + 0034 `online_payments` (XOR-FK CHECK + double-tap partial UNIQUE).
+- **Webhook FSM + atomic activation (Phase 50)** — `POST /_internal/yookassa/webhook` with IP allowlist before body parse + Redis `SET NX EX 86400` dedup; always re-fetches `GET /v3/payments/{id}` before any write; `handle_payment_succeeded` 8-step atomic UoW (SELECT-FOR-UPDATE → FSM guard → status → ledger `record_payment(method='online')` → activator → `fiscal_receipts` insert → 2-emit audit chain) in one commit boundary; `payment.canceled` captures `cancellation_party`/`reason`.
+- **54-ФЗ fiscal receipts (Phase 50+51)** — Alembic 0035 `fiscal_receipts` (FK to committed `payments.id`, UNIQUE `(payment_id, kind)`); embedded receipt items; fiscal FSM `sent → succeeded / failed`; `dispatch_fiscal_receipt` ARQ task (`max_tries=3`, exp-backoff + jitter) + Redis circuit breaker `sz:yookassa:circuit:receipts`; `monitor_stale_fiscal_receipts` 15-min cron; tax/VAT codes from `YooKassaSettings` (never hardcoded).
+- **Online refunds (Phase 51)** — full refund via ЮKassa Refund API (reception+owner, 202 awaits webhook); `refund.succeeded` writes signed-amount ledger row (v1.4 CHECK preserved) + `refunded` status + `fiscal_receipts(kind='refund')`; partial UNIQUE on `refund_of` arbitrates double-refund (idempotent 200 on retry); `poll_pending_refunds` 30-min reconciliation cron.
+- **Cross-channel notifications + carry-out (Phase 52)** — 4 Telegram + 4 email templates (`LOCKED_EMAIL_TEMPLATES` 15 → 19, AST literal-`template_id` gate); `payment_notifications` UNIQUE `(payment_id, kind, channel)`; fiscal-failure operator alert (fire-and-forget, no payment rollback); `LOCKED_AUDIT_EVENTS` extended with 9 v1.7 events pre-registered before callsites (INFRA-15 discipline).
+- **Milestone verification gate (Phase 53)** — `v1_7_runbook.sh` operator scenarios + 14 real-Postgres race tests (concurrent webhook double-delivery, Redis-restart DB-UNIQUE catch, refund-arbitration, kopecks↔rubles Decimal precision) + 2 circuit-breaker parity tests; **16/16 new tests pass, 0/5 inline product-code regressions**; DEFER-46-03 (v1.6 scenario-08 circuit breaker) closed via FISCAL-05 open-state parity.
+
+**Known deferred items at close: 5** (see STATE.md Deferred Items — all operator-credential-gated or stale artifacts, acknowledged 2026-05-24).
+
+**Operator-pending requirements carried forward** (acknowledged as deferred, not gaps): CARRY-01 (DEFER-46-01 live RU email-deliverability probe — needs real Yandex Postbox key + owner aliases), CARRY-02 (DEFER-46-02 owner 15-template countersign), VER-03 (ЮKassa sandbox owner walkthrough per D-04). VER-01/02/04/05 technically verified.
+
+---
+
 ## v1.6 Email channel + Multi-user admin (Shipped: 2026-05-21)
 
 **Phases completed:** 6 phases (41–46), 82 plans, 75 tasks

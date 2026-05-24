@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Online Payments + 54-ФЗ
-status: executing
-stopped_at: Phase 53 executed (4/4 plans); verification human_needed — VER-01/02/04/05 verified, VER-03 operator-pending
-last_updated: "2026-05-23T18:53:29.668Z"
-last_activity: 2026-05-23 -- Phase 53 execution started
+status: Awaiting next milestone
+stopped_at: Milestone v1.7 completed and archived (2026-05-24); 3 operator-credential-gated items deferred (CARRY-01/02, VER-03)
+last_updated: "2026-05-24T14:22:14.804Z"
+last_activity: 2026-05-24 — Milestone v1.7 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
@@ -18,36 +18,41 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-21 after v1.6 milestone close)
+See: .planning/PROJECT.md (updated 2026-05-24 after v1.7 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 53 — milestone-verification
+**Current focus:** Planning next milestone (v1.8 — Reports + Audit Log read API, starts at Phase 54)
 
 ## Current Position
 
-Phase: 53 (milestone-verification) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 53
-Last activity: 2026-05-23 -- Phase 53 execution started
+Phase: Milestone v1.7 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-24 — Milestone v1.7 completed and archived
 
 ## Accumulated Context
 
 ### Decisions
 
-Full decisions log lives in PROJECT.md Key Decisions table. v1.6 added new decisions (D-41-NN..D-46-NN) — all archived in `.planning/milestones/v1.6-ROADMAP.md` and per-phase `*-CONTEXT.md` files.
+Full decisions log lives in PROJECT.md Key Decisions table. v1.7 added the ЮKassa webhook-security, async-adapter, fiscal-FK, and operator-deferral decisions — all in PROJECT.md Key Decisions + archived in `.planning/milestones/v1.7-ROADMAP.md` and per-phase `*-CONTEXT.md` files.
 
 ### Blockers/Concerns
 
-None. Two open operator follow-ups from v1.6 are formally scoped into Phase 52 (CARRY-01 = DEFER-46-01, CARRY-02 = DEFER-46-02).
+None blocking. Three operator-credential-gated follow-ups remain open and acknowledged as deferred at v1.7 close: CARRY-01 (DEFER-46-01 live RU email probe), CARRY-02 (DEFER-46-02 owner countersign), VER-03 (ЮKassa sandbox walkthrough). All need real external credentials the operator runs out-of-band; none block the next milestone.
 
 ## Deferred Items
 
-Items carried forward at v1.6 close (2026-05-21), updated with v1.7 resolution plan:
+**Acknowledged at v1.7 milestone close (2026-05-24):** the pre-close artifact audit surfaced 5 open items (2 verification gaps = Phase 52 + Phase 53 human_needed, 1 Phase 53 UAT partial, 1 debug session `knowledge-base`, 1 quick task `260501-ndi`). All map to operator-credential-gated follow-ups or stale artifacts — no new functional gaps. Acknowledged and deferred per operator decision; recorded in the v1.7 MILESTONES.md entry.
+
+Items tracked through v1.7 close:
 
 | Category | Item | Status | Source | Resolution |
 |----------|------|--------|--------|-----------|
-| verification_gap | **DEFER-46-01** — VER-12 live RU email-deliverability probe (yandex.ru + mail.ru + rambler.ru `Authentication-Results` headers). Probe script ready; needs real Yandex Postbox API key + owner's personal RU aliases. | in-scope v1.7 Phase 52 as CARRY-01 | Phase 46 / Plan 46-13 | Phase 52 — closed as CARRY-01 |
-| sign_off_gap | **DEFER-46-02** — VER-14 15-template owner formal countersign (`LOCKED_EMAIL_TEMPLATES`). | in-scope v1.7 Phase 52 as CARRY-02 | Phase 46 / Plan 46-13 | Phase 52 — closed as CARRY-02 |
+| verification_gap | **DEFER-46-01 / CARRY-01** — live RU email-deliverability probe (yandex.ru + mail.ru + rambler.ru `Authentication-Results` headers). Probe script + scaffolding ready; needs real Yandex Postbox API key + owner's personal RU aliases. | operator-pending — acknowledged at v1.7 close | Phase 46 → Phase 52 | v1.8/v1.9 when operator has Yandex Postbox creds |
+| sign_off_gap | **DEFER-46-02 / CARRY-02** — 15-template owner formal countersign (`LOCKED_EMAIL_TEMPLATES`, visual sanity check, no content edits). | operator-pending — acknowledged at v1.7 close | Phase 46 → Phase 52 | v1.8/v1.9 owner countersign |
+| verification_gap | **VER-03** — ЮKassa sandbox owner-recorded end-to-end membership sale + refund walkthrough; evidence → `.planning/handoff/v1.7-yookassa-sandbox-evidence/`. Scaffolding + capture README ready (operator-pending per D-04). | operator-pending — acknowledged at v1.7 close | Phase 53 / Plan 53-04 | v1.8/v1.9 when operator runs ЮKassa sandbox session |
+| debug_session | `knowledge-base` debug session left at `unknown` status (KB-seeding artifact from commit `dfb3bce`, not a live bug investigation). | acknowledged at v1.7 close | v1.7 | `/gsd-cleanup` or resolve/close on next debug pass |
+| uat_gap | Phase 53 `53-HUMAN-UAT.md` partial (0 pending scenarios — operator scenarios documented, await same ЮKassa sandbox run as VER-03). | acknowledged at v1.7 close | Phase 53 | closes with VER-03 |
 | **CLOSED** | **DEFER-46-03** — VER-09 scenario 08 (cron-chain circuit-breaker open-state) recorded PARTIAL. | closed by VER-05 (Phase 53, Plan 53-03) | Phase 46 | **CLOSED 2026-05-23** — `test_circuit_breaker_open_state_parity.py` confirms FISCAL-05 open-state short-circuit parity (2/2 pass) |
 | ci_tech_debt | **DEFER-46-04** — 3 CI gates carry pre-existing tree-wide tech debt (ruff 79 errors / ruff format 205 files / mypy attr-defined warnings). None trace to v1.6 commits. | acknowledged | Phase 46 | v1.9 doc-debt + test-debt sweep |
 | runbook_optional | **DEFER-46-05** — VER-09 MailHog inbox assertions skipped (no MailHog in docker-compose.yml). | acknowledged | Phase 46 | v1.9 optional — add MailHog `--profile dev` service or rely on VER-12 live probe |
@@ -59,17 +64,14 @@ Items carried forward at v1.6 close (2026-05-21), updated with v1.7 resolution p
 | quick_task | `260501-ndi` orphan in `.planning/quick/` | unchanged from v1.0 | v1.0 | Defer to `/gsd-cleanup` |
 | uat_gap | Phase 06 + Phase 08 HUMAN-UAT.md pending scenarios | unchanged from v1.1 | v1.1 | v2.0 Frontend Integration milestone scope |
 
-Known deferred items: 12 (3 v1.7-resolvable in Phases 52–53 + 9 carry-over from v1.6/earlier).
+Known deferred items: 13 open (2 CLOSED this milestone: DEFER-46-03 + DEFER-36-04-A). Of the 13: 3 operator-credential-gated (CARRY-01, CARRY-02, VER-03), 2 v1.7-close artifacts (knowledge-base debug, Phase 53 UAT), 8 carry-over from v1.4–v1.6/earlier.
 
 ## Session Continuity
 
 Last session: 2026-05-23T18:53:29.664Z
-Stopped at: Phase 53 executed (4/4 plans); verification human_needed — VER-01/02/04/05 verified, VER-03 operator-pending
-Resume: Run `/gsd-plan-phase 47` to plan Phase 47 (Bedrock).
+Stopped at: Milestone v1.7 completed and archived (2026-05-24).
+Resume: Run `/gsd-new-milestone` to start v1.8 (Reports + Audit Log read API, Phase 54+).
 
 ## Operator Next Steps
 
-- Plan and execute Phase 47 (Bedrock) with `/gsd-plan-phase 47`.
-- Phases 47–53 are sequentially dependent; execute in order.
-- DEFER-46-01 + DEFER-46-02 close in Phase 52 (requires operator with real Yandex Postbox credentials).
-- DEFER-46-03 closes in Phase 53 (automated fixture re-run).
+- Start the next milestone with /gsd-new-milestone
