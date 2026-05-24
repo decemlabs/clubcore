@@ -170,7 +170,9 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   3. `GET /api/v1/reports/visits?from=&to=` returns daily visit counts using `visits.gym_date` (no secondary TZ conversion); a separate grouping by hour of day is available for peak-hour analysis; average visits per day for the period is returned
   4. Reception role receives 403 on all `/reports/*` endpoints (RBAC guard + route-introspection gate covers the new routes)
   5. All day/month buckets match Europe/Moscow boundaries (consistent with existing `gym_date STORED` and cron-window discipline)
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 55-01-PLAN.md — Module contracts (all-three DTOs, range-validation guard, router mount, test conftest) + revenue endpoint end-to-end (REV-01..05)
+- [ ] 55-02-PLAN.md — Clients snapshot (active/expiring/new, soft-delete excluded) + visits report (daily/hourly/average) endpoints (CLR-01..04, VIS-R-01..04)
 
 ### Phase 56: Audit Log Read API + CSV Export
 **Goal**: Owner can browse and filter the full 69-event audit log through a paginated JSON endpoint and download any report or audit log as a UTF-8 BOM CSV suitable for Excel.
