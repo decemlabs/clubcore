@@ -11,6 +11,7 @@
 - ✅ **v1.6 Email channel + Multi-user admin** — Phases 41-46 (shipped 2026-05-21) — see [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 - ✅ **v1.7 Online Payments + 54-ФЗ** — Phases 47-53 (shipped 2026-05-24) — see [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 - ✅ **v1.8 Reports + Audit Log read API** — Phases 54-57 (shipped 2026-05-24) — see [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
+- 🚧 **v1.9 Trainers Complete** — Phases 58-61 (in progress)
 
 ## Phases
 
@@ -146,7 +147,76 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 ---
 
-*Roadmap last updated: 2026-05-24 — v1.8 Reports + Audit Log read API SHIPPED (Phases 54-57, 10 plans, 30/30 requirements; VER-01 live runbook operator-pending per D-12). Next milestone: TBD via `/gsd-new-milestone`.*
+### 🚧 v1.9 Trainers Complete (In Progress)
+
+**Milestone Goal:** Закрыть последний неполный бизнес-домен — довести Trainers с catalog-only до ✅: настраиваемый payroll-ledger с записываемыми начислениями, расширение расписания (recurring-слоты + отпуска/блоки), и read-only отчёт по тренерам. Backend-only; `apps/admin-web` не трогаем.
+
+- [ ] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06)
+- [ ] **Phase 59: Recurring Schedule + Time-Off** - Recurring slot patterns + ARQ cron generation + time-off blocks + conflict guard (REC-01..04)
+- [ ] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04)
+- [ ] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01)
+
+## Phase Details
+
+### Phase 58: Payroll Foundations + Ledger
+**Goal**: Owner can configure trainer compensation and record payroll accruals with full financial-correctness guarantees
+**Depends on**: Phase 57 (v1.8 shipped)
+**Requirements**: PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06
+**Success Criteria** (what must be TRUE):
+  1. Owner can set a trainer's compensation config (commission_pct and/or session_fee_kopecks); a trainer with no config returns a clear 422 when a payroll run is attempted
+  2. Owner can preview a payroll calculation for a trainer over a date range and see session_count, fixed_kopecks, commission_kopecks, and total_kopecks without any row being persisted
+  3. Owner can record a payroll accrual (append-only row in trainer_payroll_accruals); a duplicate period attempt returns 409; the comp rate is snapshotted into the row at run time (not recomputed later)
+  4. Owner can mark an accrual as paid (paid_at + paid_by_user_id set); a second mark-paid attempt returns 409 already_paid; no "unpay" operation exists
+  5. Owner can list a trainer's accruals ordered by accrued_at DESC with paid/unpaid status visible; all 6 new LOCKED_AUDIT_EVENTS and new OWNER_ONLY pairs (PAYROLL + COMPENSATION) are pre-registered before any callsite; three-way RBAC parity test (backend permissions.py + admin-web can.ts + registry.ts) is green; a PT-package refund that post-dates an accrual appends a negative clawback row in the same UoW
+**Plans**: TBD
+
+### Phase 59: Recurring Schedule + Time-Off
+**Goal**: Owner can define weekly recurring availability patterns for trainers and block time-off windows; concrete slots are materialized daily by an ARQ cron
+**Depends on**: Phase 58
+**Requirements**: REC-01, REC-02, REC-03, REC-04
+**Success Criteria** (what must be TRUE):
+  1. Owner can create a recurring slot pattern (day_of_week, start_time, end_time, valid_from, optional valid_until); patterns have a UNIQUE constraint on (trainer_id, day_of_week, start_time, valid_from) preventing duplicates
+  2. A daily ARQ cron (07:00 MSK, unique=True) materializes concrete trainer_availability_slots for the configured horizon (env RECURRING_SLOT_HORIZON_DAYS, default 56) idempotently — re-running produces zero new rows; slots inside active time-off windows are skipped; slot_published audit is emitted only on real inserts (not ON CONFLICT no-ops)
+  3. Owner can create a time-off block; if any booked slot overlaps the window the endpoint returns 409 with affected slot IDs; with ?force=true the overlapping bookings are cancelled via the existing booking FSM and the client receives a cancellation DM; active slots (not booked) in the window are cancelled with cancel_reason='trainer_time_off'
+  4. Owner and reception can list recurring patterns and time-off blocks for a trainer
+**Plans**: TBD
+
+### Phase 60: Trainer-Usage Report
+**Goal**: Owner can view a read-only trainer-usage report covering load, PT-utilization, revenue attribution, and payroll summary with CSV export
+**Depends on**: Phase 59 (schedule data available; Phase 58 payroll data available for RPT-04)
+**Requirements**: RPT-01, RPT-02, RPT-03, RPT-04
+**Success Criteria** (what must be TRUE):
+  1. Owner can GET /api/v1/reports/trainers with a from/to date range and receive per-trainer rows ordered by session_count DESC; each row shows session_count, cancelled_session_count, total_hours, unique_client_count, utilization_pct (NULL when 0 slots); reception receives 403
+  2. Each trainer row includes revenue attribution (sum PT-package sale revenue for sessions where the trainer participated, avg_revenue_per_session); the known double-count limitation for multi-trainer packages is documented in the response
+  3. Each trainer row includes total_accrued_kopecks and total_paid_kopecks from trainer_payroll_accruals for the same period
+  4. Owner can GET /api/v1/reports/trainers.csv and receive a UTF-8 BOM RFC-4180 excel-dialect CSV that renders Cyrillic correctly in Excel; the report module has zero new import-linter ignores and makes no writes to any business table (D-54-07/08 discipline maintained)
+**Plans**: TBD
+
+### Phase 61: OpenAPI Handoff + Milestone Verification
+**Goal**: All v1.9 API surfaces are captured in a byte-stable OpenAPI contract artifact; RBAC parity is verified; milestone is gate-checked
+**Depends on**: Phase 60
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+  1. apps/backend/openapi.json is regenerated byte-stably containing all v1.9 paths (payroll comp-config, payroll accruals, recurring slot templates, time-off blocks, trainer report + CSV); CI git diff --exit-code passes on both openapi.json and schema.d.ts
+  2. packages/api-client/src/schema.contract.test.ts gains _v19Checks AssertNonNever forward-guards for all new v1.9 typed paths with a runtime toHaveLength(N) assertion locking the count
+  3. Three-way RBAC parity (Resource.TRAINER_PAYROLL / Resource.COMPENSATION OWNER_ONLY entries in backend permissions.py + admin-web can.ts + registry.ts) passes the existing parity test at the milestone gate; reception 403 is verified on every new owner-only route via the route-introspection guard
+  4. A milestone verification script or operator runbook confirms the end-to-end payroll + schedule + report surface against a live docker-compose stack; operator runbook authored at .planning/handoff/v1.9-trainers-runbook.md
+**Plans**: TBD
+
+## Progress
+
+**Execution Order:** 58 → 59 → 60 → 61
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 58. Payroll Foundations + Ledger | 0/TBD | Not started | - |
+| 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
+| 60. Trainer-Usage Report | 0/TBD | Not started | - |
+| 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
+
+---
+
+*Roadmap last updated: 2026-05-24 — v1.9 Trainers Complete roadmap created (Phases 58-61, 15/15 requirements mapped). v1.8 Reports + Audit Log read API SHIPPED (Phases 54-57, 10 plans, 30/30 requirements; VER-01 live runbook operator-pending per D-12).*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
@@ -156,3 +226,4 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 *v1.6 Coverage: 48/48 v1.6 requirements satisfied (8 INFRA + 11 EMAIL/AUTH-EM + 7 USERS + 5 RESET + 9 NOTIFY + 8 HANDOFF/VER). VER-12 (live RU-domain email-deliverability probe) + VER-14 (15-template owner countersign) ratification deferred to v1.7 as DEFER-46-01/02.*
 *v1.7 Coverage: 48/51 v1.7 requirements delivered (8 INFRA + 6 ADAPTER + 8 PAY + 9 WH/FISCAL-foundation + 8 FISCAL-FSM/REFUND + 5 NOTIFY + 4 VER). 3 operator-credential-gated deferred at close: CARRY-01 (DEFER-46-01 live RU email probe) + CARRY-02 (DEFER-46-02 owner countersign) + VER-03 (ЮKassa sandbox walkthrough per D-04).*
 *v1.8 Coverage: 30/30 v1.8 requirements mapped (3 INFRA + 5 REV + 4 CLR + 4 VIS-R + 6 AUD + 4 EXP + 2 HND + 2 VER).*
+*v1.9 Coverage: 15/15 v1.9 requirements mapped (6 PAY + 4 REC + 4 RPT + 1 HND).*

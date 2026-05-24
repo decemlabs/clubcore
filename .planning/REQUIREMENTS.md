@@ -80,26 +80,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAY-01 | TBD | Pending |
-| PAY-02 | TBD | Pending |
-| PAY-03 | TBD | Pending |
-| PAY-04 | TBD | Pending |
-| PAY-05 | TBD | Pending |
-| PAY-06 | TBD | Pending |
-| REC-01 | TBD | Pending |
-| REC-02 | TBD | Pending |
-| REC-03 | TBD | Pending |
-| REC-04 | TBD | Pending |
-| RPT-01 | TBD | Pending |
-| RPT-02 | TBD | Pending |
-| RPT-03 | TBD | Pending |
-| RPT-04 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| PAY-01 | Phase 58 | Pending |
+| PAY-02 | Phase 58 | Pending |
+| PAY-03 | Phase 58 | Pending |
+| PAY-04 | Phase 58 | Pending |
+| PAY-05 | Phase 58 | Pending |
+| PAY-06 | Phase 58 | Pending |
+| REC-01 | Phase 59 | Pending |
+| REC-02 | Phase 59 | Pending |
+| REC-03 | Phase 59 | Pending |
+| REC-04 | Phase 59 | Pending |
+| RPT-01 | Phase 60 | Pending |
+| RPT-02 | Phase 60 | Pending |
+| RPT-03 | Phase 60 | Pending |
+| RPT-04 | Phase 60 | Pending |
+| HND-01 | Phase 61 | Pending |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15 ✓
+- Unmapped: 0 ✓
 
 ## Locked Decisions (carry into planning)
 
@@ -118,4 +118,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-05-24*
-*Last updated: 2026-05-24 after initial definition (v1.9 Trainers Complete)*
+*Last updated: 2026-05-24 — traceability table filled after roadmap creation (v1.9 Trainers Complete, Phases 58-61)*

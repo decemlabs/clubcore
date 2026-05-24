@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Trainers Complete
 status: planning
-last_updated: "2026-05-24T19:36:39.127Z"
+last_updated: "2026-05-24T00:00:00.000Z"
 last_activity: 2026-05-24
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Between milestones — v1.8 shipped (tag `v1.8`); next is `/gsd:new-milestone` (v1.9 candidate: API Handoff + Production Hardening)
+**Current focus:** v1.9 — Phase 58 (Payroll Foundations + Ledger) — ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-05-24 — Milestone v1.9 started
+Phase: 58 of 61 (Payroll Foundations + Ledger)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-05-24 — v1.9 ROADMAP.md created; Phase 58 next
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -35,63 +37,43 @@ Last activity: 2026-05-24 — Milestone v1.9 started
 |--------|------|-------------|
 | Phases | 7 | 4 |
 | Plans | 47 | 10 |
-| Requirements | 48/51 delivered | 30/30 delivered (VER-01 live runbook operator-pending) |
+| Requirements | 48/51 delivered | 30/30 delivered |
 | Phase range | 47-53 | 54-57 |
 
 ## Accumulated Context
 
 ### Decisions
 
-Full decisions log lives in PROJECT.md Key Decisions table. v1.7 added the ЮKassa webhook-security, async-adapter, fiscal-FK, and operator-deferral decisions — all in PROJECT.md Key Decisions + archived in `.planning/milestones/v1.7-ROADMAP.md` and per-phase `*-CONTEXT.md` files.
+Full decisions log in PROJECT.md. Key v1.9 locked decisions:
 
-**v1.8 architectural constraints (from planning):**
-
-- Read-only over v1.4–v1.7 tables (`payments`, `memberships`, `clients`, `visits`, `audit_log`); no new business entities; only aggregation indexes allowed as schema changes
-- Money stays integer kopecks in all API responses; formatting deferred to frontend (v2.0)
-- All date buckets deterministic in Europe/Moscow (mirror `visits.gym_date STORED` discipline)
-- `app/modules/reports/` is strictly read-only — SVC001 commit-gate does not apply, but module must not contain any INSERT/UPDATE/DELETE against business tables
-- RBAC: owner-only for all v1.8 endpoints; reception 403 enforced by `require_permission` + route-introspection guard covering new routes
-- `audit_log` columns used by read API: `actor_user_id`, `actor_email_snapshot`, `action`, `resource_type`, `resource_id`, `payload`, `created_at`; existing index `(actor_user_id, created_at)`; new indexes added in Phase 54
+- **D-PAYROLL-LEDGER**: new `trainer_payroll_accruals` (NOT reuse `payments`); append-only v1.4 discipline; SVC001 commit-gate covers payroll service.
+- **D-PAYROLL-RATE-SNAPSHOT**: comp rate snapshotted into accrual row; past accruals are immutable (mirrors v1.2 price snapshot).
+- **D-PAYROLL-ROUNDING**: `decimal.Decimal` + `ROUND_HALF_EVEN`; integer kopecks only; no float.
+- **D-PAYROLL-CLAWBACK**: PT-package refund after accrual → append-only negative adjustment row in same UoW (not UPDATE).
+- **D-SLOT-GENERATE-AHEAD**: recurring patterns materialized by ARQ cron (env horizon, `unique=True`, `ON CONFLICT DO NOTHING`); NOT expand-on-read.
+- **D-TIMEOFF-CONFLICT**: time-off over booked slot → 409 + slot IDs; `?force=true` cascades booking FSM cancellation + DM.
+- **D-REPORT-READONLY**: trainer-report in `app/modules/reports/` under D-54-07/08 (raw-SQL, no models.py, zero writes, zero new import-linter ignores).
+- **D-AUDIT-PREREG**: 7 new LOCKED_AUDIT_EVENTS pre-registered BEFORE callsites (INFRA-15).
+- **D-RBAC-VERIFY**: Phase 58 implementor MUST read permissions.py + can.ts first — Resource.PAYROLL/COMPENSATION may already exist.
 
 ### Blockers/Concerns
 
-None blocking. Three operator-credential-gated follow-ups remain open and acknowledged as deferred at v1.7 close: CARRY-01 (DEFER-46-01 live RU email probe), CARRY-02 (DEFER-46-02 owner countersign), VER-03 (ЮKassa sandbox walkthrough). All need real external credentials the operator runs out-of-band; none block v1.8.
+None blocking v1.9. Carry-over operator-pending items (CARRY-01, CARRY-02, VER-03, VER-04/D-12) acknowledged — not functional blockers.
 
 ## Deferred Items
 
-**Acknowledged at v1.8 milestone close (2026-05-24):** the pre-close artifact audit surfaced 4 open items — 2 stale false-positives (the resolved `knowledge-base` debug KB file; the completed `260501-ndi` quick task flagged only on non-standard frontmatter) and 1 genuine operator-pending item counted twice (Phase 57 UAT partial + Phase 57 VERIFICATION `human_needed`, both the VER-04/D-12 live runbook walkthrough). No new functional gaps. Acknowledged and deferred per operator decision; recorded in the v1.8 MILESTONES.md entry.
-
-**Acknowledged at v1.7 milestone close (2026-05-24):** the pre-close artifact audit surfaced 5 open items (2 verification gaps = Phase 52 + Phase 53 human_needed, 1 Phase 53 UAT partial, 1 debug session `knowledge-base`, 1 quick task `260501-ndi`). All map to operator-credential-gated follow-ups or stale artifacts — no new functional gaps. Acknowledged and deferred per operator decision; recorded in the v1.7 MILESTONES.md entry.
-
-Items tracked through v1.7 close:
-
-| Category | Item | Status | Source | Resolution |
-|----------|------|--------|--------|-----------|
-| verification_gap | **DEFER-46-01 / CARRY-01** — live RU email-deliverability probe (yandex.ru + mail.ru + rambler.ru `Authentication-Results` headers). Probe script + scaffolding ready; needs real Yandex Postbox API key + owner's personal RU aliases. | operator-pending — acknowledged at v1.7 close | Phase 46 → Phase 52 | v1.8/v1.9 when operator has Yandex Postbox creds |
-| sign_off_gap | **DEFER-46-02 / CARRY-02** — 15-template owner formal countersign (`LOCKED_EMAIL_TEMPLATES`, visual sanity check, no content edits). | operator-pending — acknowledged at v1.7 close | Phase 46 → Phase 52 | v1.8/v1.9 owner countersign |
-| verification_gap | **VER-03** — ЮKassa sandbox owner-recorded end-to-end membership sale + refund walkthrough; evidence → `.planning/handoff/v1.7-yookassa-sandbox-evidence/`. Scaffolding + capture README ready (operator-pending per D-04). | operator-pending — acknowledged at v1.7 close | Phase 53 / Plan 53-04 | v1.8/v1.9 when operator runs ЮKassa sandbox session |
-| debug_session | `knowledge-base` debug session left at `unknown` status (KB-seeding artifact from commit `dfb3bce`, not a live bug investigation). | acknowledged at v1.7 close | v1.7 | `/gsd-cleanup` or resolve/close on next debug pass |
-| uat_gap | Phase 53 `53-HUMAN-UAT.md` partial (0 pending scenarios — operator scenarios documented, await same ЮKassa sandbox run as VER-03). | acknowledged at v1.7 close | Phase 53 | closes with VER-03 |
-| **CLOSED** | **DEFER-46-03** — VER-09 scenario 08 (cron-chain circuit-breaker open-state) recorded PARTIAL. | closed by VER-05 (Phase 53, Plan 53-03) | Phase 46 | **CLOSED 2026-05-23** — `test_circuit_breaker_open_state_parity.py` confirms FISCAL-05 open-state short-circuit parity (2/2 pass) |
-| ci_tech_debt | **DEFER-46-04** — 3 CI gates carry pre-existing tree-wide tech debt (ruff 79 errors / ruff format 205 files / mypy attr-defined warnings). None trace to v1.6 commits. | acknowledged | Phase 46 | v1.9 doc-debt + test-debt sweep |
-| runbook_optional | **DEFER-46-05** — VER-09 MailHog inbox assertions skipped (no MailHog in docker-compose.yml). | acknowledged | Phase 46 | v1.9 optional — add MailHog `--profile dev` service or rely on VER-12 live probe |
-| verification_gap | **DEFER-40-01** — Full v1.5 operator runbook; `run.sh` needs 2+ remaining hotfixes. | unchanged from v1.5 | Phase 40 | v1.9 (API Handoff + Production Hardening) |
-| verification_gap | Phase 38 verification gaps (38-VERIFICATION.md status: gaps_found) | unchanged from v1.5 | Phase 38 | v1.9 audit sweep |
-| operator-pending | **VER-04 / D-12** — live `docker compose up` walkthrough of `.planning/handoff/v1.8-reports-runbook.md` (revenue golden-path eyeball-match: NET_KOPECKS=200 000 kop on GOLDEN_DATE_MSK_NEXT=2026-01-02; manual Excel CSV-open Cyrillic check for all four .csv endpoints). Runbook authored by agent (57-03); live execution operator-pending per v1.4/v1.7 precedent (CARRY-01/VER-03). **NOT a phase-57 completion blocker.** After passing all 5 scenarios, update the runbook OPERATOR-PENDING note with date + PASS. | operator-pending — not a phase blocker | Phase 57 / Plan 57-03 | v1.8/v1.9 when operator runs live docker stack |
-| **CLOSED** | **DEFER-36-04-A** — backend pytest failures (test debt) | closed 2026-05-24 | Phase 36.1 | **CLOSED** — test-debt sweep (`.planning/debug/resolved/test-debt-sweep-v19.md`) brought full suite to **1992 passed / 0 failed / 0 errors**. Fixed stale tests + 3 real product bugs: `online_refunds` model unregistered in `alembic/env.py` (would DROP the Phase 51 table), `clients` model missing `ix_clients_email_lower_unique` declaration, and the ЮKassa boot `/v3/me` probe running live on every startup (now skipped in sandbox). `alembic check` clean. |
-| lint_format | DEFER-36-04-B — `ruff format --check` red on 123 files | unchanged from v1.4 | Phase 36-04 | v1.9 doc-debt sweep (subsumed by DEFER-46-04) |
-| verification_gap | Phase 31 admin-web browser checks (2 scenarios) | unchanged from v1.3 | Phase 31 | v2.0 Frontend Integration milestone scope |
-| quick_task | `260501-ndi` orphan in `.planning/quick/` | unchanged from v1.0 | v1.0 | Defer to `/gsd-cleanup` |
-| uat_gap | Phase 06 + Phase 08 HUMAN-UAT.md pending scenarios | unchanged from v1.1 | v1.1 | v2.0 Frontend Integration milestone scope |
-
-Known deferred items: 13 open (2 CLOSED this milestone: DEFER-46-03 + DEFER-36-04-A). Of the 13: 3 operator-credential-gated (CARRY-01, CARRY-02, VER-03), 2 v1.7-close artifacts (knowledge-base debug, Phase 53 UAT), 8 carry-over from v1.4–v1.6/earlier.
+| Category | Item | Status | Source |
+|----------|------|--------|--------|
+| operator-pending | DEFER-46-01/CARRY-01 — live RU email-deliverability probe | operator-pending | Phase 46 |
+| operator-pending | DEFER-46-02/CARRY-02 — 15-template owner countersign | operator-pending | Phase 46 |
+| operator-pending | VER-03 — ЮKassa sandbox walkthrough | operator-pending | Phase 53 |
+| operator-pending | VER-04/D-12 — live docker-compose v1.8 runbook walkthrough | operator-pending | Phase 57 |
+| ci_tech_debt | DEFER-46-04 — ruff/format/mypy pre-existing tree-wide debt | acknowledged → v1.10 | Phase 46 |
+| runbook | DEFER-40-01 — full v1.5 operator runbook execution | acknowledged → v1.10 | Phase 40 |
+| lint_format | DEFER-36-04-B — ruff format 123 files | acknowledged → v1.10 | Phase 36 |
 
 ## Session Continuity
 
-Last session: 2026-05-24 — v1.8 milestone close
-Stopped at: Milestone v1.8 archived + tagged
-Resume: Run `/gsd:new-milestone` to define the next milestone (v1.9 candidate: API Handoff + Production Hardening). `.planning/REQUIREMENTS.md` was removed at close and will be recreated fresh.
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+Last session: 2026-05-24 — v1.9 roadmap created (Phases 58-61, 15/15 requirements mapped)
+Stopped at: ROADMAP.md + STATE.md written; REQUIREMENTS.md traceability updated
+Resume: Run `/gsd-plan-phase 58` to begin planning Phase 58
