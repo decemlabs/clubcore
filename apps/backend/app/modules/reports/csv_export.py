@@ -27,6 +27,37 @@ _MSK = timezone(timedelta(hours=3), name="MSK")
 # A literal U+FEFF glyph in source is a defect (D-11, SC#4, EXP-04).
 BOM = "\ufeff"
 
+# Leading characters that spreadsheet apps (Excel/LibreOffice) interpret as the
+# start of a formula. A cell beginning with one of these can execute on open
+# (CSV/formula injection). Applied ONLY to attacker-controlled free-text cells
+# (e.g. actor_email_snapshot, payload) \u2014 NOT to machine-formatted numeric cells
+# like ruble money, which legitimately start with '-' for refunds (CR-01).
+_CSV_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def sanitize_csv_text(value: str) -> str:
+    """Neutralize spreadsheet formula injection in an untrusted free-text cell.
+
+    Prefixes a single quote when the value starts with a formula trigger so the
+    cell renders as literal text instead of being evaluated as a formula. RFC-4180
+    structural escaping (quotes/commas/newlines) is still handled by csv.writer;
+    this guards the orthogonal formula-injection vector (CR-01, threat T-56-07).
+
+    Apply ONLY to user-controlled text columns \u2014 never to numeric/money cells,
+    which legitimately begin with '-'.
+
+    Examples:
+        >>> sanitize_csv_text("=cmd|'/C calc'!A0")
+        "'=cmd|'/C calc'!A0"
+        >>> sanitize_csv_text("ivan@example.com")
+        'ivan@example.com'
+        >>> sanitize_csv_text("")
+        ''
+    """
+    if value and value[0] in _CSV_FORMULA_TRIGGERS:
+        return f"'{value}"
+    return value
+
 
 def _row_to_csv_line(row: list[object]) -> str:
     """Write a single row to a CSV string via csv.writer (RFC-4180 escaping).

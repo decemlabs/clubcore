@@ -113,19 +113,20 @@ async def test_literal_from_to_params_bind(
     march_items = r.json()["data"]["items"]
     assert len(march_items) >= 1, "Expected at least one row in March 2026 window"
 
-    # `fromDate`/`toDate` do NOT bind as from/to (would be ignored, not cause error)
+    # SC#2: the wire keys are literally `from`/`to` — `fromDate`/`toDate` must NOT
+    # act as the date filter. FastAPI ignores query params it doesn't declare, so the
+    # request succeeds (200) but the date window is NOT applied: the result is the full
+    # unfiltered set, which is never narrower than the correctly-filtered March window.
     r2 = await authed_client_owner.get(
         "/api/v1/audit-log",
         params={"fromDate": "2026-03-01", "toDate": "2026-03-31"},
     )
-    # Should succeed (unknown params ignored since extra='forbid' is on BackendSchemaBase
-    # but AuditLogQuery extends PageQuery which has extra='forbid' -- actually fromDate is
-    # not a field, so Pydantic v2 with extra='forbid' will reject it with 422.
-    # But the point is: the date window is NOT applied (or the request is rejected, either way
-    # the from/to filter did not work). We verify `from`/`to` work correctly above.
-    # If fromDate causes 422, that's also acceptable (extra='forbid').
-    # The key assertion is that the SC#2 params work.
-    assert r2.status_code in (200, 422), r2.text
+    assert r2.status_code == 200, r2.text
+    unfiltered_items = r2.json()["data"]["items"]
+    assert len(unfiltered_items) >= len(march_items), (
+        "fromDate/toDate must not bind as the date filter — the window should be "
+        "ignored (full set returned), never applied as if it were from/to"
+    )
 
 
 async def test_action_filter_narrows(

@@ -430,12 +430,18 @@ async def audit_log_csv_rows(
     Read-only: NO session.commit(), NO session.flush().
     """
     async for row in repository.stream_audit_log_rows(session, query, from_=from_, to=to):
+        # actor_email_snapshot and payload are attacker-influenced free text — guard
+        # against spreadsheet formula injection (CR-01). action/resource_type are
+        # LOCKED_AUDIT_EVENTS enum values and UUIDs/dates are machine-formatted, so
+        # they need no sanitization.
         yield [
             csv_export.format_datetime_msk(row.created_at),
             str(row.actor_user_id) if row.actor_user_id is not None else "",
-            row.actor_email_snapshot or "",
+            csv_export.sanitize_csv_text(row.actor_email_snapshot or ""),
             row.action,
             row.resource_type,
             str(row.resource_id) if row.resource_id is not None else "",
-            json.dumps(row.payload, ensure_ascii=False, separators=(",", ":")),
+            csv_export.sanitize_csv_text(
+                json.dumps(row.payload, ensure_ascii=False, separators=(",", ":"))
+            ),
         ]

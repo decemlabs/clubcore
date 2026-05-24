@@ -261,9 +261,17 @@ def _build_audit_predicates(
         predicates.append(AuditLog.actor_user_id == query.actor_user_id)
 
     if query.actor_email_snapshot is not None:
-        # Case-insensitive substring match (AUD-02). ORM .ilike() emits parameterized bind.
-        like_pattern = f"%{query.actor_email_snapshot}%"
-        predicates.append(AuditLog.actor_email_snapshot.ilike(like_pattern))
+        # Case-insensitive substring match (AUD-02). ORM .ilike() emits a parameterized
+        # bind (no SQL injection), but LIKE metacharacters in user input would otherwise
+        # corrupt filter semantics (WR-01): a bare '%' matches every row, '_' any char.
+        # Escape \, %, _ and declare the escape char so the substring is matched literally.
+        escaped = (
+            query.actor_email_snapshot.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
+        like_pattern = f"%{escaped}%"
+        predicates.append(AuditLog.actor_email_snapshot.ilike(like_pattern, escape="\\"))
 
     if query.resource_type is not None:
         predicates.append(AuditLog.resource_type == query.resource_type)

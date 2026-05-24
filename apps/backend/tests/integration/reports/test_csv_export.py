@@ -463,3 +463,53 @@ async def test_audit_log_csv_to_before_from_422(
         params={"from": "2026-05-31", "to": "2026-05-01"},
     )
     assert r.status_code == 422, r.text
+
+
+# ---------------------------------------------------------------------------
+# Security: CSV formula injection + unauthenticated access
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_log_csv_formula_injection_sanitized(
+    authed_client_owner: AsyncClient,
+    make_audit_log_row: Any,
+) -> None:
+    """A formula-trigger actor_email_snapshot is neutralized in audit-log.csv (CR-01).
+
+    An actor whose audited email begins with '=' (or + - @) must NOT produce a cell
+    a spreadsheet evaluates as a formula. The exporter prefixes such free-text cells
+    with a single quote so the value renders as literal text.
+    """
+    malicious = "=cmd|'/C calc'!A0"
+    await make_audit_log_row(
+        action="login_success",
+        resource_type="session",
+        created_at=datetime(2026, 5, 21, 9, 0, tzinfo=UTC),
+        actor_email_snapshot=malicious,
+    )
+    r = await authed_client_owner.get(
+        "/api/v1/audit-log.csv",
+        params={"action": "login_success"},
+    )
+    assert r.status_code == 200, r.text
+    rows = parse_csv_text(r.text)
+    email_col = list(CSV_AUDIT_LOG_HEADERS).index("actorEmailSnapshot")
+    target = [row for row in rows[1:] if row and malicious in row[email_col]]
+    assert target, "audited row with the malicious email must be present"
+    cell = target[0][email_col]
+    assert cell == f"'{malicious}", f"formula cell must be quote-prefixed, got {cell!r}"
+    assert not cell.startswith("="), "sanitized cell must not start with a formula trigger"
+
+
+async def test_csv_endpoints_require_auth(
+    async_client: AsyncClient,
+) -> None:
+    """All four .csv download routes reject unauthenticated callers with 401 (IN-01)."""
+    for path in (
+        "/api/v1/reports/revenue.csv",
+        "/api/v1/reports/clients.csv",
+        "/api/v1/reports/visits.csv",
+        "/api/v1/audit-log.csv",
+    ):
+        r = await async_client.get(path)
+        assert r.status_code == 401, f"{path} unexpectedly returned {r.status_code}"

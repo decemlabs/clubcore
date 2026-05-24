@@ -44,6 +44,8 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from pydantic import Field
+
 from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
 
@@ -190,7 +192,9 @@ class AuditLogQuery(PageQuery):
     """
 
     actor_user_id: UUID | None = None
-    actor_email_snapshot: str | None = None
+    # max_length 254 = RFC 5321 max email length — bounds the ILIKE substring scan
+    # cost on an owner-authenticated request (WR-02); pairs with WR-01 escaping.
+    actor_email_snapshot: str | None = Field(default=None, max_length=254)
     resource_type: str | None = None
     action: str | None = None
 
