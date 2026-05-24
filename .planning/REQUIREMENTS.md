@@ -59,7 +59,7 @@
 ### Milestone verification (VER)
 
 - [ ] **VER-01**: Operator runbook — сценарии reports + audit read API против live `docker compose up` стека (revenue golden-path с известными суммами, audit фильтрация, reception 403, CSV download)
-- [ ] **VER-02**: Корректностные/race тесты — агрегаты сверены с детерминированными фикстурами (kopecks net-of-refund; Europe/Moscow day-buckets; visits hour-buckets); пагинация audit-log стабильна; RBAC-denial покрыт
+- [x] **VER-02**: Корректностные/race тесты — агрегаты сверены с детерминированными фикстурами (kopecks net-of-refund; Europe/Moscow day-buckets; visits hour-buckets); пагинация audit-log стабильна; RBAC-denial покрыт
 
 ## Future Requirements (deferred)
 
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation 2026-05-2
 | HND-01 | Phase 57 | Complete |
 | HND-02 | Phase 57 | Complete |
 | VER-01 | Phase 57 | Pending |
-| VER-02 | Phase 57 | Pending |
+| VER-02 | Phase 57 | Complete |

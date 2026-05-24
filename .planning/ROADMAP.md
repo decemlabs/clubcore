@@ -223,7 +223,7 @@ Plans:
 **Wave 1** *(parallel — no file overlap)*
 
 - [x] 57-01-PLAN.md — Regen openapi.json + schema.d.ts (8 v1.8 paths) + add `_v18Checks` AssertNonNever guards + `toHaveLength(8)` (HND-01, HND-02)
-- [ ] 57-02-PLAN.md — Backend correctness: DST/MSK-offset midnight-boundary golden test (revenue + visits, net-of-refund); verify existing reception-403 + pagination-stability coverage (VER-02)
+- [x] 57-02-PLAN.md — Backend correctness: DST/MSK-offset midnight-boundary golden test (revenue + visits, net-of-refund); verify existing reception-403 + pagination-stability coverage (VER-02)
 
 **Wave 2** *(blocked on 57-02 for shared golden numbers)*
 
@@ -245,7 +245,7 @@ Plans:
 | 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 3/3 | Complete   | 2026-05-24 |
 | 55. Revenue + Clients + Visits Reports | 2/2 | Complete    | 2026-05-24 |
 | 56. Audit Log Read API + CSV Export | 2/2 | Complete    | 2026-05-24 |
-| 57. OpenAPI Handoff + Milestone Verification | 1/3 | In Progress|  |
+| 57. OpenAPI Handoff + Milestone Verification | 2/3 | In Progress|  |
 
 ---
 
