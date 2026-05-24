@@ -184,7 +184,10 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   3. Pagination is stable across pages (adding a new audit row during pagination does not shift earlier pages due to deterministic `created_at DESC, id DESC` ordering)
   4. CSV download endpoints (`/reports/revenue.csv`, `/reports/clients.csv`, `/reports/visits.csv`, `/audit-log.csv`) stream UTF-8 BOM content with correct RFC 4180 escaping; Cyrillic fields round-trip correctly; monetary columns render as rubles with separator (not raw kopecks); date columns are Europe/Moscow formatted
   5. CSV exports for audit log accept the same filter parameters as the JSON endpoint and produce consistent results
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 56-01-PLAN.md — Audit Log read API: paginated owner-only GET /api/v1/audit-log with filters, validation, keyset ordering (AUD-01..06)
+- [ ] 56-02-PLAN.md — CSV export: UTF-8 BOM + RFC-4180 .csv routes for revenue/clients/visits/audit-log (EXP-01..04)
 
 ### Phase 57: OpenAPI Handoff + Milestone Verification
 **Goal**: All v1.8 API paths are reflected in byte-stable `openapi.json` and `schema.d.ts` with compile-time forward guards; an operator runbook confirms revenue golden-path, audit filtering, reception 403, and CSV download against a live stack.
