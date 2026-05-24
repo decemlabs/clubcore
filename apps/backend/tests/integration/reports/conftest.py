@@ -1,14 +1,16 @@
-"""Shared fixtures for reports integration tests (Phase 55 REV/CLR/VIS-R)."""
+"""Shared fixtures for reports integration tests (Phase 55 REV/CLR/VIS-R; Phase 56 AUD)."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit_models import AuditLog
 from app.modules.payments.models import Payment
 from app.modules.visits.models import Visit
 
@@ -97,9 +99,51 @@ async def make_visit(
     return _make
 
 
+@pytest_asyncio.fixture
+async def make_audit_log_row(
+    db_session: AsyncSession,
+) -> Callable[..., Awaitable[AuditLog]]:
+    """Insert an AuditLog row with explicit created_at for deterministic tests.
+
+    Mirrors make_payment_ledger / make_visit fixture pattern.
+    Uses the SAVEPOINT-mode session so teardown rolls back all inserts.
+
+    Required: action, resource_type, created_at.
+    Optional: actor_user_id, actor_email_snapshot, resource_id, payload.
+    action/resource_type must be valid LOCKED_AUDIT_EVENTS pairs.
+    """
+
+    async def _make(
+        *,
+        action: str,
+        resource_type: str,
+        created_at: datetime,
+        actor_user_id: UUID | None = None,
+        actor_email_snapshot: str | None = None,
+        resource_id: UUID | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> AuditLog:
+        row = AuditLog(
+            action=action,
+            resource_type=resource_type,
+            actor_user_id=actor_user_id,
+            actor_email_snapshot=actor_email_snapshot,
+            resource_id=resource_id,
+            payload=payload or {},
+        )
+        row.created_at = created_at
+        db_session.add(row)
+        await db_session.commit()
+        await db_session.refresh(row)
+        return row
+
+    return _make
+
+
 __all__ = (
     "UTC",
     "datetime",
+    "make_audit_log_row",
     "make_payment_ledger",
     "make_visit",
 )
