@@ -112,7 +112,7 @@ async def test_expiring_count_within_boundary(
     make_plan: Any,
     make_membership: Any,
 ) -> None:
-    """Membership ending in 3 days is in expiringCount when within>=3; absent when within<3 (CLR-02)."""
+    """Membership ending in 3 days: counted when within>=3, absent when within<3 (CLR-02)."""
     plan = await make_plan(name="ExpiringTest")
     cli = await make_client()
     today = datetime.now(tz=UTC).date()
