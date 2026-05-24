@@ -45,8 +45,8 @@ describe('can()', () => {
     expect(OWNER_ONLY.some((e) => e.resource === 'profile')).toBe(false)
   })
 
-  it('OWNER_ONLY has exactly 25 entries (Phase 34 D-34-09a removed cancel:pt-sessions)', () => {
-    expect(OWNER_ONLY).toHaveLength(25)
+  it('OWNER_ONLY has exactly 35 entries (Phase 54 INFRA-42 added view/list:audit-log)', () => {
+    expect(OWNER_ONLY).toHaveLength(35)
   })
 
   it('OWNER_ONLY covers Phase 30 INFRA-19 v1.4 owner-only pairs', () => {

@@ -50,6 +50,8 @@ Phase 55 will add concrete reader functions for:
   - ``visits`` table — visit counts by gym_date and hour bucket.
 """
 
-from sqlalchemy import text  # noqa: F401 — imported for pattern documentation; Phase 55 readers use it.
+from sqlalchemy import (
+    text,  # noqa: F401 — imported for pattern documentation; Phase 55 readers use it.
+)
 
 __all__: tuple[str, ...] = ()
