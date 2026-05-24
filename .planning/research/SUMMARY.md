@@ -1,210 +1,184 @@
-# Research Summary — v1.7 Online Payments + 54-ФЗ
+# Project Research Summary
 
 **Project:** Sportzal
-**Milestone:** v1.7 — Online Payments (ЮKassa) + 54-ФЗ Fiscal Receipts
-**Researched:** 2026-05-21
-**Confidence:** HIGH (4 parallel research outputs converged; corrections already in PROJECT.md)
-
----
+**Milestone:** v1.9 — Trainers Complete (payroll ledger + recurring schedule + time-off + trainer-usage report)
+**Domain:** Single-gym CRM backend extension (FastAPI modular monolith, RF/СНГ)
+**Researched:** 2026-05-24
+**Confidence:** HIGH
 
 ## Executive Summary
 
-v1.7 closes the last commercial MVP gap. Online payment intake (ЮKassa) and 54-ФЗ fiscal receipts ship bundled — Russian law forbids the former without the latter. The integration path is well-documented and low-risk:
+v1.9 completes the trainer surface of the Sportzal backend. It adds four business capabilities to the existing modular monolith: (1) a **trainer payroll ledger** with per-trainer compensation config, owner-triggered payroll runs, and a "mark paid" lifecycle; (2) **recurring availability slots** generated ahead by an ARQ cron from day-of-week + time patterns; (3) **trainer time-off / unavailability blocks** that gate slot generation and guard against booked-slot conflicts; and (4) an owner-only **trainer-usage report** (sessions, hours, revenue attribution, CSV export). The four researchers converged strongly: every feature is implementable **with zero new dependencies** — the locked stack (Python 3.12, FastAPI, SQLAlchemy 2.0 async, Postgres 16, Redis, ARQ, structlog) plus stdlib `decimal` and `zoneinfo` covers all four features.
 
-- **REST API v3** with redirect-based confirmation
-- **"Чеки от ЮKassa"** managed receipt path (embed receipt in payment creation request; no separate АТОЛ/Чек.ОФД adapter)
-- **v1.4 ledger preserved** — new `online_payments` module is a sibling of `payments/`; on `payment.succeeded` it calls `record_payment(method='online')` via the existing `payment_recorder` Protocol slot. No mutation of v1.4 invariants.
+The recommended approach is to reuse three established disciplines verbatim rather than invent new patterns: the **v1.4 append-only payments ledger** (immutable accrual rows, atomic INSERT→flush→audit→commit UoW), the **v1.5 slot overlap + tstzrange + race-safe UNIQUE** discipline (extended to recurring generation and time-off), and the **v1.8 read-only reports discipline** (D-54-07/D-54-08: no `models.py`, raw-SQL `text()` cross-module reads, zero new import-linter ignores). New cross-module data access is read-only and therefore needs no Protocol slots — raw-SQL reads suffice. INFRA-15 pre-registration of `LOCKED_AUDIT_EVENTS` and three-way RBAC parity (backend `OWNER_ONLY` ↔ admin-web `can.ts` ↔ `registry.ts`) must land in the first phase, before any callsite.
 
-**Two key research-driven corrections** (already landed in PROJECT.md):
-1. **No HMAC on webhooks.** Security = IP allowlist (6 published CIDRs) + status re-fetch via `GET /v3/payments/{id}`. AST gate target = `YOOKASSA_TRUSTED_IPS: frozenset[str]`, not a signature constant.
-2. **Official `yookassa` SDK is sync (requests-based).** Wrap in `httpx.AsyncClient` adapter inside `app/integrations/yookassa/`, or use community `async_yookassa`. Never call the sync SDK from an async handler without `run_in_executor`.
+The dominant risks are financial-correctness pitfalls, all with known precedents in this codebase: **recompute drift** (payroll must be an immutable point-in-time snapshot, not a live view), **rate-config drift** (compensation rate must be snapshotted into the accrual row, mirroring v1.2 membership price snapshots), **float rounding** (integer kopecks only; numerator/denominator rate, never a FLOAT column), **refund clawback** (a refund of an already-paid period must emit a negative adjustment row, not silently leave stale commission), and **idempotency races** on both payroll runs and the slot-generation cron (DB-wins-the-race UNIQUE + `INSERT ... ON CONFLICT DO NOTHING` + ARQ `unique=True`). Mitigation for every one is an established pattern already used elsewhere in the system.
 
-**Primary regulatory risk:** silent fiscal-receipt failure → КоАП Article 14.5 penalties. Mitigation: `fiscal_receipts` outbox table + ARQ cron scanning for stale `pending` rows + circuit breaker + operator Telegram alert.
+## Key Findings
 
----
+### Recommended Stack
 
-## 1. Stack Additions
+**Verdict: zero new dependencies.** No library should be added to `pyproject.toml`. All four features reuse existing primitives plus Python stdlib. Adding `python-dateutil`/rrule, `pandas`/`numpy`, `pytz`, `icalendar`, `celery`/`dramatiq`, or any external decimal library is explicitly rejected — the recurrence model is simple DOW+time (≈15 lines of stdlib), aggregation happens in Postgres SQL, and kopeck math needs only `decimal.Decimal` / integer arithmetic.
 
-Only one new direct dependency.
+**Core primitives to reuse:**
+- **`decimal.Decimal` (stdlib)** — kopeck-accurate commission math; integer numerator/denominator rate, never float.
+- **`zoneinfo.ZoneInfo('Europe/Moscow')` (stdlib)** — all MSK-local slot expansion and date-boundary conversion (`AT TIME ZONE 'Europe/Moscow'` in SQL).
+- **v1.4 `payments` ledger pattern** — append-only ORM model, atomic audit chain, SVC001 commit-gate.
+- **v1.5 `tstzrange` overlap detection** — extended for time-off and recurring-slot conflict checks.
+- **v1.8 reports raw-SQL `text()` + `csv_export.py`** — UTF-8 BOM + RFC-4180 excel dialect.
+- **ARQ cron `unique=True, keep_result=60`** — idempotent generate-ahead pattern (cron count goes 8 → 9).
 
-| Package | Version | Role | Notes |
-|---|---|---|---|
-| `yookassa` | `3.10.1` | Official ЮKassa SDK | Sync — wrap in `httpx.AsyncClient` adapter; `SecurityHelper.is_ip_trusted()` or stdlib `ipaddress` for IP gate |
+Alembic migrations: current head is `0040`; v1.9 adds `0041`–`0046`.
 
-**Do NOT add:** Stripe (RF-banned), `aioyookassa` (stale), separate АТОЛ/Чек.ОФД adapter (managed path covers it), any 54-ФЗ tag-dictionary library (define `StrEnum`/`IntEnum` constants).
+### Expected Features
 
-**mypy:** `[[tool.mypy.overrides]] module = "yookassa.*"; ignore_missing_imports = true`. SDK types do NOT cross integration boundary — re-type in `app/integrations/yookassa/types.py`.
+**Must have (table stakes, v1.9):**
+- **PAY-01** — per-trainer compensation config (model: pct-of-revenue / fixed-per-session / both).
+- **PAY-02** — payroll preview computation (read-only, no persistence).
+- **PAY-03** — payroll accrual recording (append-only ledger row, immutable, period-unique).
+- **PAY-04** — mark accrual as paid (single allowed lifecycle mutation; 409 if already paid).
+- **PAY-05** — list accruals per trainer.
+- **REC-01** — recurring slot pattern table + CRUD.
+- **REC-02** — slot materialization ARQ cron (generate-ahead, bounded horizon).
+- **REC-03** — time-off blocks: table + create/delete + 409 conflict guard on booked slots.
+- **REC-04** — list patterns + time-off blocks.
+- **RPT-01** — trainer load report (sessions, hours, utilization).
+- **RPT-02** — PT-package revenue attribution per trainer.
+- **RPT-03** — trainer report CSV export.
 
----
+**Should have (differentiator, easy add):**
+- **RPT-04** — payroll accrual summary (`total_accrued`/`total_paid`) folded into the trainer report; trivial once PAY-03 ships.
 
-## 2. Feature Table Stakes (must ship)
+**Defer (v1.10+ / v2.0):**
+- Trainer report frontend integration (admin-web frozen in v1.9).
+- Per-session commission proration across period boundaries.
+- 1C / external payroll export; iCal sync; recurring client-trainer booking; trainer self-service portal.
+- Partial refund for PT-packages (B-02, still deferred from v1.4).
 
-| ID | Feature | Description |
-|---|---|---|
-| **PAY-01** | Server-side payment creation (redirect) | `POST /online-payments/memberships/{id}/sell` + pt-packages variant; returns `confirmation_url`; `Idempotency-Key` mandatory |
-| **WH-01** | Webhook endpoint, IP-verified | `POST /api/v1/_internal/yookassa/webhook`; IP allowlist BEFORE body parse; no auth cookie, no CSRF |
-| **WH-02** | Payment FSM (`pending → succeeded / canceled`) | `payment.succeeded` is the ONLY activation trigger; always re-fetch payment object from ЮKassa to verify |
-| **WH-03** | Refund FSM (`refund.succeeded`) | Subscription to `refund.succeeded` must be explicitly enabled during ЮKassa account setup (deployment runbook entry) |
-| **WH-04** | Idempotent webhook processing | Redis `SET NX EX 86400 sz:wh:event:{event_type}:{object_id}` + DB UNIQUE `(yookassa_payment_id)` |
-| **REF-01** | Online refund (full only) | Routes to ЮKassa Refund API; awaits `refund.succeeded`; v1.4 atomic audit chain preserved; B-02 still deferred |
-| **REF-03** | Refund timeout / poll fallback | ARQ task polls `GET /v3/refunds/{id}` if webhook silent for 30 min |
-| **FIS-01** | Receipt mechanism: "Чеки от ЮKassa" | Managed; no separate ОФД contract; email-only delivery |
-| **FIS-02** | Receipt embedded in payment creation | `receipt` object in `POST /v3/payments` body — Scenario 1, satisfies 54-ФЗ timing |
-| **FIS-03** | `fiscal_receipts` table + FSM | `pending → sent → succeeded / failed`; UNIQUE `(payment_id, kind)`; outbox monitoring |
-| **FIS-04** | Refund receipt (возврат прихода) | `receipt` in `POST /v3/refunds`; same `customer.email` requirement |
-| **FIS-05** | Client email gate | 422 `client_email_required_for_online_payment` if client has no email |
-| **FIS-06** | VAT/tax config via env vars | `YOOKASSA_TAX_SYSTEM_CODE` + `YOOKASSA_VAT_CODE` in `.env`; not hardcoded |
-| **NOT-01** | Payment success DM (Telegram + email) | On `payment.succeeded`; UNIQUE `(payment_id, channel)` idempotency |
-| **NOT-02** | Refund success DM (Telegram + email) | On `refund.succeeded`; same pattern |
-| **NOT-03** | Fiscal receipt email | ЮKassa sends directly; CRM passes `customer.email` |
-| **NOT-04** | Operator alert on fiscal failure | structlog ERROR + Telegram DM to owner when `fiscal_receipts.status → failed` |
+**Explicit anti-features:** tiered commission, reuse of the `payments` table for payroll, auto payroll-period detection, expand-on-read recurring slots, RRULE/EXDATE exceptions, real-time dashboards, predictive analytics, per-client breakdown in the trainer report.
 
----
+### Architecture Approach
 
-## 3. Differentiators (in scope if time)
+The backend is a FastAPI modular monolith with import-linter enforcing `app.core ↛ app.modules` and module-to-module independence; the only cross-module write mechanism is Protocol slots wired in `app/main.py`. v1.9 needs **no new Protocol slots** — all new cross-module access is read-only raw-SQL `text()`. The work lands across one new module plus two extensions.
 
-| ID | Feature | Complexity | Notes |
-|---|---|---|---|
-| **PAY-03** | QR/SBP confirmation type | LOW | `confirmation_type='qr'`; same `payment.succeeded` webhook |
-| **NOT-05** | Cancellation reason logging | LOW | Log `cancellation_details.reason` on `payment.canceled`; no client DM |
+**Major components:**
+1. **`app/modules/payroll/` (NEW)** — owns `trainer_comp_configs` and `payroll_accruals` tables, the run/mark-paid/list service, and raw-SQL reads of `pt_sessions` + `pt_packages` + `payments`. Append-only ledger discipline; comp config lives here, **not** on `trainers`.
+2. **`app/modules/schedule/` (EXTENDED)** — adds `recurring_slot_templates` and `trainer_time_off` tables, time-off conflict-check service (409 on booked overlap), and makes `trainer_availability_slots.created_by_user_id` nullable + adds UNIQUE `(trainer_id, start_time)` for cron idempotency.
+3. **`app/modules/reports/` (EXTENDED)** — adds `fetch_trainer_usage` raw-SQL reader and `GET /reports/trainers` + `/reports/trainers.csv`, reusing all v1.8 read-only infrastructure.
+4. **`app/workers/scheduled/generate_recurring_slots.py` (NEW)** — daily 07:00 MSK ARQ cron, generate-ahead with `ON CONFLICT DO NOTHING`, skips time-off windows, emits audit only on real inserts.
+5. **`app/core/audit.py` + `permissions.py` (EXTENDED)** — 7 new LOCKED_AUDIT_EVENTS and ~5 new OWNER_ONLY pairs, pre-registered with three-way parity.
 
-PAY-02 (embedded checkout widget) — deferred (requires frontend work).
+### Critical Pitfalls
 
----
+1. **Recompute drift** — never compute payroll as a live view. Write an immutable `payroll_accruals` row at run time with snapshotted counts/revenue/rate; subsequent refunds or backdated sessions must not mutate it.
+2. **Rate-config drift mid-period** — never read a mutable rate at run time. Snapshot the rate (numerator/denominator + config id) into the accrual row, mirroring v1.2 membership price snapshots; comp config is INSERT-only / versioned.
+3. **Float rounding** — integer kopecks only; store rate as integer numerator/denominator (or bps), compute with `decimal`/integer math, pick one rounding mode and unit-test it. Never a FLOAT/NUMERIC money column.
+4. **Idempotency / double-run + double-generate races** — DB-wins-the-race: UNIQUE `(trainer_id, period_start, period_end)` + `INSERT ... ON CONFLICT DO NOTHING RETURNING` (→ 409), UNIQUE `(trainer_id, start_time)` on slots + `ON CONFLICT DO NOTHING`, ARQ `unique=True` on the cron. Inclusive `[start, end]` date boundaries everywhere (matches memberships/visits).
+5. **Time-off over a confirmed booking** — never auto-cancel silently. Query confirmed bookings in the window before insert; return 409 with conflicting booking IDs; owner cancels via the existing booking FSM. Generation cron skips time-off windows.
+6. **Reports read-only leak / soft-deleted-trainer drop** — reports module stays `text()`-only with zero new import-linter ignores; historical aggregates use `LEFT JOIN`/`trainer_name_snapshot` and never filter on `is_active`. Period boundary off-by-one verified with a golden test.
 
-## 4. Anti-features (deferred)
+### Discrepancy Resolutions
 
-| Feature | Why |
-|---|---|
-| Recurring autopayments | Requires ЮKassa manager activation + consent flow + client portal |
-| Partial online refund | v1.4 B-02 still deferred |
-| Telegram WebApp native invoice | Separate API; admin SPA is not a Mini App |
-| Mobile-app deep-link | No mobile app |
-| Third-party АТОЛ/Чек.ОФД adapter | Inapplicable for direct gym sales |
-| SMS receipt delivery | Not supported by "Чеки от ЮKassa" |
-| Two-stage capture (`waiting_for_capture` hold) | Inapplicable for digital activation |
-| Partial VAT (5%/7%) | УСН revenue threshold (60M RUB) unreachable at single-gym scale |
-| Refund to different card | Requires separate ЮKassa Payout agreement |
+Three points where the early-stack/feature research and the deeper architecture/pitfalls research diverged. Resolved in favor of the stronger discipline:
 
----
+1. **Comp config placement — `trainers` table columns (FEATURES PAY-01) vs. dedicated table (ARCHITECTURE / PITFALLS).** **Resolved: dedicated versioned `trainer_comp_configs` table in the `payroll` module.** Rationale: financial config must not couple into the catalog module, and PITFALL 5 (rate drift) requires an INSERT-only versioned config so a payroll run can snapshot the rate in effect. Two nullable columns on `trainers` cannot satisfy the snapshot requirement.
 
-## 5. Architecture Snapshot
+2. **Refund clawback — silent in FEATURES (anti-feature: "void accrual") vs. mandatory in PITFALLS 4.** **Resolved: clawback hook is required, modeled append-only.** A refund of a payment that appears in an already-paid accrual must emit a **negative adjustment accrual row** (not an UPDATE, not a void) in the same UoW as the refund. This preserves append-only discipline. FEATURES correctly rejects a destructive "void"; PITFALLS supplies the correct append-only form. The clawback hook must be designed into the refund integration path during the payroll phase, even if full implementation is staged.
 
-**New directories** mirror established patterns:
+3. **Phase count — FEATURES suggests 3–4 phases; ARCHITECTURE specifies 6 (58–63).** **Resolved: follow the 6-phase ARCHITECTURE structure (Phases 58–63).** Splitting payroll foundations (RBAC/audit/comp-config) from the payroll ledger, and the recurring-slot CRUD from its ARQ cron, isolates the INFRA-15 bedrock and the highest-risk concurrency surfaces into their own verifiable phases.
 
-- `app/integrations/yookassa/` follows `app/integrations/email/` exactly:
-  - `types.py` (frozen dataclasses)
-  - `client.py` (async httpx adapter, never re-raises)
-  - `factory.py` (boot-time API probe)
-  - `webhook_verifier.py` (IP allowlist `Depends()` callable)
-  - `receipt.py` (`build_receipt_item()` + `PaymentSubject` / `PaymentMode` / `VatCode` enums)
+## Implications for Roadmap
 
-- `app/modules/online_payments/` is a **sibling** of `app/modules/payments/`, NOT an extension. Critical boundary: v1.4 ledger has AST-enforced append-only + CHECK constraints that must not be widened. New module owns its FSM in a new `online_payments` table. On `payment.succeeded` → `record_payment(method='online')` through existing Protocol slot.
+Based on combined research, the suggested 6-phase structure (continuing from v1.8 which ended at Phase 57):
 
-- New `fiscal_receipts` table FKs to `payments.id` (NOT `online_payments.id`). Fiscal obligation attaches to the committed ledger row.
+### Phase 58 — Foundations: RBAC parity + audit pre-registration + comp-config API
+**Rationale:** INFRA-15 requires all 7 new LOCKED_AUDIT_EVENTS and the new OWNER_ONLY pairs to exist before any callsite; three-way RBAC parity must be green before any protected endpoint lands; comp config is the prerequisite for payroll computation.
+**Delivers:** 7 audit events pre-registered; OWNER_ONLY entries + admin-web `can.ts`/`registry.ts` parity; `app/modules/payroll/` scaffold registered in `.importlinter` modules-independent list; `trainer_comp_configs` model + Alembic 0041; `GET`/`PUT /payroll/trainer-configs/{trainer_id}`; `trainer_comp_config_set` wired.
+**Addresses:** PAY-01.
+**Avoids:** PITFALL 5 (versioned INSERT-only config), security mistake (owner-only RBAC).
 
-**Webhook route:** `POST /api/v1/_internal/yookassa/webhook` (`_internal` namespace established in Phase 42 for email bounce webhook). Synchronous processing:
+### Phase 59 — Payroll Ledger
+**Rationale:** Depends on comp config from Phase 58. Highest financial-correctness surface — isolate it.
+**Delivers:** `payroll_accruals` model + Alembic 0042; raw-SQL `fetch_trainer_session_revenue` reader; `run_payroll_period` + `mark_accrual_paid` services; `POST /payroll/run`, `PATCH /payroll/accruals/{id}/paid`, `GET /payroll/accruals`; `payroll_accrual_created` + `payroll_accrual_paid` wired; clawback hook design.
+**Addresses:** PAY-02, PAY-03, PAY-04, PAY-05.
+**Uses:** v1.4 append-only ledger, `decimal` integer math, raw-SQL cross-module read.
+**Avoids:** PITFALLS 1 (snapshot not view), 2 (idempotent run via ON CONFLICT), 3 (integer rounding), 4 (clawback), 13 (concurrent run race), 6 (attribution model documented as a Key Decision before SQL).
 
-```
-verify IP → re-fetch payment → FSM transition → record_payment → fiscal_receipts INSERT
-  → COMMIT → enqueue notifications post-commit
-```
+### Phase 60 — Recurring Slots + Time-Off (schema + service)
+**Rationale:** Independent of payroll; pure schedule extension. Land tables + synchronous service paths before the cron.
+**Delivers:** `recurring_slot_templates` + `trainer_time_off` models + Alembic 0043/0044; Alembic 0045 (`created_by_user_id` nullable + UNIQUE `(trainer_id, start_time)`); template CRUD + time-off create/delete/list endpoints; `create_time_off` with 409 booked-conflict guard; `recurring_slot_template_created/cancelled` + `trainer_time_off_created/cancelled` wired.
+**Addresses:** REC-01, REC-03, REC-04.
+**Avoids:** PITFALL 9 (time-off vs confirmed booking 409), anti-pattern 3 (no cross-module auto-cancel of bookings).
 
-ЮKassa retries on non-200, so transient failures propagate naturally.
+### Phase 61 — Recurring Slot ARQ Cron
+**Rationale:** Depends on Phase 60 tables/services. Concurrency-critical — isolate for race testing.
+**Delivers:** `generate_recurring_slots.py` ARQ cron (07:00 MSK, `unique=True`); Alembic 0046 performance indexes; WorkerSettings cron extension; integration + race tests (idempotent re-run, time-off skip, audit only on real insert).
+**Addresses:** REC-02.
+**Avoids:** PITFALLS 7 (DST/zoneinfo expansion), 8 (bounded horizon), 14 (slot generation race).
 
-**Two new Protocol slots (composition root):**
-- `YooKassaClientProvider` (double-wired to FastAPI app + ARQ worker startup — REG-29-03 discipline)
-- `FiscalReceiptDispatcher` (enqueues `dispatch_fiscal_receipt` ARQ task post-commit; mirrors `enqueue_email_dispatch`)
-- Possibly `MembershipActivator` (Open Question #2)
+### Phase 62 — Trainer-Usage Report
+**Rationale:** Reads pt_sessions/payments (v1.4) + schedule data (Phase 60/61). Low risk, read-only addition to the v1.8 reports module. Comes after payroll so RPT-04 can fold in accruals.
+**Delivers:** `fetch_trainer_usage` raw-SQL reader; `get_trainer_usage_report` + CSV rows; `GET /reports/trainers` + `/reports/trainers.csv`. Optional RPT-04.
+**Addresses:** RPT-01, RPT-02, RPT-03 (+ RPT-04).
+**Avoids:** PITFALLS 10 (no ORM import / zero new linter ignores), 11 (soft-deleted trainers included), 12 (inclusive period boundary golden test).
 
-**New Alembic revisions (0033–0036):**
-- 0033: `clients.email` column + Pydantic config sentinel
-- 0034: `online_payments` table (FSM, UNIQUE `yookassa_payment_id`, UNIQUE `idempotency_key`, partial UNIQUE `(client_id, plan_id, DATE(initiated_at)) WHERE status != 'canceled'`)
-- 0035: `fiscal_receipts` table (FK to `payments.id`, UNIQUE `(payment_id, kind)`)
-- 0036: Locked-events sentinel migration (~9 new entries)
+### Phase 63 — OpenAPI Handoff + Milestone Verification
+**Rationale:** All business surfaces must be stable before regenerating the contract artifact.
+**Delivers:** byte-stable `openapi.json` + `schema.d.ts` regen with all v1.9 paths; `_v19Checks` AssertNonNever guards; operator runbook `.planning/handoff/v1.9-trainers-runbook.md`; milestone verification gate.
 
-**New import-linter entries:**
-- `online_payments.service → payments.models` (refund row + payment_receipts; mirrors Phase 45)
-- `online_payments.service → users.display`
-- `email.dispatcher → online_payments.email_templates`
+### Phase Ordering Rationale
+- **Bedrock first (58):** INFRA-15 + RBAC parity must precede any callsite; comp config gates payroll.
+- **Payroll before its consumers:** accruals must exist for RPT-04 and for clawback hook reasoning.
+- **Recurring CRUD (60) before cron (61):** the cron depends on template/time-off tables and the UNIQUE/nullable migration.
+- **Report (62) after payroll/schedule:** reads data produced by earlier phases; lowest risk so it lands late.
+- **Verification last (63):** OpenAPI regen requires a frozen surface.
+- Payroll (58/59) and schedule (60/61) tracks have **no inter-dependency** and could be reordered, but the listed order keeps the highest-risk financial surface earliest.
 
----
+### Research Flags
 
-## 6. Watch Out For (Top Pitfalls)
+Phases likely needing deeper `/gsd-research-phase` during planning:
+- **Phase 59:** payroll attribution model (sold-vs-conducted, PITFALL 6) and clawback integration into the existing refund path are decision-heavy; confirm the v1.4 refund flow touch-points before writing SQL.
+- **Phase 61:** DST/zoneinfo expansion correctness and cron race semantics warrant a golden-test design pass.
 
-| Severity | Pitfall | Prevention |
-|---|---|---|
-| **BLOCKER** | No HMAC — IP allowlist only | `Depends(verify_yookassa_ip)` BEFORE body parse; `YOOKASSA_TRUSTED_IPS` AST gate; always re-fetch `GET /v3/payments/{id}` before activation. Header is `Idempotence-Key` (one `t`) |
-| **BLOCKER** | Double activation on webhook retry (24h window) | Redis `SET NX EX 86400` before any DB write + DB UNIQUE `(yookassa_payment_id)` + FSM guard |
-| **BLOCKER** | Activation on redirect instead of webhook | `return_url` handler shows "ожидаем подтверждение"; activation locked to webhook path with no exceptions |
-| **BLOCKER** | Payment-status oracle via `return_url` | Single `return_url` for all outcomes; `_constant_time_floor` on status-check handler; no `?status=` parameter |
-| **BLOCKER** | Off-by-100 currency conversion | Dedicated `kopecks_to_yookassa(int) -> str` + `yookassa_to_kopecks(str) -> int` with unit tests; no inline conversion |
-| **BLOCKER** | Double-tap payment creation | Deterministic `Idempotency-Key = sha256(f"sell-membership:{plan_id}:{client_id}:{today}")` + DB partial UNIQUE |
-| **WARN** | 54-ФЗ receipt timing | Embed receipt in payment creation (Scenario 1); ARQ cron scans for `pending` rows > 90s |
-| **WARN** | Wrong 54-ФЗ tags (1212/1214) | `RECEIPT_SUBJECT_MEMBERSHIP = "service"`, `RECEIPT_MODE_FULL = "full_payment"` as locked `Literal` constants; Pydantic Literal types; integration tests assert exact wire values |
-| **WARN** | Missing `refund.succeeded` subscription | Deployment runbook: subscribe to `payment.succeeded`, `payment.canceled`, `payment.waiting_for_capture`, `refund.succeeded` |
+Phases with standard, well-documented patterns (skip research-phase):
+- **Phase 58:** mechanical RBAC/audit pre-registration — established discipline.
+- **Phase 60:** schema + tstzrange overlap — direct reuse of v1.5 slot discipline.
+- **Phase 62:** read-only report — verbatim reuse of v1.8 reports infrastructure.
+- **Phase 63:** OpenAPI handoff — repeated per-milestone procedure.
 
----
+## Confidence Assessment
 
-## 7. Phase Carve Recommendation (Phase 47–53)
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | Zero new deps; all findings from direct inspection of the locked stack and codebase. |
+| Features | HIGH | Domain patterns well-understood; design choices align with existing bedrock; industry sources (MEDIUM) only corroborate compensation models. |
+| Architecture | HIGH | Based on direct inspection of all relevant modules; no new Protocol slots; reuses three proven disciplines. |
+| Pitfalls | HIGH | Every pitfall derived from existing PROJECT.md Key Decisions and v1.2–v1.8 precedent with a known mitigation. |
 
-All 4 researchers independently converged on this 7-phase structure. v1.6 ended at Phase 46.
+**Overall confidence:** HIGH
 
-| # | Phase | Goal | Key deliverables |
-|---|---|---|---|
-| **47** | Bedrock | INFRA-15 events + credentials + slots first | `LOCKED_AUDIT_EVENTS` extended (~9 events); `YooKassaSettings` (`SecretStr`); `YOOKASSA_TRUSTED_IPS` frozenset; Protocol slot declarations; `integrations/yookassa/` skeleton; Alembic 0033 (`clients.email`); kopecks↔rubles converter + tests; `.env.example` |
-| **48** | ЮKassa Integration Adapter | Integration layer before domain module (parallels Phase 42 email) | `client.py` (async httpx wrapper); `factory.py` boot probe; `receipt.py` with `PaymentSubject`/`PaymentMode`/`VatCode` enums; `webhook_verifier.py` `Depends()` (sandbox bypass); `respx` test fixtures |
-| **49** | Online Sales Orchestrator | Domain module + sell endpoints | `modules/online_payments/` full structure; Alembic 0034 (`online_payments`); `POST /online-payments/memberships/{plan_id}/sell` + pt-packages; FIS-05 client email gate; `return_url` pending-screen handler; composition root wiring; import-linter updates |
-| **50** | Webhook FSM + Fiscal Foundation | Webhook handler + activation + fiscal table | `_internal/yookassa/router.py` (IP gate before body parse); `handle_webhook_event()` FSM; `record_payment(method='online')`; `MembershipActivator` Protocol slot; Alembic 0035 (`fiscal_receipts`); atomic `INSERT fiscal_receipts(status='sent')` in same UoW; Redis dedup; Alembic 0036 events sentinel |
-| **51** | Fiscal FSM + Refunds | Receipt status tracking + online refunds | `handle_receipt_webhook()` (`receipt.succeeded`/`.canceled`); `dispatch_fiscal_receipt` ARQ (max_tries=3, jitter); Redis circuit breaker; `POST /online-payments/{id}/refund` (REF-01); `handle_refund_webhook()`; REF-03 poll fallback; NOT-04 operator alert |
-| **52** | Cross-channel Notifications + v1.6 Carry-out | DMs + DEFER-46-01/02 | `online_payments/notifications.py` Telegram DMs; `online_payments/email_templates.py` + `LOCKED_EMAIL_TEMPLATES` extended; NOT-01/02 wired post-commit; **DEFER-46-01** live RU email-deliverability probe (yandex/mail/rambler); **DEFER-46-02** owner 15-template countersign |
-| **53** | Milestone Verification | Operator runbook + race tests gate | Operator curl runbook + ЮKassa sandbox walkthrough; race tests (concurrent double-delivery, duplicate after Redis restart, refund ordering); DEFER-46-03 circuit-breaker fixture re-run; 0/0 inline regressions hard cap |
+### Gaps to Address
 
-**Ordering rationale:** Bedrock first (INFRA-15 discipline). Integration adapter before domain module (matches v1.6 Phase 42 → 43). Sales orchestrator before webhook FSM (need to create payments to test activation). Fiscal foundation in same phase as webhook FSM (same DB transaction). Refunds bundled with fiscal FSM (refund receipt is a fiscal obligation). Notifications last among build-out (fire-and-forget). Verification gate always last.
-
----
-
-## 8. Open Questions (block phase planning)
-
-| Question | Who answers | When needed |
-|---|---|---|
-| **VAT regime** — `vat_code` + `tax_system_code` per gym entity (УСН доходы=2 / УСН доходы-расходы=3 / ПСН=6). Must be set per-deployment in `.env` | Gym owner / accountant | Before Phase 53 go-live |
-| **`payments.received_by_user_id` nullability** — currently `NOT NULL`; online payments have no human operator at `succeeded` time. Recommended: widen with CHECK `(method='cash' AND received_by_user_id IS NOT NULL) OR method='online'`. Affects Alembic 0034 design | Developer | Phase 49 planning |
-| **`MembershipActivator` Protocol slot vs import-linter ignore** — webhook handler needs to activate a membership. (a) New Protocol slot at composition root (clean, established precedent) vs (b) import-linter ignore entry (simpler). Shapes Phase 50 | Developer | Phase 49/50 planning |
-| **Recurring autopayments business demand** — ЮKassa supports it (manager-gated). If wanted for v2.0, store `payment_method_id` in `online_payments` now to avoid retro-migration | Product owner | Before v2.0 |
-
----
-
-## 9. Confidence
-
-| Area | Level | Notes |
-|---|---|---|
-| Stack | HIGH | Official ЮKassa PyPI (v3.10.1, 2026-04-22); 0 CVEs; async limitation confirmed |
-| Features | HIGH | All table-stakes from official ЮKassa docs; FSM states + 54-ФЗ fields confirmed |
-| Architecture | HIGH | Module boundary from codebase read (v1.4 AST + CHECK constraints); 12 prior Protocol slot examples |
-| Pitfalls | HIGH | 6 BLOCKER pitfalls from official docs; WARN pitfalls from official docs + project patterns |
-| 54-ФЗ timing rule | MEDIUM | "5-minute myth" from analyst source (klerk.ru), not official ФНС ruling; Scenario 1 embed is safe regardless |
-| Fiscal webhook event names | MEDIUM | `receipt.succeeded` / `receipt.canceled` inferred; verify against ЮKassa dashboard in Phase 50 |
-
-**Gaps to verify during implementation:**
-- Exact receipt webhook event-type strings (Phase 50)
-- `received_by_user_id` migration safety against existing cash rows (Phase 49)
-- IP CIDR list currency vs live dashboard (Phase 48 deploy)
-
----
+- **Payroll attribution model (sold vs conducted)** — must be locked as a Key Decision (`D-5x-PAYROLL-ATTRIBUTION`) before any payroll SQL is written (Phase 59 planning). Recommendation: %-of-revenue → `pt_packages.trainer_id`; fixed-per-session → `pt_sessions.trainer_id`.
+- **Rounding mode** — choose and document (ceil-in-trainer-favour per freeze-day precedent, or banker's `round()`); encode in `_compute_commission` with a dedicated unit test (Phase 59).
+- **Clawback staging** — decide whether the negative-adjustment row is fully implemented in v1.9 or designed-with-hook now and completed alongside partial-refund work (B-02). Resolve in Phase 59 planning.
+- **`payroll_accruals` paid lifecycle** — confirm the single-column `status`/`paid_at` flip is the only sanctioned mutation and is covered by the append-only AST gate (Phase 59).
+- **Multi-trainer package revenue double-count** — acceptable at single-gym scale; document as a known limitation in the report (Phase 62).
 
 ## Sources
 
-**Primary (HIGH):**
-- https://yookassa.ru/developers/using-api/interaction-format
-- https://yookassa.ru/developers/payment-acceptance/getting-started/payment-process
-- https://yookassa.ru/developers/using-api/webhooks
-- https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/basics
-- https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/parameters-values
-- https://yookassa.ru/developers/payment-acceptance/after-the-payment/refunds
-- https://pypi.org/project/yookassa/
+### Primary (HIGH confidence)
+- Direct codebase inspection — `app/modules/payments/{models,service,constants}.py` (append-only ledger + UoW), `app/modules/reports/{repository,service}.py` + `csv_export.py` (D-54-07/08 read-only discipline), `app/modules/schedule/{models,service,repository}.py` (tstzrange overlap), `app/modules/pt_sessions/models.py` (existing indexes), `app/modules/trainers/models.py`, `app/core/{audit,permissions,dependencies}.py`, `app/workers/scheduled/expire_memberships.py`, `app/main.py`, `.importlinter`, `pyproject.toml`.
+- `.planning/PROJECT.md` — v1.9 milestone scope + locked Key Decisions (snapshot pricing v1.2, ceil rounding v1.3, DB-wins-the-race v1.2/v1.3/v1.5, append-only ledger v1.4, INFRA-15 v1.3, D-54-07/08 v1.8, `trainer_name_snapshot` v1.4, three-way RBAC parity).
+- Python stdlib — `decimal`, `zoneinfo` (3.9+, present in 3.12).
 
-**Secondary (MEDIUM):**
-- https://kassa.komtet.ru/blog/moment-rascheta — 54-ФЗ timing
-- https://astral.ru/info/operator-fiskalnykh-dannykh/otpravka-elektronnogo-cheka-klientu/ — email/phone requirement
-- https://security.snyk.io/package/pip/yookassa — security scan
+### Secondary (MEDIUM confidence)
+- ISSA / NESTA / Wellyx / Gymdesk — gym commission-structure industry practice (corroborates 3-model compensation).
+- SchedulingKit / Trainerize / SmartHealthClubs — fitness scheduling + trainer-utilization KPI conventions (65–70% utilization target).
+
+### Tertiary (LOW confidence)
+- None — all findings traced to codebase precedent or official stdlib; industry sources only corroborate non-load-bearing design choices.
+
+---
+*Research completed: 2026-05-24*
+*Ready for roadmap: yes*
