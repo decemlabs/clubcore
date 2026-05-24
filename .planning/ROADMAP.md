@@ -199,7 +199,7 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 Plans:
 **Wave 1**
 
-- [ ] 56-01-PLAN.md — Audit Log read API: paginated owner-only GET /api/v1/audit-log with filters, validation, keyset ordering (AUD-01..06)
+- [x] 56-01-PLAN.md — Audit Log read API: paginated owner-only GET /api/v1/audit-log with filters, validation, keyset ordering (AUD-01..06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -235,7 +235,7 @@ Plans:
 | 53. Milestone Verification | 4/4 | Complete | 2026-05-23 |
 | 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 3/3 | Complete   | 2026-05-24 |
 | 55. Revenue + Clients + Visits Reports | 2/2 | Complete    | 2026-05-24 |
-| 56. Audit Log Read API + CSV Export | 0/TBD | Not started | - |
+| 56. Audit Log Read API + CSV Export | 1/2 | In Progress|  |
 | 57. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
 ---
