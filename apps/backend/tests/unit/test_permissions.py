@@ -13,7 +13,7 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_thirty_three_entries() -> None:
+def test_owner_only_has_exactly_thirty_five_entries() -> None:
     # Mirrors apps/admin-web/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
@@ -21,9 +21,10 @@ def test_owner_only_has_exactly_thirty_three_entries() -> None:
     #                (CREATE / EDIT / DELETE / CANCEL).
     #              + 4 v1.6 Phase 41 INFRA-37 / D-41-21 USERS write pairs
     #                (CREATE / UPDATE / DELETE / LIST).
+    #              + 2 v1.8 Phase 54 INFRA-42 AUDIT_LOG read pairs (VIEW / LIST).
     # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
     # this assertion is the structural-only drift tripwire.
-    assert len(OWNER_ONLY) == 33
+    assert len(OWNER_ONLY) == 35
 
 
 def test_role_value_set() -> None:
@@ -75,6 +76,7 @@ def test_resource_value_set() -> None:
         "schedule-slots",  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
         "bookings",  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
         "users",  # Phase 41 INFRA-37 / D-41-21 — v1.6 multi-user admin resource
+        "audit-log",  # Phase 54 INFRA-42 — v1.8 audit-log read resource (kebab, multi-word)
     }
 
 
@@ -114,11 +116,12 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check 33 locked entries (drift tripwire).
+    """Spot-check 35 locked entries (drift tripwire).
 
     Composition: v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 - Phase 34 D-34-09a
                  + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
-                 + 4 v1.6 Phase 41 INFRA-37 USERS write pairs.
+                 + 4 v1.6 Phase 41 INFRA-37 USERS write pairs
+                 + 2 v1.8 Phase 54 INFRA-42 AUDIT_LOG read pairs.
     """
     expected = frozenset({
         (Action.VIEW, Resource.FINANCE),
@@ -165,6 +168,11 @@ def test_specific_owner_only_membership() -> None:
         (Action.UPDATE, Resource.USERS),
         (Action.DELETE, Resource.USERS),
         (Action.LIST, Resource.USERS),
+        # Phase 54 INFRA-42 - v1.8 AUDIT_LOG owner-only reads
+        # (reception holds ZERO audit-log permissions per D-54-04; the audit read
+        #  API is a paginated listing plus filterable reads → VIEW + LIST).
+        (Action.VIEW, Resource.AUDIT_LOG),
+        (Action.LIST, Resource.AUDIT_LOG),
     })
     assert expected == OWNER_ONLY
 
