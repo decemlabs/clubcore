@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Reports + Audit Log read API
-status: planning
-last_updated: "2026-05-24T14:38:51.195Z"
+status: active
+last_updated: "2026-05-24T15:00:00.000Z"
 last_activity: 2026-05-24
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-24 after v1.7 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Planning next milestone (v1.8 — Reports + Audit Log read API, starts at Phase 54)
+**Current focus:** v1.8 — Reports + Audit Log read API (Phases 54-57). Start with Phase 54: Foundations.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 54 — Foundations (Module Scaffold + RBAC Parity + Indexes)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-24 — Milestone v1.8 started
+Status: Ready to plan (roadmap defined 2026-05-24)
+Progress: 0/4 phases complete [----------] 0%
+Last activity: 2026-05-24 — v1.8 roadmap created (Phases 54-57, 30 requirements mapped)
+
+## Performance Metrics
+
+| Metric | v1.7 | v1.8 target |
+|--------|------|-------------|
+| Phases | 7 | 4 |
+| Requirements | 48/51 delivered | 30/30 |
+| Phase range | 47-53 | 54-57 |
 
 ## Accumulated Context
 
@@ -35,9 +44,17 @@ Last activity: 2026-05-24 — Milestone v1.8 started
 
 Full decisions log lives in PROJECT.md Key Decisions table. v1.7 added the ЮKassa webhook-security, async-adapter, fiscal-FK, and operator-deferral decisions — all in PROJECT.md Key Decisions + archived in `.planning/milestones/v1.7-ROADMAP.md` and per-phase `*-CONTEXT.md` files.
 
+**v1.8 architectural constraints (from planning):**
+- Read-only over v1.4–v1.7 tables (`payments`, `memberships`, `clients`, `visits`, `audit_log`); no new business entities; only aggregation indexes allowed as schema changes
+- Money stays integer kopecks in all API responses; formatting deferred to frontend (v2.0)
+- All date buckets deterministic in Europe/Moscow (mirror `visits.gym_date STORED` discipline)
+- `app/modules/reports/` is strictly read-only — SVC001 commit-gate does not apply, but module must not contain any INSERT/UPDATE/DELETE against business tables
+- RBAC: owner-only for all v1.8 endpoints; reception 403 enforced by `require_permission` + route-introspection guard covering new routes
+- `audit_log` columns used by read API: `actor_user_id`, `actor_email_snapshot`, `action`, `resource_type`, `resource_id`, `payload`, `created_at`; existing index `(actor_user_id, created_at)`; new indexes added in Phase 54
+
 ### Blockers/Concerns
 
-None blocking. Three operator-credential-gated follow-ups remain open and acknowledged as deferred at v1.7 close: CARRY-01 (DEFER-46-01 live RU email probe), CARRY-02 (DEFER-46-02 owner countersign), VER-03 (ЮKassa sandbox walkthrough). All need real external credentials the operator runs out-of-band; none block the next milestone.
+None blocking. Three operator-credential-gated follow-ups remain open and acknowledged as deferred at v1.7 close: CARRY-01 (DEFER-46-01 live RU email probe), CARRY-02 (DEFER-46-02 owner countersign), VER-03 (ЮKassa sandbox walkthrough). All need real external credentials the operator runs out-of-band; none block v1.8.
 
 ## Deferred Items
 
@@ -67,10 +84,10 @@ Known deferred items: 13 open (2 CLOSED this milestone: DEFER-46-03 + DEFER-36-0
 
 ## Session Continuity
 
-Last session: 2026-05-23T18:53:29.664Z
-Stopped at: Milestone v1.7 completed and archived (2026-05-24).
-Resume: Run `/gsd-new-milestone` to start v1.8 (Reports + Audit Log read API, Phase 54+).
+Last session: 2026-05-24T15:00:00.000Z
+Stopped at: v1.8 roadmap defined (Phases 54-57, 30 requirements). Ready to plan Phase 54.
+Resume: Run `/gsd-plan-phase 54` to begin Phase 54 (Foundations — Module Scaffold + RBAC Parity + Indexes).
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 54 with `/gsd-plan-phase 54`

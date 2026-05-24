@@ -83,17 +83,37 @@
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
+Which phases cover which requirements. Updated during roadmap creation 2026-05-24.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-41 | TBD | Pending |
-| INFRA-42 | TBD | Pending |
-| INFRA-43 | TBD | Pending |
-| REV-01..05 | TBD | Pending |
-| CLR-01..04 | TBD | Pending |
-| VIS-R-01..04 | TBD | Pending |
-| AUD-01..06 | TBD | Pending |
-| EXP-01..04 | TBD | Pending |
-| HND-01..02 | TBD | Pending |
-| VER-01..02 | TBD | Pending |
+| INFRA-41 | Phase 54 | Pending |
+| INFRA-42 | Phase 54 | Pending |
+| INFRA-43 | Phase 54 | Pending |
+| REV-01 | Phase 55 | Pending |
+| REV-02 | Phase 55 | Pending |
+| REV-03 | Phase 55 | Pending |
+| REV-04 | Phase 55 | Pending |
+| REV-05 | Phase 55 | Pending |
+| CLR-01 | Phase 55 | Pending |
+| CLR-02 | Phase 55 | Pending |
+| CLR-03 | Phase 55 | Pending |
+| CLR-04 | Phase 55 | Pending |
+| VIS-R-01 | Phase 55 | Pending |
+| VIS-R-02 | Phase 55 | Pending |
+| VIS-R-03 | Phase 55 | Pending |
+| VIS-R-04 | Phase 55 | Pending |
+| AUD-01 | Phase 56 | Pending |
+| AUD-02 | Phase 56 | Pending |
+| AUD-03 | Phase 56 | Pending |
+| AUD-04 | Phase 56 | Pending |
+| AUD-05 | Phase 56 | Pending |
+| AUD-06 | Phase 56 | Pending |
+| EXP-01 | Phase 56 | Pending |
+| EXP-02 | Phase 56 | Pending |
+| EXP-03 | Phase 56 | Pending |
+| EXP-04 | Phase 56 | Pending |
+| HND-01 | Phase 57 | Pending |
+| HND-02 | Phase 57 | Pending |
+| VER-01 | Phase 57 | Pending |
+| VER-02 | Phase 57 | Pending |

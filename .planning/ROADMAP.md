@@ -10,6 +10,7 @@
 - ✅ **v1.5 Schedule + Bookings (PT slots)** — Phases 37-40 (shipped 2026-05-18) — see [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md)
 - ✅ **v1.6 Email channel + Multi-user admin** — Phases 41-46 (shipped 2026-05-21) — see [milestones/v1.6-ROADMAP.md](milestones/v1.6-ROADMAP.md)
 - ✅ **v1.7 Online Payments + 54-ФЗ** — Phases 47-53 (shipped 2026-05-24) — see [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
+- ⏳ **v1.8 Reports + Audit Log read API** — Phases 54-57 (active, started 2026-05-24)
 
 ## Phases
 
@@ -131,6 +132,67 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 
 </details>
 
+<details open>
+<summary>⏳ v1.8 Reports + Audit Log read API (Phases 54-57) — ACTIVE 2026-05-24</summary>
+
+- [ ] **Phase 54: Foundations — Module Scaffold + RBAC Parity + Indexes** — INFRA-41, INFRA-42, INFRA-43
+- [ ] **Phase 55: Revenue + Clients + Visits Reports** — REV-01..05, CLR-01..04, VIS-R-01..04
+- [ ] **Phase 56: Audit Log Read API + CSV Export** — AUD-01..06, EXP-01..04
+- [ ] **Phase 57: OpenAPI Handoff + Milestone Verification** — HND-01..02, VER-01..02
+
+</details>
+
+---
+
+## Phase Details
+
+### Phase 54: Foundations — Module Scaffold + RBAC Parity + Indexes
+**Goal**: The `app/modules/reports/` module exists and is architecturally wired: import-linter contract enforced, RBAC enums extended with owner-only reports/audit entries, and aggregation indexes applied so subsequent report queries are performant from day one.
+**Depends on**: Phase 53 (v1.7 shipped)
+**Requirements**: INFRA-41, INFRA-42, INFRA-43
+**Success Criteria** (what must be TRUE):
+  1. `app/modules/reports/` is registered in `.importlinter` `modules-independent` and import-linter passes with no violations
+  2. `Resource.REPORTS` + `Resource.AUDIT_LOG` + their owner-only RBAC pairs exist in backend enums AND are mirrored byte-for-byte in admin-web `can.ts` + `registry.ts`; three-way parity test is green
+  3. The three-way parity test explicitly covers the new v1.8 pairs (its count assertion is bumped)
+  4. Alembic migration(s) for aggregation indexes (`payments(received_at)`, `audit_log(created_at)`, `audit_log(action)`, `audit_log(resource_type)`) apply and round-trip clean; `alembic check` green
+**Plans**: TBD
+
+### Phase 55: Revenue + Clients + Visits Reports
+**Goal**: Owner can query all three read-only aggregate reports (revenue by period, clients snapshot, visits by day/hour) via authenticated JSON endpoints; all monetary values are integer kopecks; all date buckets are deterministic in Europe/Moscow.
+**Depends on**: Phase 54
+**Requirements**: REV-01, REV-02, REV-03, REV-04, REV-05, CLR-01, CLR-02, CLR-03, CLR-04, VIS-R-01, VIS-R-02, VIS-R-03, VIS-R-04
+**Success Criteria** (what must be TRUE):
+  1. `GET /api/v1/reports/revenue?from=&to=&groupBy=day` and `groupBy=month` return buckets with integer kopecks broken down by payment method (`cash`/`online`) and subject kind (`membership`/`pt_package`); refund rows reduce net amounts correctly
+  2. `GET /api/v1/reports/clients` returns active membership count, expiring-within-N-days count (default 7, param `within` 1..30), and new-clients count for a date range; all counters exclude soft-deleted rows
+  3. `GET /api/v1/reports/visits?from=&to=` returns daily visit counts using `visits.gym_date` (no secondary TZ conversion); a separate grouping by hour of day is available for peak-hour analysis; average visits per day for the period is returned
+  4. Reception role receives 403 on all `/reports/*` endpoints (RBAC guard + route-introspection gate covers the new routes)
+  5. All day/month buckets match Europe/Moscow boundaries (consistent with existing `gym_date STORED` and cron-window discipline)
+**Plans**: TBD
+
+### Phase 56: Audit Log Read API + CSV Export
+**Goal**: Owner can browse and filter the full 69-event audit log through a paginated JSON endpoint and download any report or audit log as a UTF-8 BOM CSV suitable for Excel.
+**Depends on**: Phase 55
+**Requirements**: AUD-01, AUD-02, AUD-03, AUD-04, AUD-05, AUD-06, EXP-01, EXP-02, EXP-03, EXP-04
+**Success Criteria** (what must be TRUE):
+  1. `GET /api/v1/audit-log` returns `{items, total, page, pageSize}` ordered `created_at DESC, id DESC`; reception receives 403; owner sees all 69 event kinds
+  2. Filters for actor (`actorUserId`, `actorEmailSnapshot` substring match), resource (`resource_type`), event kind (`action`), and time window (`from`/`to` interpreted in Europe/Moscow) each narrow results correctly and can be combined
+  3. Pagination is stable across pages (adding a new audit row during pagination does not shift earlier pages due to deterministic `created_at DESC, id DESC` ordering)
+  4. CSV download endpoints (`/reports/revenue.csv`, `/reports/clients.csv`, `/reports/visits.csv`, `/audit-log.csv`) stream UTF-8 BOM content with correct RFC 4180 escaping; Cyrillic fields round-trip correctly; monetary columns render as rubles with separator (not raw kopecks); date columns are Europe/Moscow formatted
+  5. CSV exports for audit log accept the same filter parameters as the JSON endpoint and produce consistent results
+**Plans**: TBD
+
+### Phase 57: OpenAPI Handoff + Milestone Verification
+**Goal**: All v1.8 API paths are reflected in byte-stable `openapi.json` and `schema.d.ts` with compile-time forward guards; an operator runbook confirms revenue golden-path, audit filtering, reception 403, and CSV download against a live stack.
+**Depends on**: Phase 56
+**Requirements**: HND-01, HND-02, VER-01, VER-02
+**Success Criteria** (what must be TRUE):
+  1. `apps/backend/openapi.json` and `packages/api-client/src/schema.d.ts` regenerate byte-stably; CI `git diff --exit-code` is green on both artifacts; all v1.8 paths (`/reports/revenue`, `/reports/clients`, `/reports/visits`, `/audit-log` and their CSV variants) are present in the schema
+  2. `schema.contract.test.ts` gains `AssertNonNever` forward-guards for v1.8 paths and the runtime count assertion is bumped to the new total
+  3. Correctness tests verify: revenue aggregates match deterministic fixture data (kopecks net-of-refund); Europe/Moscow day-buckets match expected dates at DST boundaries; visits hour-buckets aggregate correctly; audit-log pagination is stable across inserts
+  4. RBAC denial is covered by integration tests: reception `GET /api/v1/reports/revenue` and `GET /api/v1/audit-log` both return 403
+  5. Operator runbook executes against `docker compose up`: revenue golden-path with known fixture amounts passes, audit log filters narrow as expected, reception 403 confirmed manually, CSV download opens in Excel without mojibake
+**Plans**: TBD
+
 ---
 
 ## Progress Table
@@ -144,10 +206,14 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 | 51. Fiscal FSM + Refunds | 10/10 | Complete | 2026-05-23 |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 6/6 | Complete | 2026-05-23 |
 | 53. Milestone Verification | 4/4 | Complete | 2026-05-23 |
+| 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 0/TBD | Not started | - |
+| 55. Revenue + Clients + Visits Reports | 0/TBD | Not started | - |
+| 56. Audit Log Read API + CSV Export | 0/TBD | Not started | - |
+| 57. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
 ---
 
-*Roadmap last updated: 2026-05-24 — v1.7 Online Payments + 54-ФЗ SHIPPED (Phases 47-53, 47 plans). 48/51 requirements delivered; 3 operator-credential-gated (CARRY-01/02, VER-03) acknowledged as deferred at close. v1.8 starts at Phase 54.*
+*Roadmap last updated: 2026-05-24 — v1.8 Reports + Audit Log read API ACTIVE (Phases 54-57). v1.7 Online Payments + 54-ФЗ SHIPPED (Phases 47-53, 47 plans). 48/51 v1.7 requirements delivered; 3 operator-credential-gated (CARRY-01/02, VER-03) acknowledged as deferred at close.*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
@@ -156,3 +222,4 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 *v1.5 Coverage: 57/57 v1.5 requirements mapped.*
 *v1.6 Coverage: 48/48 v1.6 requirements satisfied (8 INFRA + 11 EMAIL/AUTH-EM + 7 USERS + 5 RESET + 9 NOTIFY + 8 HANDOFF/VER). VER-12 (live RU-domain email-deliverability probe) + VER-14 (15-template owner countersign) ratification deferred to v1.7 as DEFER-46-01/02.*
 *v1.7 Coverage: 48/51 v1.7 requirements delivered (8 INFRA + 6 ADAPTER + 8 PAY + 9 WH/FISCAL-foundation + 8 FISCAL-FSM/REFUND + 5 NOTIFY + 4 VER). 3 operator-credential-gated deferred at close: CARRY-01 (DEFER-46-01 live RU email probe) + CARRY-02 (DEFER-46-02 owner countersign) + VER-03 (ЮKassa sandbox walkthrough per D-04).*
+*v1.8 Coverage: 30/30 v1.8 requirements mapped (3 INFRA + 5 REV + 4 CLR + 4 VIS-R + 6 AUD + 4 EXP + 2 HND + 2 VER).*
