@@ -28,6 +28,7 @@ INVARIANTS:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import date
 from typing import Any
 
@@ -48,6 +49,7 @@ __all__ = (
     "fetch_revenue_buckets",
     "fetch_visits_daily",
     "fetch_visits_hourly",
+    "stream_audit_log_rows",
 )
 
 
@@ -325,3 +327,36 @@ async def fetch_audit_log_page(
         page=query.page,
         page_size=query.page_size,
     )
+
+
+async def stream_audit_log_rows(
+    session: AsyncSession,
+    query: AuditLogQuery,
+    *,
+    from_: date | None = None,
+    to: date | None = None,
+) -> AsyncIterator[AuditLog]:
+    """Yield AuditLog rows one-by-one for CSV streaming (EXP-02, D-16).
+
+    No offset/limit — streams ALL rows matching the filters so CSV export
+    can produce an unbounded file without materialising the full result set
+    in memory. Memory is bounded by AsyncSession.stream_scalars() cursor
+    semantics (row-by-row server-side streaming).
+
+    Ordering: created_at DESC, id DESC — consistent with the JSON paginated
+    listing (AUD-06) so CSV and JSON render rows in the same stable order.
+
+    from_/to are keyword-only args (mirroring fetch_audit_log_page from Plan 01;
+    the query model has no from_/to fields — they arrive as route-level params).
+
+    INVARIANT: ZERO INSERT / UPDATE / DELETE. Read-only.
+    """
+    predicates = _build_audit_predicates(query, from_=from_, to=to)
+    stmt = (
+        select(AuditLog)
+        .where(and_(true(), *predicates))
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+    )
+    result = await session.stream_scalars(stmt)
+    async for row in result:
+        yield row

@@ -8,9 +8,9 @@ Audit-log endpoints (audit_log_router) use
 ``Depends(require_permission(Action.LIST, Resource.AUDIT_LOG))``
 ((LIST, AUDIT_LOG) is in OWNER_ONLY per permissions.py:128-129).
 
-All responses return ``ResponseEnvelope[...]`` via ``envelope(...)``
-(per payments/router.py pattern). Reports are aggregates, not lists —
-they do NOT use PaginatedData (D-11). Exception: audit-log is a paginated list.
+JSON responses return ``ResponseEnvelope[...]`` via ``envelope(...)``.
+CSV routes return ``StreamingResponse`` directly — NO ResponseEnvelope, NO envelope() call,
+NO response_model (EXP-01..04, D-11, D-12).
 
 No try/except in route handlers — AppError subclasses bubble to the
 registered ``_app_error_handler`` (core/exceptions.py:register_exception_handlers).
@@ -26,6 +26,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -33,7 +34,13 @@ from app.core.dependencies import CurrentUser, require_permission
 from app.core.pagination import PaginatedData
 from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
-from app.modules.reports import service
+from app.modules.reports import csv_export, service
+from app.modules.reports.constants import (
+    CSV_AUDIT_LOG_HEADERS,
+    CSV_CLIENTS_HEADERS,
+    CSV_REVENUE_HEADERS,
+    CSV_VISITS_HEADERS,
+)
 from app.modules.reports.schemas import (
     AuditLogItem,
     AuditLogQuery,
@@ -127,6 +134,85 @@ async def get_visits_report(
 
 
 # ---------------------------------------------------------------------------
+# CSV export routes — Phase 56 EXP-01, EXP-03, EXP-04
+# Return StreamingResponse directly — NO ResponseEnvelope, NO response_model.
+# RBAC: same require_permission as JSON siblings ((VIEW, REPORTS) ∈ OWNER_ONLY).
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/revenue.csv",
+    response_class=StreamingResponse,
+    summary="Revenue CSV download — period buckets with ruble amounts (owner-only; EXP-01)",
+)
+async def get_revenue_csv(
+    query: Annotated[RevenueReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream revenue report as UTF-8 BOM + RFC-4180 CSV.
+
+    Same query params as GET /reports/revenue (EXP-03, SC#5).
+    Money columns are period-decimal rubles (D-13); header row = CSV_REVENUE_HEADERS.
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    Range validation: to<from → 422; range>366 days → 422.
+    No try/except — errors bubble to _app_error_handler.
+    """
+    rows = await service.revenue_csv_rows(session, query)
+    return csv_export.make_csv_streaming_response(iter(rows), CSV_REVENUE_HEADERS, "revenue.csv")
+
+
+@router.get(
+    "/clients.csv",
+    response_class=StreamingResponse,
+    summary="Clients snapshot CSV download — single summary row (owner-only; EXP-03)",
+)
+async def get_clients_csv(
+    query: Annotated[ClientsReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream clients snapshot as UTF-8 BOM + RFC-4180 CSV (single data row).
+
+    Same query params as GET /reports/clients (EXP-03, SC#5).
+    Header row = CSV_CLIENTS_HEADERS; single summary row.
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    """
+    rows = await service.clients_csv_rows(session, query)
+    return csv_export.make_csv_streaming_response(iter(rows), CSV_CLIENTS_HEADERS, "clients.csv")
+
+
+@router.get(
+    "/visits.csv",
+    response_class=StreamingResponse,
+    summary="Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)",
+)
+async def get_visits_csv(
+    query: Annotated[VisitsReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream visits daily series as UTF-8 BOM + RFC-4180 CSV.
+
+    Same query params as GET /reports/visits (EXP-03, SC#5).
+    Daily-only (date, count); hourly section deferred (D-15 discretion).
+    Header row = CSV_VISITS_HEADERS.
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    """
+    rows = await service.visits_csv_rows(session, query)
+    return csv_export.make_csv_streaming_response(iter(rows), CSV_VISITS_HEADERS, "visits.csv")
+
+
+# ---------------------------------------------------------------------------
 # Audit-log router (Phase 56 AUD-01..06)
 # ---------------------------------------------------------------------------
 
@@ -163,3 +249,54 @@ async def list_audit_log(
     """
     result = await service.list_audit_log(session, query, from_=from_, to=to)
     return envelope(result)
+
+
+@audit_log_router.get(
+    ".csv",
+    response_class=StreamingResponse,
+    summary="Audit-log CSV download — all matching rows (owner-only; EXP-02)",
+)
+async def get_audit_log_csv(
+    from_: Annotated[date | None, Query(alias="from")] = None,
+    to: Annotated[date | None, Query(alias="to")] = None,
+    query: Annotated[AuditLogQuery, Depends()] = ...,  # type: ignore[assignment]
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.LIST, Resource.AUDIT_LOG))
+    ] = ...,  # type: ignore[assignment]
+    session: Annotated[AsyncSession, Depends(get_db)] = ...,  # type: ignore[assignment]
+) -> StreamingResponse:
+    """Stream audit-log as UTF-8 BOM + RFC-4180 CSV (all matching rows, D-16).
+
+    Same filters as GET /audit-log JSON endpoint (EXP-02, SC#5):
+      ?action=...&resourceType=...&actorUserId=...&actorEmailSnapshot=...
+      ?from=YYYY-MM-DD&to=YYYY-MM-DD (route-level Query(alias=...) params)
+
+    Streams ALL matching rows (no pagination) row-by-row — memory bounded by
+    stream_scalars cursor (T-56-08, D-16).
+
+    createdAt formatted as 'YYYY-MM-DD HH:MM:SS' Europe/Moscow (D-14).
+    payload serialized as compact JSON string (ensure_ascii=False, Cyrillic literal).
+
+    ``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —
+    mirrors the JSON handler pattern (live-verified: Field(alias="from") on Depends()
+    model does NOT bind ``?from=`` on this FastAPI + Pydantic v2 stack).
+
+    Owner-only: (LIST, AUDIT_LOG) ∈ OWNER_ONLY; reception → 403 (T-56-06).
+    Unknown action/resource_type → 422 audit_filter_invalid (T-56-10, SC#5).
+    to < from → 422.
+    No try/except — AppError bubbles to _app_error_handler.
+
+    IMPORTANT: validate_audit_filters is called EAGERLY here (before StreamingResponse)
+    so validation errors are raised in the request-response phase where _app_error_handler
+    can intercept them. If validation lived inside the async generator body it would fire
+    after headers are sent (inside StreamingResponse) and could not be intercepted.
+    """
+    # Validate filters eagerly in the request phase — must happen before StreamingResponse
+    # is constructed so AuditFilterInvalidError / ValidationAppError are caught by the
+    # registered exception handler (Rule 1 fix: async generator body fires too late).
+    service.validate_audit_filters(query, from_=from_, to=to)
+
+    rows = service.audit_log_csv_rows(session, query, from_=from_, to=to)
+    return csv_export.make_async_csv_streaming_response(
+        rows, CSV_AUDIT_LOG_HEADERS, "audit-log.csv"
+    )
