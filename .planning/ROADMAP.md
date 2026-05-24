@@ -155,7 +155,10 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   2. `Resource.REPORTS` + `Resource.AUDIT_LOG` + their owner-only RBAC pairs exist in backend enums AND are mirrored byte-for-byte in admin-web `can.ts` + `registry.ts`; three-way parity test is green
   3. The three-way parity test explicitly covers the new v1.8 pairs (its count assertion is bumped)
   4. Alembic migration(s) for aggregation indexes (`payments(received_at)`, `audit_log(created_at)`, `audit_log(action)`, `audit_log(resource_type)`) apply and round-trip clean; `alembic check` green
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 54-01-PLAN.md — RBAC parity: add Resource.AUDIT_LOG + (VIEW|LIST, AUDIT_LOG) owner-only pairs, mirror into can.ts/registry.ts, bump parity count 33→35 (INFRA-42)
+- [ ] 54-02-PLAN.md — Aggregation indexes: migration 0040 adds ix_audit_log_created_at (created_at DESC, id DESC), ix_audit_log_action, ix_audit_log_resource_type; ORM lockstep, alembic check clean (INFRA-43)
+- [ ] 54-03-PLAN.md — Reports module scaffold: slim read-only app/modules/reports/ + .importlinter registration, zero new ignore_imports (INFRA-41)
 
 ### Phase 55: Revenue + Clients + Visits Reports
 **Goal**: Owner can query all three read-only aggregate reports (revenue by period, clients snapshot, visits by day/hour) via authenticated JSON endpoints; all monetary values are integer kopecks; all date buckets are deterministic in Europe/Moscow.
@@ -206,7 +209,7 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 | 51. Fiscal FSM + Refunds | 10/10 | Complete | 2026-05-23 |
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 6/6 | Complete | 2026-05-23 |
 | 53. Milestone Verification | 4/4 | Complete | 2026-05-23 |
-| 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 0/TBD | Not started | - |
+| 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 0/3 | Planned | - |
 | 55. Revenue + Clients + Visits Reports | 0/TBD | Not started | - |
 | 56. Audit Log Read API + CSV Export | 0/TBD | Not started | - |
 | 57. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
