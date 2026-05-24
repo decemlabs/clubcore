@@ -147,58 +147,77 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 ## Phase Details
 
 ### Phase 54: Foundations — Module Scaffold + RBAC Parity + Indexes
+
 **Goal**: The `app/modules/reports/` module exists and is architecturally wired: import-linter contract enforced, RBAC enums extended with owner-only reports/audit entries, and aggregation indexes applied so subsequent report queries are performant from day one.
 **Depends on**: Phase 53 (v1.7 shipped)
 **Requirements**: INFRA-41, INFRA-42, INFRA-43
 **Success Criteria** (what must be TRUE):
+
   1. `app/modules/reports/` is registered in `.importlinter` `modules-independent` and import-linter passes with no violations
   2. `Resource.REPORTS` + `Resource.AUDIT_LOG` + their owner-only RBAC pairs exist in backend enums AND are mirrored byte-for-byte in admin-web `can.ts` + `registry.ts`; three-way parity test is green
   3. The three-way parity test explicitly covers the new v1.8 pairs (its count assertion is bumped)
   4. Alembic migration(s) for aggregation indexes (`payments(received_at)`, `audit_log(created_at)`, `audit_log(action)`, `audit_log(resource_type)`) apply and round-trip clean; `alembic check` green
+
 **Plans**: 3 plans
+
 - [x] 54-01-PLAN.md — RBAC parity: add Resource.AUDIT_LOG + (VIEW|LIST, AUDIT_LOG) owner-only pairs, mirror into can.ts/registry.ts, bump parity count 33→35 (INFRA-42)
 - [x] 54-02-PLAN.md — Aggregation indexes: migration 0040 adds ix_audit_log_created_at (created_at DESC, id DESC), ix_audit_log_action, ix_audit_log_resource_type; ORM lockstep, alembic check clean (INFRA-43)
 - [x] 54-03-PLAN.md — Reports module scaffold: slim read-only app/modules/reports/ + .importlinter registration, zero new ignore_imports (INFRA-41)
 
 ### Phase 55: Revenue + Clients + Visits Reports
+
 **Goal**: Owner can query all three read-only aggregate reports (revenue by period, clients snapshot, visits by day/hour) via authenticated JSON endpoints; all monetary values are integer kopecks; all date buckets are deterministic in Europe/Moscow.
 **Depends on**: Phase 54
 **Requirements**: REV-01, REV-02, REV-03, REV-04, REV-05, CLR-01, CLR-02, CLR-03, CLR-04, VIS-R-01, VIS-R-02, VIS-R-03, VIS-R-04
 **Success Criteria** (what must be TRUE):
+
   1. `GET /api/v1/reports/revenue?fromDate=&toDate=&groupBy=day` and `groupBy=month` return buckets with integer kopecks broken down by payment method (`cash`/`online`) and subject kind (`membership`/`pt_package`); refund rows reduce net amounts correctly *(camelCase wire params per project `to_camel` convention — accepted Phase 55 deviation from illustrative `?from=&to=`)*
   2. `GET /api/v1/reports/clients` returns active membership count, expiring-within-N-days count (default 7, param `within` 1..30), and new-clients count for a date range; all counters exclude soft-deleted rows
   3. `GET /api/v1/reports/visits?fromDate=&toDate=` returns daily visit counts using `visits.gym_date` (no secondary TZ conversion); a separate grouping by hour of day is available for peak-hour analysis; average visits per day for the period is returned
   4. Reception role receives 403 on all `/reports/*` endpoints (RBAC guard + route-introspection gate covers the new routes)
   5. All day/month buckets match Europe/Moscow boundaries (consistent with existing `gym_date STORED` and cron-window discipline)
+
 **Plans**: 2 plans
+
 - [x] 55-01-PLAN.md — Module contracts (all-three DTOs, range-validation guard, router mount, test conftest) + revenue endpoint end-to-end (REV-01..05)
 - [x] 55-02-PLAN.md — Clients snapshot (active/expiring/new, soft-delete excluded) + visits report (daily/hourly/average) endpoints (CLR-01..04, VIS-R-01..04)
 
 ### Phase 56: Audit Log Read API + CSV Export
+
 **Goal**: Owner can browse and filter the full 69-event audit log through a paginated JSON endpoint and download any report or audit log as a UTF-8 BOM CSV suitable for Excel.
 **Depends on**: Phase 55
 **Requirements**: AUD-01, AUD-02, AUD-03, AUD-04, AUD-05, AUD-06, EXP-01, EXP-02, EXP-03, EXP-04
 **Success Criteria** (what must be TRUE):
+
   1. `GET /api/v1/audit-log` returns `{items, total, page, pageSize}` ordered `created_at DESC, id DESC`; reception receives 403; owner sees all 69 event kinds
   2. Filters for actor (`actorUserId`, `actorEmailSnapshot` substring match), resource (`resource_type`), event kind (`action`), and time window (`from`/`to` interpreted in Europe/Moscow) each narrow results correctly and can be combined
   3. Pagination is stable across pages (adding a new audit row during pagination does not shift earlier pages due to deterministic `created_at DESC, id DESC` ordering)
   4. CSV download endpoints (`/reports/revenue.csv`, `/reports/clients.csv`, `/reports/visits.csv`, `/audit-log.csv`) stream UTF-8 BOM content with correct RFC 4180 escaping; Cyrillic fields round-trip correctly; monetary columns render as rubles with separator (not raw kopecks); date columns are Europe/Moscow formatted
   5. CSV exports for audit log accept the same filter parameters as the JSON endpoint and produce consistent results
+
 **Plans**: 2 plans
 Plans:
+**Wave 1**
+
 - [ ] 56-01-PLAN.md — Audit Log read API: paginated owner-only GET /api/v1/audit-log with filters, validation, keyset ordering (AUD-01..06)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 56-02-PLAN.md — CSV export: UTF-8 BOM + RFC-4180 .csv routes for revenue/clients/visits/audit-log (EXP-01..04)
 
 ### Phase 57: OpenAPI Handoff + Milestone Verification
+
 **Goal**: All v1.8 API paths are reflected in byte-stable `openapi.json` and `schema.d.ts` with compile-time forward guards; an operator runbook confirms revenue golden-path, audit filtering, reception 403, and CSV download against a live stack.
 **Depends on**: Phase 56
 **Requirements**: HND-01, HND-02, VER-01, VER-02
 **Success Criteria** (what must be TRUE):
+
   1. `apps/backend/openapi.json` and `packages/api-client/src/schema.d.ts` regenerate byte-stably; CI `git diff --exit-code` is green on both artifacts; all v1.8 paths (`/reports/revenue`, `/reports/clients`, `/reports/visits`, `/audit-log` and their CSV variants) are present in the schema
   2. `schema.contract.test.ts` gains `AssertNonNever` forward-guards for v1.8 paths and the runtime count assertion is bumped to the new total
   3. Correctness tests verify: revenue aggregates match deterministic fixture data (kopecks net-of-refund); Europe/Moscow day-buckets match expected dates at DST boundaries; visits hour-buckets aggregate correctly; audit-log pagination is stable across inserts
   4. RBAC denial is covered by integration tests: reception `GET /api/v1/reports/revenue` and `GET /api/v1/audit-log` both return 403
   5. Operator runbook executes against `docker compose up`: revenue golden-path with known fixture amounts passes, audit log filters narrow as expected, reception 403 confirmed manually, CSV download opens in Excel without mojibake
+
 **Plans**: TBD
 
 ---
