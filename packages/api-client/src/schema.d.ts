@@ -34,6 +34,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated audit-log listing (owner-only; AUD-01..06)
+         * @description Paginated audit-log listing with optional AND-combined filters (AUD-01..06).
+         *
+         *     Results ordered created_at DESC, id DESC (stable pagination, AUD-06, D-08).
+         *     Filter params: ?actorUserId=...&actorEmailSnapshot=...&resourceType=...&action=...
+         *     Date window (inclusive MSK day bounds): ?from=YYYY-MM-DD&to=YYYY-MM-DD
+         *     Pagination: ?page=1&pageSize=20 (max pageSize=100).
+         *
+         *     ``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —
+         *     live-verified: Field(alias="from") on a Depends() model does NOT bind ``?from=`` on
+         *     this FastAPI + Pydantic v2 stack.
+         *
+         *     Owner-only: (LIST, AUDIT_LOG) in OWNER_ONLY; reception -> 403 (AUD-05, SC#1).
+         *     Unknown action/resource_type -> 422 audit_filter_invalid (AUD-03, D-05).
+         *     to < from -> 422 (D-06).
+         *     No try/except -- AppError bubbles to _app_error_handler.
+         */
+        get: operations["list_audit_log_api_v1_audit_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-log.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit-log CSV download — all matching rows (owner-only; EXP-02)
+         * @description Stream audit-log as UTF-8 BOM + RFC-4180 CSV (all matching rows, D-16).
+         *
+         *     Same filters as GET /audit-log JSON endpoint (EXP-02, SC#5):
+         *       ?action=...&resourceType=...&actorUserId=...&actorEmailSnapshot=...
+         *       ?from=YYYY-MM-DD&to=YYYY-MM-DD (route-level Query(alias=...) params)
+         *
+         *     Streams ALL matching rows (no pagination) row-by-row — memory bounded by
+         *     stream_scalars cursor (T-56-08, D-16).
+         *
+         *     createdAt formatted as 'YYYY-MM-DD HH:MM:SS' Europe/Moscow (D-14).
+         *     payload serialized as compact JSON string (ensure_ascii=False, Cyrillic literal).
+         *
+         *     ``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —
+         *     mirrors the JSON handler pattern (live-verified: Field(alias="from") on Depends()
+         *     model does NOT bind ``?from=`` on this FastAPI + Pydantic v2 stack).
+         *
+         *     Owner-only: (LIST, AUDIT_LOG) ∈ OWNER_ONLY; reception → 403 (T-56-06).
+         *     Unknown action/resource_type → 422 audit_filter_invalid (T-56-10, SC#5).
+         *     to < from → 422.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *
+         *     IMPORTANT: validate_audit_filters is called EAGERLY here (before StreamingResponse)
+         *     so validation errors are raised in the request-response phase where _app_error_handler
+         *     can intercept them. If validation lived inside the async generator body it would fire
+         *     after headers are sent (inside StreamingResponse) and could not be intercepted.
+         */
+        get: operations["get_audit_log_csv_api_v1_audit_log_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -851,6 +929,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/online-payments/memberships/{membership_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Initiate online refund of a membership (Phase 51 REFUND-01). Full refund only (partial deferred to v1.8 B-02). Returns 202; completion awaits ЮKassa refund.succeeded webhook.
+         * @description REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.
+         *
+         *     RBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →
+         *     verify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-
+         *     source / FSM) BEFORE calling ЮKassa; emits the
+         *     ``online_refund_initiated`` audit row inside the single UoW.
+         *
+         *     Error mapping (raised from the service layer):
+         *       - 404 membership_not_found / online_payment_not_found / original_payment_not_found
+         *       - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition
+         *         / refund_already_in_flight
+         *       - 422 yookassa_validation_error
+         *       - 503 yookassa_unavailable
+         *       - 502 yookassa_permanent_error
+         */
+        post: operations["refund_membership_online_api_v1_online_payments_memberships__membership_id__refund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-payments/memberships/{plan_id}/sell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sell a membership online (redirect flow); reception+owner; CSRF + Idempotency-Key required
+         * @description PAY-03 — membership redirect flow.
+         *
+         *     Returns 201 + ``ResponseEnvelope[SellResponse]`` with
+         *     ``confirmation_url`` populated and ``qr_payload`` NULL on success.
+         *     Error mapping (service layer): 422 ``client_email_required_for_online_payment``,
+         *     422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,
+         *     502 ``yookassa_permanent_error``.
+         */
+        post: operations["sell_membership_redirect_api_v1_online_payments_memberships__plan_id__sell_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-payments/memberships/{plan_id}/sell-qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sell a membership online (QR flow); reception+owner; CSRF + Idempotency-Key required
+         * @description PAY-05 — membership QR flow.
+         *
+         *     Returns 201 + ``ResponseEnvelope[SellResponse]`` with ``qr_payload``
+         *     populated and ``confirmation_url`` NULL on success. QR replays re-fetch
+         *     upstream so the second click also receives a valid ``qr_payload``
+         *     (D-49-09 + Plan 49-03 BLOCKER #1).
+         */
+        post: operations["sell_membership_qr_api_v1_online_payments_memberships__plan_id__sell_qr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-payments/pt-packages/{plan_id}/sell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required
+         * @description PAY-04 — PT-package redirect flow. Same shape as membership variant.
+         */
+        post: operations["sell_pt_package_redirect_api_v1_online_payments_pt_packages__plan_id__sell_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-payments/pt-packages/{plan_id}/sell-qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required
+         * @description PAY-05 — PT-package QR flow. Same shape as membership QR variant.
+         */
+        post: operations["sell_pt_package_qr_api_v1_online_payments_pt_packages__plan_id__sell_qr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-payments/pt-packages/{pt_package_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Initiate online refund of a PT-package (Phase 51 REFUND-01). Full refund only. Returns 202; completion awaits ЮKassa refund.succeeded webhook.
+         * @description REFUND-01 — POST /api/v1/online-payments/pt-packages/{id}/refund.
+         *
+         *     Mirrors ``refund_membership_online``. No freeze / renewed-source guards
+         *     for PT-packages (no freeze concept, no renewal chain in v1.x).
+         */
+        post: operations["refund_pt_package_online_api_v1_online_payments_pt_packages__pt_package_id__refund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -1266,6 +1491,165 @@ export interface paths {
          *       - 422 idempotency_key_reuse (same key, different body).
          */
         post: operations["cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active/expiring/new clients summary (owner-only; CLR-01..04)
+         * @description Clients snapshot: active memberships, expiring-within-N count, new-clients in range.
+         *
+         *     All counters exclude soft-deleted clients (CLR-04).
+         *     `within` defaults to 7, range 1..30 (D-07); out-of-range → 422.
+         *     Active/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).
+         *
+         *     Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
+         *     Range cap: 366 days (D-06); toDate<fromDate → 422.
+         */
+        get: operations["get_clients_report_api_v1_reports_clients_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/clients.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Clients snapshot CSV download — single summary row (owner-only; EXP-03)
+         * @description Stream clients snapshot as UTF-8 BOM + RFC-4180 CSV (single data row).
+         *
+         *     Same query params as GET /reports/clients (EXP-03, SC#5).
+         *     Header row = CSV_CLIENTS_HEADERS; single summary row.
+         *
+         *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         */
+        get: operations["get_clients_csv_api_v1_reports_clients_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Revenue by period (day|month) from payments ledger (owner-only; REV-01..05)
+         * @description Aggregate payments ledger into period buckets with method/subject_kind breakdown.
+         *
+         *     Refunds (subject_kind='refund', negative amount_kopecks) net into netKopecks
+         *     only — they do NOT appear in bySubjectKind (D-01, REV-04).
+         *
+         *     Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
+         *     Range cap: 366 days (D-06); to<from → 422.
+         */
+        get: operations["get_revenue_report_api_v1_reports_revenue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/revenue.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Revenue CSV download — period buckets with ruble amounts (owner-only; EXP-01)
+         * @description Stream revenue report as UTF-8 BOM + RFC-4180 CSV.
+         *
+         *     Same query params as GET /reports/revenue (EXP-03, SC#5).
+         *     Money columns are period-decimal rubles (D-13); header row = CSV_REVENUE_HEADERS.
+         *
+         *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         *     Range validation: to<from → 422; range>366 days → 422.
+         *     No try/except — errors bubble to _app_error_handler.
+         */
+        get: operations["get_revenue_csv_api_v1_reports_revenue_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Visits by day/hour + average (owner-only; VIS-R-01..04)
+         * @description Visits composite report: daily counts, hourly distribution, averagePerDay.
+         *
+         *     Daily groups by gym_date (MSK STORED column — no secondary TZ conversion, VIS-R-04).
+         *     Hourly groups by hour-of-day across the full range (VIS-R-02).
+         *     averagePerDay = total visits / calendar days in range inclusive (D-10).
+         *     Sparse buckets: only days/hours with visits appear (D-08).
+         *
+         *     Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
+         *     Range cap: 366 days (D-06); toDate<fromDate → 422.
+         */
+        get: operations["get_visits_report_api_v1_reports_visits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/visits.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)
+         * @description Stream visits daily series as UTF-8 BOM + RFC-4180 CSV.
+         *
+         *     Same query params as GET /reports/visits (EXP-03, SC#5).
+         *     Daily-only (date, count); hourly section deferred (D-15 discretion).
+         *     Header row = CSV_VISITS_HEADERS.
+         *
+         *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         */
+        get: operations["get_visits_csv_api_v1_reports_visits_csv_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1694,6 +2078,40 @@ export interface components {
             userAgent: string | null;
         };
         /**
+         * AuditLogItem
+         * @description Single audit-log row (D-09). Owner sees full payload including JSONB.
+         *
+         *     Fields mirror AuditLog ORM columns (app.core.audit_models.AuditLog).
+         *     Wire keys are camelCase via alias_generator=to_camel (ResponseData -> ContractModel).
+         *     created_at serializes as ISO-8601 with timezone offset.
+         */
+        AuditLogItem: {
+            /** Action */
+            action: string;
+            /** Actoremailsnapshot */
+            actorEmailSnapshot: string | null;
+            /** Actoruserid */
+            actorUserId: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Resourceid */
+            resourceId: string | null;
+            /** Resourcetype */
+            resourceType: string;
+        };
+        /**
          * BookingCancelRequest
          * @description POST /api/v1/bookings/{id}/cancel body (Phase 38 plan 38-03 / BOOK-06).
          *
@@ -1985,6 +2403,20 @@ export interface components {
             tags?: string[] | null;
             /** Telegramuserid */
             telegramUserId?: number | null;
+        };
+        /**
+         * ClientsReportResponse
+         * @description Clients report payload — flat counters (CLR-01..04).
+         */
+        ClientsReportResponse: {
+            /** Activecount */
+            activeCount: number;
+            /** Expiringcount */
+            expiringCount: number;
+            /** Newclientscount */
+            newClientsCount: number;
+            /** Withindays */
+            withinDays: number;
         };
         /**
          * EmergencyContact
@@ -2321,6 +2753,34 @@ export interface components {
          */
         MembershipStatus: "active" | "expired" | "cancelled" | "frozen";
         /**
+         * OnlineRefundRequest
+         * @description POST /api/v1/online-payments/{id}/refund body (Phase 51 REFUND-01).
+         */
+        OnlineRefundRequest: {
+            /**
+             * Idempotencykey
+             * Format: uuid
+             */
+            idempotencyKey: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * OnlineRefundResponse
+         * @description 201 response for the refund endpoint (Phase 51 D-51-08).
+         */
+        OnlineRefundResponse: {
+            /**
+             * Onlinerefundid
+             * Format: uuid
+             */
+            onlineRefundId: string;
+            /** Status */
+            status: string;
+            /** Yookassarefundid */
+            yookassaRefundId: string;
+        };
+        /**
          * OtpRequestBody
          * @description POST /api/v1/auth/otp/request body (D-42-22 / AUTH-EM-02).
          *
@@ -2351,6 +2811,17 @@ export interface components {
         PaginatedData_ActiveSessionItem_: {
             /** Items */
             items: components["schemas"]["ActiveSessionItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[AuditLogItem] */
+        PaginatedData_AuditLogItem_: {
+            /** Items */
+            items: components["schemas"]["AuditLogItem"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -2882,6 +3353,10 @@ export interface components {
         ResponseEnvelope_ClientResponse_: {
             data: components["schemas"]["ClientResponse"];
         };
+        /** ResponseEnvelope[ClientsReportResponse] */
+        ResponseEnvelope_ClientsReportResponse_: {
+            data: components["schemas"]["ClientsReportResponse"];
+        };
         /** ResponseEnvelope[LoginResponse] */
         ResponseEnvelope_LoginResponse_: {
             data: components["schemas"]["LoginResponse"];
@@ -2903,9 +3378,17 @@ export interface components {
             /** Data */
             data: null;
         };
+        /** ResponseEnvelope[OnlineRefundResponse] */
+        ResponseEnvelope_OnlineRefundResponse_: {
+            data: components["schemas"]["OnlineRefundResponse"];
+        };
         /** ResponseEnvelope[PaginatedData[ActiveSessionItem]] */
         ResponseEnvelope_PaginatedData_ActiveSessionItem__: {
             data: components["schemas"]["PaginatedData_ActiveSessionItem_"];
+        };
+        /** ResponseEnvelope[PaginatedData[AuditLogItem]] */
+        ResponseEnvelope_PaginatedData_AuditLogItem__: {
+            data: components["schemas"]["PaginatedData_AuditLogItem_"];
         };
         /** ResponseEnvelope[PaginatedData[BookingResponse]] */
         ResponseEnvelope_PaginatedData_BookingResponse__: {
@@ -2967,6 +3450,14 @@ export interface components {
         ResponseEnvelope_PtSessionResponse_: {
             data: components["schemas"]["PtSessionResponse"];
         };
+        /** ResponseEnvelope[RevenueReportResponse] */
+        ResponseEnvelope_RevenueReportResponse_: {
+            data: components["schemas"]["RevenueReportResponse"];
+        };
+        /** ResponseEnvelope[SellResponse] */
+        ResponseEnvelope_SellResponse_: {
+            data: components["schemas"]["SellResponse"];
+        };
         /** ResponseEnvelope[SlotResponse] */
         ResponseEnvelope_SlotResponse_: {
             data: components["schemas"]["SlotResponse"];
@@ -2995,11 +3486,111 @@ export interface components {
         ResponseEnvelope_VisitsMetaResponse_: {
             data: components["schemas"]["VisitsMetaResponse"];
         };
+        /** ResponseEnvelope[VisitsReportResponse] */
+        ResponseEnvelope_VisitsReportResponse_: {
+            data: components["schemas"]["VisitsReportResponse"];
+        };
+        /**
+         * RevenueBucket
+         * @description Aggregated revenue for a single period (day or month).
+         */
+        RevenueBucket: {
+            byMethod: components["schemas"]["RevenueBucketByMethod"];
+            bySubjectKind: components["schemas"]["RevenueBucketBySubjectKind"];
+            /** Netkopecks */
+            netKopecks: number;
+            /** Period */
+            period: string;
+        };
+        /**
+         * RevenueBucketByMethod
+         * @description Net kopecks split by payment method for a single period bucket.
+         */
+        RevenueBucketByMethod: {
+            /**
+             * Cash
+             * @default 0
+             */
+            cash: number;
+            /**
+             * Online
+             * @default 0
+             */
+            online: number;
+        };
+        /**
+         * RevenueBucketBySubjectKind
+         * @description Net kopecks split by subject kind for a single period bucket.
+         *
+         *     Only positive sale kinds appear here. Refunds are folded into
+         *     netKopecks on the parent RevenueBucket but not broken out here (D-01).
+         */
+        RevenueBucketBySubjectKind: {
+            /**
+             * Membership
+             * @default 0
+             */
+            membership: number;
+            /**
+             * Ptpackage
+             * @default 0
+             */
+            ptPackage: number;
+        };
+        /**
+         * RevenueReportResponse
+         * @description Revenue report payload wrapped by ResponseEnvelope[RevenueReportResponse].
+         */
+        RevenueReportResponse: {
+            /** Buckets */
+            buckets: components["schemas"]["RevenueBucket"][];
+            /**
+             * Fromdate
+             * Format: date
+             */
+            fromDate: string;
+            /**
+             * Groupby
+             * @enum {string}
+             */
+            groupBy: "day" | "month";
+            /**
+             * Todate
+             * Format: date
+             */
+            toDate: string;
+        };
         /**
          * Role
          * @enum {string}
          */
         Role: "owner" | "reception";
+        /**
+         * SellRequest
+         * @description POST /api/v1/online-payments/.../sell* body (Phase 49 PAY-03..05).
+         */
+        SellRequest: {
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+        };
+        /**
+         * SellResponse
+         * @description 201 response for any of the 4 sell endpoints (Phase 49 D-49-14).
+         */
+        SellResponse: {
+            /** Confirmationurl */
+            confirmationUrl?: string | null;
+            /**
+             * Onlinepaymentid
+             * Format: uuid
+             */
+            onlinePaymentId: string;
+            /** Qrpayload */
+            qrPayload?: string | null;
+        };
         /**
          * SlotCancelRequest
          * @description PATCH /api/v1/trainer-slots/{id}/cancel body (SLOT-09).
@@ -3398,6 +3989,29 @@ export interface components {
             membershipId: string;
         };
         /**
+         * VisitsDailyBucket
+         * @description Visit count for a single gym_date (MSK).
+         */
+        VisitsDailyBucket: {
+            /** Count */
+            count: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+        };
+        /**
+         * VisitsHourlyBucket
+         * @description Visit count for a single hour-of-day (0..23 MSK) across the full range.
+         */
+        VisitsHourlyBucket: {
+            /** Count */
+            count: number;
+            /** Hour */
+            hour: number;
+        };
+        /**
          * VisitsMetaResponse
          * @description GET /api/v1/visits/_meta response (Phase 22 D-22-1).
          *
@@ -3409,6 +4023,28 @@ export interface components {
             gymHoursEnd: string;
             /** Gymhoursstart */
             gymHoursStart: string;
+        };
+        /**
+         * VisitsReportResponse
+         * @description Visits report payload — composite (daily + hourly + averagePerDay) (D-09).
+         */
+        VisitsReportResponse: {
+            /** Averageperday */
+            averagePerDay: number;
+            /** Daily */
+            daily: components["schemas"]["VisitsDailyBucket"][];
+            /**
+             * Fromdate
+             * Format: date
+             */
+            fromDate: string;
+            /** Hourly */
+            hourly: components["schemas"]["VisitsHourlyBucket"][];
+            /**
+             * Todate
+             * Format: date
+             */
+            toDate: string;
         };
     };
     responses: never;
@@ -3434,6 +4070,80 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_audit_log_api_v1_audit_log_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                page?: number;
+                pageSize?: number;
+                actorUserId?: string | null;
+                actorEmailSnapshot?: string | null;
+                resourceType?: string | null;
+                action?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_AuditLogItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audit_log_csv_api_v1_audit_log_csv_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                page?: number;
+                pageSize?: number;
+                actorUserId?: string | null;
+                actorEmailSnapshot?: string | null;
+                resourceType?: string | null;
+                action?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -4562,6 +5272,216 @@ export interface operations {
             };
         };
     };
+    refund_membership_online_api_v1_online_payments_memberships__membership_id__refund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnlineRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_OnlineRefundResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sell_membership_redirect_api_v1_online_payments_memberships__plan_id__sell_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SellResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sell_membership_qr_api_v1_online_payments_memberships__plan_id__sell_qr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SellResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sell_pt_package_redirect_api_v1_online_payments_pt_packages__plan_id__sell_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SellResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sell_pt_package_qr_api_v1_online_payments_pt_packages__plan_id__sell_qr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_SellResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refund_pt_package_online_api_v1_online_payments_pt_packages__pt_package_id__refund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pt_package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnlineRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_OnlineRefundResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_payments_api_v1_payments_get: {
         parameters: {
             query?: {
@@ -5120,6 +6040,196 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_PtSessionResponse_"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clients_report_api_v1_reports_clients_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+                within?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientsReportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clients_csv_api_v1_reports_clients_csv_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+                within?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_revenue_report_api_v1_reports_revenue_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+                groupBy?: "day" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_RevenueReportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_revenue_csv_api_v1_reports_revenue_csv_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+                groupBy?: "day" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_visits_report_api_v1_reports_visits_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_VisitsReportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_visits_csv_api_v1_reports_visits_csv_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
