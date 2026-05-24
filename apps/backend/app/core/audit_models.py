@@ -69,4 +69,13 @@ class AuditLog(Base, UUIDPkMixin):
             "actor_user_id",
             "created_at",
         ),
+        # Phase 54 INFRA-43 / D-54-11 — report + Phase-56 pagination support.
+        # Composite (created_at DESC, id DESC) fully covers the stable ordering.
+        Index(
+            "ix_audit_log_created_at",
+            text("created_at DESC"),
+            text("id DESC"),
+        ),
+        Index("ix_audit_log_action", "action"),
+        Index("ix_audit_log_resource_type", "resource_type"),
     )
