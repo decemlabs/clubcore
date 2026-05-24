@@ -203,7 +203,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 56-02-PLAN.md — CSV export: UTF-8 BOM + RFC-4180 .csv routes for revenue/clients/visits/audit-log (EXP-01..04)
+- [x] 56-02-PLAN.md — CSV export: UTF-8 BOM + RFC-4180 .csv routes for revenue/clients/visits/audit-log (EXP-01..04)
 
 ### Phase 57: OpenAPI Handoff + Milestone Verification
 
@@ -235,7 +235,7 @@ Plans:
 | 53. Milestone Verification | 4/4 | Complete | 2026-05-23 |
 | 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 3/3 | Complete   | 2026-05-24 |
 | 55. Revenue + Clients + Visits Reports | 2/2 | Complete    | 2026-05-24 |
-| 56. Audit Log Read API + CSV Export | 1/2 | In Progress|  |
+| 56. Audit Log Read API + CSV Export | 2/2 | Complete   | 2026-05-24 |
 | 57. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
 ---
