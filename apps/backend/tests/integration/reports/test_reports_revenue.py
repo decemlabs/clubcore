@@ -21,7 +21,6 @@ from typing import Any
 
 from httpx import AsyncClient
 
-
 # --- tests -----------------------------------------------------------------
 
 
