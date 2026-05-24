@@ -1,9 +1,10 @@
-"""Reports module DTOs (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04).
+"""Reports module DTOs (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04; Phase 56 AUD-01..06).
 
 Schema conventions:
   - Query DTOs extend ``BackendSchemaBase`` (extra='forbid', alias_generator=to_camel,
     validate_by_name + validate_by_alias). NOT PageQuery — reports are aggregates,
     not paginated lists (D-11).
+  - Exception: AuditLogQuery extends PageQuery (D-07) — audit-log is a paginated list.
   - Response DTOs extend ``ResponseData`` (ContractModel, permissive outbound).
   - Wire form is camelCase; Python is snake_case.
   - Money stays integer kopecks in all API responses (REV-05).
@@ -20,6 +21,10 @@ Wire format for query params (FastAPI + Pydantic v2 alias_generator=to_camel beh
   explicit aliases. Using BackendSchemaBase (alias_generator=to_camel) causes
   ``from_date`` -> ``fromDate`` as the query param name.
 
+  For AuditLogQuery, the ``from``/``to`` date params are NOT model fields at all —
+  they are declared as route-level ``Query(alias="from")``/``Query(alias="to")``
+  parameters (live-verified; Field(alias=...) does not bind ?from= via Depends()).
+
 Decisions implemented:
   D-01: Nested bucket shape (byMethod, bySubjectKind). refundKopecks NOT added —
         net-only per D-01 default; refunds fold into netKopecks via signed sums.
@@ -28,14 +33,18 @@ Decisions implemented:
   D-07: within validated ge=1, le=30, default 7.
   D-09: Visits response is composite (daily + hourly + averagePerDay).
   D-10: averagePerDay is a float (raw ratio — frontend owns formatting).
-  D-11: Aggregates, not lists — no PaginatedData/PageQuery.
+  D-11: Aggregates, not lists — no PaginatedData/PageQuery (revenue/clients/visits).
+  D-07 (AUD): AuditLogQuery extends PageQuery; page=1, pageSize=20, max 100.
+  D-09 (AUD): AuditLogItem exposes full payload JSONB (owner-only resource).
 """
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Literal
+from datetime import date, datetime
+from typing import Any, Literal
+from uuid import UUID
 
+from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
 
 # ---------------------------------------------------------------------------
@@ -158,3 +167,47 @@ class VisitsReportResponse(ResponseData):
     average_per_day: float  # total / calendar_days (D-10); raw float, frontend formats
     from_date: date
     to_date: date
+
+
+# ---------------------------------------------------------------------------
+# Audit-log DTOs (Phase 56 AUD-01..06)
+# ---------------------------------------------------------------------------
+
+
+class AuditLogQuery(PageQuery):
+    """GET /api/v1/audit-log query params (D-05, D-07).
+
+    Inherits page + page_size from PageQuery (defaults: page=1, pageSize=20, max 100).
+    Wire: ?actorUserId=...&actorEmailSnapshot=...&resourceType=...&action=...&page=...&pageSize=...
+    (alias_generator=to_camel inherited via PageQuery -> BackendSchemaBase -> ContractModel)
+
+    IMPORTANT: ``from`` / ``to`` date bounds are NOT fields on this model.
+    They are declared as explicit route-level ``Query(alias="from")`` /
+    ``Query(alias="to")`` parameters on the handler (live-verified: Field(alias="from")
+    on a Depends() model field does NOT bind the ``?from=`` query param on this
+    FastAPI + Pydantic v2 stack). The service and repository receive them as
+    keyword-only arguments (from_=..., to=...).
+    """
+
+    actor_user_id: UUID | None = None
+    actor_email_snapshot: str | None = None
+    resource_type: str | None = None
+    action: str | None = None
+
+
+class AuditLogItem(ResponseData):
+    """Single audit-log row (D-09). Owner sees full payload including JSONB.
+
+    Fields mirror AuditLog ORM columns (app.core.audit_models.AuditLog).
+    Wire keys are camelCase via alias_generator=to_camel (ResponseData -> ContractModel).
+    created_at serializes as ISO-8601 with timezone offset.
+    """
+
+    id: UUID
+    created_at: datetime  # wire: createdAt (ISO-8601 with tz offset)
+    actor_user_id: UUID | None  # wire: actorUserId
+    actor_email_snapshot: str | None  # wire: actorEmailSnapshot
+    action: str
+    resource_type: str  # wire: resourceType
+    resource_id: UUID | None  # wire: resourceId
+    payload: dict[str, Any]
