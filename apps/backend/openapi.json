@@ -50,6 +50,81 @@
         "title": "ActiveSessionItem",
         "type": "object"
       },
+      "AuditLogItem": {
+        "description": "Single audit-log row (D-09). Owner sees full payload including JSONB.\n\nFields mirror AuditLog ORM columns (app.core.audit_models.AuditLog).\nWire keys are camelCase via alias_generator=to_camel (ResponseData -> ContractModel).\ncreated_at serializes as ISO-8601 with timezone offset.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actorEmailSnapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actoremailsnapshot"
+          },
+          "actorUserId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actoruserid"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "resourceId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resourceid"
+          },
+          "resourceType": {
+            "title": "Resourcetype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "actorUserId",
+          "actorEmailSnapshot",
+          "action",
+          "resourceType",
+          "resourceId",
+          "payload"
+        ],
+        "title": "AuditLogItem",
+        "type": "object"
+      },
       "BookingCancelRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/bookings/{id}/cancel body (Phase 38 plan 38-03 / BOOK-06).\n\n`reason` is REQUIRED — 1..200 chars; downstream audit row stores this\nstring verbatim via `BookingCancelledPayload.cancel_reason`.\nMirrors `PtSessionCancelRequest` shape (B-12 precedent).",
@@ -748,6 +823,35 @@
         "title": "ClientUpdateRequest",
         "type": "object"
       },
+      "ClientsReportResponse": {
+        "description": "Clients report payload — flat counters (CLR-01..04).",
+        "properties": {
+          "activeCount": {
+            "title": "Activecount",
+            "type": "integer"
+          },
+          "expiringCount": {
+            "title": "Expiringcount",
+            "type": "integer"
+          },
+          "newClientsCount": {
+            "title": "Newclientscount",
+            "type": "integer"
+          },
+          "withinDays": {
+            "title": "Withindays",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activeCount",
+          "expiringCount",
+          "newClientsCount",
+          "withinDays"
+        ],
+        "title": "ClientsReportResponse",
+        "type": "object"
+      },
       "EmergencyContact": {
         "description": "Free-shape contact owned by UI (D-17). Same E.164 phone as Client.phone.",
         "properties": {
@@ -1406,6 +1510,58 @@
         "title": "MembershipStatus",
         "type": "string"
       },
+      "OnlineRefundRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/online-payments/{id}/refund body (Phase 51 REFUND-01).",
+        "properties": {
+          "idempotencyKey": {
+            "format": "uuid",
+            "title": "Idempotencykey",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "idempotencyKey"
+        ],
+        "title": "OnlineRefundRequest",
+        "type": "object"
+      },
+      "OnlineRefundResponse": {
+        "description": "201 response for the refund endpoint (Phase 51 D-51-08).",
+        "properties": {
+          "onlineRefundId": {
+            "format": "uuid",
+            "title": "Onlinerefundid",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "yookassaRefundId": {
+            "title": "Yookassarefundid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "onlineRefundId",
+          "status",
+          "yookassaRefundId"
+        ],
+        "title": "OnlineRefundResponse",
+        "type": "object"
+      },
       "OtpRequestBody": {
         "additionalProperties": false,
         "description": "POST /api/v1/auth/otp/request body (D-42-22 / AUTH-EM-02).\n\nchannel='telegram' (default) preserves backwards compat — existing\ncallers send no ``channel`` field and the route surfaces the unified\nOTP flow under one endpoint. The service-layer Telegram facade\n(``request_otp_telegram``) delegates to the pre-existing\n``telegram_service.start_deep_link`` so /auth/telegram/start stays in\nplace for any FE callers that already use it.\n\nchannel='email' requires ``email`` to be present; the model_validator\nenforces this so FastAPI returns 422 BEFORE the route function runs.\nThe 422 is not an anti-oracle leak: invalid body SHAPE is not a\nsuccessful-vs-unknown-account discriminator — anti-oracle is enforced\nin the authenticated branches of ``request_otp_email`` (Task 4).",
@@ -1464,6 +1620,37 @@
           "pageSize"
         ],
         "title": "PaginatedData[ActiveSessionItem]",
+        "type": "object"
+      },
+      "PaginatedData_AuditLogItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditLogItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[AuditLogItem]",
         "type": "object"
       },
       "PaginatedData_BookingResponse_": {
@@ -2555,6 +2742,18 @@
         "title": "ResponseEnvelope[ClientResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_ClientsReportResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientsReportResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientsReportResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_LoginResponse_": {
         "properties": {
           "data": {
@@ -2616,6 +2815,18 @@
         "title": "ResponseEnvelope[NoneType]",
         "type": "object"
       },
+      "ResponseEnvelope_OnlineRefundResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/OnlineRefundResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[OnlineRefundResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_ActiveSessionItem__": {
         "properties": {
           "data": {
@@ -2626,6 +2837,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[ActiveSessionItem]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_AuditLogItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_AuditLogItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[AuditLogItem]]",
         "type": "object"
       },
       "ResponseEnvelope_PaginatedData_BookingResponse__": {
@@ -2808,6 +3031,30 @@
         "title": "ResponseEnvelope[PtSessionResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_RevenueReportResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RevenueReportResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[RevenueReportResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_SellResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SellResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[SellResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_SlotResponse_": {
         "properties": {
           "data": {
@@ -2892,6 +3139,117 @@
         "title": "ResponseEnvelope[VisitsMetaResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_VisitsReportResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VisitsReportResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[VisitsReportResponse]",
+        "type": "object"
+      },
+      "RevenueBucket": {
+        "description": "Aggregated revenue for a single period (day or month).",
+        "properties": {
+          "byMethod": {
+            "$ref": "#/components/schemas/RevenueBucketByMethod"
+          },
+          "bySubjectKind": {
+            "$ref": "#/components/schemas/RevenueBucketBySubjectKind"
+          },
+          "netKopecks": {
+            "title": "Netkopecks",
+            "type": "integer"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period",
+          "netKopecks",
+          "byMethod",
+          "bySubjectKind"
+        ],
+        "title": "RevenueBucket",
+        "type": "object"
+      },
+      "RevenueBucketByMethod": {
+        "description": "Net kopecks split by payment method for a single period bucket.",
+        "properties": {
+          "cash": {
+            "default": 0,
+            "title": "Cash",
+            "type": "integer"
+          },
+          "online": {
+            "default": 0,
+            "title": "Online",
+            "type": "integer"
+          }
+        },
+        "title": "RevenueBucketByMethod",
+        "type": "object"
+      },
+      "RevenueBucketBySubjectKind": {
+        "description": "Net kopecks split by subject kind for a single period bucket.\n\nOnly positive sale kinds appear here. Refunds are folded into\nnetKopecks on the parent RevenueBucket but not broken out here (D-01).",
+        "properties": {
+          "membership": {
+            "default": 0,
+            "title": "Membership",
+            "type": "integer"
+          },
+          "ptPackage": {
+            "default": 0,
+            "title": "Ptpackage",
+            "type": "integer"
+          }
+        },
+        "title": "RevenueBucketBySubjectKind",
+        "type": "object"
+      },
+      "RevenueReportResponse": {
+        "description": "Revenue report payload wrapped by ResponseEnvelope[RevenueReportResponse].",
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/RevenueBucket"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "fromDate": {
+            "format": "date",
+            "title": "Fromdate",
+            "type": "string"
+          },
+          "groupBy": {
+            "enum": [
+              "day",
+              "month"
+            ],
+            "title": "Groupby",
+            "type": "string"
+          },
+          "toDate": {
+            "format": "date",
+            "title": "Todate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "buckets",
+          "fromDate",
+          "toDate",
+          "groupBy"
+        ],
+        "title": "RevenueReportResponse",
+        "type": "object"
+      },
       "Role": {
         "enum": [
           "owner",
@@ -2899,6 +3257,59 @@
         ],
         "title": "Role",
         "type": "string"
+      },
+      "SellRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/online-payments/.../sell* body (Phase 49 PAY-03..05).",
+        "properties": {
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId"
+        ],
+        "title": "SellRequest",
+        "type": "object"
+      },
+      "SellResponse": {
+        "description": "201 response for any of the 4 sell endpoints (Phase 49 D-49-14).",
+        "properties": {
+          "confirmationUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmationurl"
+          },
+          "onlinePaymentId": {
+            "format": "uuid",
+            "title": "Onlinepaymentid",
+            "type": "string"
+          },
+          "qrPayload": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qrpayload"
+          }
+        },
+        "required": [
+          "onlinePaymentId"
+        ],
+        "title": "SellResponse",
+        "type": "object"
       },
       "SlotCancelRequest": {
         "additionalProperties": false,
@@ -3560,6 +3971,45 @@
         "title": "VisitResponse",
         "type": "object"
       },
+      "VisitsDailyBucket": {
+        "description": "Visit count for a single gym_date (MSK).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "count"
+        ],
+        "title": "VisitsDailyBucket",
+        "type": "object"
+      },
+      "VisitsHourlyBucket": {
+        "description": "Visit count for a single hour-of-day (0..23 MSK) across the full range.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "hour": {
+            "title": "Hour",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hour",
+          "count"
+        ],
+        "title": "VisitsHourlyBucket",
+        "type": "object"
+      },
       "VisitsMetaResponse": {
         "additionalProperties": false,
         "description": "GET /api/v1/visits/_meta response (Phase 22 D-22-1).\n\nReturns gym hours window as HH:MM strings. Serialises from Settings\n(lru_cache) — no DB access. Cache-Control: public, max-age=300.",
@@ -3578,6 +4028,48 @@
           "gymHoursEnd"
         ],
         "title": "VisitsMetaResponse",
+        "type": "object"
+      },
+      "VisitsReportResponse": {
+        "description": "Visits report payload — composite (daily + hourly + averagePerDay) (D-09).",
+        "properties": {
+          "averagePerDay": {
+            "title": "Averageperday",
+            "type": "number"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/VisitsDailyBucket"
+            },
+            "title": "Daily",
+            "type": "array"
+          },
+          "fromDate": {
+            "format": "date",
+            "title": "Fromdate",
+            "type": "string"
+          },
+          "hourly": {
+            "items": {
+              "$ref": "#/components/schemas/VisitsHourlyBucket"
+            },
+            "title": "Hourly",
+            "type": "array"
+          },
+          "toDate": {
+            "format": "date",
+            "title": "Todate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "daily",
+          "hourly",
+          "averagePerDay",
+          "fromDate",
+          "toDate"
+        ],
+        "title": "VisitsReportResponse",
         "type": "object"
       }
     }
@@ -3600,6 +4092,313 @@
         "summary": "Email Webhook",
         "tags": [
           "_internal"
+        ]
+      }
+    },
+    "/api/v1/audit-log": {
+      "get": {
+        "description": "Paginated audit-log listing with optional AND-combined filters (AUD-01..06).\n\nResults ordered created_at DESC, id DESC (stable pagination, AUD-06, D-08).\nFilter params: ?actorUserId=...&actorEmailSnapshot=...&resourceType=...&action=...\nDate window (inclusive MSK day bounds): ?from=YYYY-MM-DD&to=YYYY-MM-DD\nPagination: ?page=1&pageSize=20 (max pageSize=100).\n\n``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —\nlive-verified: Field(alias=\"from\") on a Depends() model does NOT bind ``?from=`` on\nthis FastAPI + Pydantic v2 stack.\n\nOwner-only: (LIST, AUDIT_LOG) in OWNER_ONLY; reception -> 403 (AUD-05, SC#1).\nUnknown action/resource_type -> 422 audit_filter_invalid (AUD-03, D-05).\nto < from -> 422 (D-06).\nNo try/except -- AppError bubbles to _app_error_handler.",
+        "operationId": "list_audit_log_api_v1_audit_log_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorUserId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actoruserid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorEmailSnapshot",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 254,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actoremailsnapshot"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceType",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resourcetype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_AuditLogItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Paginated audit-log listing (owner-only; AUD-01..06)",
+        "tags": [
+          "audit-log"
+        ]
+      }
+    },
+    "/api/v1/audit-log.csv": {
+      "get": {
+        "description": "Stream audit-log as UTF-8 BOM + RFC-4180 CSV (all matching rows, D-16).\n\nSame filters as GET /audit-log JSON endpoint (EXP-02, SC#5):\n  ?action=...&resourceType=...&actorUserId=...&actorEmailSnapshot=...\n  ?from=YYYY-MM-DD&to=YYYY-MM-DD (route-level Query(alias=...) params)\n\nStreams ALL matching rows (no pagination) row-by-row — memory bounded by\nstream_scalars cursor (T-56-08, D-16).\n\ncreatedAt formatted as 'YYYY-MM-DD HH:MM:SS' Europe/Moscow (D-14).\npayload serialized as compact JSON string (ensure_ascii=False, Cyrillic literal).\n\n``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —\nmirrors the JSON handler pattern (live-verified: Field(alias=\"from\") on Depends()\nmodel does NOT bind ``?from=`` on this FastAPI + Pydantic v2 stack).\n\nOwner-only: (LIST, AUDIT_LOG) ∈ OWNER_ONLY; reception → 403 (T-56-06).\nUnknown action/resource_type → 422 audit_filter_invalid (T-56-10, SC#5).\nto < from → 422.\nNo try/except — AppError bubbles to _app_error_handler.\n\nIMPORTANT: validate_audit_filters is called EAGERLY here (before StreamingResponse)\nso validation errors are raised in the request-response phase where _app_error_handler\ncan intercept them. If validation lived inside the async generator body it would fire\nafter headers are sent (inside StreamingResponse) and could not be intercepted.",
+        "operationId": "get_audit_log_csv_api_v1_audit_log_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorUserId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actoruserid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorEmailSnapshot",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 254,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actoremailsnapshot"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceType",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resourcetype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit-log CSV download — all matching rows (owner-only; EXP-02)",
+        "tags": [
+          "audit-log"
         ]
       }
     },
@@ -5498,6 +6297,330 @@
         ]
       }
     },
+    "/api/v1/online-payments/memberships/{membership_id}/refund": {
+      "post": {
+        "description": "REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.\n\nRBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →\nverify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-\nsource / FSM) BEFORE calling ЮKassa; emits the\n``online_refund_initiated`` audit row inside the single UoW.\n\nError mapping (raised from the service layer):\n  - 404 membership_not_found / online_payment_not_found / original_payment_not_found\n  - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition\n    / refund_already_in_flight\n  - 422 yookassa_validation_error\n  - 503 yookassa_unavailable\n  - 502 yookassa_permanent_error",
+        "operationId": "refund_membership_online_api_v1_online_payments_memberships__membership_id__refund_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnlineRefundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_OnlineRefundResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Initiate online refund of a membership (Phase 51 REFUND-01). Full refund only (partial deferred to v1.8 B-02). Returns 202; completion awaits ЮKassa refund.succeeded webhook.",
+        "tags": [
+          "online-payments"
+        ]
+      }
+    },
+    "/api/v1/online-payments/memberships/{plan_id}/sell": {
+      "post": {
+        "description": "PAY-03 — membership redirect flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with\n``confirmation_url`` populated and ``qr_payload`` NULL on success.\nError mapping (service layer): 422 ``client_email_required_for_online_payment``,\n422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,\n502 ``yookassa_permanent_error``.",
+        "operationId": "sell_membership_redirect_api_v1_online_payments_memberships__plan_id__sell_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_SellResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sell a membership online (redirect flow); reception+owner; CSRF + Idempotency-Key required",
+        "tags": [
+          "online-payments"
+        ]
+      }
+    },
+    "/api/v1/online-payments/memberships/{plan_id}/sell-qr": {
+      "post": {
+        "description": "PAY-05 — membership QR flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with ``qr_payload``\npopulated and ``confirmation_url`` NULL on success. QR replays re-fetch\nupstream so the second click also receives a valid ``qr_payload``\n(D-49-09 + Plan 49-03 BLOCKER #1).",
+        "operationId": "sell_membership_qr_api_v1_online_payments_memberships__plan_id__sell_qr_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_SellResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sell a membership online (QR flow); reception+owner; CSRF + Idempotency-Key required",
+        "tags": [
+          "online-payments"
+        ]
+      }
+    },
+    "/api/v1/online-payments/pt-packages/{plan_id}/sell": {
+      "post": {
+        "description": "PAY-04 — PT-package redirect flow. Same shape as membership variant.",
+        "operationId": "sell_pt_package_redirect_api_v1_online_payments_pt_packages__plan_id__sell_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_SellResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required",
+        "tags": [
+          "online-payments"
+        ]
+      }
+    },
+    "/api/v1/online-payments/pt-packages/{plan_id}/sell-qr": {
+      "post": {
+        "description": "PAY-05 — PT-package QR flow. Same shape as membership QR variant.",
+        "operationId": "sell_pt_package_qr_api_v1_online_payments_pt_packages__plan_id__sell_qr_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_SellResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required",
+        "tags": [
+          "online-payments"
+        ]
+      }
+    },
+    "/api/v1/online-payments/pt-packages/{pt_package_id}/refund": {
+      "post": {
+        "description": "REFUND-01 — POST /api/v1/online-payments/pt-packages/{id}/refund.\n\nMirrors ``refund_membership_online``. No freeze / renewed-source guards\nfor PT-packages (no freeze concept, no renewal chain in v1.x).",
+        "operationId": "refund_pt_package_online_api_v1_online_payments_pt_packages__pt_package_id__refund_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pt_package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pt Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnlineRefundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_OnlineRefundResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Initiate online refund of a PT-package (Phase 51 REFUND-01). Full refund only. Returns 202; completion awaits ЮKassa refund.succeeded webhook.",
+        "tags": [
+          "online-payments"
+        ]
+      }
+    },
     "/api/v1/payments": {
       "get": {
         "description": "List payments globally with filter parity (Phase 32 PAY-06).\n\nOwner-only because ``(VIEW, PAYMENTS)`` is in ``OWNER_ONLY``. Reception\non the global route receives 403 — they use the scoped ``/by-client`` and\n``/by-membership`` routes instead.",
@@ -6520,6 +7643,357 @@
         "summary": "Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)",
         "tags": [
           "pt-sessions"
+        ]
+      }
+    },
+    "/api/v1/reports/clients": {
+      "get": {
+        "description": "Clients snapshot: active memberships, expiring-within-N count, new-clients in range.\n\nAll counters exclude soft-deleted clients (CLR-04).\n`within` defaults to 7, range 1..30 (D-07); out-of-range → 422.\nActive/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
+        "operationId": "get_clients_report_api_v1_reports_clients_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "within",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "title": "Within",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientsReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active/expiring/new clients summary (owner-only; CLR-01..04)",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/clients.csv": {
+      "get": {
+        "description": "Stream clients snapshot as UTF-8 BOM + RFC-4180 CSV (single data row).\n\nSame query params as GET /reports/clients (EXP-03, SC#5).\nHeader row = CSV_CLIENTS_HEADERS; single summary row.\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
+        "operationId": "get_clients_csv_api_v1_reports_clients_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "within",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "title": "Within",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clients snapshot CSV download — single summary row (owner-only; EXP-03)",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/revenue": {
+      "get": {
+        "description": "Aggregate payments ledger into period buckets with method/subject_kind breakdown.\n\nRefunds (subject_kind='refund', negative amount_kopecks) net into netKopecks\nonly — they do NOT appear in bySubjectKind (D-01, REV-04).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); to<from → 422.",
+        "operationId": "get_revenue_report_api_v1_reports_revenue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "enum": [
+                "day",
+                "month"
+              ],
+              "title": "Groupby",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_RevenueReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revenue by period (day|month) from payments ledger (owner-only; REV-01..05)",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/revenue.csv": {
+      "get": {
+        "description": "Stream revenue report as UTF-8 BOM + RFC-4180 CSV.\n\nSame query params as GET /reports/revenue (EXP-03, SC#5).\nMoney columns are period-decimal rubles (D-13); header row = CSV_REVENUE_HEADERS.\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.\nRange validation: to<from → 422; range>366 days → 422.\nNo try/except — errors bubble to _app_error_handler.",
+        "operationId": "get_revenue_csv_api_v1_reports_revenue_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "enum": [
+                "day",
+                "month"
+              ],
+              "title": "Groupby",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revenue CSV download — period buckets with ruble amounts (owner-only; EXP-01)",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/visits": {
+      "get": {
+        "description": "Visits composite report: daily counts, hourly distribution, averagePerDay.\n\nDaily groups by gym_date (MSK STORED column — no secondary TZ conversion, VIS-R-04).\nHourly groups by hour-of-day across the full range (VIS-R-02).\naveragePerDay = total visits / calendar days in range inclusive (D-10).\nSparse buckets: only days/hours with visits appear (D-08).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
+        "operationId": "get_visits_report_api_v1_reports_visits_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_VisitsReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Visits by day/hour + average (owner-only; VIS-R-01..04)",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/visits.csv": {
+      "get": {
+        "description": "Stream visits daily series as UTF-8 BOM + RFC-4180 CSV.\n\nSame query params as GET /reports/visits (EXP-03, SC#5).\nDaily-only (date, count); hourly section deferred (D-15 discretion).\nHeader row = CSV_VISITS_HEADERS.\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
+        "operationId": "get_visits_csv_api_v1_reports_visits_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)",
+        "tags": [
+          "reports"
         ]
       }
     },
