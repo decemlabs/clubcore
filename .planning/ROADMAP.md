@@ -165,9 +165,9 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 **Depends on**: Phase 54
 **Requirements**: REV-01, REV-02, REV-03, REV-04, REV-05, CLR-01, CLR-02, CLR-03, CLR-04, VIS-R-01, VIS-R-02, VIS-R-03, VIS-R-04
 **Success Criteria** (what must be TRUE):
-  1. `GET /api/v1/reports/revenue?from=&to=&groupBy=day` and `groupBy=month` return buckets with integer kopecks broken down by payment method (`cash`/`online`) and subject kind (`membership`/`pt_package`); refund rows reduce net amounts correctly
+  1. `GET /api/v1/reports/revenue?fromDate=&toDate=&groupBy=day` and `groupBy=month` return buckets with integer kopecks broken down by payment method (`cash`/`online`) and subject kind (`membership`/`pt_package`); refund rows reduce net amounts correctly *(camelCase wire params per project `to_camel` convention — accepted Phase 55 deviation from illustrative `?from=&to=`)*
   2. `GET /api/v1/reports/clients` returns active membership count, expiring-within-N-days count (default 7, param `within` 1..30), and new-clients count for a date range; all counters exclude soft-deleted rows
-  3. `GET /api/v1/reports/visits?from=&to=` returns daily visit counts using `visits.gym_date` (no secondary TZ conversion); a separate grouping by hour of day is available for peak-hour analysis; average visits per day for the period is returned
+  3. `GET /api/v1/reports/visits?fromDate=&toDate=` returns daily visit counts using `visits.gym_date` (no secondary TZ conversion); a separate grouping by hour of day is available for peak-hour analysis; average visits per day for the period is returned
   4. Reception role receives 403 on all `/reports/*` endpoints (RBAC guard + route-introspection gate covers the new routes)
   5. All day/month buckets match Europe/Moscow boundaries (consistent with existing `gym_date STORED` and cron-window discipline)
 **Plans**: 2 plans
@@ -212,7 +212,7 @@ Full details: [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 | 52. Cross-Channel Notifications + v1.6 Carry-out | 6/6 | Complete | 2026-05-23 |
 | 53. Milestone Verification | 4/4 | Complete | 2026-05-23 |
 | 54. Foundations — Module Scaffold + RBAC Parity + Indexes | 3/3 | Complete   | 2026-05-24 |
-| 55. Revenue + Clients + Visits Reports | 2/2 | Complete   | 2026-05-24 |
+| 55. Revenue + Clients + Visits Reports | 2/2 | Complete    | 2026-05-24 |
 | 56. Audit Log Read API + CSV Export | 0/TBD | Not started | - |
 | 57. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
