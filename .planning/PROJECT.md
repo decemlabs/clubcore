@@ -61,7 +61,26 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 ## Current Milestone
 
-**None active.** v1.7 shipped 2026-05-24. Next: `/gsd:new-milestone` for v1.8 (Reports + Audit Log read API), starting at Phase 54.
+**v1.8 — Reports + Audit Log read API** (active, started 2026-05-24; continues at **Phase 54**).
+
+**Goal:** Дать owner'у read-side backend для аналитики зала и аудита действий — агрегированные отчёты поверх существующих ledger/clients/visits таблиц + фильтруемый read API над уже пишущимся `audit_log`, с CSV-экспортом. Никаких новых бизнес-сущностей; read-only поверх v1.4–v1.7 данных.
+
+**Target features:**
+
+- **Revenue report** — выручка по дням/месяцам из append-only `payments` ledger (cash + online), разбивка по методу оплаты и subject_kind; integer kopecks, формат на фронте
+- **Clients report** — активные абонементы, истекающие в окне N дней, новые клиенты за период (поверх `memberships` + `clients`)
+- **Visits report** — посещаемость по дням/часам, пиковые часы, средняя посещаемость (поверх `visits.gym_date`) — *заменяет «топ тренеров + PT-usage» из исходного v1.7-плана по решению owner'а 2026-05-24*
+- **Audit Log read API** — `GET /api/v1/audit-log`, owner-only RBAC, фильтры actor / resource / time-window / event-kind / `actor_email_snapshot`; пагинация `{items, total, page, pageSize}` — впервые открывает 69-event write-side наружу
+- **CSV export** — server-side download endpoints (StreamingResponse) для отчётов
+- **OpenAPI handoff** — byte-stable regen `openapi.json` + `schema.d.ts` + `AssertNonNever` forward-guards (per-milestone discipline)
+
+**Key constraints:**
+
+- Read-only: никаких новых бизнес-таблиц; допустимы только индексы под агрегацию (revenue by period, visits by gym_date)
+- Деньги — integer kopecks из `payments` ledger; форматирование на фронте (v2.0)
+- Audit read API owner-only (anti-oracle не требуется — owner видит всё); фильтры не должны позволять reception-эскалацию (route-introspection guard + RBAC)
+- Агрегаты должны быть детерминированы по Europe/Moscow (как `visits.gym_date STORED` и cron-окна)
+- **Out of scope:** топ-тренеров + PT-usage report (отложено в v1.9/v2.0); tech-debt sweep DEFER-46-04 / 36-04-B / 40-01 (остаётся в v1.9); frontend дашборды (v2.0 против frozen contract)
 
 <details>
 <summary>Shipped milestone scope (v1.7 — shipped 2026-05-24)</summary>
@@ -93,15 +112,16 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 ## Next Milestone Goals
 
-Постлинейка milestone'ов после v1.7 (immediate next = **v1.8**, starts at Phase 54):
+Постлинейка milestone'ов после v1.8 (current = **v1.8 Reports + Audit Log read API**, active, Phase 54+):
 
 | Milestone | Focus |
 |---|---|
-| **v1.8 — Reports + Audit Log read API** | Owner-dashboard backend: revenue by day/month, active/expiring clients, top trainers, PT-session usage; `GET /api/v1/audit-log` с owner-only RBAC + фильтры (actor / resource / time-window / event-kind / `actor_email_snapshot`) |
 | **v1.9 — API Handoff + Production Hardening** | Curated Postman v2.1 collection + Newman CLI runner; auth runbook expansion; OpenAPI doc site + versioned spec URL; `@sportzal/api-client` publish to npm; OpenAPI tag curation + explicit `operation_id=`; idempotency hardening (CR-01/02/02b carry-over from Phase 33); residual DEFER-36-04-A (11 failures) + DEFER-36-04-B (ruff format 123 files); **DEFER-40-01 full v1.5 operator runbook execution + run.sh hardening**; **DEFER-46-04 v1.6 CI tech-debt sweep (ruff 79 + format 205 + mypy attr-defined)**; **DEFER-46-05 optional MailHog docker-compose `--profile dev` integration**; doc-debt sweep *(DEFER-46-03 circuit-breaker fixture re-run + DEFER-36-04-A backend-suite failures both CLOSED during v1.7)* |
 | **v2.0 — Frontend Integration + Launch** | Design team integrates production admin + client apps against the frozen v1.9 contract; integration tests at the seam (live backend + real frontends); coexistence with frozen `apps/admin-web` (mock reference); launch checklist + production deploy story |
 
 После v1.9 контракт замораживается. v2.0 — финальная интеграция и запуск.
+
+> **Deferred из v1.8 (2026-05-24):** «Топ тренеров + PT-usage report» вынесен из v1.8 owner-dashboard по решению owner'а (заменён на Visits report). Кандидат на v1.9 или v2.0.
 
 <details>
 <summary>Previous milestone scope (v1.4 — shipped 2026-05-16)</summary>
@@ -323,4 +343,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-24 — Milestone v1.7 Online Payments + 54-ФЗ SHIPPED (Phases 47–53, 47 plans, 48/51 requirements delivered). Billing now ✅ full (ЮKassa online payments + 54-ФЗ fiscal receipts + refunds). 3 operator-credential-gated items deferred at close: VER-03 (ЮKassa sandbox walkthrough), CARRY-01 (DEFER-46-01 live RU email probe), CARRY-02 (DEFER-46-02 owner countersign). Next: v1.8 Reports + Audit Log read API, starts at Phase 54.*
+*Last updated: 2026-05-24 — Milestone v1.8 Reports + Audit Log read API STARTED (continues at Phase 54). Read-side backend: revenue/clients/visits aggregated reports + filterable `GET /api/v1/audit-log` (owner-only) + CSV export, all read-only over v1.4–v1.7 data. Owner swapped «топ тренеров + PT-usage» → Visits report; that report deferred to v1.9/v2.0. v1.7 carry-over (CARRY-01/02, VER-03) remains operator-pending. v1.9 keeps tech-debt sweep (DEFER-46-04 / 36-04-B / 40-01).*

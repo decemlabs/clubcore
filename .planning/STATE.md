@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: Online Payments + 54-ФЗ
-status: Awaiting next milestone
-stopped_at: Milestone v1.7 completed and archived (2026-05-24); 3 operator-credential-gated items deferred (CARRY-01/02, VER-03)
-last_updated: "2026-05-24T14:22:14.804Z"
-last_activity: 2026-05-24 — Milestone v1.7 completed and archived
+milestone: v1.8
+milestone_name: Reports + Audit Log read API
+status: planning
+last_updated: "2026-05-24T14:38:51.195Z"
+last_activity: 2026-05-24
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 47
-  completed_plans: 47
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-24 after v1.7 milestone close)
 
 ## Current Position
 
-Phase: Milestone v1.7 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-24 — Milestone v1.7 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-24 — Milestone v1.8 started
 
 ## Accumulated Context
 
