@@ -86,6 +86,20 @@ async def build_yookassa_client(*, settings: YooKassaSettings) -> YooKassaClient
         headers={"User-Agent": "Sportzal/1.7 YooKassa-Adapter"},
     )
     # D-48-13: boot probe via GET /v3/me. D-48-15: single attempt, no retry.
+    #
+    # Sandbox short-circuit: sandbox credentials (placeholder shop_id/secret in
+    # dev + the test suite) can never authenticate against the REAL ЮKassa API,
+    # so the probe always returns 401 — pure noise. More importantly, the live
+    # network round-trip adds unbounded latency to EVERY app-lifespan startup;
+    # under the test suite (one create_app() + LifespanManager per test) the
+    # accumulated/throttled latency intermittently exceeds asgi-lifespan's 5s
+    # startup timeout, surfacing as order-dependent "ERROR at setup" failures
+    # across unrelated tests. Skipping the probe in sandbox mode keeps the
+    # non-sandbox boot-health contract (D-48-13/14) intact while making startup
+    # deterministic and network-free in dev/test.
+    if settings.sandbox:
+        _log.info("yookassa_boot_probe", ok=None, reason="sandbox_skip")
+        return YooKassaClient(http=http, settings=settings)
     try:
         resp = await http.get("me", timeout=5.0)
         resp.raise_for_status()
