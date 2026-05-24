@@ -30,9 +30,8 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
-from uuid import UUID
 
-from sqlalchemy import and_, cast, func, select, text
+from sqlalchemy import and_, cast, func, select, text, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Date
 
@@ -303,14 +302,17 @@ async def fetch_audit_log_page(
     predicates = _build_audit_predicates(query, from_=from_, to=to)
 
     # COUNT with the same predicates (no ORDER/LIMIT).
-    total_stmt = select(func.count()).select_from(AuditLog).where(and_(*predicates))
+    # Use and_(true(), *predicates) to avoid SADeprecationWarning when predicates is empty.
+    total_stmt = (
+        select(func.count()).select_from(AuditLog).where(and_(true(), *predicates))
+    )
     total: int = (await session.scalar(total_stmt)) or 0
 
     # List with keyset ordering and offset/limit.
     offset = (query.page - 1) * query.page_size
     list_stmt = (
         select(AuditLog)
-        .where(and_(*predicates))
+        .where(and_(true(), *predicates))
         .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         .offset(offset)
         .limit(query.page_size)

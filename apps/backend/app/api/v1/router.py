@@ -32,6 +32,7 @@ from app.modules.pt_sessions.router import (
 from app.modules.pt_sessions.router import (
     pt_sessions_router,
 )
+from app.modules.reports.router import audit_log_router
 from app.modules.reports.router import router as reports_router
 from app.modules.schedule.router import schedule_router
 from app.modules.trainers.router import router as trainers_router
@@ -76,6 +77,7 @@ v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
 v1.include_router(users_router, prefix="/users", tags=["users"])
 v1.include_router(visits_router, prefix="/visits", tags=["visits"])
 v1.include_router(reports_router, prefix="/reports", tags=["reports"])
+v1.include_router(audit_log_router, prefix="/audit-log", tags=["audit-log"])
 
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under

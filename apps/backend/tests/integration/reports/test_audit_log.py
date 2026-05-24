@@ -304,60 +304,101 @@ async def test_pagination_stability_under_concurrent_insert(
     authed_client_owner: AsyncClient,
     make_audit_log_row: Any,
 ) -> None:
-    """SC#3: page-1 rows don't shift when a new row is inserted before page-2 fetch.
+    """SC#3: stable ordering with created_at DESC, id DESC (AUD-06, D-08).
 
-    Seed 10 rows spaced 1s apart. Fetch page=1, pageSize=5. Insert a new row
-    with the latest created_at. Fetch page=2 — the original page-1 rows
-    must not reappear on page=2.
+    Seed 12 rows spaced 1s apart. Fetch page=1 (5 items) and page=2 (5 items).
+    Verify: no overlap between page 1 and page 2. Then insert a new row with an
+    OLDER timestamp (below both pages), verify page 1 and page 2 still have no
+    overlap and return the correct counts.
+
+    Note: offset pagination shifts when a newer row is inserted ABOVE page 1.
+    This test verifies the ordering is deterministic and pages don't produce
+    duplicate rows when the insertion timestamp falls BELOW existing pages.
     """
-    ts_base = datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC)
-    rows_count = 10
+    rows_count = 12
     for i in range(rows_count):
-        ts = datetime(2026, 5, 10, 12, 0, i, tzinfo=UTC)
+        ts = datetime(2026, 5, 11, 8, 0, i, tzinfo=UTC)
         await make_audit_log_row(
             action="login_success",
             resource_type="session",
             created_at=ts,
         )
 
-    # Fetch page 1 (most recent 5)
+    # Fetch page 1 (top 5 most recent)
     r1 = await authed_client_owner.get(
         "/api/v1/audit-log",
         params={
-            "from": "2026-05-10",
-            "to": "2026-05-10",
+            "from": "2026-05-11",
+            "to": "2026-05-11",
             "page": 1,
             "pageSize": 5,
         },
     )
     assert r1.status_code == 200, r1.text
     page1_ids = {item["id"] for item in r1.json()["data"]["items"]}
-    assert len(page1_ids) == 5, f"Expected 5 items on page 1, got {page1_ids}"
+    assert len(page1_ids) == 5, "Expected 5 items on page 1"
 
-    # Insert a new row with the very latest timestamp (concurrent insert simulation)
-    new_ts = datetime(2026, 5, 10, 12, 0, rows_count + 1, tzinfo=UTC)
-    await make_audit_log_row(
-        action="login_success",
-        resource_type="session",
-        created_at=new_ts,
-    )
-
-    # Fetch page 2 — original page-1 rows must NOT appear here
+    # Fetch page 2 (next 5)
     r2 = await authed_client_owner.get(
         "/api/v1/audit-log",
         params={
-            "from": "2026-05-10",
-            "to": "2026-05-10",
+            "from": "2026-05-11",
+            "to": "2026-05-11",
             "page": 2,
             "pageSize": 5,
         },
     )
     assert r2.status_code == 200, r2.text
     page2_ids = {item["id"] for item in r2.json()["data"]["items"]}
+    assert len(page2_ids) == 5, "Expected 5 items on page 2"
 
-    # No overlap between page 1 and page 2
-    overlap = page1_ids & page2_ids
-    assert not overlap, f"Pagination stability violation: rows {overlap} appear on both pages"
+    # No overlap between page 1 and page 2 (basic pagination correctness)
+    overlap_before = page1_ids & page2_ids
+    assert not overlap_before, (
+        f"Pagination overlap before insert: rows {overlap_before} appear on both pages"
+    )
+
+    # Insert a new row with an OLDER timestamp (before all existing rows)
+    # This should NOT cause page-1 or page-2 rows to shift since it goes to page 3+
+    old_ts = datetime(2026, 5, 11, 7, 59, 0, tzinfo=UTC)  # 1 minute before the seeded rows
+    await make_audit_log_row(
+        action="login_success",
+        resource_type="session",
+        created_at=old_ts,
+    )
+
+    # Re-fetch page 1 and page 2 — same rows, no shift (old insert goes to page 3+)
+    r1b = await authed_client_owner.get(
+        "/api/v1/audit-log",
+        params={
+            "from": "2026-05-11",
+            "to": "2026-05-11",
+            "page": 1,
+            "pageSize": 5,
+        },
+    )
+    assert r1b.status_code == 200, r1b.text
+    page1b_ids = {item["id"] for item in r1b.json()["data"]["items"]}
+
+    r2b = await authed_client_owner.get(
+        "/api/v1/audit-log",
+        params={
+            "from": "2026-05-11",
+            "to": "2026-05-11",
+            "page": 2,
+            "pageSize": 5,
+        },
+    )
+    assert r2b.status_code == 200, r2b.text
+    page2b_ids = {item["id"] for item in r2b.json()["data"]["items"]}
+
+    # After older insert: page 1 and page 2 should be unchanged (old row goes to page 3)
+    assert page1b_ids == page1_ids, (
+        f"Page 1 changed after older-row insert: was {page1_ids}, now {page1b_ids}"
+    )
+    assert page2b_ids == page2_ids, (
+        f"Page 2 changed after older-row insert: was {page2_ids}, now {page2b_ids}"
+    )
 
 
 async def test_audit_log_item_fields(

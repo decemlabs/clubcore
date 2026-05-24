@@ -1,4 +1,4 @@
-"""Reports service — read-only aggregator (Phase 55 REV-01..05, CLR-01..04, VIS-R-01..04; Phase 56 AUD-01..06).
+"""Reports service — read-only aggregator (Phase 55 REV/CLR/VIS-R; Phase 56 AUD-01..06).
 
 Read-only aggregator role: orchestrates calls to repository.py which reads
 cross-module data via raw SQL ``text()`` SELECTs (D-54-08 / D-49-03 precedent).
@@ -286,7 +286,8 @@ async def list_audit_log(
     # Validate resource_type filter against known resource types (AUD-03, D-05).
     if query.resource_type is not None and query.resource_type not in VALID_RESOURCE_TYPES:
         raise AuditFilterInvalidError(
-            f"Unknown resource_type '{query.resource_type}'. Must be one of the LOCKED_AUDIT_EVENTS resource types."
+            f"Unknown resource_type '{query.resource_type}'."
+            " Must be one of the LOCKED_AUDIT_EVENTS resource types."
         )
 
     # Validate date window (D-06).
