@@ -2,11 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Reports + Audit Log read API
-status: active
-last_updated: "2026-05-24T15:00:00.000Z"
-last_activity: 2026-05-24
+status: planning
+stopped_at: Phase 54 context gathered
+last_updated: "2026-05-24T14:54:01.757Z"
+last_activity: 2026-05-24 — v1.8 roadmap created (Phases 54-57, 30 requirements mapped)
 progress:
-  total_phases: 4
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -45,6 +46,7 @@ Last activity: 2026-05-24 — v1.8 roadmap created (Phases 54-57, 30 requirement
 Full decisions log lives in PROJECT.md Key Decisions table. v1.7 added the ЮKassa webhook-security, async-adapter, fiscal-FK, and operator-deferral decisions — all in PROJECT.md Key Decisions + archived in `.planning/milestones/v1.7-ROADMAP.md` and per-phase `*-CONTEXT.md` files.
 
 **v1.8 architectural constraints (from planning):**
+
 - Read-only over v1.4–v1.7 tables (`payments`, `memberships`, `clients`, `visits`, `audit_log`); no new business entities; only aggregation indexes allowed as schema changes
 - Money stays integer kopecks in all API responses; formatting deferred to frontend (v2.0)
 - All date buckets deterministic in Europe/Moscow (mirror `visits.gym_date STORED` discipline)
@@ -84,8 +86,8 @@ Known deferred items: 13 open (2 CLOSED this milestone: DEFER-46-03 + DEFER-36-0
 
 ## Session Continuity
 
-Last session: 2026-05-24T15:00:00.000Z
-Stopped at: v1.8 roadmap defined (Phases 54-57, 30 requirements). Ready to plan Phase 54.
+Last session: 2026-05-24T14:54:01.752Z
+Stopped at: Phase 54 context gathered
 Resume: Run `/gsd-plan-phase 54` to begin Phase 54 (Foundations — Module Scaffold + RBAC Parity + Indexes).
 
 ## Operator Next Steps
