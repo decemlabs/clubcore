@@ -1,7 +1,8 @@
 """TEST-06: backend permissions ⇔ frontend can.ts/registry.ts parity (Phase 6 D-13, D-14, D-15).
 
-Three set-equalities (D-13; counts updated through Phase 41 INFRA-37):
-  1. OWNER_ONLY pairs (33 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6) — backend
+Three set-equalities (D-13; counts updated through Phase 54 INFRA-42):
+  1. OWNER_ONLY pairs (35 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
+     + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)) — backend
      frozenset == frontend can.ts array.
   2. Resource StrEnum values — backend == frontend Resource union.
   3. Action StrEnum values — backend == frontend Action union.
@@ -138,12 +139,13 @@ def test_action_values_match() -> None:
     )
 
 
-def test_owner_only_count_is_thirty_three() -> None:
-    """Sanity belt — `OWNER_ONLY` is exactly 33 entries.
+def test_owner_only_count_is_thirty_five() -> None:
+    """Sanity belt — `OWNER_ONLY` is exactly 35 entries.
 
     Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a
     + 4 v1.5 INFRA-27 (CREATE|EDIT|DELETE|CANCEL on SCHEDULE_SLOTS)
-    + 4 v1.6 Phase 41 INFRA-37 (CREATE|UPDATE|DELETE|LIST on USERS).
+    + 4 v1.6 Phase 41 INFRA-37 (CREATE|UPDATE|DELETE|LIST on USERS)
+    + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG).
     """
-    assert len(OWNER_ONLY) == 33
-    assert len(_parse_owner_only_pairs()) == 33
+    assert len(OWNER_ONLY) == 35
+    assert len(_parse_owner_only_pairs()) == 35

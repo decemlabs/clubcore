@@ -54,9 +54,10 @@ class Resource(StrEnum):
     SCHEDULE_SLOTS = "schedule-slots"  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
     BOOKINGS = "bookings"  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
     USERS = "users"  # NEW Phase 41 INFRA-37 / D-41-21 — multi-user admin module (Phase 43)
+    AUDIT_LOG = "audit-log"  # NEW Phase 54 INFRA-42 — kebab on wire (multi-word, mirrors OWNER_AREA / SCHEDULE_SLOTS)
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (33 entries after Phase 41 INFRA-37).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (35 entries after Phase 54 INFRA-42).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -121,6 +122,11 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         (Action.UPDATE, Resource.USERS),
         (Action.DELETE, Resource.USERS),
         (Action.LIST, Resource.USERS),
+        # v1.8 (Phase 54 INFRA-42 / D-54-04) — audit-log read API is owner-only.
+        # Reception has ZERO audit perms (403). Reuses Action.VIEW (filterable read)
+        # + Action.LIST (paginated listing); no new Action value.
+        (Action.VIEW, Resource.AUDIT_LOG),
+        (Action.LIST, Resource.AUDIT_LOG),
     }
 )
 
