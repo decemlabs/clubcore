@@ -60,6 +60,10 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   { action: 'update', resource: 'users' },
   { action: 'delete', resource: 'users' },
   { action: 'list', resource: 'users' },
+  // v1.8 (Phase 54 INFRA-42 — audit-log read; reception has zero audit perms per D-54-04).
+  // Reuses 'view' (filterable read) + 'list' (paginated listing); no new action value.
+  { action: 'view', resource: 'audit-log' },
+  { action: 'list', resource: 'audit-log' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {
