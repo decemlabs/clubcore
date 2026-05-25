@@ -218,6 +218,20 @@ The frozenset size grows 53 → 58.
                                         # when ЮKassa reports the refund canceled
                                         # (Plan 51-09 / D-51-17 step 4). CHILD emit.
 
+  ## v1.9 (Phase 59 lock — INFRA-15; emitted in Phase 59 service body)
+  Recurring-schedule + time-off lifecycle (REC-01..04 / D-59-09):
+  - recurring_slot_template_created     {template_id, trainer_id, day_of_week,
+                                         start_time, end_time, valid_from}
+                                        # 'schedule_slot' — emitted on new pattern creation
+  - recurring_slot_template_cancelled   {template_id, trainer_id}
+                                        # 'schedule_slot' — emitted on pattern deactivation
+  - trainer_time_off_created            {time_off_id, trainer_id, block_start, block_end,
+                                         reason, force_cascade, cancelled_slot_count,
+                                         cancelled_booking_count}
+                                        # 'trainer' — emitted after INSERT + optional cascade
+  - trainer_time_off_cancelled          {time_off_id, trainer_id}
+                                        # 'trainer' — emitted on time-off block deletion
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -400,6 +414,16 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("payroll_accrual_created", "payroll_accrual"),
         ("payroll_accrual_paid", "payroll_accrual"),
         ("payroll_clawback_recorded", "payroll_accrual"),
+        # v1.9 (Phase 59 lock — INFRA-15; emitted in Phase 59 service body)
+        # Recurring-schedule + time-off lifecycle (REC-01..04 / D-59-09):
+        # Pre-registered BEFORE any callsite per INFRA-15 discipline.
+        # Active-slot-cancel leg reuses existing ("slot_cancelled", "schedule_slot");
+        # force-cascade booking leg reuses existing ("booking_cancelled", "booking") —
+        # no new events for those legs (D-59-09).
+        ("recurring_slot_template_created", "schedule_slot"),
+        ("recurring_slot_template_cancelled", "schedule_slot"),
+        ("trainer_time_off_created", "trainer"),
+        ("trainer_time_off_cancelled", "trainer"),
     }
 )
 
