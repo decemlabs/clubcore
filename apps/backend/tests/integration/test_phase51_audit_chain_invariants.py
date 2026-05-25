@@ -43,14 +43,19 @@ from app.core.audit import LOCKED_AUDIT_EVENTS
 
 
 def test_locked_audit_events_count_after_phase_51_is_85() -> None:
-    """Post-Phase-51 event count is 85 (plan doc said 82, actual is 85).
+    """LOCKED_AUDIT_EVENTS baseline — 93 after Phase 59.
 
-    Baseline: 85 events after Phase 51 completes. If this fails with a higher
-    count a new audit event was added without updating this test (which is the
-    intended behaviour — the diff IS the review gate).
+    History (the diff IS the review gate — bump on every audit-event addition):
+      - 85 after Phase 51 (79 pre-51 + 3 refund + 3 fiscal)
+      - 89 after Phase 58 (+4 payroll: comp-config set, accrual created/paid, clawback)
+      - 93 after Phase 59 (+4 schedule: recurring_slot_template_created/cancelled,
+        trainer_time_off_created/cancelled)
+    If this fails with a higher count a new audit event was added without
+    updating this test (intended behaviour). Update this assertion to lock the
+    new baseline.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 85, (
-        f"Expected 85 LOCKED_AUDIT_EVENTS after Phase 51, got {len(LOCKED_AUDIT_EVENTS)}. "
+    assert len(LOCKED_AUDIT_EVENTS) == 93, (
+        f"Expected 93 LOCKED_AUDIT_EVENTS after Phase 59, got {len(LOCKED_AUDIT_EVENTS)}. "
         "Either a new event was added without updating this test, or an event was removed. "
         "Update this assertion to lock the new baseline."
     )
