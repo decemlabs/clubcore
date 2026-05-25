@@ -298,7 +298,7 @@ async def find_paid_accrual_covering_refund(
     *,
     trainer_id: UUID,
     pt_package_id: UUID,
-) -> "TrainerPayrollAccrual | None":
+) -> TrainerPayrollAccrual | None:
     """Return the status='paid' regular accrual covering the refunded package, or None.
 
     "Covering" means the accrual's [period_start, period_end] inclusive range
@@ -364,7 +364,7 @@ async def find_paid_accrual_covering_refund(
 async def insert_clawback_accrual(
     session: AsyncSession,
     *,
-    original_accrual: "TrainerPayrollAccrual",
+    original_accrual: TrainerPayrollAccrual,
     refund_payment_id: UUID,
     clawback_kopecks: int,
 ) -> UUID:

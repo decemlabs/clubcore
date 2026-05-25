@@ -363,6 +363,98 @@ async def list_accruals(
     return rows, total
 
 
+async def record_clawback_for_pt_package_refund(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    *,
+    actor: CurrentUser,
+    refund_payment_id: UUID,
+    pt_package_id: UUID,
+    pt_package_trainer_id: UUID | None,
+) -> UUID | None:
+    """Append a NEGATIVE clawback row when a refund post-dates a paid accrual (PAY-06 / D-58-20).
+
+    This slot is called by pt_packages.service.refund_pt_package (D-58-20)
+    AFTER the pt_package_refunded audit emit and BEFORE session.commit().
+    It runs inside the CALLER's session/UoW — the clawback INSERT and audit emit
+    commit atomically with the refund (same-UoW atomicity per T-58-34).
+
+    Does NOT call session.commit() — caller owns the transaction (SVC001 /
+    # noqa: SVC001 caller-owns-txn marker above mirrors activate_pt_package_from_webhook).
+
+    Algorithm (D-58-20):
+      1. If pt_package_trainer_id is None → return None immediately (not commissionable;
+         D-58-21 nullable-trainer fallback — no payroll impact).
+      2. Find the status='paid' regular accrual covering the refunded package's session
+         MSK-dates (attribution: assigned-at-sale). If None → return None (no impact).
+      3. Compute clawback_kopecks = abs(original.accrual_kopecks). Full-package refund
+         only in v1.9 (partial deferred B-02). The clawback reverses the entire
+         commission component that was paid for this accrual period.
+      4. repository.insert_clawback_accrual — INSERT negative row (accrual_kopecks <0);
+         flush; NO commit.
+      5. audit.emit("payroll_clawback_recorded", ...) — BEFORE the caller commits
+         (D-58-17 atomic chain; INFRA-11 literal strings).
+      6. Return the new clawback accrual id (UUID).
+
+    Args:
+        session: The caller's AsyncSession (shared UoW — no new transaction).
+        actor: The authenticated user performing the refund (owner-gated upstream).
+        refund_payment_id: FK to the refund payment row (source_refund_payment_id).
+        pt_package_id: The PT-package being refunded (for audit payload only;
+            payroll does NOT read pt_packages ORM — cross-module via caller).
+        pt_package_trainer_id: The assigned trainer from the pt_package row (nullable;
+            passed by caller so payroll never reads pt_packages — D-58-21).
+
+    Returns:
+        UUID of the new clawback accrual row, or None when no payroll impact.
+    """
+    # Step 1 — NULL trainer_id → package was never commissionable; no clawback.
+    if pt_package_trainer_id is None:
+        return None  # D-58-21 nullable-trainer fallback
+
+    # Step 2 — find the status='paid' regular accrual covering this package's session dates.
+    # attribution: assigned-at-sale (clawback hits pt_package.trainer_id)
+    original = await repository.find_paid_accrual_covering_refund(
+        session,
+        trainer_id=pt_package_trainer_id,
+        pt_package_id=pt_package_id,
+    )
+    if original is None:
+        return None  # no paid accrual covers this package → no payroll impact
+
+    # Step 3 — compute clawback amount. v1.9: full-package refund only (partial deferred B-02).
+    # The clawback reverses the entire accrual_kopecks of the original paid row.
+    # accrual_kopecks on a regular row is always positive (D-58-03); abs() is defensive.
+    clawback_kopecks: int = abs(original.accrual_kopecks)
+
+    # Step 4 — INSERT negative clawback row (caller's session; NO commit).
+    new_id = await repository.insert_clawback_accrual(
+        session,
+        original_accrual=original,
+        refund_payment_id=refund_payment_id,
+        clawback_kopecks=clawback_kopecks,
+    )
+
+    # Step 5 — audit emit BEFORE caller's commit (D-58-17 atomic chain).
+    # Literal strings "payroll_clawback_recorded" and "payroll_accrual" required by
+    # INFRA-11 AST gate (tests/unit/test_audit_taxonomy.py). UUIDs str()-cast (58-05 lesson).
+    await audit.emit(
+        session,
+        "payroll_clawback_recorded",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="payroll_accrual",  # LITERAL
+        resource_id=new_id,
+        clawback_accrual_id=str(new_id),
+        clawback_of_accrual_id=str(original.id),
+        trainer_id=str(pt_package_trainer_id),
+        source_refund_payment_id=str(refund_payment_id),
+        pt_package_id=str(pt_package_id),
+        accrual_kopecks=-clawback_kopecks,  # signed negative in audit payload
+    )
+
+    # Step 6 — return new clawback id (caller commits the UoW).
+    return new_id
+
+
 async def mark_accrual_paid(
     session: AsyncSession,
     actor: CurrentUser,
