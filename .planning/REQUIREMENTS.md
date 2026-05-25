@@ -13,7 +13,7 @@ Requirements for milestone v1.9. Each maps to a roadmap phase.
 ### Payroll
 
 - [x] **PAY-01**: Owner настраивает на тренере модель компенсации — `commission_pct` (NUMERIC) и/или `session_fee_kopecks` (INT), оба nullable; оба NULL = payroll для тренера не считается; гибрид (оба заданы) допускается
-- [ ] **PAY-02**: Owner получает read-only preview начисления тренеру за период (`from`/`to`, Europe/Moscow): session_count, fixed_kopecks, commission_kopecks, total_kopecks — без персистентности
+- [x] **PAY-02**: Owner получает read-only preview начисления тренеру за период (`from`/`to`, Europe/Moscow): session_count, fixed_kopecks, commission_kopecks, total_kopecks — без персистентности
 - [ ] **PAY-03**: Owner фиксирует начисление как append-only строку в новой `trainer_payroll_accruals` (snapshot ставки + period + session_count; UNIQUE `(trainer_id, period_start, period_end)`; 409 при дубле периода; 422 если у тренера нет comp-config)
 - [ ] **PAY-04**: Owner отмечает начисление выплаченным (`paid_at` + `paid_by_user_id` — единственная разрешённая мутация строки; 409 `already_paid`; операции «unpay» нет)
 - [ ] **PAY-05**: Owner видит список начислений тренера, упорядоченный `accrued_at DESC`, с paid/unpaid статусом (`{items, total, page, pageSize}`)
@@ -81,7 +81,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAY-01 | Phase 58 | Complete |
-| PAY-02 | Phase 58 | Pending |
+| PAY-02 | Phase 58 | Complete |
 | PAY-03 | Phase 58 | Pending |
 | PAY-04 | Phase 58 | Pending |
 | PAY-05 | Phase 58 | Pending |
