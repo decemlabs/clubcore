@@ -1,5 +1,5 @@
 ---
-status: partial
+status: resolved
 phase: 58-payroll-foundations-ledger
 source: [58-VERIFICATION.md]
 started: 2026-05-25
@@ -8,7 +8,7 @@ updated: 2026-05-25
 
 ## Current Test
 
-[awaiting developer decision — no functional testing required; both items are reconciliation decisions]
+[resolved 2026-05-25 — both reconciliation decisions made by developer]
 
 ## Tests
 
@@ -28,6 +28,9 @@ Decision needed: either (a) ratify `math.ceil` and correct D-PAYROLL-ROUNDING in
 REQUIREMENTS.md, or (b) gap-closure plan to switch the helper to
 `Decimal` + `ROUND_HALF_EVEN` and update the golden-number tests.
 
+**RESOLVED 2026-05-25 → (a):** Developer ratified `math.ceil` (shipped). REQUIREMENTS.md
+D-PAYROLL-ROUNDING corrected to integer ceil-in-trainer's-favor. No code change.
+
 ### 2. ROADMAP SC#5 audit-event count wording
 expected: ROADMAP Phase 58 SC#5 count matches the registered LOCKED_AUDIT_EVENTS so Phase 61 milestone verification does not re-raise it as a gap.
 result: [pending]
@@ -40,12 +43,14 @@ need only 4, and documented the "6" as a pre-collapse over-estimate
 `test_audit_taxonomy.py` correctly asserts 89. Recommended: update SC#5 wording
 to "4" before Phase 61. Low-risk doc edit, no code impact.
 
+**RESOLVED 2026-05-25:** ROADMAP SC#5 wording updated from "6" to "4" with reconciliation note.
+
 ## Summary
 
 total: 2
-passed: 0
+passed: 2
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 

@@ -106,7 +106,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 - **D-PAYROLL-LEDGER**: новая `trainer_payroll_accruals` (НЕ reuse `payments`); append-only дисциплина v1.4; SVC001 commit-gate покрывает payroll-сервис.
 - **D-PAYROLL-RATE-SNAPSHOT**: ставка (commission_pct + session_fee_kopecks) снапшотится в accrual-строку; изменение конфига тренера НЕ меняет прошлые начисления (зеркало v1.2 mandatory price snapshot).
 - **D-PAYROLL-ATTRIBUTION**: комиссия начисляется на полную сумму PT-package sale, если ≥1 сессия пакета попадает в период (НЕ per-session proration); документированное known limitation.
-- **D-PAYROLL-ROUNDING**: `decimal.Decimal` + `ROUND_HALF_EVEN` (банковское округление), без float; commission_kopecks = round(sum_revenue * pct / 100).
+- **D-PAYROLL-ROUNDING**: целочисленная арифметика + `math.ceil` в пользу тренера (НЕ float, НЕ `Decimal`); `commission_kopecks = ceil(revenue_kopecks * commission_pct_bps / 10000)`. Зафиксировано в CONTEXT.md D-58-04 и реализовано в Phase 58 (`compute_accrual_components`, единый helper для preview/accrual/clawback); зеркало freeze-day ceil-дисциплины Phase 25. *(Ratified 2026-05-25 — заменяет прежнее `ROUND_HALF_EVEN`-намерение, противоречившее D-58-04.)*
 - **D-PAYROLL-CLAWBACK**: refund PT-пакета после начисления → append-only отрицательная корректирующая строка в same UoW, не UPDATE.
 - **D-SLOT-GENERATE-AHEAD**: recurring-паттерны материализуются ARQ-кроном в concrete `trainer_availability_slots` (горизонт env), НЕ expand-on-read; идемпотентность через дедуп/`ON CONFLICT DO NOTHING` + `unique=True`.
 - **D-TIMEOFF-CONFLICT**: time-off над `booked`-слотом → 409 + список броней; каскадная отмена только по явному `?force=true`.

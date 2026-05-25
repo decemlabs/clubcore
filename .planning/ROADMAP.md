@@ -167,7 +167,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
   2. Owner can preview a payroll calculation for a trainer over a date range and see session_count, fixed_kopecks, commission_kopecks, and total_kopecks without any row being persisted
   3. Owner can record a payroll accrual (append-only row in trainer_payroll_accruals); a duplicate period attempt returns 409; the comp rate is snapshotted into the row at run time (not recomputed later)
   4. Owner can mark an accrual as paid (paid_at + paid_by_user_id set); a second mark-paid attempt returns 409 already_paid; no "unpay" operation exists
-  5. Owner can list a trainer's accruals ordered by accrued_at DESC with paid/unpaid status visible; all 6 new LOCKED_AUDIT_EVENTS and new OWNER_ONLY pairs (PAYROLL + COMPENSATION) are pre-registered before any callsite; three-way RBAC parity test (backend permissions.py + admin-web can.ts + registry.ts) is green; a PT-package refund that post-dates an accrual appends a negative clawback row in the same UoW
+  5. Owner can list a trainer's accruals ordered by accrued_at DESC with paid/unpaid status visible; all 4 new LOCKED_AUDIT_EVENTS (trainer_comp_config_set, payroll_accrual_created, payroll_accrual_paid, payroll_clawback_recorded — original "6" was a pre-collapse over-estimate; reconciled 2026-05-25) and new OWNER_ONLY pairs (PAYROLL + COMPENSATION) are pre-registered before any callsite; three-way RBAC parity test (backend permissions.py + admin-web can.ts + registry.ts) is green; a PT-package refund that post-dates an accrual appends a negative clawback row in the same UoW
 **Plans**: 9 plans
 Plans:
 - [x] 58-01-PLAN.md — RBAC + audit bedrock pre-registration (INFRA-15)
