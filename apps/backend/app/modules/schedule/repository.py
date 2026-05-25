@@ -329,9 +329,30 @@ async def insert_recurring_template(
         return tmpl
     except IntegrityError as exc:
         await session.rollback()
-        # Re-raise as None only on the UNIQUE violation; propagate other errors.
-        if "uq_recurring_slot_templates_trainer_id" in str(exc.orig):
-            return None
+        # Re-raise as None only on the expected UNIQUE violation for this index;
+        # propagate all other IntegrityErrors (FK violations, other constraints).
+        #
+        # Detection strategy (WR-04): prefer asyncpg's structured constraint_name
+        # attribute over a raw substring of the rendered message. asyncpg wraps
+        # UniqueViolationError (sqlstate 23505) with a `constraint_name` property
+        # that is stable across driver-message format changes and locale settings.
+        # Fall back to sqlstate '23505' + constraint name check as a belt-and-
+        # suspenders guard if the asyncpg attribute access fails for any reason.
+        orig = exc.orig
+        try:
+            # asyncpg UniqueViolationError exposes constraint_name directly.
+            constraint_name: str | None = getattr(orig, "constraint_name", None)
+        except Exception:
+            constraint_name = None
+
+        if constraint_name is not None:
+            if constraint_name == "uq_recurring_slot_templates_trainer_id":
+                return None
+        else:
+            # Fallback: check sqlstate 23505 + constraint name in message.
+            sqlstate: str | None = getattr(orig, "sqlstate", None)
+            if sqlstate == "23505" and "uq_recurring_slot_templates_trainer_id" in str(exc):
+                return None
         raise
 
 
