@@ -3,8 +3,10 @@
 Each exported function owns the full unit-of-work for its operation:
   - ``set_comp_config`` — INSERT new versioned comp config + audit emit + commit (PAY-01).
   - ``get_active_comp_config`` — read-only resolver; raises 404 if no config exists (PAY-01).
+  - ``compute_accrual_components`` — pure computation helper (PAY-02 / PAY-03); ZERO writes.
+  - ``preview_accrual`` — read-only preview endpoint handler (PAY-02 / D-58-12); ZERO writes.
 
-Subsequent plans append ``preview_accrual`` (PAY-02), ``run_payroll_period`` (PAY-03),
+Subsequent plans append ``run_payroll_period`` (PAY-03),
 ``mark_accrual_paid`` (PAY-04), ``list_accruals`` (PAY-05), and
 ``record_clawback_for_pt_package_refund`` (PAY-06) to this module.
 
@@ -13,15 +15,21 @@ Commit discipline (SVC001):
   ``session.commit()``.  Repository helpers flush but do NOT commit.  Later
   plans follow the same pattern: each service function that mutates state
   owns the final ``session.commit()``.
+  ``compute_accrual_components`` and ``preview_accrual`` are read-only — they
+  call ZERO session.commit() / session.add() / audit.emit().
 
 Exception conventions:
-  ``CompConfigMissingError`` — 404 on the GET read path (PAY-01 D-58-11).
-  Plan 58-07 (PAY-03 run_payroll_period) will add a 422-mapped variant or
-  reuse this class with a router-layer mapping; for now this is the GET form.
+  ``CompConfigMissingError`` — raised on two paths with different HTTP status codes:
+    - GET /payroll/trainer-configs/{trainer_id}: router passes through → 404 (PAY-01 D-58-11).
+    - GET /payroll/preview: router remaps to 422 at the endpoint layer (PAY-02 D-58-07).
+      The same exception class is reused; the router decides the HTTP status code by
+      catching CompConfigMissingError and raising HTTPException(422) before FastAPI's
+      centralised AppError handler can emit 404. This keeps one error class (D-58-09).
 """
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -33,7 +41,7 @@ from app.core.dependencies import CurrentUser
 from app.core.exceptions import NotFoundError
 from app.modules.payroll import repository
 from app.modules.payroll.models import TrainerCompConfig
-from app.modules.payroll.schemas import TrainerCompConfigRequest
+from app.modules.payroll.schemas import PayrollPreviewResponse, TrainerCompConfigRequest
 
 _MSK = ZoneInfo("Europe/Moscow")
 
@@ -118,3 +126,89 @@ async def get_active_comp_config(
     if config is None:
         raise CompConfigMissingError("comp_config_missing")
     return config
+
+
+async def compute_accrual_components(
+    session: AsyncSession,
+    trainer_id: UUID,
+    period_start: date,
+    period_end: date,
+) -> tuple[int, int, int, int, TrainerCompConfig]:
+    """Compute payroll accrual components for a trainer + period (PAY-02 / PAY-03 / D-58-12).
+
+    This is the SINGLE source of truth for commission + fixed computation reused by
+    both preview_accrual (PAY-02) and run_payroll_period (PAY-03) — guaranteeing that
+    preview and the persisted accrual produce identical numbers (PITFALL 1
+    recompute-drift mitigation / T-58-23).
+
+    Returns:
+        (session_count, fixed_kopecks, commission_kopecks, total_kopecks, resolved_config)
+
+    Algorithm:
+      1. Resolve comp config as of period_end via repository.resolve_active_comp_config.
+         If None OR both commission_pct_bps and session_fee_kopecks are NULL → raise
+         CompConfigMissingError (D-58-07 / D-58-09). The router remaps this to 422 on
+         the preview/accrual paths; the GET config path keeps its 404.
+      2. Fetch (commission_revenue_kopecks, session_count) from
+         repository.fetch_trainer_session_revenue for the given period.
+      3. commission_kopecks = math.ceil(revenue_kopecks * bps / 10000) when bps is
+         non-NULL else 0.  Integer-only: math.ceil on a Python int * int / int
+         expression produces an exact rational result via Python's arbitrary-precision
+         integers before division; no float intermediate (D-58-04 / T-58-25).
+      4. fixed_kopecks = (session_fee_kopecks or 0) * session_count.
+      5. total_kopecks = commission_kopecks + fixed_kopecks.
+
+    ZERO writes: no session.commit(), no session.add(), no audit.emit() (D-58-12).
+    """
+    # Step 1 — resolve config as of period_end (D-58-02 INSERT-only versioned resolver).
+    config = await repository.resolve_active_comp_config(session, trainer_id, period_end)
+    if config is None or (
+        config.commission_pct_bps is None and config.session_fee_kopecks is None
+    ):
+        raise CompConfigMissingError("comp_config_missing")
+
+    # Step 2 — cross-module revenue + session count read.
+    revenue_kopecks, session_count = await repository.fetch_trainer_session_revenue(
+        session, trainer_id, period_start, period_end
+    )
+
+    # Step 3 — commission: integer-only math.ceil in trainer's favor (D-58-04 / T-58-25).
+    # math.ceil(a * b / c) where a, b, c are Python ints: Python evaluates a * b as an
+    # exact integer then divides by c using true division — math.ceil returns an int.
+    # No float() conversion occurs; this is exact rational arithmetic.
+    bps = config.commission_pct_bps
+    commission_kopecks: int = math.ceil(revenue_kopecks * bps / 10000) if bps is not None else 0
+
+    # Step 4 — fixed: session fee per conducting session.
+    fixed_kopecks: int = (config.session_fee_kopecks or 0) * session_count
+
+    # Step 5 — total.
+    total_kopecks: int = commission_kopecks + fixed_kopecks
+
+    return session_count, fixed_kopecks, commission_kopecks, total_kopecks, config
+
+
+async def preview_accrual(
+    session: AsyncSession,
+    trainer_id: UUID,
+    period_start: date,
+    period_end: date,
+) -> PayrollPreviewResponse:
+    """Return a read-only payroll preview for a trainer + period (PAY-02 / D-58-12).
+
+    Maps the first four ints from compute_accrual_components into PayrollPreviewResponse.
+    NO session.commit(), NO audit.emit(), NO session.add() / INSERT — zero-persistence
+    (D-58-12 zero-persistence invariant / T-58-23).
+
+    CompConfigMissingError propagates to the router, which remaps it to 422 for this
+    endpoint (see module docstring). This is the router-remap approach (one error class).
+    """
+    session_count, fixed_kopecks, commission_kopecks, total_kopecks, _config = (
+        await compute_accrual_components(session, trainer_id, period_start, period_end)
+    )
+    return PayrollPreviewResponse(
+        session_count=session_count,
+        fixed_kopecks=fixed_kopecks,
+        commission_kopecks=commission_kopecks,
+        total_kopecks=total_kopecks,
+    )
