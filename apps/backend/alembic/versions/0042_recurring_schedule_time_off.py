@@ -32,7 +32,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
@@ -96,7 +95,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.func.now(),
         ),
-        # day_of_week must be in [0, 6] (Mon–Sun)
+        # day_of_week must be in [0, 6] (Mon-Sun)
         sa.CheckConstraint(
             "day_of_week >= 0 AND day_of_week <= 6",
             name=op.f("ck_recurring_slot_templates_day_of_week"),
