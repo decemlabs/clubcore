@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Trainers Complete
-status: executing
-stopped_at: Phase 58 context gathered
-last_updated: "2026-05-25T12:26:38.884Z"
+status: verifying
+stopped_at: "Completed 58-07-PLAN.md (PAY-03 + PAY-04: accrual record + mark-paid)"
+last_updated: "2026-05-25T12:40:04.368Z"
 last_activity: 2026-05-25
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 Phase: 58 (payroll-foundations-ledger) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-25
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [███████░░░] 67%
 | Phase 58 P03 | 3min | 1 tasks | 1 files |
 | Phase 58 P04 | 20min | 2 tasks | 3 files |
 | Phase 58 P05 | 45 | 4 tasks | 6 files |
+| Phase 58-payroll-foundations-ledger P07 | 8 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,9 @@ Full decisions log in PROJECT.md. Key v1.9 locked decisions:
 - **D-REPORT-READONLY**: trainer-report in `app/modules/reports/` under D-54-07/08 (raw-SQL, no models.py, zero writes, zero new import-linter ignores).
 - **D-AUDIT-PREREG**: 7 new LOCKED_AUDIT_EVENTS pre-registered BEFORE callsites (INFRA-15).
 - **D-RBAC-VERIFY**: Phase 58 implementor MUST read permissions.py + can.ts first — Resource.PAYROLL/COMPENSATION may already exist.
+- [Phase ?]: 58-07: ON CONFLICT DO NOTHING RETURNING — DB wins the race (D-58-06)
+- [Phase ?]: 58-07: run_payroll_period reuses compute_accrual_components — PITFALL 1 prevented (T-58-23)
+- [Phase ?]: 58-07: Router-layer 422 remap for CompConfigMissingError on POST /accruals (D-58-07/D-58-09)
 
 ### Blockers/Concerns
 
@@ -78,6 +82,6 @@ None blocking v1.9. Carry-over operator-pending items (CARRY-01, CARRY-02, VER-0
 
 ## Session Continuity
 
-Last session: 2026-05-25T12:26:38.881Z
-Stopped at: Phase 58 context gathered
+Last session: 2026-05-25T12:40:04.364Z
+Stopped at: Completed 58-07-PLAN.md (PAY-03 + PAY-04: accrual record + mark-paid)
 Resume: Run `/gsd-plan-phase 58` to begin planning Phase 58

@@ -176,7 +176,7 @@ Plans:
 - [x] 58-04-PLAN.md — ORM models + Pydantic schemas
 - [x] 58-05-PLAN.md — comp-config service/repo/router + PAY-01 tests
 - [x] 58-06-PLAN.md — PAY-02 read-only preview + shared compute helper
-- [ ] 58-07-PLAN.md — PAY-03 record accrual + PAY-04 mark-paid
+- [x] 58-07-PLAN.md — PAY-03 record accrual + PAY-04 mark-paid
 - [ ] 58-08-PLAN.md — PAY-05 paginated accrual listing
 - [ ] 58-09-PLAN.md — PAY-06 clawback Protocol slot + refund hook + SC#5 reconciliation
 
@@ -219,7 +219,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 58. Payroll Foundations + Ledger | 6/9 | In Progress|  |
+| 58. Payroll Foundations + Ledger | 7/9 | In Progress|  |
 | 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
