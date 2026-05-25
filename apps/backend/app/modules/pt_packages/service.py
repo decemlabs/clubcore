@@ -54,7 +54,7 @@ from app.core.dependencies import (
     get_email_dispatcher,
     get_payment_recorder,
     get_payment_refunder,
-    get_payroll_clawback_recorder,  # Phase 58 D-58-20 — cross-module via Protocol slot (no payroll import)
+    get_payroll_clawback_recorder,  # Phase 58 D-58-20 — cross-module via Protocol slot
     resolve_trainer_by_id,
 )
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
@@ -276,9 +276,7 @@ def _assert_can_exhaust(pt_package: PtPackage) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _validate_immutability(
-    plan: PtPackagePlan, data: PtPackagePlanUpdateRequest
-) -> None:
+def _validate_immutability(plan: PtPackagePlan, data: PtPackagePlanUpdateRequest) -> None:
     """Raise FieldImmutableError if a non-None update value differs from current.
 
     D-33-07: session_count / price_kopecks / validity_days are all immutable
@@ -289,17 +287,11 @@ def _validate_immutability(
     does NOT raise — only an actual mutation does.
     """
     if data.session_count is not None and data.session_count != plan.session_count:
-        raise FieldImmutableError(
-            "field_immutable", fields={"field": "session_count"}
-        )
+        raise FieldImmutableError("field_immutable", fields={"field": "session_count"})
     if data.price_kopecks is not None and data.price_kopecks != plan.price_kopecks:
-        raise FieldImmutableError(
-            "field_immutable", fields={"field": "price_kopecks"}
-        )
+        raise FieldImmutableError("field_immutable", fields={"field": "price_kopecks"})
     if data.validity_days is not None and data.validity_days != plan.validity_days:
-        raise FieldImmutableError(
-            "field_immutable", fields={"field": "validity_days"}
-        )
+        raise FieldImmutableError("field_immutable", fields={"field": "validity_days"})
 
 
 # ---------------------------------------------------------------------------
@@ -357,9 +349,7 @@ async def create_pt_package_plan(
     except IntegrityError as exc:
         await session.rollback()
         if _is_pt_package_plan_name_conflict(exc):
-            raise PtPackagePlanNameConflictError(
-                "pt_package_plan_name_conflict"
-            ) from exc
+            raise PtPackagePlanNameConflictError("pt_package_plan_name_conflict") from exc
         raise
 
     # D-33-15: payload must match PtPackagePlanCreatedPayload exactly —
@@ -422,9 +412,7 @@ async def update_pt_package_plan(
     except IntegrityError as exc:
         await session.rollback()
         if _is_pt_package_plan_name_conflict(exc):
-            raise PtPackagePlanNameConflictError(
-                "pt_package_plan_name_conflict"
-            ) from exc
+            raise PtPackagePlanNameConflictError("pt_package_plan_name_conflict") from exc
         raise
 
     # D-33-15: PtPackagePlanUpdatedPayload requires {plan_id, changed_fields}.
@@ -489,9 +477,7 @@ async def archive_pt_package_plan(
 # ---------------------------------------------------------------------------
 
 
-async def resolve_active_pt_package(
-    session: AsyncSession, client_id: UUID
-) -> PtPackage | None:
+async def resolve_active_pt_package(session: AsyncSession, client_id: UUID) -> PtPackage | None:
     """Public resolver delegate (D-33-12).
 
     Phase 34 PT-session sale consumes via the ``ActivePtPackage`` Protocol
@@ -553,9 +539,7 @@ async def _fanout_payment_receipt_email(  # noqa: SVC001 caller-owns-txn
         )
     ).first()
     client_email: str | None = row.email if row is not None else None
-    actor_full_name: str = (
-        row.full_name if row is not None and row.full_name is not None else ""
-    )
+    actor_full_name: str = row.full_name if row is not None and row.full_name is not None else ""
 
     # 2. Skip fanout when client.email IS NULL (D-45-10).
     if client_email is None:
@@ -721,9 +705,7 @@ async def create_pt_package(
     # that surfaces the 409 without bumping into IntegrityError.
     existing = await repository.find_active_for_client(session, data.client_id)
     if existing is not None:
-        raise ActivePtPackageAlreadyExistsError(
-            "active_pt_package_already_exists"
-        )
+        raise ActivePtPackageAlreadyExistsError("active_pt_package_already_exists")
 
     # 4: server-compute dates (Europe/Moscow business day; inclusive end).
     start_date = datetime.now(ZoneInfo("Europe/Moscow")).date()
@@ -746,9 +728,7 @@ async def create_pt_package(
     except IntegrityError as exc:
         await session.rollback()
         if _is_active_pt_package_conflict(exc):
-            raise ActivePtPackageAlreadyExistsError(
-                "active_pt_package_already_exists"
-            ) from exc
+            raise ActivePtPackageAlreadyExistsError("active_pt_package_already_exists") from exc
         raise
 
     # 7: record payment in the same UoW via Protocol slot (modules-independent
@@ -802,11 +782,7 @@ async def create_pt_package(
         price_kopecks_snapshot=pt_package.price_kopecks_snapshot,
         validity_days_snapshot=pt_package.validity_days_snapshot,
         start_date=pt_package.start_date.isoformat(),
-        end_date=(
-            pt_package.end_date.isoformat()
-            if pt_package.end_date is not None
-            else None
-        ),
+        end_date=(pt_package.end_date.isoformat() if pt_package.end_date is not None else None),
         payment_id=str(payment.id),
     )
 
@@ -865,10 +841,7 @@ async def list_pt_packages(
     """
     page = await repository.list_pt_packages_paginated(session, query)
     return PaginatedData.model_construct(
-        items=[
-            PtPackageResponse.model_validate(p, from_attributes=True)
-            for p in page.items
-        ],
+        items=[PtPackageResponse.model_validate(p, from_attributes=True) for p in page.items],
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -1109,8 +1082,7 @@ async def refund_pt_package(
     # in that branch and ordering does not introduce a regression).
     result = await session.execute(
         sa.text(
-            "SELECT count(*) FROM bookings "
-            "WHERE pt_package_id = :pkg_id AND status = 'confirmed'"
+            "SELECT count(*) FROM bookings WHERE pt_package_id = :pkg_id AND status = 'confirmed'"
         ),  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
         {"pkg_id": str(pt_package_id)},
     )
@@ -1259,14 +1231,14 @@ async def activate_pt_package_from_webhook(  # noqa: SVC001 caller-owns-txn — 
         """
     )
     op_row = (
-        await session.execute(op_stmt, {"online_payment_id": online_payment_id})
-    ).mappings().one_or_none()
+        (await session.execute(op_stmt, {"online_payment_id": online_payment_id}))
+        .mappings()
+        .one_or_none()
+    )
 
     # 2: preconditions.
     if op_row is None:
-        raise PtPackageNotFoundError(
-            f"online_payment_not_found: {online_payment_id}"
-        )
+        raise PtPackageNotFoundError(f"online_payment_not_found: {online_payment_id}")
     if op_row["pt_package_plan_id"] is None:
         raise ConflictError(
             "online_payment_not_pt_package_sale",

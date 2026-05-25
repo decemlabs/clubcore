@@ -29,8 +29,8 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
-import sqlalchemy as sa
 import pytest_asyncio
+import sqlalchemy as sa
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,10 +39,9 @@ from app.core.database import get_db
 from app.core.dependencies import register_payroll_clawback_recorder
 from app.core.redis import get_redis
 from app.modules.clients.models import Client
-from app.modules.payments.models import Payment
 from app.modules.payroll.models import TrainerPayrollAccrual
 from app.modules.payroll.router import router as payroll_router
-from app.modules.pt_packages.models import PtPackage, PtPackagePlan
+from app.modules.pt_packages.models import PtPackagePlan
 from app.modules.pt_sessions.models import PtSession
 
 # ---------------------------------------------------------------------------
@@ -50,15 +49,35 @@ from app.modules.pt_sessions.models import PtSession
 # ---------------------------------------------------------------------------
 from tests.integration.payroll.conftest import (
     authed_client_owner as authed_client_owner,
+)
+from tests.integration.payroll.conftest import (
     db_session_real_commit as db_session_real_commit,
+)
+from tests.integration.payroll.conftest import (
     make_accrual as make_accrual,
+)
+from tests.integration.payroll.conftest import (
     make_client as make_client,
+)
+from tests.integration.payroll.conftest import (
     make_comp_config as make_comp_config,
+)
+from tests.integration.payroll.conftest import (
     make_plan as make_plan,
+)
+from tests.integration.payroll.conftest import (
     make_trainer as make_trainer,
+)
+from tests.integration.payroll.conftest import (
     make_user as make_user,
+)
+from tests.integration.payroll.conftest import (
     redis_clean as redis_clean,
+)
+from tests.integration.payroll.conftest import (
     seeded_owner as seeded_owner,
+)
+from tests.integration.payroll.conftest import (
     seeded_reception as seeded_reception,
 )
 
@@ -192,9 +211,7 @@ async def _count_clawback_rows(db_session: AsyncSession, trainer_id: UUID) -> in
     return int(result.scalar_one())
 
 
-async def _count_audit_rows(
-    db_session: AsyncSession, action: str, resource_type: str
-) -> int:
+async def _count_audit_rows(db_session: AsyncSession, action: str, resource_type: str) -> int:
     result = await db_session.execute(
         sa.text(
             "SELECT COUNT(*) FROM audit_log "
@@ -327,10 +344,12 @@ async def test_clawback_negative_row_appended_after_paid_accrual(
     clawback_row = clawback_result.mappings().one()
     assert clawback_row["accrual_kopecks"] < 0, "Clawback must be negative"
     assert clawback_row["status"] == "pending", "Clawback row starts as pending"
-    assert str(clawback_row["clawback_of_accrual_id"]) == str(
-        paid_accrual.id
-    ), "clawback_of_accrual_id must point to the original paid accrual"
-    assert clawback_row["source_refund_payment_id"] is not None, "source_refund_payment_id must be set"
+    assert str(clawback_row["clawback_of_accrual_id"]) == str(paid_accrual.id), (
+        "clawback_of_accrual_id must point to the original paid accrual"
+    )
+    assert clawback_row["source_refund_payment_id"] is not None, (
+        "source_refund_payment_id must be set"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -417,9 +436,13 @@ async def test_original_accrual_unchanged_after_clawback(
 
     # Re-fetch the original accrual and assert it is unchanged
     await db_session.refresh(paid_accrual)
-    assert paid_accrual.accrual_kopecks == original_accrual_kopecks, "accrual_kopecks must not change"
+    assert paid_accrual.accrual_kopecks == original_accrual_kopecks, (
+        "accrual_kopecks must not change"
+    )
     assert paid_accrual.status == original_status, "status must not change (no UPDATE)"
-    assert paid_accrual.clawback_of_accrual_id is None, "original row must not become a clawback row"
+    assert paid_accrual.clawback_of_accrual_id is None, (
+        "original row must not become a clawback row"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +463,7 @@ async def test_no_clawback_when_no_paid_accrual(
     owner = seeded_owner
 
     client = Client(
-        last_name="НетАкрual",
+        last_name="NoAccrual",
         first_name="Тест",
         phone=f"+7999{uuid4().hex[:7]}",
         created_by_user_id=owner.id,
@@ -526,14 +549,18 @@ async def test_no_clawback_when_trainer_id_null(
 
     # Count clawback rows across all trainers — should be 0 before and after
     result2 = await db_session.execute(
-        sa.text("SELECT COUNT(*) FROM trainer_payroll_accruals WHERE clawback_of_accrual_id IS NOT NULL")
+        sa.text(
+            "SELECT COUNT(*) FROM trainer_payroll_accruals WHERE clawback_of_accrual_id IS NOT NULL"
+        )
     )
     count_before = int(result2.scalar_one())
 
     await _refund_pt_package(authed_client_owner, pt_package_id)
 
     result3 = await db_session.execute(
-        sa.text("SELECT COUNT(*) FROM trainer_payroll_accruals WHERE clawback_of_accrual_id IS NOT NULL")
+        sa.text(
+            "SELECT COUNT(*) FROM trainer_payroll_accruals WHERE clawback_of_accrual_id IS NOT NULL"
+        )
     )
     count_after = int(result3.scalar_one())
     assert count_after == count_before, "No clawback row when package trainer_id is NULL"
@@ -616,11 +643,15 @@ async def test_audit_row_emitted_on_clawback(
         status="paid",
     )
 
-    audit_before = await _count_audit_rows(db_session, "payroll_clawback_recorded", "payroll_accrual")
+    audit_before = await _count_audit_rows(
+        db_session, "payroll_clawback_recorded", "payroll_accrual"
+    )
 
     await _refund_pt_package(authed_client_owner, pt_package_id)
 
-    audit_after = await _count_audit_rows(db_session, "payroll_clawback_recorded", "payroll_accrual")
+    audit_after = await _count_audit_rows(
+        db_session, "payroll_clawback_recorded", "payroll_accrual"
+    )
     assert audit_after == audit_before + 1, (
         "payroll_clawback_recorded audit row must be emitted on refund with paid accrual"
     )
