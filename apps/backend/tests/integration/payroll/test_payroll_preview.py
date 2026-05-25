@@ -15,7 +15,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -24,10 +24,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.clients.models import Client
+from app.modules.payments.models import Payment
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from app.modules.pt_sessions.models import PtSession
-from app.modules.payments.models import Payment
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -36,7 +35,7 @@ from app.modules.payments.models import Payment
 PERIOD_START = "2026-04-01"
 PERIOD_END = "2026-04-30"
 # A performed_at within the period, in Europe/Moscow tz (UTC+3)
-PERFORMED_AT = datetime(2026, 4, 15, 10, 0, 0, tzinfo=timezone.utc)
+PERFORMED_AT = datetime(2026, 4, 15, 10, 0, 0, tzinfo=UTC)
 
 
 def _csrf(client: AsyncClient) -> dict[str, str]:
@@ -131,8 +130,10 @@ async def _seed_pt_data(
 async def _count_accruals(db_session: AsyncSession) -> int:
     """Return current row count in trainer_payroll_accruals."""
     row = (
-        await db_session.execute(sa.text("SELECT COUNT(*) AS cnt FROM trainer_payroll_accruals"))
-    ).mappings().one()
+        (await db_session.execute(sa.text("SELECT COUNT(*) AS cnt FROM trainer_payroll_accruals")))
+        .mappings()
+        .one()
+    )
     return int(row["cnt"])
 
 
@@ -407,6 +408,5 @@ async def test_preview_zero_persistence(
 
     count_after = await _count_accruals(db_session)
     assert count_after == count_before, (
-        f"Preview must not persist any accrual row: "
-        f"before={count_before}, after={count_after}"
+        f"Preview must not persist any accrual row: before={count_before}, after={count_after}"
     )
