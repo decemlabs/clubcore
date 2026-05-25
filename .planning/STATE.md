@@ -4,8 +4,8 @@ milestone: v1.9
 milestone_name: Trainers Complete
 status: executing
 stopped_at: Phase 60 context gathered
-last_updated: "2026-05-25T19:43:17.726Z"
-last_activity: 2026-05-25 -- Phase 60 planning complete
+last_updated: "2026-05-25T19:44:03.427Z"
+last_activity: 2026-05-25 -- Phase 60 execution started
 progress:
   total_phases: 4
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 59 — recurring-schedule-time-off
+**Current focus:** Phase 60 — trainer-usage-report
 
 ## Current Position
 
-Phase: 59 (recurring-schedule-time-off) — EXECUTING
-Plan: 1 of 5
-Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 60 planning complete
+Phase: 60 (trainer-usage-report) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 60
+Last activity: 2026-05-25 -- Phase 60 execution started
 
 Progress: [██████████] 100%
 

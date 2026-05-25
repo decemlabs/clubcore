@@ -228,8 +228,8 @@ Plans:
   4. Owner can GET /api/v1/reports/trainers.csv and receive a UTF-8 BOM RFC-4180 excel-dialect CSV that renders Cyrillic correctly in Excel; the report module has zero new import-linter ignores and makes no writes to any business table (D-54-07/08 discipline maintained)
 
 **Plans**: 4 plans
-- [ ] 60-01-PLAN.md — Schemas + constants (TrainerUsageRow/Response, CSV_TRAINER_USAGE_HEADERS, TRAINER_REPORT_REVENUE_NOTE)
-- [ ] 60-02-PLAN.md — Repository: raw-SQL CTE reader fetch_trainer_usage (session_agg + slot_agg + revenue_agg + payroll_agg)
+- [x] 60-01-PLAN.md — Schemas + constants (TrainerUsageRow/Response, CSV_TRAINER_USAGE_HEADERS, TRAINER_REPORT_REVENUE_NOTE)
+- [x] 60-02-PLAN.md — Repository: raw-SQL CTE reader fetch_trainer_usage (session_agg + slot_agg + revenue_agg + payroll_agg)
 - [ ] 60-03-PLAN.md — Service + Router: GET /trainers JSON + GET /trainers.csv (owner-only, reuses (VIEW, REPORTS) pair)
 - [ ] 60-04-PLAN.md — Integration tests + CI guards (PITFALL 6/10/11/12 goldens, CSV BOM/Cyrillic/formula-injection, RPT-04 clawback netting)
 
@@ -255,7 +255,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 5/5 | Complete   | 2026-05-25 |
-| 60. Trainer-Usage Report | 0/TBD | Not started | - |
+| 60. Trainer-Usage Report | 2/4 | In Progress|  |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
 ---
