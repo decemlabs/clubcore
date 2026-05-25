@@ -722,6 +722,13 @@ async def create_recurring_template(
     to surface the UNIQUE constraint; on violation it rolls back to the savepoint
     and returns None (caller detects None → raises).
     """
+    # 0. Resolve trainer up-front — 404 trainer_not_found on unknown id (WR-03).
+    # Mirrors publish_slot's contract: FK violation on INSERT surfaces as raw
+    # IntegrityError (500) without this guard; a clean 404 is the expected surface.
+    trainer = await resolve_trainer_by_id(session, data.trainer_id)
+    if trainer is None:
+        raise TrainerNotFoundError("trainer_not_found")
+
     tmpl = await repository.insert_recurring_template(
         session,
         trainer_id=data.trainer_id,
@@ -861,6 +868,13 @@ async def create_time_off(
          importlib.import_module("app.modules.bookings.service") (D-38-11 /
          PATTERNS.md §5 — grimp-opaque). Never raises (fire-and-forget).
     """
+    # 0. Resolve trainer up-front — 404 trainer_not_found on unknown id (WR-03).
+    # Mirrors publish_slot's contract: FK violation on INSERT surfaces as raw
+    # IntegrityError (500) without this guard; a clean 404 is the expected surface.
+    trainer = await resolve_trainer_by_id(session, data.trainer_id)
+    if trainer is None:
+        raise TrainerNotFoundError("trainer_not_found")
+
     # 1. Find overlapping active + booked slots for the trainer.
     from sqlalchemy import select
 
