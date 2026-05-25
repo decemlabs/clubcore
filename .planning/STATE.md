@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Trainers Complete
-status: verifying
-stopped_at: "Completed 58-07-PLAN.md (PAY-03 + PAY-04: accrual record + mark-paid)"
-last_updated: "2026-05-25T13:03:29.964Z"
+status: ready_to_plan
+stopped_at: Phase 58 complete (9/9) — ready to discuss Phase 59
+last_updated: 2026-05-25T13:23:43.554Z
 last_activity: 2026-05-25
 progress:
   total_phases: 4
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 58 — payroll-foundations-ledger
+**Current focus:** Phase 59 — recurring schedule + time off
 
 ## Current Position
 
-Phase: 58 (payroll-foundations-ledger) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
+Phase: 59
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-25
 
 Progress: [██████████] 100%

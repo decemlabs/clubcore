@@ -1,14 +1,17 @@
 ---
 phase: 58-payroll-foundations-ledger
 verified: 2026-05-25T00:00:00Z
-status: human_needed
+status: passed
 score: 5/5
 overrides_applied: 0
+human_verification_resolved: 2026-05-25
 human_verification:
   - test: "Confirm D-PAYROLL-ROUNDING deviation is intentional and acceptable"
+    resolution: "RESOLVED — developer ratified shipped `math.ceil` (CONTEXT D-58-04). REQUIREMENTS.md D-PAYROLL-ROUNDING corrected to integer ceil-in-trainer's-favor. No code change. See 58-HUMAN-UAT.md."
     expected: "Developer acknowledges that REQUIREMENTS.md D-PAYROLL-ROUNDING locked `decimal.Decimal + ROUND_HALF_EVEN` but implementation uses `math.ceil` (integer-only, trainer-favorable rounding) as specified by D-58-04 in CONTEXT.md. Decision: accept the deviation or update REQUIREMENTS.md."
     why_human: "Both sources claim to be 'locked decisions'. The CONTEXT.md D-58-04 explicitly chose math.ceil; REQUIREMENTS.md D-PAYROLL-ROUNDING says ROUND_HALF_EVEN. This is a documented conflict between the milestone requirements document and the phase context. Cannot resolve programmatically; needs owner acknowledgment."
   - test: "ROADMAP SC#5 audit event count discrepancy"
+    resolution: "RESOLVED — ROADMAP SC#5 updated 6 → 4 with reconciliation note. test_audit_taxonomy.py count (89) unchanged. See 58-HUMAN-UAT.md."
     expected: "ROADMAP Phase 58 SC#5 says 'all 6 new LOCKED_AUDIT_EVENTS' but 4 were delivered. The 58-09 SUMMARY.md explains why 4 is correct (preview + list are zero-emit; the two projected additional events were a planning over-estimate). Developer should either update ROADMAP.md SC#5 to say '4' or add a note, so the Phase 61 milestone verifier doesn't flag it again."
     why_human: "The 89-count assertion in test_audit_taxonomy.py passes and is internally consistent. The discrepancy is purely a ROADMAP documentation gap. No code change needed; only roadmap annotation."
 ---
