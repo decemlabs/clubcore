@@ -151,7 +151,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 **Milestone Goal:** Закрыть последний неполный бизнес-домен — довести Trainers с catalog-only до ✅: настраиваемый payroll-ledger с записываемыми начислениями, расширение расписания (recurring-слоты + отпуска/блоки), и read-only отчёт по тренерам. Backend-only; `apps/admin-web` не трогаем.
 
-- [ ] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06)
+- [x] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06) (completed 2026-05-25)
 - [ ] **Phase 59: Recurring Schedule + Time-Off** - Recurring slot patterns + ARQ cron generation + time-off blocks + conflict guard (REC-01..04)
 - [ ] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04)
 - [ ] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01)
@@ -209,7 +209,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 58. Payroll Foundations + Ledger | 4/5 | In Progress|  |
+| 58. Payroll Foundations + Ledger | 5/5 | Complete   | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
