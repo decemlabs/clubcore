@@ -26,17 +26,18 @@ delegates to Pydantic's generic schema-builder and raises
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import Select, and_, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.pagination import PaginatedData
-from app.modules.schedule.models import TrainerAvailabilitySlot
+from app.modules.schedule.models import RecurringSlotTemplate, TrainerAvailabilitySlot, TrainerTimeOff
 from app.modules.schedule.schemas import (
     SlotListQuery,
     resolve_default_from_time,
@@ -290,12 +291,188 @@ async def update_slot_status_predicate_gated(
     return result.first() is not None
 
 
+# ---------------------------------------------------------------------------
+# Phase 59 — RecurringSlotTemplate helpers (REC-01 / REC-04)
+# ---------------------------------------------------------------------------
+
+
+async def insert_recurring_template(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID,
+    day_of_week: int,
+    start_time: Any,  # datetime.time
+    end_time: Any,    # datetime.time
+    valid_from: date,
+    valid_until: date | None,
+) -> RecurringSlotTemplate | None:
+    """Insert a RecurringSlotTemplate. Returns None on UNIQUE violation
+    (trainer_id, day_of_week, start_time, valid_from) — caller raises ConflictError.
+    Caller owns flush + commit (SVC001).
+    """
+    tmpl = RecurringSlotTemplate(
+        trainer_id=trainer_id,
+        day_of_week=day_of_week,
+        start_time=start_time,
+        end_time=end_time,
+        valid_from=valid_from,
+        valid_until=valid_until,
+        is_active=True,
+    )
+    session.add(tmpl)
+    try:
+        await session.flush()
+        return tmpl
+    except IntegrityError as exc:
+        await session.rollback()
+        # Re-raise as None only on the UNIQUE violation; propagate other errors.
+        if "uq_recurring_slot_templates_trainer_id" in str(exc.orig):
+            return None
+        raise
+
+
+async def get_recurring_template_by_id_for_update(
+    session: AsyncSession,
+    template_id: UUID,
+) -> RecurringSlotTemplate | None:
+    """Row-locked fetch for FSM-guarded mutations (deactivate)."""
+    stmt: Select[tuple[RecurringSlotTemplate]] = (
+        select(RecurringSlotTemplate)
+        .where(RecurringSlotTemplate.id == template_id)
+        .with_for_update()
+    )
+    result: RecurringSlotTemplate | None = await session.scalar(stmt)
+    return result
+
+
+async def list_recurring_templates(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> PaginatedData[RecurringSlotTemplate]:
+    """Paginated list of recurring templates (both roles — REC-04)."""
+    predicates: list[Any] = []
+    if trainer_id is not None:
+        predicates.append(RecurringSlotTemplate.trainer_id == trainer_id)
+
+    where_clause = and_(*predicates) if predicates else sa.true()
+
+    total_stmt = (
+        select(func.count())
+        .select_from(RecurringSlotTemplate)
+        .where(where_clause)
+    )
+    total = await session.scalar(total_stmt) or 0
+
+    stmt: Select[tuple[RecurringSlotTemplate]] = (
+        select(RecurringSlotTemplate)
+        .where(where_clause)
+        .order_by(
+            RecurringSlotTemplate.created_at.asc(),
+            RecurringSlotTemplate.id.asc(),
+        )
+    )
+    offset = (page - 1) * page_size
+    stmt = stmt.offset(offset).limit(page_size)
+    rows = (await session.scalars(stmt)).all()
+    return PaginatedData.model_construct(
+        items=list(rows),
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 — TrainerTimeOff helpers (REC-03 / REC-04)
+# ---------------------------------------------------------------------------
+
+
+async def insert_time_off(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID,
+    block_start: datetime,
+    block_end: datetime,
+    reason: str | None,
+) -> TrainerTimeOff:
+    """Insert a TrainerTimeOff block. Caller owns flush + commit (SVC001)."""
+    time_off = TrainerTimeOff(
+        trainer_id=trainer_id,
+        block_start=block_start,
+        block_end=block_end,
+        reason=reason,
+    )
+    session.add(time_off)
+    return time_off
+
+
+async def get_time_off_by_id(
+    session: AsyncSession,
+    time_off_id: UUID,
+) -> TrainerTimeOff | None:
+    """Return a TrainerTimeOff row by id, or None."""
+    stmt: Select[tuple[TrainerTimeOff]] = (
+        select(TrainerTimeOff).where(TrainerTimeOff.id == time_off_id)
+    )
+    result: TrainerTimeOff | None = await session.scalar(stmt)
+    return result
+
+
+async def list_time_off(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> PaginatedData[TrainerTimeOff]:
+    """Paginated list of time-off blocks (both roles — REC-04)."""
+    predicates: list[Any] = []
+    if trainer_id is not None:
+        predicates.append(TrainerTimeOff.trainer_id == trainer_id)
+
+    where_clause = and_(*predicates) if predicates else sa.true()
+
+    total_stmt = (
+        select(func.count())
+        .select_from(TrainerTimeOff)
+        .where(where_clause)
+    )
+    total = await session.scalar(total_stmt) or 0
+
+    stmt: Select[tuple[TrainerTimeOff]] = (
+        select(TrainerTimeOff)
+        .where(where_clause)
+        .order_by(
+            TrainerTimeOff.block_start.asc(),
+            TrainerTimeOff.id.asc(),
+        )
+    )
+    offset = (page - 1) * page_size
+    stmt = stmt.offset(offset).limit(page_size)
+    rows = (await session.scalars(stmt)).all()
+    return PaginatedData.model_construct(
+        items=list(rows),
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 __all__ = [
     "find_buffer_violations",
     "find_overlapping_slots_for_update",
+    "get_recurring_template_by_id_for_update",
     "get_slot_by_id",
     "get_slot_by_id_for_update",
+    "get_time_off_by_id",
+    "insert_recurring_template",
     "insert_slot",
+    "insert_time_off",
+    "list_recurring_templates",
     "list_slots_paginated",
+    "list_time_off",
     "update_slot_status_predicate_gated",
 ]

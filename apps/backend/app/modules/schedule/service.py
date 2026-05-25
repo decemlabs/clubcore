@@ -44,14 +44,20 @@ from app.modules.schedule import repository
 from app.modules.schedule.constants import (
     SLOT_BUFFER_MINUTES,
     SLOT_STATUS_TRANSITIONS,
+    TIME_OFF_BOOKED_CONFLICT_CODE,
+    TIME_OFF_CANCEL_REASON,
 )
-from app.modules.schedule.models import TrainerAvailabilitySlot
+from app.modules.schedule.models import RecurringSlotTemplate, TrainerAvailabilitySlot, TrainerTimeOff
 from app.modules.schedule.schemas import (
+    RecurringSlotTemplateCreate,
+    RecurringSlotTemplateResponse,
     SlotCancelRequest,
     SlotCreateRequest,
     SlotListQuery,
     SlotResponse,
     SlotStatus,
+    TimeOffCreate,
+    TimeOffResponse,
 )
 
 _log = structlog.get_logger("schedule.service")
@@ -605,3 +611,524 @@ async def cancel_slot(
             "cancel_slot: just-cancelled slot disappeared on reload"
         )
     return _slot_response_from_orm(reloaded)
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 REC-01 — error classes for recurring template operations.
+# ---------------------------------------------------------------------------
+
+
+class RecurringTemplateDuplicateError(ConflictError):
+    """Raised by create_recurring_template when (trainer_id, day_of_week,
+    start_time, valid_from) UNIQUE constraint fires (REC-01 verbatim key)."""
+
+    code = "recurring_template_duplicate"
+    status_code = 409
+
+
+class RecurringTemplateNotFoundError(NotFoundError):
+    """Raised by deactivate_recurring_template when the template id does not exist."""
+
+    code = "recurring_template_not_found"
+    status_code = 404
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 REC-03 — error class for time-off booked-slot conflict.
+# ---------------------------------------------------------------------------
+
+
+class TimeOffBookedConflictError(ConflictError):
+    """Raised by create_time_off when booked slots overlap and force=False.
+
+    Carries conflicting_slot_ids + conflicting_booking_ids in `fields` so
+    the router can project them into the 409 TimeOffConflictDetail body.
+    error_code matches TIME_OFF_BOOKED_CONFLICT_CODE (REC-03 D-59-06).
+    """
+
+    code = TIME_OFF_BOOKED_CONFLICT_CODE  # "time_off_booked_conflict"
+    status_code = 409
+
+
+class TimeOffNotFoundError(NotFoundError):
+    """Raised by delete_time_off when the time_off_id does not exist."""
+
+    code = "time_off_not_found"
+    status_code = 404
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 REC-01 — response projectors.
+# ---------------------------------------------------------------------------
+
+
+def _template_response_from_orm(
+    tmpl: RecurringSlotTemplate,
+) -> RecurringSlotTemplateResponse:
+    """Project RecurringSlotTemplate ORM to RecurringSlotTemplateResponse."""
+    return RecurringSlotTemplateResponse(
+        id=tmpl.id,
+        trainer_id=tmpl.trainer_id,
+        day_of_week=tmpl.day_of_week,
+        start_time=tmpl.start_time,
+        end_time=tmpl.end_time,
+        valid_from=tmpl.valid_from,
+        valid_until=tmpl.valid_until,
+        is_active=tmpl.is_active,
+        created_at=tmpl.created_at,
+    )
+
+
+def _time_off_response_from_orm(time_off: TrainerTimeOff) -> TimeOffResponse:
+    """Project TrainerTimeOff ORM to TimeOffResponse."""
+    return TimeOffResponse(
+        id=time_off.id,
+        trainer_id=time_off.trainer_id,
+        block_start=time_off.block_start,
+        block_end=time_off.block_end,
+        reason=time_off.reason,
+        created_at=time_off.created_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 REC-01 — recurring template service functions.
+# ---------------------------------------------------------------------------
+
+
+async def create_recurring_template(
+    session: AsyncSession,
+    actor: CurrentUser,
+    data: RecurringSlotTemplateCreate,
+) -> RecurringSlotTemplateResponse:
+    """Create a recurring slot template (REC-01 / D-59-02).
+
+    Owner-driven; owns the UoW — session.commit() at end (SVC001 gate).
+
+    Sequence:
+      1. Attempt INSERT via repository; catch UNIQUE violation →
+         RecurringTemplateDuplicateError (409).
+      2. audit.emit('recurring_slot_template_created', ...) LITERAL.
+      3. session.commit().
+      4. Return RecurringSlotTemplateResponse.
+
+    Note: repository.insert_recurring_template calls session.flush() internally
+    to surface the UNIQUE constraint; on violation it rolls back to the savepoint
+    and returns None (caller detects None → raises).
+    """
+    tmpl = await repository.insert_recurring_template(
+        session,
+        trainer_id=data.trainer_id,
+        day_of_week=data.day_of_week,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        valid_from=data.valid_from,
+        valid_until=data.valid_until,
+    )
+    if tmpl is None:
+        raise RecurringTemplateDuplicateError("recurring_template_duplicate")
+
+    # Audit emit — LITERAL event + resource_type (INFRA-11 AST gate).
+    await audit.emit(
+        session,
+        "recurring_slot_template_created",  # LITERAL
+        actor_user_id=actor.id,
+        resource_type="schedule_slot",  # LITERAL
+        resource_id=tmpl.id,
+        template_id=str(tmpl.id),
+        trainer_id=str(tmpl.trainer_id),
+        day_of_week=tmpl.day_of_week,
+        start_time=str(tmpl.start_time),
+        end_time=str(tmpl.end_time),
+    )
+
+    # SVC001 gate — single commit covers INSERT + audit.
+    await session.commit()
+    await session.refresh(tmpl)
+    return _template_response_from_orm(tmpl)
+
+
+async def deactivate_recurring_template(
+    session: AsyncSession,
+    actor: CurrentUser,
+    template_id: UUID,
+) -> RecurringSlotTemplateResponse:
+    """Flip is_active=False on a recurring template (REC-01 deactivate).
+
+    Owner-driven; owns the UoW — session.commit() at end (SVC001 gate).
+
+    Forward-only: does NOT cancel materialized slots. The ARQ cron will stop
+    generating new slots once is_active=False (next tick onwards).
+
+    Sequence:
+      1. Load with row lock → 404 if missing.
+      2. Flip is_active=False.
+      3. session.flush().
+      4. audit.emit('recurring_slot_template_cancelled', ...) LITERAL.
+      5. session.commit().
+      6. Return RecurringSlotTemplateResponse.
+    """
+    tmpl = await repository.get_recurring_template_by_id_for_update(
+        session, template_id
+    )
+    if tmpl is None:
+        raise RecurringTemplateNotFoundError("recurring_template_not_found")
+
+    tmpl.is_active = False
+    await session.flush()
+
+    await audit.emit(
+        session,
+        "recurring_slot_template_cancelled",  # LITERAL
+        actor_user_id=actor.id,
+        resource_type="schedule_slot",  # LITERAL
+        resource_id=tmpl.id,
+        template_id=str(tmpl.id),
+        trainer_id=str(tmpl.trainer_id),
+    )
+
+    await session.commit()
+    await session.refresh(tmpl)
+    return _template_response_from_orm(tmpl)
+
+
+async def list_recurring_templates(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> PaginatedData[RecurringSlotTemplateResponse]:
+    """Paginated recurring template list (REC-04 — both roles). Read-only."""
+    page_data = await repository.list_recurring_templates(
+        session,
+        trainer_id=trainer_id,
+        page=page,
+        page_size=page_size,
+    )
+    return PaginatedData.model_construct(
+        items=[_template_response_from_orm(t) for t in page_data.items],
+        total=page_data.total,
+        page=page_data.page,
+        page_size=page_data.page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 REC-03 — time-off service functions.
+# ---------------------------------------------------------------------------
+
+
+async def create_time_off(
+    session: AsyncSession,
+    actor: CurrentUser,
+    data: TimeOffCreate,
+    *,
+    force: bool = False,
+) -> TimeOffResponse:
+    """Create a trainer time-off block (REC-03 / D-59-06 LOCKED semantics).
+
+    Owner-driven; owns the UoW — single session.commit() at end (SVC001 gate).
+
+    Sequence:
+      1. Query trainer_availability_slots overlapping [block_start, block_end]
+         for the trainer. Split by status: booked vs. active.
+      2. If booked overlaps exist AND not force:
+         → raise TimeOffBookedConflictError (409, error_code="time_off_booked_conflict")
+           carrying conflicting_slot_ids + conflicting_booking_ids. NO mutations.
+      3. If force: for each booked slot —
+           a. raw UPDATE bookings SET status='cancelled', cancel_reason=TIME_OFF_CANCEL_REASON
+              WHERE slot_id=:sid AND status='confirmed' RETURNING id
+              (# noqa: TABLE_REF D-38-11 cross-module pattern).
+           b. 0-row RETURNING → InternalConsistencyError (invariant breach).
+           c. Flip slot active/booked→cancelled (cancel_reason=TIME_OFF_CANCEL_REASON).
+           d. session.flush().
+           e. audit.emit('slot_cancelled', had_booking=True) LITERAL.
+           f. audit.emit('booking_cancelled', ...) LITERAL.
+      4. Active (un-booked) overlapping slots: flip active→cancelled
+         (cancel_reason=TIME_OFF_CANCEL_REASON), emit 'slot_cancelled'
+         (had_booking=False) per slot.
+      5. INSERT TrainerTimeOff row via repository.insert_time_off; flush.
+      6. audit.emit('trainer_time_off_created', ...) LITERAL.
+      7. Single session.commit() covering ALL mutations + audits.
+      8. AFTER commit: fire-and-forget client DM per cascaded booking via
+         importlib.import_module("app.modules.bookings.service") (D-38-11 /
+         PATTERNS.md §5 — grimp-opaque). Never raises (fire-and-forget).
+    """
+    # 1. Find overlapping active + booked slots for the trainer.
+    from sqlalchemy import and_, select
+
+    overlap_stmt = select(
+        TrainerAvailabilitySlot.id,
+        TrainerAvailabilitySlot.status,
+    ).where(
+        TrainerAvailabilitySlot.trainer_id == data.trainer_id,
+        TrainerAvailabilitySlot.status != "cancelled",
+        sa.func.tstzrange(
+            TrainerAvailabilitySlot.start_time,
+            TrainerAvailabilitySlot.end_time,
+            "[)",
+        ).op("&&")(sa.func.tstzrange(data.block_start, data.block_end, "[)")),
+    )
+    overlap_rows = (await session.execute(overlap_stmt)).all()
+
+    booked_slot_ids: list[UUID] = [r.id for r in overlap_rows if r.status == "booked"]
+    active_slot_ids: list[UUID] = [r.id for r in overlap_rows if r.status == "active"]
+
+    # 2. Without force + booked overlaps → 409 with conflict detail.
+    if booked_slot_ids and not force:
+        # Gather paired confirmed booking_ids for the conflict report.
+        from app.modules.schedule.schemas import TimeOffConflictDetail  # local import for clarity
+
+        booking_ids_stmt = sa.text(
+            """
+            SELECT id FROM bookings
+            WHERE slot_id = ANY(:slot_ids) AND status = 'confirmed'
+            """,  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+        )
+        booking_id_rows = (
+            await session.execute(
+                booking_ids_stmt,
+                {"slot_ids": list(booked_slot_ids)},
+            )
+        ).fetchall()
+        conflicting_booking_ids = [r.id for r in booking_id_rows]
+        raise TimeOffBookedConflictError(
+            TIME_OFF_BOOKED_CONFLICT_CODE,
+            fields={
+                "conflicting_slot_ids": [str(sid) for sid in booked_slot_ids],
+                "conflicting_booking_ids": [str(bid) for bid in conflicting_booking_ids],
+            },
+        )
+
+    # 3. Force cascade — cancel each booked slot + its confirmed booking.
+    cascaded_booking_ids: list[UUID] = []
+    if force:
+        # Load the booked slots to mutate in-place.
+        if booked_slot_ids:
+            booked_slots_stmt = (
+                select(TrainerAvailabilitySlot)
+                .where(TrainerAvailabilitySlot.id.in_(booked_slot_ids))
+                .with_for_update()
+            )
+            booked_slots = list((await session.scalars(booked_slots_stmt)).all())
+
+            for slot in booked_slots:
+                # 3a. Raw UPDATE bookings (D-38-11 — cross-module, no static import).
+                cascade_stmt = sa.text(
+                    """
+                    UPDATE bookings
+                    SET status='cancelled',
+                        cancelled_at=now(),
+                        cancel_reason=:reason,
+                        updated_at=now()
+                    WHERE slot_id=:sid AND status='confirmed'
+                    RETURNING id
+                    """,  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+                )
+                result = await session.execute(
+                    cascade_stmt,
+                    {"sid": slot.id, "reason": TIME_OFF_CANCEL_REASON},
+                )
+                cancelled_row = result.first()
+                # 3b. 0-row → invariant breach (slot=booked but no confirmed booking).
+                if cancelled_row is None:
+                    _log.error(
+                        "slot_booking_inconsistency",
+                        slot_id=str(slot.id),
+                        slot_status=slot.status,
+                        expected="bookings.status='confirmed' row",
+                    )
+                    raise InternalConsistencyError("slot_booking_inconsistency")
+                booking_id: UUID = cancelled_row.id
+                cascaded_booking_ids.append(booking_id)
+
+                # 3c. Flip the slot's status.
+                slot.status = "cancelled"
+                slot.cancelled_at = datetime.now(UTC)
+                slot.cancel_reason = TIME_OFF_CANCEL_REASON
+                await session.flush()
+
+                # 3e. audit.emit slot_cancelled (had_booking=True) — LITERAL.
+                await audit.emit(
+                    session,
+                    "slot_cancelled",  # LITERAL
+                    actor_user_id=actor.id,
+                    resource_type="schedule_slot",  # LITERAL
+                    resource_id=slot.id,
+                    slot_id=str(slot.id),
+                    trainer_id=str(slot.trainer_id),
+                    cancelled_by_user_id=str(actor.id),
+                    cancel_reason=TIME_OFF_CANCEL_REASON,
+                    had_booking=True,
+                )
+
+                # 3f. audit.emit booking_cancelled — LITERAL (4-key BookingCancelledPayload).
+                await audit.emit(
+                    session,
+                    "booking_cancelled",  # LITERAL
+                    actor_user_id=actor.id,
+                    resource_type="booking",  # LITERAL
+                    resource_id=booking_id,
+                    booking_id=str(booking_id),
+                    slot_id=str(slot.id),
+                    cancelled_by_user_id=str(actor.id),
+                    cancel_reason=TIME_OFF_CANCEL_REASON,
+                )
+
+    # 4. Active (un-booked) overlapping slots → flip to cancelled.
+    if active_slot_ids:
+        active_slots_stmt = (
+            select(TrainerAvailabilitySlot)
+            .where(TrainerAvailabilitySlot.id.in_(active_slot_ids))
+            .with_for_update()
+        )
+        active_slots = list((await session.scalars(active_slots_stmt)).all())
+        for slot in active_slots:
+            slot.status = "cancelled"
+            slot.cancelled_at = datetime.now(UTC)
+            slot.cancel_reason = TIME_OFF_CANCEL_REASON
+            await session.flush()
+
+            await audit.emit(
+                session,
+                "slot_cancelled",  # LITERAL
+                actor_user_id=actor.id,
+                resource_type="schedule_slot",  # LITERAL
+                resource_id=slot.id,
+                slot_id=str(slot.id),
+                trainer_id=str(slot.trainer_id),
+                cancelled_by_user_id=str(actor.id),
+                cancel_reason=TIME_OFF_CANCEL_REASON,
+                had_booking=False,
+            )
+
+    # 5. INSERT TrainerTimeOff row; flush.
+    time_off = await repository.insert_time_off(
+        session,
+        trainer_id=data.trainer_id,
+        block_start=data.block_start,
+        block_end=data.block_end,
+        reason=data.reason,
+    )
+    await session.flush()
+
+    # 6. audit.emit trainer_time_off_created — LITERAL, resource_type="trainer".
+    await audit.emit(
+        session,
+        "trainer_time_off_created",  # LITERAL
+        actor_user_id=actor.id,
+        resource_type="trainer",  # LITERAL
+        resource_id=time_off.id,
+        time_off_id=str(time_off.id),
+        trainer_id=str(time_off.trainer_id),
+        block_start=time_off.block_start.isoformat(),
+        block_end=time_off.block_end.isoformat(),
+        reason=time_off.reason,
+    )
+
+    # 7. Single commit covers ALL slot/booking updates + audits + time-off row (SVC001).
+    await session.commit()
+
+    # 8. AFTER commit: fire-and-forget DM per cascaded booking.
+    # importlib indirection preserves modules-independent contract (PATTERNS.md §5).
+    if cascaded_booking_ids:
+        import importlib
+
+        bookings_service = importlib.import_module("app.modules.bookings.service")
+        bookings_notifications = importlib.import_module(
+            "app.modules.bookings.notifications"
+        )
+        telegram_bot = importlib.import_module("app.integrations.telegram.bot")
+        telegram_sender_mod = importlib.import_module(
+            "app.integrations.telegram.sender"
+        )
+        from app.core.config import get_settings
+
+        dm_bot = telegram_bot.build_bot(
+            token=get_settings().telegram_bot_token.get_secret_value(),
+        )
+
+        for booking_id in cascaded_booking_ids:
+            cancelled_booking = await bookings_service._load_booking_with_relationships(
+                session, booking_id
+            )
+            if cancelled_booking is None:
+                _log.warning(
+                    "time_off_cascade_dm_skipped_missing_booking",
+                    time_off_id=str(time_off.id),
+                    booking_id=str(booking_id),
+                )
+                continue
+            await bookings_service._dispatch_booking_lifecycle_notification(
+                cancelled_booking,
+                kind="cancelled_by_owner",  # LITERAL
+                template=bookings_notifications.BOOKING_CANCELLED_BY_OWNER_DM,
+                bot=dm_bot,
+                sender=telegram_sender_mod,
+                session=session,
+            )
+
+    await session.refresh(time_off)
+    return _time_off_response_from_orm(time_off)
+
+
+async def delete_time_off(
+    session: AsyncSession,
+    actor: CurrentUser,
+    time_off_id: UUID,
+) -> None:
+    """Delete a time-off block (forward-only — does NOT resurrect cancelled slots).
+
+    Owns the UoW — session.commit() at end (SVC001 gate).
+
+    Sequence:
+      1. Load by id → 404 if missing.
+      2. DELETE the row.
+      3. audit.emit('trainer_time_off_cancelled', ...) LITERAL.
+      4. session.commit().
+    """
+    time_off = await repository.get_time_off_by_id(session, time_off_id)
+    if time_off is None:
+        raise TimeOffNotFoundError("time_off_not_found")
+
+    # Capture fields before DELETE (ORM expires them).
+    _time_off_id = time_off.id
+    _trainer_id = time_off.trainer_id
+
+    await session.delete(time_off)
+    await session.flush()
+
+    await audit.emit(
+        session,
+        "trainer_time_off_cancelled",  # LITERAL
+        actor_user_id=actor.id,
+        resource_type="trainer",  # LITERAL
+        resource_id=_time_off_id,
+        time_off_id=str(_time_off_id),
+        trainer_id=str(_trainer_id),
+    )
+
+    await session.commit()
+
+
+async def list_time_off(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> "PaginatedData[TimeOffResponse]":
+    """Paginated time-off list (REC-04 — both roles). Read-only."""
+    page_data = await repository.list_time_off(
+        session,
+        trainer_id=trainer_id,
+        page=page,
+        page_size=page_size,
+    )
+    return PaginatedData.model_construct(
+        items=[_time_off_response_from_orm(t) for t in page_data.items],
+        total=page_data.total,
+        page=page_data.page,
+        page_size=page_data.page_size,
+    )

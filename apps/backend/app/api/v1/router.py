@@ -35,7 +35,11 @@ from app.modules.pt_sessions.router import (
 )
 from app.modules.reports.router import audit_log_router
 from app.modules.reports.router import router as reports_router
-from app.modules.schedule.router import schedule_router
+from app.modules.schedule.router import (
+    recurring_templates_router,
+    schedule_router,
+    time_off_router,
+)
 from app.modules.trainers.router import router as trainers_router
 from app.modules.users.router import router as users_router
 from app.modules.visits.router import router as visits_router
@@ -65,6 +69,12 @@ v1.include_router(
     tags=["pt-sessions"],
 )
 v1.include_router(schedule_router, prefix="/trainer-slots", tags=["schedule"])
+v1.include_router(
+    recurring_templates_router,
+    prefix="/recurring-templates",
+    tags=["schedule"],
+)
+v1.include_router(time_off_router, prefix="/time-off", tags=["schedule"])
 v1.include_router(bookings_router, prefix="/bookings", tags=["bookings"])
 # Per-client bookings — mounted under /clients per BOOK-08 locked contract;
 # implementation lives in bookings/router.py (client_scoped_bookings_router)
