@@ -1,4 +1,4 @@
-"""Payroll repository — ORM writes + own-module reads for payroll tables (Phase 58 PAY-01..06).
+"""Payroll repository — ORM writes + own-module reads for payroll tables (Phase 58 PAY-01..07).
 
 CROSS-MODULE READ DISCIPLINE (D-58-19 / D-54-08 / Phase 49 D-49-03 precedent):
   - Use ``from sqlalchemy import text`` for cross-module table reads — NEVER import
@@ -11,7 +11,9 @@ OWN-MODULE WRITE DISCIPLINE (D-32-10 caller-owns-txn precedent):
   - ``insert_comp_config`` calls ``session.flush()`` to surface deferred FK/CHECK
     violations and assign server-side defaults (e.g. ``id``).  It does NOT call
     ``session.commit()`` — the service-layer orchestrator owns the commit (SVC001).
-  - ``resolve_active_comp_config`` is a pure read; no mutations.
+  - ``insert_accrual_on_conflict`` uses ON CONFLICT DO NOTHING RETURNING and does NOT
+    call ``session.commit()`` — the service-layer orchestrator owns the commit (SVC001).
+  - ``resolve_active_comp_config`` and ``select_accrual_for_update`` are pure reads.
 
 INVARIANTS:
   - ZERO INSERT/UPDATE/DELETE against pt_sessions, payments, or pt_packages tables.
@@ -25,10 +27,11 @@ from datetime import date
 from uuid import UUID
 
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.payroll.constants import PAYMENT_SUBJECT_KIND_PT_PACKAGE
-from app.modules.payroll.models import TrainerCompConfig
+from app.modules.payroll.models import TrainerCompConfig, TrainerPayrollAccrual
 
 
 async def fetch_trainer_session_revenue(
@@ -150,6 +153,92 @@ async def resolve_active_comp_config(
         )
         .order_by(TrainerCompConfig.effective_from.desc())
         .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def insert_accrual_on_conflict(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID,
+    period_start: date,
+    period_end: date,
+    sessions_count: int,
+    revenue_kopecks: int,
+    commission_pct_bps_snapshot: int | None,
+    session_fee_kopecks_snapshot: int | None,
+    comp_config_id_snapshot: UUID,
+    accrual_kopecks: int,
+) -> UUID | None:
+    """INSERT a TrainerPayrollAccrual row; return id on success or None on duplicate.
+
+    Uses ``INSERT ... ON CONFLICT (trainer_id, period_start, period_end)
+    WHERE clawback_of_accrual_id IS NULL DO NOTHING RETURNING id`` (D-58-06
+    DB-wins-the-race idempotency — NO SELECT-then-INSERT, no TOCTOU race).
+
+    The ``index_where`` predicate MUST match the partial UNIQUE constraint
+    ``uq_trainer_payroll_accruals_period_alive`` exactly:
+        WHERE clawback_of_accrual_id IS NULL
+    This ensures only live (non-clawback) accruals are checked for duplicates;
+    clawback rows (PAY-06) may coexist for the same period.
+
+    ``status`` defaults to 'pending' via the DB server-default; ``clawback_of_accrual_id``
+    and ``source_refund_payment_id`` remain NULL (regular accrual, not a clawback).
+
+    Does NOT call ``session.commit()`` — the service-layer orchestrator owns the
+    transactional moment (SVC001).
+
+    Returns:
+        UUID of the newly inserted row, or ``None`` when ON CONFLICT suppressed
+        the insert (the period already has a live accrual for this trainer).
+    """
+    stmt = (
+        pg_insert(TrainerPayrollAccrual)
+        .values(
+            trainer_id=trainer_id,
+            period_start=period_start,
+            period_end=period_end,
+            sessions_count=sessions_count,
+            revenue_kopecks=revenue_kopecks,
+            commission_pct_bps_snapshot=commission_pct_bps_snapshot,
+            session_fee_kopecks_snapshot=session_fee_kopecks_snapshot,
+            comp_config_id_snapshot=comp_config_id_snapshot,
+            accrual_kopecks=accrual_kopecks,
+            # status, accrued_at use DB server-defaults ('pending', now())
+            # clawback_of_accrual_id and source_refund_payment_id stay NULL
+        )
+        .on_conflict_do_nothing(
+            index_elements=["trainer_id", "period_start", "period_end"],
+            # MUST match partial UNIQUE uq_trainer_payroll_accruals_period_alive predicate
+            index_where=TrainerPayrollAccrual.clawback_of_accrual_id.is_(None),
+        )
+        .returning(TrainerPayrollAccrual.id)
+    )
+    result = await session.execute(stmt)
+    row = result.scalar_one_or_none()
+    return row  # UUID on insert, None when ON CONFLICT suppressed the row
+
+
+async def select_accrual_for_update(
+    session: AsyncSession,
+    accrual_id: UUID,
+) -> TrainerPayrollAccrual | None:
+    """SELECT a TrainerPayrollAccrual row WITH FOR UPDATE row-lock (D-58-08).
+
+    Used by the mark-paid path to prevent concurrent double-pay races:
+    the row lock is acquired before the status check, ensuring only one
+    concurrent transition from 'pending' → 'paid' can succeed.
+
+    Own-module ORM read — ``TrainerPayrollAccrual`` lives in this module;
+    no cross-module import concern.
+
+    Returns the row or ``None`` when the accrual_id does not exist.
+    """
+    stmt = (
+        select(TrainerPayrollAccrual)
+        .where(TrainerPayrollAccrual.id == accrual_id)
+        .with_for_update()
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
