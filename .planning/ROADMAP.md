@@ -153,7 +153,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 - [x] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06) (completed 2026-05-25)
 - [x] **Phase 59: Recurring Schedule + Time-Off** - Recurring slot patterns + ARQ cron generation + time-off blocks + conflict guard (REC-01..04) (completed 2026-05-25)
-- [ ] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04)
+- [x] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04) (completed 2026-05-25)
 - [ ] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01)
 
 ## Phase Details
@@ -231,7 +231,7 @@ Plans:
 - [x] 60-01-PLAN.md — Schemas + constants (TrainerUsageRow/Response, CSV_TRAINER_USAGE_HEADERS, TRAINER_REPORT_REVENUE_NOTE)
 - [x] 60-02-PLAN.md — Repository: raw-SQL CTE reader fetch_trainer_usage (session_agg + slot_agg + revenue_agg + payroll_agg)
 - [x] 60-03-PLAN.md — Service + Router: GET /trainers JSON + GET /trainers.csv (owner-only, reuses (VIEW, REPORTS) pair)
-- [ ] 60-04-PLAN.md — Integration tests + CI guards (PITFALL 6/10/11/12 goldens, CSV BOM/Cyrillic/formula-injection, RPT-04 clawback netting)
+- [x] 60-04-PLAN.md — Integration tests + CI guards (PITFALL 6/10/11/12 goldens, CSV BOM/Cyrillic/formula-injection, RPT-04 clawback netting)
 
 ### Phase 61: OpenAPI Handoff + Milestone Verification
 
@@ -255,7 +255,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 5/5 | Complete   | 2026-05-25 |
-| 60. Trainer-Usage Report | 3/4 | In Progress|  |
+| 60. Trainer-Usage Report | 4/4 | Complete   | 2026-05-25 |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
 ---
