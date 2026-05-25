@@ -1220,3 +1220,90 @@ def get_pt_package_activator() -> PtPackageActivator:
             "app/main.py:create_app() (HTTP-only single-wire — no ARQ entry path)."
         )
     return _pt_package_activator
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 58 D-58-20 — PayrollClawbackRecorder Protocol slot (v1.9 payroll).
+#
+# Seventeenth composition-root carve-out. PAY-06 wires the real implementation
+# (payroll.service.record_clawback_for_pt_package_refund) from
+# ``app.main.create_app()`` ONLY — HTTP-only single-wire (NOT from
+# ``app.workers.telegram_bot.main`` — the bot does not refund PT-packages;
+# mirrors D-32-14 / D-33-12 discipline for API-only slots).
+#
+# Defensive-raise accessor (mirrors get_payment_refunder at line ~415) —
+# a missing clawback recorder in the refund flow is a misconfiguration, not
+# an expected state. The slot is called by pt_packages.service.refund_pt_package
+# AFTER the pt_package_refunded audit emit and BEFORE session.commit()
+# (D-58-20 same-UoW contract — clawback commits atomically with the refund).
+#
+# Cross-module discipline: pt_packages.service imports ONLY this getter from
+# app.core.dependencies — NOT from app.modules.payroll.* (zero new
+# ignore_imports edges in .importlinter). The slot receives pt_package_trainer_id
+# from the caller so payroll never reads pt_packages directly (D-58-21
+# assigned-at-sale attribution).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PayrollClawbackRecorder(Protocol):
+    """Structural type for the payroll-clawback callable (Phase 58 D-58-20 / PAY-06).
+
+    Return type ``UUID | None``:
+      - UUID — id of the new negative clawback accrual row (inserted in the
+        caller's UoW; caller commits atomically with the refund).
+      - None — no clawback needed: either pt_package_trainer_id is None
+        (non-commissionable package; D-58-21 nullable-trainer fallback) or
+        there is no status='paid' accrual covering the refunded package's
+        revenue (no payroll impact).
+
+    Signature carries ``pt_package_trainer_id`` from the caller so payroll
+    NEVER reads ``pt_packages`` directly — assigned-at-sale attribution
+    per D-58-21. Payroll is unaware of the pt_packages ORM model.
+
+    The implementation (payroll.service.record_clawback_for_pt_package_refund)
+    MUST NOT call ``session.commit()`` — the caller (refund_pt_package) owns
+    the transaction (SVC001 / caller-owns-txn). The clawback row and audit
+    emit enrolled in ``session`` commit atomically with the refund (T-58-34).
+    """
+
+    async def __call__(
+        self,
+        session: AsyncSession,
+        *,
+        actor: CurrentUser,
+        refund_payment_id: UUID,
+        pt_package_id: UUID,
+        pt_package_trainer_id: UUID | None,
+    ) -> UUID | None: ...
+
+
+_payroll_clawback_recorder: PayrollClawbackRecorder | None = None
+
+
+def register_payroll_clawback_recorder(impl: PayrollClawbackRecorder) -> None:
+    """Composition-root setter (Phase 58 D-58-20).
+
+    Called from ``app.main.create_app`` ONLY (HTTP-only single-wire —
+    the bot does not refund PT-packages; no ARQ entry path). Idempotent:
+    re-registering replaces the slot (mirrors WR-05 reasoning; useful for
+    tests that inject the real implementation via the conftest override).
+    """
+    global _payroll_clawback_recorder
+    _payroll_clawback_recorder = impl
+
+
+def get_payroll_clawback_recorder() -> PayrollClawbackRecorder:
+    """Defensive accessor (Phase 58 D-58-20) — raises if slot not registered.
+
+    Mirrors ``get_payment_refunder`` defensive-raise pattern (line ~415);
+    a missing clawback recorder in the refund flow is a hard
+    misconfiguration, not a recoverable state (the slot MUST be registered
+    in ``create_app()`` alongside ``register_payment_refunder``).
+    """
+    if _payroll_clawback_recorder is None:
+        raise RuntimeError(
+            "PayrollClawbackRecorder slot not registered — register via "
+            "app.core.dependencies.register_payroll_clawback_recorder() in "
+            "app/main.py:create_app() (HTTP-only single-wire — no ARQ entry path)."
+        )
+    return _payroll_clawback_recorder
