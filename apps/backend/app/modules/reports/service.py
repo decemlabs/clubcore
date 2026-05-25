@@ -26,7 +26,7 @@ from app.core.audit import LOCKED_AUDIT_EVENTS
 from app.core.exceptions import ValidationAppError
 from app.core.pagination import PaginatedData
 from app.modules.reports import csv_export, repository
-from app.modules.reports.constants import GRAIN_MONTH
+from app.modules.reports.constants import GRAIN_MONTH, TRAINER_REPORT_REVENUE_NOTE
 from app.modules.reports.schemas import (
     AuditLogItem,
     AuditLogQuery,
@@ -37,6 +37,9 @@ from app.modules.reports.schemas import (
     RevenueBucketBySubjectKind,
     RevenueReportQuery,
     RevenueReportResponse,
+    TrainerUsageReportQuery,
+    TrainerUsageReportResponse,
+    TrainerUsageRow,
     VisitsDailyBucket,
     VisitsHourlyBucket,
     VisitsReportQuery,
@@ -398,6 +401,69 @@ async def visits_csv_rows(
     return [
         [d.date.isoformat(), d.count]
         for d in r.daily
+    ]
+
+
+async def get_trainer_usage_report(
+    session: AsyncSession,
+    query: TrainerUsageReportQuery,
+) -> TrainerUsageReportResponse:
+    """Trainer-usage aggregate for [from_date, to_date] MSK (RPT-01..04).
+
+    Thin orchestrator: validate date range -> fetch per-trainer rows ->
+    assemble TrainerUsageReportResponse with revenue_attribution_note from constants.
+
+    Read-only: NO session.commit(), NO session.flush().
+    """
+    _validate_date_range(query.from_date, query.to_date)
+    rows = await repository.fetch_trainer_usage(session, query.from_date, query.to_date)
+    return TrainerUsageReportResponse(
+        trainers=[TrainerUsageRow.model_validate(row) for row in rows],
+        from_date=query.from_date,
+        to_date=query.to_date,
+        revenue_attribution_note=TRAINER_REPORT_REVENUE_NOTE,
+    )
+
+
+async def trainer_usage_csv_rows(
+    session: AsyncSession,
+    query: TrainerUsageReportQuery,
+) -> list[list[object]]:
+    """Build trainer-usage CSV data rows by reusing get_trainer_usage_report (D-15).
+
+    Column order mirrors CSV_TRAINER_USAGE_HEADERS (D-60-11):
+      trainerNameSnapshot, sessionCount, cancelledSessionCount, totalHours,
+      uniqueClientCount, utilizationPct, revenueRubles, avgRevenuePerSessionRubles,
+      totalAccruedRubles, totalPaidRubles.
+
+    sanitize_csv_text applied ONLY to trainer_name_snapshot (free-text, T-60-08).
+    Numeric/money columns are NOT sanitized — a leading '-' on clawback accruals is a
+    legitimate signed number, not a formula trigger (csv_export.py:32-35).
+
+    utilization_pct = None -> empty CSV cell (NOT "None"/"NULL") (D-60-11).
+    avg_revenue_per_session = None -> empty CSV cell (D-60-11).
+
+    Read-only: NO session.commit(), NO session.flush().
+    """
+    r = await get_trainer_usage_report(session, query)
+    return [
+        [
+            csv_export.sanitize_csv_text(row.trainer_name_snapshot),
+            row.session_count,
+            row.cancelled_session_count,
+            f"{row.total_hours:.2f}",
+            row.unique_client_count,
+            "" if row.utilization_pct is None else f"{row.utilization_pct:.2f}",
+            csv_export.format_kopecks_as_rubles(row.revenue_kopecks),
+            (
+                ""
+                if row.avg_revenue_per_session is None
+                else csv_export.format_kopecks_as_rubles(row.avg_revenue_per_session)
+            ),
+            csv_export.format_kopecks_as_rubles(row.total_accrued_kopecks),
+            csv_export.format_kopecks_as_rubles(row.total_paid_kopecks),
+        ]
+        for row in r.trainers
     ]
 
 

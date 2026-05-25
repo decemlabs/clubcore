@@ -39,6 +39,7 @@ from app.modules.reports.constants import (
     CSV_AUDIT_LOG_HEADERS,
     CSV_CLIENTS_HEADERS,
     CSV_REVENUE_HEADERS,
+    CSV_TRAINER_USAGE_HEADERS,
     CSV_VISITS_HEADERS,
 )
 from app.modules.reports.schemas import (
@@ -48,6 +49,8 @@ from app.modules.reports.schemas import (
     ClientsReportResponse,
     RevenueReportQuery,
     RevenueReportResponse,
+    TrainerUsageReportQuery,
+    TrainerUsageReportResponse,
     VisitsReportQuery,
     VisitsReportResponse,
 )
@@ -210,6 +213,79 @@ async def get_visits_csv(
     """
     rows = await service.visits_csv_rows(session, query)
     return csv_export.make_csv_streaming_response(iter(rows), CSV_VISITS_HEADERS, "visits.csv")
+
+
+@router.get(
+    "/trainers",
+    response_model=ResponseEnvelope[TrainerUsageReportResponse],
+    summary="Trainer-usage report (owner-only; RPT-01..02, RPT-04)",
+    description=(
+        "Per-trainer aggregate for [fromDate, toDate] MSK: session counts, hours, "
+        "unique clients, utilization %, revenue, accrued vs paid compensation. "
+        "Revenue is attributed to the trainer assigned at PT-package sale time. "
+        "Range cap: 366 days (D-06); toDate<fromDate → 422; reception → 403."
+    ),
+    tags=["reports"],
+    responses={
+        403: {"description": "reception forbidden — (VIEW, REPORTS) ∈ OWNER_ONLY"},
+        422: {"description": "invalid period — toDate<fromDate or range>366 days"},
+    },
+)
+async def get_trainers_report(
+    query: Annotated[TrainerUsageReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[TrainerUsageReportResponse]:
+    """Per-trainer usage aggregate for the given period (RPT-01..02, RPT-04).
+
+    Returns TrainerUsageReportResponse with a list of TrainerUsageRow entries,
+    one per trainer who had at least one session in the period.
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    Range cap: 366 days (D-06); toDate<fromDate → 422.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_trainer_usage_report(session, query)
+    return envelope(result)
+
+
+@router.get(
+    "/trainers.csv",
+    response_class=StreamingResponse,
+    summary="Trainer-usage CSV download (owner-only; RPT-03)",
+    description=(
+        "Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV. "
+        "Same query params as GET /reports/trainers. "
+        "One row per trainer; money columns in period-decimal rubles; "
+        "None/NULL cells render as empty string. "
+        "Filename: trainer-usage-YYYY-MM-DD-YYYY-MM-DD.csv (EXP-01 precedent). "
+        "Owner-only; reception → 403."
+    ),
+    tags=["reports"],
+)
+async def get_trainers_csv(
+    query: Annotated[TrainerUsageReportQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV (RPT-03).
+
+    Same query params as GET /reports/trainers (EXP-01 precedent, SC#5).
+    One row per trainer; header row = CSV_TRAINER_USAGE_HEADERS.
+    Money columns are period-decimal rubles (D-13); None → empty cell (D-60-11).
+    Filename: trainer-usage-{from_date.isoformat()}-{to_date.isoformat()}.csv
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    Range cap: 366 days (D-06); toDate<fromDate → 422.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    filename = f"trainer-usage-{query.from_date.isoformat()}-{query.to_date.isoformat()}.csv"
+    rows = await service.trainer_usage_csv_rows(session, query)
+    return csv_export.make_csv_streaming_response(iter(rows), CSV_TRAINER_USAGE_HEADERS, filename)
 
 
 # ---------------------------------------------------------------------------
