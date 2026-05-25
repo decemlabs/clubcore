@@ -65,9 +65,13 @@ def test_worker_settings_cron_resolves_to_registered_function() -> None:
 
     Phase 51 (Plan 51-09 FISCAL-06 + REFUND-02) appended two crons:
     monitor_stale_fiscal_receipts (index 6) and poll_pending_refunds
-    (index 7). cron_jobs now has 8 entries total. Earlier indices preserved.
+    (index 7). cron_jobs now had 8 entries.
+
+    Phase 59 (Plan 59-05 REC-02) appended generate_recurring_slots
+    (index 8) — daily 07:00 MSK slot materialization cron. cron_jobs
+    now has 9 entries total. Earlier indices preserved.
     """
-    assert len(WorkerSettings.cron_jobs) == 8
+    assert len(WorkerSettings.cron_jobs) == 9
     cron_entry = WorkerSettings.cron_jobs[0]
     assert cron_entry.coroutine.__name__ == "expire_memberships"
     assert cron_entry.coroutine is expire_memberships, (
@@ -116,10 +120,13 @@ def test_worker_settings_functions_registered() -> None:
 
     Phase 52 (NOT-01..05) appended ``dispatch_payment_notification`` — the
     request-handler-driven cross-channel client + owner-alert dispatch task.
-    List now has 11 entries.
+    List had 11 entries.
+
+    Phase 59 (Plan 59-05 REC-02) appended ``generate_recurring_slots`` — the
+    daily slot materialization cron. List now has 12 entries.
     """
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 11
+    assert len(WorkerSettings.functions) == 12
 
 
 def test_worker_settings_redis_settings_resolved() -> None:

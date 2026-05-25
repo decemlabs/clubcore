@@ -103,9 +103,14 @@ from app.modules.online_payments.tasks import dispatch_payment_notification
 from app.modules.payments.models import (  # noqa: F401
     PaymentReceipt,  # Phase 45 D-45-20 — payment_receipts eager-import (REG-29-04)
 )
+from app.modules.schedule.models import (  # noqa: F401
+    RecurringSlotTemplate,  # Phase 59 REC-02 — recurring_slot_templates eager-import (REG-29-04)
+    TrainerTimeOff,  # Phase 59 REC-03 — trainer_time_off eager-import (REG-29-04)
+)
 from app.workers.scheduled.cleanup_password_reset_tokens import cleanup_password_reset_tokens
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
+from app.workers.scheduled.generate_recurring_slots import generate_recurring_slots
 from app.workers.scheduled.mark_no_show_bookings import mark_no_show_bookings
 from app.workers.scheduled.monitor_stale_fiscal_receipts import monitor_stale_fiscal_receipts
 from app.workers.scheduled.poll_pending_refunds import poll_pending_refunds
@@ -149,6 +154,10 @@ class WorkerSettings:
         # Phase 51 REFUND-04 / Plan 51-09 — every 30 min ЮKassa-side poll
         # for pending online_refunds older than 30 min.
         poll_pending_refunds,
+        # Phase 59 REC-02 — daily 07:00 MSK (container TZ=UTC → hour=4, minute=0)
+        # recurring slot materialization cron. Generates trainer_availability_slots
+        # from active recurring templates for the next RECURRING_SLOT_HORIZON_DAYS ahead.
+        generate_recurring_slots,
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -252,6 +261,21 @@ class WorkerSettings:
             poll_pending_refunds,
             minute={0, 30},
             hour=set(range(24)),
+            unique=True,
+            keep_result=60,
+        ),
+        # Phase 59 REC-02 — 07:00 Europe/Moscow daily (container TZ=UTC → hour=4,
+        # minute=0). Materializes concrete trainer_availability_slots from active
+        # recurring templates for the rolling RECURRING_SLOT_HORIZON_DAYS window
+        # (default 56 days). ON CONFLICT (trainer_id, start_time) DO NOTHING is
+        # the SQL-level idempotency gate (PITFALLS Pitfall 8); unique=True dedups
+        # concurrent ARQ ticks. Time slot is non-colliding: 04:00 UTC is clear of
+        # the 00:30 (cleanup_password_reset_tokens), 03:05-03:35 (memberships /
+        # notifs / pt_packages / reminders), and 20:10 (no-show) buckets.
+        cron(
+            generate_recurring_slots,
+            hour=4,
+            minute=0,
             unique=True,
             keep_result=60,
         ),
