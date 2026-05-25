@@ -209,7 +209,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 58. Payroll Foundations + Ledger | 2/5 | In Progress|  |
+| 58. Payroll Foundations + Ledger | 3/5 | In Progress|  |
 | 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
