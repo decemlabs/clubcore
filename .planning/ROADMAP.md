@@ -200,8 +200,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 59-01-PLAN.md — Infra bedrock: 4 audit events + RECURRING_SLOT_HORIZON_DAYS env + schedule constants (INFRA-15 pre-reg)
-- [ ] 59-02-PLAN.md — Alembic 0042: recurring_slot_templates + trainer_time_off + slot ALTER (nullable author + UNIQUE)
+- [x] 59-01-PLAN.md — Infra bedrock: 4 audit events + RECURRING_SLOT_HORIZON_DAYS env + schedule constants (INFRA-15 pre-reg)
+- [x] 59-02-PLAN.md — Alembic 0042: recurring_slot_templates + trainer_time_off + slot ALTER (nullable author + UNIQUE)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -250,7 +250,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
-| 59. Recurring Schedule + Time-Off | 0/5 | Planned     | - |
+| 59. Recurring Schedule + Time-Off | 2/5 | In Progress|  |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
