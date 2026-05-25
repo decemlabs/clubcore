@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -242,6 +242,55 @@ async def select_accrual_for_update(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def list_accruals_for_trainer(
+    session: AsyncSession,
+    trainer_id: UUID,
+    *,
+    page: int,
+    page_size: int,
+) -> list[TrainerPayrollAccrual]:
+    """Return a page of TrainerPayrollAccrual rows for *trainer_id*, ordered accrued_at DESC.
+
+    Includes ALL rows (regular + clawback) for the trainer — no clawback_of_accrual_id
+    filter applied (D-58-03 clawback visibility, PAY-05 / D-58-14).
+
+    LIMIT/OFFSET pagination using LIMIT :page_size OFFSET (page-1)*page_size.
+    ORDER BY accrued_at DESC hits ix_trainer_payroll_accruals_trainer_accrued
+    (trainer_id, accrued_at DESC) composite index.
+
+    Pure read — ZERO writes, no session.commit() (SVC001).
+    """
+    stmt = (
+        select(TrainerPayrollAccrual)
+        .where(TrainerPayrollAccrual.trainer_id == trainer_id)
+        .order_by(TrainerPayrollAccrual.accrued_at.desc())
+        .limit(page_size)
+        .offset((page - 1) * page_size)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def count_accruals(
+    session: AsyncSession,
+    trainer_id: UUID,
+) -> int:
+    """Return the total (unpaginated) count of accrual rows for *trainer_id*.
+
+    Used to populate the ``total`` field of the pagination envelope (PAY-05 / D-58-14).
+    Includes ALL rows (regular + clawback — no filter on clawback_of_accrual_id).
+
+    Pure read — ZERO writes, no session.commit() (SVC001).
+    """
+    stmt = (
+        select(func.count())
+        .select_from(TrainerPayrollAccrual)
+        .where(TrainerPayrollAccrual.trainer_id == trainer_id)
+    )
+    result = await session.execute(stmt)
+    return int(result.scalar_one())
 
 
 async def insert_comp_config(
