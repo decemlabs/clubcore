@@ -189,7 +189,13 @@ Plans:
   2. A daily ARQ cron (07:00 MSK, unique=True) materializes concrete trainer_availability_slots for the configured horizon (env RECURRING_SLOT_HORIZON_DAYS, default 56) idempotently — re-running produces zero new rows; slots inside active time-off windows are skipped; slot_published audit is emitted only on real inserts (not ON CONFLICT no-ops)
   3. Owner can create a time-off block; if any booked slot overlaps the window the endpoint returns 409 with affected slot IDs; with ?force=true the overlapping bookings are cancelled via the existing booking FSM and the client receives a cancellation DM; active slots (not booked) in the window are cancelled with cancel_reason='trainer_time_off'
   4. Owner and reception can list recurring patterns and time-off blocks for a trainer
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 59-01-PLAN.md — Infra bedrock: 4 audit events + RECURRING_SLOT_HORIZON_DAYS env + schedule constants (INFRA-15 pre-reg)
+- [ ] 59-02-PLAN.md — Alembic 0042: recurring_slot_templates + trainer_time_off + slot ALTER (nullable author + UNIQUE)
+- [ ] 59-03-PLAN.md — ORM models + DTOs + nullable-author widening of SlotResponse
+- [ ] 59-04-PLAN.md — Recurring-pattern CRUD + time-off 409/force-cascade/DM/active-cancel service + endpoints (REC-01/03/04)
+- [ ] 59-05-PLAN.md — DST-safe materialization cron + idempotency + time-off-skip + worker registration (REC-02)
 
 ### Phase 60: Trainer-Usage Report
 **Goal**: Owner can view a read-only trainer-usage report covering load, PT-utilization, revenue attribution, and payroll summary with CSV export
@@ -220,7 +226,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
-| 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
+| 59. Recurring Schedule + Time-Off | 0/5 | Planned     | - |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
