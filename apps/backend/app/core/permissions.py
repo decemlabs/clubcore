@@ -57,7 +57,7 @@ class Resource(StrEnum):
     AUDIT_LOG = "audit-log"  # NEW Phase 54 INFRA-42 — kebab on wire (multi-word, mirrors OWNER_AREA / SCHEDULE_SLOTS)
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (35 entries after Phase 54 INFRA-42).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (40 entries after Phase 58 INFRA-15).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -127,6 +127,17 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         # + Action.LIST (paginated listing); no new Action value.
         (Action.VIEW, Resource.AUDIT_LOG),
         (Action.LIST, Resource.AUDIT_LOG),
+        # v1.9 Phase 58 INFRA-15 / D-58-15 — Payroll + compensation write/run/refund
+        # pairs. Reception has zero payroll visibility beyond existing VIEW entries.
+        # Existing (VIEW, PAYROLL) and (VIEW, COMPENSATION) at lines 66-67 remain
+        # unchanged. D-58-15 Claude's Discretion: (EDIT, COMPENSATION) collapsed into
+        # (CREATE, COMPENSATION) — INSERT-only versioned model makes "edit" semantically
+        # identical to "create new version". Final count grows from 35 to 40.
+        (Action.CREATE, Resource.COMPENSATION),
+        (Action.CREATE, Resource.PAYROLL),
+        (Action.EDIT, Resource.PAYROLL),
+        (Action.REFUND, Resource.PAYROLL),
+        (Action.LIST, Resource.PAYROLL),
     }
 )
 

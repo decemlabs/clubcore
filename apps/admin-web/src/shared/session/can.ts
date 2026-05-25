@@ -64,6 +64,16 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   // Reuses 'view' (filterable read) + 'list' (paginated listing); no new action value.
   { action: 'view', resource: 'audit-log' },
   { action: 'list', resource: 'audit-log' },
+  // v1.9 (Phase 58 INFRA-15 / D-58-15 — Payroll + compensation write/run/refund pairs).
+  // Reception has zero payroll visibility beyond existing 'view' entries.
+  // Existing { action: 'view', resource: 'payroll' } and { action: 'view', resource: 'compensation' }
+  // at lines 15-16 remain unchanged. D-58-15 Claude's Discretion: 'edit'/'compensation'
+  // collapsed into 'create'/'compensation' — INSERT-only versioned model. Count grows 35 → 40.
+  { action: 'create', resource: 'compensation' },
+  { action: 'create', resource: 'payroll' },
+  { action: 'edit', resource: 'payroll' },
+  { action: 'refund', resource: 'payroll' },
+  { action: 'list', resource: 'payroll' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {
