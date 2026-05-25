@@ -169,7 +169,9 @@ def upgrade() -> None:
         ),
     )
     # Support efficient overlap queries in the time-off conflict service and the
-    # cron NOT EXISTS predicate (PITFALL 9): trainer + block_start btree.
+    # cron's per-trainer pre-fetch (list_active_time_off_for_trainers uses
+    # WHERE trainer_id IN (...) AND block_end > now — PITFALL 9 / Python-side
+    # filter): trainer + block_start btree.
     op.create_index(
         op.f("ix_trainer_time_off_trainer_id"),
         "trainer_time_off",

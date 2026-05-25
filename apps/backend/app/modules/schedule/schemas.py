@@ -168,7 +168,7 @@ class SlotListQuery(PageQuery):
 
 
 class RecurringSlotTemplateCreate(BackendSchemaBase):
-    """POST /api/v1/recurring-slot-templates body (REC-01 / D-59-02).
+    """POST /api/v1/recurring-templates body (REC-01 / D-59-02).
 
     Mirrors the CHECK constraints from migration 0042 at the Pydantic layer
     (T-59-06 double gate — DTO validates before the DB CHECK fires):

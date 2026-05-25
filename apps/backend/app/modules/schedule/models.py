@@ -281,7 +281,9 @@ class TrainerTimeOff(Base, UUIDPkMixin, TimestampMixin):
             "block_end > block_start",
             name="block_end_after_start",
         ),
-        # Overlap query support: trainer timeline scans in conflict service + cron NOT EXISTS
+        # Backs overlap queries in the conflict service + the cron's per-trainer
+        # pre-fetch (list_active_time_off_for_trainers: WHERE trainer_id IN (...)
+        # AND block_end > now; Python-side overlap filter — PITFALL 9 inverse).
         Index(
             "ix_trainer_time_off_trainer_id",
             "trainer_id",
