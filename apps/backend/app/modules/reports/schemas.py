@@ -48,6 +48,7 @@ from pydantic import Field
 
 from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
+from app.modules.reports.constants import TRAINER_REPORT_REVENUE_NOTE
 
 # ---------------------------------------------------------------------------
 # Revenue report DTOs (REV-01..05)
@@ -215,3 +216,62 @@ class AuditLogItem(ResponseData):
     resource_type: str  # wire: resourceType
     resource_id: UUID | None  # wire: resourceId
     payload: dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Trainer-usage report DTOs (Phase 60 RPT-01..04)
+# ---------------------------------------------------------------------------
+
+
+class TrainerUsageReportQuery(BackendSchemaBase):
+    """GET /api/v1/reports/trainers query parameters (RPT-01..04).
+
+    Wire: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
+    (alias_generator=to_camel maps from_date->fromDate, to_date->toDate)
+
+    Both fields are required — no defaults (period is always explicit per RPT-01).
+    BackendSchemaBase provides extra='forbid' + alias_generator=to_camel.
+    Do NOT use Field(alias=...) — incompatible with FastAPI Depends() for query params
+    (schemas.py L18-22).
+    """
+
+    from_date: date
+    to_date: date
+
+
+class TrainerUsageRow(ResponseData):
+    """Per-trainer aggregate row in the trainer-usage report (RPT-01..04).
+
+    Field order mirrors CSV_TRAINER_USAGE_HEADERS for diffability (D-60-11).
+    Money fields are integer kopecks (REV-05 / D-11).
+    utilization_pct is None when 0 active|booked slots in the period (D-60-06).
+    avg_revenue_per_session is None when session_count == 0.
+    total_accrued_kopecks is signed to net clawbacks automatically (D-58-03 / D-60-05).
+    trainer_name_snapshot: from trainers.full_name (NO is_active filter — PITFALL 11).
+    """
+
+    trainer_id: UUID  # wire: trainerId
+    trainer_name_snapshot: str  # wire: trainerNameSnapshot
+    session_count: int  # wire: sessionCount (non-cancelled pt_sessions)
+    cancelled_session_count: int  # wire: cancelledSessionCount
+    total_hours: float  # wire: totalHours; 0.0 when no booking-linked sessions (D-60-04)
+    unique_client_count: int  # wire: uniqueClientCount (COUNT DISTINCT pt_packages.client_id)
+    utilization_pct: float | None  # wire: utilizationPct; None = 0 active|booked slots (D-60-06)
+    revenue_kopecks: int  # wire: revenueKopecks; attributed via pt_packages.trainer_id (D-58-21)
+    avg_revenue_per_session: int | None  # wire: avgRevenuePerSession; None when session_count==0
+    total_accrued_kopecks: int  # wire: totalAccruedKopecks; signed (D-58-03 clawbacks net out)
+    total_paid_kopecks: int  # wire: totalPaidKopecks
+
+
+class TrainerUsageReportResponse(ResponseData):
+    """Trainer-usage report envelope (RPT-01..04).
+
+    Non-paginated: single gym has O(10) trainers; no page/pageSize (D-60-09).
+    revenue_attribution_note: sourced from constants.TRAINER_REPORT_REVENUE_NOTE
+    (D-60-07 single source of truth for the double-count disclosure wording).
+    """
+
+    trainers: list[TrainerUsageRow]
+    from_date: date
+    to_date: date
+    revenue_attribution_note: str = TRAINER_REPORT_REVENUE_NOTE
