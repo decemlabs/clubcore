@@ -159,17 +159,21 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 ## Phase Details
 
 ### Phase 58: Payroll Foundations + Ledger
+
 **Goal**: Owner can configure trainer compensation and record payroll accruals with full financial-correctness guarantees
 **Depends on**: Phase 57 (v1.8 shipped)
 **Requirements**: PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06
 **Success Criteria** (what must be TRUE):
+
   1. Owner can set a trainer's compensation config (commission_pct and/or session_fee_kopecks); a trainer with no config returns a clear 422 when a payroll run is attempted
   2. Owner can preview a payroll calculation for a trainer over a date range and see session_count, fixed_kopecks, commission_kopecks, and total_kopecks without any row being persisted
   3. Owner can record a payroll accrual (append-only row in trainer_payroll_accruals); a duplicate period attempt returns 409; the comp rate is snapshotted into the row at run time (not recomputed later)
   4. Owner can mark an accrual as paid (paid_at + paid_by_user_id set); a second mark-paid attempt returns 409 already_paid; no "unpay" operation exists
   5. Owner can list a trainer's accruals ordered by accrued_at DESC with paid/unpaid status visible; all 4 new LOCKED_AUDIT_EVENTS (trainer_comp_config_set, payroll_accrual_created, payroll_accrual_paid, payroll_clawback_recorded — original "6" was a pre-collapse over-estimate; reconciled 2026-05-25) and new OWNER_ONLY pairs (PAYROLL + COMPENSATION) are pre-registered before any callsite; three-way RBAC parity test (backend permissions.py + admin-web can.ts + registry.ts) is green; a PT-package refund that post-dates an accrual appends a negative clawback row in the same UoW
+
 **Plans**: 9 plans
 Plans:
+
 - [x] 58-01-PLAN.md — RBAC + audit bedrock pre-registration (INFRA-15)
 - [x] 58-02-PLAN.md — payroll module scaffold + import-linter registration + constants
 - [x] 58-03-PLAN.md — Alembic 0041 (trainer_comp_configs + trainer_payroll_accruals)
@@ -181,42 +185,62 @@ Plans:
 - [x] 58-09-PLAN.md — PAY-06 clawback Protocol slot + refund hook + SC#5 reconciliation
 
 ### Phase 59: Recurring Schedule + Time-Off
+
 **Goal**: Owner can define weekly recurring availability patterns for trainers and block time-off windows; concrete slots are materialized daily by an ARQ cron
 **Depends on**: Phase 58
 **Requirements**: REC-01, REC-02, REC-03, REC-04
 **Success Criteria** (what must be TRUE):
+
   1. Owner can create a recurring slot pattern (day_of_week, start_time, end_time, valid_from, optional valid_until); patterns have a UNIQUE constraint on (trainer_id, day_of_week, start_time, valid_from) preventing duplicates
   2. A daily ARQ cron (07:00 MSK, unique=True) materializes concrete trainer_availability_slots for the configured horizon (env RECURRING_SLOT_HORIZON_DAYS, default 56) idempotently — re-running produces zero new rows; slots inside active time-off windows are skipped; slot_published audit is emitted only on real inserts (not ON CONFLICT no-ops)
   3. Owner can create a time-off block; if any booked slot overlaps the window the endpoint returns 409 with affected slot IDs; with ?force=true the overlapping bookings are cancelled via the existing booking FSM and the client receives a cancellation DM; active slots (not booked) in the window are cancelled with cancel_reason='trainer_time_off'
   4. Owner and reception can list recurring patterns and time-off blocks for a trainer
+
 **Plans**: 5 plans
 Plans:
+**Wave 1**
+
 - [ ] 59-01-PLAN.md — Infra bedrock: 4 audit events + RECURRING_SLOT_HORIZON_DAYS env + schedule constants (INFRA-15 pre-reg)
 - [ ] 59-02-PLAN.md — Alembic 0042: recurring_slot_templates + trainer_time_off + slot ALTER (nullable author + UNIQUE)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 59-03-PLAN.md — ORM models + DTOs + nullable-author widening of SlotResponse
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 59-04-PLAN.md — Recurring-pattern CRUD + time-off 409/force-cascade/DM/active-cancel service + endpoints (REC-01/03/04)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 59-05-PLAN.md — DST-safe materialization cron + idempotency + time-off-skip + worker registration (REC-02)
 
 ### Phase 60: Trainer-Usage Report
+
 **Goal**: Owner can view a read-only trainer-usage report covering load, PT-utilization, revenue attribution, and payroll summary with CSV export
 **Depends on**: Phase 59 (schedule data available; Phase 58 payroll data available for RPT-04)
 **Requirements**: RPT-01, RPT-02, RPT-03, RPT-04
 **Success Criteria** (what must be TRUE):
+
   1. Owner can GET /api/v1/reports/trainers with a from/to date range and receive per-trainer rows ordered by session_count DESC; each row shows session_count, cancelled_session_count, total_hours, unique_client_count, utilization_pct (NULL when 0 slots); reception receives 403
   2. Each trainer row includes revenue attribution (sum PT-package sale revenue for sessions where the trainer participated, avg_revenue_per_session); the known double-count limitation for multi-trainer packages is documented in the response
   3. Each trainer row includes total_accrued_kopecks and total_paid_kopecks from trainer_payroll_accruals for the same period
   4. Owner can GET /api/v1/reports/trainers.csv and receive a UTF-8 BOM RFC-4180 excel-dialect CSV that renders Cyrillic correctly in Excel; the report module has zero new import-linter ignores and makes no writes to any business table (D-54-07/08 discipline maintained)
+
 **Plans**: TBD
 
 ### Phase 61: OpenAPI Handoff + Milestone Verification
+
 **Goal**: All v1.9 API surfaces are captured in a byte-stable OpenAPI contract artifact; RBAC parity is verified; milestone is gate-checked
 **Depends on**: Phase 60
 **Requirements**: HND-01
 **Success Criteria** (what must be TRUE):
+
   1. apps/backend/openapi.json is regenerated byte-stably containing all v1.9 paths (payroll comp-config, payroll accruals, recurring slot templates, time-off blocks, trainer report + CSV); CI git diff --exit-code passes on both openapi.json and schema.d.ts
   2. packages/api-client/src/schema.contract.test.ts gains _v19Checks AssertNonNever forward-guards for all new v1.9 typed paths with a runtime toHaveLength(N) assertion locking the count
   3. Three-way RBAC parity (Resource.TRAINER_PAYROLL / Resource.COMPENSATION OWNER_ONLY entries in backend permissions.py + admin-web can.ts + registry.ts) passes the existing parity test at the milestone gate; reception 403 is verified on every new owner-only route via the route-introspection guard
   4. A milestone verification script or operator runbook confirms the end-to-end payroll + schedule + report surface against a live docker-compose stack; operator runbook authored at .planning/handoff/v1.9-trainers-runbook.md
+
 **Plans**: TBD
 
 ## Progress
