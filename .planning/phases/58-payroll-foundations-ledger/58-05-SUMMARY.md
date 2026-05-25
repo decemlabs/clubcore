@@ -162,6 +162,18 @@ None — all data flows are fully wired. The payroll router endpoints are functi
 
 Both endpoints mitigated per T-58-17 disposition: `require_permission(Action.CREATE, Resource.COMPENSATION)` and `require_permission(Action.VIEW, Resource.COMPENSATION)` both backed by `OWNER_ONLY` frozenset (pre-registered Plan 58-01). Reception 403 verified by integration tests.
 
-## Self-Check
+## Self-Check: PASSED
 
-Checking created files exist and commits are present.
+All 6 created files exist:
+- FOUND: apps/backend/app/modules/payroll/repository.py
+- FOUND: apps/backend/app/modules/payroll/service.py
+- FOUND: apps/backend/app/modules/payroll/router.py
+- FOUND: apps/backend/tests/integration/payroll/__init__.py
+- FOUND: apps/backend/tests/integration/payroll/conftest.py
+- FOUND: apps/backend/tests/integration/payroll/test_payroll_comp_config.py
+
+All 4 task commits present:
+- c05c6ce: feat(58-05): create payroll repository
+- d66a5f8: feat(58-05): create payroll service
+- 91b2fb9: feat(58-05): create payroll router
+- ff35e3b: feat(58-05): add payroll test infrastructure + 9 PAY-01 integration tests
