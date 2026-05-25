@@ -1,36 +1,36 @@
-"""Payroll service — orchestrator for comp-config + accrual lifecycle (Phase 58 PAY-01..06).
+"""Payroll service — orchestrator for comp-config + accrual lifecycle (Phase 58 PAY-01..07).
 
 Each exported function owns the full unit-of-work for its operation:
   - ``set_comp_config`` — INSERT new versioned comp config + audit emit + commit (PAY-01).
   - ``get_active_comp_config`` — read-only resolver; raises 404 if no config exists (PAY-01).
   - ``compute_accrual_components`` — pure computation helper (PAY-02 / PAY-03); ZERO writes.
   - ``preview_accrual`` — read-only preview endpoint handler (PAY-02 / D-58-12); ZERO writes.
+  - ``run_payroll_period`` — INSERT accrual with snapshotted numbers + audit + commit (PAY-03).
+  - ``mark_accrual_paid`` — single pending→paid transition + audit + commit (PAY-04).
 
-Subsequent plans append ``run_payroll_period`` (PAY-03),
-``mark_accrual_paid`` (PAY-04), ``list_accruals`` (PAY-05), and
+Subsequent plans append ``list_accruals`` (PAY-05) and
 ``record_clawback_for_pt_package_refund`` (PAY-06) to this module.
 
 Commit discipline (SVC001):
-  ``set_comp_config`` is the orchestrator for PAY-01 writes — it calls
-  ``session.commit()``.  Repository helpers flush but do NOT commit.  Later
-  plans follow the same pattern: each service function that mutates state
-  owns the final ``session.commit()``.
+  Each service function that mutates state owns the final ``session.commit()``.
+  Repository helpers flush but do NOT commit.
   ``compute_accrual_components`` and ``preview_accrual`` are read-only — they
   call ZERO session.commit() / session.add() / audit.emit().
 
 Exception conventions:
   ``CompConfigMissingError`` — raised on two paths with different HTTP status codes:
     - GET /payroll/trainer-configs/{trainer_id}: router passes through → 404 (PAY-01 D-58-11).
-    - GET /payroll/preview: router remaps to 422 at the endpoint layer (PAY-02 D-58-07).
-      The same exception class is reused; the router decides the HTTP status code by
-      catching CompConfigMissingError and raising HTTPException(422) before FastAPI's
-      centralised AppError handler can emit 404. This keeps one error class (D-58-09).
+    - GET /payroll/preview + POST /accruals: router remaps to 422 at the endpoint layer
+      (PAY-02 D-58-07 / PAY-03). Same exception class; router decides the HTTP status code.
+      This keeps one error class (D-58-09).
+  ``PayrollPeriodAlreadyRunError`` — raised when ON CONFLICT returns None (409, D-58-06).
+  ``AlreadyPaidError`` — raised on second mark-paid attempt (409, D-58-08).
 """
 
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -38,10 +38,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.dependencies import CurrentUser
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.payroll import repository
-from app.modules.payroll.models import TrainerCompConfig
-from app.modules.payroll.schemas import PayrollPreviewResponse, TrainerCompConfigRequest
+from app.modules.payroll.constants import ERROR_ALREADY_PAID, ERROR_PAYROLL_PERIOD_ALREADY_RUN
+from app.modules.payroll.models import TrainerCompConfig, TrainerPayrollAccrual
+from app.modules.payroll.schemas import (
+    PayrollAccrualCreate,
+    PayrollPreviewResponse,
+    TrainerCompConfigRequest,
+)
 
 _MSK = ZoneInfo("Europe/Moscow")
 
@@ -52,14 +57,46 @@ class CompConfigMissingError(NotFoundError):
     GET /payroll/trainer-configs/{trainer_id} raises this when
     ``resolve_active_comp_config`` returns None → 404.
 
-    Plan 58-07 (PAY-03): ``run_payroll_period`` needs a 422 variant of this
-    error for the accrual path (D-58-07 / D-58-09). At that point either a
-    new ``CompConfigMissingFor422Error(ValidationAppError)`` subclass will be
-    added, or the router will remap the 404 to 422 for that endpoint.
-    For now, ship the 404 form used by the PAY-01 GET path.
+    POST /accruals: router remaps to 422 via router-layer remap (D-58-07 / D-58-09),
+    same as the preview endpoint. One error class; router decides the HTTP status code.
     """
 
     code = "comp_config_missing"
+    status_code = 404
+
+
+class PayrollPeriodAlreadyRunError(ConflictError):
+    """Accrual INSERT was suppressed by ON CONFLICT DO NOTHING (D-58-06 / PAY-03).
+
+    Raised by ``run_payroll_period`` when ``repository.insert_accrual_on_conflict``
+    returns ``None`` — the partial UNIQUE index
+    ``uq_trainer_payroll_accruals_period_alive`` already has a live row for this
+    (trainer_id, period_start, period_end) triple. Router maps to HTTP 409.
+    """
+
+    code = ERROR_PAYROLL_PERIOD_ALREADY_RUN  # "payroll_period_already_run"
+    status_code = 409
+
+
+class AlreadyPaidError(ConflictError):
+    """Accrual is already in the 'paid' state (D-58-08 / PAY-04).
+
+    Raised by ``mark_accrual_paid`` when ``select_accrual_for_update`` returns a
+    row whose ``status == 'paid'``. Router maps to HTTP 409. There is no unpay path.
+    """
+
+    code = ERROR_ALREADY_PAID  # "already_paid"
+    status_code = 409
+
+
+class AccrualNotFoundError(NotFoundError):
+    """No TrainerPayrollAccrual row exists for the given accrual_id (PAY-04 D-58-08).
+
+    Raised by ``mark_accrual_paid`` when ``select_accrual_for_update`` returns None.
+    Router passes through → 404 not_found.
+    """
+
+    code = "not_found"
     status_code = 404
 
 
@@ -119,8 +156,6 @@ async def get_active_comp_config(
     If *as_of_date* is None, defaults to today in Europe/Moscow (project TZ discipline).
     Raises ``CompConfigMissingError`` (404) when no config exists.
     """
-    from datetime import datetime
-
     resolved_date = as_of_date or datetime.now(_MSK).date()
     config = await repository.resolve_active_comp_config(session, trainer_id, resolved_date)
     if config is None:
@@ -212,3 +247,146 @@ async def preview_accrual(
         commission_kopecks=commission_kopecks,
         total_kopecks=total_kopecks,
     )
+
+
+async def run_payroll_period(
+    session: AsyncSession,
+    actor: CurrentUser,
+    body: PayrollAccrualCreate,
+) -> TrainerPayrollAccrual:
+    """INSERT an append-only accrual row snapshotting rate/config at run time (PAY-03 / D-58-03).
+
+    Atomic unit-of-work (orchestrator owns commit) — mirror of D-33-11 sequence:
+      1. ``compute_accrual_components`` — resolve config + compute numbers (raises
+         ``CompConfigMissingError`` → 422 if no/both-NULL config; router remaps).
+      2. ``repository.insert_accrual_on_conflict`` — INSERT ON CONFLICT DO NOTHING
+         RETURNING id (D-58-06 DB-wins-the-race). If None → raises
+         ``PayrollPeriodAlreadyRunError`` (409 payroll_period_already_run).
+      3. ``session.get`` — fetch the inserted row by RETURNING id to build the response.
+      4. ``audit.emit("payroll_accrual_created", ...)`` — BEFORE commit (D-58-17).
+         Literal strings required by INFRA-11 AST gate.
+      5. ``session.commit()`` — SVC001 gate; atomically commits accrual row + audit row.
+
+    Snapshot discipline: snapshot columns come from ``resolved_config`` returned by
+    ``compute_accrual_components`` — they are NEVER recomputed. Editing the comp config
+    after this call does NOT change these frozen columns (D-58-03 / T-58-28).
+
+    No unpay / void / reverse function — this is an append-only ledger.
+    """
+    # Step 1 — resolve config + compute amounts (PITFALL 1: reuse shared helper, no drift).
+    session_count, _fixed_kopecks, _commission_kopecks, total_kopecks, resolved_config = (
+        await compute_accrual_components(
+            session, body.trainer_id, body.period_start, body.period_end
+        )
+    )
+    total_kopecks_signed: int = total_kopecks  # positive for regular accruals (D-58-03)
+
+    # Step 2 — INSERT ON CONFLICT DO NOTHING RETURNING (T-58-27 / D-58-06).
+    # revenue_kopecks is the commission_revenue_kopecks used in the computation.
+    # We re-fetch it from resolved values already computed by compute_accrual_components.
+    # commission_kopecks = ceil(revenue * bps / 10000); back-solve revenue for snapshot:
+    # revenue_kopecks is NOT returned by compute_accrual_components but we can re-fetch it
+    # cheaply (one extra call is safe — it's a read-only cross-module query).
+    revenue_kopecks, _sc = await repository.fetch_trainer_session_revenue(
+        session, body.trainer_id, body.period_start, body.period_end
+    )
+
+    accrual_id = await repository.insert_accrual_on_conflict(
+        session,
+        trainer_id=body.trainer_id,
+        period_start=body.period_start,
+        period_end=body.period_end,
+        sessions_count=session_count,
+        revenue_kopecks=revenue_kopecks,
+        commission_pct_bps_snapshot=resolved_config.commission_pct_bps,
+        session_fee_kopecks_snapshot=resolved_config.session_fee_kopecks,
+        comp_config_id_snapshot=resolved_config.id,
+        accrual_kopecks=total_kopecks_signed,
+    )
+    if accrual_id is None:
+        # ON CONFLICT suppressed the insert → duplicate period for this trainer.
+        raise PayrollPeriodAlreadyRunError("payroll_period_already_run")
+
+    # Step 3 — fetch the inserted row (RETURNING only gave us the id).
+    accrual = await session.get(TrainerPayrollAccrual, accrual_id)
+    if accrual is None:
+        # Should not happen — just committed, but be defensive.
+        raise AccrualNotFoundError("not_found")  # pragma: no cover
+
+    # Step 4 — audit emit BEFORE commit (D-58-17 atomic chain).
+    # Literal strings "payroll_accrual_created" and "payroll_accrual" required by
+    # INFRA-11 AST gate (tests/unit/test_audit_taxonomy.py). UUIDs + dates str()-cast
+    # (58-05 lesson — audit payload must be JSON-serializable primitives).
+    await audit.emit(
+        session,
+        "payroll_accrual_created",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="payroll_accrual",  # LITERAL
+        resource_id=accrual.id,
+        accrual_id=str(accrual.id),
+        trainer_id=str(body.trainer_id),
+        period_start=str(body.period_start),
+        period_end=str(body.period_end),
+        sessions_count=session_count,
+        revenue_kopecks=revenue_kopecks,
+        accrual_kopecks=total_kopecks_signed,
+        comp_config_id_snapshot=str(resolved_config.id),
+    )
+
+    # Step 5 — commit (SVC001).
+    await session.commit()
+    return accrual
+
+
+async def mark_accrual_paid(
+    session: AsyncSession,
+    actor: CurrentUser,
+    accrual_id: UUID,
+) -> TrainerPayrollAccrual:
+    """Transition accrual status from 'pending' → 'paid' (PAY-04 / D-58-08).
+
+    Atomic unit-of-work with row-lock (D-58-08 SELECT FOR UPDATE prevents concurrent
+    double-pay races — T-58-30). Sequence:
+      1. ``select_accrual_for_update`` — row-lock the accrual; None → 404.
+      2. Status guard: if ``status == 'paid'`` → raise ``AlreadyPaidError`` (409).
+      3. Mutate: ``status = 'paid'``, ``paid_at = now(UTC)``,
+         ``paid_by_user_id = actor.id``. Flush to assign server-side timestamp.
+      4. ``audit.emit("payroll_accrual_paid", ...)`` — BEFORE commit (D-58-17).
+      5. ``session.commit()`` — SVC001 gate.
+
+    NO unpay function — the 'pending' → 'paid' transition is one-way (D-58-08).
+    Clawback rows (PAY-06) are separate INSERTs with negative accrual_kopecks.
+    """
+    # Step 1 — acquire FOR UPDATE row lock.
+    accrual = await repository.select_accrual_for_update(session, accrual_id)
+    if accrual is None:
+        raise AccrualNotFoundError("not_found")
+
+    # Step 2 — status guard.
+    if accrual.status == "paid":
+        raise AlreadyPaidError("already_paid")
+
+    # Step 3 — single allowed post-INSERT mutation (T-58-28).
+    accrual.status = "paid"
+    accrual.paid_at = datetime.now(_MSK)
+    accrual.paid_by_user_id = actor.id
+    await session.flush()  # surfaces constraint violations before audit emit
+
+    # Step 4 — audit emit BEFORE commit (D-58-17).
+    # Literal strings "payroll_accrual_paid" and "payroll_accrual" required by
+    # INFRA-11 AST gate. UUIDs str()-cast (58-05 lesson).
+    await audit.emit(
+        session,
+        "payroll_accrual_paid",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="payroll_accrual",  # LITERAL
+        resource_id=accrual.id,
+        accrual_id=str(accrual.id),
+        trainer_id=str(accrual.trainer_id),
+        paid_by_user_id=str(actor.id),
+        accrual_kopecks=accrual.accrual_kopecks,
+    )
+
+    # Step 5 — commit (SVC001).
+    await session.commit()
+    return accrual

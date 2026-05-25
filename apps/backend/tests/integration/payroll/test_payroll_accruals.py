@@ -174,9 +174,9 @@ async def test_post_accrual_happy_path(
     assert r.status_code == 201, r.text
     data = r.json()["data"]
 
-    # Status and temporal fields
+    # Status and temporal fields (camelCase wire format via BackendSchemaBase)
     assert data["status"] == "pending"
-    assert data["accrued_at"] is not None or data.get("accruedAt") is not None
+    assert data.get("accruedAt") is not None
 
     # Snapshot fields match the config
     assert data.get("commissionPctBpsSnapshot") == config.commission_pct_bps

@@ -1,26 +1,29 @@
-"""Payroll router — owner-only endpoints under /api/v1/payroll/ (Phase 58 PAY-01..06).
+"""Payroll router — owner-only endpoints under /api/v1/payroll/ (Phase 58 PAY-01..07).
 
-Endpoint surface (Plans 58-05..08):
+Endpoint surface (Plans 58-05..07):
   Plan 58-05 (PAY-01):
     PUT  /trainer-configs/{trainer_id}  — Set/replace comp config (INSERT-only versioned)
     GET  /trainer-configs/{trainer_id}  — Get active comp config (latest effective_from <= today)
   Plan 58-06 (PAY-02):
     GET  /preview                       — Read-only payroll preview (zero-persistence)
+  Plan 58-07 (PAY-03/04):
+    POST /accruals                      — Record accrual (append-only, snapshotted rate)
+    POST /accruals/{id}/mark-paid       — Transition pending→paid (single allowed mutation)
 
 Later plans append:
-  Plan 58-07 (PAY-03): POST /accruals
-  Plan 58-08 (PAY-04): POST /accruals/{id}/mark-paid
   Plan 58-09 (PAY-05): GET /accruals
 
 Permission mapping:
-  PUT  trainer-configs: (CREATE, COMPENSATION) ∈ OWNER_ONLY (pre-registered Plan 58-01)
-  GET  trainer-configs: (VIEW,   COMPENSATION) ∈ OWNER_ONLY (pre-registered Phase A)
-  GET  /preview:        (LIST, PAYROLL)         ∈ OWNER_ONLY (pre-registered Plan 58-01)
-  Reception receives 403 on all three (T-58-17 / T-58-22 mitigation).
+  PUT  trainer-configs:         (CREATE, COMPENSATION) ∈ OWNER_ONLY (pre-registered Plan 58-01)
+  GET  trainer-configs:         (VIEW,   COMPENSATION) ∈ OWNER_ONLY (pre-registered Phase A)
+  GET  /preview:                (LIST, PAYROLL)         ∈ OWNER_ONLY (pre-registered Plan 58-01)
+  POST /accruals:               (CREATE, PAYROLL)       ∈ OWNER_ONLY (pre-registered Plan 58-01)
+  POST /accruals/{id}/mark-paid: (EDIT, PAYROLL)        ∈ OWNER_ONLY (pre-registered Plan 58-01)
+  Reception receives 403 on all (T-58-17 / T-58-22 / T-58-26 mitigation).
 
 CompConfigMissingError routing:
   GET /trainer-configs/{trainer_id} → 404 (GET path keeps its NotFoundError mapping).
-  GET /preview                      → router-layer remap to 422 ValidationAppError
+  GET /preview + POST /accruals     → router-layer remap to 422 ValidationAppError
     (D-58-07 / D-58-09 preview/accrual paths require 422 comp_config_missing).
 
 Router is NOT mounted here — Plan 58-10 (or the last plan in the wave) adds
@@ -44,11 +47,16 @@ from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.payroll import service
 from app.modules.payroll.schemas import (
+    PayrollAccrualCreate,
+    PayrollAccrualResponse,
     PayrollPreviewResponse,
     TrainerCompConfigRequest,
     TrainerCompConfigResponse,
 )
-from app.modules.payroll.service import CompConfigMissingError
+from app.modules.payroll.service import (
+    CompConfigMissingError,
+    PayrollPeriodAlreadyRunError,
+)
 
 router = APIRouter()
 
@@ -154,3 +162,74 @@ async def preview_payroll(
         # _CompConfigMissing422Error keeps the same "comp_config_missing" code at HTTP 422.
         raise _CompConfigMissing422Error(exc.message) from exc
     return envelope(result)
+
+
+@router.post(
+    "/accruals",
+    status_code=201,
+    response_model=ResponseEnvelope[PayrollAccrualResponse],
+    summary=(
+        "Record payroll accrual with run-time-snapshotted rate (append-only;"
+        " owner-only PAY-03 / D-58-03)"
+    ),
+)
+async def create_accrual(
+    body: PayrollAccrualCreate,
+    actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.CREATE, Resource.PAYROLL))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PayrollAccrualResponse]:
+    """INSERT an append-only accrual row with snapshotted rate/config (PAY-03 / D-58-03).
+
+    Resolution: uses ``service.compute_accrual_components`` as the single source of truth
+    (same numbers as GET /preview; prevents recompute drift — PITFALL 1 / T-58-23).
+    DB-wins-the-race idempotency: INSERT ON CONFLICT DO NOTHING RETURNING; duplicate
+    period returns 409 ``payroll_period_already_run`` (T-58-27 / D-58-06).
+
+    Owner-only: ``(CREATE, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).
+    Reception receives 403 (T-58-26 mitigate).
+
+    Router-layer 422 remap for CompConfigMissingError (same as preview; D-58-07 / D-58-09).
+    PayrollPeriodAlreadyRunError propagates through AppError handler → 409.
+    """
+    try:
+        accrual = await service.run_payroll_period(session, actor, body)
+    except CompConfigMissingError as exc:
+        # Router-layer remap: accrual path needs 422, not 404 (D-58-07 / D-58-09).
+        raise _CompConfigMissing422Error(exc.message) from exc
+    except PayrollPeriodAlreadyRunError:
+        raise  # AppError handler maps to 409 payroll_period_already_run
+    return envelope(PayrollAccrualResponse.model_validate(accrual, from_attributes=True))
+
+
+@router.post(
+    "/accruals/{accrual_id}/mark-paid",
+    status_code=200,
+    response_model=ResponseEnvelope[PayrollAccrualResponse],
+    summary=(
+        "Mark payroll accrual as paid (pending→paid single transition;"
+        " owner-only PAY-04 / D-58-08)"
+    ),
+)
+async def mark_accrual_paid(
+    accrual_id: UUID,
+    actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.EDIT, Resource.PAYROLL))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PayrollAccrualResponse]:
+    """Transition accrual status from 'pending' → 'paid' (PAY-04 / D-58-08).
+
+    Uses SELECT FOR UPDATE row-lock before status check to prevent concurrent
+    double-pay races (T-58-30). Second attempt → 409 ``already_paid``.
+    No unpay path — the 'paid' status is terminal.
+
+    Owner-only: ``(EDIT, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).
+    Reception receives 403 (T-58-26 mitigate).
+
+    ``AlreadyPaidError`` propagates through AppError handler → 409.
+    ``AccrualNotFoundError`` (NotFoundError) propagates → 404.
+    """
+    accrual = await service.mark_accrual_paid(session, actor, accrual_id)
+    return envelope(PayrollAccrualResponse.model_validate(accrual, from_attributes=True))
