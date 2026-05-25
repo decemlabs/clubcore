@@ -28,10 +28,10 @@ Requirements for milestone v1.9. Each maps to a roadmap phase.
 
 ### Trainer Report
 
-- [ ] **RPT-01**: Owner видит read-only отчёт-нагрузку по тренерам за период (session_count, cancelled_session_count, total_hours, unique_client_count, utilization_pct — NULL при 0 слотов), упорядоченный `session_count DESC`; reception 403
-- [ ] **RPT-02**: Отчёт показывает revenue-атрибуцию на тренера (sum PT-package sale, avg_revenue_per_session) — атрибуция по участию тренера в пакете (known limitation: пакет с >1 тренером даёт revenue double-count на total-уровне)
-- [ ] **RPT-03**: Owner выгружает trainer-report в CSV (UTF-8 BOM, RFC-4180 excel dialect — дисциплина v1.8)
-- [ ] **RPT-04**: Отчёт дополнительно показывает `total_accrued_kopecks` / `total_paid_kopecks` за период (из `trainer_payroll_accruals`)
+- [x] **RPT-01**: Owner видит read-only отчёт-нагрузку по тренерам за период (session_count, cancelled_session_count, total_hours, unique_client_count, utilization_pct — NULL при 0 слотов), упорядоченный `session_count DESC`; reception 403
+- [x] **RPT-02**: Отчёт показывает revenue-атрибуцию на тренера (sum PT-package sale, avg_revenue_per_session) — атрибуция по участию тренера в пакете (known limitation: пакет с >1 тренером даёт revenue double-count на total-уровне)
+- [x] **RPT-03**: Owner выгружает trainer-report в CSV (UTF-8 BOM, RFC-4180 excel dialect — дисциплина v1.8)
+- [x] **RPT-04**: Отчёт дополнительно показывает `total_accrued_kopecks` / `total_paid_kopecks` за период (из `trainer_payroll_accruals`)
 
 ### API Handoff
 
@@ -90,10 +90,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REC-02 | Phase 59 | Pending |
 | REC-03 | Phase 59 | Pending |
 | REC-04 | Phase 59 | Pending |
-| RPT-01 | Phase 60 | Pending |
-| RPT-02 | Phase 60 | Pending |
-| RPT-03 | Phase 60 | Pending |
-| RPT-04 | Phase 60 | Pending |
+| RPT-01 | Phase 60 | Complete |
+| RPT-02 | Phase 60 | Complete |
+| RPT-03 | Phase 60 | Complete |
+| RPT-04 | Phase 60 | Complete |
 | HND-01 | Phase 61 | Pending |
 
 **Coverage:**
