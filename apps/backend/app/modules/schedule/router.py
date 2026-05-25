@@ -483,8 +483,6 @@ async def create_time_off(
     Error surface:
       - 409 time_off_booked_conflict  (booked slots overlap and force=False)
     """
-    from fastapi.responses import JSONResponse
-
     incoming_body = await request.body()
     incoming_hash = body_sha256(incoming_body)
 
@@ -516,15 +514,35 @@ async def create_time_off(
             conflicting_slot_ids=[UUID(s) for s in raw_slot_ids],
             conflicting_booking_ids=[UUID(s) for s in raw_booking_ids],
         )
-        return JSONResponse(
-            status_code=409,
-            content={
-                "code": exc.code,
-                "message": exc.message,
-                "fields": exc.fields,
-                "data": conflict_detail.model_dump(mode="json", by_alias=True),
-            },
+        conflict_body = {
+            "code": exc.code,
+            "message": exc.message,
+            "fields": exc.fields,
+            "data": conflict_detail.model_dump(mode="json", by_alias=True),
+        }
+        body_bytes = json.dumps(conflict_body, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
         )
+        # Persist a replayable 409 envelope so a client retry of the same
+        # Idempotency-Key replays the 409 instead of hitting the __in_flight__
+        # sentinel and receiving a spurious 409 idempotency_in_flight (D-38-14 /
+        # Pitfall-14 — the in-flight placeholder is never replaced otherwise,
+        # wedging the key for the full TTL even though no mutation occurred).
+        envelope_json = json.dumps(
+            {
+                "status_code": 409,
+                "body_hash": incoming_hash,
+                "body_b64": base64.b64encode(body_bytes).decode("ascii"),
+            },
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        await redis.set(
+            f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
+            envelope_json,
+            ex=IDEMPOTENCY_TTL_SECONDS,
+        )
+        return Response(content=body_bytes, status_code=409, media_type="application/json")
 
     response_envelope = envelope(time_off)
     body_bytes = json.dumps(
