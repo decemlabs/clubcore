@@ -524,7 +524,7 @@ async def create_time_off(
                 "code": exc.code,
                 "message": exc.message,
                 "fields": exc.fields,
-                "data": conflict_detail.model_dump(mode="json"),
+                "data": conflict_detail.model_dump(mode="json", by_alias=True),
             },
         )
 
