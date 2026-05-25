@@ -19,7 +19,7 @@ instead of the memberships one.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 import pytest_asyncio
@@ -211,6 +211,7 @@ async def make_accrual(
         session_fee_kopecks_snapshot: int | None = None,
         clawback_of_accrual_id: UUID | None = None,
         source_refund_payment_id: UUID | None = None,
+        accrued_at: datetime | None = None,
     ) -> TrainerPayrollAccrual:
         accrual = TrainerPayrollAccrual(
             trainer_id=trainer_id,
@@ -226,6 +227,8 @@ async def make_accrual(
             clawback_of_accrual_id=clawback_of_accrual_id,
             source_refund_payment_id=source_refund_payment_id,
         )
+        if accrued_at is not None:
+            accrual.accrued_at = accrued_at
         db_session.add(accrual)
         await db_session.commit()
         await db_session.refresh(accrual)
