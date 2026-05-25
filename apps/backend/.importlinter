@@ -29,6 +29,16 @@ modules =
     app.modules.pt_packages
     app.modules.pt_sessions
     app.modules.users
+    app.modules.payroll
+    # Phase 58 INFRA-15 / D-58-18 — payroll module registered preemptively
+    # (INFRA-15 discipline, mirrors Phases 54 D-54-09 / 47 INFRA-40 / 51).
+    # Cross-module reads (pt_sessions / pt_packages / payments) go via raw
+    # SQL text() SELECTs in payroll/repository.py (D-58-19 / D-54-08 lineage),
+    # so ZERO new ignore_imports edges are needed.
+    # Cross-module write (clawback into payroll from pt_packages.service)
+    # goes via the PayrollClawbackRecorder Protocol slot in app.core.dependencies
+    # (D-58-20), so the pt_packages → payroll import remains forbidden as
+    # intended (mirror Phase 32 D-32-14 PaymentRefunder pattern).
     app.modules.reports
     # Phase 54 INFRA-41 / D-54-09 — reports module registered preemptively
     # (INFRA-15 discipline, mirrors Phases 47/51). Read-only aggregator reads
