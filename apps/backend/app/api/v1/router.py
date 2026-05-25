@@ -20,6 +20,7 @@ from app.modules.memberships.router import (
 )
 from app.modules.online_payments.router import router as online_payments_router
 from app.modules.payments.router import router as payments_router
+from app.modules.payroll.router import router as payroll_router
 from app.modules.pt_packages.router import (
     plans_router as pt_package_plans_router,
 )
@@ -50,6 +51,7 @@ v1.include_router(
     tags=["online-payments"],
 )
 v1.include_router(payments_router, prefix="/payments", tags=["payments"])
+v1.include_router(payroll_router, prefix="/payroll", tags=["payroll"])
 v1.include_router(
     pt_package_plans_router,
     prefix="/pt-package-plans",
