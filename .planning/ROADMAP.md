@@ -209,7 +209,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 59-04-PLAN.md — Recurring-pattern CRUD + time-off 409/force-cascade/DM/active-cancel service + endpoints (REC-01/03/04)
+- [x] 59-04-PLAN.md — Recurring-pattern CRUD + time-off 409/force-cascade/DM/active-cancel service + endpoints (REC-01/03/04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -250,7 +250,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
-| 59. Recurring Schedule + Time-Off | 3/5 | In Progress|  |
+| 59. Recurring Schedule + Time-Off | 4/5 | In Progress|  |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
 
