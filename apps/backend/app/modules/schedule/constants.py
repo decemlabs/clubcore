@@ -37,7 +37,21 @@ SLOT_STATUS_TRANSITIONS: Mapping[str, frozenset[str]] = MappingProxyType(
 # to v1.8 reports milestone alongside .ics export.
 SLOT_BUFFER_MINUTES = 10
 
+# Phase 59 REC-03 / D-59-06 — cancel_reason literal used when a trainer time-off
+# block drives a slot/booking cancellation. Shared by:
+#   - the active-slot cancel leg (cancel_reason='trainer_time_off' on status 'active')
+#   - the force-cascade booking UPDATE (cancel_reason='trainer_time_off' on 'confirmed' booking)
+# Both legs use this constant so tests and service code share a single literal source.
+TIME_OFF_CANCEL_REASON = "trainer_time_off"
+
+# Phase 59 REC-03 / D-59-06 — snake_case error_code for the 409 response raised
+# when a time-off block overlaps a confirmed booking AND ?force=true is not set.
+# Shared between service.py raise site and router.py / test assertions.
+TIME_OFF_BOOKED_CONFLICT_CODE = "time_off_booked_conflict"
+
 __all__ = [
     "SLOT_BUFFER_MINUTES",
     "SLOT_STATUS_TRANSITIONS",
+    "TIME_OFF_BOOKED_CONFLICT_CODE",
+    "TIME_OFF_CANCEL_REASON",
 ]

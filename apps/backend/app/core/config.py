@@ -102,6 +102,13 @@ class Settings(BaseSettings):
     gym_hours_start: time = time(7, 0)
     gym_hours_end: time = time(23, 0)
 
+    # Phase 59 addition (D-59-04 / REC-02): rolling materialization horizon for
+    # the generate_recurring_slots ARQ cron. Controls how far ahead the cron
+    # materialises concrete trainer_availability_slots rows from recurring templates.
+    # Default 56 days (~8 weeks). Override via env var RECURRING_SLOT_HORIZON_DAYS.
+    # Read via get_settings().recurring_slot_horizon_days inside the cron service helper.
+    recurring_slot_horizon_days: int = 56
+
     # Phase 43 addition (D-43-14): frontend base URL for owner-managed
     # invitation links (?include_invite_link=true escape hatch + email body).
     # Default points at the admin-web dev server; production overrides via .env.
