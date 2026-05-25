@@ -13,7 +13,7 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_thirty_five_entries() -> None:
+def test_owner_only_has_exactly_forty_entries() -> None:
     # Mirrors apps/admin-web/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
@@ -22,9 +22,13 @@ def test_owner_only_has_exactly_thirty_five_entries() -> None:
     #              + 4 v1.6 Phase 41 INFRA-37 / D-41-21 USERS write pairs
     #                (CREATE / UPDATE / DELETE / LIST).
     #              + 2 v1.8 Phase 54 INFRA-42 AUDIT_LOG read pairs (VIEW / LIST).
+    #              + 5 v1.9 Phase 58 INFRA-15 / D-58-15 payroll/compensation write
+    #                pairs: (CREATE, COMPENSATION) + PAYROLL (CREATE / EDIT / REFUND /
+    #                LIST). (EDIT, COMPENSATION) collapsed into (CREATE, COMPENSATION)
+    #                per D-58-15 Claude's Discretion (INSERT-only versioned model).
     # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
     # this assertion is the structural-only drift tripwire.
-    assert len(OWNER_ONLY) == 35
+    assert len(OWNER_ONLY) == 40
 
 
 def test_role_value_set() -> None:
@@ -173,6 +177,17 @@ def test_specific_owner_only_membership() -> None:
         #  API is a paginated listing plus filterable reads → VIEW + LIST).
         (Action.VIEW, Resource.AUDIT_LOG),
         (Action.LIST, Resource.AUDIT_LOG),
+        # Phase 58 INFRA-15 / D-58-15 - v1.9 payroll + compensation owner-only writes
+        # (reception holds ZERO payroll visibility beyond the pre-existing VIEW pairs
+        #  at lines above; (EDIT, COMPENSATION) collapsed into (CREATE, COMPENSATION)
+        #  per D-58-15 Claude's Discretion — INSERT-only versioned comp-config model.
+        #  PAYROLL gets CREATE (record accrual) / EDIT (mark-paid) / REFUND (clawback
+        #  hook authorization) / LIST (paginated accrual listing)).
+        (Action.CREATE, Resource.COMPENSATION),
+        (Action.CREATE, Resource.PAYROLL),
+        (Action.EDIT, Resource.PAYROLL),
+        (Action.REFUND, Resource.PAYROLL),
+        (Action.LIST, Resource.PAYROLL),
     })
     assert expected == OWNER_ONLY
 
