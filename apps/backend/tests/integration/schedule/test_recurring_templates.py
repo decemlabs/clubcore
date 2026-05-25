@@ -26,7 +26,6 @@ from app.modules.auth.models import User
 from app.modules.schedule.models import RecurringSlotTemplate
 from app.modules.trainers.models import Trainer
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

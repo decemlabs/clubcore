@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -31,13 +30,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_models import AuditLog
 from app.modules.auth.models import User
 from app.modules.bookings import service as bookings_service
-from app.modules.bookings.models import Booking
-from app.modules.bookings.schemas import BookingCreateRequest, BookingStatus
+from app.modules.bookings.schemas import BookingCreateRequest
 from app.modules.schedule import service as schedule_service
 from app.modules.schedule.models import TrainerAvailabilitySlot, TrainerTimeOff
 from app.modules.schedule.schemas import TimeOffCreate
 from app.modules.trainers.models import Trainer
-
 
 # ---------------------------------------------------------------------------
 # Local DB-direct factories (mirror test_slot_cancel_cascade.py style)
@@ -486,7 +483,6 @@ async def test_delete_time_off_emits_cancelled_and_does_not_resurrect_slots(
     csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
 
     # Create time-off via HTTP (cancels the overlapping active slot).
-    now = datetime.now(UTC)
     create_r = await authed_client_owner.post(
         "/api/v1/time-off",
         json={

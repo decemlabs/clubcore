@@ -47,7 +47,11 @@ from app.modules.schedule.constants import (
     TIME_OFF_BOOKED_CONFLICT_CODE,
     TIME_OFF_CANCEL_REASON,
 )
-from app.modules.schedule.models import RecurringSlotTemplate, TrainerAvailabilitySlot, TrainerTimeOff
+from app.modules.schedule.models import (
+    RecurringSlotTemplate,
+    TrainerAvailabilitySlot,
+    TrainerTimeOff,
+)
 from app.modules.schedule.schemas import (
     RecurringSlotTemplateCreate,
     RecurringSlotTemplateResponse,
@@ -856,7 +860,7 @@ async def create_time_off(
          PATTERNS.md §5 — grimp-opaque). Never raises (fire-and-forget).
     """
     # 1. Find overlapping active + booked slots for the trainer.
-    from sqlalchemy import and_, select
+    from sqlalchemy import select
 
     overlap_stmt = select(
         TrainerAvailabilitySlot.id,
@@ -878,7 +882,6 @@ async def create_time_off(
     # 2. Without force + booked overlaps → 409 with conflict detail.
     if booked_slot_ids and not force:
         # Gather paired confirmed booking_ids for the conflict report.
-        from app.modules.schedule.schemas import TimeOffConflictDetail  # local import for clarity
 
         booking_ids_stmt = sa.text(
             """

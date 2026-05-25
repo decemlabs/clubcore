@@ -37,7 +37,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.pagination import PaginatedData
-from app.modules.schedule.models import RecurringSlotTemplate, TrainerAvailabilitySlot, TrainerTimeOff
+from app.modules.schedule.models import (
+    RecurringSlotTemplate,
+    TrainerAvailabilitySlot,
+    TrainerTimeOff,
+)
 from app.modules.schedule.schemas import (
     SlotListQuery,
     resolve_default_from_time,

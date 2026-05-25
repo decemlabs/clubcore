@@ -31,9 +31,7 @@ import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Query
-
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,8 +58,8 @@ from app.modules.schedule.schemas import (
     SlotCreateRequest,
     SlotListQuery,
     SlotResponse,
-    TimeOffCreate,
     TimeOffConflictDetail,
+    TimeOffCreate,
     TimeOffResponse,
 )
 
@@ -508,7 +506,7 @@ async def create_time_off(
     except service.TimeOffBookedConflictError as exc:
         # Map typed conflict to 409 with TimeOffConflictDetail body.
         # exc.fields is dict[str, object] | None per AppError signature.
-        # The service serialises UUID strings into "conflicting_slot_ids" / "conflicting_booking_ids".
+        # Service serialises UUIDs into "conflicting_slot_ids" / "conflicting_booking_ids".
         from typing import cast as _cast
 
         exc_fields: dict[str, object] = exc.fields or {}
