@@ -151,7 +151,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 **Milestone Goal:** Закрыть последний неполный бизнес-домен — довести Trainers с catalog-only до ✅: настраиваемый payroll-ledger с записываемыми начислениями, расширение расписания (recurring-слоты + отпуска/блоки), и read-only отчёт по тренерам. Backend-only; `apps/admin-web` не трогаем.
 
-- [x] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06) (completed 2026-05-25)
+- [ ] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06)
 - [ ] **Phase 59: Recurring Schedule + Time-Off** - Recurring slot patterns + ARQ cron generation + time-off blocks + conflict guard (REC-01..04)
 - [ ] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04)
 - [ ] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01)
