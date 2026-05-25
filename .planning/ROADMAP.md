@@ -168,7 +168,17 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
   3. Owner can record a payroll accrual (append-only row in trainer_payroll_accruals); a duplicate period attempt returns 409; the comp rate is snapshotted into the row at run time (not recomputed later)
   4. Owner can mark an accrual as paid (paid_at + paid_by_user_id set); a second mark-paid attempt returns 409 already_paid; no "unpay" operation exists
   5. Owner can list a trainer's accruals ordered by accrued_at DESC with paid/unpaid status visible; all 6 new LOCKED_AUDIT_EVENTS and new OWNER_ONLY pairs (PAYROLL + COMPENSATION) are pre-registered before any callsite; three-way RBAC parity test (backend permissions.py + admin-web can.ts + registry.ts) is green; a PT-package refund that post-dates an accrual appends a negative clawback row in the same UoW
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+- [x] 58-01-PLAN.md — RBAC + audit bedrock pre-registration (INFRA-15)
+- [x] 58-02-PLAN.md — payroll module scaffold + import-linter registration + constants
+- [x] 58-03-PLAN.md — Alembic 0041 (trainer_comp_configs + trainer_payroll_accruals)
+- [x] 58-04-PLAN.md — ORM models + Pydantic schemas
+- [x] 58-05-PLAN.md — comp-config service/repo/router + PAY-01 tests
+- [ ] 58-06-PLAN.md — PAY-02 read-only preview + shared compute helper
+- [ ] 58-07-PLAN.md — PAY-03 record accrual + PAY-04 mark-paid
+- [ ] 58-08-PLAN.md — PAY-05 paginated accrual listing
+- [ ] 58-09-PLAN.md — PAY-06 clawback Protocol slot + refund hook + SC#5 reconciliation
 
 ### Phase 59: Recurring Schedule + Time-Off
 **Goal**: Owner can define weekly recurring availability patterns for trainers and block time-off windows; concrete slots are materialized daily by an ARQ cron
@@ -209,7 +219,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 58. Payroll Foundations + Ledger | 5/5 | Complete   | 2026-05-25 |
+| 58. Payroll Foundations + Ledger | 5/9 | In progress | - |
 | 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
