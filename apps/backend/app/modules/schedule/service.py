@@ -1299,7 +1299,7 @@ async def _generate_recurring_slots(  # noqa: SVC001 caller-owns-txn
         {row["trainer_id"] for row in candidate_rows}  # type: ignore[misc]
     )
     active_time_offs = await repository.list_active_time_off_for_trainers(
-        session, trainer_ids_in_batch
+        session, trainer_ids_in_batch, now
     )
 
     def _overlaps_any_time_off(

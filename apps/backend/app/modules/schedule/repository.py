@@ -510,8 +510,17 @@ async def list_active_recurring_templates(
 async def list_active_time_off_for_trainers(
     session: AsyncSession,
     trainer_ids: list[UUID],
+    now: datetime,
 ) -> list[TrainerTimeOff]:
-    """Return all TrainerTimeOff blocks for the given trainers.
+    """Return TrainerTimeOff blocks for the given trainers whose block_end > now.
+
+    The ``WHERE block_end > :now`` predicate makes the function name truthful
+    ("active" = not yet past) and bounds the fetch to forward-relevant blocks
+    so the table does not accumulate unbounded historical rows in memory as it
+    grows (WR-05). The downstream Python overlap filter
+    (block_start < row_end AND block_end > row_start) remains correct for all
+    returned rows because past blocks (block_end <= now) cannot overlap future
+    cron candidates (start_utc > now by construction in _generate_recurring_slots).
 
     Used by the cron helper to pre-filter candidate slots in Python before
     the bulk INSERT, avoiding complex SQL sub-selects that are tricky with
@@ -520,7 +529,8 @@ async def list_active_time_off_for_trainers(
     if not trainer_ids:
         return []
     stmt: Select[tuple[TrainerTimeOff]] = select(TrainerTimeOff).where(
-        TrainerTimeOff.trainer_id.in_(trainer_ids)
+        TrainerTimeOff.trainer_id.in_(trainer_ids),
+        TrainerTimeOff.block_end > now,
     )
     rows = (await session.scalars(stmt)).all()
     return list(rows)
