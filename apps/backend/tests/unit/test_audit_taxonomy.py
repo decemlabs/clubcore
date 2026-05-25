@@ -28,6 +28,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import LOCKED_AUDIT_EVENTS, AuditEventNotLockedError, emit
+from app.core.audit_payloads import AUDIT_PAYLOAD_SCHEMAS
 
 # parents[0]=unit, [1]=tests, [2]=backend, [3]=apps, [4]=repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -366,3 +367,33 @@ async def test_bogus_v16_audit_event_is_rejected() -> None:
     # Confirm the session was never touched — the guard must fire BEFORE any
     # session.add / commit / flush call.
     session.add.assert_not_called()
+
+
+def test_phase59_locked_pairs_have_registered_payload_schemas() -> None:
+    """WR-01 (Phase 59): every Phase-59 locked pair MUST have a registered Pydantic
+    payload schema in AUDIT_PAYLOAD_SCHEMAS with extra='forbid'.
+
+    Without a registered schema, audit.emit() skips the payload validation branch
+    entirely (schema = AUDIT_PAYLOAD_SCHEMAS.get(pair) → None), so typo'd or
+    drifting payload keys land silently in JSONB. This test closes that gap for
+    the four Phase-59 recurring-schedule + time-off events.
+    """
+    phase59_pairs = [
+        ("recurring_slot_template_created", "schedule_slot"),
+        ("recurring_slot_template_cancelled", "schedule_slot"),
+        ("trainer_time_off_created", "trainer"),
+        ("trainer_time_off_cancelled", "trainer"),
+    ]
+    missing_from_locked: list[str] = []
+    missing_schema: list[str] = []
+    for pair in phase59_pairs:
+        if pair not in LOCKED_AUDIT_EVENTS:
+            missing_from_locked.append(str(pair))
+        if pair not in AUDIT_PAYLOAD_SCHEMAS:
+            missing_schema.append(str(pair))
+    assert not missing_from_locked, (
+        f"Phase 59 pairs missing from LOCKED_AUDIT_EVENTS: {missing_from_locked}"
+    )
+    assert not missing_schema, (
+        f"Phase 59 pairs missing from AUDIT_PAYLOAD_SCHEMAS (WR-01): {missing_schema}"
+    )

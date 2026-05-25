@@ -1019,6 +1019,11 @@ async def create_time_off(
     await session.flush()
 
     # 6. audit.emit trainer_time_off_created — LITERAL, resource_type="trainer".
+    # Include cascade counts for forensic auditability (WR-02 / D-59-09):
+    # cancelled_slot_count = active slots cancelled + booked slots force-cancelled.
+    # cancelled_booking_count = number of confirmed bookings cascade-cancelled.
+    _cancelled_slot_count = len(active_slot_ids) + len(cascaded_booking_ids)
+    _cancelled_booking_count = len(cascaded_booking_ids)
     await audit.emit(
         session,
         "trainer_time_off_created",  # LITERAL
@@ -1030,6 +1035,9 @@ async def create_time_off(
         block_start=time_off.block_start.isoformat(),
         block_end=time_off.block_end.isoformat(),
         reason=time_off.reason,
+        force_cascade=force,
+        cancelled_slot_count=_cancelled_slot_count,
+        cancelled_booking_count=_cancelled_booking_count,
     )
 
     # 7. Single commit covers ALL slot/booking updates + audits + time-off row (SVC001).

@@ -1137,6 +1137,77 @@ class PayrollClawbackRecordedPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# v1.9 Recurring-schedule + time-off lifecycle (Phase 59 REC-01..04 / D-59-09)
+# ---------------------------------------------------------------------------
+
+
+class RecurringSlotTemplateCreatedPayload(BaseModel):
+    """Payload schema for ("recurring_slot_template_created", "schedule_slot") — REC-01.
+
+    Emitted by create_recurring_template on successful INSERT.
+    UUIDs are stringified at the callsite (D-38-17 / Pitfall 13) and coerced
+    back to UUID by Pydantic v2 model_validate. start_time/end_time are str
+    representations of datetime.time (HH:MM:SS).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: UUID
+    trainer_id: UUID
+    day_of_week: int
+    start_time: str  # str(datetime.time) at callsite
+    end_time: str    # str(datetime.time) at callsite
+
+
+class RecurringSlotTemplateCancelledPayload(BaseModel):
+    """Payload schema for ("recurring_slot_template_cancelled", "schedule_slot") — REC-01.
+
+    Emitted by deactivate_recurring_template when is_active is flipped to False.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: UUID
+    trainer_id: UUID
+
+
+class TrainerTimeOffCreatedPayload(BaseModel):
+    """Payload schema for ("trainer_time_off_created", "trainer") — REC-03.
+
+    Emitted by create_time_off after INSERT + optional cascade.
+    block_start/block_end are ISO-8601 datetime strings with timezone offset
+    (dt.isoformat() at the callsite per D-38-17 / Pitfall 13).
+    force_cascade, cancelled_slot_count, cancelled_booking_count capture the
+    cascade scope so the audit trail records how many slots/bookings the
+    time-off block affected (WR-02 / D-59-09 canonical shape).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    time_off_id: UUID
+    trainer_id: UUID
+    block_start: str   # isoformat() at callsite
+    block_end: str     # isoformat() at callsite
+    reason: str | None
+    force_cascade: bool
+    cancelled_slot_count: int
+    cancelled_booking_count: int
+
+
+class TrainerTimeOffCancelledPayload(BaseModel):
+    """Payload schema for ("trainer_time_off_cancelled", "trainer") — REC-03.
+
+    Emitted by delete_time_off when the time-off block is hard-deleted.
+    Forward-only: does not resurrect cancelled slots.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    time_off_id: UUID
+    trainer_id: UUID
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -1220,4 +1291,10 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("payroll_accrual_created", "payroll_accrual"): PayrollAccrualCreatedPayload,
     ("payroll_accrual_paid", "payroll_accrual"): PayrollAccrualPaidPayload,
     ("payroll_clawback_recorded", "payroll_accrual"): PayrollClawbackRecordedPayload,
+    # v1.9 (Phase 59 lock — INFRA-15 / D-59-09; emitted in Phase 59 service body)
+    # Recurring-schedule + time-off lifecycle (REC-01..04):
+    ("recurring_slot_template_created", "schedule_slot"): RecurringSlotTemplateCreatedPayload,
+    ("recurring_slot_template_cancelled", "schedule_slot"): RecurringSlotTemplateCancelledPayload,
+    ("trainer_time_off_created", "trainer"): TrainerTimeOffCreatedPayload,
+    ("trainer_time_off_cancelled", "trainer"): TrainerTimeOffCancelledPayload,
 }

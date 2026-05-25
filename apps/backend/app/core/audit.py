@@ -228,7 +228,12 @@ The frozenset size grows 53 → 58.
   - trainer_time_off_created            {time_off_id, trainer_id, block_start, block_end,
                                          reason, force_cascade, cancelled_slot_count,
                                          cancelled_booking_count}
-                                        # 'trainer' — emitted after INSERT + optional cascade
+                                        # 'trainer' — emitted after INSERT + optional cascade;
+                                        # force_cascade=True/False captures whether ?force was
+                                        # set; cancelled_slot_count = active + booked slots
+                                        # cancelled; cancelled_booking_count = bookings cascade-
+                                        # cancelled. These three fields agree with the Pydantic
+                                        # TrainerTimeOffCreatedPayload schema (WR-02 / D-59-09).
   - trainer_time_off_cancelled          {time_off_id, trainer_id}
                                         # 'trainer' — emitted on time-off block deletion
 
