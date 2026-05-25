@@ -358,6 +358,9 @@ async def publish_slot(
 
     # 7. Audit emit — SlotPublishedPayload extra='forbid' (5 keys; UUIDs str,
     # datetimes isoformat per D-38-17 / Pitfall 13).
+    # Phase 59 D-59-05: created_by_user_id is now UUID | None (0042 nullable
+    # ALTER); guard against None so the widened SlotPublishedPayload receives
+    # None (not the string "None") when a cron-generated slot has no author.
     await audit.emit(
         session,
         "slot_published",  # LITERAL — INFRA-11 AST gate
@@ -368,7 +371,9 @@ async def publish_slot(
         trainer_id=str(slot.trainer_id),
         start_time=slot.start_time.isoformat(),
         end_time=slot.end_time.isoformat(),
-        created_by_user_id=str(slot.created_by_user_id),
+        created_by_user_id=(
+            str(slot.created_by_user_id) if slot.created_by_user_id is not None else None
+        ),
     )
 
     # 8. Commit (SVC001 gate).

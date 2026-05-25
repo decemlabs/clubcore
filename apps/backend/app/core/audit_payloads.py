@@ -348,6 +348,14 @@ class SlotPublishedPayload(BaseModel):
     `start_time` / `end_time` are ISO-8601 datetime strings with timezone
     offset (Europe/Moscow per project i18n convention; serialiser uses
     `dt.isoformat()` at the emit callsite per P13).
+
+    Phase 59 D-59-05 / T-59-09: ``created_by_user_id`` is now ``UUID | None``
+    with a default of ``None``.  Cron-generated recurring slots (Plan 05) have
+    no human author and emit this field as NULL; the human publish_slot path
+    continues to populate it with the actor's UUID.  Mirrors the additive
+    widening of ``BookingCreatedPayload.created_by_user_id`` (Phase 40 D-40-05).
+    ``model_config = ConfigDict(extra="forbid")`` is intentionally unchanged —
+    only the field annotation grows (additive model-body widening pattern).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -356,7 +364,7 @@ class SlotPublishedPayload(BaseModel):
     trainer_id: UUID
     start_time: str
     end_time: str
-    created_by_user_id: UUID
+    created_by_user_id: UUID | None = None
 
 
 class SlotCancelledPayload(BaseModel):
