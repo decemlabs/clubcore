@@ -85,6 +85,16 @@ external = ["SVC"]
 # characters cannot move, so silence RUF001/RUF002 for this file and
 # RUF100 for the per-line noqa tripwires that ruff treats as no-ops today.
 "app/modules/memberships/notifications.py" = ["RUF001", "RUF002", "RUF003", "RUF100"]
+# Phase 60 RPT-04 (plan 60-04): trainer-usage integration tests use Cyrillic
+# trainer names (RUF001/RUF002/RUF003 — ambiguous Cyrillic letters in Russian
+# proper nouns used as test seed data; intentional test fixture design) and
+# blocking subprocess.run for PITFALL 10 / lint-imports ship-gate assertions
+# (ASYNC221: blocking call in async test; S603/S607: subprocess with list argv
+# from trusted test constants — acceptable security trade-off in test context).
+"tests/integration/reports/test_reports_trainers.py" = [
+    "RUF001", "RUF002", "RUF003",
+    "ASYNC221", "S603", "S607",
+]
 
 [format]
 quote-style = "double"
