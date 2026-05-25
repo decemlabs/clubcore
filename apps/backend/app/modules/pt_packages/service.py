@@ -54,6 +54,7 @@ from app.core.dependencies import (
     get_email_dispatcher,
     get_payment_recorder,
     get_payment_refunder,
+    get_payroll_clawback_recorder,  # Phase 58 D-58-20 — cross-module via Protocol slot (no payroll import)
     resolve_trainer_by_id,
 )
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
@@ -1161,6 +1162,22 @@ async def refund_pt_package(
         client_id=str(pt_package.client_id),
         refund_payment_id=str(refund_payment.id),
         reason=data.reason,
+    )
+
+    # 6b. Payroll clawback hook (D-58-20 / PAY-06) — inside the same UoW.
+    # Called AFTER pt_package_refunded audit emit and BEFORE session.commit()
+    # so the clawback row + its audit row commit atomically with the refund
+    # (T-58-34 same-UoW atomicity). Cross-module discipline: this call goes
+    # through the PayrollClawbackRecorder Protocol slot in app.core.dependencies
+    # — pt_packages.service NEVER imports app.modules.payroll.* (zero new
+    # ignore_imports edges). pt_package.trainer_id is passed by the caller
+    # (assigned-at-sale attribution per D-58-21); payroll reads no pt_packages.
+    await get_payroll_clawback_recorder()(
+        session,
+        actor=actor,
+        refund_payment_id=refund_payment.id,
+        pt_package_id=pt_package_id,
+        pt_package_trainer_id=pt_package.trainer_id,
     )
 
     # 7. Refresh updated_at for the response.

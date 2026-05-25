@@ -63,6 +63,7 @@ from app.core.dependencies import (
     register_membership_activator,  # Phase 47 D-47-01 — HTTP-only single-wire.
     register_payment_recorder,
     register_payment_refunder,
+    register_payroll_clawback_recorder,  # Phase 58 D-58-20 — HTTP-only single-wire.
     register_pt_package_activator,  # Phase 47 D-47-01 — HTTP-only single-wire.
     register_slot_by_id_resolver,
     register_trainer_by_id_resolver,
@@ -244,6 +245,16 @@ def create_app() -> FastAPI:
 
     register_payment_recorder(payments_service.record_payment)
     register_payment_refunder(payments_service.issue_refund)
+
+    # Phase 58 D-58-20: seventeenth composition-root carve-out — payroll clawback
+    # recorder. Wired EXCLUSIVELY here (NOT in telegram_bot.py — the bot does not
+    # refund PT-packages; HTTP-only single-wire mirrors D-32-14 discipline).
+    # Defensive-raise accessor: absence is a hard misconfiguration, not a no-op.
+    from app.modules.payroll import (
+        service as payroll_service,
+    )
+
+    register_payroll_clawback_recorder(payroll_service.record_clawback_for_pt_package_refund)
 
     # Phase 33 D-33-12: seventh composition-root carve-out — pt_sessions
     # service (Phase 34) will validate active-PT-package existence via this
