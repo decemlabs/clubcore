@@ -293,6 +293,137 @@ async def count_accruals(
     return int(result.scalar_one())
 
 
+async def find_paid_accrual_covering_refund(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID,
+    pt_package_id: UUID,
+) -> "TrainerPayrollAccrual | None":
+    """Return the status='paid' regular accrual covering the refunded package, or None.
+
+    "Covering" means the accrual's [period_start, period_end] inclusive range
+    contains at least one non-cancelled pt_session MSK-date for the given
+    pt_package_id.  Attribution: assigned-at-sale — the package's assigned
+    trainer_id (passed by caller) is the accrual trainer.
+
+    Only regular rows (clawback_of_accrual_id IS NULL) with status='paid' are
+    returned — i.e. rows for which the trainer has already been paid and the
+    refund creates a financial liability.
+
+    If multiple such rows exist (e.g. sessions spread across multiple paid
+    periods for the same package) the most recent accrued_at is returned;
+    v1.9 full-package refund means we pick the authoritative paid row and
+    clawback its entire commission component.
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM imports of other modules.
+    Verified columns:
+      pt_sessions (apps/backend/app/modules/pt_sessions/models.py:50-137):
+        - id            UUID PK
+        - pt_package_id UUID FK→pt_packages.id NOT NULL
+        - trainer_id    UUID NOT NULL
+        - performed_at  TIMESTAMPTZ NOT NULL
+        - cancelled_at  TIMESTAMPTZ NULL (exclude cancelled sessions)
+
+    INVARIANTS:
+      - ZERO INSERT / UPDATE / DELETE.
+      - ORM model imports from other modules: FORBIDDEN (D-58-19).
+      - Caller passes pt_package_trainer_id from the sale record (D-58-21
+        assigned-at-sale attribution); payroll never reads pt_packages directly.
+    """
+    # attribution: assigned-at-sale — clawback hits the package's assigned trainer
+    result = await session.execute(
+        text(
+            # Find status='paid' regular accruals for this trainer whose period
+            # covers >= 1 non-cancelled session of the given package (MSK dates).
+            "SELECT id "
+            "FROM trainer_payroll_accruals tpa "
+            "WHERE tpa.trainer_id = :trainer_id "
+            "  AND tpa.status = 'paid' "
+            "  AND tpa.clawback_of_accrual_id IS NULL "  # regular (non-clawback) rows only
+            "  AND EXISTS ( "
+            "    SELECT 1 FROM pt_sessions s "
+            "    WHERE s.pt_package_id = :pt_package_id "
+            "      AND s.cancelled_at IS NULL "
+            "      AND (s.performed_at AT TIME ZONE 'Europe/Moscow')::date "
+            "          BETWEEN tpa.period_start AND tpa.period_end "
+            "  ) "
+            "ORDER BY tpa.accrued_at DESC "
+            "LIMIT 1"
+        ),
+        {
+            "trainer_id": str(trainer_id),
+            "pt_package_id": str(pt_package_id),
+        },
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return await session.get(TrainerPayrollAccrual, row)
+
+
+async def insert_clawback_accrual(
+    session: AsyncSession,
+    *,
+    original_accrual: "TrainerPayrollAccrual",
+    refund_payment_id: UUID,
+    clawback_kopecks: int,
+) -> UUID:
+    """INSERT a negative clawback TrainerPayrollAccrual row; return its id.
+
+    The clawback row is an append-only negative correction for a previously
+    paid accrual (D-58-03 / PAY-06). It reuses snapshot columns from the
+    original accrual (trainer_id, period_start, period_end, comp_config_id_snapshot,
+    commission_pct_bps_snapshot, session_fee_kopecks_snapshot, sessions_count,
+    revenue_kopecks) to maintain a full audit trail of what was reversed.
+
+    Clawback rows are exempt from the partial UNIQUE constraint
+    ``uq_trainer_payroll_accruals_period_alive`` (which filters WHERE
+    clawback_of_accrual_id IS NULL), so a plain INSERT is correct.
+    The paired-FK CHECK ``ck_trainer_payroll_accruals_clawback_fks_paired``
+    is satisfied because both ``clawback_of_accrual_id`` and
+    ``source_refund_payment_id`` are NOT NULL.
+
+    ``accrual_kopecks`` is set to NEGATIVE ``clawback_kopecks`` (the caller
+    passes a positive value representing the amount to reverse; this function
+    negates it). ``status`` defaults to 'pending' via server-default.
+
+    ``session.flush()`` is called to assign the server-generated ``id`` so
+    the caller can include it in the audit payload. Does NOT call
+    ``session.commit()`` — the caller (refund_pt_package) owns the transaction
+    (SVC001 / caller-owns-txn).
+
+    Args:
+        original_accrual: The status='paid' regular accrual being reversed.
+            Its snapshot columns are reused in the clawback row.
+        refund_payment_id: FK to the refund payment row that triggered this
+            clawback (source_refund_payment_id column).
+        clawback_kopecks: Positive integer — the commission amount to reverse.
+            This function stores -clawback_kopecks (negative) in accrual_kopecks.
+
+    Returns:
+        UUID of the newly inserted clawback accrual row.
+    """
+    # attribution: assigned-at-sale (clawback hits the trainer from the original row)
+    clawback_row = TrainerPayrollAccrual(
+        trainer_id=original_accrual.trainer_id,
+        period_start=original_accrual.period_start,
+        period_end=original_accrual.period_end,
+        sessions_count=original_accrual.sessions_count,
+        revenue_kopecks=original_accrual.revenue_kopecks,
+        commission_pct_bps_snapshot=original_accrual.commission_pct_bps_snapshot,
+        session_fee_kopecks_snapshot=original_accrual.session_fee_kopecks_snapshot,
+        comp_config_id_snapshot=original_accrual.comp_config_id_snapshot,
+        accrual_kopecks=-clawback_kopecks,  # negative — the clawback amount
+        # Clawback FKs — both must be NOT NULL (ck_trainer_payroll_accruals_clawback_fks_paired)
+        clawback_of_accrual_id=original_accrual.id,
+        source_refund_payment_id=refund_payment_id,
+        # status defaults to 'pending' via server-default
+    )
+    session.add(clawback_row)
+    await session.flush()  # assigns id + surfaces CHECK violations; caller owns commit
+    return clawback_row.id
+
+
 async def insert_comp_config(
     session: AsyncSession,
     *,
