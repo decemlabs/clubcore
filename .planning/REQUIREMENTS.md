@@ -17,7 +17,7 @@ Requirements for milestone v1.9. Each maps to a roadmap phase.
 - [x] **PAY-03**: Owner фиксирует начисление как append-only строку в новой `trainer_payroll_accruals` (snapshot ставки + period + session_count; UNIQUE `(trainer_id, period_start, period_end)`; 409 при дубле периода; 422 если у тренера нет comp-config)
 - [x] **PAY-04**: Owner отмечает начисление выплаченным (`paid_at` + `paid_by_user_id` — единственная разрешённая мутация строки; 409 `already_paid`; операции «unpay» нет)
 - [x] **PAY-05**: Owner видит список начислений тренера, упорядоченный `accrued_at DESC`, с paid/unpaid статусом (`{items, total, page, pageSize}`)
-- [ ] **PAY-06**: Возврат PT-пакета, пришедший после начисления комиссии, пишет append-only отрицательную clawback-корректировку в payroll-ledger (hook в существующий PT-package refund-flow; same-UoW; не UPDATE существующей строки)
+- [x] **PAY-06**: Возврат PT-пакета, пришедший после начисления комиссии, пишет append-only отрицательную clawback-корректировку в payroll-ledger (hook в существующий PT-package refund-flow; same-UoW; не UPDATE существующей строки)
 
 ### Recurring Schedule
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PAY-03 | Phase 58 | Complete |
 | PAY-04 | Phase 58 | Complete |
 | PAY-05 | Phase 58 | Complete |
-| PAY-06 | Phase 58 | Pending |
+| PAY-06 | Phase 58 | Complete |
 | REC-01 | Phase 59 | Pending |
 | REC-02 | Phase 59 | Pending |
 | REC-03 | Phase 59 | Pending |

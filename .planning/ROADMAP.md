@@ -151,7 +151,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 **Milestone Goal:** Закрыть последний неполный бизнес-домен — довести Trainers с catalog-only до ✅: настраиваемый payroll-ledger с записываемыми начислениями, расширение расписания (recurring-слоты + отпуска/блоки), и read-only отчёт по тренерам. Backend-only; `apps/admin-web` не трогаем.
 
-- [ ] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06)
+- [x] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06) (completed 2026-05-25)
 - [ ] **Phase 59: Recurring Schedule + Time-Off** - Recurring slot patterns + ARQ cron generation + time-off blocks + conflict guard (REC-01..04)
 - [ ] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04)
 - [ ] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01)
@@ -178,7 +178,7 @@ Plans:
 - [x] 58-06-PLAN.md — PAY-02 read-only preview + shared compute helper
 - [x] 58-07-PLAN.md — PAY-03 record accrual + PAY-04 mark-paid
 - [x] 58-08-PLAN.md — PAY-05 paginated accrual listing
-- [ ] 58-09-PLAN.md — PAY-06 clawback Protocol slot + refund hook + SC#5 reconciliation
+- [x] 58-09-PLAN.md — PAY-06 clawback Protocol slot + refund hook + SC#5 reconciliation
 
 ### Phase 59: Recurring Schedule + Time-Off
 **Goal**: Owner can define weekly recurring availability patterns for trainers and block time-off windows; concrete slots are materialized daily by an ARQ cron
@@ -219,7 +219,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 58. Payroll Foundations + Ledger | 8/9 | In Progress|  |
+| 58. Payroll Foundations + Ledger | 9/9 | Complete   | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 0/TBD | Not started | - |
 | 60. Trainer-Usage Report | 0/TBD | Not started | - |
 | 61. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
