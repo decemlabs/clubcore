@@ -90,11 +90,11 @@ async def set_comp_config(
         actor_user_id=actor.id,
         resource_type="trainer_comp_config",
         resource_id=config.id,
-        comp_config_id=config.id,
-        trainer_id=trainer_id,
+        comp_config_id=str(config.id),
+        trainer_id=str(trainer_id),
         commission_pct_bps=body.commission_pct_bps,
         session_fee_kopecks=body.session_fee_kopecks,
-        effective_from=body.effective_from,
+        effective_from=str(body.effective_from),
     )
 
     await session.commit()
