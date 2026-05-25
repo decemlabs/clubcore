@@ -392,6 +392,14 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("online_refund_initiated", "online_refund"),
         ("online_refund_polled_settled", "online_refund"),
         ("online_refund_canceled", "online_refund"),
+        # v1.9 (Phase 58 lock — INFRA-15; emitted in Phase 58 service body)
+        # Payroll lifecycle (PAY-01..06 / D-58-16):
+        # Pre-registered BEFORE any callsite per INFRA-15 discipline (mirror Phase 51
+        # online_refund block above + Phase 30 INFRA-17 / Phase 41 INFRA-34 precedents).
+        ("trainer_comp_config_set", "trainer_comp_config"),
+        ("payroll_accrual_created", "payroll_accrual"),
+        ("payroll_accrual_paid", "payroll_accrual"),
+        ("payroll_clawback_recorded", "payroll_accrual"),
     }
 )
 

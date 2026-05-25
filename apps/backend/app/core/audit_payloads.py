@@ -1069,6 +1069,66 @@ class OnlineRefundCanceledPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# v1.9 Payroll lifecycle (Phase 58 INFRA-15 / D-58-16 / D-58-17)
+# ---------------------------------------------------------------------------
+
+
+class TrainerCompConfigSetPayload(BaseModel):
+    """Payload schema for ("trainer_comp_config_set", "trainer_comp_config") — PAY-01 / D-58-17."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comp_config_id: UUID
+    trainer_id: UUID
+    commission_pct_bps: int | None = Field(default=None, ge=0, le=10000)
+    session_fee_kopecks: int | None = Field(default=None, ge=0)
+    effective_from: date
+
+
+class PayrollAccrualCreatedPayload(BaseModel):
+    """Payload schema for ("payroll_accrual_created", "payroll_accrual") — PAY-03 / D-58-17."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accrual_id: UUID
+    trainer_id: UUID
+    period_start: date
+    period_end: date
+    sessions_count: int
+    revenue_kopecks: int
+    accrual_kopecks: int
+    comp_config_id_snapshot: UUID
+
+
+class PayrollAccrualPaidPayload(BaseModel):
+    """Payload schema for ("payroll_accrual_paid", "payroll_accrual") — PAY-04 / D-58-17."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accrual_id: UUID
+    trainer_id: UUID
+    paid_by_user_id: UUID
+    accrual_kopecks: int
+
+
+class PayrollClawbackRecordedPayload(BaseModel):
+    """Payload schema for ("payroll_clawback_recorded", "payroll_accrual") — PAY-06 / D-58-17.
+
+    `accrual_kopecks` is signed negative (append-only clawback row; mirrors
+    RefundIssuedPayload.amount_kopecks semantics for the payroll ledger).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    clawback_accrual_id: UUID
+    clawback_of_accrual_id: UUID
+    trainer_id: UUID
+    source_refund_payment_id: UUID
+    pt_package_id: UUID
+    accrual_kopecks: int  # signed negative for clawbacks
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -1146,4 +1206,10 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("online_refund_initiated", "online_refund"): OnlineRefundInitiatedPayload,
     ("online_refund_polled_settled", "online_refund"): OnlineRefundPolledSettledPayload,
     ("online_refund_canceled", "online_refund"): OnlineRefundCanceledPayload,
+    # v1.9 (Phase 58 lock — INFRA-15 / D-58-16 / D-58-17; emitted in Phase 58 service body)
+    # Payroll lifecycle (PAY-01..06):
+    ("trainer_comp_config_set", "trainer_comp_config"): TrainerCompConfigSetPayload,
+    ("payroll_accrual_created", "payroll_accrual"): PayrollAccrualCreatedPayload,
+    ("payroll_accrual_paid", "payroll_accrual"): PayrollAccrualPaidPayload,
+    ("payroll_clawback_recorded", "payroll_accrual"): PayrollClawbackRecordedPayload,
 }
