@@ -29,14 +29,16 @@ Discipline invariants (Phase 30 walkers — all must remain green):
     app.core.dependencies (here: resolve_trainer_by_id).
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
+from app.core.config import get_settings
 from app.core.dependencies import CurrentUser, resolve_trainer_by_id
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.pagination import PaginatedData
@@ -1113,6 +1115,236 @@ async def delete_time_off(
     )
 
     await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 REC-02 — recurring slot materialization helpers.
+# ---------------------------------------------------------------------------
+
+_MOSCOW_TZ = ZoneInfo("Europe/Moscow")
+
+
+def _expand_template_occurrences(
+    *,
+    trainer_id: UUID,
+    day_of_week: int,
+    start_time_local: time,
+    end_time_local: time,
+    from_date: date,
+    to_date: date,
+) -> list[dict[str, object]]:
+    """Expand a recurring template into concrete UTC slot dicts for [from_date, to_date].
+
+    DST-safe expansion (PITFALL 7 / T-59-15):
+      - Combine the date with the local time in ZoneInfo("Europe/Moscow") to get
+        an aware Moscow datetime, then convert to UTC via .astimezone(timezone.utc).
+      - NEVER add raw timedelta to a naive datetime — this function exclusively
+        produces aware UTC datetimes.
+
+    Moscow has been permanently UTC+3 with no DST since 2014 (last clock change
+    was 2014-10-26). The ZoneInfo path is still the correct approach — it handles
+    the edge case of historical dates and future policy changes transparently.
+
+    Args:
+        trainer_id:      Template owner.
+        day_of_week:     ISO weekday int (0=Monday … 6=Sunday).
+        start_time_local: Slot start in Europe/Moscow local time.
+        end_time_local:   Slot end in Europe/Moscow local time.
+        from_date:       First date to check (inclusive), UTC-date context.
+        to_date:         Last date to check (inclusive), UTC-date context.
+
+    Returns:
+        List of dicts with keys ``trainer_id``, ``start_time`` (UTC aware),
+        ``end_time`` (UTC aware) — one dict per matching calendar date in range.
+
+    Example (DST golden — PITFALL 7):
+        expand(MONDAY, time(10,0), time(11,0), date(2026,3,30), date(2026,3,30))
+        → [{"trainer_id": ..., "start_time": datetime(2026,3,30,7,0,tzinfo=utc), ...}]
+    """
+    results: list[dict[str, object]] = []
+    delta = to_date - from_date
+    for offset in range(delta.days + 1):
+        candidate = from_date + timedelta(days=offset)
+        # ISO weekday: Monday=0 … Sunday=6 (matches model convention).
+        if candidate.isoweekday() - 1 != day_of_week:
+            continue
+        # Build aware Moscow datetime, then convert to UTC (PITFALL 7 mitigation).
+        start_moscow = datetime(
+            candidate.year,
+            candidate.month,
+            candidate.day,
+            start_time_local.hour,
+            start_time_local.minute,
+            start_time_local.second,
+            tzinfo=_MOSCOW_TZ,
+        )
+        end_moscow = datetime(
+            candidate.year,
+            candidate.month,
+            candidate.day,
+            end_time_local.hour,
+            end_time_local.minute,
+            end_time_local.second,
+            tzinfo=_MOSCOW_TZ,
+        )
+        results.append(
+            {
+                "trainer_id": trainer_id,
+                "start_time": start_moscow.astimezone(UTC),
+                "end_time": end_moscow.astimezone(UTC),
+            }
+        )
+    return results
+
+
+async def _generate_recurring_slots(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    now: datetime | None = None,
+) -> int:
+    """Materialize-ahead: generate concrete trainer_availability_slots from active templates.
+
+    Caller-owns-txn — this helper does NOT call session.commit() (SVC001 opt-out).
+    The ARQ worker (app.workers.scheduled.generate_recurring_slots) is the
+    transaction owner.
+
+    Generation window: now() < slot_start_utc <= now() + RECURRING_SLOT_HORIZON_DAYS.
+    Slots inside active time-off windows are skipped via AND NOT EXISTS predicate
+    in the repository bulk INSERT (PITFALL 9 inverse — T-59-16 mitigation).
+
+    Idempotency: ON CONFLICT (trainer_id, start_time) DO NOTHING in the bulk
+    INSERT means repeat cron runs produce ZERO new rows (PITFALL 8 — T-59-13).
+
+    slot_published audit is emitted ONCE PER ROW ACTUALLY INSERTED (ids returned
+    by RETURNING) — never for ON CONFLICT no-ops (T-59-14 / ROADMAP SC#2).
+    created_by_user_id=None on all cron-generated slots (no human author).
+
+    Args:
+        session: AsyncSession in caller-owned transaction.
+        now:     Override current UTC datetime (tests pass a fixed value for
+                 determinism). Production passes None → datetime.now(UTC).
+
+    Returns:
+        int — number of rows actually inserted on this run (0 on pure re-run).
+    """
+    if now is None:
+        now = datetime.now(UTC)
+
+    horizon_days = get_settings().recurring_slot_horizon_days
+    horizon_end_utc = now + timedelta(days=horizon_days)
+
+    # from_date / to_date in UTC calendar days (inclusive bracket for expansion).
+    # We use the UTC date of `now` as the lower bound; expansion then filters on
+    # slot_start_utc > now (the strict half of the horizon predicate).
+    from_date = now.date()
+    to_date = horizon_end_utc.date()
+
+    templates = await repository.list_active_recurring_templates(session)
+
+    candidate_rows: list[dict[str, object]] = []
+    for tmpl in templates:
+        # Skip templates whose validity window doesn't overlap the horizon.
+        if tmpl.valid_from > to_date:
+            continue
+        if tmpl.valid_until is not None and tmpl.valid_until < from_date:
+            continue
+
+        effective_from = max(tmpl.valid_from, from_date)
+        effective_to = to_date if tmpl.valid_until is None else min(tmpl.valid_until, to_date)
+
+        occurrences = _expand_template_occurrences(
+            trainer_id=tmpl.trainer_id,
+            day_of_week=tmpl.day_of_week,
+            start_time_local=tmpl.start_time,
+            end_time_local=tmpl.end_time,
+            from_date=effective_from,
+            to_date=effective_to,
+        )
+        # Filter: slot_start_utc must be strictly after now (horizon lower bound).
+        for occ in occurrences:
+            start_utc = occ["start_time"]
+            assert isinstance(start_utc, datetime)
+            if start_utc > now:
+                candidate_rows.append(occ)
+
+    if not candidate_rows:
+        return 0
+
+    # Pre-filter: skip slots that overlap an active trainer_time_off window (PITFALL 9 inverse).
+    # Fetch all time-off blocks for the relevant trainers, then filter in Python.
+    # This avoids asyncpg parameter-binding pitfalls with complex SQL sub-selects
+    # while keeping the time-off skip guarantee (T-59-16 / T-59-14).
+    trainer_ids_in_batch: list[UUID] = list(
+        {row["trainer_id"] for row in candidate_rows}  # type: ignore[misc]
+    )
+    active_time_offs = await repository.list_active_time_off_for_trainers(
+        session, trainer_ids_in_batch
+    )
+
+    def _overlaps_any_time_off(
+        row_trainer_id: UUID,
+        row_start: datetime,
+        row_end: datetime,
+    ) -> bool:
+        """Return True when any time-off block overlaps [row_start, row_end)."""
+        for toff in active_time_offs:
+            if toff.trainer_id != row_trainer_id:
+                continue
+            # Overlap condition: block_start < row_end AND block_end > row_start.
+            if toff.block_start < row_end and toff.block_end > row_start:
+                return True
+        return False
+
+    clean_rows: list[dict[str, object]] = []
+    for row in candidate_rows:
+        if not _overlaps_any_time_off(
+            row["trainer_id"],  # type: ignore[arg-type]
+            row["start_time"],  # type: ignore[arg-type]
+            row["end_time"],  # type: ignore[arg-type]
+        ):
+            clean_rows.append(row)
+
+    if not clean_rows:
+        return 0
+
+    # Bulk INSERT with ON CONFLICT (trainer_id, start_time) DO NOTHING RETURNING id.
+    # Returns only ids of rows actually inserted (conflicts return nothing — PITFALL 8).
+    inserted_ids = await repository.bulk_insert_recurring_slots(session, clean_rows)
+
+    # Flush so the inserted rows are visible within the transaction (needed for
+    # audit FK; the cron caller commits after this helper returns).
+    await session.flush()
+
+    # Audit emit — slot_published ONCE PER REAL INSERT only (ROADMAP SC#2 / T-59-14).
+    # created_by_user_id=None (cron actor — no human author, D-59-05 / T-59-14).
+    # We need start/end times for the audit payload; build a lookup from the
+    # candidate rows matched by the inserted ids. Since ids are UUIDs returned
+    # by RETURNING, we must re-query the just-inserted rows.
+    if inserted_ids:
+        from sqlalchemy import select as _select
+
+        freshly_inserted = (
+            await session.scalars(
+                _select(TrainerAvailabilitySlot).where(
+                    TrainerAvailabilitySlot.id.in_(inserted_ids)
+                )
+            )
+        ).all()
+
+        for slot in freshly_inserted:
+            await audit.emit(
+                session,
+                "slot_published",  # LITERAL — INFRA-11 AST gate
+                actor_user_id=None,  # cron actor — no human author (D-41-08)
+                resource_type="schedule_slot",  # LITERAL
+                resource_id=slot.id,
+                slot_id=str(slot.id),
+                trainer_id=str(slot.trainer_id),
+                start_time=slot.start_time.isoformat(),
+                end_time=slot.end_time.isoformat(),
+                created_by_user_id=None,
+            )
+
+    return len(inserted_ids)
 
 
 async def list_time_off(

@@ -465,7 +465,106 @@ async def list_time_off(
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase 59 REC-02 — bulk recurring-slot INSERT helpers
+# ---------------------------------------------------------------------------
+
+
+async def list_active_recurring_templates(
+    session: AsyncSession,
+) -> list[RecurringSlotTemplate]:
+    """Return all is_active=True recurring templates.
+
+    The cron helper iterates this list to expand occurrences. No pagination —
+    the total count of active templates is expected to be O(trainers * days_per_week)
+    which is well within a single-query budget (PITFALL 8).
+    """
+    stmt: Select[tuple[RecurringSlotTemplate]] = select(RecurringSlotTemplate).where(
+        RecurringSlotTemplate.is_active.is_(True)
+    )
+    rows = (await session.scalars(stmt)).all()
+    return list(rows)
+
+
+async def list_active_time_off_for_trainers(
+    session: AsyncSession,
+    trainer_ids: list[UUID],
+) -> list[TrainerTimeOff]:
+    """Return all TrainerTimeOff blocks for the given trainers.
+
+    Used by the cron helper to pre-filter candidate slots in Python before
+    the bulk INSERT, avoiding complex SQL sub-selects that are tricky with
+    asyncpg parameter binding (D-59-05 / PITFALL 9 inverse).
+    """
+    if not trainer_ids:
+        return []
+    stmt: Select[tuple[TrainerTimeOff]] = select(TrainerTimeOff).where(
+        TrainerTimeOff.trainer_id.in_(trainer_ids)
+    )
+    rows = (await session.scalars(stmt)).all()
+    return list(rows)
+
+
+async def bulk_insert_recurring_slots(
+    session: AsyncSession,
+    rows: list[dict[str, Any]],
+) -> list[Any]:
+    """Bulk INSERT trainer_availability_slots with ON CONFLICT (trainer_id, start_time)
+    DO NOTHING RETURNING id.
+
+    Each dict in `rows` must have keys:
+        trainer_id (UUID), start_time (datetime TZ-aware), end_time (datetime TZ-aware).
+    created_by_user_id is NULL (cron actor — no human author, D-59-05 / T-59-14).
+    status is 'active'.
+
+    Returns only the ids of rows ACTUALLY INSERTED (conflicts return nothing).
+    Caller owns flush + commit (SVC001 — # noqa: SVC001 is on the service helper,
+    not here; this repository helper is the low-level IO primitive).
+
+    PITFALL 8 mitigation: ON CONFLICT DO NOTHING makes repeat cron ticks no-ops
+    at the SQL level — the RETURNING clause returns zero rows on a pure conflict
+    run, which is the intended idempotency signal.
+
+    Time-off skip (PITFALL 9 inverse / T-59-16): the caller (_generate_recurring_slots
+    in service.py) pre-filters rows in Python using list_active_time_off_for_trainers,
+    so this function only receives time-off-clean candidates.
+
+    Implementation note: asyncpg uses native positional parameter binding. We use
+    SQLAlchemy's pg_insert().values().on_conflict_do_nothing().returning() which
+    generates correct $N parameters via the SQLAlchemy asyncpg dialect — no raw
+    sa.text() with ::type casts needed.
+    """
+    if not rows:
+        return []
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    # Batch INSERT: all rows in one statement for efficiency.
+    # ON CONFLICT (trainer_id, start_time) DO NOTHING ensures idempotency (PITFALL 8).
+    # RETURNING id surfaces only the rows that were actually inserted.
+    stmt = (
+        pg_insert(TrainerAvailabilitySlot)
+        .values(
+            [
+                {
+                    "trainer_id": row["trainer_id"],
+                    "start_time": row["start_time"],
+                    "end_time": row["end_time"],
+                    "status": "active",
+                    "created_by_user_id": None,
+                }
+                for row in rows
+            ]
+        )
+        .on_conflict_do_nothing(index_elements=["trainer_id", "start_time"])
+        .returning(TrainerAvailabilitySlot.id)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 __all__ = [
+    "bulk_insert_recurring_slots",
     "find_buffer_violations",
     "find_overlapping_slots_for_update",
     "get_recurring_template_by_id_for_update",
@@ -475,6 +574,8 @@ __all__ = [
     "insert_recurring_template",
     "insert_slot",
     "insert_time_off",
+    "list_active_recurring_templates",
+    "list_active_time_off_for_trainers",
     "list_recurring_templates",
     "list_slots_paginated",
     "list_time_off",
