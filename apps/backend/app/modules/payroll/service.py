@@ -338,6 +338,31 @@ async def run_payroll_period(
     return accrual
 
 
+async def list_accruals(
+    session: AsyncSession,
+    trainer_id: UUID,
+    *,
+    page: int,
+    page_size: int,
+) -> tuple[list[TrainerPayrollAccrual], int]:
+    """Return (rows, total) for a paginated listing of *trainer_id*'s accruals (PAY-05 / D-58-14).
+
+    Delegates to two repository reads:
+      1. ``list_accruals_for_trainer`` — ORDER BY accrued_at DESC, LIMIT/OFFSET page.
+      2. ``count_accruals`` — unpaginated COUNT for the envelope ``total`` field.
+
+    Both paid and pending rows surface; clawback rows (negative accrual_kopecks) are
+    included — no filter on status or clawback_of_accrual_id (D-58-14 deferred filters).
+
+    Pure read — ZERO writes, ZERO audit.emit(), ZERO session.commit() (SVC001).
+    """
+    rows = await repository.list_accruals_for_trainer(
+        session, trainer_id, page=page, page_size=page_size
+    )
+    total = await repository.count_accruals(session, trainer_id)
+    return rows, total
+
+
 async def mark_accrual_paid(
     session: AsyncSession,
     actor: CurrentUser,

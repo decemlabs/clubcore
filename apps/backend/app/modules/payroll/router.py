@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission
 from app.core.exceptions import ValidationAppError
+from app.core.pagination import PageQuery, PaginatedData
 from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.payroll import service
@@ -162,6 +163,55 @@ async def preview_payroll(
         # _CompConfigMissing422Error keeps the same "comp_config_missing" code at HTTP 422.
         raise _CompConfigMissing422Error(exc.message) from exc
     return envelope(result)
+
+
+@router.get(
+    "/accruals",
+    response_model=ResponseEnvelope[PaginatedData[PayrollAccrualResponse]],
+    summary=(
+        "List a trainer's payroll accruals paginated, accrued_at DESC"
+        " (owner-only PAY-05 / D-58-14)"
+    ),
+)
+async def list_payroll_accruals(
+    trainer_id: Annotated[UUID, Query(alias="trainerId")],
+    query: Annotated[PageQuery, Depends()],
+    _actor: Annotated[
+        CurrentUser, Depends(require_permission(Action.LIST, Resource.PAYROLL))
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PaginatedData[PayrollAccrualResponse]]:
+    """List all payroll accrual rows for *trainer_id*, ordered accrued_at DESC (PAY-05 / D-58-14).
+
+    Both paid and pending rows are returned; clawback rows (negative accrual_kopecks)
+    are included alongside regular accruals — no status or period filters (deferred per
+    CONTEXT.md D-58-14).
+
+    Pagination (PageQuery): page (default 1) + pageSize (default 20, max 100).
+    Response envelope: { data: { items: [...], total: N, page: P, pageSize: S } }.
+
+    Owner-only: (LIST, PAYROLL) ∈ OWNER_ONLY (pre-registered Plan 58-01).
+    Reception receives 403 (T-58-31 mitigate).
+
+    Threat T-58-32: pageSize bounded by PageQuery Field(le=100) — resource exhaustion
+    mitigated by the shared pagination validator.
+    Threat T-58-33: trainer_id is a bound WHERE parameter; owner sees all trainers
+    by design (no cross-trainer leakage).
+    """
+    rows, total = await service.list_accruals(
+        session, trainer_id, page=query.page, page_size=query.page_size
+    )
+    items = [
+        PayrollAccrualResponse.model_validate(row, from_attributes=True) for row in rows
+    ]
+    return envelope(
+        PaginatedData(
+            items=items,
+            total=total,
+            page=query.page,
+            page_size=query.page_size,
+        )
+    )
 
 
 @router.post(
