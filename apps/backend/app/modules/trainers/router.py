@@ -37,7 +37,7 @@ from app.modules.trainers.schemas import (
     TrainerUpdateRequest,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Trainers"])
 
 
 @router.get(

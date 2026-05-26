@@ -63,7 +63,7 @@ from app.modules.pt_packages.schemas import (
     PtPackageResponse,
 )
 
-plans_router = APIRouter()
+plans_router = APIRouter(tags=["Payments"])
 
 
 @plans_router.get(
@@ -195,7 +195,7 @@ async def archive_plan(
 # do not modify the include in app/api/v1/router.py.
 # ---------------------------------------------------------------------------
 
-pt_packages_router = APIRouter()
+pt_packages_router = APIRouter(tags=["Payments"])
 
 
 # ---------------------------------------------------------------------------

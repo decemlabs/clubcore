@@ -56,8 +56,8 @@ from app.modules.pt_sessions.schemas import (
     PtSessionResponse,
 )
 
-pt_sessions_router = APIRouter()
-package_scoped_router = APIRouter()
+pt_sessions_router = APIRouter(tags=["Payments"])
+package_scoped_router = APIRouter(tags=["Payments"])
 
 
 @pt_sessions_router.post(

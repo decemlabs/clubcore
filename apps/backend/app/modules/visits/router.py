@@ -41,7 +41,7 @@ from app.modules.visits.schemas import (
     VisitsMetaResponse,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Visits"])
 
 
 @router.get(

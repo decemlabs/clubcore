@@ -40,6 +40,15 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SECRET_KEY", "openapi-export-placeholder")
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "openapi-export-placeholder")
 os.environ.setdefault("TELEGRAM_BOT_USERNAME", "openapi_export_bot")
+# Phase 47 YooKassaSettings are instantiated at module import time in
+# app/integrations/yookassa/webhook_verifier.py. Backfill harmless placeholders
+# so the export script works in a clean shell (no .env required).
+# `setdefault` never overrides values set by an operator or CI.
+os.environ.setdefault("YOOKASSA_SHOP_ID", "000000")
+os.environ.setdefault("YOOKASSA_SECRET_KEY", "openapi-export-placeholder")
+os.environ.setdefault("YOOKASSA_RETURN_URL", "http://localhost")
+os.environ.setdefault("YOOKASSA_TAX_SYSTEM_CODE", "2")
+os.environ.setdefault("YOOKASSA_DEFAULT_VAT_CODE", "1")
 
 # Import order matters: env-prep above MUST come before `from app.main`,
 # which is why this import sits below module-level statements (D-04).

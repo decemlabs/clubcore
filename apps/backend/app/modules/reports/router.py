@@ -55,10 +55,10 @@ from app.modules.reports.schemas import (
     VisitsReportResponse,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Reports"])
 
 # Second router for audit-log (D-02): mounted at /audit-log prefix in api/v1/router.py.
-audit_log_router = APIRouter()
+audit_log_router = APIRouter(tags=["Audit-log"])
 
 
 @router.get(

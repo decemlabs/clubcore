@@ -55,7 +55,7 @@ from app.modules.bookings.schemas import (
     BookingsForClientListQuery,
 )
 
-bookings_router = APIRouter()
+bookings_router = APIRouter(tags=["Bookings"])
 # Separate router mounted by `app.api.v1.router` at the `/clients` prefix so
 # the per-client list resolves at `GET /api/v1/clients/{client_id}/bookings`
 # per BOOK-08 locked contract. Mirrors the pt-sessions package-scoped pattern
@@ -63,7 +63,7 @@ bookings_router = APIRouter()
 # inside bookings/ while exposing it under the clients/ URL tree, so
 # clients/router.py remains dependency-leaf (no `from app.modules.bookings`
 # import). Closes Phase 38 verifier Gap #2.
-client_scoped_bookings_router = APIRouter()
+client_scoped_bookings_router = APIRouter(tags=["Bookings"])
 
 
 @bookings_router.post(
