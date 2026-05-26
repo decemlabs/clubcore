@@ -9,6 +9,8 @@
 
 ## 1. Pre-cutover backup
 
+> Note (62.1): plan 62.1-08 captures fresh smoke evidence against a dedicated `clubcore_smoke` DB target — see `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md`. The `sportzal.dump` filename below documents the original one-time 2026-05-26 cutover backup.
+
 ```bash
 pg_dump -h <host> -U app -F c -f sportzal.dump sportzal
 chmod 600 sportzal.dump
@@ -27,21 +29,9 @@ psql -h <host> -U app -d clubcore -c "SELECT count(*) FROM clients;"
 Row-count verify on 2-3 high-volume tables (`clients`, `subscriptions`, `payments`)
 against pre-cutover. Mismatch → abort, fall to Section 6 (rollback).
 
-## 3. Redis FLUSHDB cutover (D-62-07; cross-references G-3 / plan 62-03)
+## 3. Redis namespace cutover (historical — completed Phase 62 / REB-03)
 
-```bash
-redis-cli FLUSHDB                                            # dedicated instance
-redis-cli --scan --pattern 'sz:*' | xargs -r redis-cli DEL   # shared instance
-```
-
-Phase 62 reads/writes ONLY `cc:*`; legacy `sz:*` MUST clear at cutover — no runtime dual-read. Tradeoffs accepted per D-62-07 (TTL-bounded; per-handler FSM idempotency mitigates):
-
-| Surface | TTL | Cutover consequence |
-| --- | --- | --- |
-| Idempotency keys `sz:idem:*` | 1h | brief replay window for in-flight requests |
-| Circuit breakers | varies | reset closed; first call re-evaluates |
-| Telegram dedup | 1h | same /start may double-fire briefly |
-| Yookassa webhook dedup | 24h | webhook replay; FSM idempotency mitigates |
+Phase 62 / REB-03 flipped the Redis key prefix from the legacy `sz:` namespace to the `cc:` namespace (commit 6ec1115b, 2026-05-26). The operator FLUSHDB / scan-and-DEL cutover step that previously lived here was a one-time operation tied to the v1.10 deploy; it has been executed and is no longer applicable. Phase 62 / D-62-07 lineage preserved for audit trail. Subsequent cutovers (e.g., Phase 63+ infra work) will document their own cutover steps in their own runbooks.
 
 ## 4. DNS/DKIM/SPF/DMARC checklist for new email FROM domain (D-62-05)
 
