@@ -9,11 +9,17 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';"
     />
-    <title>SportZal</title>
+    <title>clubcore</title>
     <script>
       (function () {
         try {
-          var raw = localStorage.getItem('sportzal:ui:v1');
+          // TODO Phase 67 / RUN-07: drop sportzal:ui:v1 fallback (v1.10 shim).
+          // Bootstrap runs before main.tsx migrator; the fallback prevents a
+          // one-boot FOUC for returning users whose theme still lives under
+          // the legacy key. New users only ever touch clubcore:ui:v2.
+          var raw =
+            localStorage.getItem('clubcore:ui:v2') ||
+            localStorage.getItem('sportzal:ui:v1');
           var theme = 'system';
           if (raw) {
             var parsed = JSON.parse(raw);

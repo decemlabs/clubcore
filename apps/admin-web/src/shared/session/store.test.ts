@@ -8,7 +8,7 @@ describe('session store', () => {
   })
 
   it('uses the versioned persist key', () => {
-    expect(SESSION_STORAGE_KEY).toBe('sportzal:session:v1')
+    expect(SESSION_STORAGE_KEY).toBe('clubcore:session:v2')
   })
 
   it('defaults role to owner', () => {

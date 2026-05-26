@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, type PersistStorage, createJSONStorage } from 'zustand/middleware'
 import type { Role, SessionState } from './types'
 
-const STORAGE_KEY = 'sportzal:session:v1'
+const STORAGE_KEY = 'clubcore:session:v2'
 
 type PersistedSession = Pick<SessionState, 'role'>
 
@@ -18,9 +18,12 @@ export const useSessionStore = create<SessionState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
       storage,
       partialize: (s) => ({ role: s.role }),
+      // Pass-through: persisted shape is identical v1→v2 (Phase 62 D-62-06).
+      // The legacy-key → STORAGE_KEY copy runs as a pre-rehydrate side
+      // effect in `src/app/main.tsx` (see STORE_MIGRATIONS).
       migrate: (state) => state as PersistedSession,
       skipHydration: true,
     },

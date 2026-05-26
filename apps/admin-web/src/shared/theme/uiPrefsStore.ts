@@ -12,7 +12,7 @@ export interface UiPrefsState {
 
 type PersistedUi = Pick<UiPrefsState, 'theme' | 'sidebarCollapsed'>
 
-const STORAGE_KEY = 'sportzal:ui:v1'
+const STORAGE_KEY = 'clubcore:ui:v2'
 
 const storage: PersistStorage<PersistedUi> | undefined = createJSONStorage<PersistedUi>(
   () => window.localStorage,
@@ -28,9 +28,15 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
       storage,
       partialize: (s) => ({ theme: s.theme, sidebarCollapsed: s.sidebarCollapsed }),
+      // Pass-through: persisted shape is identical v1→v2 (Phase 62 D-62-06).
+      // Zustand requires `migrate` whenever `version` increments above stored
+      // version; without this callback rehydrate would throw on v1 payloads.
+      // The legacy-key → STORAGE_KEY copy runs as a pre-rehydrate side
+      // effect in `src/app/main.tsx` (see STORE_MIGRATIONS).
+      migrate: (state) => state as PersistedUi,
       skipHydration: true,
     },
   ),

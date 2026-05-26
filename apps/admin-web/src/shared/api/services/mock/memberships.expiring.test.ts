@@ -27,7 +27,7 @@ function isoOffset(days: number): string {
 
 function injectMembership(partial: Partial<Membership> & Pick<Membership, 'id' | 'endDate'>) {
   // loadDB returns a freshly-parsed snapshot — must call saveDB to persist
-  // back to the versioned localStorage key (`sportzal:mock:v1`).
+  // back to the versioned localStorage key (`clubcore:mock:v2`).
   const db = loadDB()
   const seed = db.memberships[0]
   if (!seed) throw new Error('mock DB has no memberships seed — cannot fabricate fixture')
