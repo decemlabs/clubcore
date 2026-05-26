@@ -260,7 +260,7 @@ Plans:
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 5/5 | Complete   | 2026-05-25 |
 | 60. Trainer-Usage Report | 4/4 | Complete   | 2026-05-25 |
-| 61. OpenAPI Handoff + Milestone Verification | 4/4 | Complete   | 2026-05-26 |
+| 61. OpenAPI Handoff + Milestone Verification | 4/4 | Complete    | 2026-05-26 |
 
 ---
 

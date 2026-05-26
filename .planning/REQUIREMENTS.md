@@ -35,7 +35,7 @@ Requirements for milestone v1.9. Each maps to a roadmap phase.
 
 ### API Handoff
 
-- [ ] **HND-01**: Byte-stable regen `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` со всеми v1.9 путями + `_v19Checks` `AssertNonNever` forward-guards; RBAC three-way parity (`Resource.TRAINER_PAYROLL` + новые OWNER_ONLY пары; backend ↔ admin-web `can.ts` ↔ `registry.ts`) зелёный; milestone verification
+- [x] **HND-01**: Byte-stable regen `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` со всеми v1.9 путями + `_v19Checks` `AssertNonNever` forward-guards; RBAC three-way parity (`Resource.TRAINER_PAYROLL` + новые OWNER_ONLY пары; backend ↔ admin-web `can.ts` ↔ `registry.ts`) зелёный; milestone verification
 
 ## v2 Requirements
 
@@ -94,7 +94,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RPT-02 | Phase 60 | Complete |
 | RPT-03 | Phase 60 | Complete |
 | RPT-04 | Phase 60 | Complete |
-| HND-01 | Phase 61 | Pending |
+| HND-01 | Phase 61 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total

@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Trainers Complete
-status: completed
-stopped_at: v1.9 Trainers Complete milestone shipped (Phases 58-61)
-last_updated: "2026-05-26T06:55:00.000Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 61 was final phase)
+last_updated: 2026-05-26T07:07:56.060Z
 last_activity: 2026-05-26 -- Phase 61 milestone-close verified, v1.9 complete
 progress:
   total_phases: 4
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v1.9 Trainers Complete — milestone shipped (Phases 58–61). Next: v1.10+ planning.
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 61 (OpenAPI Handoff + Milestone Verification) — COMPLETE
-Plan: 4 of 4 — COMPLETE
+Phase: 61
+Plan: Not started
 Status: v1.9 Trainers Complete milestone shipped
-Last activity: 2026-05-26 -- Phase 61 verification green; runbook authored; STATE updated
+Last activity: 2026-05-26
 
 Progress: [██████████] 100%
 
 ## Milestone Close — v1.9 Trainers Complete
 
-**Status:** COMPLETE (Phases 58–61).
+**Status:** Milestone complete
 **Green-state baseline:** `.planning/phases/60-trainer-usage-report/60-VERIFICATION.md` —
 Phase 60 (final feature phase) verification report; all v1.9 payroll +
 recurring-schedule + trainer-report surface shipped and exercised.
