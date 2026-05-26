@@ -186,7 +186,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
-| 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete   | 2026-05-26 |
+| 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete    | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 65. Handoff Artifacts | v1.11 | 0/0 | Not started (milestone not opened) | — |

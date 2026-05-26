@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: clubcore Rebrand
-status: verifying
-stopped_at: "Phase 62.1 complete — v1.10 ready for /gsd:complete-milestone"
-last_updated: "2026-05-26T14:21:52.537Z"
+status: ready_to_plan
+stopped_at: Phase 62.1 complete (9/9) — ready to discuss Phase 999.1
+last_updated: 2026-05-26T14:29:13.574Z
 last_activity: 2026-05-26
 progress:
   total_phases: 8
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand) per D-10-SPLIT; Phases 63-67 → v1.11)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 62.1 — finalize-sportzal-clubcore-rename-a-b-c-scope
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
 
 ## Current Position
 
-Phase: 62.1 — COMPLETE (v1.10 ready for milestone close)
-Plan: 9 of 9 (62.1-09 final closure complete)
+Phase: 999.1
+Plan: Not started
 Status: Phase complete — ready for verification
 Last activity: 2026-05-26
 
@@ -49,7 +49,7 @@ Last activity: 2026-05-26
 
 ## Milestone Close — v1.9 Trainers Complete
 
-**Status:** Phase complete — ready for verification
+**Status:** Ready to plan
 **Green-state baseline:** `.planning/phases/60-trainer-usage-report/60-VERIFICATION.md` —
 Phase 60 (final feature phase) verification report; all v1.9 payroll +
 recurring-schedule + trainer-report surface shipped and exercised.
