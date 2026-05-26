@@ -77,7 +77,7 @@ Plans:
 **Goal:** Close v1.10 by removing the 4 sportzal-era back-compat shims (A — main.tsx + index.html + config.py + runbook), capturing local operator-pending evidence with explicit production-deferral for DNS/DKIM (B), and recording the 5/6 email_templates count corrigendum (C) — all pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-SCOPE so v1.11 opens against a fully-clean clubcore tree
 **Requirements**: REB-09, REB-10
 **Depends on:** Phase 62 (REB-01..08 satisfied 2026-05-26)
-**Plans:** 7/9 plans executed
+**Plans:** 8/9 plans executed
 
 Plans:
 **Wave 1**
@@ -95,7 +95,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 62.1-08-PLAN.md — pg_dump/restore round-trip capture into v1.10-OPERATOR-EVIDENCE.md (REB-10) — checkpoint:human-verify
+- [x] 62.1-08-PLAN.md — pg_dump/restore round-trip capture into v1.10-OPERATOR-EVIDENCE.md (REB-10) — checkpoint:human-verify
 - [ ] 62.1-09-PLAN.md — v1.10-MILESTONE-AUDIT-ADDENDUM.md + ROADMAP/REQUIREMENTS/STATE finalization
 
 ### Phase 63: Tech-Debt Sweep (v1.11)
