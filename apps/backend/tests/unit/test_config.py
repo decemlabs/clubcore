@@ -8,9 +8,13 @@ D-11: midnight-spanning gym hours rejected by model_validator at boot.
 from __future__ import annotations
 
 from datetime import time
+from typing import TYPE_CHECKING
 
 import pytest
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from app.core.config import Settings
 
 # Required fields for Settings instantiation in tests (no .env loaded).
 # PostgresDsn and RedisDsn validators require RFC-3986-compliant URIs.
@@ -21,54 +25,52 @@ _REQUIRED_SETTINGS = {
 }
 
 
+def _build_settings(**overrides: object) -> Settings:
+    """Construct Settings with required defaults + caller overrides.
+
+    Centralises the ``_env_file=None`` + ``type: ignore[call-arg]`` boilerplate
+    (REVIEW-62.1 IN-03) so per-test setup is a single-keyword call.
+    """
+    from app.core.config import Settings
+
+    return Settings(
+        **_REQUIRED_SETTINGS,
+        **overrides,
+        _env_file=None,  # type: ignore[call-arg]
+    )
+
+
 class TestGymHoursValidator:
     """D-11: model_validator rejects gym_hours_end <= gym_hours_start."""
 
     def test_midnight_spanning_rejected(self) -> None:
         """end < start (23:00 → 07:00 spanning midnight) → ValidationError."""
-        from app.core.config import Settings
-
         with pytest.raises((ValidationError, ValueError)):
-            Settings(
-                **_REQUIRED_SETTINGS,
+            _build_settings(
                 gym_hours_start=time(23, 0),
                 gym_hours_end=time(7, 0),
-                _env_file=None,  # type: ignore[call-arg]
             )
 
     def test_equal_start_and_end_rejected(self) -> None:
         """end == start → ValidationError (interval must be strictly positive)."""
-        from app.core.config import Settings
-
         with pytest.raises((ValidationError, ValueError)):
-            Settings(
-                **_REQUIRED_SETTINGS,
+            _build_settings(
                 gym_hours_start=time(7, 0),
                 gym_hours_end=time(7, 0),
-                _env_file=None,  # type: ignore[call-arg]
             )
 
     def test_valid_window_accepted(self) -> None:
         """end > start → Settings constructed without error."""
-        from app.core.config import Settings
-
-        s = Settings(
-            **_REQUIRED_SETTINGS,
+        s = _build_settings(
             gym_hours_start=time(8, 0),
             gym_hours_end=time(22, 0),
-            _env_file=None,  # type: ignore[call-arg]
         )
         assert s.gym_hours_start == time(8, 0)
         assert s.gym_hours_end == time(22, 0)
 
     def test_default_values_accepted(self) -> None:
         """Default gym_hours_start=07:00, gym_hours_end=23:00 satisfy the invariant."""
-        from app.core.config import Settings
-
-        s = Settings(
-            **_REQUIRED_SETTINGS,
-            _env_file=None,  # type: ignore[call-arg]
-        )
+        s = _build_settings()
         assert s.gym_hours_start == time(7, 0)
         assert s.gym_hours_end == time(23, 0)
 
@@ -85,22 +87,26 @@ class TestEmailFromResolution:
         """When no env is set, EmailProviderSettings.from_address keeps
         its hardcoded default ``"noreply@mail.sportzal.ru"``.
         """
-        from app.core.config import Settings
-
-        s = Settings(
-            **_REQUIRED_SETTINGS,
-            _env_file=None,  # type: ignore[call-arg]
-        )
+        s = _build_settings()
         assert s.clubcore_email_from is None
         assert s.email.from_address == "noreply@mail.sportzal.ru"
 
     def test_clubcore_email_from_overrides_from_address(self) -> None:
         """When CLUBCORE_EMAIL_FROM is set, it overrides from_address."""
-        from app.core.config import Settings
-
-        s = Settings(
-            **_REQUIRED_SETTINGS,
-            clubcore_email_from="alice@example.com",
-            _env_file=None,  # type: ignore[call-arg]
-        )
+        s = _build_settings(clubcore_email_from="alice@example.com")
         assert s.email.from_address == "alice@example.com"
+
+    def test_empty_clubcore_email_from_rejected(self) -> None:
+        """REVIEW-62.1 WR-01/WR-02: empty-string override raises ValidationError.
+
+        EmailStr typing makes pydantic reject "" at field validation time,
+        restoring the fail-fast invariant the deleted multi-env chain
+        implicitly provided.
+        """
+        with pytest.raises(ValidationError):
+            _build_settings(clubcore_email_from="")
+
+    def test_malformed_clubcore_email_from_rejected(self) -> None:
+        """REVIEW-62.1 WR-02: override missing '@' raises ValidationError."""
+        with pytest.raises(ValidationError):
+            _build_settings(clubcore_email_from="ops-team")
