@@ -1,34 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10
-milestone_name: clubcore Rebrand
-status: completed
-stopped_at: "Phase 62.1 complete — v1.10 ready for /gsd:complete-milestone"
-last_updated: "2026-05-26T15:16:56.603Z"
-last_activity: 2026-05-26 — Milestone v1.10 completed and archived
+milestone: v1.11
+milestone_name: API Handoff + Production Hardening
+status: planning
+last_updated: "2026-05-26T15:32:54.090Z"
+last_activity: 2026-05-26
 progress:
-  total_phases: 8
-  completed_phases: 2
-  total_plans: 16
-  completed_plans: 16
-  percent: 25
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand) per D-10-SPLIT; Phases 63-67 → v1.11)
+See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v1.10 clubcore Rebrand SHIPPED 2026-05-26 (tag `v1.10`; 10/10 REB-* satisfied). Next: open v1.11 API Handoff + Production Hardening via `/gsd-new-milestone` (Phases 63-67 — Tech-Debt Sweep → Contract Freeze → Handoff Artifacts → Idempotency Hardening → Operator-Pending Runbook Execution). Phase 999.1 (WR-06 PT session credit restore) sits in Backlog — promote via `/gsd:review-backlog` when v1.11 opens.
+**Current focus:** v1.11 API Handoff + Production Hardening opened 2026-05-26 (Phases 63-67 — Tech-Debt Sweep → Contract Freeze → Handoff Artifacts → Idempotency Hardening → Operator-Pending Runbook Execution). Backend-only milestone; no new business features. Research-first mode selected; requirements + roadmap will be defined in this session. Phase 999.1 (WR-06 PT session credit restore) sits in Backlog — promote via `/gsd:review-backlog` separately when ready.
 
 ## Current Position
 
-Phase: Milestone v1.10 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-26 — Milestone v1.10 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-26 — Milestone v1.11 started
 
 ## v1.10 Roadmap Summary
 

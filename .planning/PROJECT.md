@@ -80,9 +80,16 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Current Milestone: v1.11 API Handoff + Production Hardening (not yet opened)
+## Current Milestone: v1.11 API Handoff + Production Hardening
 
 **Goal:** Close v1.10 carry-over под clean clubcore-именем — tech-debt sweep, OpenAPI curation + contract freeze, handoff artifacts (Postman/Newman + auth runbook + private doc-site), idempotency hardening (CR-01/02/02b), operator-pending runbook execution. Финальный baseline перед v2.0 frontend-интеграцией.
+
+**Target features:**
+- Tech-debt sweep (DEFER-46-04 ruff/format/mypy на чистом дереве + DEFER-36-04-B + DEFER-40-01 v1.5 runbook tooling)
+- OpenAPI contract curation + freeze (explicit `operation_id=` + `tags=[...]` + `info`/`servers`/`securitySchemes` гигиена + pre-freeze drift gate baseline)
+- Handoff artifacts (curated Postman v2.1 + Newman CLI smoke + расширенный `clubcore-auth-runbook.md` + private gitignored OpenAPI doc-site via Redocly/Stoplight)
+- Idempotency hardening (CR-01/02/02b closed; standardized `Idempotency-Key` Redis-cache flow; `components.parameters.IdempotencyKey` OpenAPI reusable parameter)
+- Operator-pending runbook execution (v1.7 VER-03 + CARRY-01/02; v1.8 VER-01; v1.9 D-61-12 trainers; MailHog `--profile dev` evidence)
 
 **Phases (planned, 63-67):**
 - **Phase 63 — Tech-Debt Sweep**: DEFER-46-04 (ruff/format/mypy на чистом дереве) + DEFER-36-04-B + DEFER-40-01 (v1.5 runbook tooling)
@@ -91,7 +98,7 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 - **Phase 66 — Idempotency Hardening**: audit всех mutating endpoints, стандартизированный `Idempotency-Key` Redis-cache flow, OpenAPI reusable parameter
 - **Phase 67 — Operator-Pending Runbook Execution**: накопившиеся walkthroughs (v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12); MailHog `--profile dev`; evidence захвачен
 
-**Status:** Not yet opened. `REQUIREMENTS.md` будет recreated fresh per project convention; 22-requirement snapshot уже сохранён под "Planned for v1.11" в архивированном `.planning/milestones/v1.10-REQUIREMENTS.md`.
+**Status:** Opened 2026-05-26. Phase numbering continues from v1.10 close (last phase 62.1 → v1.11 starts at Phase 63). `REQUIREMENTS.md` recreated fresh per project convention; 22-requirement snapshot preserved under "Planned for v1.11" in archived `.planning/milestones/v1.10-REQUIREMENTS.md`.
 
 **Key constraints:**
 - Backend-only milestone — `apps/admin-web` остаётся frozen mock reference; production admin + client apps разрабатываются дизайн-командой вне репозитория и интегрируются в v2.0
@@ -350,7 +357,7 @@ Target features (all delivered):
 
 ### Active
 
-**Milestone v1.11 — API Handoff + Production Hardening** (not yet opened; Phases 63-67). Backend-only; no new business features. Scope: Tech-Debt Sweep (DEFER-46-04 ruff/format/mypy + DEFER-36-04-B + DEFER-40-01 run.sh) → Contract Freeze with OpenAPI curation (explicit `operation_id=` + `tags=[...]` + `info`/`servers`/`securitySchemes` hygiene + pre-freeze drift gate) → Handoff Artifacts (curated Postman v2.1 + Newman CLI smoke + расширенный `clubcore-auth-runbook.md` + private gitignored OpenAPI doc-site via Redocly/Stoplight) → Idempotency Hardening (audit всех mutating endpoints; CR-01/02/02b closed; standardized `Idempotency-Key` Redis-cache flow + `components.parameters.IdempotencyKey` OpenAPI reusable parameter) → Operator-Pending Runbook Execution (v1.7 VER-03 sandbox walkthrough + CARRY-01 live RU email-deliverability probe + CARRY-02 owner 15-template countersign, v1.8 VER-01 live runbook, v1.9 D-61-12 trainers runbook, MailHog `--profile dev` evidence). 22-requirement snapshot preserved under "Planned for v1.11" in archived `.planning/milestones/v1.10-REQUIREMENTS.md`. `REQUIREMENTS.md` will be recreated fresh per project convention when milestone opens.
+**Milestone v1.11 — API Handoff + Production Hardening** (opened 2026-05-26; Phases 63-67). Backend-only; no new business features. Scope: Tech-Debt Sweep (DEFER-46-04 ruff/format/mypy + DEFER-36-04-B + DEFER-40-01 run.sh) → Contract Freeze with OpenAPI curation (explicit `operation_id=` + `tags=[...]` + `info`/`servers`/`securitySchemes` hygiene + pre-freeze drift gate) → Handoff Artifacts (curated Postman v2.1 + Newman CLI smoke + расширенный `clubcore-auth-runbook.md` + private gitignored OpenAPI doc-site via Redocly/Stoplight) → Idempotency Hardening (audit всех mutating endpoints; CR-01/02/02b closed; standardized `Idempotency-Key` Redis-cache flow + `components.parameters.IdempotencyKey` OpenAPI reusable parameter) → Operator-Pending Runbook Execution (v1.7 VER-03 sandbox walkthrough + CARRY-01 live RU email-deliverability probe + CARRY-02 owner 15-template countersign, v1.8 VER-01 live runbook, v1.9 D-61-12 trainers runbook, MailHog `--profile dev` evidence). REQUIREMENTS.md recreated fresh per project convention; 22-requirement snapshot preserved under "Planned for v1.11" in archived `.planning/milestones/v1.10-REQUIREMENTS.md`.
 
 ### Out of Scope
 
@@ -471,7 +478,14 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
+*Last updated: 2026-05-26 — started milestone v1.11 API Handoff + Production Hardening (Phases 63-67, continues numbering from v1.10/62.1). Backend-only milestone; no new business features and no new ORM entities. Scope: Tech-Debt Sweep (DEFER-46-04 ruff/format/mypy on clean tree + DEFER-36-04-B + DEFER-40-01 v1.5 runbook tooling) → Contract Freeze with OpenAPI curation (explicit `operation_id=` + `tags=[...]` + `info`/`servers`/`securitySchemes` hygiene + pre-freeze drift gate baseline) → Handoff Artifacts (curated Postman v2.1 + Newman CLI smoke + extended `clubcore-auth-runbook.md` + private gitignored OpenAPI doc-site via Redocly/Stoplight) → Idempotency Hardening (CR-01/02/02b closed; standardized `Idempotency-Key` Redis-cache flow + `components.parameters.IdempotencyKey` OpenAPI reusable parameter) → Operator-Pending Runbook Execution (v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12 trainers, MailHog `--profile dev` evidence). Research-first mode selected; REQUIREMENTS.md recreated fresh per project convention. 22-requirement snapshot preserved under "Planned for v1.11" in archived `.planning/milestones/v1.10-REQUIREMENTS.md`.*
+
+<details>
+<summary>Previous footer (v1.10 close, 2026-05-26)</summary>
+
 *Last updated: 2026-05-26 — v1.10 clubcore Rebrand milestone SHIPPED (Phase 62 + closure Phase 62.1, 16 plans, 10/10 REB-* requirements satisfied; audit `v1.10-MILESTONE-AUDIT.md` 8/8 PASSED + addendum `v1.10-MILESTONE-AUDIT-ADDENDUM.md` 10/10 PASSED; tag `v1.10`). Full project rename `sportzal → clubcore`: pnpm workspace (`@clubcore/*`), localStorage (`clubcore:*:v2` Zustand v1→v2 copy-on-read+delete), Redis (`cc:*` operator FLUSHDB), `CLUB_BRAND` constant in `app/core/branding.py` (placeholder value retained per D-62-02), `CLUBCORE_EMAIL_FROM` env with `SPORTZAL_EMAIL_FROM` deprecated-warning fallback chain, Postgres DB rename runbook + DNS/DKIM checklist + local pg_dump/restore round-trip evidence, forward-only `.planning/` rewrite with `HISTORICAL_NOTE.md` preserving Phases 47-61 + audits as immutable audit trail. Phase 62.1 closure stripped the 4 sportzal-era back-compat shims (REB-09) + captured operator evidence (REB-10) so v1.11 opens against a fully-clean tree. Original 6-phase scope narrowed to single phase per D-10-SPLIT; Phases 63-67 (Tech-Debt Sweep → Contract Freeze → Handoff Artifacts → Idempotency Hardening → Operator-Pending Runbook Execution) moved to v1.11 API Handoff + Production Hardening (not yet opened; REQUIREMENTS.md to be recreated fresh when opens, per project convention).*
+
+</details>
 
 <details>
 <summary>Previous footer (v1.10 mid-milestone, 2026-05-26)</summary>
