@@ -30,7 +30,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 Note: Phase numbers are sequential (63-67) but execution order is non-monotonic. Phase 65 (Handoff Artifacts) executes AFTER Phase 66 (Idempotency Hardening) because the Postman collection, Newman smoke harness, and auth runbook must reflect the `components.parameters.IdempotencyKey` reusable parameter and the 7 additional `Depends(verify_idempotency)` wired endpoints added in Phase 66.
 
-- [ ] **Phase 63: Tech-Debt Sweep** — CI tree cleaned: ruff format + ruff safe-fix + mypy strict all exit 0; v1.5 run.sh hardened; all 6 backend CI gates green on swept tree (DEBT-01..05)
+- [x] **Phase 63: Tech-Debt Sweep** — CI tree cleaned: ruff format + ruff safe-fix + mypy strict all exit 0; v1.5 run.sh hardened; all 6 backend CI gates green on swept tree (DEBT-01..05) (completed 2026-05-26)
 - [ ] **Phase 64: Contract Freeze — OpenAPI Curation** — Curated OpenAPI spec under clubcore name: correct `info.*`, `servers`, `securitySchemes`, explicit operation IDs, tags for 10 domains, shared `components.responses`; Redocly lint added as 7th CI gate; baseline tag committed (FRZ-01..08)
 - [ ] **Phase 66: Idempotency Hardening** *(executes before Phase 65)* — `verify_idempotency` user-scoped (security fix); 86400s TTL; all category-A endpoints covered; `components.parameters.IdempotencyKey` in spec; double-submit integration tests pass (IDM-01..07)
 - [ ] **Phase 65: Handoff Artifacts** *(executes after Phase 66)* — Postman v2.1 collection + Newman smoke harness + `clubcore-auth-runbook.md` + private Redocly doc-site delivered as a complete handoff package from the post-Phase-66 frozen spec (HND-01..06)
@@ -55,7 +55,7 @@ Plans:
 - [x] 63-02-PLAN.md — DEBT-02 ruff check --fix safe-only (158 → 0; no --unsafe-fixes)
 - [x] 63-03-PLAN.md — DEBT-03 mypy strict cleanup (11 → 0) + auth/models.py __all__ fix + tests.* mypy override
 - [x] 63-04-PLAN.md — DEBT-04 v1.5/run.sh hardening (4 hotfixes + RBAC actor + X-CSRF-Token header)
-- [ ] 63-05-PLAN.md — DEBT-05 verify all 6 backend CI gates exit 0; capture GitHub Actions CI run URL post-merge
+- [x] 63-05-PLAN.md — DEBT-05 verify all 6 backend CI gates exit 0; capture GitHub Actions CI run URL post-merge
 
 ### Phase 64: Contract Freeze — OpenAPI Curation
 **Goal**: The `openapi.json` spec is the authoritative, curated single source of truth under the clubcore name — correct metadata, stable operation IDs, explicit tags for all 10 domains, shared error responses, and a passing Redocly lint gate in CI
@@ -123,7 +123,7 @@ Plans:
 | 58-61. Trainers Complete | v1.9 | 22/22 | Complete | 2026-05-26 |
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
-| 63. Tech-Debt Sweep | v1.11 | 4/5 | In Progress|  |
+| 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete   | 2026-05-26 |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/TBD | Not started | — |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
