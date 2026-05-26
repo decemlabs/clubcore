@@ -27,8 +27,8 @@
 - [x] **REB-06**: `import-linter` контракты + ESLint правила обновлены под новые package names — `.importlinter` + `eslint.config.js` `no-restricted-paths` zones (если ссылаются на `@sportzal/*`) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
 - [x] **REB-07**: CI workflow `.github/workflows/ci.yml` пересматривает все ссылки на `@sportzal/*` пакеты в `pnpm --filter` инвокациях; backend Docker image labels / compose service names проверены *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
 - [x] **REB-08**: backend + admin-web smoke-проверка после rebrand — backend `pytest` зелёный, admin-web `typecheck` + `lint` + `test` зелёные, `docker compose up` поднимается без ошибок, openapi.json + schema.d.ts регенерируются byte-stably под новым именем *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
-- [ ] **REB-09**: Shim removal (4 sites) — strip the four `sportzal`-era back-compat shims tagged `TODO Phase 67 / RUN-07` AND their marker comments: (a) `apps/admin-web/src/app/main.tsx` localStorage migrator block, (b) `apps/admin-web/index.html` theme-bootstrap inline script `sportzal:ui:v1` fallback read, (c) `apps/backend/app/core/config.py:128-159` `SPORTZAL_EMAIL_FROM` deprecated-warning fallback resolver, (d) `.planning/handoff/clubcore-db-rename-runbook.md` `cc:*` Redis cutover note instructing operator FLUSHDB of `sz:*`. Acceptance: `grep -rn "TODO Phase 67 / RUN-07" .` returns 0 matches; full backend `pytest` + admin-web `vitest`/`typecheck`/`lint` remain green; admin-web boots in a browser with no localStorage migration log line emitted. *(pulled forward from v1.11/Phase 67/RUN-07 on 2026-05-26 per D-62.1-A1)*
-- [ ] **REB-10**: Operator-pending evidence captured — `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` exists with (a) captured local pg_dump/restore round-trip output proving the runbook commands execute cleanly against the dev DB (restore target = dedicated `clubcore_smoke` DB so live `clubcore` DB is untouched), (b) explicit `DNS/DKIM: N/A-until-production` row with the trigger-condition documented (fires when a real `clubcore.*` domain is provisioned; resulting `Authentication-Results` headers append to the same file). *(pulled forward from v1.11/Phase 67/RUN-08 on 2026-05-26 per D-62.1-B1)*
+- [x] **REB-09**: Shim removal (4 sites) — strip the four `sportzal`-era back-compat shims tagged `TODO Phase 67 / RUN-07` AND their marker comments: (a) `apps/admin-web/src/app/main.tsx` localStorage migrator block, (b) `apps/admin-web/index.html` theme-bootstrap inline script `sportzal:ui:v1` fallback read, (c) `apps/backend/app/core/config.py:128-159` `SPORTZAL_EMAIL_FROM` deprecated-warning fallback resolver, (d) `.planning/handoff/clubcore-db-rename-runbook.md` `cc:*` Redis cutover note instructing operator FLUSHDB of `sz:*`. Acceptance: `grep -rn "TODO Phase 67 / RUN-07" .` returns 0 matches; full backend `pytest` + admin-web `vitest`/`typecheck`/`lint` remain green; admin-web boots in a browser with no localStorage migration log line emitted. *(pulled forward from v1.11/Phase 67/RUN-07 on 2026-05-26 per D-62.1-A1)* *(verified 2026-05-26 by Phase 62.1 plans 62.1-04 through 62.1-07 — see .planning/v1.10-MILESTONE-AUDIT-ADDENDUM.md)*
+- [x] **REB-10**: Operator-pending evidence captured — `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` exists with (a) captured local pg_dump/restore round-trip output proving the runbook commands execute cleanly against the dev DB (restore target = dedicated `clubcore_smoke` DB so live `clubcore` DB is untouched), (b) explicit `DNS/DKIM: N/A-until-production` row with the trigger-condition documented (fires when a real `clubcore.*` domain is provisioned; resulting `Authentication-Results` headers append to the same file). *(pulled forward from v1.11/Phase 67/RUN-08 on 2026-05-26 per D-62.1-B1)* *(verified 2026-05-26 by Phase 62.1 plan 62.1-08 — see .planning/v1.10-MILESTONE-AUDIT-ADDENDUM.md)*
 
 ## Planned for v1.11 (API Handoff + Production Hardening) — Not Yet Defined
 
@@ -117,13 +117,16 @@ Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 on
 | REB-06 | Phase 62 | Complete |
 | REB-07 | Phase 62 | Complete |
 | REB-08 | Phase 62 | Complete |
-| REB-09 | Phase 62.1 | Pending |
-| REB-10 | Phase 62.1 | Pending |
+| REB-09 | Phase 62.1 | Complete |
+| REB-10 | Phase 62.1 | Complete |
 
 **Coverage (v1.10 active):**
 - v1.10 requirements: **10 total** (REB:10 — 8 from Phase 62 + 2 from Phase 62.1)
 - Mapped to phases: **10/10** ✓
+- Satisfied: **10/10 satisfied** ✓
 - Unmapped: 0
+
+*Final v1.10 closure: REB-09 + REB-10 verified 2026-05-26 by Phase 62.1 (plans 62.1-04..62.1-08). See .planning/v1.10-MILESTONE-AUDIT-ADDENDUM.md for 10/10 evidence.*
 
 **Phase distribution (v1.10):**
 - Phase 62 (Rebrand): 8 requirements
