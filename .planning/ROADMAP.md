@@ -154,7 +154,7 @@ Full details: [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 - [x] **Phase 58: Payroll Foundations + Ledger** - RBAC/audit pre-registration + comp-config API + accrual ledger + clawback hook (PAY-01..06) (completed 2026-05-25)
 - [x] **Phase 59: Recurring Schedule + Time-Off** - Recurring slot patterns + ARQ cron generation + time-off blocks + conflict guard (REC-01..04) (completed 2026-05-25)
 - [x] **Phase 60: Trainer-Usage Report** - Owner-only report of trainer load, revenue attribution, payroll summary + CSV export (RPT-01..04) (completed 2026-05-25)
-- [ ] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01)
+- [x] **Phase 61: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + v19 forward-guards + RBAC parity verification (HND-01) (completed 2026-05-26)
 
 ## Phase Details
 
@@ -249,7 +249,7 @@ Plans:
 - [x] 61-01-PLAN.md — Regenerate openapi.json + schema.d.ts byte-stably for v1.9 trainers surface
 - [x] 61-02-PLAN.md — Add _v19Checks AssertNonNever forward-guards + runtime toHaveLength(14) assertion
 - [x] 61-03-PLAN.md — Author .planning/handoff/v1.9-trainers-runbook.md (5 scenarios + OPERATOR-PENDING + attestation)
-- [ ] 61-04-PLAN.md — Milestone verification pass (RBAC parity + introspection + full suite + drift gates) + STATE.md close
+- [x] 61-04-PLAN.md — Milestone verification pass (RBAC parity + introspection + full suite + drift gates) + STATE.md close
 
 ## Progress
 
@@ -260,7 +260,7 @@ Plans:
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 5/5 | Complete   | 2026-05-25 |
 | 60. Trainer-Usage Report | 4/4 | Complete   | 2026-05-25 |
-| 61. OpenAPI Handoff + Milestone Verification | 3/4 | In Progress|  |
+| 61. OpenAPI Handoff + Milestone Verification | 4/4 | Complete   | 2026-05-26 |
 
 ---
 
