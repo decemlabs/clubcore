@@ -43,11 +43,13 @@ Phase 38 additions:
    composition-root register_* calls that wire the cross-module Protocol slots.
 """
 
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 
 from app.api.router import api
 from app.core.config import get_settings
@@ -90,6 +92,46 @@ from app.modules.auth.service import (
     set_redis_factory as set_auth_redis_factory,
 )
 from app.modules.memberships.service import resolve_active_membership_by_client
+
+# Phase 64 FRZ-02 / D-11-OPID / D-64-OPID-HOOK
+# Strip the `_api_v1_{method}` suffix that FastAPI appends by default to
+# operation IDs (e.g. `login_api_v1_auth_login_post` → `login`).
+# Wired via `FastAPI(generate_unique_id_function=custom_unique_id)` below.
+#
+# D-64-OPID-COLLISION fallback: four handler names collide after the strip
+# because both `app.modules.memberships.router` (mounted at /membership-plans)
+# and `app.modules.pt_packages.router` (mounted at /pt-package-plans) define
+# Python functions with identical names — `list_plans`, `create_plan`,
+# `get_plan`, `update_plan`. For the collision-set only, the tag prefix is
+# prepended (hyphens → underscores) to produce unique IDs:
+#   membership-plans  → membership_plans_list_plans / membership_plans_create_plan / …
+#   pt-package-plans  → pt_package_plans_list_plans / pt_package_plans_create_plan / …
+# All other routes continue to use the simple strip.
+_OPID_COLLISION_SET: frozenset[str] = frozenset(
+    {"list_plans", "create_plan", "get_plan", "update_plan"}
+)
+
+
+def custom_unique_id(route: APIRoute) -> str:
+    """Return a clean operation ID by stripping the FastAPI default suffix.
+
+    FastAPI's default `generate_unique_id` seeds the operation ID from the
+    Python handler name and then appends ``_{path-tokens}_{method}``, e.g.
+    ``login_api_v1_auth_login_post``.  This hook strips that suffix so the
+    spec contains ``login`` instead of the verbose default.
+
+    D-64-OPID-COLLISION fallback: when the stripped name belongs to
+    ``_OPID_COLLISION_SET`` (handlers shared by two routers that produce
+    identical names after stripping), the first route tag is prepended
+    (hyphens replaced by underscores) to disambiguate:
+        route.tags[0]="membership-plans"  → "membership_plans_list_plans"
+        route.tags[0]="pt-package-plans"  → "pt_package_plans_list_plans"
+    """
+    stripped = re.sub(r"_api_v1_.*", "", route.name)
+    if stripped in _OPID_COLLISION_SET and route.tags:
+        tag_prefix = re.sub(r"[^a-z0-9]", "_", str(route.tags[0]).lower())
+        return f"{tag_prefix}_{stripped}"
+    return stripped
 
 
 @asynccontextmanager
@@ -210,6 +252,7 @@ def create_app() -> FastAPI:
             "Phase 64-04)."
         ),
         servers=[{"url": "http://localhost:8000", "description": "Local dev"}],
+        generate_unique_id_function=custom_unique_id,
         lifespan=combined_lifespan,
         docs_url="/docs" if settings.environment == "dev" else None,
         redoc_url=None,
