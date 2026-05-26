@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Trainers Complete
-status: milestone_complete
-stopped_at: Milestone complete (Phase 61 was final phase)
-last_updated: 2026-05-26T07:07:56.060Z
-last_activity: 2026-05-26 -- Phase 61 milestone-close verified, v1.9 complete
+status: completed
+stopped_at: v1.9 Trainers Complete milestone shipped (Phases 58–61 complete)
+last_updated: "2026-05-26T07:29:20.765Z"
+last_activity: 2026-05-26 — Milestone v1.9 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,26 +25,26 @@ See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 ## Current Position
 
-Phase: 61
-Plan: Not started
-Status: v1.9 Trainers Complete milestone shipped
-Last activity: 2026-05-26
-
-Progress: [██████████] 100%
+Phase: Milestone v1.9 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-26 — Milestone v1.9 completed and archived
 
 ## Milestone Close — v1.9 Trainers Complete
 
-**Status:** Milestone complete
+**Status:** v1.9 milestone complete
 **Green-state baseline:** `.planning/phases/60-trainer-usage-report/60-VERIFICATION.md` —
 Phase 60 (final feature phase) verification report; all v1.9 payroll +
 recurring-schedule + trainer-report surface shipped and exercised.
 **Milestone-close artifacts (Phase 61 SUMMARYs):**
+
 - `.planning/phases/61-openapi-handoff-milestone-verification/61-01-SUMMARY.md` — openapi.json + schema.d.ts regen + drift-gate lockstep
 - `.planning/phases/61-openapi-handoff-milestone-verification/61-02-SUMMARY.md` — `_v19Checks` AssertNonNever forward-guards + count assertion
 - `.planning/phases/61-openapi-handoff-milestone-verification/61-03-SUMMARY.md` — `.planning/handoff/v1.9-trainers-runbook.md` authored (sectioned format mirroring v1.8 precedent)
 - `.planning/phases/61-openapi-handoff-milestone-verification/61-04-SUMMARY.md` — milestone-gate verification pass (8/8 green: parity + introspection + reception-403 + full pytest + frontend typecheck/test + lint-imports + drift gates + no-edit guard)
 
 **Milestone-gate verifications (all green at 2026-05-26):**
+
 - `pytest tests/integration/test_rbac_parity.py` — 4 passed (D-61-05)
 - `pytest tests/integration/test_route_introspection.py` — 3 passed (D-61-06)
 - `pytest tests/integration/rbac/test_owner_only.py` — 121 passed (D-61-06)
@@ -96,6 +96,16 @@ None blocking v1.9. Carry-over operator-pending items (CARRY-01, CARRY-02, VER-0
 
 ## Deferred Items
 
+Items acknowledged and deferred at v1.9 milestone close on 2026-05-26 (audit-open Acknowledge action):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | knowledge-base | unknown — stale session marker, no active investigation |
+| quick_task | 260501-ndi-fix-pyproject-toml-migrate-dev-deps-from | work shipped 2026-05-01 (commit efdb7cc5); orphan tracker file |
+| uat_gap | Phase 58 58-HUMAN-UAT.md | resolved status with 2 pending scenarios (operator-pending; covered by D-61-12 runbook) |
+| uat_gap | Phase 59 59-HUMAN-UAT.md | partial — WR-06 (force-cancel does not restore sessions_remaining) is pre-v1.9 documented product decision |
+| verification_gap | Phase 59 59-VERIFICATION.md | human_needed — WR-06 + live test infra; non-blocking per v1.9 audit |
+
 | Category | Item | Status | Source |
 |----------|------|--------|--------|
 | operator-pending | DEFER-46-01/CARRY-01 — live RU email-deliverability probe | operator-pending | Phase 46 |
@@ -112,3 +122,7 @@ None blocking v1.9. Carry-over operator-pending items (CARRY-01, CARRY-02, VER-0
 Last session: 2026-05-26T06:55:00.000Z
 Stopped at: v1.9 Trainers Complete milestone shipped (Phases 58–61 complete)
 Resume: v1.10+ planning. Live `v1.9-trainers-runbook.md` walkthrough is OPERATOR-PENDING (D-61-12) — not a phase-completion blocker.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

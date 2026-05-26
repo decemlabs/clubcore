@@ -300,6 +300,58 @@ A strictly read-only reporting + audit-read layer over the v1.4–v1.7 tables wi
 
 ### Cost Observations
 
+- Model mix: Opus 4.7 for orchestration + plan-phase; Sonnet 4.6 for executor + verifier agents. Roughly 30% opus / 65% sonnet / 5% haiku — read-only milestone meant less codegen, more spec/contract work.
+- Sessions: few; the 10-plan footprint collapsed multiple phases into single sessions.
+- Notable: the smallest milestone of the project by plan count (10 plans / 4 phases) delivering 30/30 requirements — proves the read-only/zero-new-entities approach when the data model already supports the feature.
+
+---
+
+## Milestone: v1.9 — Trainers Complete
+
+**Shipped:** 2026-05-26
+**Phases:** 4 (58–61) | **Plans:** 22
+
+### What Was Built
+
+The last incomplete business domain — Trainers — moves from catalog-only (v1.4) to ✅. New `app/modules/payroll/` (17th `modules-independent` entry, zero new `ignore_imports`) ships an owner-configurable comp model (commission_pct_bps + session_fee_kopecks, both nullable) plus an append-only `trainer_payroll_accruals` ledger (UNIQUE `(trainer_id, period_start, period_end)` so the DB arbitrates duplicate-period races; `INSERT ... ON CONFLICT DO NOTHING RETURNING` discipline; rate snapshot at run time; pending→paid idempotent; PT-package refund → same-UoW negative clawback row via `PayrollClawbackRecorder` Protocol slot). Rounding ratified mid-milestone (D-PAYROLL-ROUNDING corrected from banker's-rounding to integer `math.ceil` in trainer's favor) — `compute_accrual_components` became the single source of truth shared by preview/accrual/clawback paths. Recurring slot patterns + `trainer_time_off` blocks landed via Alembic 0042; a daily ARQ cron `generate_recurring_slots` (04:00 UTC, `unique=True`) materializes concrete `trainer_availability_slots` over a `RECURRING_SLOT_HORIZON_DAYS` env (default 56), skipping time-off windows and emitting `slot_published` only on real inserts. Time-off creation cascades active-slot cancellation + DM via the existing notification machinery; overlap with booked slots returns 409 unless `?force=true`. The v1.8-deferred Trainer-Usage report shipped with a single 4-CTE raw-SQL `text()` read (session/slot/revenue/payroll aggregates) + UTF-8-BOM CSV — strictly read-only (D-54-07/08 maintained), signed-SUM payroll netted with clawbacks so RPT-04 reflects refund reality. Phase 61 regenerated `openapi.json` + `schema.d.ts` byte-stably with all 14 v1.9 path×method combos, `_v19Checks` `AssertNonNever` tuple with `toHaveLength(14)`, and a fully green milestone-gate (2181/6 pytest, 4/4 RBAC parity, 3/3 route introspection, 121/121 reception-403, lint-imports + drift gates clean).
+
+### What Worked
+
+- **Pre-flight `D-RBAC-VERIFY` saved a phase of churn** — flagging "read `permissions.py` + `can.ts` first to check whether `Resource.PAYROLL/COMPENSATION` already exist" before Phase 58 implementation cut a likely false-start; the discipline of *verifying assumptions about existing scaffolding* on a milestone touching ground covered in v1.4 paid off cleanly.
+- **Mid-milestone D-PAYROLL-ROUNDING correction caught the right way** — the CONTEXT D-58-04 conflict (banker's-rounding intent vs. ceil-in-trainer's-favor implementation) surfaced during Phase 58 implementation, was ratified to ceil 2026-05-25, REQUIREMENTS.md L109 updated, and no code change was needed — proving that locked decisions can still be corrected when reality contradicts them, *if* the conflict is surfaced before it ossifies.
+- **Single `compute_accrual_components` helper became a real PITFALL preventer** — T-58-23 (PITFALL 1) was caught not by a checklist but by reusing the same function across preview/accrual/clawback. Refactoring to one helper before the second call site existed eliminated the entire class of "preview shows X, accrual writes Y" bugs.
+- **`INSERT ... ON CONFLICT DO NOTHING RETURNING` for DB-arbitrated races (D-58-06)** — replaced app-layer "check then insert" with a single statement where the DB decides; pattern reused for the recurring-slot materialization cron and was the cleanest concurrency story in any payroll system the codebase had attempted.
+- **Operator-deferral pattern now a well-worn groove** — D-61-12 runbook walkthrough deferral mirrors v1.4 CARRY-01, v1.7 VER-03, v1.8 D-12 exactly; the pattern is now load-bearing and the milestone closed without anyone needing to justify it.
+
+### What Was Inefficient
+
+- **CLI one-liner extractor STILL produces noise (3rd milestone in a row)** — `milestone.complete` again grabbed `One-liner:` literal field labels and Rule-1-Bug deviation bullets instead of phase one-liners; MILESTONES.md required full manual rewrite. v1.7, v1.8, and v1.9 have all hit this. The extractor is no longer worth running for accomplishments; the discipline is now "let it create the entry, then overwrite the body."
+- **REQUIREMENTS.md REC-01..04 checkboxes drifted unfixed through Phase 59 close** — the audit caught it (rows 24-27 + traceability 89-92 stale `[ ]` / Pending), but it should have been fixed at Phase 59 verification time, not at milestone close. Phase-close checklists need a "flip REQUIREMENTS.md rows now" step.
+- **Pre-close audit-open false-positives persist** — same noise as v1.8: stale debug-session marker, completed-but-flagged quick task, UAT-status normalizer still missing. Three milestones running of the same warnings being acknowledged-then-ignored.
+- **Phase 61 had a 2-call milestone.complete (duplicate v1.9 entry in MILESTONES.md)** — the CLI was called twice during this very close-out, producing duplicate sections that needed manual deduplication. Either the CLI should be idempotent on existing-version detection or the orchestrator should check before re-calling.
+
+### Patterns Established
+
+- **Versioned comp-config + snapshot-at-accrual** — config updates INSERT a new row with `is_current=true` (partial UNIQUE arbitrates), past accruals keep their snapshot rate. Mirrors v1.2 mandatory price snapshot but generalized to any rate-bearing config that history should preserve.
+- **Cron `function_names ⊆ function_names` invariant** — added a test that recurring-slot cron is registered in both the cron map and the function registry; prevents the v1.3 REG-29-03 / v1.5 REG-40 family of "cron job declared but worker can't find it" runtime failures.
+- **Signed-SUM netted aggregates in reports** — RPT-04 net-of-clawback uses `SUM(amount_kopecks)` over signed rows (positive accrual + negative clawback in the same table) so the read query "just works" without subqueries. Pattern transplants v1.4 ledger discipline to the report-aggregation layer.
+- **Same-UoW Protocol-slot cascades for cross-module refund effects** — `PayrollClawbackRecorder` extends the v1.4 `payment_recorder` + v1.5 `BookingSlotRestorer` pattern: a refund flow consumes a Protocol slot that lives in another module without importing it, and the cascade row is written in the *same* commit as the refund itself.
+
+### Key Lessons
+
+1. **Stop trusting the auto-extractor for MILESTONES.md.** Three milestones in a row of the same problem. Either fix the source-of-truth (`one_liner` field placement in SUMMARY.md) or commit to hand-writing the entry from phase summaries — running the CLI then rewriting is the worst of both worlds.
+2. **Documentation drift is a phase-close concern, not a milestone-close concern.** REC-01..04 checkboxes should have flipped at Phase 59 verification; carrying it to milestone close created audit noise. Phase-completion needs an "update REQUIREMENTS.md rows for this phase's reqs" gate.
+3. **Locked decisions remain editable when reality demands.** D-PAYROLL-ROUNDING was "locked" pre-Phase 58 and corrected mid-phase 58 when implementation revealed the conflict with D-58-04. The mechanism (REQUIREMENTS.md edit + audit-log entry noting the correction) worked; the lesson is to not treat "locked" as "frozen" — treat it as "if you change this, document why."
+4. **The milestone shipped in 2 days because every pattern was a copy.** v1.9 invented essentially zero new architecture — payroll ledger = v1.4 payments ledger; recurring cron = v1.3 expiring cron + v1.5 booking-reminder cron; trainer report = v1.8 reports module discipline. The каркас's "поэтапно наращивать без переписывания структуры" core value paid off most clearly here.
+
+### Cost Observations
+
+- Model mix: Opus 4.7 for orchestration + plan-phase; Sonnet 4.6 for executor + verifier agents. Roughly 30% opus / 65% sonnet / 5% haiku.
+- Sessions: ~6, with Phase 58 doing the heaviest single session (9 plans).
+- Notable: 22 plans across 4 phases at 0 inline product-code regressions reported in the milestone audit. The all-business-domains-✅ milestone arrived with under 3 days of wall-clock work — the structural payoff of v1.0–v1.8 bedrock.
+
+### Cost Observations
+
 - Model mix: Opus 4.7 for orchestration + plan-phase; Sonnet 4.6 for executor + verifier agents. Roughly 35% opus / 60% sonnet / 5% haiku — slightly more opus-weighted than v1.7 given the smaller, more judgment-heavy milestone.
 - Sessions: few; the milestone's small size (10 plans) meant several phases collapsed into single sessions.
 - Notable: the highest value-per-plan ratio of the project — 30 requirements delivered in 10 plans by consuming, not building, infrastructure.
@@ -320,6 +372,8 @@ A strictly read-only reporting + audit-read layer over the v1.4–v1.7 tables wi
 | v1.5 Schedule + Bookings (PT slots) | 4 | 20 | Race-safe partial UNIQUE `(slot_id) WHERE status='confirmed'`; bot `/book` self-service via `create_booking_via_bot` (NULL actor + `actor_role` Literal); 23:10 no-show cron + 06:35 reminder cron with `booking_notifications` idempotency; module-scope locked DM copy (D-39-02); DEFER pattern for runbook-scaffolding gaps |
 | v1.6 Email channel + Multi-user admin | 6 | 82 | `LOCKED_EMAIL_TEMPLATES` AST gate (parallel to `LOCKED_AUDIT_EVENTS`); INSERT-only re-claim discipline on partial-UNIQUE soft-delete; `actor_email_snapshot` denormalised audit; `_constant_time_floor` try/finally; in-phase gap-closure waves; agent structural attestation for owner-sign-off items; second Protocol-double-wire pattern (EmailDispatcher); 11 Alembic migrations in one milestone |
 | v1.7 Online Payments + 54-ФЗ | 7 | 47 | Async adapter wrapping a synchronous SDK behind frozen-dataclass boundary + respx fixtures; AST gate on `YOOKASSA_TRUSTED_IPS`; webhook security = IP allowlist + status re-fetch (no HMAC) with value-granting locked to the verified webhook; fiscal obligation FK'd to the committed ledger row; circuit-breaker + cross-channel discriminator transplanted from v1.6; 0/5 inline regressions across 47 plans (best ratio yet); operator-deferral pattern for credential-gated verification |
+| v1.8 Reports + Audit Log read API | 4 | 10 | Read-only module discipline (D-54-07/08: no `models.py`, raw-SQL `text()` cross-module reads, zero writes against business tables, SVC001 N/A); UTF-8 BOM + RFC-4180 excel CSV for Cyrillic-safe export (D-11); keyset pagination `ORDER BY created_at DESC, id DESC` with composite btree index for stable concurrent reads; DST golden-test as correctness anchor shared between automated test + operator runbook; smallest-milestone-ever (10 plans / 4 phases) by consuming existing tables instead of building |
+| v1.9 Trainers Complete | 4 | 22 | Versioned comp-config with snapshot-at-accrual rate (generalization of v1.2 price snapshot to any rate-bearing config); `INSERT ... ON CONFLICT DO NOTHING RETURNING` for DB-arbitrated races (D-58-06) reused in payroll accrual + recurring-slot materialization cron; `cron_function_names ⊆ function_names` invariant test preventing v1.3/v1.5-class registration-drift failures; signed-SUM netted aggregates in reports (positive accrual + negative clawback in one table → no subqueries); locked-decision-correction discipline (D-PAYROLL-ROUNDING ratified mid-Phase 58 when CONTEXT D-58-04 conflict surfaced) — all 8 business domains ✅ |
 
 ### Cumulative Quality
 
@@ -333,6 +387,8 @@ A strictly read-only reporting + audit-read layer over the v1.4–v1.7 tables wi
 | v1.5 | ~12.6K LOC backend | unchanged | 57/57 mapped (1 runbook deferred) | 1100+ backend (incl. 4 new locked DM templates + booking_notifications idempotency + 2 cron jobs) |
 | v1.6 | ~14K+ LOC backend (new `users/`, `integrations/email/`) | unchanged | 48/48 (VER-12 + VER-14 deferred to v1.7) | 1100+ backend + 76 OpenAPI forward-guards (65 → 76) + 6 real-Postgres race tests + 2 anti-oracle integration tests + 2 AST gates green |
 | v1.7 | ~37.7K LOC backend (new `online_payments/`, `online_refunds/`, `fiscal_receipts/`, `integrations/yookassa/`; Alembic at 0039) | unchanged (frozen mock reference) | 48/51 delivered (CARRY-01/02 + VER-03 operator-deferred) | 1992 passed / 0 failed after test-debt sweep; +16 Phase 53 tests (14 real-Postgres race + 2 circuit-breaker parity); 0/5 inline regressions; DEFER-46-03 + DEFER-36-04-A both CLOSED |
+| v1.8 | ~37.7K LOC backend (new read-only `app/modules/reports/`; Alembic at 0040, +3 audit-log indexes) | unchanged (frozen mock reference) | 30/30 (VER-01 live runbook operator-pending per D-12) | 2181-ish backend + 68 reports tests + 8 `_v18Checks` AssertNonNever forward-guards + `toHaveLength(8)` runtime + DST golden test |
+| v1.9 | new `app/modules/payroll/` + extended `app/modules/schedule/` (recurring + time-off) + new `reports/trainers` endpoint; Alembic at 0042 (0041 payroll + 0042 recurring/time-off) | unchanged (frozen mock reference) | 15/15 (D-61-12 live runbook operator-pending) | 2181 backend passed, 6 skipped + 121 reception-403 + 4 RBAC parity + 3 route-introspection + 14 `_v19Checks` forward-guards + `toHaveLength(14)` runtime; lint-imports 3 kept / 0 broken; drift gates clean |
 
 ### Top Lessons (Verified Across Milestones)
 
