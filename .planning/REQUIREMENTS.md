@@ -18,7 +18,7 @@ DEFER-46-04 + DEFER-36-04-B + DEFER-40-01 on a clean clubcore tree, BEFORE the c
 
 - [x] **DEBT-01**: DEFER-46-04 + DEFER-36-04-B ruff format pass applied across the whole tree (~297 files total: 205 from v1.6 era + 123 v1.4 residual); lands as a single dedicated commit; `uv run ruff format --check` exits 0 tree-wide afterwards.
 - [x] **DEBT-02**: DEFER-46-04 ruff safe-fix pass applied (`uv run ruff check --fix` without `--unsafe-fixes`); 158 errors → 0; lands as a separate commit from DEBT-01; CI gate `uv run ruff check` exits 0.
-- [ ] **DEBT-03**: DEFER-46-04 mypy strict cleanup in `apps/backend/app/` — 11 errors → 0 (including the `auth/models.py` `__all__` fix per PITFALLS Pitfall #6); residual errors in `tests/` left documented if any; `uv run mypy --strict app` exits 0; lands as a separate commit from DEBT-01/02.
+- [x] **DEBT-03**: DEFER-46-04 mypy strict cleanup in `apps/backend/app/` — 11 errors → 0 (including the `auth/models.py` `__all__` fix per PITFALLS Pitfall #6); residual errors in `tests/` left documented if any; `uv run mypy --strict app` exits 0; lands as a separate commit from DEBT-01/02.
 - [ ] **DEBT-04**: DEFER-40-01 v1.5 verification runbook tooling (`v1.5-verification-evidence/run.sh`) hardened — the 4 known hotfixes from Phase 40 retrospective applied: (a) Alembic 32-char revision-id limit, (b) `/healthz` not `/health`, (c) `trainer_availability_slots` not `trainer_slots`, (d) `verify_*@local.dev` fixture user defaults — plus RBAC actor fix on `POST /trainer-slots` and missing `X-CSRF-Token` header; documented in the runbook's revision log.
 - [ ] **DEBT-05**: All 6 backend CI gates green end-to-end on the swept tree (ruff + ruff format + mypy strict + import-linter + openapi.json drift + export_openapi); no `# type: ignore`, `# noqa`, or new `ignore_imports` introduced as part of the sweep.
 
@@ -131,7 +131,7 @@ Populated by gsd-roadmapper during Phase 10 of `/gsd:new-milestone`.
 |---|---|---|
 | DEBT-01 | Phase 63 | Complete |
 | DEBT-02 | Phase 63 | Complete |
-| DEBT-03 | Phase 63 | Pending |
+| DEBT-03 | Phase 63 | Complete |
 | DEBT-04 | Phase 63 | Pending |
 | DEBT-05 | Phase 63 | Pending |
 | FRZ-01 | Phase 64 | Pending |
