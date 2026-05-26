@@ -1808,6 +1808,37 @@
         "title": "PaginatedData[PaymentResponse]",
         "type": "object"
       },
+      "PaginatedData_PayrollAccrualResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PayrollAccrualResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[PayrollAccrualResponse]",
+        "type": "object"
+      },
       "PaginatedData_PtPackagePlanResponse_": {
         "properties": {
           "items": {
@@ -1901,6 +1932,37 @@
         "title": "PaginatedData[PtSessionResponse]",
         "type": "object"
       },
+      "PaginatedData_RecurringSlotTemplateResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecurringSlotTemplateResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[RecurringSlotTemplateResponse]",
+        "type": "object"
+      },
       "PaginatedData_SlotResponse_": {
         "properties": {
           "items": {
@@ -1930,6 +1992,37 @@
           "pageSize"
         ],
         "title": "PaginatedData[SlotResponse]",
+        "type": "object"
+      },
+      "PaginatedData_TimeOffResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TimeOffResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[TimeOffResponse]",
         "type": "object"
       },
       "PaginatedData_TrainerResponse_": {
@@ -2136,6 +2229,210 @@
           "receivedByUserId"
         ],
         "title": "PaymentResponse",
+        "type": "object"
+      },
+      "PayrollAccrualCreate": {
+        "additionalProperties": false,
+        "description": "POST /payroll/accruals request body (PAY-03 / D-58-13).\n\nperiod_start <= period_end is enforced by model_validator to produce a 422\nwith a descriptive message at the endpoint layer, before the service is called.",
+        "properties": {
+          "periodEnd": {
+            "format": "date",
+            "title": "Periodend",
+            "type": "string"
+          },
+          "periodStart": {
+            "format": "date",
+            "title": "Periodstart",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trainerId",
+          "periodStart",
+          "periodEnd"
+        ],
+        "title": "PayrollAccrualCreate",
+        "type": "object"
+      },
+      "PayrollAccrualResponse": {
+        "additionalProperties": false,
+        "description": "Outbound representation of a TrainerPayrollAccrual row (PAY-03..05 / D-58-13..14).\n\naccrual_kopecks is signed (positive for regular accruals; negative for clawback rows).\nAll temporal columns are UTC-aware datetimes.",
+        "properties": {
+          "accrualKopecks": {
+            "title": "Accrualkopecks",
+            "type": "integer"
+          },
+          "accruedAt": {
+            "format": "date-time",
+            "title": "Accruedat",
+            "type": "string"
+          },
+          "clawbackOfAccrualId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clawbackofaccrualid"
+          },
+          "commissionPctBpsSnapshot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissionpctbpssnapshot"
+          },
+          "compConfigIdSnapshot": {
+            "format": "uuid",
+            "title": "Compconfigidsnapshot",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "paidAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paidat"
+          },
+          "paidByUserId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paidbyuserid"
+          },
+          "periodEnd": {
+            "format": "date",
+            "title": "Periodend",
+            "type": "string"
+          },
+          "periodStart": {
+            "format": "date",
+            "title": "Periodstart",
+            "type": "string"
+          },
+          "revenueKopecks": {
+            "title": "Revenuekopecks",
+            "type": "integer"
+          },
+          "sessionFeeKopecksSnapshot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionfeekopeckssnapshot"
+          },
+          "sessionsCount": {
+            "title": "Sessionscount",
+            "type": "integer"
+          },
+          "sourceRefundPaymentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcerefundpaymentid"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trainerId",
+          "periodStart",
+          "periodEnd",
+          "sessionsCount",
+          "revenueKopecks",
+          "commissionPctBpsSnapshot",
+          "sessionFeeKopecksSnapshot",
+          "compConfigIdSnapshot",
+          "accrualKopecks",
+          "status",
+          "accruedAt",
+          "paidAt",
+          "paidByUserId",
+          "clawbackOfAccrualId",
+          "sourceRefundPaymentId"
+        ],
+        "title": "PayrollAccrualResponse",
+        "type": "object"
+      },
+      "PayrollPreviewResponse": {
+        "additionalProperties": false,
+        "description": "GET /payroll/preview response body (PAY-02 / D-58-12).\n\nPreview amounts are non-negative (no clawback in preview; that is a separate accrual).\nAll amounts in integer kopecks.",
+        "properties": {
+          "commissionKopecks": {
+            "minimum": 0.0,
+            "title": "Commissionkopecks",
+            "type": "integer"
+          },
+          "fixedKopecks": {
+            "minimum": 0.0,
+            "title": "Fixedkopecks",
+            "type": "integer"
+          },
+          "sessionCount": {
+            "minimum": 0.0,
+            "title": "Sessioncount",
+            "type": "integer"
+          },
+          "totalKopecks": {
+            "minimum": 0.0,
+            "title": "Totalkopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sessionCount",
+          "fixedKopecks",
+          "commissionKopecks",
+          "totalKopecks"
+        ],
+        "title": "PayrollPreviewResponse",
         "type": "object"
       },
       "PtPackageCancelRequest": {
@@ -2706,6 +3003,127 @@
         "title": "PtSessionResponse",
         "type": "object"
       },
+      "RecurringSlotTemplateCreate": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/recurring-templates body (REC-01 / D-59-02).\n\nMirrors the CHECK constraints from migration 0042 at the Pydantic layer\n(T-59-06 double gate — DTO validates before the DB CHECK fires):\n- day_of_week MUST be in [0, 6]  (0 = Mon, 6 = Sun ISO weekday).\n- end_time MUST be after start_time.\n- valid_until, when present, MUST be >= valid_from.",
+        "properties": {
+          "dayOfWeek": {
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Dayofweek",
+            "type": "integer"
+          },
+          "endTime": {
+            "format": "time",
+            "title": "Endtime",
+            "type": "string"
+          },
+          "startTime": {
+            "format": "time",
+            "title": "Starttime",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          },
+          "validFrom": {
+            "format": "date",
+            "title": "Validfrom",
+            "type": "string"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          }
+        },
+        "required": [
+          "trainerId",
+          "dayOfWeek",
+          "startTime",
+          "endTime",
+          "validFrom"
+        ],
+        "title": "RecurringSlotTemplateCreate",
+        "type": "object"
+      },
+      "RecurringSlotTemplateResponse": {
+        "description": "Outbound representation of a RecurringSlotTemplate (REC-01 / REC-04).",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "dayOfWeek": {
+            "title": "Dayofweek",
+            "type": "integer"
+          },
+          "endTime": {
+            "format": "time",
+            "title": "Endtime",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isActive": {
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "startTime": {
+            "format": "time",
+            "title": "Starttime",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          },
+          "validFrom": {
+            "format": "date",
+            "title": "Validfrom",
+            "type": "string"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          }
+        },
+        "required": [
+          "id",
+          "trainerId",
+          "dayOfWeek",
+          "startTime",
+          "endTime",
+          "validFrom",
+          "validUntil",
+          "isActive",
+          "createdAt"
+        ],
+        "title": "RecurringSlotTemplateResponse",
+        "type": "object"
+      },
       "ResponseEnvelope_BookingDetailResponse_": {
         "properties": {
           "data": {
@@ -2911,6 +3329,18 @@
         "title": "ResponseEnvelope[PaginatedData[PaymentResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_PayrollAccrualResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_PayrollAccrualResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[PayrollAccrualResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_PtPackagePlanResponse__": {
         "properties": {
           "data": {
@@ -2947,6 +3377,18 @@
         "title": "ResponseEnvelope[PaginatedData[PtSessionResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_RecurringSlotTemplateResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_RecurringSlotTemplateResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[RecurringSlotTemplateResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_SlotResponse__": {
         "properties": {
           "data": {
@@ -2957,6 +3399,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[SlotResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_TimeOffResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_TimeOffResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[TimeOffResponse]]",
         "type": "object"
       },
       "ResponseEnvelope_PaginatedData_TrainerResponse__": {
@@ -2995,6 +3449,30 @@
         "title": "ResponseEnvelope[PaginatedData[VisitResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PayrollAccrualResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PayrollAccrualResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PayrollAccrualResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PayrollPreviewResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PayrollPreviewResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PayrollPreviewResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_PtPackagePlanResponse_": {
         "properties": {
           "data": {
@@ -3029,6 +3507,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PtSessionResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_RecurringSlotTemplateResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RecurringSlotTemplateResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[RecurringSlotTemplateResponse]",
         "type": "object"
       },
       "ResponseEnvelope_RevenueReportResponse_": {
@@ -3091,6 +3581,30 @@
         "title": "ResponseEnvelope[TelegramStatusResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_TimeOffResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TimeOffResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[TimeOffResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_TrainerCompConfigResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrainerCompConfigResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[TrainerCompConfigResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_TrainerResponse_": {
         "properties": {
           "data": {
@@ -3101,6 +3615,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[TrainerResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_TrainerUsageReportResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrainerUsageReportResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[TrainerUsageReportResponse]",
         "type": "object"
       },
       "ResponseEnvelope_UserCreateResponse_": {
@@ -3357,7 +3883,7 @@
         "type": "object"
       },
       "SlotResponse": {
-        "description": "Outbound representation of a TrainerAvailabilitySlot (SLOT-02 / SLOT-08).\n\nPhase 40 BLOCKER-2 extension: ``trainer_full_name`` is projected via JOIN\non the trainers table at the repository layer (D-38-08 pattern preserved —\nno snapshot column on ``trainer_availability_slots``). The /book bot\nhandler (Phase 40 D-40-07) consumes this field directly to label the\nInlineKeyboard buttons without a secondary lookup.",
+        "description": "Outbound representation of a TrainerAvailabilitySlot (SLOT-02 / SLOT-08).\n\nPhase 40 BLOCKER-2 extension: ``trainer_full_name`` is projected via JOIN\non the trainers table at the repository layer (D-38-08 pattern preserved —\nno snapshot column on ``trainer_availability_slots``). The /book bot\nhandler (Phase 40 D-40-07) consumes this field directly to label the\nInlineKeyboard buttons without a secondary lookup.\n\nPhase 59 D-59-05: ``created_by_user_id`` is now ``UUID | None`` — the 0042\nmigration made the column nullable so the recurring-slot cron (Plan 05) can\nmaterialise slots with no human author.  The human publish_slot path\ncontinues to populate this field with the actor's UUID.",
         "properties": {
           "cancelReason": {
             "anyOf": [
@@ -3388,9 +3914,16 @@
             "type": "string"
           },
           "createdByUserId": {
-            "format": "uuid",
-            "title": "Createdbyuserid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdbyuserid"
           },
           "endTime": {
             "format": "date-time",
@@ -3540,6 +4073,195 @@
         "title": "TelegramVerifyRequest",
         "type": "object"
       },
+      "TimeOffCreate": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/trainer-time-off body (REC-03 / D-59-06).\n\nMirrors the CHECK constraint from migration 0042 at the Pydantic layer\n(T-59-07 double gate — DTO validates before the DB CHECK fires):\n- block_end MUST be after block_start.\nBoth fields MUST be timezone-aware (TIMESTAMPTZ; always stored in UTC).",
+        "properties": {
+          "blockEnd": {
+            "format": "date-time",
+            "title": "Blockend",
+            "type": "string"
+          },
+          "blockStart": {
+            "format": "date-time",
+            "title": "Blockstart",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trainerId",
+          "blockStart",
+          "blockEnd"
+        ],
+        "title": "TimeOffCreate",
+        "type": "object"
+      },
+      "TimeOffResponse": {
+        "description": "Outbound representation of a TrainerTimeOff block (REC-03 / REC-04).",
+        "properties": {
+          "blockEnd": {
+            "format": "date-time",
+            "title": "Blockend",
+            "type": "string"
+          },
+          "blockStart": {
+            "format": "date-time",
+            "title": "Blockstart",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trainerId",
+          "blockStart",
+          "blockEnd",
+          "reason",
+          "createdAt"
+        ],
+        "title": "TimeOffResponse",
+        "type": "object"
+      },
+      "TrainerCompConfigRequest": {
+        "additionalProperties": false,
+        "description": "PUT /payroll/trainer-configs/{trainer_id} request body (PAY-01 / D-58-10).\n\nT-58-13: bps ge=0/le=10000 mirrors DB CHECK\nck_trainer_comp_configs_commission_pct_bps_range.\nT-58-14: kopecks ge=0 mirrors DB CHECK\nck_trainer_comp_configs_session_fee_kopecks_nonneg.\nBoth NULL is allowed at write time; service validates both-NULL at accrual run time\n(D-58-09).",
+        "properties": {
+          "commissionPctBps": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissionpctbps"
+          },
+          "effectiveFrom": {
+            "format": "date",
+            "title": "Effectivefrom",
+            "type": "string"
+          },
+          "sessionFeeKopecks": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionfeekopecks"
+          }
+        },
+        "required": [
+          "effectiveFrom"
+        ],
+        "title": "TrainerCompConfigRequest",
+        "type": "object"
+      },
+      "TrainerCompConfigResponse": {
+        "additionalProperties": false,
+        "description": "Outbound representation of a TrainerCompConfig row (PAY-01 / D-58-11).\n\nT-58-15: Snapshot field exposure is accepted (owner-only RBAC gates the response).",
+        "properties": {
+          "commissionPctBps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissionpctbps"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "format": "date",
+            "title": "Effectivefrom",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sessionFeeKopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionfeekopecks"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trainerId",
+          "commissionPctBps",
+          "sessionFeeKopecks",
+          "effectiveFrom",
+          "createdAt"
+        ],
+        "title": "TrainerCompConfigResponse",
+        "type": "object"
+      },
       "TrainerCreateRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/trainers body. Required: fullName. Phone optional.",
@@ -3659,6 +4381,119 @@
           }
         },
         "title": "TrainerUpdateRequest",
+        "type": "object"
+      },
+      "TrainerUsageReportResponse": {
+        "description": "Trainer-usage report envelope (RPT-01..04).\n\nNon-paginated: single gym has O(10) trainers; no page/pageSize (D-60-09).\nrevenue_attribution_note: sourced from constants.TRAINER_REPORT_REVENUE_NOTE\n(D-60-07 single source of truth for the double-count disclosure wording).",
+        "properties": {
+          "fromDate": {
+            "format": "date",
+            "title": "Fromdate",
+            "type": "string"
+          },
+          "revenueAttributionNote": {
+            "default": "Revenue is attributed to pt_packages.trainer_id (assigned at sale). Packages currently have a single assigned trainer, so per-trainer revenue is unambiguous; if a package is reassigned during its lifecycle, revenue accrues to the trainer assigned at sale time. Summing revenue across trainers may not equal the global PT-package revenue total.",
+            "title": "Revenueattributionnote",
+            "type": "string"
+          },
+          "toDate": {
+            "format": "date",
+            "title": "Todate",
+            "type": "string"
+          },
+          "trainers": {
+            "items": {
+              "$ref": "#/components/schemas/TrainerUsageRow"
+            },
+            "title": "Trainers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "trainers",
+          "fromDate",
+          "toDate"
+        ],
+        "title": "TrainerUsageReportResponse",
+        "type": "object"
+      },
+      "TrainerUsageRow": {
+        "description": "Per-trainer aggregate row in the trainer-usage report (RPT-01..04).\n\nField order mirrors CSV_TRAINER_USAGE_HEADERS for diffability (D-60-11).\nMoney fields are integer kopecks (REV-05 / D-11).\nutilization_pct is None when 0 active|booked slots in the period (D-60-06).\navg_revenue_per_session is None when session_count == 0.\ntotal_accrued_kopecks is signed to net clawbacks automatically (D-58-03 / D-60-05).\ntrainer_name_snapshot: from trainers.full_name (NO is_active filter — PITFALL 11).",
+        "properties": {
+          "avgRevenuePerSession": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avgrevenuepersession"
+          },
+          "cancelledSessionCount": {
+            "title": "Cancelledsessioncount",
+            "type": "integer"
+          },
+          "revenueKopecks": {
+            "title": "Revenuekopecks",
+            "type": "integer"
+          },
+          "sessionCount": {
+            "title": "Sessioncount",
+            "type": "integer"
+          },
+          "totalAccruedKopecks": {
+            "title": "Totalaccruedkopecks",
+            "type": "integer"
+          },
+          "totalHours": {
+            "title": "Totalhours",
+            "type": "number"
+          },
+          "totalPaidKopecks": {
+            "title": "Totalpaidkopecks",
+            "type": "integer"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          },
+          "trainerNameSnapshot": {
+            "title": "Trainernamesnapshot",
+            "type": "string"
+          },
+          "uniqueClientCount": {
+            "title": "Uniqueclientcount",
+            "type": "integer"
+          },
+          "utilizationPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilizationpct"
+          }
+        },
+        "required": [
+          "trainerId",
+          "trainerNameSnapshot",
+          "sessionCount",
+          "cancelledSessionCount",
+          "totalHours",
+          "uniqueClientCount",
+          "utilizationPct",
+          "revenueKopecks",
+          "avgRevenuePerSession",
+          "totalAccruedKopecks",
+          "totalPaidKopecks"
+        ],
+        "title": "TrainerUsageRow",
         "type": "object"
       },
       "UserCreateRequest": {
@@ -6891,6 +7726,317 @@
         ]
       }
     },
+    "/api/v1/payroll/accruals": {
+      "get": {
+        "description": "List all payroll accrual rows for *trainer_id*, ordered accrued_at DESC (PAY-05 / D-58-14).\n\nBoth paid and pending rows are returned; clawback rows (negative accrual_kopecks)\nare included alongside regular accruals — no status or period filters (deferred per\nCONTEXT.md D-58-14).\n\nPagination (PageQuery): page (default 1) + pageSize (default 20, max 100).\nResponse envelope: { data: { items: [...], total: N, page: P, pageSize: S } }.\n\nOwner-only: (LIST, PAYROLL) ∈ OWNER_ONLY (pre-registered Plan 58-01).\nReception receives 403 (T-58-31 mitigate).\n\nThreat T-58-32: pageSize bounded by PageQuery Field(le=100) — resource exhaustion\nmitigated by the shared pagination validator.\nThreat T-58-33: trainer_id is a bound WHERE parameter; owner sees all trainers\nby design (no cross-trainer leakage).",
+        "operationId": "list_payroll_accruals_api_v1_payroll_accruals_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trainerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainerid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PayrollAccrualResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a trainer's payroll accruals paginated, accrued_at DESC (owner-only PAY-05 / D-58-14)",
+        "tags": [
+          "payroll"
+        ]
+      },
+      "post": {
+        "description": "INSERT an append-only accrual row with snapshotted rate/config (PAY-03 / D-58-03).\n\nResolution: uses ``service.compute_accrual_components`` as the single source of truth\n(same numbers as GET /preview; prevents recompute drift — PITFALL 1 / T-58-23).\nDB-wins-the-race idempotency: INSERT ON CONFLICT DO NOTHING RETURNING; duplicate\nperiod returns 409 ``payroll_period_already_run`` (T-58-27 / D-58-06).\n\nOwner-only: ``(CREATE, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).\nReception receives 403 (T-58-26 mitigate).\n\nRouter-layer 422 remap for CompConfigMissingError (same as preview; D-58-07 / D-58-09).\nPayrollPeriodAlreadyRunError propagates through AppError handler → 409.",
+        "operationId": "create_accrual_api_v1_payroll_accruals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayrollAccrualCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PayrollAccrualResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record payroll accrual with run-time-snapshotted rate (append-only; owner-only PAY-03 / D-58-03)",
+        "tags": [
+          "payroll"
+        ]
+      }
+    },
+    "/api/v1/payroll/accruals/{accrual_id}/mark-paid": {
+      "post": {
+        "description": "Transition accrual status from 'pending' → 'paid' (PAY-04 / D-58-08).\n\nUses SELECT FOR UPDATE row-lock before status check to prevent concurrent\ndouble-pay races (T-58-30). Second attempt → 409 ``already_paid``.\nNo unpay path — the 'paid' status is terminal.\n\nOwner-only: ``(EDIT, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).\nReception receives 403 (T-58-26 mitigate).\n\n``AlreadyPaidError`` propagates through AppError handler → 409.\n``AccrualNotFoundError`` (NotFoundError) propagates → 404.",
+        "operationId": "mark_accrual_paid_api_v1_payroll_accruals__accrual_id__mark_paid_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accrual_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Accrual Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PayrollAccrualResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark payroll accrual as paid (pending→paid single transition; owner-only PAY-04 / D-58-08)",
+        "tags": [
+          "payroll"
+        ]
+      }
+    },
+    "/api/v1/payroll/preview": {
+      "get": {
+        "description": "Return session_count, fixed_kopecks, commission_kopecks, total_kopecks for a period.\n\nRead-only — ZERO rows persisted, ZERO audit events emitted (D-58-12).\nShares compute logic with PAY-03 via ``service.compute_accrual_components`` to\nprevent recompute drift between preview and persisted accrual (PITFALL 1 / T-58-23).\n\nOwner-only: ``(LIST, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).\nReception receives 403 (T-58-22 mitigate).\n\nRouter-layer 422 remap for CompConfigMissingError (D-58-07 / D-58-09):\n  ``CompConfigMissingError`` from the service is caught HERE and re-raised as a\n  ``ValidationAppError`` with the same ``comp_config_missing`` code and 422 status.\n  This is the router-remap approach (one error class; PAY-01 GET path keeps 404).",
+        "operationId": "preview_payroll_api_v1_payroll_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trainerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainerid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "periodStart",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Periodstart",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "periodEnd",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Periodend",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PayrollPreviewResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview payroll accrual for a trainer + period (read-only, zero-persistence; owner-only PAY-02 / D-58-12)",
+        "tags": [
+          "payroll"
+        ]
+      }
+    },
+    "/api/v1/payroll/trainer-configs/{trainer_id}": {
+      "get": {
+        "description": "Resolve and return the active compensation config for the given trainer (PAY-01 / D-58-11).\n\n\"Active\" means the row with the latest ``effective_from`` that is <= today (MSK).\nReturns 404 ``comp_config_missing`` when no config exists for the trainer.\nOwner-only: ``(VIEW, COMPENSATION) ∈ OWNER_ONLY`` (pre-registered Phase A).\nReception receives 403 (T-58-17 mitigate).\n``CompConfigMissingError`` propagates to the centralised AppError handler → 404.",
+        "operationId": "get_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TrainerCompConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get the active comp config (latest effective_from <= today; owner-only PAY-01 / D-58-11)",
+        "tags": [
+          "payroll"
+        ]
+      },
+      "put": {
+        "description": "INSERT a new versioned compensation config for the given trainer (PAY-01 / D-58-02).\n\nEvery PUT inserts a NEW row — prior config rows are never modified.  The\nresponse body contains the newly created config row with its assigned ``id``.\nOwner-only: ``(CREATE, COMPENSATION) ∈ OWNER_ONLY`` (Plan 58-01 pre-registration).\nReception receives 403 (T-58-17 mitigate).",
+        "operationId": "set_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainerCompConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TrainerCompConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set/replace trainer comp config (INSERT-only versioned; owner-only PAY-01 / D-58-10)",
+        "tags": [
+          "payroll"
+        ]
+      }
+    },
     "/api/v1/pt-package-plans": {
       "get": {
         "description": "List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.",
@@ -7646,6 +8792,161 @@
         ]
       }
     },
+    "/api/v1/recurring-templates": {
+      "get": {
+        "description": "List recurring templates (REC-04 — both roles).\n\n(LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.",
+        "operationId": "list_recurring_templates_api_v1_recurring_templates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trainerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trainerid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_RecurringSlotTemplateResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List recurring slot templates (reception+owner; trainer_id filter)",
+        "tags": [
+          "schedule"
+        ]
+      },
+      "post": {
+        "description": "Create a recurring slot template (REC-01 / D-59-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nTwo-phase Redis idempotency (D-38-14 / Pitfall 14).\n\nError surface:\n  - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)",
+        "operationId": "create_recurring_template_api_v1_recurring_templates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringSlotTemplateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_RecurringSlotTemplateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a recurring slot template (owner-only; 409 recurring_template_duplicate on duplicate trainer+dow+start+valid_from; requires Idempotency-Key — D-38-14)",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/recurring-templates/{template_id}/deactivate": {
+      "post": {
+        "description": "Flip is_active=False on a recurring template (REC-01 deactivate).\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nForward-only: does not cancel materialized slots.",
+        "operationId": "deactivate_recurring_template_api_v1_recurring_templates__template_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_RecurringSlotTemplateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate a recurring slot template (owner-only; 404 recurring_template_not_found; requires Idempotency-Key)",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
     "/api/v1/reports/clients": {
       "get": {
         "description": "Clients snapshot: active memberships, expiring-within-N count, new-clients in range.\n\nAll counters exclude soft-deleted clients (CLR-04).\n`within` defaults to 7, range 1..30 (D-07); out-of-range → 422.\nActive/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
@@ -7896,6 +9197,105 @@
         ]
       }
     },
+    "/api/v1/reports/trainers": {
+      "get": {
+        "description": "Per-trainer aggregate for [fromDate, toDate] MSK: session counts, hours, unique clients, utilization %, revenue, accrued vs paid compensation. Revenue is attributed to the trainer assigned at PT-package sale time. Range cap: 366 days (D-06); toDate<fromDate → 422; reception → 403.",
+        "operationId": "get_trainers_report_api_v1_reports_trainers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TrainerUsageReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "reception forbidden — (VIEW, REPORTS) ∈ OWNER_ONLY"
+          },
+          "422": {
+            "description": "invalid period — toDate<fromDate or range>366 days"
+          }
+        },
+        "summary": "Trainer-usage report (owner-only; RPT-01..02, RPT-04)",
+        "tags": [
+          "reports",
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/trainers.csv": {
+      "get": {
+        "description": "Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV. Same query params as GET /reports/trainers. One row per trainer; money columns in period-decimal rubles; None/NULL cells render as empty string. Filename: trainer-usage-YYYY-MM-DD-YYYY-MM-DD.csv (EXP-01 precedent). Owner-only; reception → 403.",
+        "operationId": "get_trainers_csv_api_v1_reports_trainers_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trainer-usage CSV download (owner-only; RPT-03)",
+        "tags": [
+          "reports",
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/visits": {
       "get": {
         "description": "Visits composite report: daily counts, hourly distribution, averagePerDay.\n\nDaily groups by gym_date (MSK STORED column — no secondary TZ conversion, VIS-R-04).\nHourly groups by hour-of-day across the full range (VIS-R-02).\naveragePerDay = total visits / calendar days in range inclusive (D-10).\nSparse buckets: only days/hours with visits appear (D-08).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
@@ -7994,6 +9394,166 @@
         "summary": "Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)",
         "tags": [
           "reports"
+        ]
+      }
+    },
+    "/api/v1/time-off": {
+      "get": {
+        "description": "List time-off blocks (REC-04 — both roles).\n\n(LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.",
+        "operationId": "list_time_off_api_v1_time_off_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trainerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trainerid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_TimeOffResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List trainer time-off blocks (reception+owner; trainer_id filter)",
+        "tags": [
+          "schedule"
+        ]
+      },
+      "post": {
+        "description": "Create a trainer time-off block (REC-03 / D-59-06 LOCKED semantics).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403 (on both\nforce=true and force=false — threat model T-59-09).\n\nError surface:\n  - 409 time_off_booked_conflict  (booked slots overlap and force=False)",
+        "operationId": "create_time_off_api_v1_time_off_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimeOffCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_TimeOffResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a trainer time-off block (owner-only; 409 time_off_booked_conflict when booked slots overlap and ?force not set; ?force=true cascades booking cancellations + client DMs; requires Idempotency-Key — D-38-14)",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/time-off/{time_off_id}": {
+      "delete": {
+        "description": "Delete a trainer time-off block (REC-03 delete / forward-only).\n\n(DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nDoes NOT resurrect cancelled slots — next cron tick re-materializes new ones.",
+        "operationId": "delete_time_off_api_v1_time_off__time_off_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "time_off_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Time Off Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a trainer time-off block (owner-only; 404 time_off_not_found; forward-only — does not resurrect cancelled slots)",
+        "tags": [
+          "schedule"
         ]
       }
     },
