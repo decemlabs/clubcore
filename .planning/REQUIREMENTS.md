@@ -1,11 +1,11 @@
 # Requirements: clubcore (v1.10 — clubcore Rebrand)
 
 **Defined:** 2026-05-26
-**Last updated:** 2026-05-26 — milestone narrowed to Phase 62 only per D-10-SPLIT during /gsd:discuss-phase 62. Originally 32 requirements (6 phases); now 8 requirements (1 phase). Remaining 24 requirements (Phases 63-67) moved to v1.11 API Handoff + Production Hardening — see "Planned for v1.11" section below; REQUIREMENTS.md will be recreated fresh when v1.11 opens (per project convention).
+**Last updated:** 2026-05-26 — milestone narrowed to Phase 62 only per D-10-SPLIT during /gsd:discuss-phase 62. Originally 32 requirements (6 phases); now 10 requirements (1 phase + 1 inserted closure phase 62.1). Remaining 24 requirements (Phases 63-67) moved to v1.11 API Handoff + Production Hardening — see "Planned for v1.11" section below; REQUIREMENTS.md will be recreated fresh when v1.11 opens (per project convention).
 
 **Core Value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-**Milestone goal:** Полностью переименовать кодовую базу `sportzal → clubcore` — code identifiers (пакеты, localStorage, Redis), operator-tier renames (Postgres DB, email FROM env с deprecated-warning fallback, DNS/DKIM checklist), `CLUB_BRAND` constant extraction в email_templates, forward-only `.planning/` rewrite (historical phase folders immutable как audit trail). Контракт замораживается под правильным именем для последующего v1.11 handoff cycle.
+**Milestone goal:** Полностью переименовать кодовую базу `sportzal → clubcore` — code identifiers (пакеты, localStorage, Redis), operator-tier renames (Postgres DB, email FROM env с deprecated-warning fallback, DNS/DKIM checklist), `CLUB_BRAND` constant extraction в email_templates, forward-only `.planning/` rewrite (historical phase folders immutable как audit trail). Контракт замораживается под правильным именем для последующего v1.11 handoff cycle. Closure phase 62.1 (inserted 2026-05-26) finalizes the rename by removing the 4 back-compat shims and capturing local operator evidence (REB-09 + REB-10).
 
 **Constraints carried into this milestone:**
 
@@ -27,10 +27,12 @@
 - [x] **REB-06**: `import-linter` контракты + ESLint правила обновлены под новые package names — `.importlinter` + `eslint.config.js` `no-restricted-paths` zones (если ссылаются на `@sportzal/*`) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
 - [x] **REB-07**: CI workflow `.github/workflows/ci.yml` пересматривает все ссылки на `@sportzal/*` пакеты в `pnpm --filter` инвокациях; backend Docker image labels / compose service names проверены *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
 - [x] **REB-08**: backend + admin-web smoke-проверка после rebrand — backend `pytest` зелёный, admin-web `typecheck` + `lint` + `test` зелёные, `docker compose up` поднимается без ошибок, openapi.json + schema.d.ts регенерируются byte-stably под новым именем *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
+- [ ] **REB-09**: Shim removal (4 sites) — strip the four `sportzal`-era back-compat shims tagged `TODO Phase 67 / RUN-07` AND their marker comments: (a) `apps/admin-web/src/app/main.tsx` localStorage migrator block, (b) `apps/admin-web/index.html` theme-bootstrap inline script `sportzal:ui:v1` fallback read, (c) `apps/backend/app/core/config.py:128-159` `SPORTZAL_EMAIL_FROM` deprecated-warning fallback resolver, (d) `.planning/handoff/clubcore-db-rename-runbook.md` `cc:*` Redis cutover note instructing operator FLUSHDB of `sz:*`. Acceptance: `grep -rn "TODO Phase 67 / RUN-07" .` returns 0 matches; full backend `pytest` + admin-web `vitest`/`typecheck`/`lint` remain green; admin-web boots in a browser with no localStorage migration log line emitted. *(pulled forward from v1.11/Phase 67/RUN-07 on 2026-05-26 per D-62.1-A1)*
+- [ ] **REB-10**: Operator-pending evidence captured — `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` exists with (a) captured local pg_dump/restore round-trip output proving the runbook commands execute cleanly against the dev DB (restore target = dedicated `clubcore_smoke` DB so live `clubcore` DB is untouched), (b) explicit `DNS/DKIM: N/A-until-production` row with the trigger-condition documented (fires when a real `clubcore.*` domain is provisioned; resulting `Authentication-Results` headers append to the same file). *(pulled forward from v1.11/Phase 67/RUN-08 on 2026-05-26 per D-62.1-B1)*
 
 ## Planned for v1.11 (API Handoff + Production Hardening) — Not Yet Defined
 
-The 24 requirements below originally appeared in v1.10 and are now scheduled for v1.11 (Phases 63-67). They remain unmapped in any active milestone; when v1.11 opens, `REQUIREMENTS.md` will be recreated fresh per project convention and these requirements will be re-stated there with updated context. Listed here as a snapshot of v1.11 intent.
+The 22 requirements below originally appeared in v1.10 and are now scheduled for v1.11 (Phases 63-67). They remain unmapped in any active milestone; when v1.11 opens, `REQUIREMENTS.md` will be recreated fresh per project convention and these requirements will be re-stated there with updated context. Listed here as a snapshot of v1.11 intent.
 
 <details>
 <summary>v1.11 requirement snapshot (HND/FRZ/IDM/DEBT/RUN — 24 reqs)</summary>
@@ -73,8 +75,7 @@ The 24 requirements below originally appeared in v1.10 and are now scheduled for
 - **RUN-04**: v1.8 VER-01 — live `docker compose up` reports runbook walkthrough
 - **RUN-05**: v1.9 D-61-12 — trainers runbook walkthrough (513-line, 5 scenarios)
 - **RUN-06**: DEFER-46-05 MailHog `--profile dev` integration в `docker-compose.yml`
-- **RUN-07** (new in v1.11): v1.10 back-compat shim removal — strip `sportzal:*` localStorage migration logic + `SPORTZAL_EMAIL_FROM` env fallback + `cc:*` Redis cutover note в operator runbook
-- **RUN-08** (new in v1.11): v1.10 operator-tier rename evidence — DB rename (pg_dump/restore evidence + post-cutover smoke), DNS/DKIM `Authentication-Results` для нового домена
+*RUN-07 and RUN-08 pulled forward into v1.10 (Phase 62.1) on 2026-05-26 as REB-09 (shim removal) and REB-10 (operator-pending evidence) per D-62.1-X2 — see v1.10 active section above.*
 
 </details>
 
@@ -104,7 +105,7 @@ The 24 requirements below originally appeared in v1.10 and are now scheduled for
 
 ## Traceability
 
-Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 only per D-10-SPLIT. 8/8 active v1.10 requirements mapped; zero orphans, zero duplicates.
+Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 only per D-10-SPLIT. 10/10 active v1.10 requirements mapped; zero orphans, zero duplicates.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -116,16 +117,19 @@ Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 on
 | REB-06 | Phase 62 | Complete |
 | REB-07 | Phase 62 | Complete |
 | REB-08 | Phase 62 | Complete |
+| REB-09 | Phase 62.1 | Pending |
+| REB-10 | Phase 62.1 | Pending |
 
 **Coverage (v1.10 active):**
-- v1.10 requirements: **8 total** (REB:8)
-- Mapped to phases: **8/8** ✓
+- v1.10 requirements: **10 total** (REB:10 — 8 from Phase 62 + 2 from Phase 62.1)
+- Mapped to phases: **10/10** ✓
 - Unmapped: 0
 
 **Phase distribution (v1.10):**
 - Phase 62 (Rebrand): 8 requirements
+- Phase 62.1 (Closure — shim removal + operator evidence): 2 requirements (REB-09, REB-10)
 
-**v1.11 snapshot (24 requirements; not yet active):** see "Planned for v1.11" section above. Phases 63-67 (DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:6 + 2 new v1.10-shim-removal RUN-07/08) — to be formally re-stated в свежем REQUIREMENTS.md когда v1.11 откроется.
+**v1.11 snapshot (22 requirements; not yet active):** see "Planned for v1.11" section above. Phases 63-67 (DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:4 — RUN-07/08 pulled forward into v1.10 as REB-09/10 per D-62.1-X2) — to be formally re-stated в свежем REQUIREMENTS.md когда v1.11 откроется.
 
 ---
-*Requirements defined: 2026-05-26 — start of milestone v1.10 (originally clubcore Rebrand + API Handoff + Production Hardening, 32 requirements, 6 phases). Re-scoped 2026-05-26 to v1.10 = clubcore Rebrand (Phase 62 only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62 — Phase 62 scope expanded from "code-only rename" to include operator-tier renames (DB rename, CLUBCORE_EMAIL_FROM env, DNS/DKIM, FLUSHDB), making the original 6-phase milestone too heterogeneous to ship as one. Phases 63-67 (24 requirements) deferred to v1.11 API Handoff + Production Hardening (not yet opened).*
+*Requirements defined: 2026-05-26 — start of milestone v1.10 (originally clubcore Rebrand + API Handoff + Production Hardening, 32 requirements, 6 phases). Re-scoped 2026-05-26 to v1.10 = clubcore Rebrand (Phase 62 only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62 — Phase 62 scope expanded from "code-only rename" to include operator-tier renames (DB rename, CLUBCORE_EMAIL_FROM env, DNS/DKIM, FLUSHDB), making the original 6-phase milestone too heterogeneous to ship as one. Phases 63-67 (22 requirements) deferred to v1.11 API Handoff + Production Hardening (not yet opened). Updated 2026-05-26: Phase 62.1 inserted post-audit to close v1.10 with REB-09 (shim removal) + REB-10 (operator-pending evidence), pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-X1/X2.*
