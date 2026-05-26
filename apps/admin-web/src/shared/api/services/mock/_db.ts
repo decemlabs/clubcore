@@ -4,7 +4,7 @@ import type { Membership, MembershipId, MembershipPlan, MembershipPlanId, Member
 import type { Trainer } from '@/entities/trainer'
 import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
 
-const STORAGE_KEY = 'sportzal:mock:v1'
+const STORAGE_KEY = 'clubcore:mock:v2'
 const SEED_COUNT = 30
 const PLAN_COUNT = 8
 const MEMBERSHIP_COUNT = 40

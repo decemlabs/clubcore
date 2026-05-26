@@ -5,7 +5,7 @@ Faker-backed in-memory implementation. Per-domain service modules land here
 
 **Conventions**
 
-- Central DB seeded once with `faker.seed(42)`, persisted under `sportzal:mock:v1`.
+- Central DB seeded once with `faker.seed(42)`, persisted under `clubcore:mock:v2`.
 - Each service method awaits `simulateLatency()` and may throw a fake `DomainError`.
 - Role checks: call `can(role, action, resource)` from `@/shared/session/can`; if
   false, throw `{ code: 'forbidden', message: ... }` (mock 403-analog).

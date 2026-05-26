@@ -1,7 +1,7 @@
 # Session module — RBAC contract
 
 This is **not authentication.** The role is UI state, persisted via Zustand + `localStorage`
-under the key `sportzal:session:v1`. Two roles exist in v1: `owner` (Владелец) and
+under the key `clubcore:session:v2`. Two roles exist in v1: `owner` (Владелец) and
 `reception` (Ресепшн). Switching is a UI dropdown, not a login.
 
 ## Sources of truth
