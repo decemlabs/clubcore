@@ -384,7 +384,7 @@ def test_bookings_router_mounts_per_client_path() -> None:
     bookings_router_src = (repo_root / "app" / "modules" / "bookings" / "router.py").read_text(
         encoding="utf-8"
     )
-    assert "client_scoped_bookings_router = APIRouter()" in bookings_router_src, (
+    assert "client_scoped_bookings_router = APIRouter(" in bookings_router_src, (
         "client_scoped_bookings_router must be declared in bookings/router.py "
         "(Phase 38 Gap #2 — per-client URL contract)"
     )
