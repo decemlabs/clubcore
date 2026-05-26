@@ -639,13 +639,13 @@ export interface paths {
          * List alive membership plans (owner-only); paginated; ?active filter
          * @description List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.
          */
-        get: operations["membership_plans_list_plans"];
+        get: operations["memberships_list_plans"];
         put?: never;
         /**
          * Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)
          * @description Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.
          */
-        post: operations["membership_plans_create_plan"];
+        post: operations["memberships_create_plan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -663,7 +663,7 @@ export interface paths {
          * Fetch a single alive membership plan (owner-only)
          * @description Read one alive membership plan. 404 for missing or soft-deleted ids.
          */
-        get: operations["membership_plans_get_plan"];
+        get: operations["memberships_get_plan"];
         put?: never;
         post?: never;
         /**
@@ -683,7 +683,7 @@ export interface paths {
          * Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)
          * @description Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.
          */
-        patch: operations["membership_plans_update_plan"];
+        patch: operations["memberships_update_plan"];
         trace?: never;
     };
     "/api/v1/memberships": {
@@ -1305,13 +1305,13 @@ export interface paths {
          * List PT-package plans (owner-only); paginated; ?includeArchived toggle
          * @description List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.
          */
-        get: operations["pt_package_plans_list_plans"];
+        get: operations["payments_list_plans"];
         put?: never;
         /**
          * Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)
          * @description Create a PT-package plan (PT-02). CREATE + CSRF required.
          */
-        post: operations["pt_package_plans_create_plan"];
+        post: operations["payments_create_plan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1329,7 +1329,7 @@ export interface paths {
          * Fetch a single alive PT-package plan (owner-only)
          * @description Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.
          */
-        get: operations["pt_package_plans_get_plan"];
+        get: operations["payments_get_plan"];
         put?: never;
         post?: never;
         /**
@@ -1351,7 +1351,7 @@ export interface paths {
          *     price_kopecks / validity_days raises 409 ``field_immutable`` with
          *     ``fields.field`` carrying the offending field name.
          */
-        patch: operations["pt_package_plans_update_plan"];
+        patch: operations["payments_update_plan"];
         trace?: never;
     };
     "/api/v1/pt-packages": {
@@ -5572,7 +5572,7 @@ export interface operations {
             };
         };
     };
-    membership_plans_list_plans: {
+    memberships_list_plans: {
         parameters: {
             query?: {
                 page?: number;
@@ -5606,7 +5606,7 @@ export interface operations {
             };
         };
     };
-    membership_plans_create_plan: {
+    memberships_create_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -5639,7 +5639,7 @@ export interface operations {
             };
         };
     };
-    membership_plans_get_plan: {
+    memberships_get_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -5699,7 +5699,7 @@ export interface operations {
             };
         };
     };
-    membership_plans_update_plan: {
+    memberships_update_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6509,7 +6509,7 @@ export interface operations {
             };
         };
     };
-    pt_package_plans_list_plans: {
+    payments_list_plans: {
         parameters: {
             query?: {
                 page?: number;
@@ -6543,7 +6543,7 @@ export interface operations {
             };
         };
     };
-    pt_package_plans_create_plan: {
+    payments_create_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6576,7 +6576,7 @@ export interface operations {
             };
         };
     };
-    pt_package_plans_get_plan: {
+    payments_get_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6636,7 +6636,7 @@ export interface operations {
             };
         };
     };
-    pt_package_plans_update_plan: {
+    payments_update_plan: {
         parameters: {
             query?: never;
             header?: never;
