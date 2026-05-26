@@ -1,5 +1,5 @@
 {
-  "name": "sportzal-adminka",
+  "name": "clubcore-adminka",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "predev": "pnpm --filter @sportzal/api-client codegen",
+    "predev": "pnpm --filter @clubcore/api-client codegen",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
@@ -33,7 +33,7 @@
     "@radix-ui/react-separator": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
-    "@sportzal/api-client": "workspace:*",
+    "@clubcore/api-client": "workspace:*",
     "@tanstack/react-query": "^5.59.0",
     "@tanstack/react-router": "^1.95.0",
     "@tanstack/react-table": "^8.21.3",

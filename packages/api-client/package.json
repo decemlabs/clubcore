@@ -1,9 +1,9 @@
 {
-  "name": "@sportzal/api-client",
+  "name": "@clubcore/api-client",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Typed transport for the Sportzal backend (request<P,M> + ApiError + generated openapi-typescript schema).",
+  "description": "Typed transport for the clubcore backend (request<P,M> + ApiError + generated openapi-typescript schema).",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

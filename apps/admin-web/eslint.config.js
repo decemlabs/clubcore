@@ -117,7 +117,7 @@ export default tseslint.config(
         {
           selector: "CallExpression[callee.name='fetch']",
           message:
-            'Use @sportzal/api-client.request<P,M> instead of raw fetch(). Direct fetch is allowed only inside src/shared/api/services/http/**.',
+            'Use @clubcore/api-client.request<P,M> instead of raw fetch(). Direct fetch is allowed only inside src/shared/api/services/http/**.',
         },
       ],
     },
