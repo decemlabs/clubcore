@@ -54,7 +54,7 @@ Plans:
 - [x] 63-01-PLAN.md — DEBT-01 ruff format tree-wide (~297 files, single atomic commit)
 - [x] 63-02-PLAN.md — DEBT-02 ruff check --fix safe-only (158 → 0; no --unsafe-fixes)
 - [x] 63-03-PLAN.md — DEBT-03 mypy strict cleanup (11 → 0) + auth/models.py __all__ fix + tests.* mypy override
-- [ ] 63-04-PLAN.md — DEBT-04 v1.5/run.sh hardening (4 hotfixes + RBAC actor + X-CSRF-Token header)
+- [x] 63-04-PLAN.md — DEBT-04 v1.5/run.sh hardening (4 hotfixes + RBAC actor + X-CSRF-Token header)
 - [ ] 63-05-PLAN.md — DEBT-05 verify all 6 backend CI gates exit 0; capture GitHub Actions CI run URL post-merge
 
 ### Phase 64: Contract Freeze — OpenAPI Curation
@@ -123,7 +123,7 @@ Plans:
 | 58-61. Trainers Complete | v1.9 | 22/22 | Complete | 2026-05-26 |
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
-| 63. Tech-Debt Sweep | v1.11 | 3/5 | In Progress|  |
+| 63. Tech-Debt Sweep | v1.11 | 4/5 | In Progress|  |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/TBD | Not started | — |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
