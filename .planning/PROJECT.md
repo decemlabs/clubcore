@@ -73,9 +73,35 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Current Milestone
+## Current Milestone: v1.10 clubcore Rebrand + API Handoff + Production Hardening
 
-**No active milestone.** v1.9 Trainers Complete shipped 2026-05-26 (Phases 58–61, 22 plans, 15/15 requirements). All 8 business domains are now ✅. Start the next milestone via `/gsd-new-milestone`.
+**Goal:** Переименовать проект в кодовой базе `sportzal → clubcore` (контракт замораживается под правильным именем), подготовить curated handoff артефакты для дизайн-команды v2.0 (Postman/Newman, OpenAPI doc-site, внутренний `@clubcore/api-client` freeze), завершить идемпотентность и accumulated tech-debt sweep, отработать накопившиеся operator-pending runbook'и.
+
+**Phase numbering:** continued from v1.9 — starts at **Phase 62**.
+
+**Target features:**
+- **Rebrand `sportzal → clubcore`** (first phase) — pnpm packages `@sportzal/*` → `@clubcore/*`, versioned localStorage keys migration (`sportzal:*:v1` → `clubcore:*:v2` с back-compat read для одного релиза), Redis key namespace `sz:*` → `cc:*`, env prefix (если присутствует), все docs/comments/CLAUDE.md/MILESTONES.md/PROJECT.md. Backend Python package `app` остаётся
+- **Postman v2.1 collection + Newman CLI runner** — curated коллекция, категоризированная по доменам, auth-flow + env templates; Newman smoke run в operator-runbook'е
+- **Auth runbook expansion** — обновление `.planning/handoff/v1.6-auth-runbook.md` под v1.7+ (online payments, fiscal receipts, email + multi-user)
+- **OpenAPI doc site** — локальный/приватный артефакт (Redocly/Stoplight/swagger-ui) для дизайн-команды через приватный канал, без публичной публикации
+- **`@clubcore/api-client` contract freeze** — internal workspace package; v1.10 `schema.d.ts` фиксируется как замороженный контракт для дизайн-команды (semver-discipline + pre-freeze drift-gate); **никакой публикации в npm**
+- **OpenAPI tag curation + explicit `operation_id=`** — D-21-3 carry-over; заменить auto-derived operationIds на эксплицитные стабильные имена
+- **Idempotency hardening (CR-01/02/02b)** — Phase 33 carry-over; review всех mutating endpoints для idempotency-key coverage
+- **Tech-debt sweep** — DEFER-46-04 (ruff 79 errors + format 205 files + mypy attr-defined) + DEFER-36-04-B (residual 123 files) + DEFER-40-01 (полное исполнение v1.5 operator runbook + run.sh hardening)
+- **Operator-pending runbook execution** — v1.7 VER-03 (ЮKassa sandbox owner walkthrough) + CARRY-01/02 (RU email-deliverability probe + 15-template countersign); v1.8 VER-01 (reports runbook); v1.9 D-61-12 (trainers runbook); MailHog `--profile dev` (DEFER-46-05)
+
+**Key constraints:**
+- Backend-only milestone — `apps/admin-web` остаётся frozen-as-of-v1.3 mock reference (после rebrand имена пакетов внутри обновятся, но логика/UI не трогается)
+- Rebrand идёт ПЕРВОЙ фазой — чтобы все последующие handoff артефакты создавались уже под clubcore-именем
+- Никаких новых бизнес-фич; никаких новых `LOCKED_AUDIT_EVENTS`; никаких новых OWNER_ONLY pairs; никаких новых ORM моделей (исключение — schema migration для rebrand если нужна)
+- Contract freeze: после v1.10 OpenAPI / `schema.d.ts` замораживается под clubcore-именем; v2.0 (next) — финальная frontend-интеграция дизайн-командой против замороженного контракта
+- Личный коммерческий проект — публикация в npm/PyPI/публичных registry **запрещена**
+
+**Out of scope (этого milestone):**
+- Любые новые бизнес-фичи / новые домены / новые ORM сущности → out
+- Публикация `@clubcore/api-client` в публичный npm registry → запрещено (см. constraints)
+- Frontend-интеграция (production admin + client apps дизайн-командой) → v2.0
+- Kubernetes / Terraform / production deploy story → отдельный milestone после v2.0
 
 <details>
 <summary>v1.9 Trainers Complete scope (shipped 2026-05-26)</summary>
@@ -302,7 +328,7 @@ Target features (all delivered):
 
 ### Active
 
-**Next milestone planning** — v1.9 shipped 2026-05-26 (Trainers Complete; all 8 business domains ✅). Pending milestone definition; expected next is **v1.10 API Handoff + Production Hardening** (Postman/Newman, OpenAPI doc-site, `@sportzal/api-client` npm publish, idempotency hardening, tech-debt sweep DEFER-46-04/40-01/36-04-B). Start with `/gsd-new-milestone`.
+**Milestone v1.10 — clubcore Rebrand + API Handoff + Production Hardening** (started 2026-05-26; Phases start at 62). Backend-only; no new business features. Requirements defined in `.planning/REQUIREMENTS.md` covering: rebrand `sportzal → clubcore` (packages, localStorage keys, Redis namespace, docs); curated Postman v2.1 + Newman; OpenAPI doc-site (private artifact); `@clubcore/api-client` contract freeze (internal workspace, NO npm publish); OpenAPI tag curation + explicit `operation_id=`; idempotency hardening CR-01/02/02b; tech-debt sweep DEFER-46-04 / 36-04-B / 40-01; operator-pending runbook execution (v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12, MailHog DEFER-46-05).
 
 ### Out of Scope
 
@@ -417,6 +443,8 @@ This document evolves at phase transitions and milestone boundaries.
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
+---
+*Last updated: 2026-05-26 — started milestone v1.10 clubcore Rebrand + API Handoff + Production Hardening (Phase numbering continues from v1.9; starts at Phase 62). Scope: rebrand sportzal→clubcore (packages, localStorage keys, Redis namespace, docs); curated Postman v2.1 + Newman; OpenAPI doc-site (private artifact); `@clubcore/api-client` contract freeze (internal workspace, NO npm publish — личный коммерческий проект); OpenAPI tag curation + explicit `operation_id=`; idempotency hardening CR-01/02/02b; tech-debt sweep DEFER-46-04/36-04-B/40-01; operator-pending runbook execution (v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12, MailHog DEFER-46-05). Project officially renamed Sportzal → clubcore in planning docs; code rebrand lands in Phase 62. Backend-only milestone; admin-web остаётся frozen-as-of-v1.3 mock reference. `.planning/REQUIREMENTS.md` recreated fresh.*
 ---
 *Last updated: 2026-05-26 — v1.9 Trainers Complete milestone SHIPPED (Phases 58–61, 15/15 requirements satisfied). Phase 61 (OpenAPI Handoff + Milestone Verification, 4 plans, HND-01) closed the milestone: byte-stable `openapi.json` + `schema.d.ts` regen with all 14 v1.9 path×method combos; 14-entry `_v19Checks` `AssertNonNever` tuple with `expect(_v19Checks).toHaveLength(14)`; full milestone gate green (RBAC parity 128 tests, full backend pytest 2181 passed, frontend 16 passed, lint-imports clean, drift gates clean, no-edit guard on permissions.py/can.ts/registry.ts); `.planning/handoff/v1.9-trainers-runbook.md` (513 lines, 5 scenarios) — live walkthrough OPERATOR-PENDING per D-61-12 (v1.4/v1.7/v1.8 precedent, not a blocker). Trainers domain is now ✅. Next: v1.10+ planning.*
 ---

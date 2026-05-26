@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.9
-milestone_name: Trainers Complete
-status: completed
-stopped_at: v1.9 Trainers Complete milestone shipped (Phases 58–61 complete)
-last_updated: "2026-05-26T07:29:20.765Z"
-last_activity: 2026-05-26 — Milestone v1.9 completed and archived
+milestone: v1.10
+milestone_name: clubcore Rebrand + API Handoff + Production Hardening
+status: planning
+last_updated: "2026-05-26T08:36:50.219Z"
+last_activity: 2026-05-26
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 22
-  completed_plans: 22
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-24 after v1.8 milestone close)
 
 ## Current Position
 
-Phase: Milestone v1.9 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-26 — Milestone v1.9 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-26 — Milestone v1.10 started
 
 ## Milestone Close — v1.9 Trainers Complete
 
