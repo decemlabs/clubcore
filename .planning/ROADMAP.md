@@ -79,7 +79,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 64-01-PLAN.md — FRZ-01 + FRZ-04 (info{} + servers[] + description; byte-stable regen)
+- [x] 64-01-PLAN.md — FRZ-01 + FRZ-04 (info{} + servers[] + description; byte-stable regen)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -167,7 +167,7 @@ Plans:
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
-| 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/7 | Not started | — |
+| 64. Contract Freeze — OpenAPI Curation | v1.11 | 1/7 | In Progress|  |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
