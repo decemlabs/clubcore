@@ -2,11 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: clubcore Rebrand
-status: planning
-last_updated: "2026-05-26T12:00:00.000Z"
-last_activity: 2026-05-26
+status: completed
+stopped_at: Phase 62 context gathered
+last_updated: "2026-05-26T09:18:27.905Z"
+last_activity: "2026-05-26 — milestone v1.10 narrowed from 6 phases to 1 (Phase 62) per D-10-SPLIT during /gsd:discuss-phase 62; Phases 63-67 deferred to v1.11; ROADMAP.md + REQUIREMENTS.md + PROJECT.md restructured atomically"
 progress:
-  total_phases: 1
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -40,6 +41,7 @@ Last activity: 2026-05-26 — milestone v1.10 narrowed from 6 phases to 1 (Phase
 **Coverage:** 8/8 v1.10 requirements mapped ✓ (zero orphans, zero duplicates).
 
 **Rationale for D-10-SPLIT (2026-05-26):**
+
 - /gsd:discuss-phase 62 revealed Phase 62 scope expansion beyond "code-only rename" to include operator-tier infrastructure work (DB rename via pg_dump/restore, email FROM env wiring, DNS/DKIM checklist, FLUSHDB cutover step, CLUB_BRAND constant extraction).
 - Mixing code-only rename and operator infra cutover in one phase made verification heterogeneous and risky.
 - Splitting preserves D-62-FIRST: v1.10 ships as "полная переименовка"; v1.11 builds handoff artefacts under clean clubcore name.
@@ -132,8 +134,8 @@ All v1.9 audit-open items resolved 2026-05-26. `gsd-sdk query audit-open` → 0/
 
 ## Session Continuity
 
-Last session: 2026-05-26T12:00:00.000Z
-Stopped at: /gsd:discuss-phase 62 — 4 area-decisions captured (brand vs identifier split, operator-tier renames, back-compat mechanics, historical .planning scope); milestone restructure applied (v1.10 = Phase 62 only per D-10-SPLIT, Phases 63-67 → v1.11 snapshot); CONTEXT.md + DISCUSSION-LOG.md ready to write.
+Last session: 2026-05-26T09:18:27.900Z
+Stopped at: Phase 62 context gathered
 Resume: `/gsd:plan-phase 62` to decompose Phase 62 (clubcore Rebrand) into executable plans, using 62-CONTEXT.md decisions.
 
 ## Operator Next Steps
