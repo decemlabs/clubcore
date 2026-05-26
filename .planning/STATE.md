@@ -96,15 +96,19 @@ None blocking v1.9. Carry-over operator-pending items (CARRY-01, CARRY-02, VER-0
 
 ## Deferred Items
 
-Items acknowledged and deferred at v1.9 milestone close on 2026-05-26 (audit-open Acknowledge action):
+Items acknowledged and deferred at v1.9 milestone close on 2026-05-26 (audit-open Acknowledge action).
 
-| Category | Item | Status |
-|----------|------|--------|
-| debug | knowledge-base | unknown — stale session marker, no active investigation |
-| quick_task | 260501-ndi-fix-pyproject-toml-migrate-dev-deps-from | work shipped 2026-05-01 (commit efdb7cc5); orphan tracker file |
-| uat_gap | Phase 58 58-HUMAN-UAT.md | resolved status with 2 pending scenarios (operator-pending; covered by D-61-12 runbook) |
-| uat_gap | Phase 59 59-HUMAN-UAT.md | partial — WR-06 (force-cancel does not restore sessions_remaining) is pre-v1.9 documented product decision |
-| verification_gap | Phase 59 59-VERIFICATION.md | human_needed — WR-06 + live test infra; non-blocking per v1.9 audit |
+**All audit-open backend items resolved 2026-05-26** (re-audit pass after milestone close, commits `a2f1a82e` / `20ac22f1` / `df4aeb3c`):
+
+| Category | Item | Resolution |
+|----------|------|------------|
+| debug | knowledge-base | RESOLVED — added `status: complete` frontmatter; file is a permanent registry of resolved patterns, not an active session |
+| quick_task | 260501-ndi-fix-pyproject-toml-migrate-dev-deps-from | RESOLVED — orphan tracker removed (work shipped 2026-05-01 in commit efdb7cc5) |
+| uat_gap | Phase 58 58-HUMAN-UAT.md | RESOLVED — stale `[pending]` markers replaced with `pass`; frontmatter `status: complete`. Both decisions already made 2026-05-25 (D-PAYROLL-ROUNDING ratified to ceil + SC#5 wording fixed) |
+| uat_gap | Phase 59 59-HUMAN-UAT.md | RESOLVED — full suite re-run 2181 passed; WR-06 product decision recorded (option B — restore sessions_remaining on owner-initiated cancellation); follow-up captured as backlog Phase 999.1 |
+| verification_gap | Phase 59 59-VERIFICATION.md | RESOLVED — `status: verified`; both human_needed items closed with resolution lines |
+
+`gsd-sdk query audit-open` → 0 / 0 / 0 / 0 / 0 (debug, quick, uat, verification, context) as of 2026-05-26.
 
 | Category | Item | Status | Source |
 |----------|------|--------|--------|
