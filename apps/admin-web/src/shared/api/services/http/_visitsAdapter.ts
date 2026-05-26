@@ -8,7 +8,7 @@
  *
  * All helpers are pure (no I/O, no time, no randomness).
  */
-import type { components } from '@sportzal/api-client'
+import type { components } from '@clubcore/api-client'
 import type { Visit, VisitId, VisitChannel } from '@/entities/visit'
 import type { GymMeta } from '@/shared/api/contracts/visits'
 

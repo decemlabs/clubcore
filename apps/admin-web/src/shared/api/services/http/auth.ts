@@ -4,11 +4,11 @@
  * Rules:
  * - Must implement the same Contracts as mock/.
  * - No UI imports, no React — pure transport layer.
- * - Error mapping (HTTP -> ApiError) lives in @sportzal/api-client; this layer
+ * - Error mapping (HTTP -> ApiError) lives in @clubcore/api-client; this layer
  *   re-throws ApiError unchanged. Callers discriminate on error.code.
  * - Phase 4 D-07: every 2xx is `{data: T}`. Unwrap via _envelope.ts.
  */
-import { request } from '@sportzal/api-client'
+import { request } from '@clubcore/api-client'
 import {
   meResponseSchema,
   type AuthService,

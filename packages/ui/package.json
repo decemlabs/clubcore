@@ -1,5 +1,5 @@
 {
-  "name": "@sportzal/ui",
+  "name": "@clubcore/ui",
   "private": true,
   "version": "0.0.0",
   "description": "Phase 1 placeholder for shared UI primitives. Real implementation lands in a later phase.",

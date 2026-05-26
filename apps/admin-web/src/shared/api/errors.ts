@@ -1,4 +1,4 @@
-import { ApiError } from '@sportzal/api-client'
+import { ApiError } from '@clubcore/api-client'
 
 export class DomainError extends Error {
   constructor(
@@ -25,4 +25,4 @@ export function appErrorCode(e: unknown): string | undefined {
   return isAppError(e) ? e.code : undefined
 }
 
-export { ApiError } from '@sportzal/api-client'
+export { ApiError } from '@clubcore/api-client'

@@ -1,4 +1,4 @@
-import { request, type components } from '@sportzal/api-client'
+import { request, type components } from '@clubcore/api-client'
 import type { VisitsService, VisitsListQuery } from '@/shared/api/contracts/visits'
 import type { VisitId } from '@/entities/visit'
 import { unwrap } from './_envelope'

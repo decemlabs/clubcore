@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ApiError } from '@sportzal/api-client'
+import { ApiError } from '@clubcore/api-client'
 import {
   redirectOnSessionExpired,
   __resetRedirectingFlagForTests,

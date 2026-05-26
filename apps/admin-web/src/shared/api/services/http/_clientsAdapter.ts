@@ -13,7 +13,7 @@
  * All three helpers are pure (no I/O, no time, no randomness) and are exported for
  * unit testing. The http ClientsService composes them in `clients.ts`.
  */
-import type { components } from '@sportzal/api-client'
+import type { components } from '@clubcore/api-client'
 import type { Client, ClientId } from '@/entities/client'
 import type {
   ClientCreateInput,

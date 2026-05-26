@@ -5,7 +5,7 @@ let redirecting = false
 
 /**
  * Global handler for synthetic ApiError(code='session_expired') from
- * @sportzal/api-client. Phase 9 D-A1: emitted when single-flight /auth/refresh
+ * @clubcore/api-client. Phase 9 D-A1: emitted when single-flight /auth/refresh
  * fails. Phase 10 D-07: caught at QueryCache + MutationCache onError level so
  * EXACTLY ONE redirect happens regardless of how many queries/mutations fail
  * in the same tick.
