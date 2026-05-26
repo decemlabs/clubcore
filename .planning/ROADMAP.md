@@ -77,14 +77,14 @@ Plans:
 **Goal:** Close v1.10 by removing the 4 sportzal-era back-compat shims (A — main.tsx + index.html + config.py + runbook), capturing local operator-pending evidence with explicit production-deferral for DNS/DKIM (B), and recording the 5/6 email_templates count corrigendum (C) — all pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-SCOPE so v1.11 opens against a fully-clean clubcore tree
 **Requirements**: REB-09, REB-10
 **Depends on:** Phase 62 (REB-01..08 satisfied 2026-05-26)
-**Plans:** 9 plans
+**Plans:** 3/9 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 62.1-01-PLAN.md — REQUIREMENTS.md integration (REB-09 + REB-10 + RUN-07/08 forward-pointer + traceability)
-- [ ] 62.1-02-PLAN.md — 62.1-CORRIGENDUM.md (5/6 email_templates count correction + D-62.1-01 pattern ratification)
-- [ ] 62.1-03-PLAN.md — v1.10-OPERATOR-EVIDENCE.md scaffold + DNS/DKIM N/A-until-production row
+- [x] 62.1-01-PLAN.md — REQUIREMENTS.md integration (REB-09 + REB-10 + RUN-07/08 forward-pointer + traceability)
+- [x] 62.1-02-PLAN.md — 62.1-CORRIGENDUM.md (5/6 email_templates count correction + D-62.1-01 pattern ratification)
+- [x] 62.1-03-PLAN.md — v1.10-OPERATOR-EVIDENCE.md scaffold + DNS/DKIM N/A-until-production row
 
 **Wave 2** *(4 atomic commits per D-62.1-A2, blocked on Wave 1 plan 01)*
 
