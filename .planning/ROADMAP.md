@@ -66,7 +66,7 @@ Plans:
 - [x] 62-03-PLAN.md — G-3 backend Redis key prefixes (sz: → cc: across 5 modules)
 - [x] 62-04-PLAN.md — G-4 CLUB_BRAND extraction + CLUBCORE_EMAIL_FROM env with deprecated fallback
 - [x] 62-05-PLAN.md — G-5 Postgres DB rename + operator runbook (pg_dump/restore + DNS/DKIM checklist)
-- [ ] 62-06-PLAN.md — G-6 forward-only .planning/ + repo docs rewrite + HISTORICAL_NOTE.md
+- [x] 62-06-PLAN.md — G-6 forward-only .planning/ + repo docs rewrite + HISTORICAL_NOTE.md
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 62. clubcore Rebrand | v1.10 | 5/7 | In Progress|  |
+| 62. clubcore Rebrand | v1.10 | 6/7 | In Progress|  |
 | 63. Tech-Debt Sweep | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 65. Handoff Artifacts | v1.11 | 0/0 | Not started (milestone not opened) | — |
