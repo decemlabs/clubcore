@@ -67,7 +67,16 @@ Plans:
   3. Every router declares explicit `tags=[...]`; `openapi_tags` list in `app/main.py` orders all 10 business domains; `npx @redocly/cli preview-docs` groups operations under expected tag headings without stray "default" folder
   4. `securitySchemes` (cookieAuth + csrfHeader) and `components.responses` (401/403/404/409/422/429 envelopes) are present in the spec; `sportzal_csrf` cookie name documented as v2.0 carry-over per D-11-CSRF-DEFER
   5. `npx @redocly/cli lint openapi.json` exits 0; the Redocly lint step is live in `.github/workflows/ci.yml` as the 7th parallel gate; `contract-freeze-v1.11.0` baseline tag committed; `CHANGELOG.md` entry in `packages/api-client/` records the freeze
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 64-01-PLAN.md — FRZ-01 + FRZ-04 (info{} + servers[] + description; byte-stable regen)
+- [ ] 64-02-PLAN.md — FRZ-02 (generate_unique_id_function suffix-strip + collision audit + schema.d.ts regen)
+- [ ] 64-03-PLAN.md — FRZ-03 (explicit per-router tags + openapi_tags 12-domain ordering + aggregator-tag dedup + Users 11th tag)
+- [ ] 64-04-PLAN.md — FRZ-05 (securitySchemes cookieAuth + csrfHeader + per-route PUBLIC_ENDPOINT_OPERATION_IDS opt-out)
+- [ ] 64-05-PLAN.md — FRZ-06 (shared components.responses + $ref migration post-processor)
+- [ ] 64-06-PLAN.md — FRZ-07 (redocly.yaml + 7th CI gate redocly-lint parallel job)
+- [ ] 64-07-PLAN.md — FRZ-08 (CHANGELOG.md + REQUIREMENTS.md path-fix + annotated baseline tag contract-freeze-v1.11.0)
 
 ### Phase 65: Handoff Artifacts
 **Goal**: The v2.0 frontend integration team receives a complete, usable handoff package — a Postman v2.1 collection with auth scripts and test assertions, a Newman smoke harness, an `clubcore-auth-runbook.md` covering all auth flows and `Idempotency-Key` semantics, and a private local doc-site — all generated from the post-Phase-66 frozen spec
@@ -124,7 +133,7 @@ Plans:
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
-| 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/TBD | Not started | — |
+| 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/7 | Not started | — |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
