@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: clubcore Rebrand
-status: completed
+status: executing
 stopped_at: Phase 62.1 context gathered
-last_updated: "2026-05-26T12:56:24.898Z"
-last_activity: 2026-05-26 -- Phase 62 marked complete
+last_updated: "2026-05-26T13:17:20.591Z"
+last_activity: 2026-05-26 -- Phase 62.1 planning complete
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 7
+  total_plans: 16
   completed_plans: 7
   percent: 13
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-05-26 — v1.10 narrowed to Phase 62 (cl
 
 Phase: 62 — COMPLETE
 Plan: 7 of 7 (62-07 smoke evidence remaining)
-Status: Phase 62 complete
-Last activity: 2026-05-26 -- Phase 62 marked complete
+Status: Ready to execute
+Last activity: 2026-05-26 -- Phase 62.1 planning complete
 
 ## v1.10 Roadmap Summary
 
@@ -49,7 +49,7 @@ Last activity: 2026-05-26 -- Phase 62 marked complete
 
 ## Milestone Close — v1.9 Trainers Complete
 
-**Status:** Phase 62 complete
+**Status:** Ready to execute
 **Green-state baseline:** `.planning/phases/60-trainer-usage-report/60-VERIFICATION.md` —
 Phase 60 (final feature phase) verification report; all v1.9 payroll +
 recurring-schedule + trainer-report surface shipped and exercised.
