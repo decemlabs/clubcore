@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: clubcore Rebrand
 status: completed
-stopped_at: Phase 62 Plan 06 (forward-only .planning/ + repo docs rewrite + HISTORICAL_NOTE.md) shipped
-last_updated: "2026-05-26T12:15:56.462Z"
+stopped_at: Phase 62.1 context gathered
+last_updated: "2026-05-26T12:56:24.898Z"
 last_activity: 2026-05-26 -- Phase 62 marked complete
 progress:
-  total_phases: 2
+  total_phases: 8
   completed_phases: 1
   total_plans: 7
   completed_plans: 7
-  percent: 50
+  percent: 13
 ---
 
 # Project State
@@ -83,6 +83,10 @@ recurring-schedule + trainer-report surface shipped and exercised.
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 62.1 inserted after Phase 62: Finalize sportzal → clubcore rename (A+B+C scope) (URGENT)
+
 ### Decisions
 
 Full decisions log in PROJECT.md. Key v1.9 locked decisions carried forward:
@@ -134,8 +138,8 @@ All v1.9 audit-open items resolved 2026-05-26. `gsd-sdk query audit-open` → 0/
 
 ## Session Continuity
 
-Last session: 2026-05-26T11:47:01Z
-Stopped at: Phase 62 Plan 06 (forward-only .planning/ + repo docs rewrite + HISTORICAL_NOTE.md) shipped
+Last session: 2026-05-26T12:56:24.893Z
+Stopped at: Phase 62.1 context gathered
 Resume: execute 62-07-PLAN.md (G-7 final smoke gauntlet + evidence capture, 12 gates) to close Phase 62 and v1.10.
 
 ## Operator Next Steps
