@@ -13,30 +13,6 @@ import { services, API_MODE } from '@/shared/api/services'
 import { authKeys } from '@/features/auth/api/keys'
 import { Splash } from '@/shared/ui/splash'
 
-// TODO Phase 67 / RUN-07: drop v1.10 sportzal:* localStorage migration shim.
-// Phase 62 D-62-06 — one-shot pre-rehydrate migrator. Copies legacy
-// sportzal:*:v1 payloads to clubcore:*:v2 and deletes the legacy keys so
-// Zustand `persist.rehydrate()` below reads from the new namespace cleanly.
-// Runs once per browser: subsequent boots find the new keys already present
-// and short-circuit. Greenfield users skip every pair (no spurious writes).
-const STORE_MIGRATIONS: ReadonlyArray<readonly [string, string]> = [
-  ['sportzal:session:v1', 'clubcore:session:v2'],
-  ['sportzal:ui:v1', 'clubcore:ui:v2'],
-  ['sportzal:mock:v1', 'clubcore:mock:v2'],
-] as const
-
-for (const [oldKey, newKey] of STORE_MIGRATIONS) {
-  try {
-    if (window.localStorage.getItem(newKey) !== null) continue
-    const legacy = window.localStorage.getItem(oldKey)
-    if (legacy === null) continue
-    window.localStorage.setItem(newKey, legacy)
-    window.localStorage.removeItem(oldKey)
-  } catch {
-    /* noop — storage quota/disabled; let store re-seed from defaults */
-  }
-}
-
 await Promise.all([
   useSessionStore.persist.rehydrate(),
   useUiPrefsStore.persist.rehydrate(),
