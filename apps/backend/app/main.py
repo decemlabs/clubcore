@@ -180,9 +180,36 @@ def create_app() -> FastAPI:
             "Set COOKIE_SECURE=true in the environment."
         )
 
+    # Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1: contract-freeze baseline for
+    # the v1.11.0 OpenAPI spec. Rebrands `title` + `version` away from the
+    # v1.10 Sportzal-era values to clubcore + v1.11.0 (same rebrand discipline
+    # as Phase 62 D-62-01). `description` is engineering-targeted (D-11-DOCS-
+    # PRIVATE — private commercial; no marketing copy). `servers=[...]` ships
+    # EXACTLY one localhost entry per D-64-NO-SERVER-LIST-EXPANSION (staging
+    # and prod URLs deferred to v2.0). `contact` and `license_info` are
+    # INTENTIONALLY omitted per D-64-NO-OPENAPI-EXTRA-INFO (private commercial;
+    # D-11-DOCS-PRIVATE). `generate_unique_id_function`, `openapi_tags`, and
+    # the `app.openapi` post-processor wire in via later Phase 64 plans
+    # (64-02 / 64-03 / 64-04 / 64-05) — out of scope here.
     app = FastAPI(
-        title="Sportzal API",
-        version="1.1.0",
+        title="clubcore API",
+        version="1.11.0",
+        description=(
+            "v1.11.0 contract-freeze baseline for the clubcore backend "
+            "(Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1). This spec is "
+            "curated for handoff — it is the authoritative single source of "
+            "truth consumed by `packages/api-client` codegen and by the "
+            "Phase 65 auth runbook at `.planning/handoff/clubcore-auth-"
+            "runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 "
+            "plans (64-02..64-07) curate operation IDs, tags, security "
+            "schemes, shared error responses, and Redocly lint.\n\n"
+            "Carry-over: the `sportzal_csrf` cookie name is retained in "
+            "v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is "
+            "scheduled for v2.0 with a coordinated admin-web cutover "
+            "(documented further in the securitySchemes block landed by "
+            "Phase 64-04)."
+        ),
+        servers=[{"url": "http://localhost:8000", "description": "Local dev"}],
         lifespan=combined_lifespan,
         docs_url="/docs" if settings.environment == "dev" else None,
         redoc_url=None,

@@ -4910,8 +4910,9 @@
     }
   },
   "info": {
-    "title": "Sportzal API",
-    "version": "1.1.0"
+    "description": "v1.11.0 contract-freeze baseline for the clubcore backend (Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1). This spec is curated for handoff — it is the authoritative single source of truth consumed by `packages/api-client` codegen and by the Phase 65 auth runbook at `.planning/handoff/clubcore-auth-runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 plans (64-02..64-07) curate operation IDs, tags, security schemes, shared error responses, and Redocly lint.\n\nCarry-over: the `sportzal_csrf` cookie name is retained in v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is scheduled for v2.0 with a coordinated admin-web cutover (documented further in the securitySchemes block landed by Phase 64-04).",
+    "title": "clubcore API",
+    "version": "1.11.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10630,5 +10631,11 @@
         "summary": "Health"
       }
     }
-  }
+  },
+  "servers": [
+    {
+      "description": "Local dev",
+      "url": "http://localhost:8000"
+    }
+  ]
 }
