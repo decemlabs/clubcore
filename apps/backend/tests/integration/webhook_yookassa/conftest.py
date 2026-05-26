@@ -43,7 +43,7 @@ New Plan 50-06 fixtures (B-2 / W-5 fixes):
   with parameterisable object_id (defaults to a constant; tests pin to the
   seeded row's yookassa_payment_id).
 - ``redis_test_client`` — exposes the app-state Redis client; on teardown
-  flushes keys with the ``sz:yookassa:webhook:`` prefix to keep tests
+  flushes keys with the ``cc:yookassa:webhook:`` prefix to keep tests
   isolated.
 - ``YOOKASSA_TRUSTED_IPS`` — re-exported from
   ``app.integrations.yookassa.webhook_verifier`` for tests that need to set a
@@ -336,15 +336,15 @@ async def webhook_client(
 
 @pytest_asyncio.fixture
 async def redis_test_client(app: FastAPI) -> AsyncIterator[Redis]:
-    """Expose the app-state Redis client; flush ``sz:yookassa:webhook:*`` after
+    """Expose the app-state Redis client; flush ``cc:yookassa:webhook:*`` after
     each test so dedup keys do not bleed between tests."""
     client: Redis = app.state.redis
     # Pre-clean any leftover keys from a previous run.
-    keys = await client.keys("sz:yookassa:webhook:*")
+    keys = await client.keys("cc:yookassa:webhook:*")
     if keys:
         await client.delete(*keys)
     yield client
-    keys = await client.keys("sz:yookassa:webhook:*")
+    keys = await client.keys("cc:yookassa:webhook:*")
     if keys:
         await client.delete(*keys)
 

@@ -2,8 +2,8 @@
 
 The Redis sliding-window circuit breaker for ЮKassa /receipts (D-51-14):
   - threshold: 5 failures within 60s sliding window opens the circuit
-  - open key:    ``sz:yookassa:circuit:<provider>`` (TTL = 300s)
-  - window key:  ``sz:yookassa:circuit_window:<provider>`` (sorted set)
+  - open key:    ``cc:yookassa:circuit:<provider>`` (TTL = 300s)
+  - window key:  ``cc:yookassa:circuit_window:<provider>`` (sorted set)
   - is_circuit_open uses cheap EXISTS on the open key (O(1))
   - record_failure runs ZADD + ZREMRANGEBYSCORE + EXPIRE + ZCARD inside a
     single MULTI/EXEC pipeline (Pitfall 11 — closes the concurrent-worker
@@ -49,7 +49,7 @@ async def test_is_circuit_open_returns_false_when_no_open_marker() -> None:
 async def test_is_circuit_open_returns_true_when_marker_set() -> None:
     """Manually-set open marker → True (EXISTS short-circuit)."""
     redis = _fake_redis()
-    await redis.set("sz:yookassa:circuit:receipts", "1", ex=300)
+    await redis.set("cc:yookassa:circuit:receipts", "1", ex=300)
     assert await is_circuit_open(redis, "receipts") is True
 
 
@@ -58,7 +58,7 @@ async def test_record_failure_increments_window_sorted_set() -> None:
     """One record_failure call → ZCARD(window) == 1."""
     redis = _fake_redis()
     await record_failure(redis, "receipts")
-    count = await redis.zcard("sz:yookassa:circuit_window:receipts")
+    count = await redis.zcard("cc:yookassa:circuit_window:receipts")
     assert count == 1
 
 

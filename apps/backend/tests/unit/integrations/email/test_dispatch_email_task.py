@@ -254,7 +254,7 @@ async def test_dispatch_email_blocked_path_audits_invalid_recipient(
     assert "audit_correlation_id" in kwargs and isinstance(kwargs["audit_correlation_id"], str)
     # Circuit breaker NOT exercised for 'blocked' (not transient).
     # Window key should be untouched.
-    assert (await redis.zcard("sz:email:circuit_window:yandex_postbox")) == 0
+    assert (await redis.zcard("cc:email:circuit_window:yandex_postbox")) == 0
     # WR-04 regression: non-circuit non-ok paths must use status='rejected'.
     s = factory.sessions[0]
     assert s.added[0].status == "rejected", (
@@ -287,7 +287,7 @@ async def test_dispatch_email_transient_5xx_records_failure_and_audits_provider_
 
     assert result == "failed"
     # Circuit breaker recorded the failure (one entry in window key).
-    assert (await redis.zcard("sz:email:circuit_window:yandex_postbox")) == 1
+    assert (await redis.zcard("cc:email:circuit_window:yandex_postbox")) == 1
     event, kwargs = captured_audit[0]
     assert event == "email_send_failed"
     # CR-01 regression guard
@@ -317,7 +317,7 @@ async def test_dispatch_email_when_circuit_open_short_circuits(
 
     redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
     # Pre-open the circuit.
-    await redis.set(f"sz:email:circuit:{_PROVIDER}", "1", ex=300)
+    await redis.set(f"cc:email:circuit:{_PROVIDER}", "1", ex=300)
     client = _StubEmailClient(
         EmailSendResult(ok=True, classification="ok", provider_message_id="should-not-be-used")
     )
@@ -380,7 +380,7 @@ async def test_dispatch_email_permanent_error_audits_provider_5xx(
     assert kwargs["reason"] == "provider_5xx"
     assert "audit_correlation_id" in kwargs and isinstance(kwargs["audit_correlation_id"], str)
     # Circuit-breaker NOT armed on permanent_error (only transient_error arms it).
-    assert (await redis.zcard(f"sz:email:circuit_window:{_PROVIDER}")) == 0
+    assert (await redis.zcard(f"cc:email:circuit_window:{_PROVIDER}")) == 0
     # WR-04 regression: permanent error uses status='rejected' (not 'circuit_open').
     s = factory.sessions[0]
     assert s.added[0].status == "rejected", (

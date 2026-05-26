@@ -19,7 +19,7 @@ Cloud Postbox default rate limit ~14 emails/sec; 5 concurrent leaves safe
 margin and matches the LOCKED value from the phase context.
 
 Circuit breaker (D-42-14): Redis sliding-window 5 failures / 60s opens
-key ``sz:email:circuit:yandex_postbox`` with 5min TTL. Open circuit
+key ``cc:email:circuit:yandex_postbox`` with 5min TTL. Open circuit
 short-circuits to ``EmailSendResult(ok=False, classification='transient_error',
 error='circuit_open')`` WITHOUT touching the provider. The
 ``error='circuit_open'`` sentinel is the discriminator that maps to audit

@@ -143,10 +143,10 @@ async def fiscal_yookassa_client() -> AsyncIterator[YooKassaClient]:
 async def fiscal_redis(app: FastAPI) -> AsyncIterator[Redis]:
     """Lifespan-bound Redis singleton; flushes the receipts circuit keys."""
     client: Redis = app.state.redis
-    for prefix in ("sz:yookassa:circuit:receipts", "sz:yookassa:circuit_window:receipts"):
+    for prefix in ("cc:yookassa:circuit:receipts", "cc:yookassa:circuit_window:receipts"):
         await client.delete(prefix)
     yield client
-    for prefix in ("sz:yookassa:circuit:receipts", "sz:yookassa:circuit_window:receipts"):
+    for prefix in ("cc:yookassa:circuit:receipts", "cc:yookassa:circuit_window:receipts"):
         await client.delete(prefix)
 
 

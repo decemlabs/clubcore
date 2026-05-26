@@ -2,8 +2,8 @@
 
 The Redis sliding-window circuit breaker (D-42-14):
   - threshold: 5 failures within 60s sliding window opens the circuit
-  - open key: ``sz:email:circuit:<provider>`` with TTL <= 300s (5 min)
-  - sliding-window backing store: Redis sorted set ``sz:email:circuit_window:<provider>``
+  - open key: ``cc:email:circuit:<provider>`` with TTL <= 300s (5 min)
+  - sliding-window backing store: Redis sorted set ``cc:email:circuit_window:<provider>``
   - is_circuit_open uses cheap EXISTS on the open key (O(1))
   - while the open key is present, is_circuit_open returns True even after
     every failure timestamp slides out of the 60s window (TTL-driven close)
@@ -77,7 +77,7 @@ async def test_circuit_stays_open_after_window_entries_slide_out() -> None:
     assert await is_circuit_open(redis, "yandex_postbox") is True
     # Simulate every window entry sliding out by removing them entirely;
     # this is the moral equivalent of >60s passing with no new failures.
-    await redis.delete("sz:email:circuit_window:yandex_postbox")
+    await redis.delete("cc:email:circuit_window:yandex_postbox")
     # The open key remains — circuit still considered open.
     assert await is_circuit_open(redis, "yandex_postbox") is True
 
@@ -100,14 +100,14 @@ async def test_constants_match_locked_values() -> None:
     assert _FAILURE_THRESHOLD == 5
     assert _WINDOW_SECONDS == 60
     assert _OPEN_TTL_SECONDS == 300
-    assert _CIRCUIT_KEY_PREFIX == "sz:email:circuit:"
+    assert _CIRCUIT_KEY_PREFIX == "cc:email:circuit:"
 
 
 @pytest.mark.asyncio
 async def test_record_failure_trims_stale_window_entries() -> None:
     """Old entries (>60s) are trimmed; only fresh ones count toward threshold."""
     redis = _fake_redis()
-    window_key = "sz:email:circuit_window:yandex_postbox"
+    window_key = "cc:email:circuit_window:yandex_postbox"
     # Pre-seed 4 stale entries older than 60s.
     stale_score = int((time.time() - 120) * 1000)
     for i in range(4):
@@ -147,7 +147,7 @@ async def test_record_failure_concurrent_open_at_threshold() -> None:
     assert exists == 1, "circuit failed to open after N concurrent failures (CR-03 regression)"
 
     # Window key must have exactly N entries (unique uuid suffix per call).
-    count = await redis.zcard(f"sz:email:circuit_window:{provider}")
+    count = await redis.zcard(f"cc:email:circuit_window:{provider}")
     assert count == _FAILURE_THRESHOLD, (
         f"window cardinality drift: expected {_FAILURE_THRESHOLD}, got {count} "
         "(lost member from non-atomic ZADD?)"
@@ -166,5 +166,5 @@ async def test_record_failure_below_threshold_does_not_open() -> None:
     exists = await redis.exists(f"{_CIRCUIT_KEY_PREFIX}{provider}")
     assert exists == 0, "circuit opened below threshold (false positive)"
 
-    count = await redis.zcard(f"sz:email:circuit_window:{provider}")
+    count = await redis.zcard(f"cc:email:circuit_window:{provider}")
     assert count == n

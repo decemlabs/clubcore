@@ -79,7 +79,7 @@ _RACE_OWNER_EMAIL = "ver02b-redis-restart-owner@example.com"
 _RACE_OWNER_PASSWORD = "hunter22hunter22"  # noqa: S105
 
 # Redis dedup key prefix (mirrors router.py:56).
-_WEBHOOK_DEDUP_KEY_PREFIX = "sz:yookassa:webhook:"
+_WEBHOOK_DEDUP_KEY_PREFIX = "cc:yookassa:webhook:"
 
 
 @pytest_asyncio.fixture
@@ -179,7 +179,7 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
 
     Sequence:
     1. Deliver ``payment.succeeded`` (1st) → succeeds, writes DB rows, sets
-       Redis dedup key ``sz:yookassa:webhook:payment.succeeded:{yk_id}``.
+       Redis dedup key ``cc:yookassa:webhook:payment.succeeded:{yk_id}``.
     2. Explicitly DELETE the dedup key (simulates Redis restart gap — key
        evicted / flushed).
     3. Re-deliver the SAME ``payment.succeeded`` webhook (2nd).

@@ -150,7 +150,7 @@ async def test_dispatch_fiscal_receipt_short_circuits_when_breaker_open(
     """Test 4 — open breaker short-circuits with Retry(defer=300); no respx call."""
     # Pre-seed the open marker. Use a respx mock that would FAIL the test
     # if hit (the breaker check must short-circuit BEFORE the HTTP call).
-    await fiscal_redis.set("sz:yookassa:circuit:receipts", "1", ex=300)
+    await fiscal_redis.set("cc:yookassa:circuit:receipts", "1", ex=300)
 
     with respx.mock(base_url="https://api.yookassa.ru/v3/", assert_all_called=False) as router:
         route = router.post("receipts")
@@ -185,8 +185,8 @@ async def test_circuit_breaker_opens_after_5_failures_within_60s(
     that's covered by tests 3 and 4.
     """
     # Pre-clean any leftover state.
-    await fiscal_redis.delete("sz:yookassa:circuit:receipts")
-    await fiscal_redis.delete("sz:yookassa:circuit_window:receipts")
+    await fiscal_redis.delete("cc:yookassa:circuit:receipts")
+    await fiscal_redis.delete("cc:yookassa:circuit_window:receipts")
 
     for i in range(4):
         await record_failure(fiscal_redis, "receipts")
@@ -199,7 +199,7 @@ async def test_circuit_breaker_opens_after_5_failures_within_60s(
     assert await is_circuit_open(fiscal_redis, "receipts") is True
 
     # Confirm the open-marker TTL is ~300s (5min, D-51-14 lock).
-    ttl = await fiscal_redis.ttl("sz:yookassa:circuit:receipts")
+    ttl = await fiscal_redis.ttl("cc:yookassa:circuit:receipts")
     assert 290 <= int(ttl) <= 300
 
 

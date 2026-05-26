@@ -235,7 +235,7 @@ async def create_pt_package(
       - 409 active_pt_package_already_exists (defensive pre-check AND DB
         partial UNIQUE race gate — D-33-09).
       - Idempotency-Key required (D-33-16); same Redis namespace
-        ``sz:idem:{key}`` and TTL as Phase 32 PAY-09.
+        ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.
 
     RBAC-04 ordering: auth → require_permission → verify_csrf →
     verify_idempotency. Two-phase Redis claim + replay block mirrors

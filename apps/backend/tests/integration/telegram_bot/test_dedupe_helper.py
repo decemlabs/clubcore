@@ -42,7 +42,7 @@ async def test_dedupe_helper_first_sight() -> None:
     result = await _dedupe_update_id(redis, update_id=1, chat_id=100)
 
     assert result is True
-    redis.set.assert_awaited_once_with("sz:bot:update:1", "1", nx=True, ex=3600)
+    redis.set.assert_awaited_once_with("cc:bot:update:1", "1", nx=True, ex=3600)
 
 
 async def test_dedupe_helper_replay_skipped() -> None:
