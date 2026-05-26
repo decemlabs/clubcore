@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: API Handoff + Production Hardening
-status: executing
-stopped_at: Phase 63 complete; Phase 64 (Contract Freeze — OpenAPI Curation) is next per execution order 63 → 64 → 66 → 65 → 67
-last_updated: "2026-05-26T19:30:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 63 complete (5/5) — ready to discuss Phase 999.1
+last_updated: 2026-05-26T18:45:40.945Z
 last_activity: 2026-05-26 — Phase 63 (Tech-Debt Sweep) complete — all 6 backend CI gates green locally (ruff + ruff format + mypy --strict app + lint-imports + openapi export + openapi drift); GitHub Actions URL skipped per user (D-63-04 fallback applied — local exit codes recorded in 63-05 closure commit body + 63-05-SUMMARY.md)
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 5
   completed_plans: 5
-  percent: 100
+  percent: 17
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 63 — Tech-Debt Sweep
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
 
 ## Current Position
 
-Phase: 64 (Contract Freeze — OpenAPI Curation) — ready to plan
-Plan: 0 of TBD
-Status: Phase 63 closed; Phase 64 next per execution order 63 → 64 → 66 → 65 → 67
-Last activity: 2026-05-26 — Phase 63 complete (D-63-04 local-exit-code fallback)
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-26
 
 Progress: [██████████] 100% (Phase 63 of 5 plans)
 
