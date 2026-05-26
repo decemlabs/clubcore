@@ -1147,6 +1147,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payroll/accruals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a trainer's payroll accruals paginated, accrued_at DESC (owner-only PAY-05 / D-58-14)
+         * @description List all payroll accrual rows for *trainer_id*, ordered accrued_at DESC (PAY-05 / D-58-14).
+         *
+         *     Both paid and pending rows are returned; clawback rows (negative accrual_kopecks)
+         *     are included alongside regular accruals — no status or period filters (deferred per
+         *     CONTEXT.md D-58-14).
+         *
+         *     Pagination (PageQuery): page (default 1) + pageSize (default 20, max 100).
+         *     Response envelope: { data: { items: [...], total: N, page: P, pageSize: S } }.
+         *
+         *     Owner-only: (LIST, PAYROLL) ∈ OWNER_ONLY (pre-registered Plan 58-01).
+         *     Reception receives 403 (T-58-31 mitigate).
+         *
+         *     Threat T-58-32: pageSize bounded by PageQuery Field(le=100) — resource exhaustion
+         *     mitigated by the shared pagination validator.
+         *     Threat T-58-33: trainer_id is a bound WHERE parameter; owner sees all trainers
+         *     by design (no cross-trainer leakage).
+         */
+        get: operations["list_payroll_accruals_api_v1_payroll_accruals_get"];
+        put?: never;
+        /**
+         * Record payroll accrual with run-time-snapshotted rate (append-only; owner-only PAY-03 / D-58-03)
+         * @description INSERT an append-only accrual row with snapshotted rate/config (PAY-03 / D-58-03).
+         *
+         *     Resolution: uses ``service.compute_accrual_components`` as the single source of truth
+         *     (same numbers as GET /preview; prevents recompute drift — PITFALL 1 / T-58-23).
+         *     DB-wins-the-race idempotency: INSERT ON CONFLICT DO NOTHING RETURNING; duplicate
+         *     period returns 409 ``payroll_period_already_run`` (T-58-27 / D-58-06).
+         *
+         *     Owner-only: ``(CREATE, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).
+         *     Reception receives 403 (T-58-26 mitigate).
+         *
+         *     Router-layer 422 remap for CompConfigMissingError (same as preview; D-58-07 / D-58-09).
+         *     PayrollPeriodAlreadyRunError propagates through AppError handler → 409.
+         */
+        post: operations["create_accrual_api_v1_payroll_accruals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/accruals/{accrual_id}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark payroll accrual as paid (pending→paid single transition; owner-only PAY-04 / D-58-08)
+         * @description Transition accrual status from 'pending' → 'paid' (PAY-04 / D-58-08).
+         *
+         *     Uses SELECT FOR UPDATE row-lock before status check to prevent concurrent
+         *     double-pay races (T-58-30). Second attempt → 409 ``already_paid``.
+         *     No unpay path — the 'paid' status is terminal.
+         *
+         *     Owner-only: ``(EDIT, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).
+         *     Reception receives 403 (T-58-26 mitigate).
+         *
+         *     ``AlreadyPaidError`` propagates through AppError handler → 409.
+         *     ``AccrualNotFoundError`` (NotFoundError) propagates → 404.
+         */
+        post: operations["mark_accrual_paid_api_v1_payroll_accruals__accrual_id__mark_paid_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview payroll accrual for a trainer + period (read-only, zero-persistence; owner-only PAY-02 / D-58-12)
+         * @description Return session_count, fixed_kopecks, commission_kopecks, total_kopecks for a period.
+         *
+         *     Read-only — ZERO rows persisted, ZERO audit events emitted (D-58-12).
+         *     Shares compute logic with PAY-03 via ``service.compute_accrual_components`` to
+         *     prevent recompute drift between preview and persisted accrual (PITFALL 1 / T-58-23).
+         *
+         *     Owner-only: ``(LIST, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).
+         *     Reception receives 403 (T-58-22 mitigate).
+         *
+         *     Router-layer 422 remap for CompConfigMissingError (D-58-07 / D-58-09):
+         *       ``CompConfigMissingError`` from the service is caught HERE and re-raised as a
+         *       ``ValidationAppError`` with the same ``comp_config_missing`` code and 422 status.
+         *       This is the router-remap approach (one error class; PAY-01 GET path keeps 404).
+         */
+        get: operations["preview_payroll_api_v1_payroll_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/trainer-configs/{trainer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the active comp config (latest effective_from <= today; owner-only PAY-01 / D-58-11)
+         * @description Resolve and return the active compensation config for the given trainer (PAY-01 / D-58-11).
+         *
+         *     "Active" means the row with the latest ``effective_from`` that is <= today (MSK).
+         *     Returns 404 ``comp_config_missing`` when no config exists for the trainer.
+         *     Owner-only: ``(VIEW, COMPENSATION) ∈ OWNER_ONLY`` (pre-registered Phase A).
+         *     Reception receives 403 (T-58-17 mitigate).
+         *     ``CompConfigMissingError`` propagates to the centralised AppError handler → 404.
+         */
+        get: operations["get_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__get"];
+        /**
+         * Set/replace trainer comp config (INSERT-only versioned; owner-only PAY-01 / D-58-10)
+         * @description INSERT a new versioned compensation config for the given trainer (PAY-01 / D-58-02).
+         *
+         *     Every PUT inserts a NEW row — prior config rows are never modified.  The
+         *     response body contains the newly created config row with its assigned ``id``.
+         *     Owner-only: ``(CREATE, COMPENSATION) ∈ OWNER_ONLY`` (Plan 58-01 pre-registration).
+         *     Reception receives 403 (T-58-17 mitigate).
+         */
+        put: operations["set_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pt-package-plans": {
         parameters: {
             query?: never;
@@ -1497,6 +1644,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recurring-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List recurring slot templates (reception+owner; trainer_id filter)
+         * @description List recurring templates (REC-04 — both roles).
+         *
+         *     (LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.
+         */
+        get: operations["list_recurring_templates_api_v1_recurring_templates_get"];
+        put?: never;
+        /**
+         * Create a recurring slot template (owner-only; 409 recurring_template_duplicate on duplicate trainer+dow+start+valid_from; requires Idempotency-Key — D-38-14)
+         * @description Create a recurring slot template (REC-01 / D-59-02).
+         *
+         *     (CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
+         *     Two-phase Redis idempotency (D-38-14 / Pitfall 14).
+         *
+         *     Error surface:
+         *       - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)
+         */
+        post: operations["create_recurring_template_api_v1_recurring_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recurring-templates/{template_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate a recurring slot template (owner-only; 404 recurring_template_not_found; requires Idempotency-Key)
+         * @description Flip is_active=False on a recurring template (REC-01 deactivate).
+         *
+         *     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
+         *     Forward-only: does not cancel materialized slots.
+         */
+        post: operations["deactivate_recurring_template_api_v1_recurring_templates__template_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/clients": {
         parameters: {
             query?: never;
@@ -1602,6 +1804,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/trainers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trainer-usage report (owner-only; RPT-01..02, RPT-04)
+         * @description Per-trainer aggregate for [fromDate, toDate] MSK: session counts, hours, unique clients, utilization %, revenue, accrued vs paid compensation. Revenue is attributed to the trainer assigned at PT-package sale time. Range cap: 366 days (D-06); toDate<fromDate → 422; reception → 403.
+         */
+        get: operations["get_trainers_report_api_v1_reports_trainers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/trainers.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trainer-usage CSV download (owner-only; RPT-03)
+         * @description Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV. Same query params as GET /reports/trainers. One row per trainer; money columns in period-decimal rubles; None/NULL cells render as empty string. Filename: trainer-usage-YYYY-MM-DD-YYYY-MM-DD.csv (EXP-01 precedent). Owner-only; reception → 403.
+         */
+        get: operations["get_trainers_csv_api_v1_reports_trainers_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/visits": {
         parameters: {
             query?: never;
@@ -1651,6 +1893,61 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/time-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List trainer time-off blocks (reception+owner; trainer_id filter)
+         * @description List time-off blocks (REC-04 — both roles).
+         *
+         *     (LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.
+         */
+        get: operations["list_time_off_api_v1_time_off_get"];
+        put?: never;
+        /**
+         * Create a trainer time-off block (owner-only; 409 time_off_booked_conflict when booked slots overlap and ?force not set; ?force=true cascades booking cancellations + client DMs; requires Idempotency-Key — D-38-14)
+         * @description Create a trainer time-off block (REC-03 / D-59-06 LOCKED semantics).
+         *
+         *     (CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403 (on both
+         *     force=true and force=false — threat model T-59-09).
+         *
+         *     Error surface:
+         *       - 409 time_off_booked_conflict  (booked slots overlap and force=False)
+         */
+        post: operations["create_time_off_api_v1_time_off_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/time-off/{time_off_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a trainer time-off block (owner-only; 404 time_off_not_found; forward-only — does not resurrect cancelled slots)
+         * @description Delete a trainer time-off block (REC-03 delete / forward-only).
+         *
+         *     (DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
+         *     Does NOT resurrect cancelled slots — next cron tick re-materializes new ones.
+         */
+        delete: operations["delete_time_off_api_v1_time_off__time_off_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2884,6 +3181,17 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[PayrollAccrualResponse] */
+        PaginatedData_PayrollAccrualResponse_: {
+            /** Items */
+            items: components["schemas"]["PayrollAccrualResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[PtPackagePlanResponse] */
         PaginatedData_PtPackagePlanResponse_: {
             /** Items */
@@ -2917,10 +3225,32 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[RecurringSlotTemplateResponse] */
+        PaginatedData_RecurringSlotTemplateResponse_: {
+            /** Items */
+            items: components["schemas"]["RecurringSlotTemplateResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[SlotResponse] */
         PaginatedData_SlotResponse_: {
             /** Items */
             items: components["schemas"]["SlotResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[TimeOffResponse] */
+        PaginatedData_TimeOffResponse_: {
+            /** Items */
+            items: components["schemas"]["TimeOffResponse"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -3033,6 +3363,106 @@ export interface components {
             subjectId: string;
             /** Subjectkind */
             subjectKind: string;
+        };
+        /**
+         * PayrollAccrualCreate
+         * @description POST /payroll/accruals request body (PAY-03 / D-58-13).
+         *
+         *     period_start <= period_end is enforced by model_validator to produce a 422
+         *     with a descriptive message at the endpoint layer, before the service is called.
+         */
+        PayrollAccrualCreate: {
+            /**
+             * Periodend
+             * Format: date
+             */
+            periodEnd: string;
+            /**
+             * Periodstart
+             * Format: date
+             */
+            periodStart: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * PayrollAccrualResponse
+         * @description Outbound representation of a TrainerPayrollAccrual row (PAY-03..05 / D-58-13..14).
+         *
+         *     accrual_kopecks is signed (positive for regular accruals; negative for clawback rows).
+         *     All temporal columns are UTC-aware datetimes.
+         */
+        PayrollAccrualResponse: {
+            /** Accrualkopecks */
+            accrualKopecks: number;
+            /**
+             * Accruedat
+             * Format: date-time
+             */
+            accruedAt: string;
+            /** Clawbackofaccrualid */
+            clawbackOfAccrualId: string | null;
+            /** Commissionpctbpssnapshot */
+            commissionPctBpsSnapshot: number | null;
+            /**
+             * Compconfigidsnapshot
+             * Format: uuid
+             */
+            compConfigIdSnapshot: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Paidat */
+            paidAt: string | null;
+            /** Paidbyuserid */
+            paidByUserId: string | null;
+            /**
+             * Periodend
+             * Format: date
+             */
+            periodEnd: string;
+            /**
+             * Periodstart
+             * Format: date
+             */
+            periodStart: string;
+            /** Revenuekopecks */
+            revenueKopecks: number;
+            /** Sessionfeekopeckssnapshot */
+            sessionFeeKopecksSnapshot: number | null;
+            /** Sessionscount */
+            sessionsCount: number;
+            /** Sourcerefundpaymentid */
+            sourceRefundPaymentId: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * PayrollPreviewResponse
+         * @description GET /payroll/preview response body (PAY-02 / D-58-12).
+         *
+         *     Preview amounts are non-negative (no clawback in preview; that is a separate accrual).
+         *     All amounts in integer kopecks.
+         */
+        PayrollPreviewResponse: {
+            /** Commissionkopecks */
+            commissionKopecks: number;
+            /** Fixedkopecks */
+            fixedKopecks: number;
+            /** Sessioncount */
+            sessionCount: number;
+            /** Totalkopecks */
+            totalKopecks: number;
         };
         /**
          * PtPackageCancelRequest
@@ -3341,6 +3771,84 @@ export interface components {
              */
             updatedAt: string;
         };
+        /**
+         * RecurringSlotTemplateCreate
+         * @description POST /api/v1/recurring-templates body (REC-01 / D-59-02).
+         *
+         *     Mirrors the CHECK constraints from migration 0042 at the Pydantic layer
+         *     (T-59-06 double gate — DTO validates before the DB CHECK fires):
+         *     - day_of_week MUST be in [0, 6]  (0 = Mon, 6 = Sun ISO weekday).
+         *     - end_time MUST be after start_time.
+         *     - valid_until, when present, MUST be >= valid_from.
+         */
+        RecurringSlotTemplateCreate: {
+            /** Dayofweek */
+            dayOfWeek: number;
+            /**
+             * Endtime
+             * Format: time
+             */
+            endTime: string;
+            /**
+             * Starttime
+             * Format: time
+             */
+            startTime: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+            /**
+             * Validfrom
+             * Format: date
+             */
+            validFrom: string;
+            /** Validuntil */
+            validUntil?: string | null;
+        };
+        /**
+         * RecurringSlotTemplateResponse
+         * @description Outbound representation of a RecurringSlotTemplate (REC-01 / REC-04).
+         */
+        RecurringSlotTemplateResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Dayofweek */
+            dayOfWeek: number;
+            /**
+             * Endtime
+             * Format: time
+             */
+            endTime: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isactive */
+            isActive: boolean;
+            /**
+             * Starttime
+             * Format: time
+             */
+            startTime: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+            /**
+             * Validfrom
+             * Format: date
+             */
+            validFrom: string;
+            /** Validuntil */
+            validUntil: string | null;
+        };
         /** ResponseEnvelope[BookingDetailResponse] */
         ResponseEnvelope_BookingDetailResponse_: {
             data: components["schemas"]["BookingDetailResponse"];
@@ -3410,6 +3918,10 @@ export interface components {
         ResponseEnvelope_PaginatedData_PaymentResponse__: {
             data: components["schemas"]["PaginatedData_PaymentResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[PayrollAccrualResponse]] */
+        ResponseEnvelope_PaginatedData_PayrollAccrualResponse__: {
+            data: components["schemas"]["PaginatedData_PayrollAccrualResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[PtPackagePlanResponse]] */
         ResponseEnvelope_PaginatedData_PtPackagePlanResponse__: {
             data: components["schemas"]["PaginatedData_PtPackagePlanResponse_"];
@@ -3422,9 +3934,17 @@ export interface components {
         ResponseEnvelope_PaginatedData_PtSessionResponse__: {
             data: components["schemas"]["PaginatedData_PtSessionResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[RecurringSlotTemplateResponse]] */
+        ResponseEnvelope_PaginatedData_RecurringSlotTemplateResponse__: {
+            data: components["schemas"]["PaginatedData_RecurringSlotTemplateResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[SlotResponse]] */
         ResponseEnvelope_PaginatedData_SlotResponse__: {
             data: components["schemas"]["PaginatedData_SlotResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[TimeOffResponse]] */
+        ResponseEnvelope_PaginatedData_TimeOffResponse__: {
+            data: components["schemas"]["PaginatedData_TimeOffResponse_"];
         };
         /** ResponseEnvelope[PaginatedData[TrainerResponse]] */
         ResponseEnvelope_PaginatedData_TrainerResponse__: {
@@ -3438,6 +3958,14 @@ export interface components {
         ResponseEnvelope_PaginatedData_VisitResponse__: {
             data: components["schemas"]["PaginatedData_VisitResponse_"];
         };
+        /** ResponseEnvelope[PayrollAccrualResponse] */
+        ResponseEnvelope_PayrollAccrualResponse_: {
+            data: components["schemas"]["PayrollAccrualResponse"];
+        };
+        /** ResponseEnvelope[PayrollPreviewResponse] */
+        ResponseEnvelope_PayrollPreviewResponse_: {
+            data: components["schemas"]["PayrollPreviewResponse"];
+        };
         /** ResponseEnvelope[PtPackagePlanResponse] */
         ResponseEnvelope_PtPackagePlanResponse_: {
             data: components["schemas"]["PtPackagePlanResponse"];
@@ -3449,6 +3977,10 @@ export interface components {
         /** ResponseEnvelope[PtSessionResponse] */
         ResponseEnvelope_PtSessionResponse_: {
             data: components["schemas"]["PtSessionResponse"];
+        };
+        /** ResponseEnvelope[RecurringSlotTemplateResponse] */
+        ResponseEnvelope_RecurringSlotTemplateResponse_: {
+            data: components["schemas"]["RecurringSlotTemplateResponse"];
         };
         /** ResponseEnvelope[RevenueReportResponse] */
         ResponseEnvelope_RevenueReportResponse_: {
@@ -3470,9 +4002,21 @@ export interface components {
         ResponseEnvelope_TelegramStatusResponse_: {
             data: components["schemas"]["TelegramStatusResponse"];
         };
+        /** ResponseEnvelope[TimeOffResponse] */
+        ResponseEnvelope_TimeOffResponse_: {
+            data: components["schemas"]["TimeOffResponse"];
+        };
+        /** ResponseEnvelope[TrainerCompConfigResponse] */
+        ResponseEnvelope_TrainerCompConfigResponse_: {
+            data: components["schemas"]["TrainerCompConfigResponse"];
+        };
         /** ResponseEnvelope[TrainerResponse] */
         ResponseEnvelope_TrainerResponse_: {
             data: components["schemas"]["TrainerResponse"];
+        };
+        /** ResponseEnvelope[TrainerUsageReportResponse] */
+        ResponseEnvelope_TrainerUsageReportResponse_: {
+            data: components["schemas"]["TrainerUsageReportResponse"];
         };
         /** ResponseEnvelope[UserCreateResponse] */
         ResponseEnvelope_UserCreateResponse_: {
@@ -3638,6 +4182,11 @@ export interface components {
          *     no snapshot column on ``trainer_availability_slots``). The /book bot
          *     handler (Phase 40 D-40-07) consumes this field directly to label the
          *     InlineKeyboard buttons without a secondary lookup.
+         *
+         *     Phase 59 D-59-05: ``created_by_user_id`` is now ``UUID | None`` — the 0042
+         *     migration made the column nullable so the recurring-slot cron (Plan 05) can
+         *     materialise slots with no human author.  The human publish_slot path
+         *     continues to populate this field with the actor's UUID.
          */
         SlotResponse: {
             /** Cancelreason */
@@ -3649,11 +4198,8 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
-            /**
-             * Createdbyuserid
-             * Format: uuid
-             */
-            createdByUserId: string;
+            /** Createdbyuserid */
+            createdByUserId: string | null;
             /**
              * Endtime
              * Format: date-time
@@ -3769,6 +4315,121 @@ export interface components {
             deepLinkToken: string;
         };
         /**
+         * TimeOffCreate
+         * @description POST /api/v1/trainer-time-off body (REC-03 / D-59-06).
+         *
+         *     Mirrors the CHECK constraint from migration 0042 at the Pydantic layer
+         *     (T-59-07 double gate — DTO validates before the DB CHECK fires):
+         *     - block_end MUST be after block_start.
+         *     Both fields MUST be timezone-aware (TIMESTAMPTZ; always stored in UTC).
+         */
+        TimeOffCreate: {
+            /**
+             * Blockend
+             * Format: date-time
+             */
+            blockEnd: string;
+            /**
+             * Blockstart
+             * Format: date-time
+             */
+            blockStart: string;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * TimeOffResponse
+         * @description Outbound representation of a TrainerTimeOff block (REC-03 / REC-04).
+         */
+        TimeOffResponse: {
+            /**
+             * Blockend
+             * Format: date-time
+             */
+            blockEnd: string;
+            /**
+             * Blockstart
+             * Format: date-time
+             */
+            blockStart: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
+         * TrainerCompConfigRequest
+         * @description PUT /payroll/trainer-configs/{trainer_id} request body (PAY-01 / D-58-10).
+         *
+         *     T-58-13: bps ge=0/le=10000 mirrors DB CHECK
+         *     ck_trainer_comp_configs_commission_pct_bps_range.
+         *     T-58-14: kopecks ge=0 mirrors DB CHECK
+         *     ck_trainer_comp_configs_session_fee_kopecks_nonneg.
+         *     Both NULL is allowed at write time; service validates both-NULL at accrual run time
+         *     (D-58-09).
+         */
+        TrainerCompConfigRequest: {
+            /** Commissionpctbps */
+            commissionPctBps?: number | null;
+            /**
+             * Effectivefrom
+             * Format: date
+             */
+            effectiveFrom: string;
+            /** Sessionfeekopecks */
+            sessionFeeKopecks?: number | null;
+        };
+        /**
+         * TrainerCompConfigResponse
+         * @description Outbound representation of a TrainerCompConfig row (PAY-01 / D-58-11).
+         *
+         *     T-58-15: Snapshot field exposure is accepted (owner-only RBAC gates the response).
+         */
+        TrainerCompConfigResponse: {
+            /** Commissionpctbps */
+            commissionPctBps: number | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Effectivefrom
+             * Format: date
+             */
+            effectiveFrom: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sessionfeekopecks */
+            sessionFeeKopecks: number | null;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+        };
+        /**
          * TrainerCreateRequest
          * @description POST /api/v1/trainers body. Required: fullName. Phone optional.
          */
@@ -3819,6 +4480,71 @@ export interface components {
             isActive?: boolean | null;
             /** Phone */
             phone?: string | null;
+        };
+        /**
+         * TrainerUsageReportResponse
+         * @description Trainer-usage report envelope (RPT-01..04).
+         *
+         *     Non-paginated: single gym has O(10) trainers; no page/pageSize (D-60-09).
+         *     revenue_attribution_note: sourced from constants.TRAINER_REPORT_REVENUE_NOTE
+         *     (D-60-07 single source of truth for the double-count disclosure wording).
+         */
+        TrainerUsageReportResponse: {
+            /**
+             * Fromdate
+             * Format: date
+             */
+            fromDate: string;
+            /**
+             * Revenueattributionnote
+             * @default Revenue is attributed to pt_packages.trainer_id (assigned at sale). Packages currently have a single assigned trainer, so per-trainer revenue is unambiguous; if a package is reassigned during its lifecycle, revenue accrues to the trainer assigned at sale time. Summing revenue across trainers may not equal the global PT-package revenue total.
+             */
+            revenueAttributionNote: string;
+            /**
+             * Todate
+             * Format: date
+             */
+            toDate: string;
+            /** Trainers */
+            trainers: components["schemas"]["TrainerUsageRow"][];
+        };
+        /**
+         * TrainerUsageRow
+         * @description Per-trainer aggregate row in the trainer-usage report (RPT-01..04).
+         *
+         *     Field order mirrors CSV_TRAINER_USAGE_HEADERS for diffability (D-60-11).
+         *     Money fields are integer kopecks (REV-05 / D-11).
+         *     utilization_pct is None when 0 active|booked slots in the period (D-60-06).
+         *     avg_revenue_per_session is None when session_count == 0.
+         *     total_accrued_kopecks is signed to net clawbacks automatically (D-58-03 / D-60-05).
+         *     trainer_name_snapshot: from trainers.full_name (NO is_active filter — PITFALL 11).
+         */
+        TrainerUsageRow: {
+            /** Avgrevenuepersession */
+            avgRevenuePerSession: number | null;
+            /** Cancelledsessioncount */
+            cancelledSessionCount: number;
+            /** Revenuekopecks */
+            revenueKopecks: number;
+            /** Sessioncount */
+            sessionCount: number;
+            /** Totalaccruedkopecks */
+            totalAccruedKopecks: number;
+            /** Totalhours */
+            totalHours: number;
+            /** Totalpaidkopecks */
+            totalPaidKopecks: number;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+            /** Trainernamesnapshot */
+            trainerNameSnapshot: string;
+            /** Uniqueclientcount */
+            uniqueClientCount: number;
+            /** Utilizationpct */
+            utilizationPct: number | null;
         };
         /**
          * UserCreateRequest
@@ -5587,6 +6313,202 @@ export interface operations {
             };
         };
     };
+    list_payroll_accruals_api_v1_payroll_accruals_get: {
+        parameters: {
+            query: {
+                trainerId: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PayrollAccrualResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_accrual_api_v1_payroll_accruals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayrollAccrualCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PayrollAccrualResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_accrual_paid_api_v1_payroll_accruals__accrual_id__mark_paid_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accrual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PayrollAccrualResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_payroll_api_v1_payroll_preview_get: {
+        parameters: {
+            query: {
+                trainerId: string;
+                periodStart: string;
+                periodEnd: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PayrollPreviewResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TrainerCompConfigResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainerCompConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TrainerCompConfigResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_plans_api_v1_pt_package_plans_get: {
         parameters: {
             query?: {
@@ -6052,6 +6974,103 @@ export interface operations {
             };
         };
     };
+    list_recurring_templates_api_v1_recurring_templates_get: {
+        parameters: {
+            query?: {
+                trainerId?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_RecurringSlotTemplateResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_recurring_template_api_v1_recurring_templates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringSlotTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_RecurringSlotTemplateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_recurring_template_api_v1_recurring_templates__template_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_RecurringSlotTemplateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_clients_report_api_v1_reports_clients_get: {
         parameters: {
             query: {
@@ -6180,6 +7199,73 @@ export interface operations {
             };
         };
     };
+    get_trainers_report_api_v1_reports_trainers_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TrainerUsageReportResponse_"];
+                };
+            };
+            /** @description reception forbidden — (VIEW, REPORTS) ∈ OWNER_ONLY */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid period — toDate<fromDate or range>366 days */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_trainers_csv_api_v1_reports_trainers_csv_get: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_visits_report_api_v1_reports_visits_get: {
         parameters: {
             query: {
@@ -6226,6 +7312,103 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_time_off_api_v1_time_off_get: {
+        parameters: {
+            query?: {
+                trainerId?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_TimeOffResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_time_off_api_v1_time_off_post: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeOffCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_TimeOffResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_time_off_api_v1_time_off__time_off_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                time_off_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
