@@ -1,4 +1,4 @@
-import { request, type components } from '@sportzal/api-client'
+import { request, type components } from '@clubcore/api-client'
 import type {
   ClientsService,
   ClientsListQuery,

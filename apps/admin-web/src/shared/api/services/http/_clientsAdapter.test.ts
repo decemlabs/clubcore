@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { components } from '@sportzal/api-client'
+import type { components } from '@clubcore/api-client'
 import {
   responseToClient,
   createInputToRequest,
