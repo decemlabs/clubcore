@@ -246,9 +246,9 @@ Plans:
   4. A milestone verification script or operator runbook confirms the end-to-end payroll + schedule + report surface against a live docker-compose stack; operator runbook authored at .planning/handoff/v1.9-trainers-runbook.md
 
 **Plans**: 4 plans
-- [ ] 61-01-PLAN.md — Regenerate openapi.json + schema.d.ts byte-stably for v1.9 trainers surface
+- [x] 61-01-PLAN.md — Regenerate openapi.json + schema.d.ts byte-stably for v1.9 trainers surface
 - [ ] 61-02-PLAN.md — Add _v19Checks AssertNonNever forward-guards + runtime toHaveLength(14) assertion
-- [ ] 61-03-PLAN.md — Author .planning/handoff/v1.9-trainers-runbook.md (5 scenarios + OPERATOR-PENDING + attestation)
+- [x] 61-03-PLAN.md — Author .planning/handoff/v1.9-trainers-runbook.md (5 scenarios + OPERATOR-PENDING + attestation)
 - [ ] 61-04-PLAN.md — Milestone verification pass (RBAC parity + introspection + full suite + drift gates) + STATE.md close
 
 ## Progress
@@ -260,7 +260,7 @@ Plans:
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 5/5 | Complete   | 2026-05-25 |
 | 60. Trainer-Usage Report | 4/4 | Complete   | 2026-05-25 |
-| 61. OpenAPI Handoff + Milestone Verification | 0/4 | Planned | - |
+| 61. OpenAPI Handoff + Milestone Verification | 2/4 | In Progress|  |
 
 ---
 
