@@ -26,7 +26,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 ### v1.10 clubcore Rebrand (Phase 62)
 
-- [ ] **Phase 62: clubcore Rebrand** — Переименовать `sportzal → clubcore` во всех package names, storage keys, Redis namespaces, docs + operator-tier renames (Postgres DB rename, `CLUBCORE_EMAIL_FROM` env с deprecated-warning fallback, DNS/DKIM checklist, `CLUB_BRAND` constant extraction); smoke-проверка зелёная под новым именем
+- [x] **Phase 62: clubcore Rebrand** — Переименовать `sportzal → clubcore` во всех package names, storage keys, Redis namespaces, docs + operator-tier renames (Postgres DB rename, `CLUBCORE_EMAIL_FROM` env с deprecated-warning fallback, DNS/DKIM checklist, `CLUB_BRAND` constant extraction); smoke-проверка зелёная под новым именем (completed 2026-05-26)
 
 ### v1.11 API Handoff + Production Hardening (Phases 63-67)
 
@@ -70,7 +70,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 62-07-PLAN.md — G-7 final smoke gauntlet + evidence capture (12 gates)
+- [x] 62-07-PLAN.md — G-7 final smoke gauntlet + evidence capture (12 gates)
 
 ### Phase 63: Tech-Debt Sweep (v1.11)
 
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 62. clubcore Rebrand | v1.10 | 6/7 | In Progress|  |
+| 62. clubcore Rebrand | v1.10 | 7/7 | Complete   | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 65. Handoff Artifacts | v1.11 | 0/0 | Not started (milestone not opened) | — |
