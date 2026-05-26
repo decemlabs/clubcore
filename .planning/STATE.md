@@ -4,8 +4,8 @@ milestone: v1.11
 milestone_name: API Handoff + Production Hardening
 status: executing
 stopped_at: Phase 64 Wave 1 complete (64-01 landed); Wave 2 ready
-last_updated: "2026-05-26T19:24:19.304Z"
-last_activity: 2026-05-26 -- Phase 64 planning complete
+last_updated: "2026-05-26T19:26:46.247Z"
+last_activity: 2026-05-26 -- Phase 64 execution started
 progress:
   total_phases: 6
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** Phase 64 — contract-freeze-openapi-curation
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-26 -- Phase 64 planning complete
+Phase: 64 (contract-freeze-openapi-curation) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 64
+Last activity: 2026-05-26 -- Phase 64 execution started
 
 Progress: [██████████] 100% (Phase 63 of 5 plans)
 

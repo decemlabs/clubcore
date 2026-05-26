@@ -83,8 +83,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 64-02-PLAN.md — FRZ-02 (generate_unique_id_function suffix-strip + collision audit + schema.d.ts regen)
-- [ ] 64-03-PLAN.md — FRZ-03 (explicit per-router tags + openapi_tags 12-domain ordering + aggregator-tag dedup + Users 11th tag)
+- [x] 64-02-PLAN.md — FRZ-02 (generate_unique_id_function suffix-strip + collision audit + schema.d.ts regen)
+- [x] 64-03-PLAN.md — FRZ-03 (explicit per-router tags + openapi_tags 12-domain ordering + aggregator-tag dedup + Users 11th tag)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -167,7 +167,7 @@ Plans:
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
-| 64. Contract Freeze — OpenAPI Curation | v1.11 | 1/7 | In Progress|  |
+| 64. Contract Freeze — OpenAPI Curation | v1.11 | 3/7 | In Progress|  |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
