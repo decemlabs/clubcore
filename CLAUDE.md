@@ -1,9 +1,9 @@
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**Sportzal**
+**clubcore** *(переименован из `sportzal` в Phase 62 / v1.10; CLUB_BRAND placeholder value `"Sportzal"` сохранён per D-62-02)*
 
-Sportzal — CRM для тренажёрного зала. Сейчас пет-проект на один зал: управление клиентами, абонементами, посещениями, расписанием, бронированиями, тренерами, биллингом и уведомлениями. Под рынок РФ/СНГ. Frontend — admin-панель на React 19 (Vite + TanStack Router) с моками; backend сейчас отсутствует и будет построен в текущем milestone как модульный монолит на FastAPI.
+clubcore — CRM для тренажёрного зала. Сейчас пет-проект на один зал: управление клиентами, абонементами, посещениями, расписанием, бронированиями, тренерами, биллингом и уведомлениями. Под рынок РФ/СНГ. Frontend — admin-панель на React 19 (Vite + TanStack Router) с моками; backend сейчас отсутствует и будет построен в текущем milestone как модульный монолит на FastAPI.
 
 **Core Value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
@@ -121,7 +121,7 @@ Sportzal — CRM для тренажёрного зала. Сейчас пет-�
 ## State & Data Conventions
 ### Zustand stores
 - One store per concern (`session`, `uiPrefs`).
-- Persisted state uses `persist` middleware with **versioned** storage keys (`sportzal:<name>:v1`) and a `partialize` selector.
+- Persisted state uses `persist` middleware with **versioned** storage keys (`clubcore:<name>:v2`; legacy `sportzal:<name>:v1` keys migrated copy-on-read + deleted per D-62-06) and a `partialize` selector.
 - `skipHydration: true` + manual `persist.rehydrate()` in `src/app/main.tsx` so the bootstrap is awaited before React mounts (avoids flicker between roles/themes).
 ### TanStack Query (target conventions)
 - Per-feature `xKeys` factory (e.g. `clientsKeys.list(filter) = ['clients', 'list', filter] as const`).
@@ -192,7 +192,7 @@ Sportzal — CRM для тренажёрного зала. Сейчас пет-�
 ## Core Abstractions
 ### Session & Authorization (`src/shared/session/`)
 - `types.ts` — `Role = 'owner' | 'reception'`, `SessionState = { role; setRole }`
-- `store.ts` — Zustand store, persisted to `localStorage['sportzal:session:v1']` with `version: 1`, `skipHydration: true` (manually rehydrated in `main.tsx:13`).
+- `store.ts` — Zustand store, persisted to `localStorage['clubcore:session:v2']` (legacy `sportzal:session:v1` migrated copy-on-read+delete) with `version: 2`, `skipHydration: true` (manually rehydrated in `main.tsx:13`).
 - `registry.ts` — `routeRegistry: readonly RouteEntry[]` — maps each top-level path to a `Resource`, sidebar label (Russian), Lucide icon name, and i18n key. Used by sidebar, router, and tests.
 - `can.ts` — `can(role, action, resource): boolean`. Owner short-circuits to `true`; reception is denied any pair listed in `OWNER_ONLY` (finance/reports/payroll/compensation/settings/owner-area views, template edits, client deletes, refunds).
 - `RoleGate.tsx` — declarative wrapper for in-page action gating.
@@ -200,13 +200,13 @@ Sportzal — CRM для тренажёрного зала. Сейчас пет-�
 ```ts
 ```
 ### Theming (`src/shared/theme/` + `src/app/providers/ThemeProvider.tsx`)
-- UI prefs Zustand store at `localStorage['sportzal:ui:v1']` holds `{ theme: 'light' | 'dark' | 'system' }`.
+- UI prefs Zustand store at `localStorage['clubcore:ui:v2']` (legacy `sportzal:ui:v1` migrated) holds `{ theme: 'light' | 'dark' | 'system' }`.
 - Inline blocking script in `index.html` reads that key and applies `.dark` to `<html>` before React mounts (no FOUC).
 - `ThemeProvider` keeps the class in sync with store changes and `prefers-color-scheme`.
 - All colors are semantic shadcn tokens (`bg-background`, `text-muted-foreground`); raw palette classes are banned by ESLint (`eslint.config.js:8-9, 71-83`).
 ### Mock Services Container
 - 120–300 ms simulated latency, configurable failure rate.
-- Versioned localStorage DB key `sportzal:mock:v1`.
+- Versioned localStorage DB key `clubcore:mock:v2` (legacy `sportzal:mock:v1` migrated copy-on-read+delete per D-62-06).
 - `faker.seed(42)` for deterministic data.
 - Mock services enforce role access (throw `DomainError` when `can(...)` is false).
 ## Data Flow Examples

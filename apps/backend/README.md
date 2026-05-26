@@ -1,6 +1,6 @@
-# sportzal-backend
+# clubcore-backend
 
-Backend для Sportzal — CRM для тренажёрного зала. Модульный монолит на FastAPI 0.115+ (Python 3.12, uv, SQLAlchemy 2.0 async, Alembic, Pydantic v2, Postgres 16, Redis 7, ARQ, structlog). Phase A — каркас; бизнес-фичи лежат в `app.modules.*` как placeholders.
+Backend для clubcore (переименован из `sportzal` в Phase 62 / v1.10; CLUB_BRAND gym-name placeholder `"Sportzal"` сохранён per D-62-02) — CRM для тренажёрного зала. Модульный монолит на FastAPI 0.115+ (Python 3.12, uv, SQLAlchemy 2.0 async, Alembic, Pydantic v2, Postgres 16, Redis 7, ARQ, structlog). Phase A — каркас; бизнес-фичи лежат в `app.modules.*` как placeholders.
 
 ## Quick start
 

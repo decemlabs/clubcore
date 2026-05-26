@@ -1,4 +1,6 @@
-# CLAUDE.md — SportZal Adminka
+# CLAUDE.md — clubcore Adminka
+
+> Renamed from "SportZal Adminka" → "clubcore-adminka" in Phase 62 / v1.10 per D-62-09. CLUB_BRAND placeholder value `"Sportzal"` (gym-name) preserved per D-62-02 — unrelated to project rename.
 
 Project conventions for Claude Code. Read this before making changes.
 
@@ -49,7 +51,7 @@ React 19, Vite 6, TypeScript strict, Tailwind CSS v4 (CSS-first `@theme`), shadc
 - **Russian locale:** DD.MM.YYYY, Monday week-start, 24h, `+7 (XXX) XXX-XX-XX` phone masks, `1 234,56 ₽` with NBSP, 3-form pluralization via `Intl.PluralRules('ru-RU')`. Single `src/shared/i18n/ru.ts` dictionary — no i18next.
 - **Style tokens:** only semantic shadcn tokens (`bg-background`, `text-muted-foreground`, …). Raw palette colors (`bg-white`, `text-slate-900`) are banned via ESLint.
 - **shadcn customization:** don't hand-edit `components/ui/*`. Put customizations in wrappers. If you must diverge, mark with `// SHADCN-DIVERGENCE: …`.
-- **Mock realism:** 120–300ms latency, configurable failure rate, versioned localStorage key (`sportzal:mock:v1`), `faker.seed(42)`. Mock services enforce role access.
+- **Mock realism:** 120–300ms latency, configurable failure rate, versioned localStorage key (`clubcore:mock:v2`; legacy `sportzal:mock:v1` migrated copy-on-read+delete per D-62-06), `faker.seed(42)`. Mock services enforce role access.
 
 ## Anti-features (do not build in v1)
 
