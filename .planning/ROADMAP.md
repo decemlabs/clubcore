@@ -12,7 +12,7 @@
 - ✅ **v1.7 Online Payments + 54-ФЗ** — Phases 47-53 (shipped 2026-05-24) — see [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 - ✅ **v1.8 Reports + Audit Log read API** — Phases 54-57 (shipped 2026-05-24) — see [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 - ✅ **v1.9 Trainers Complete** — Phases 58-61 (shipped 2026-05-26) — see [milestones/v1.9-ROADMAP.md](milestones/v1.9-ROADMAP.md)
-- 🚧 **v1.10 clubcore Rebrand** — Phase 62 (in progress, started 2026-05-26 — narrowed from original 6-phase scope per D-10-SPLIT)
+- ✅ **v1.10 clubcore Rebrand** — Phases 62 + 62.1 (shipped 2026-05-26 — narrowed from original 6-phase scope per D-10-SPLIT; Phase 62.1 inserted post-audit to close REB-09 + REB-10)
 - 🔜 **v1.11 API Handoff + Production Hardening** — Phases 63-67 (not yet opened; scope deferred from v1.10 on 2026-05-26)
 
 ## Phases
@@ -74,10 +74,18 @@ Plans:
 
 ### Phase 62.1: Finalize sportzal → clubcore rename (A+B+C scope) (INSERTED)
 
-**Goal:** Close v1.10 by removing the 4 sportzal-era back-compat shims (A — main.tsx + index.html + config.py + runbook), capturing local operator-pending evidence with explicit production-deferral for DNS/DKIM (B), and recording the 5/6 email_templates count corrigendum (C) — all pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-SCOPE so v1.11 opens against a fully-clean clubcore tree
+**Goal**: Close v1.10 by removing the 4 sportzal-era back-compat shims (A), capturing local operator-pending evidence with explicit production-deferral for DNS/DKIM (B), and recording the 5/6 email_templates count corrigendum (C) — pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-SCOPE so v1.11 opens against a fully-clean clubcore tree
+**Depends on**: Phase 62 (REB-01..08 satisfied 2026-05-26)
 **Requirements**: REB-09, REB-10
-**Depends on:** Phase 62 (REB-01..08 satisfied 2026-05-26)
-**Plans:** 8/9 plans executed
+**Success Criteria** (what must be TRUE):
+
+  1. All 4 shim sites tagged `TODO Phase 67 / RUN-07` removed (main.tsx, index.html, config.py, runbook) — grep across tree returns 0 matches
+  2. `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` exists with captured pg_dump/restore round-trip against dedicated clubcore_smoke DB + DNS/DKIM N/A-until-production row
+  3. `.planning/phases/62.1-.../62.1-CORRIGENDUM.md` records the 5/6 email_templates imprecision (D-62.1-01 pattern)
+  4. `.planning/v1.10-MILESTONE-AUDIT-ADDENDUM.md` records final 10/10 v1.10 status
+  5. D-62-02 (CLUB_BRAND="Sportzal" placeholder) and D-62-09 (Phase 62 byte-frozen) invariants preserved
+
+**Plans**: 9 plans
 
 Plans:
 **Wave 1**
@@ -95,8 +103,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [x] 62.1-08-PLAN.md — pg_dump/restore round-trip capture into v1.10-OPERATOR-EVIDENCE.md (REB-10) — checkpoint:human-verify
-- [ ] 62.1-09-PLAN.md — v1.10-MILESTONE-AUDIT-ADDENDUM.md + ROADMAP/REQUIREMENTS/STATE finalization
+- [x] 62.1-08-PLAN.md — pg_dump/restore round-trip capture into v1.10-OPERATOR-EVIDENCE.md (REB-10)
+- [x] 62.1-09-PLAN.md — v1.10-MILESTONE-AUDIT-ADDENDUM.md + ROADMAP/REQUIREMENTS/STATE finalization (this plan)
 
 ### Phase 63: Tech-Debt Sweep (v1.11)
 
@@ -177,7 +185,8 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 62. clubcore Rebrand | v1.10 | 7/7 | Complete   | 2026-05-26 |
+| 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
+| 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete   | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 65. Handoff Artifacts | v1.11 | 0/0 | Not started (milestone not opened) | — |
@@ -186,7 +195,7 @@ Plans:
 
 ---
 
-*Roadmap last updated: 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62; Phases 63-67 (24 requirements: DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:6) moved to v1.11 API Handoff + Production Hardening (not yet opened — REQUIREMENTS.md to be recreated fresh when v1.11 starts, per project convention).*
+*Roadmap last updated: 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62; Phases 63-67 (24 requirements: DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:6) moved to v1.11 API Handoff + Production Hardening (not yet opened — REQUIREMENTS.md to be recreated fresh when v1.11 starts, per project convention). Phase 62.1 inserted post-audit 2026-05-26 to close v1.10 with REB-09 (shim removal) + REB-10 (operator evidence); v1.10 final = 10/10 (see .planning/v1.10-MILESTONE-AUDIT-ADDENDUM.md).*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
@@ -197,7 +206,7 @@ Plans:
 *v1.7 Coverage: 48/51 v1.7 requirements delivered. 3 operator-credential-gated deferred at close (CARRY-01, CARRY-02, VER-03).*
 *v1.8 Coverage: 30/30 v1.8 requirements mapped.*
 *v1.9 Coverage: 15/15 v1.9 requirements mapped.*
-*v1.10 Coverage: 8/8 v1.10 requirements mapped (8 REB → Phase 62) — narrowed scope per D-10-SPLIT 2026-05-26.*
+*v1.10 Coverage: 10/10 v1.10 requirements satisfied (8 REB → Phase 62; REB-09 + REB-10 → Phase 62.1) — narrowed scope per D-10-SPLIT 2026-05-26; Phase 62.1 closure complete 2026-05-26 (see v1.10-MILESTONE-AUDIT-ADDENDUM.md).*
 *v1.11 Planned: 24 requirements distributed across Phases 63-67 (5 DEBT + 5 FRZ + 4 HND + 4 IDM + 6 RUN) — milestone not yet opened.*
 
 ## Backlog
