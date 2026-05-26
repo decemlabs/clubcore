@@ -1,3 +1,9 @@
+---
+status: complete
+type: knowledge-base
+note: Not an active debug session — this file is the permanent registry of resolved debug patterns used by gsd-debugger to surface known-pattern hypotheses on new investigations. The `status: complete` frontmatter suppresses audit-open false-positives.
+---
+
 # GSD Debug Knowledge Base
 
 Resolved debug sessions. Used by `gsd-debugger` to surface known-pattern hypotheses at the start of new investigations.
