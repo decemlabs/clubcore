@@ -358,6 +358,55 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 
 ---
 
+## Milestone: v1.10 — clubcore Rebrand
+
+**Shipped:** 2026-05-26
+**Phases:** 2 (62 + closure 62.1) | **Plans:** 16 (7 + 9)
+**Timeline:** 2026-05-26 (single day, ~6 hours wall-clock, 83 commits)
+**Requirements:** 10/10 (REB-01..10) satisfied
+**Code shipped:** rename-only milestone — 185 files changed, +9.6K / -15.1K LOC (net deletion from sportzal removal + forward-only `.planning/` rewrite)
+**Audit:** PASSED 8/8 (`v1.10-MILESTONE-AUDIT.md`) + addendum PASSED 10/10 post-closure (`v1.10-MILESTONE-AUDIT-ADDENDUM.md`)
+
+### What Was Built
+- Full project rename `sportzal → clubcore` across every active code identifier — pnpm workspace (`@clubcore/api-client` + `@clubcore/ui` + `clubcore-adminka`), localStorage (`clubcore:{session,ui,mock}:v2` via Zustand persist `version: 1 → 2` copy-on-read+delete + `index.html` theme-bootstrap fallback), Redis namespace `sz:* → cc:*` across 5 modules.
+- Operator-tier renames: Postgres DB rename runbook (pg_dump/restore + DNS/DKIM checklist) at `.planning/handoff/clubcore-db-rename-runbook.md`; `CLUBCORE_EMAIL_FROM` env via `app/core/config.py` with `SPORTZAL_EMAIL_FROM` deprecated-warning → hardcoded default fallback chain.
+- `CLUB_BRAND` constant extraction to `app/core/branding.py` (placeholder value `"Sportzal"` retained per D-62-02; per-club configurable branding deferred); 6 email_templates references unified.
+- Forward-only `.planning/` rewrite + `.planning/HISTORICAL_NOTE.md` documenting that `phases/47-61/*` + `audits/*` are deliberately immutable as audit trail.
+- Closure Phase 62.1 stripped the 4 sportzal-era back-compat shims (REB-09) + captured operator evidence in `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` against a dedicated `clubcore_smoke` DB; DNS/DKIM pinned `N/A-until-production` with documented trigger condition (REB-10).
+
+### What Worked
+- **Forward-only `.planning/` rewrite with `HISTORICAL_NOTE.md` boundary (D-62-09 / D-10-HISTORY-IMMUTABLE)** — rewriting historical phase folders retroactively would destroy chain-of-custody for past decisions. The note documents which docs reflect sportzal-era reality vs the clubcore rewrite, so future readers don't have to guess.
+- **Per-layer back-compat mechanics chosen by layer-reliability constraints** — localStorage = zero-touch copy-on-read+delete (user never sees friction), Redis = operator FLUSHDB at cutover (runtime flips would corrupt circuit-breaker state mid-flight), env = soft-deprecation chain (`CLUBCORE → SPORTZAL_legacy → hardcoded`) so .env files don't break on first deploy. One-size-fits-all migration would have been wrong.
+- **Mid-milestone narrowing via D-10-SPLIT** — `/gsd:discuss-phase 62` surfaced that the operator-tier work expanded Phase 62 beyond a pure code-rename. Splitting Phases 63-67 (DEBT/FRZ/HND/IDM/RUN) to v1.11 kept verification homogeneous; the alternative (heterogeneous 6-phase milestone with mixed code-rename + operator-infra risk profiles) would have been a verification nightmare.
+- **Closure Phase 62.1 inserted post-audit per D-62.1-SCOPE** — audit passed 8/8 but flagged 4 back-compat shims tagged for removal in v1.11/Phase 67. Letting v1.11 ("API Handoff") inherit legacy shims would have been a contradiction. ~9 plans of closure work bought a fully-clean tree for v1.11 to open against.
+- **AST literal-string gate discipline maintained throughout** — `LOCKED_AUDIT_EVENTS` + `LOCKED_EMAIL_TEMPLATES` + `YOOKASSA_TRUSTED_IPS` AST walkers caught zero violations during rename (the constants didn't change semantics; only their host file name shifted from `sportzal` to `clubcore` references in surrounding comments).
+- **Smoke gauntlet caught upstream regressions** — Phase 62 G-7 smoke gauntlet (12 gates) surfaced G7-E + G7-H regressions traceable back to plans 62-01 / 62-04, both gap-closed inline before milestone close. The dedicated final-smoke phase paid for itself.
+
+### What Was Inefficient
+- **Auto-extracted `one_liner` from SUMMARY.md frontmatter was garbage** — the `gsd-sdk milestone.complete` CLI auto-populated the MILESTONES.md entry with deviation-rule text and `"One-liner:"` placeholder strings because the SUMMARY.md `one_liner:` field wasn't consistently populated. Workaround: manually curate accomplishments. Fix: future executor agents should always fill `one_liner:` with the actual one-line phase outcome, not skip the field.
+- **`.planning/MILESTONES.md` carried a stale "v1.10 In Progress" entry from milestone-open time** — the new shipped entry landed at the top, but the old in-progress entry remained below until manually deleted during /gsd-complete-milestone. Fix: milestone-open should record its in-progress entry in a dedicated section (e.g. `## In Progress`) that close-milestone deletes verbatim.
+- **`v1.10-OPERATOR-EVIDENCE.md` was already in `.planning/milestones/` before milestone close** — Phase 62.1 plan 08 wrote it there directly (which is the right end location), but the file was untracked in the close audit because the CLI only knew to move root-level `v1.X-*.md` files. Workaround: explicit `git add` covered it. Fix: docs that target the archive directory at write-time should be flagged so close-milestone doesn't try to move them again.
+
+### Patterns Established
+- **Forward-only documentation rewrites with `HISTORICAL_NOTE.md` audit trail** — when a project rename touches every doc, rewrite the active surface and freeze the past with a single note that explains the boundary. Future renames (per-club brand → real brand, project namespace shifts) follow this pattern.
+- **Per-layer back-compat mechanic selection** — when migrating a multi-layer convention (localStorage + Redis + env + DB names), each layer's choice should reflect its reliability constraints, not be uniform. Tag all shims with `TODO Phase N / RUN-N` for removal-in-closure.
+- **Closure phase as a sub-milestone (62.1 pattern)** — when audit passes but flags TODO-tagged shims, insert a closure phase to remove them before tagging the milestone shipped. Keeps the next milestone's freeze baseline clean.
+- **Pull-forward via `D-62.1-SCOPE`-style decision** — pulling REB-09/REB-10 forward from v1.11/Phase 67 to v1.10 closure was the right call: the work was small, the alternative (carry a known-debt milestone forward) was bad. Pattern: when next-milestone scope includes "remove the shims you just added", pull that work into the current closure.
+- **Operator evidence with explicit production-deferral marker** — `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` captured local pg_dump/restore round-trip against a `_smoke` DB AND marked DNS/DKIM as `N/A-until-production` with a documented trigger condition. Closes the requirement structurally without faking production evidence.
+
+### Key Lessons
+- **A rename milestone is operator-tier work in disguise.** What looked like a code-only Phase 62 expanded to include Postgres DB rename + DNS/DKIM checklist + env wiring + FLUSHDB cutover. Future "trivial" rename milestones should be discussed before scoping is locked.
+- **Audit findings tagged TODO-for-next-milestone are scope creep waiting to happen.** v1.10 audit passed but flagged 4 shims for v1.11; pulling them forward in Phase 62.1 was cheaper than letting v1.11 open dirty. Heuristic: if the next milestone's first task is "remove the thing this milestone added", do it in closure.
+- **AST literal-string gates survive renames trivially** because the constants don't change. The discipline of "register first, callsite later" (INFRA-15) means rename milestones are mechanical: change the file names + the host strings, not the protected constants.
+- **Forward-only rewrites preserve audit trail.** Rewriting `phases/47-61/*` retroactively would have destroyed the historical record. `HISTORICAL_NOTE.md` is now the load-bearing artifact for understanding the sportzal-era vs clubcore-era boundary.
+
+### Cost Observations
+- Model mix: Opus 4.7 dominated orchestration + discuss-phase + planning + close-milestone; Sonnet 4.6 ran executor + verifier work. Roughly 30% opus / 65% sonnet / 5% haiku — slightly more opus-weighted than v1.9 because the rename touched policy decisions (`D-10-SPLIT`, `D-62-02`, `D-62-09`, `D-62.1-SCOPE`) that warranted Opus judgment.
+- Sessions: small — a single-day milestone (~6 hours wall-clock, 83 commits). Phase 62 ran 7 plans in 3 waves; Phase 62.1 ran 9 plans in 3 waves.
+- Notable: highest deletion-to-insertion ratio of the project (~9.6K added / 15.1K deleted) — rename milestones reshape the surface area, they don't add code. The forward-only `.planning/` rewrite drove most of the deletion volume.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -374,7 +423,7 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 | v1.7 Online Payments + 54-ФЗ | 7 | 47 | Async adapter wrapping a synchronous SDK behind frozen-dataclass boundary + respx fixtures; AST gate on `YOOKASSA_TRUSTED_IPS`; webhook security = IP allowlist + status re-fetch (no HMAC) with value-granting locked to the verified webhook; fiscal obligation FK'd to the committed ledger row; circuit-breaker + cross-channel discriminator transplanted from v1.6; 0/5 inline regressions across 47 plans (best ratio yet); operator-deferral pattern for credential-gated verification |
 | v1.8 Reports + Audit Log read API | 4 | 10 | Read-only module discipline (D-54-07/08: no `models.py`, raw-SQL `text()` cross-module reads, zero writes against business tables, SVC001 N/A); UTF-8 BOM + RFC-4180 excel CSV for Cyrillic-safe export (D-11); keyset pagination `ORDER BY created_at DESC, id DESC` with composite btree index for stable concurrent reads; DST golden-test as correctness anchor shared between automated test + operator runbook; smallest-milestone-ever (10 plans / 4 phases) by consuming existing tables instead of building |
 | v1.9 Trainers Complete | 4 | 22 | Versioned comp-config with snapshot-at-accrual rate (generalization of v1.2 price snapshot to any rate-bearing config); `INSERT ... ON CONFLICT DO NOTHING RETURNING` for DB-arbitrated races (D-58-06) reused in payroll accrual + recurring-slot materialization cron; `cron_function_names ⊆ function_names` invariant test preventing v1.3/v1.5-class registration-drift failures; signed-SUM netted aggregates in reports (positive accrual + negative clawback in one table → no subqueries); locked-decision-correction discipline (D-PAYROLL-ROUNDING ratified mid-Phase 58 when CONTEXT D-58-04 conflict surfaced) — all 8 business domains ✅ |
-| v1.10 clubcore Rebrand (in progress) | 1 (Phase 62) | 7 | Single-phase milestone narrowed per D-10-SPLIT; project rename `sportzal → clubcore` across pnpm packages, localStorage (Zustand `version: 1 → 2` copy-on-read+delete), Redis namespace (operator FLUSHDB), Postgres DB (operator pg_dump/restore), `CLUBCORE_EMAIL_FROM → SPORTZAL_EMAIL_FROM (legacy)` fallback chain, `CLUB_BRAND` constant extraction (placeholder value retained per D-62-02); forward-only `.planning/` rewrite + `HISTORICAL_NOTE.md` audit-trail boundary (D-62-09 / D-10-HISTORY-IMMUTABLE) — historical `phases/47-61/*` + `audits/*` intentionally immutable |
+| v1.10 clubcore Rebrand | 2 (62 + closure 62.1) | 16 (7 + 9) | Single-phase milestone narrowed per D-10-SPLIT; project rename `sportzal → clubcore` across pnpm packages, localStorage (Zustand `version: 1 → 2` copy-on-read+delete), Redis namespace (operator FLUSHDB), Postgres DB (operator pg_dump/restore), `CLUBCORE_EMAIL_FROM → SPORTZAL_EMAIL_FROM (legacy)` fallback chain, `CLUB_BRAND` constant extraction (placeholder value retained per D-62-02); forward-only `.planning/` rewrite + `HISTORICAL_NOTE.md` audit-trail boundary (D-62-09 / D-10-HISTORY-IMMUTABLE) — historical `phases/47-61/*` + `audits/*` intentionally immutable. Closure Phase 62.1 inserted post-audit per D-62.1-SCOPE: 4 back-compat shims stripped (REB-09) + operator evidence captured against dedicated `_smoke` DB with DNS/DKIM `N/A-until-production` marker (REB-10) — v1.11 opens against fully-clean tree |
 
 ### Cumulative Quality
 

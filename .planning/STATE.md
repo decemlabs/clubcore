@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand) per D-10-SPLIT; Phases 63-67 → v1.11)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** v1.10 clubcore Rebrand SHIPPED 2026-05-26 (tag `v1.10`; 10/10 REB-* satisfied). Next: open v1.11 API Handoff + Production Hardening via `/gsd-new-milestone` (Phases 63-67 — Tech-Debt Sweep → Contract Freeze → Handoff Artifacts → Idempotency Hardening → Operator-Pending Runbook Execution). Phase 999.1 (WR-06 PT session credit restore) sits in Backlog — promote via `/gsd:review-backlog` when v1.11 opens.
 
 ## Current Position
 
