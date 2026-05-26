@@ -8,7 +8,7 @@ D-11: midnight-spanning gym hours rejected by model_validator at boot.
 from __future__ import annotations
 
 from datetime import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from pydantic import ValidationError
@@ -18,25 +18,27 @@ if TYPE_CHECKING:
 
 # Required fields for Settings instantiation in tests (no .env loaded).
 # PostgresDsn and RedisDsn validators require RFC-3986-compliant URIs.
-_REQUIRED_SETTINGS = {
+_REQUIRED_SETTINGS: dict[str, Any] = {
     "database_url": "postgresql+asyncpg://user:pass@localhost:5432/testdb",
     "redis_url": "redis://localhost:6379/0",
     "secret_key": "test-secret-key-not-real-minimum-length",
 }
 
 
-def _build_settings(**overrides: object) -> Settings:
+def _build_settings(**overrides: Any) -> Settings:
     """Construct Settings with required defaults + caller overrides.
 
-    Centralises the ``_env_file=None`` + ``type: ignore[call-arg]`` boilerplate
-    (REVIEW-62.1 IN-03) so per-test setup is a single-keyword call.
+    Centralises the ``_env_file=None`` boilerplate (REVIEW-62.1 IN-03) so
+    per-test setup is a single-keyword call. The Any-typed kwargs deliberately
+    bypass the BaseSettings TypedDict constraint that mypy strict otherwise
+    rejects when expanding the required-fields dict alongside test overrides.
     """
     from app.core.config import Settings
 
     return Settings(
         **_REQUIRED_SETTINGS,
         **overrides,
-        _env_file=None,  # type: ignore[call-arg]
+        _env_file=None,
     )
 
 
