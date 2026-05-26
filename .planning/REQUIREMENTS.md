@@ -91,21 +91,55 @@
 
 ## Traceability
 
-Updated during roadmap creation. Initial mapping будет сделана gsd-roadmapper в следующем шаге.
+Mapped 2026-05-26 by gsd-roadmapper. 32/32 requirements mapped to 6 phases (62-67); zero orphans, zero duplicates.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REB-01..08 | TBD | Pending |
-| HND-01..04 | TBD | Pending |
-| FRZ-01..05 | TBD | Pending |
-| IDM-01..04 | TBD | Pending |
-| DEBT-01..05 | TBD | Pending |
-| RUN-01..06 | TBD | Pending |
+| REB-01 | Phase 62 | Pending |
+| REB-02 | Phase 62 | Pending |
+| REB-03 | Phase 62 | Pending |
+| REB-04 | Phase 62 | Pending |
+| REB-05 | Phase 62 | Pending |
+| REB-06 | Phase 62 | Pending |
+| REB-07 | Phase 62 | Pending |
+| REB-08 | Phase 62 | Pending |
+| DEBT-01 | Phase 63 | Pending |
+| DEBT-02 | Phase 63 | Pending |
+| DEBT-03 | Phase 63 | Pending |
+| DEBT-04 | Phase 63 | Pending |
+| DEBT-05 | Phase 63 | Pending |
+| FRZ-01 | Phase 64 | Pending |
+| FRZ-02 | Phase 64 | Pending |
+| FRZ-03 | Phase 64 | Pending |
+| FRZ-04 | Phase 64 | Pending |
+| FRZ-05 | Phase 64 | Pending |
+| HND-01 | Phase 65 | Pending |
+| HND-02 | Phase 65 | Pending |
+| HND-03 | Phase 65 | Pending |
+| HND-04 | Phase 65 | Pending |
+| IDM-01 | Phase 66 | Pending |
+| IDM-02 | Phase 66 | Pending |
+| IDM-03 | Phase 66 | Pending |
+| IDM-04 | Phase 66 | Pending |
+| RUN-01 | Phase 67 | Pending |
+| RUN-02 | Phase 67 | Pending |
+| RUN-03 | Phase 67 | Pending |
+| RUN-04 | Phase 67 | Pending |
+| RUN-05 | Phase 67 | Pending |
+| RUN-06 | Phase 67 | Pending |
 
 **Coverage:**
 - v1.10 requirements: **32 total** (REB:8 + HND:4 + FRZ:5 + IDM:4 + DEBT:5 + RUN:6)
-- Mapped to phases: TBD (gsd-roadmapper)
-- Unmapped: TBD
+- Mapped to phases: **32/32** ✓
+- Unmapped: 0
+
+**Phase distribution:**
+- Phase 62 (Rebrand): 8 requirements
+- Phase 63 (Tech-Debt Sweep): 5 requirements
+- Phase 64 (Contract Freeze — OpenAPI Curation): 5 requirements
+- Phase 65 (Handoff Artifacts): 4 requirements
+- Phase 66 (Idempotency Hardening): 4 requirements
+- Phase 67 (Operator-Pending Runbook Execution): 6 requirements
 
 ---
-*Requirements defined: 2026-05-26 — start of milestone v1.10 clubcore Rebrand + API Handoff + Production Hardening (Phases continue from v1.9, start at Phase 62)*
+*Requirements defined: 2026-05-26 — start of milestone v1.10 clubcore Rebrand + API Handoff + Production Hardening (Phases continue from v1.9, start at Phase 62). Traceability mapped by gsd-roadmapper 2026-05-26: 32/32 covered.*
