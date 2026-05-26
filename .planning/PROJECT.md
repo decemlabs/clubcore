@@ -1,8 +1,8 @@
-# Sportzal
+# clubcore
 
 ## What This Is
 
-Sportzal — CRM для тренажёрного зала. Пет-проект на один зал: управление клиентами, абонементами, посещениями, расписанием, бронированиями, тренерами, биллингом и уведомлениями. Под рынок РФ/СНГ.
+clubcore — CRM для тренажёрного зала (переименован из `sportzal` в Phase 62 / v1.10; gym-brand placeholder остаётся `Sportzal` per D-62-02). Пет-проект на один зал: управление клиентами, абонементами, посещениями, расписанием, бронированиями, тренерами, биллингом и уведомлениями. Под рынок РФ/СНГ.
 
 **Текущее состояние (после v1.3 — Memberships Extras + Tech-Debt):**
 - **Frontend** — admin-панель на React 19 (Vite + TanStack Router) в `apps/admin-web/` (~18.8K LOC TS). Через `VITE_API_MODE=http` swap-seam идут: `/login`, `/clients/*`, `/memberships` (теперь с freeze/renewal flow + «Заморожен» filter pill + «Истекает в течение» within-days selector), `/memberships/$membershipId` (плоский detail route с `FreezeSection` + `RenewSection` + `RenewConfirmDialog`), `/membership-plans` (owner-only, `freeze_days_limit` immutable post-creation), `/visits` (reception check-in с FE-08 a..d edge cases), `/clients/$clientId` (Pattern α: Promise.all loader + ESLint-enforced cross-feature isolation), `/profile` (active sessions UI, http-only по D-22-2). Остальные домены продолжают идти через моки. Shared `StatusBadge` (4-value variant с frozen warning token), 3 TanStack Query mutation hooks (freeze/unfreeze optimistic, renew non-optimistic + navigate). 233 admin-web tests.
@@ -355,7 +355,7 @@ Target features (all delivered):
 - **Cross-module callbacks:** Protocol-based registration в `app/main.py` composition root (`register_user_loader`, `HandlerContext`) — preserves `modules-independent` контракт.
 - **Будущая трансформация в multi-tenant SaaS** возможна, но НЕ должна влиять на решения сейчас.
 - **Текущий codebase (после v1.7):** ~37.7K LOC Python в `apps/backend/app/` (бизнес-модули: auth, clients, memberships, visits, trainers, schedule, bookings, pt_packages, pt_sessions, payments, billing, users, notifications, online_payments, online_refunds, fiscal_receipts); backend suite green after the v1.7 test-debt sweep (~1992 passed, 0 failed — see `.planning/debug/resolved/test-debt-sweep-v19.md`) over 269 test files (pytest-asyncio + httpx ASGITransport + SAVEPOINT isolation + real-Postgres race tests for visits/freeze/bookings/online-payments + ARQ cron correctness + circuit-breaker parity); Alembic at revision 0039; admin-web frozen-as-of-v1.3 mock reference (~18.8K LOC TS, 233 tests); ЮKassa + email integrations under `app/integrations/`.
-- **CI:** `.github/workflows/ci.yml` гонит backend (`uv run ruff check`, `uv run mypy --strict`, `uv run pytest`, `uv run python apps/backend/scripts/export_openapi.py && git diff --exit-code apps/backend/openapi.json`) + frontend (`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm --filter @sportzal/api-client codegen && git diff --exit-code`) gates параллельно.
+- **CI:** `.github/workflows/ci.yml` гонит backend (`uv run ruff check`, `uv run mypy --strict`, `uv run pytest`, `uv run python apps/backend/scripts/export_openapi.py && git diff --exit-code apps/backend/openapi.json`) + frontend (`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm --filter @clubcore/api-client codegen && git diff --exit-code`) gates параллельно.
 
 ## Constraints
 
