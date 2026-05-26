@@ -4,7 +4,7 @@ from datetime import time
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import BaseModel, PostgresDsn, RedisDsn, SecretStr, model_validator
+from pydantic import BaseModel, EmailStr, PostgresDsn, RedisDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -118,7 +118,10 @@ class Settings(BaseSettings):
 
     # Phase 62 D-62-03 — env-driven email FROM override.
     # CLUBCORE_EMAIL_FROM overrides EmailProviderSettings.from_address default.
-    clubcore_email_from: str | None = None  # canonical env: CLUBCORE_EMAIL_FROM
+    # Typed as EmailStr (REVIEW-62.1 WR-02): pydantic rejects malformed addresses
+    # (missing '@', empty/whitespace) at construction, restoring the fail-fast
+    # posture the deleted multi-env fallback chain implicitly provided (WR-01).
+    clubcore_email_from: EmailStr | None = None  # canonical env: CLUBCORE_EMAIL_FROM
 
     @model_validator(mode="after")
     def _gym_hours_range_invariant(self) -> "Settings":
