@@ -4,7 +4,6 @@ from datetime import time
 from functools import lru_cache
 from typing import Literal, Self
 
-import structlog
 from pydantic import BaseModel, PostgresDsn, RedisDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -117,17 +116,9 @@ class Settings(BaseSettings):
     # flag is captured (D-43-14 / Pitfall 4 anti-oracle).
     frontend_base_url: str = "http://localhost:5173"
 
-    # Phase 62 D-62-03 — env-driven email FROM with v1.10-shim fallback chain.
-    # Precedence (resolved in `_resolve_email_from` model_validator below):
-    #   1. CLUBCORE_EMAIL_FROM (canonical)
-    #   2. SPORTZAL_EMAIL_FROM (legacy; emits deprecated-warning via structlog)
-    #   3. EmailProviderSettings.from_address default "noreply@mail.sportzal.ru"
-    # The hardcoded default deliberately remains the sportzal.ru domain
-    # (CONTEXT line 172) — domain migration is operator's DNS work, not a code
-    # rename. Removal target of the legacy env: v1.11 / Phase 67 / RUN-07.
+    # Phase 62 D-62-03 — env-driven email FROM override.
+    # CLUBCORE_EMAIL_FROM overrides EmailProviderSettings.from_address default.
     clubcore_email_from: str | None = None  # canonical env: CLUBCORE_EMAIL_FROM
-    # TODO Phase 67 / RUN-07: drop SPORTZAL_EMAIL_FROM legacy env fallback
-    sportzal_email_from: str | None = None  # legacy env (deprecated, removed v1.11)
 
     @model_validator(mode="after")
     def _gym_hours_range_invariant(self) -> "Settings":
@@ -141,22 +132,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_email_from(self) -> "Settings":
-        # Phase 62 D-62-03 — resolve CLUBCORE_EMAIL_FROM → SPORTZAL_EMAIL_FROM
-        # (warn) → keep EmailProviderSettings.from_address default. The hardcoded
-        # default literal "noreply@mail.sportzal.ru" inside EmailProviderSettings
-        # is preserved per CONTEXT line 172 (operator DNS work, not a code rename).
-        resolved: str | None = None
-        if self.clubcore_email_from:
-            resolved = self.clubcore_email_from
-        elif self.sportzal_email_from:
-            # TODO Phase 67 / RUN-07: drop SPORTZAL_EMAIL_FROM legacy env fallback
-            structlog.get_logger(__name__).warning(
-                "env_fallback_used",
-                env="SPORTZAL_EMAIL_FROM",
-                canonical="CLUBCORE_EMAIL_FROM",
-                removal_target="v1.11/Phase 67/RUN-07",
-            )
-            resolved = self.sportzal_email_from
+        # Phase 62 D-62-03 — canonical env override of EmailProviderSettings.from_address.
+        resolved: str | None = self.clubcore_email_from
         if resolved is not None:
             # EmailProviderSettings is a pydantic BaseModel (not frozen by default
             # in this codebase, but use object.__setattr__ for forward-compat with
