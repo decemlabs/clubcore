@@ -12,7 +12,8 @@
 - ✅ **v1.7 Online Payments + 54-ФЗ** — Phases 47-53 (shipped 2026-05-24) — see [milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 - ✅ **v1.8 Reports + Audit Log read API** — Phases 54-57 (shipped 2026-05-24) — see [milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 - ✅ **v1.9 Trainers Complete** — Phases 58-61 (shipped 2026-05-26) — see [milestones/v1.9-ROADMAP.md](milestones/v1.9-ROADMAP.md)
-- 🚧 **v1.10 clubcore Rebrand + API Handoff + Production Hardening** — Phases 62-67 (in progress, started 2026-05-26)
+- 🚧 **v1.10 clubcore Rebrand** — Phase 62 (in progress, started 2026-05-26 — narrowed from original 6-phase scope per D-10-SPLIT)
+- 🔜 **v1.11 API Handoff + Production Hardening** — Phases 63-67 (not yet opened; scope deferred from v1.10 on 2026-05-26)
 
 ## Phases
 
@@ -23,32 +24,37 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
-### v1.10 clubcore Rebrand + API Handoff + Production Hardening (Phases 62-67)
+### v1.10 clubcore Rebrand (Phase 62)
 
-- [ ] **Phase 62: clubcore Rebrand** — Переименовать `sportzal → clubcore` во всех package names, storage keys, Redis namespaces, docs; smoke-проверка зелёная под новым именем
+- [ ] **Phase 62: clubcore Rebrand** — Переименовать `sportzal → clubcore` во всех package names, storage keys, Redis namespaces, docs + operator-tier renames (Postgres DB rename, `CLUBCORE_EMAIL_FROM` env с deprecated-warning fallback, DNS/DKIM checklist, `CLUB_BRAND` constant extraction); smoke-проверка зелёная под новым именем
+
+### v1.11 API Handoff + Production Hardening (Phases 63-67)
+
 - [ ] **Phase 63: Tech-Debt Sweep** — Закрыть DEFER-46-04 (ruff/format/mypy) + DEFER-36-04-B + DEFER-40-01 (run.sh hardening) на чистом дереве перед contract-freeze артефактами
 - [ ] **Phase 64: Contract Freeze — OpenAPI Curation** — Explicit `operation_id=` + `tags=[...]` + spec hygiene + pre-freeze drift gate; курированный OpenAPI становится источником для всех handoff артефактов
 - [ ] **Phase 65: Handoff Artifacts** — Curated Postman v2.1 + Newman CLI smoke; расширенный auth runbook под clubcore-именем; OpenAPI doc-site как приватный артефакт
 - [ ] **Phase 66: Idempotency Hardening** — CR-01/02/02b закрыты: audit всех mutating endpoints, стандартизированный `Idempotency-Key` Redis-cache flow, документация в OpenAPI + auth runbook
-- [ ] **Phase 67: Operator-Pending Runbook Execution** — Все накопившиеся operator-pending walkthroughs исполнены: v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12; MailHog `--profile dev`; evidence захвачен
+- [ ] **Phase 67: Operator-Pending Runbook Execution** — Все накопившиеся operator-pending walkthroughs исполнены: v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12; MailHog `--profile dev`; evidence захвачен + v1.11-native v1.10 back-compat shim removal (sportzal:* localStorage / SPORTZAL_EMAIL_FROM fallback)
 
 ## Phase Details
 
 ### Phase 62: clubcore Rebrand
-**Goal**: Кодовая база полностью переименована из `sportzal` в `clubcore`; контракт фиксируется под правильным именем во всех последующих фазах
-**Depends on**: Nothing (first phase of v1.10) — MUST be first so all subsequent handoff artifacts are created under the clubcore name
+**Goal**: Кодовая база полностью переименована из `sportzal` в `clubcore` (code identifiers + operator-tier renames: Postgres DB + email FROM env + DNS); контракт фиксируется под правильным именем; единственная фаза v1.10
+**Depends on**: Nothing — единственная и финальная фаза v1.10; все handoff артефакты v1.11 создаются уже под clubcore-именем (D-62-FIRST + D-10-SPLIT)
 **Requirements**: REB-01, REB-02, REB-03, REB-04, REB-05, REB-06, REB-07, REB-08
 **Success Criteria** (what must be TRUE):
   1. После rebrand `docker compose up` поднимается без ошибок и backend pytest зелёный (полная suite ≥ 2181 passed, как v1.9 baseline)
   2. `pnpm --filter @clubcore/api-client typecheck` и `pnpm --filter @clubcore/api-client test` зелёные; админ-веб typecheck/lint/test зелёные (старые `@sportzal/*` ссылки больше не существуют)
   3. `openapi.json` + `schema.d.ts` регенерируются byte-stably под новым именем; CI drift-gate clean
-  4. localStorage / Redis / env prefix миграции имеют back-compat read из старых ключей ровно на один релиз (с deprecated-warning), задокументировано в operator-runbook
-  5. Все `import-linter`, ESLint `no-restricted-paths`, CI workflow + Docker labels работают с новыми package names; ноль ссылок на "sportzal" / "@sportzal" в активном коде (исключение — back-compat миграционные shims с TODO `remove in v1.11`)
+  4. localStorage `copy-on-read + delete old key` миграция (Zustand `persist` version 1→2 с `migrate` callback); Redis cutover — operator FLUSHDB (документировано в runbook, runtime fallback отсутствует); env `CLUBCORE_EMAIL_FROM` → `SPORTZAL_EMAIL_FROM` (legacy, deprecated-warning) → hardcoded default fallback chain; Postgres DB renamed via documented operator pg_dump/restore; DNS/DKIM checklist под новый домен в operator-runbook; v1.11 stripping shims задокументирован как карательное действие
+  5. `CLUB_BRAND` constant extracted в `app/core/branding.py` (значение неизменно — "Sportzal" placeholder; per-club configurable branding deferred to future phase); все ссылки на гимн-имя в email_templates переведены на единую константу
+  6. Forward-only `.planning/` rewrite: PROJECT.md / MILESTONES.md / ROADMAP.md / REQUIREMENTS.md / RETROSPECTIVE.md / STATE.md / future handoff/ обновлены; historical `.planning/phases/47-61/*` + `.planning/audits/*` намеренно immutable как audit trail (документировано в `.planning/HISTORICAL_NOTE.md`)
+  7. Все `import-linter`, ESLint `no-restricted-paths`, CI workflow + Docker labels работают с новыми package names; ноль ссылок на "sportzal" / "@sportzal" в активном коде (исключение — back-compat миграционные shims с TODO `remove in v1.11` + историческое `.planning/` дерево)
 **Plans**: TBD
 
-### Phase 63: Tech-Debt Sweep
+### Phase 63: Tech-Debt Sweep (v1.11)
 **Goal**: Pre-existing tree-wide CI tech-debt + накопившийся runbook tooling приведены в зелёное состояние ДО создания contract-freeze артефактов
-**Depends on**: Phase 62 (rebrand) — sweep работает на уже-переименованном дереве, чтобы не пересекаться с REB-* изменениями
+**Depends on**: Phase 62 (v1.10 rebrand) — sweep работает на уже-переименованном дереве, чтобы не пересекаться с REB-* изменениями
 **Requirements**: DEBT-01, DEBT-02, DEBT-03, DEBT-04, DEBT-05
 **Success Criteria** (what must be TRUE):
   1. `uv run ruff check` exit 0 на всём backend (79 errors → 0); никаких `# noqa` без обоснования в комментарии
@@ -58,7 +64,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   5. Полный backend pytest + admin-web vitest остаются зелёными после sweep (ни один format/lint cleanup не вносит regression)
 **Plans**: TBD
 
-### Phase 64: Contract Freeze — OpenAPI Curation
+### Phase 64: Contract Freeze — OpenAPI Curation (v1.11)
 **Goal**: OpenAPI spec курирован под explicit `operation_id` + `tags` + `info` гигиену; курированный artefact становится единственным источником истины для всех handoff артефактов; baseline для contract-freeze зафиксирован
 **Depends on**: Phase 63 (tech-debt sweep) — curation работает на clean tree чтобы byte-stable regen был достижим
 **Requirements**: FRZ-01, FRZ-02, FRZ-03, FRZ-04, FRZ-05
@@ -70,7 +76,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   5. CI drift-gate (`git diff --exit-code` на `openapi.json` + `schema.d.ts`) clean после двух подряд регенов; milestone-close runbook документирует operator-step pre-freeze verification
 **Plans**: TBD
 
-### Phase 65: Handoff Artifacts
+### Phase 65: Handoff Artifacts (v1.11)
 **Goal**: Дизайн-команда получает приватный handoff пакет (Postman + Newman + Auth runbook + OpenAPI doc-site), полностью сгенерированный из курированного OpenAPI под clubcore-именем
 **Depends on**: Phase 64 (OpenAPI curation) — все артефакты sourced из курированной spec; пред-курация дала бы плохие operationId/tags в Postman + doc-site
 **Requirements**: HND-01, HND-02, HND-03, HND-04
@@ -82,7 +88,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   5. Все handoff артефакты ссылаются на `clubcore` имя; ни один артефакт не содержит residual `sportzal` упоминаний
 **Plans**: TBD
 
-### Phase 66: Idempotency Hardening
+### Phase 66: Idempotency Hardening (v1.11)
 **Goal**: `Idempotency-Key` semantics стандартизирована, документирована и покрыта тестами; CR-01/02/02b carry-over из Phase 33 закрыты до contract-freeze final lock
 **Depends on**: Phase 64 (OpenAPI curation) — Idempotency-Key reusable parameter добавляется в курированный spec; ordering after curation предотвращает повторный drift OpenAPI artefact
 **Requirements**: IDM-01, IDM-02, IDM-03, IDM-04
@@ -94,8 +100,8 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   5. Полный backend pytest зелёный включая новые double-submit integration tests; ни один inherent-idempotent или exempt endpoint не помечен ошибочно как "требует key"
 **Plans**: TBD
 
-### Phase 67: Operator-Pending Runbook Execution
-**Goal**: Все накопившиеся operator-credential-gated walkthroughs исполнены оператором с captured evidence; v1.10 milestone закрыт без operator-pending хвостов
+### Phase 67: Operator-Pending Runbook Execution (v1.11)
+**Goal**: Все накопившиеся operator-credential-gated walkthroughs исполнены оператором с captured evidence; v1.11 milestone закрыт без operator-pending хвостов + v1.10 back-compat shims (sportzal:* localStorage, SPORTZAL_EMAIL_FROM fallback) выдернуты
 **Depends on**: Phases 62-66 (вся кодовая часть завершена) — runbook execution требует stable backend под clubcore-именем + курированный OpenAPI + handoff артефакты ready
 **Requirements**: RUN-01, RUN-02, RUN-03, RUN-04, RUN-05, RUN-06
 **Success Criteria** (what must be TRUE):
@@ -111,15 +117,15 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 62. clubcore Rebrand | v1.10 | 0/0 | Not started | — |
-| 63. Tech-Debt Sweep | v1.10 | 0/0 | Not started | — |
-| 64. Contract Freeze — OpenAPI Curation | v1.10 | 0/0 | Not started | — |
-| 65. Handoff Artifacts | v1.10 | 0/0 | Not started | — |
-| 66. Idempotency Hardening | v1.10 | 0/0 | Not started | — |
-| 67. Operator-Pending Runbook Execution | v1.10 | 0/0 | Not started | — |
+| 63. Tech-Debt Sweep | v1.11 | 0/0 | Not started (milestone not opened) | — |
+| 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/0 | Not started (milestone not opened) | — |
+| 65. Handoff Artifacts | v1.11 | 0/0 | Not started (milestone not opened) | — |
+| 66. Idempotency Hardening | v1.11 | 0/0 | Not started (milestone not opened) | — |
+| 67. Operator-Pending Runbook Execution | v1.11 | 0/0 | Not started (milestone not opened) | — |
 
 ---
 
-*Roadmap last updated: 2026-05-26 — v1.10 clubcore Rebrand + API Handoff + Production Hardening planning (Phases 62-67, 32 requirements: REB:8 + DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:6).*
+*Roadmap last updated: 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62; Phases 63-67 (24 requirements: DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:6) moved to v1.11 API Handoff + Production Hardening (not yet opened — REQUIREMENTS.md to be recreated fresh when v1.11 starts, per project convention).*
 *v1.0 Coverage: 47/47 v1 requirements validated*
 *v1.1 Coverage: 70/70 v1 requirements validated*
 *v1.2 Coverage: 63/63 v1 requirements satisfied (2 accepted-at-planning deviations carried forward as v1.3 tech-debt — both closed in Phase 24 DEBT-01/02)*
@@ -130,7 +136,8 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 *v1.7 Coverage: 48/51 v1.7 requirements delivered. 3 operator-credential-gated deferred at close (CARRY-01, CARRY-02, VER-03).*
 *v1.8 Coverage: 30/30 v1.8 requirements mapped.*
 *v1.9 Coverage: 15/15 v1.9 requirements mapped.*
-*v1.10 Coverage: 32/32 v1.10 requirements mapped (8 REB → Phase 62 + 5 DEBT → Phase 63 + 5 FRZ → Phase 64 + 4 HND → Phase 65 + 4 IDM → Phase 66 + 6 RUN → Phase 67).*
+*v1.10 Coverage: 8/8 v1.10 requirements mapped (8 REB → Phase 62) — narrowed scope per D-10-SPLIT 2026-05-26.*
+*v1.11 Planned: 24 requirements distributed across Phases 63-67 (5 DEBT + 5 FRZ + 4 HND + 4 IDM + 6 RUN) — milestone not yet opened.*
 
 ## Backlog
 

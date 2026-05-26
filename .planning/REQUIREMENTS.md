@@ -1,17 +1,19 @@
-# Requirements: clubcore (v1.10 — clubcore Rebrand + API Handoff + Production Hardening)
+# Requirements: clubcore (v1.10 — clubcore Rebrand)
 
 **Defined:** 2026-05-26
+**Last updated:** 2026-05-26 — milestone narrowed to Phase 62 only per D-10-SPLIT during /gsd:discuss-phase 62. Originally 32 requirements (6 phases); now 8 requirements (1 phase). Remaining 24 requirements (Phases 63-67) moved to v1.11 API Handoff + Production Hardening — see "Planned for v1.11" section below; REQUIREMENTS.md will be recreated fresh when v1.11 opens (per project convention).
+
 **Core Value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-**Milestone goal:** Переименовать проект в кодовой базе `sportzal → clubcore` (контракт замораживается под правильным именем), подготовить curated handoff артефакты для дизайн-команды v2.0 (Postman/Newman, OpenAPI doc-site, внутренний `@clubcore/api-client` freeze), завершить идемпотентность и accumulated tech-debt sweep, отработать накопившиеся operator-pending runbook'и.
+**Milestone goal:** Полностью переименовать кодовую базу `sportzal → clubcore` — code identifiers (пакеты, localStorage, Redis), operator-tier renames (Postgres DB, email FROM env с deprecated-warning fallback, DNS/DKIM checklist), `CLUB_BRAND` constant extraction в email_templates, forward-only `.planning/` rewrite (historical phase folders immutable как audit trail). Контракт замораживается под правильным именем для последующего v1.11 handoff cycle.
 
 **Constraints carried into this milestone:**
 
 - Backend-only — `apps/admin-web` остаётся frozen-as-of-v1.3 mock reference (внутри обновляются только package names + storage keys; UI/логика не трогается)
 - Никакой публикации в публичные registry (npm/PyPI) — личный коммерческий проект
-- Никаких новых бизнес-фич / ORM сущностей / `LOCKED_AUDIT_EVENTS` / `OWNER_ONLY` pairs
-- Rebrand — первая фаза; все handoff артефакты создаются уже под clubcore-именем
-- Phase numbering continues from v1.9 — starts at **Phase 62**
+- Никаких новых бизнес-фич / ORM сущностей / `LOCKED_AUDIT_EVENTS` / `OWNER_ONLY` pairs (`CLUB_BRAND` constant extraction — pure refactor, value неизменно)
+- Phase numbering continues from v1.9 — single phase: **Phase 62**. Phases 63-67 переходят в v1.11.
+- Back-compat: localStorage `copy-on-read + delete`; Redis `operator FLUSHDB` (no runtime fallback); env `CLUBCORE_EMAIL_FROM → SPORTZAL_EMAIL_FROM (legacy, warning) → hardcoded` chain. Removal of shims в Phase 67 (v1.11).
 
 ## v1.10 Requirements
 
@@ -26,46 +28,57 @@
 - [ ] **REB-07**: CI workflow `.github/workflows/ci.yml` пересматривает все ссылки на `@sportzal/*` пакеты в `pnpm --filter` инвокациях; backend Docker image labels / compose service names проверены
 - [ ] **REB-08**: backend + admin-web smoke-проверка после rebrand — backend `pytest` зелёный, admin-web `typecheck` + `lint` + `test` зелёные, `docker compose up` поднимается без ошибок, openapi.json + schema.d.ts регенерируются byte-stably под новым именем
 
-### Handoff Artifacts (Postman + Newman + Auth runbook + OpenAPI doc-site)
+## Planned for v1.11 (API Handoff + Production Hardening) — Not Yet Defined
 
-- [ ] **HND-01**: Curated Postman v2.1 collection — категоризирована по доменам (Auth / Clients / Memberships / Visits / Schedule / Bookings / Trainers / Payments / Reports / Audit-log), auth-flow scenario (login → CSRF → mutating call → refresh → logout), env templates (`local`, `staging`), все запросы с pre-filled body examples; sourced из живого OpenAPI spec (не вручную)
-- [ ] **HND-02**: Newman CLI runner integration — `newman run <collection> --environment <env>` исполняется локально и в operator-runbook'е; smoke-scenario набор покрывает auth + одну CRUD-операцию + один webhook (sandbox); exit-code non-zero на любом fail
-- [ ] **HND-03**: Auth runbook expanded — `.planning/handoff/v1.6-auth-runbook.md` → переименован в `clubcore-auth-runbook.md`, расширен под v1.7 (online payments + fiscal receipts), v1.6 multi-user + password-reset, v1.9 trainer payroll; live curl-flow scenarios verified
-- [ ] **HND-04**: OpenAPI doc-site (private artifact) — генерируется локально из `apps/backend/openapi.json` через Redocly/Stoplight CLI; output как `apps/backend/openapi-docs/` (gitignored по-умолчанию); operator-runbook документирует как запустить + как поделиться с дизайн-командой через приватный канал (zip/S3-presigned-URL/etc); НЕ публикуется публично
+The 24 requirements below originally appeared in v1.10 and are now scheduled for v1.11 (Phases 63-67). They remain unmapped in any active milestone; when v1.11 opens, `REQUIREMENTS.md` will be recreated fresh per project convention and these requirements will be re-stated there with updated context. Listed here as a snapshot of v1.11 intent.
 
-### Contract Freeze (api-client + OpenAPI curation)
+<details>
+<summary>v1.11 requirement snapshot (HND/FRZ/IDM/DEBT/RUN — 24 reqs)</summary>
 
-- [ ] **FRZ-01**: `@clubcore/api-client` contract freeze — `packages/api-client/src/schema.d.ts` фиксируется как замороженный v1.10 контракт; добавлен `packages/api-client/CHANGELOG.md` с фиксацией baseline-версии; package.json `version: 1.10.0`; semver-discipline документирована в README пакета
-- [ ] **FRZ-02**: Pre-freeze drift gate — CI workflow остаётся `git diff --exit-code` на `openapi.json` + `schema.d.ts`; добавляется операторский шаг в milestone-close runbook'е, проверяющий что после rebrand + curation regeneration выдает byte-stable артефакты
-- [ ] **FRZ-03**: OpenAPI tag curation — все routes имеют explicit `tags=[...]` в FastAPI декораторе; tags соответствуют 10 доменам (Auth, Clients, Memberships, Visits, Schedule, Bookings, Trainers, Payments, Reports, Audit-log); порядок tags в OpenAPI spec явный (через `app.openapi_tags = [...]`)
-- [ ] **FRZ-04**: Explicit `operation_id=` на ВСЕХ business endpoints (D-21-3 carry-over) — заменить auto-derived operationIds (которые включают router prefix + method name) на стабильные snake_case имена (e.g. `list_clients`, `create_membership`, `freeze_membership`, `record_visit`); обновлённый `schema.d.ts` отражает новые имена; `schema.contract.test.ts` форвард-гарды обновлены
-- [ ] **FRZ-05**: OpenAPI spec hygiene — `info.title`, `info.version`, `info.description` отражают clubcore + v1.10; `servers: [...]` явно указан; `components.securitySchemes` корректно описывает cookie-based auth + CSRF header
+### Handoff Artifacts (Phase 65 — Postman + Newman + Auth runbook + OpenAPI doc-site)
 
-### Idempotency Hardening (CR-01/02/02b carry-over)
+- **HND-01**: Curated Postman v2.1 collection — категоризирована по доменам (Auth / Clients / Memberships / Visits / Schedule / Bookings / Trainers / Payments / Reports / Audit-log), auth-flow scenario, env templates (`local`, `staging`), pre-filled body examples; sourced из живого OpenAPI spec
+- **HND-02**: Newman CLI runner integration — smoke-scenario coverage; exit-code non-zero на любом fail
+- **HND-03**: Auth runbook expanded — `.planning/handoff/v1.6-auth-runbook.md` → `clubcore-auth-runbook.md`, расширен под v1.7 + v1.6 + v1.9; live curl-flow scenarios verified
+- **HND-04**: OpenAPI doc-site (private artifact) — генерируется локально через Redocly/Stoplight CLI; gitignored; НЕ публикуется публично
 
-- [ ] **IDM-01**: Audit всех mutating endpoints (POST/PATCH/DELETE) на coverage `Idempotency-Key` — для каждого endpoint решено: (a) требует Idempotency-Key, (b) inherently idempotent (UPSERT semantics), (c) явно exempt с обоснованием
-- [ ] **IDM-02**: CR-01 closed — `Idempotency-Key` header стандартизирован: 16-128 chars UUIDv4 рекомендован; storage в Redis с TTL 24h; response cached с body+status; повторный запрос с тем же key возвращает cached response (а не повторно вызывает handler)
-- [ ] **IDM-03**: CR-02 closed — endpoints which currently rely on `Idempotency-Key` (memberships sale, PT-package sale, online payment create) проходят integration tests на double-submit (с одинаковым key → identical response; с разным key → второй вызов rejected с 409 или принимается как новый — задокументировано per-endpoint)
-- [ ] **IDM-04**: CR-02b closed — Idempotency-Key semantics документирована в `clubcore-auth-runbook.md` + в OpenAPI `components.parameters.IdempotencyKey` reusable parameter; все endpoints, требующие key, имеют explicit reference
+### Contract Freeze (Phase 64 — api-client + OpenAPI curation)
 
-### Tech-debt Sweep
+- **FRZ-01**: `@clubcore/api-client` contract freeze — `schema.d.ts` фиксируется как замороженный v1.11 контракт; `CHANGELOG.md` baseline; package.json `version: 1.11.0`
+- **FRZ-02**: Pre-freeze drift gate — CI `git diff --exit-code` + operator pre-freeze verification step
+- **FRZ-03**: OpenAPI tag curation — explicit `tags=[...]` на всех routes; 10 доменов; явный порядок через `app.openapi_tags`
+- **FRZ-04**: Explicit `operation_id=` на ВСЕХ business endpoints (D-21-3 carry-over) — стабильные snake_case имена
+- **FRZ-05**: OpenAPI spec hygiene — `info.title`/`version`/`description`/`servers`/`securitySchemes` корректны под clubcore + v1.11
 
-- [ ] **DEBT-01**: DEFER-46-04 ruff errors closed — `uv run ruff check` exit 0 на всём backend (79 errors → 0); ruff `--fix` + manual review; никаких `# noqa` без обоснования в комментарии
-- [ ] **DEBT-02**: DEFER-46-04 ruff format applied — `uv run ruff format` на всех 205 files; CI gate активирован (если был отключен)
-- [ ] **DEBT-03**: DEFER-46-04 mypy attr-defined cleaned — `uv run mypy --strict` без attr-defined warnings; либо fix, либо явный type-ignore с обоснованием
-- [ ] **DEBT-04**: DEFER-36-04-B residual closed — оставшиеся 123 files под ruff format обработаны (если не покрыты DEBT-02)
-- [ ] **DEBT-05**: DEFER-40-01 v1.5 runbook executed + hardened — полное исполнение `v1.5-verification-evidence/run.sh` против live `docker compose up` стека; все 4 hotfix-ситуации из v1.5 ретроспективы закрыты в run.sh (Alembic revision-id length, /healthz vs /health, table name spelling, fixture login defaults, RBAC actor on POST /trainer-slots, X-CSRF-Token header); runbook script верифицирован end-to-end
+### Idempotency Hardening (Phase 66 — CR-01/02/02b carry-over)
 
-### Operator-Pending Runbook Execution
+- **IDM-01**: Audit всех mutating endpoints (POST/PATCH/DELETE) на coverage `Idempotency-Key` (a/b/c per-endpoint классификация)
+- **IDM-02**: CR-01 closed — `Idempotency-Key` стандартизирован: 16-128 chars UUIDv4, Redis TTL 24h, cached response replay
+- **IDM-03**: CR-02 closed — integration tests на double-submit для memberships/PT-package/online payment endpoints
+- **IDM-04**: CR-02b closed — semantics документирована в auth-runbook + `components.parameters.IdempotencyKey` OpenAPI reusable parameter
 
-- [ ] **RUN-01**: v1.7 VER-03 — ЮKassa sandbox owner walkthrough исполнен; evidence captured (sandbox payment created → succeeded webhook → membership активирован → fiscal receipt отправлен → email доставлен); recorded in `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md`
-- [ ] **RUN-02**: v1.7 CARRY-01 (DEFER-46-01) — live RU email-deliverability probe запущен; `Authentication-Results` headers захвачены для yandex.ru + mail.ru + rambler.ru; SPF/DKIM/DMARC `pass` подтверждены; evidence in operator-evidence document
-- [ ] **RUN-03**: v1.7 CARRY-02 (DEFER-46-02) — owner countersign на 19 locked email templates (15 v1.6 + 4 v1.7); signed-off attestation row в operator-evidence document
-- [ ] **RUN-04**: v1.8 VER-01 — live `docker compose up` reports runbook walkthrough исполнен; revenue golden-path eyeball-match + manual Excel CSV-open Cyrillic check; evidence in operator-evidence document
-- [ ] **RUN-05**: v1.9 D-61-12 — trainers runbook walkthrough исполнен (513-line, 5 scenarios: docker bring-up + payroll golden-path + recurring/time-off + trainer-usage report Excel + reception-403 enumeration); evidence in operator-evidence document
-- [ ] **RUN-06**: DEFER-46-05 MailHog `--profile dev` integration — `docker-compose.yml` получает optional MailHog service под `--profile dev` для локального dev-окружения email-тестов; documented в README
+### Tech-debt Sweep (Phase 63)
 
-## v2.0 Requirements (Out of v1.10 Scope)
+- **DEBT-01**: DEFER-46-04 ruff errors closed — `uv run ruff check` exit 0 (79 → 0)
+- **DEBT-02**: DEFER-46-04 ruff format applied — `uv run ruff format` 205 files; CI gate активирован
+- **DEBT-03**: DEFER-46-04 mypy attr-defined cleaned — `uv run mypy --strict` без warnings
+- **DEBT-04**: DEFER-36-04-B residual closed — 123 files под ruff format
+- **DEBT-05**: DEFER-40-01 v1.5 runbook executed + hardened — `v1.5-verification-evidence/run.sh` end-to-end clean
+
+### Operator-Pending Runbook Execution (Phase 67)
+
+- **RUN-01**: v1.7 VER-03 — ЮKassa sandbox owner walkthrough; evidence в `.planning/milestones/v1.11-OPERATOR-EVIDENCE.md`
+- **RUN-02**: v1.7 CARRY-01 (DEFER-46-01) — live RU email-deliverability probe; `Authentication-Results` headers captured
+- **RUN-03**: v1.7 CARRY-02 (DEFER-46-02) — owner countersign на 19 locked email templates (15 v1.6 + 4 v1.7)
+- **RUN-04**: v1.8 VER-01 — live `docker compose up` reports runbook walkthrough
+- **RUN-05**: v1.9 D-61-12 — trainers runbook walkthrough (513-line, 5 scenarios)
+- **RUN-06**: DEFER-46-05 MailHog `--profile dev` integration в `docker-compose.yml`
+- **RUN-07** (new in v1.11): v1.10 back-compat shim removal — strip `sportzal:*` localStorage migration logic + `SPORTZAL_EMAIL_FROM` env fallback + `cc:*` Redis cutover note в operator runbook
+- **RUN-08** (new in v1.11): v1.10 operator-tier rename evidence — DB rename (pg_dump/restore evidence + post-cutover smoke), DNS/DKIM `Authentication-Results` для нового домена
+
+</details>
+
+## v2.0 Requirements (Out of v1.10 + v1.11 Scope)
 
 ### Frontend Integration + Launch
 
@@ -79,7 +92,7 @@
 
 | Feature | Reason |
 |---------|--------|
-| `@clubcore/api-client` публикация в npm | Личный коммерческий проект; контракт раздаётся приватно дизайн-команде |
+| `@clubcore/api-client` публикация в npm | Личный коммерческий проект; контракт раздаётся приватно дизайн-команде (v1.11 ownership) |
 | OpenAPI doc-site публичный hosting (Redocly Cloud, public GitHub Pages, etc) | Тот же reason — приватный артефакт |
 | Новые бизнес-фичи / новые ORM модели / новые `LOCKED_AUDIT_EVENTS` / новые `OWNER_ONLY` pairs | Не часть scope v1.10; код заморожен под handoff |
 | Frontend (admin + client) production code | v2.0 milestone; дизайн-команда делает это вне репо |
@@ -91,7 +104,7 @@
 
 ## Traceability
 
-Mapped 2026-05-26 by gsd-roadmapper. 32/32 requirements mapped to 6 phases (62-67); zero orphans, zero duplicates.
+Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 only per D-10-SPLIT. 8/8 active v1.10 requirements mapped; zero orphans, zero duplicates.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -103,43 +116,16 @@ Mapped 2026-05-26 by gsd-roadmapper. 32/32 requirements mapped to 6 phases (62-6
 | REB-06 | Phase 62 | Pending |
 | REB-07 | Phase 62 | Pending |
 | REB-08 | Phase 62 | Pending |
-| DEBT-01 | Phase 63 | Pending |
-| DEBT-02 | Phase 63 | Pending |
-| DEBT-03 | Phase 63 | Pending |
-| DEBT-04 | Phase 63 | Pending |
-| DEBT-05 | Phase 63 | Pending |
-| FRZ-01 | Phase 64 | Pending |
-| FRZ-02 | Phase 64 | Pending |
-| FRZ-03 | Phase 64 | Pending |
-| FRZ-04 | Phase 64 | Pending |
-| FRZ-05 | Phase 64 | Pending |
-| HND-01 | Phase 65 | Pending |
-| HND-02 | Phase 65 | Pending |
-| HND-03 | Phase 65 | Pending |
-| HND-04 | Phase 65 | Pending |
-| IDM-01 | Phase 66 | Pending |
-| IDM-02 | Phase 66 | Pending |
-| IDM-03 | Phase 66 | Pending |
-| IDM-04 | Phase 66 | Pending |
-| RUN-01 | Phase 67 | Pending |
-| RUN-02 | Phase 67 | Pending |
-| RUN-03 | Phase 67 | Pending |
-| RUN-04 | Phase 67 | Pending |
-| RUN-05 | Phase 67 | Pending |
-| RUN-06 | Phase 67 | Pending |
 
-**Coverage:**
-- v1.10 requirements: **32 total** (REB:8 + HND:4 + FRZ:5 + IDM:4 + DEBT:5 + RUN:6)
-- Mapped to phases: **32/32** ✓
+**Coverage (v1.10 active):**
+- v1.10 requirements: **8 total** (REB:8)
+- Mapped to phases: **8/8** ✓
 - Unmapped: 0
 
-**Phase distribution:**
+**Phase distribution (v1.10):**
 - Phase 62 (Rebrand): 8 requirements
-- Phase 63 (Tech-Debt Sweep): 5 requirements
-- Phase 64 (Contract Freeze — OpenAPI Curation): 5 requirements
-- Phase 65 (Handoff Artifacts): 4 requirements
-- Phase 66 (Idempotency Hardening): 4 requirements
-- Phase 67 (Operator-Pending Runbook Execution): 6 requirements
+
+**v1.11 snapshot (24 requirements; not yet active):** see "Planned for v1.11" section above. Phases 63-67 (DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:6 + 2 new v1.10-shim-removal RUN-07/08) — to be formally re-stated в свежем REQUIREMENTS.md когда v1.11 откроется.
 
 ---
-*Requirements defined: 2026-05-26 — start of milestone v1.10 clubcore Rebrand + API Handoff + Production Hardening (Phases continue from v1.9, start at Phase 62). Traceability mapped by gsd-roadmapper 2026-05-26: 32/32 covered.*
+*Requirements defined: 2026-05-26 — start of milestone v1.10 (originally clubcore Rebrand + API Handoff + Production Hardening, 32 requirements, 6 phases). Re-scoped 2026-05-26 to v1.10 = clubcore Rebrand (Phase 62 only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62 — Phase 62 scope expanded from "code-only rename" to include operator-tier renames (DB rename, CLUBCORE_EMAIL_FROM env, DNS/DKIM, FLUSHDB), making the original 6-phase milestone too heterogeneous to ship as one. Phases 63-67 (24 requirements) deferred to v1.11 API Handoff + Production Hardening (not yet opened).*
