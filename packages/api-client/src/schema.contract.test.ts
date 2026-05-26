@@ -386,6 +386,59 @@ const _v18Checks: [
   _AuditLogCsvGet,
 ] = [true, true, true, true, true, true, true, true]
 
+// --- v1.9 surface (Trainers Complete — Phases 58-60) -------------------
+// Payroll (Phase 58 INFRA-15 / PAY-01..06):
+type _PayrollTrainerConfigPut = AssertNonNever<
+  paths['/api/v1/payroll/trainer-configs/{trainer_id}']['put']
+>
+type _PayrollTrainerConfigGet = AssertNonNever<
+  paths['/api/v1/payroll/trainer-configs/{trainer_id}']['get']
+>
+type _PayrollPreviewGet = AssertNonNever<paths['/api/v1/payroll/preview']['get']>
+type _PayrollAccrualPost = AssertNonNever<
+  paths['/api/v1/payroll/accruals']['post']['responses']['201']
+>
+type _PayrollAccrualList = AssertNonNever<paths['/api/v1/payroll/accruals']['get']>
+type _PayrollAccrualMarkPaidPost = AssertNonNever<
+  paths['/api/v1/payroll/accruals/{accrual_id}/mark-paid']['post']
+>
+
+// Schedule v1.9 (Phase 59 REC-01..04 / TOFF-01..03):
+type _RecurringTemplatePost = AssertNonNever<
+  paths['/api/v1/recurring-templates']['post']['responses']['201']
+>
+type _RecurringTemplateDeactivatePost = AssertNonNever<
+  paths['/api/v1/recurring-templates/{template_id}/deactivate']['post']
+>
+type _RecurringTemplateList = AssertNonNever<paths['/api/v1/recurring-templates']['get']>
+type _TimeOffPost = AssertNonNever<paths['/api/v1/time-off']['post']['responses']['201']>
+type _TimeOffDelete = AssertNonNever<
+  paths['/api/v1/time-off/{time_off_id}']['delete']['responses']['204']
+>
+type _TimeOffList = AssertNonNever<paths['/api/v1/time-off']['get']>
+
+// Reports v1.9 (Phase 60 RPT-01..04):
+type _ReportsTrainersGet = AssertNonNever<paths['/api/v1/reports/trainers']['get']>
+type _ReportsTrainersCsvGet = AssertNonNever<paths['/api/v1/reports/trainers.csv']['get']>
+
+// Static checks for v1.9 surface — each must resolve to true at compile time.
+const _v19Checks: [
+  _PayrollTrainerConfigPut,
+  _PayrollTrainerConfigGet,
+  _PayrollPreviewGet,
+  _PayrollAccrualPost,
+  _PayrollAccrualList,
+  _PayrollAccrualMarkPaidPost,
+  _RecurringTemplatePost,
+  _RecurringTemplateDeactivatePost,
+  _RecurringTemplateList,
+  _TimeOffPost,
+  _TimeOffDelete,
+  _TimeOffList,
+  _ReportsTrainersGet,
+  _ReportsTrainersCsvGet,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -419,5 +472,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v1.8 reports/audit surface (Phases 55-57)', () => {
     expect(_v18Checks).toHaveLength(8)
+  })
+
+  it('compiles against the regenerated v1.9 trainers surface (Phases 58-60)', () => {
+    expect(_v19Checks).toHaveLength(14)
   })
 })
