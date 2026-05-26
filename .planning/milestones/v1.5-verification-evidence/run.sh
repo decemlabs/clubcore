@@ -13,9 +13,9 @@
 # Required env vars:
 #   DATABASE_URL          — Postgres conn string (e.g. postgresql://postgres:postgres@localhost:5432/sportzal)
 #   BASE_URL              — API base URL with /api/v1 prefix (default: http://localhost:8000/api/v1)
-#   RECEPTION_EMAIL       — reception fixture email (default: reception@fixture.local)
+#   RECEPTION_EMAIL       — reception fixture email (default: verify_reception@local.dev)
 #   RECEPTION_PASSWORD    — reception fixture password (default from seed_v1_4_verification_fixtures.py)
-#   OWNER_EMAIL           — owner fixture email (default: owner@fixture.local)
+#   OWNER_EMAIL           — owner fixture email (default: verify_owner@local.dev)
 #   OWNER_PASSWORD        — owner fixture password (default from seed)
 #
 # Idempotency: each scenario psql-DELETEs its own priors at the head of its block
@@ -26,6 +26,17 @@
 #   cd apps/backend && uv run python -m scripts.seed_v1_4_verification_fixtures
 #   cd ../..
 #   bash .planning/milestones/v1.5-verification-evidence/run.sh
+#
+# Revision log:
+#   2026-05-26 (Phase 63 DEBT-04): backport DEFER-40-01 hotfixes from v1.6/run.sh —
+#     RBAC actor on POST /trainer-slots (5 sites swapped reception→owner per backend
+#     RBAC matrix at apps/backend/app/modules/schedule/router.py:5,95), and
+#     X-CSRF-Token threading on all mutating verbs (cookie name `sportzal_csrf`
+#     per D-62-02 / D-11-CSRF-DEFER — CLUB_BRAND placeholder retained; backend
+#     ships this literal name; rename deferred to v2.0). /healthz path,
+#     verify_*@local.dev operator emails, trainer_availability_slots table name,
+#     and Alembic 32-char identifier guard — confirmed already correct in v1.5;
+#     no edit needed for those four dispositions.
 #
 
 set -euo pipefail
@@ -57,18 +68,33 @@ if ! psql "$DATABASE_URL" -c 'SELECT 1' >/dev/null 2>&1; then
 fi
 echo "[preflight] db reachable"
 
-# Acquire session cookies (reception + owner)
+# Acquire session cookies (reception + owner) AND extract X-CSRF-Token per jar.
+# Cookie name `sportzal_csrf` is the literal name shipped by the backend
+# (D-62-02 / D-11-CSRF-DEFER — CLUB_BRAND placeholder retained; rename to
+# the brand-aligned name is deferred to v2.0). The token is non-httpOnly so curl can
+# read it from the cookie jar via awk; every mutating verb below threads it
+# via `-H "X-CSRF-Token: $CSRF_RECEPTION"` (or $CSRF_OWNER) per Phase 6 D-06-XSRF.
 echo "[preflight] acquiring reception session cookie"
 RECEPTION_COOKIE_JAR="$(mktemp -t reception_cookie.XXXXXX)"
 curl -s -c "$RECEPTION_COOKIE_JAR" -X POST "$BASE_URL/auth/login" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$RECEPTION_EMAIL\",\"password\":\"$RECEPTION_PASSWORD\"}" >/dev/null
+CSRF_RECEPTION="$(awk '$6=="sportzal_csrf"{print $7}' "$RECEPTION_COOKIE_JAR")"
+if [ -z "$CSRF_RECEPTION" ]; then
+  echo "FATAL: failed to extract sportzal_csrf from reception cookie jar — check backend cookie name" >&2
+  exit 1
+fi
 
 echo "[preflight] acquiring owner session cookie"
 OWNER_COOKIE_JAR="$(mktemp -t owner_cookie.XXXXXX)"
 curl -s -c "$OWNER_COOKIE_JAR" -X POST "$BASE_URL/auth/login" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$OWNER_EMAIL\",\"password\":\"$OWNER_PASSWORD\"}" >/dev/null
+CSRF_OWNER="$(awk '$6=="sportzal_csrf"{print $7}' "$OWNER_COOKIE_JAR")"
+if [ -z "$CSRF_OWNER" ]; then
+  echo "FATAL: failed to extract sportzal_csrf from owner cookie jar — check backend cookie name" >&2
+  exit 1
+fi
 
 # Resolve fixture UUIDs from DB (no hard-coded UUIDs)
 TRAINER_ALPHA_ID=$(psql "$DATABASE_URL" -t -A -c "SELECT id FROM trainers WHERE full_name='Trainer Alpha' LIMIT 1;")
@@ -93,10 +119,11 @@ psql "$DATABASE_URL" -c "DELETE FROM trainer_availability_slots WHERE trainer_id
 SLOT_START=$(date -u -v+1d +"%Y-%m-%dT10:00:00Z" 2>/dev/null || date -u -d 'tomorrow 10:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_END=$(date -u -v+1d +"%Y-%m-%dT11:00:00Z" 2>/dev/null || date -u -d 'tomorrow 11:00' +"%Y-%m-%dT%H:%M:%SZ")
 
-echo "=== POST $BASE_URL/trainer-slots ===" >> "$SCENARIO_OUT"
+echo "=== POST $BASE_URL/trainer-slots (owner-only per RBAC matrix) ===" >> "$SCENARIO_OUT"
 curl -i -X POST "$BASE_URL/trainer-slots" \
-  -b "$RECEPTION_COOKIE_JAR" \
+  -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d "{\"trainerId\":\"$TRAINER_ALPHA_ID\",\"startTime\":\"$SLOT_START\",\"endTime\":\"$SLOT_END\",\"durationMinutes\":60}" \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -134,8 +161,9 @@ fi
 SLOT_START=$(date -u -v+2d +"%Y-%m-%dT11:00:00Z" 2>/dev/null || date -u -d '+2 days 11:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_END=$(date -u -v+2d +"%Y-%m-%dT12:00:00Z" 2>/dev/null || date -u -d '+2 days 12:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_RESP=$(curl -s -X POST "$BASE_URL/trainer-slots" \
-  -b "$RECEPTION_COOKIE_JAR" \
+  -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d "{\"trainerId\":\"$TRAINER_ALPHA_ID\",\"startTime\":\"$SLOT_START\",\"endTime\":\"$SLOT_END\",\"durationMinutes\":60}")
 SLOT_ID=$(echo "$SLOT_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 echo "fresh slot_id=$SLOT_ID" >> "$SCENARIO_OUT"
@@ -146,6 +174,7 @@ curl -i -X POST "$BASE_URL/bookings" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $IDEMP_KEY" \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d "{\"slotId\":\"$SLOT_ID\",\"clientId\":\"$VERIFY_CLIENT_A\",\"ptPackageId\":\"$ACTIVE_PKG\"}" \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -169,8 +198,9 @@ fi
 SLOT_START=$(date -u -v+3d +"%Y-%m-%dT13:00:00Z" 2>/dev/null || date -u -d '+3 days 13:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_END=$(date -u -v+3d +"%Y-%m-%dT14:00:00Z" 2>/dev/null || date -u -d '+3 days 14:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_RESP=$(curl -s -X POST "$BASE_URL/trainer-slots" \
-  -b "$RECEPTION_COOKIE_JAR" \
+  -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d "{\"trainerId\":\"$TRAINER_ALPHA_ID\",\"startTime\":\"$SLOT_START\",\"endTime\":\"$SLOT_END\",\"durationMinutes\":60}")
 RACE_SLOT_ID=$(echo "$SLOT_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 echo "race slot_id=$RACE_SLOT_ID" >> "$SCENARIO_OUT"
@@ -185,6 +215,7 @@ echo "=== Parallel POST /bookings (client A + client B, same slot) ===" >> "$SCE
     -b "$RECEPTION_COOKIE_JAR" \
     -H 'Content-Type: application/json' \
     -H "Idempotency-Key: $KEY_A" \
+    -H "X-CSRF-Token: $CSRF_RECEPTION" \
     -d "{\"slotId\":\"$RACE_SLOT_ID\",\"clientId\":\"$VERIFY_CLIENT_A\",\"ptPackageId\":\"$ACTIVE_PKG\"}" \
     >> "$SCENARIO_OUT" 2>&1
 ) &
@@ -194,6 +225,7 @@ PID_A=$!
     -b "$RECEPTION_COOKIE_JAR" \
     -H 'Content-Type: application/json' \
     -H "Idempotency-Key: $KEY_B" \
+    -H "X-CSRF-Token: $CSRF_RECEPTION" \
     -d "{\"slotId\":\"$RACE_SLOT_ID\",\"clientId\":\"$VERIFY_CLIENT_B\",\"ptPackageId\":\"$ACTIVE_PKG_B\"}" \
     >> "$SCENARIO_OUT" 2>&1
 ) &
@@ -238,6 +270,7 @@ echo "=== Reception POST /bookings/$CANCEL_BOOKING_ID/cancel (expect 409 cancel_
 curl -i -X POST "$BASE_URL/bookings/$CANCEL_BOOKING_ID/cancel" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d '{}' \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -246,6 +279,7 @@ echo "=== Owner POST /bookings/$CANCEL_BOOKING_ID/cancel (expect 200 cancelled) 
 curl -i -X POST "$BASE_URL/bookings/$CANCEL_BOOKING_ID/cancel" \
   -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d '{}' \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -270,6 +304,7 @@ PLAN_ID=$(psql "$DATABASE_URL" -t -A -c "SELECT id FROM pt_package_plans WHERE i
 PKG_RESP=$(curl -s -X POST "$BASE_URL/pt-packages" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d "{\"clientId\":\"$VERIFY_CLIENT_A\",\"planId\":\"$PLAN_ID\",\"amountKopecks\":500000}")
 NEW_PKG_ID=$(echo "$PKG_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 echo "fresh pt_package_id=$NEW_PKG_ID" >> "$SCENARIO_OUT"
@@ -278,8 +313,9 @@ echo "fresh pt_package_id=$NEW_PKG_ID" >> "$SCENARIO_OUT"
 SLOT_START=$(date -u -v+5d +"%Y-%m-%dT10:00:00Z" 2>/dev/null || date -u -d '+5 days 10:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_END=$(date -u -v+5d +"%Y-%m-%dT11:00:00Z" 2>/dev/null || date -u -d '+5 days 11:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_RESP=$(curl -s -X POST "$BASE_URL/trainer-slots" \
-  -b "$RECEPTION_COOKIE_JAR" \
+  -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d "{\"trainerId\":\"$TRAINER_ALPHA_ID\",\"startTime\":\"$SLOT_START\",\"endTime\":\"$SLOT_END\",\"durationMinutes\":60}")
 REFUND_SLOT_ID=$(echo "$SLOT_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 
@@ -288,6 +324,7 @@ BOOK_RESP=$(curl -s -X POST "$BASE_URL/bookings" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $IDEMP_KEY" \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d "{\"slotId\":\"$REFUND_SLOT_ID\",\"clientId\":\"$VERIFY_CLIENT_A\",\"ptPackageId\":\"$NEW_PKG_ID\"}")
 OUTSTANDING_BOOKING_ID=$(echo "$BOOK_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 echo "outstanding booking_id=$OUTSTANDING_BOOKING_ID" >> "$SCENARIO_OUT"
@@ -296,6 +333,7 @@ echo "=== POST $BASE_URL/pt-packages/$NEW_PKG_ID/refund (expect 409 outstanding_
 curl -i -X POST "$BASE_URL/pt-packages/$NEW_PKG_ID/refund" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d '{"reason":"verify_refund_blocked_by_outstanding_booking"}' \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -304,6 +342,7 @@ echo "=== Owner POST $BASE_URL/bookings/$OUTSTANDING_BOOKING_ID/cancel (precondi
 curl -i -X POST "$BASE_URL/bookings/$OUTSTANDING_BOOKING_ID/cancel" \
   -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d '{}' \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -312,6 +351,7 @@ echo "=== Retry POST $BASE_URL/pt-packages/$NEW_PKG_ID/refund (expect 200 refund
 curl -i -X POST "$BASE_URL/pt-packages/$NEW_PKG_ID/refund" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d '{"reason":"verify_refund_after_cancel"}' \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
@@ -329,6 +369,7 @@ echo "[scenario 06] pt_session_completes_booking — start" >> "$SCENARIO_OUT"
 PKG_RESP=$(curl -s -X POST "$BASE_URL/pt-packages" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d "{\"clientId\":\"$VERIFY_CLIENT_A\",\"planId\":\"$PLAN_ID\",\"amountKopecks\":500000}")
 COMPLETE_PKG_ID=$(echo "$PKG_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 SESSIONS_BEFORE=$(psql "$DATABASE_URL" -t -A -c "SELECT sessions_remaining FROM pt_packages WHERE id='$COMPLETE_PKG_ID';")
@@ -338,8 +379,9 @@ echo "pt_package $COMPLETE_PKG_ID sessions_before=$SESSIONS_BEFORE" >> "$SCENARI
 SLOT_START=$(date -u -v+6d +"%Y-%m-%dT10:00:00Z" 2>/dev/null || date -u -d '+6 days 10:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_END=$(date -u -v+6d +"%Y-%m-%dT11:00:00Z" 2>/dev/null || date -u -d '+6 days 11:00' +"%Y-%m-%dT%H:%M:%SZ")
 SLOT_RESP=$(curl -s -X POST "$BASE_URL/trainer-slots" \
-  -b "$RECEPTION_COOKIE_JAR" \
+  -b "$OWNER_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_OWNER" \
   -d "{\"trainerId\":\"$TRAINER_ALPHA_ID\",\"startTime\":\"$SLOT_START\",\"endTime\":\"$SLOT_END\",\"durationMinutes\":60}")
 COMPLETE_SLOT_ID=$(echo "$SLOT_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 
@@ -348,6 +390,7 @@ BOOK_RESP=$(curl -s -X POST "$BASE_URL/bookings" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $IDEMP_KEY" \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d "{\"slotId\":\"$COMPLETE_SLOT_ID\",\"clientId\":\"$VERIFY_CLIENT_A\",\"ptPackageId\":\"$COMPLETE_PKG_ID\"}")
 COMPLETE_BOOKING_ID=$(echo "$BOOK_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 echo "complete booking_id=$COMPLETE_BOOKING_ID" >> "$SCENARIO_OUT"
@@ -358,6 +401,7 @@ echo "=== POST $BASE_URL/pt-sessions {booking_id} (expect 201) ===" >> "$SCENARI
 curl -i -X POST "$BASE_URL/pt-sessions" \
   -b "$RECEPTION_COOKIE_JAR" \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF_RECEPTION" \
   -d "{\"ptPackageId\":\"$COMPLETE_PKG_ID\",\"trainerId\":\"$TRAINER_ALPHA_ID\",\"bookingId\":\"$COMPLETE_BOOKING_ID\",\"performedAt\":\"$PERFORMED_AT\"}" \
   | tee -a "$SCENARIO_OUT"
 echo >> "$SCENARIO_OUT"
