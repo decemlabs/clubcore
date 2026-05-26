@@ -1,441 +1,307 @@
 # Feature Research
 
-**Domain:** Trainer completion for single-gym CRM (payroll ledger, recurring schedule, time-off, trainer-utilization report)
-**Researched:** 2026-05-24
-**Confidence:** HIGH (domain patterns are well-understood; specific design choices align with existing codebase bedrock)
+**Domain:** API Handoff + Production Hardening for single-gym CRM backend (v1.11)
+**Researched:** 2026-05-26
+**Confidence:** HIGH — domain is well-defined infrastructure work (no new business features); patterns sourced from current codebase inspection + Stripe/Redocly/OpenAPI canonical references
 
 ---
 
-## Context: What Already Exists
+## Context: What v1.11 Is and Is Not
 
-Before defining new features, the existing bedrock constrains every design decision below:
+v1.11 is a zero-new-business-feature milestone. Every "feature" below is infrastructure plumbing,
+documentation quality, or operator verification. The frontend integration team (v2.0) is the
+downstream consumer of every artifact produced here.
 
-- **`trainers` table** — `id`, `full_name`, `phone`, `is_active`, `deleted_at`. Soft-deactivate via `is_active`; hard-delete via `deleted_at` partial-unique discipline.
-- **`trainer_availability_slots` table** — `trainer_id`, `start_time`, `end_time`, `status` (`active`/`booked`/`cancelled`), `created_by_user_id`, `cancelled_at`, `cancel_reason`. Manual one-off slots only.
-- **`pt_sessions` table** — `pt_package_id`, `trainer_id`, `client_id`, `performed_at`, `trainer_name_snapshot`, `booking_id` (nullable). FK to `bookings`. Index `ix_pt_sessions_trainer_id_performed_at_desc` already exists for load analytics.
-- **`bookings` table** — `slot_id` → `trainer_availability_slots`. FSM: `confirmed → cancelled / no_show / completed`.
-- **`payments` table** — append-only ledger; `subject_kind ∈ ('membership', 'pt_package', 'refund')`, signed `amount_kopecks`, `method`, `received_at`. No `UPDATE`/`DELETE` allowed (AST gate). `subject_kind` CHECK constraint will need extending for payroll accruals.
-- **`audit_log` table** — `LOCKED_AUDIT_EVENTS` frozenset, AST literal-string gate. New events must be pre-registered before callsites.
-- **`app/modules/reports/`** — v1.8 read-only discipline: no `models.py`, raw-SQL `text()` cross-module reads, zero writes.
-- **RBAC** — `Resource`/`Action`/`OWNER_ONLY` with byte-parity across backend + `admin-web/src/shared/session/can.ts` + `registry.ts`.
-
----
-
-## CATEGORY A — PAYROLL
-
-### PAY-01: Per-trainer compensation model configuration
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** `trainers` table (existing)
-- **Description:** Each trainer needs a configurable compensation model. Industry practice (confirmed): most small gyms use one of three models — % of PT-package revenue, fixed amount per conducted session, or both combined. For Sportzal single-gym scope, all three configurations are needed on a per-trainer basis. Configuration lives on the trainer record itself (two nullable columns: `commission_pct` NUMERIC(5,2) and `session_fee_kopecks` INTEGER). Both columns being NULL means "no payroll computed for this trainer" (e.g., salaried employee managed outside the CRM). Either or both can be set simultaneously (hybrid model). Commission % applies to the `amount_kopecks` of PT-package sale payments linked to sessions this trainer conducted. Session fee applies to each non-cancelled `pt_sessions` row for this trainer.
-- **New schema:** Two nullable columns on `trainers` table via Alembic migration. No new table needed.
-- **RBAC:** Owner-only `PATCH /api/v1/trainers/{id}` already exists; extend schema to include new fields. Reception reads `is_active` only (existing behavior unchanged).
-- **Single-gym scope note:** Tiered commission (e.g., "40% up to $5K/mo, 45% above") is an enterprise feature. Not needed. Single flat rate per trainer.
-
-### PAY-02: Payroll period computation (the "payroll run")
-- **Category:** Table stake
-- **Complexity:** MEDIUM
-- **Dependency:** PAY-01 (compensation config); `pt_sessions` (non-cancelled, `performed_at` in period); `payments` (PT-package sale rows linked to sessions via `pt_package_id`); Europe/Moscow TZ discipline
-- **Description:** Owner requests a payroll computation for a trainer over a date range (e.g., "1–31 May 2026 MSK"). The computation:
-  1. Selects all non-cancelled `pt_sessions` where `trainer_id = ?` AND `performed_at` falls within the period (Europe/Moscow).
-  2. For `session_fee_kopecks`: count × fee = fixed component.
-  3. For `commission_pct`: find the PT-package sale payment for each session's `pt_package_id` (JOIN `payments WHERE subject_kind='pt_package' AND subject_id=pt_package_id`), sum `amount_kopecks`, apply `commission_pct`. Note: one PT-package payment covers multiple sessions; commission is typically computed on the full package sale price attributed to sessions in the period, NOT per-session proration. **Decision for Sportzal:** commission is applied to the total PT-package sale revenue (the payment row) where at least one session from that package falls in the period. This avoids a "proration per session" complexity that has no single right answer. This is the typical small-gym interpretation.
-  4. Total accrual = fixed component + commission component (integer kopecks, no floating-point).
-- **Output:** A computed `TrainerPayrollPreview` response (trainer_id, period_start, period_end, session_count, fixed_kopecks, commission_kopecks, total_kopecks). This is a read-only preview endpoint — no persistence yet.
-- **RBAC:** Owner-only `GET /api/v1/trainers/{id}/payroll/preview?from=&to=`.
-
-### PAY-03: Payroll accrual recording (append-only ledger row)
-- **Category:** Table stake
-- **Complexity:** MEDIUM
-- **Dependency:** PAY-02 (computed amount); `payments` table append-only discipline (v1.4); `LOCKED_AUDIT_EVENTS`; `audit_log`
-- **Description:** Owner confirms the payroll run → system records an **accrual row** as an append-only entry. This is the "commit" step after the preview. Two design options exist:
-  - **Option A:** Reuse the existing `payments` table with a new `subject_kind='trainer_payroll'`. Requires extending the CHECK constraint on `subject_kind` and the sign CHECK (payroll accrual amounts are negative from the gym's perspective, i.e., money owed out). Extends the existing audit chain.
-  - **Option B:** New `trainer_payroll_accruals` table with its own append-only discipline.
-
-  **Recommendation: Option B (new table).** Reasons: (1) `payments.subject_kind` CHECK constraint is tightly coupled to membership/PT-package revenue semantics — extending it to cover payroll blurs the revenue ledger with the expenses ledger, making revenue reports harder to compute correctly. (2) The v1.4 `amount_sign_matches_subject_kind` CHECK would need a third branch with different sign logic. (3) Payroll accruals have different lifecycle attributes (paid_at, period_start, period_end, session_count_snapshot) that don't fit cleanly in `payments`. (4) The reports module reads `payments` for revenue — mixing payroll there would require all revenue queries to exclude `subject_kind='trainer_payroll'`. New `trainer_payroll_accruals` table keeps revenue ledger clean.
-
-  **New table schema:**
-  - `id` UUID PK
-  - `trainer_id` UUID FK → `trainers.id` ON DELETE RESTRICT
-  - `period_start` DATE NOT NULL (Europe/Moscow calendar date)
-  - `period_end` DATE NOT NULL (inclusive)
-  - `session_count` INTEGER NOT NULL (snapshot at accrual time)
-  - `fixed_kopecks` INTEGER NOT NULL DEFAULT 0
-  - `commission_kopecks` INTEGER NOT NULL DEFAULT 0
-  - `total_kopecks` INTEGER NOT NULL (= fixed + commission, NOT a CHECK — service computes it)
-  - `accrued_at` TIMESTAMPTZ NOT NULL DEFAULT now() (single temporal column, mirrors `payments.received_at` discipline)
-  - `accrued_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT
-  - `paid_at` TIMESTAMPTZ NULL (NULL = not yet paid; filled in by PAY-04)
-  - `paid_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT NULL
-  - `audit_log_id` UUID FK → `audit_log.id` ON DELETE SET NULL
-  - UNIQUE `(trainer_id, period_start, period_end)` — one accrual per trainer per period (prevents duplicate runs). Partial UNIQUE with WHERE `paid_at IS NULL` is an alternative, but a hard UNIQUE is simpler and forces the owner to void + re-run if they made an error.
-
-  Append-only: no UPDATE/DELETE on accrual rows after creation (except `paid_at`/`paid_by_user_id` via PAY-04 pattern). The AST commit-gate pattern should cover this module.
-- **RBAC:** Owner-only `POST /api/v1/trainers/{id}/payroll/accrue`.
-- **Audit events (pre-register before callsites):** `trainer_payroll_accrued`.
-
-### PAY-04: Mark payroll accrual as paid
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** PAY-03 (accrual row exists)
-- **Description:** Owner records that the accrual was paid out (cash, bank transfer — outside the CRM). This sets `paid_at = now()` and `paid_by_user_id` on the accrual row. This is the **only allowed mutation** on an accrual row after creation (all other fields are immutable). Separate audit event. Not a new ledger row — the accrual row has a `paid_at` column specifically for this lifecycle state.
-  - Idempotency: if `paid_at` is already set, return 409 `already_paid`.
-  - No "unpay" operation — if owner made an error, they need to note it in audit log manually. At single-gym scope, an "undo paid" operation creates more confusion than it solves.
-- **RBAC:** Owner-only `POST /api/v1/trainers/{id}/payroll/accruals/{accrual_id}/mark-paid`.
-- **Audit events:** `trainer_payroll_paid`.
-
-### PAY-05: List payroll accruals for a trainer
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** PAY-03
-- **Description:** `GET /api/v1/trainers/{id}/payroll/accruals` — paginated list of accrual rows for a trainer, ordered `accrued_at DESC`. Response includes `paid_at` so owner can see unpaid vs paid history. Standard `{items, total, page, pageSize}` envelope.
-- **RBAC:** Owner-only.
+**Current state entering v1.11 (confirmed by codebase inspection):**
+- 81 OpenAPI paths, 104 route operations across 18 tags
+- 57 mutating endpoints (POST/PATCH/DELETE); 0 have `Idempotency-Key` documented in the OpenAPI spec
+- `app/core/idempotency.py` exists: `verify_idempotency` Depends, `begin_idempotency`, `store_idempotency_response`, `idempotent_response`. TTL currently 3600s (1h), Redis prefix `cc:idem:`.
+- 8 route files use `verify_idempotency`: `pt_sessions`, `schedule`, `pt_packages`, `bookings`, `online_payments` — covering financial + scheduling mutations. Auth, clients, memberships sell/cancel, trainers, users, visits, payroll do NOT.
+- `app/main.py` FastAPI title = `"Sportzal API"`, version = `"1.1.0"`, no `servers`, no `securitySchemes`, no `info.contact/license/description` — default auto-gen spec.
+- Auto-generated `operationId` values follow FastAPI's `{function_name}{path_slug}{method}` pattern (e.g. `login_api_v1_auth_login_post`) — verbose, unstable, consumer-unfriendly.
+- Existing handoff artifacts: `v1.4-auth-runbook.md`, `v1.6-postman.json` (Sportzal-branded, pre-rebrand), `v1.8-reports-runbook.md`, `v1.9-trainers-runbook.md` (operator-pending).
+- `v1.10-OPERATOR-EVIDENCE.md` is the canonical append-only evidence file; v1.11 RUN-01..06 append there.
+- Ruff: 79 check errors + 205 format files pending. mypy: attr-defined warnings pending. (DEFER-46-04).
 
 ---
 
-### PAY Anti-features
+## Feature Landscape: v1.11 Capabilities
 
-| Anti-Feature | Why It's Anti-Feature at Single-Gym Scope | What to Do Instead |
-|---|---|---|
-| Reuse `payments` table for payroll accruals | Blurs revenue ledger with expense ledger; breaks revenue reports; needs CHECK constraint surgery | New `trainer_payroll_accruals` table |
-| Tiered commission (% changes by revenue threshold) | Enterprise feature; no second gym to compare tiers | Single flat `commission_pct` per trainer |
-| Automatic payroll period detection | No payroll calendar in CRM; owner decides period manually | Manual `from`/`to` params on preview + accrue endpoints |
-| "Void" / reverse accrual row | Creates reconciliation complexity; no accounting module to balance against | Mark accruals as paid or not; corrections are new rows with notes (out of v1.9 scope) |
-| Integration with 1C/external payroll software | No accounting integration in scope | Export via CSV (v1.10 scope) or manual |
-| Per-session commission proration | Ambiguous when a package spans two periods; no single correct answer | Commission on full package sale attributed to period (PAY-02 approach) |
-| Payroll for non-PT-session work (floor time, classes) | No class module; hourly floor tracking not in scope | PT-sessions only; floor time tracked manually |
+Capabilities are organized by phase. Each entry carries complexity (S/M/L) and
+Table Stakes / Differentiator / Anti-Feature designation.
 
 ---
 
-## CATEGORY B — RECURRING SCHEDULE SLOTS
+### Phase 63 — Tech-Debt Sweep
 
-### REC-01: Recurring slot pattern (day-of-week + time)
-- **Category:** Table stake
-- **Complexity:** MEDIUM
-- **Dependency:** `trainers` table; `trainer_availability_slots` (existing); time-off blocks (REC-03, needed before generation to avoid conflicts)
-- **Description:** Owner/reception defines a recurring availability pattern for a trainer: `trainer_id`, `day_of_week` (0=Monday…6=Sunday, per ISO 8601), `start_time` TIME, `end_time` TIME, `valid_from` DATE, `valid_until` DATE (nullable = open-ended). These are patterns, not slot rows yet.
+#### Table Stakes (must close before contract-freeze artifacts)
 
-  **Generate-ahead vs expand-on-read decision:**
-  - **Expand-on-read:** Pattern rows only; slots are computed dynamically at query time. Pro: no DB bloat, changes to pattern apply immediately. Con: complex queries, cannot represent exceptions (a specific date cancelled due to time-off), hard to book against a virtual slot.
-  - **Generate-ahead:** Pattern triggers insertion of concrete `trainer_availability_slots` rows for N weeks ahead. Pro: existing booking machinery works unchanged, slots are bookable immediately, time-off blocks can cancel/prevent specific generated slots, audit trail of when slot was created. Con: cron job to materialize future slots, DB rows accumulate.
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| `ruff check` exit 0 (DEFER-46-04) | CI gate was parked for 3 milestones; a spec with linting errors cannot credibly claim production-ready | S | 79 known errors; mostly stylistic. `uv run ruff check` baseline. |
+| `ruff format` applied (DEFER-46-04) | Byte-stable `openapi.json` regen requires deterministic code formatting | S | 205 files. Activate as CI gate AFTER applying. |
+| `mypy --strict` clean (DEFER-46-04) | Strict-typed codebase with attr-defined warnings is inconsistent branding to handoff consumers reading the README | S | Only attr-defined class; not new `ignore` lines. |
+| v1.5 `run.sh` runbook hardened (DEFER-40-01) | DEFER-40-01 has been carried 3 milestones; Phase 67 operator walkthrough requires a working v1.5 verification script | M | 4 documented bugs in the script: RBAC actor, X-CSRF-Token header, table name. Fix + end-to-end clean. |
+| DEFER-36-04-B residual closed | Same formatting wave as DEFER-46-04; 123 files from v1.4 era | S | Rolled into the ruff format pass. |
 
-  **Recommendation: Generate-ahead with a bounded horizon (4–8 weeks ahead).** Reasons for this codebase: (1) `bookings` already reference `trainer_availability_slots.id` (FK); reusing the existing slot table means zero changes to booking logic. (2) The existing race-safe partial UNIQUE on `bookings` slot works on concrete slot IDs. (3) A simple ARQ cron that materializes slots up to 8 weeks ahead runs once daily (trivial). (4) Single-gym pet-project — 1 trainer × 5 days × 2 slots/day × 56 days = ~560 slot rows per trainer, perfectly manageable. (5) Exceptions (time-off) cancel specific generated slot rows — this already works with the existing slot cancellation machinery.
+#### Differentiators (do-if-trivial in Phase 63)
 
-  **New table `trainer_recurring_patterns`:**
-  - `id` UUID PK
-  - `trainer_id` UUID FK → `trainers.id` ON DELETE RESTRICT
-  - `day_of_week` SMALLINT NOT NULL CHECK (0..6)
-  - `start_time` TIME NOT NULL
-  - `end_time` TIME NOT NULL CHECK (end_time > start_time)
-  - `valid_from` DATE NOT NULL
-  - `valid_until` DATE NULL (open-ended)
-  - `is_active` BOOLEAN NOT NULL DEFAULT TRUE (deactivate without deleting; stops future generation)
-  - `created_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT
-  - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
-  - UNIQUE `(trainer_id, day_of_week, start_time, valid_from)` — prevents duplicate patterns for same trainer+day+time starting same date.
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Add `ruff format` + `ruff check` as blocking CI gate | Future milestones cannot re-accumulate debt | S | One-liner addition to CI workflow after the sweep. Worth doing. |
 
-- **RBAC:** Owner-only create/update; reception reads trainer patterns (GET).
+#### Anti-Features
 
-### REC-02: Slot materialization cron (generate-ahead)
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** REC-01 (patterns exist); `trainer_availability_slots` (existing); REC-03 (time-off blocks must be checked before materializing)
-- **Description:** ARQ daily cron (`materialize_recurring_slots`, e.g. 07:00 MSK) scans all active `trainer_recurring_patterns` with `valid_from <= today + 56 days` and `(valid_until IS NULL OR valid_until >= today)`. For each pattern occurrence (each date that matches `day_of_week` within the window), checks if a slot row already exists for that trainer+datetime (prevents duplicates on re-run). If no slot exists AND no time-off block overlaps that window (REC-03), inserts a new `trainer_availability_slots` row with `status='active'`. Idempotent on re-run (SELECT before INSERT or INSERT...ON CONFLICT DO NOTHING). `unique=True` on ARQ cron (same pattern as other crons in this codebase).
-- **Horizon:** Configurable via env var `RECURRING_SLOT_HORIZON_DAYS` (default 56, i.e., 8 weeks). Not hardcoded.
-- **Audit events:** No per-slot audit event (high volume, low value). Log generation count via structlog INFO.
-
-### REC-03: Trainer time-off / unavailability blocks
-- **Category:** Table stake
-- **Complexity:** LOW–MEDIUM
-- **Dependency:** `trainers` table; `trainer_availability_slots` (existing); bookings (conflict check)
-- **Description:** Owner creates a time-off block for a trainer: `trainer_id`, `block_start` TIMESTAMPTZ, `block_end` TIMESTAMPTZ, `reason` TEXT NULL. Effects:
-  1. **Prevents generation:** The cron (REC-02) skips slot materialization for any pattern occurrence that overlaps the block window.
-  2. **Cancels existing active slots:** When a time-off block is created, any existing `trainer_availability_slots` rows for that trainer that fall within the window AND have `status='active'` are transitioned to `status='cancelled'` with `cancel_reason='trainer_time_off'`. This uses the existing slot cancellation machinery.
-  3. **Blocks that overlap booked slots:** If a slot within the block window has `status='booked'` (i.e., a booking exists), the system returns a conflict warning listing the affected bookings. **Owner must explicitly confirm** with `?force=true` to proceed — this cancels the booking(s) (booking FSM `confirmed → cancelled`) and sends cancellation DMs to clients via the existing booking notification machinery. Alternatively, owner resolves conflicts manually before creating the time-off block.
-
-  **New table `trainer_time_off_blocks`:**
-  - `id` UUID PK
-  - `trainer_id` UUID FK → `trainers.id` ON DELETE RESTRICT
-  - `block_start` TIMESTAMPTZ NOT NULL
-  - `block_end` TIMESTAMPTZ NOT NULL CHECK (block_end > block_start)
-  - `reason` TEXT NULL
-  - `created_by_user_id` UUID FK → `users.id` ON DELETE RESTRICT
-  - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
-  - No soft-delete — time-off blocks can be deleted (hard-delete) if created in error, but only if no slots were already cancelled due to them (or owner accepts the cancelled slots stay cancelled). Simpler: allow hard-delete unconditionally; the already-cancelled slots stay cancelled (trainer re-creates manually if needed).
-
-- **RBAC:** Owner-only create/delete; reception reads (for UI display).
-- **Audit events:** `trainer_time_off_created`, `trainer_time_off_deleted`.
-
-### REC-04: List recurring patterns + time-off blocks for a trainer
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** REC-01, REC-03
-- **Description:** `GET /api/v1/trainers/{id}/recurring-patterns` and `GET /api/v1/trainers/{id}/time-off` — list endpoints for the frontend to render the trainer's schedule configuration. Standard `{items, total, page, pageSize}` envelope or simple list (these sets are small).
-- **RBAC:** Owner + reception (read-only).
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Suppress mypy warnings with `# type: ignore` | Fastest path to green | Creates debt at exactly the moment a handoff consumer inherits the codebase | Fix the underlying attr-defined issue properly |
+| Run ruff with `--select` subset to avoid fixing everything | Faster | Leaves the CI bar lower than claimed | Apply full `ruff check` as configured in `pyproject.toml` |
 
 ---
 
-### REC Anti-features
+### Phase 64 — Contract Freeze (OpenAPI Curation)
 
-| Anti-Feature | Why It's Anti-Feature at Single-Gym Scope | What to Do Instead |
-|---|---|---|
-| Expand-on-read recurring slots (virtual slots, no DB rows) | Breaks existing booking FK discipline; complex conflict detection with virtual entities | Generate-ahead concrete slot rows (REC-02) |
-| Per-occurrence exception on a recurring series (RRULE EXDATE pattern) | Full iCalendar RRULE with EXDATE is over-engineering; no external calendar sync needed | Time-off block cancels specific generated slot rows |
-| iCalendar / .ics sync / Google Calendar integration | No external calendar integration in scope for v1.9 | Manual pattern entry in admin UI |
-| Client-facing recurring booking (auto-reserve same slot every week) | No client portal in scope; booking is reception/owner-initiated | Manual booking per session or admin-side recurrence |
-| Pattern templates (copy pattern across trainers) | Only 1–5 trainers at single-gym scale; copy-paste is fine | Per-trainer pattern creation |
-| Unlimited lookahead horizon | Performance risk if misconfigured | Env-var-capped horizon (default 8 weeks) |
-| "Soft-delete" time-off blocks | Unnecessary complexity; just allow hard-delete with conflict guard | Hard-delete with conflict check |
+#### Table Stakes
 
----
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Explicit `operation_id=` on all 104 business operations | Auto-gen IDs like `login_api_v1_auth_login_post` are verbose and break on refactor; consumers generate SDK clients from operationId | M | Naming convention: `verb_resource` snake_case (e.g. `auth_login`, `clients_list`, `memberships_sell`). FastAPI `@router.post(..., operation_id="auth_login")`. |
+| `title` updated to `"clubcore API"` | Spec was authored under `"Sportzal API"` title — all handoff docs generated from it will carry the wrong name | S | `FastAPI(title="clubcore API", version="1.11.0", ...)` |
+| `version` bumped to `"1.11.0"` | Downstream consumers (Postman, SDK generators) key on version for changelog tracking | S | Must match package.json `@clubcore/api-client` version bump. |
+| `info.description` populated | Tells consumers what the API is, auth model, and base URL; currently absent | S | 3-4 sentences: gym CRM, JWT cookie auth + CSRF, RU/CIS region. |
+| `servers` array populated | Without servers the spec defaults to relative URL `/`; Postman env variables cannot auto-populate from spec | S | At minimum: `http://localhost:8000` (dev). Placeholder `https://api.{your-domain}.ru` for staging/prod. |
+| `securitySchemes` defined | Currently absent; spec consumers cannot understand the auth model. Cookie-based JWT + CSRF is non-standard enough to require documentation. | M | OAS3 `apiKey` type for the `sz_access` cookie + separate `apiKey` for `X-CSRF-Token` header. Or `http: {scheme: bearer}` for access + `apiKey` for CSRF. Route-level `security:` annotations on all non-anonymous endpoints. |
+| Explicit `tags=[...]` with `app.openapi_tags` ordering | Tags exist (`v1/router.py` assigns them) but tag order in the spec is arbitrary; Redocly/Stoplight render tags in declaration order | S | Add `openapi_tags=[{"name": "auth"}, {"name": "clients"}, ...]` to `FastAPI(...)`. 18 existing tags; consider merging `pt-package-plans` + `pt-packages` under `pt-packages` or keeping granular — decide and freeze. |
+| `components.responses` shared error envelopes | Currently every 422/401/403/404/409 response is inlined per-operation. Deduplication makes the spec 20-30% smaller and enables consumers to write shared error-handling middleware. | M | Define at minimum: `Error401`, `Error403`, `Error404`, `Error409`, `Error422UnprocessableEntity`. Reference via `$ref: '#/components/responses/Error401'`. |
+| Pre-freeze drift gate baseline | CI must fail if `openapi.json` is out of sync with the codebase after the freeze | S | `python -c "from app.main import create_app; ..."` export script already exists; `git diff --exit-code openapi.json` as CI step. Already partially in place — tighten the gate to treat any diff as a breaking error. |
+| `@clubcore/api-client` version bump to `1.11.0` | Frontend consumers pin to a version; bumping signals the freeze | S | `package.json` version field + `CHANGELOG.md` baseline entry. |
 
-## CATEGORY C — TRAINER-UTILIZATION REPORT
+#### Differentiators (do-if-trivial)
 
-### RPT-01: Trainer load report (sessions + hours per trainer per period)
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** `pt_sessions` (non-cancelled, `performed_at`, `trainer_id`); `trainer_name_snapshot`; v1.8 reports module discipline (raw-SQL `text()`, read-only, no `models.py`); Europe/Moscow TZ
-- **Description:** `GET /api/v1/reports/trainers` — owner-only aggregate over `pt_sessions`. Parameters: `from` DATE, `to` DATE (inclusive, Europe/Moscow). Returns per-trainer row:
-  - `trainer_id`, `trainer_name` (from `trainers.full_name` JOIN, not snapshot — for current name display)
-  - `session_count` (non-cancelled sessions in period)
-  - `cancelled_session_count`
-  - `total_hours` (sum of `(end_time - start_time)` from linked `bookings`; NULL when no booking → use a configurable default session duration of 60 min, or 0 if no duration available)
-  - `unique_client_count` (distinct `client_id` values in period)
-  - `utilization_pct` — optional: `session_count / available_slot_count * 100` where `available_slot_count` = total `trainer_availability_slots` for trainer in period. This is the standard "trainer utilization" metric (industry target 65–70%). Note: available_slot_count can be 0 for trainers with no slots → omit or NULL.
-  Ordered by `session_count DESC` (top trainers first).
-- **RBAC:** Owner-only `(VIEW, REPORTS)` (existing permission); reception 403.
-- **New indexes needed:** `trainer_id` on `pt_sessions` already has `ix_pt_sessions_trainer_id_performed_at_desc`. A `performed_at` partial index or the existing composite is sufficient.
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| `info.contact` (email + support URL) | Tells handoff consumers who to contact when the spec seems wrong | S | `contact: {"name": "clubcore backend", "email": "andre.shipunov@icloud.com"}` |
+| `components.parameters.PageParam`, `PageSizeParam`, `SortParam` | Recurring pagination params documented once; reduces copy-paste in spec | S | Only worth doing if 5+ endpoints share the same `page`/`page_size` query params — audit first. |
+| `x-clubcore-rbac` extension on owner-only operations | Machine-readable RBAC hints; useful for future codegen | S | `x-clubcore-rbac: {roles: ["owner"]}` on all OWNER_ONLY paths. Very low effort. |
+| `deprecated: true` markers on any legacy alias paths | Documents intentional deprecation for consumers | S | Check if any `/api/v1/auth/sessions/revoke` vs `/api/v1/auth/sessions/{family_id}/revoke` legacy patterns exist. |
 
-### RPT-02: PT-package utilization / revenue attribution per trainer
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** `pt_sessions` (same as RPT-01); `payments` WHERE `subject_kind='pt_package'`; JOIN through `pt_packages` via `pt_sessions.pt_package_id`
-- **Description:** Extends RPT-01 response (or a separate section of the same endpoint) with revenue attribution:
-  - `revenue_kopecks` — sum of `payments.amount_kopecks` for PT-package sale rows whose package had at least one session by this trainer in the period (same attribution logic as PAY-02 commission computation).
-  - `avg_revenue_per_session_kopecks` — `revenue_kopecks / session_count` (integer division).
-  This lets the owner see "which trainer generates the most revenue" vs "which trainer conducts the most sessions" — these can diverge if trainers work with different package tiers.
-- **RBAC:** Same as RPT-01.
+#### Anti-Features
 
-### RPT-03: CSV export for trainer report
-- **Category:** Table stake
-- **Complexity:** LOW
-- **Dependency:** RPT-01, RPT-02; v1.8 UTF-8-BOM CSV discipline (RFC-4180 excel dialect)
-- **Description:** `GET /api/v1/reports/trainers.csv` — same data as RPT-01+02 as StreamingResponse, UTF-8 BOM, RFC-4180 excel dialect. Mirrors v1.8 `/reports/revenue.csv` etc. pattern exactly.
-- **RBAC:** Owner-only.
-
-### RPT-04: Payroll accrual summary in trainer report (optional, deferred)
-- **Category:** Differentiator
-- **Complexity:** LOW
-- **Dependency:** PAY-03 (accruals exist); RPT-01
-- **Description:** Optionally include `total_accrued_kopecks` and `total_paid_kopecks` for the period from `trainer_payroll_accruals` in the trainer report response. This makes the "top trainers" view also show what was paid out, closing the revenue→cost view for the owner. Low additional complexity once accruals exist.
-- **Note:** Can be added in the same phase as RPT-01 since both come from new tables.
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Publishing the spec to a public URL (GitHub Pages, Redocly Cloud, public npm) | Easier sharing | This is a private commercial CRM — the API surface reveals business logic, RBAC structure, and endpoint URLs of a commercial system. Publishing = security and business risk. | Private gitignored doc-site (Phase 65) + share via encrypted channel with the design team |
+| Restructuring route prefixes during curation | Makes spec "cleaner" | Any URL change is a **breaking change** after freeze; the frontend team builds against the frozen URLs | Freeze URLs as-is; document known "ugly" URLs in the spec description |
+| Merging `_internal` routes into the business spec | Webhooks are documented for completeness | `_internal` routes (email webhook, ЮKassa webhook) are server-to-server; including them in the handoff spec confuses frontend developers and leaks infrastructure details | Tag `_internal` routes with `x-internal: true`; exclude from Postman collection (already precedent from v1.6 Postman) |
 
 ---
 
-### RPT Anti-features
+### Phase 65 — Handoff Artifacts
 
-| Anti-Feature | Why It's Anti-Feature at Single-Gym Scope | What to Do Instead |
-|---|---|---|
-| Real-time live dashboard (WebSocket/SSE) | No frontend integration in v1.9; report is owner-initiated | Simple GET endpoint, same as v1.8 |
-| Per-client breakdown in trainer report | Client-level view belongs to clients module; trainer report is trainer-level aggregate | Separate client-detail endpoint if ever needed |
-| Predictive analytics / forecasting | ML/statistics complexity; no training data volume at single-gym scale | Simple historical aggregates |
-| Write operations inside reports module | D-54-07 discipline: reports are strictly read-only | Raw-SQL reads only |
-| No-show rate in trainer report | No-shows are bookings-level data; trainer report focuses on conducted sessions | Booking-level reports (separate future feature if needed) |
-| Class instructor utilization | No class/group module in Sportzal | PT-session-only scope |
+#### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Curated Postman v2.1 collection (full surface) | Frontend integration team needs a runnable collection to validate their HTTP client setup | L | Cover all 18 tag domains (not just auth). Folder per tag. Auth happy-path at the top as a setup folder (login → capture cookie + CSRF into env variables via `pm.test` + `pm.environment.set`). ENV templates: `clubcore-local.postman_environment.json` (`baseUrl=http://localhost:8000`). |
+| Pre-request auth script pattern | Without it, every request in the collection would require manual cookie pasting | M | Collection-level pre-request: if `{{accessToken}}` is absent, execute `POST /api/v1/auth/login`, then extract `Set-Cookie: sz_access` → `pm.environment.set("accessToken", ...)` and extract `sportzal_csrf` cookie → `pm.environment.set("csrfToken", ...)`. Mutating requests send `X-CSRF-Token: {{csrfToken}}`. |
+| Test scripts (status code + schema shape per request) | v1.6 Postman had 74 items with no test assertions; fails silently | M | Each request gets at minimum `pm.test("Status 200", () => pm.response.to.have.status(200))` + `pm.test("has data key", () => pm.expect(pm.response.json()).to.have.property("data"))`. |
+| Newman CLI smoke integration | CI-runnable (exit non-zero on fail); the single script the design team can run to verify the backend is alive | M | `npx newman run clubcore-collection.json -e clubcore-local.json --reporters cli,junit --reporter-junit-export newman-results.xml`. Cover at minimum: auth login → CSRF capture → clients list → memberships list → visits list → health. ~10 requests. |
+| `clubcore-auth-runbook.md` (expanded, clubcore-branded) | `v1.4-auth-runbook.md` was written under the Sportzal name + does not cover Telegram OTP, refresh rotation, multi-user invite, password-reset, or CSRF flow | M | Supersede `v1.4-auth-runbook.md`. Add: (a) CSRF header extraction one-liner `CSRF=$(awk '/sportzal_csrf/ {print $7}' cookies.txt)`; (b) JWT decode via `python3 -c "import base64, json, sys; [print(json.loads(base64.b64decode(p+'==').decode())) for p in sys.argv[1].split('.')[0:2]]"`; (c) Telegram OTP flow (start → status poll → verify); (d) refresh rotation manual test; (e) invite + accept flow; (f) password-reset flow. |
+| Private OpenAPI doc-site via Redocly CLI | Design team needs browseable, searchable API docs — not raw JSON | M | `npx @redocly/cli preview-docs apps/backend/openapi.json` (port 8080). Add `make docs` target. Add `docs/` output to `.gitignore`. Do NOT publish to any public URL. |
+
+#### Differentiators (do-if-trivial)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| `Makefile` target `make docs` (wraps Redocly preview) | One command for new team members | S | `docs: npx @redocly/cli preview-docs apps/backend/openapi.json --port 8080` |
+| `Makefile` target `make smoke` (wraps Newman) | One command for integration validation | S | `smoke: npx newman run ...` |
+| Postman folder for idempotency testing (duplicate-request pairs) | Shows consumers how Idempotency-Key works in practice | S | Two-request folder: original sale + identical replay → same 200 body. |
+| Code samples in spec `x-codeSamples` | Redocly renders curl/Python/TypeScript samples in the doc-site | M | Moderate effort but high DX value; worth doing for the 5 most-used endpoints (login, clients list, memberships sell, visits check-in, reports). |
+
+#### Anti-Features
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Publishing doc-site to Redocly Cloud / GitHub Pages / any public URL | Easy sharing | Private commercial CRM — leaks business logic, RBAC, URL surface | Private serve via `redocly preview-docs`; share the `openapi.json` file directly over encrypted channel |
+| Full collection covering all 104 operations with detailed bodies | Comprehensive coverage | Unsustainable; the collection becomes a maintenance burden larger than the code itself | Smoke 10-15 key operations; document the rest via the OpenAPI spec |
+| PDF export of the doc-site | Printable docs | PDFs go stale immediately as the spec evolves; they cannot stay in sync | Direct consumers to the live local preview or the JSON spec |
+| Newman as a blocking CI gate at this stage | Seems like a natural extension | Newman requires a running backend + real secrets (DB, Redis, ЮKassa sandbox) — cannot run in CI without a full docker-compose stack; adds complexity without a clear payoff at the v1.11 stage | Run Newman locally via `make smoke`; add to CI only when a staging environment exists |
+
+---
+
+### Phase 66 — Idempotency Hardening
+
+#### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Full audit of 57 mutating endpoints — per-endpoint classification | Before standardizing, you need to know which endpoints are in which category | S | Three categories: (A) already uses `verify_idempotency` + `idempotent_response`, (B) needs idempotency but doesn't have it, (C) idempotency is not applicable (auth flows, reads, webhook receivers). |
+| TTL extension from 3600s → 86400s (24h) | Current TTL of 1h is too short; Stripe's documented standard is 24h; ЮKassa also uses 24h per their API docs. Clients retry over longer windows (network timeouts, app restarts). | S | Single constant change in `app/core/idempotency.py:IDEMPOTENCY_TTL_SECONDS`. No Redis key migration needed (keys expire naturally). |
+| `components.parameters.IdempotencyKey` in OpenAPI spec | Currently 0 endpoints document the header in the spec despite 8 route files requiring it. Downstream consumers cannot know the header is required from the spec alone. | M | Add to `components.parameters`: `IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9_:-]{1,128}$"}}`. Add `$ref` on all endpoints that call `verify_idempotency`. |
+| Integration tests for double-submit on financial endpoints | CR-02 carry-over from Phase 33 review; memberships sell, PT-package sell, online-payment sell are the highest-risk double-submit paths | M | Tests: first POST succeeds (201) → same key + same body → 200 replay with identical body. Different body → 422 `idempotency_key_reuse`. In-flight placeholder → 409 `idempotency_in_flight`. At minimum: `POST /memberships` (cash sell), `POST /pt-packages`, `POST /online-payments/memberships/{plan_id}/sell`. |
+| Document idempotency semantics in `clubcore-auth-runbook.md` (CR-02b) | Consumers need to understand: which endpoints require the header, what format the key must be, what errors they get on reuse | S | Add dedicated "Idempotency-Key" section to the runbook. Cover: required format, TTL, replay semantics, `idempotency_key_reuse` vs `idempotency_in_flight` error codes. |
+| Classify `POST /memberships/sell` (cash) for idempotency coverage | Currently missing — financial endpoint with no idempotency | M | Verify `memberships/router.py` `sell_membership` handler. If missing `verify_idempotency`, add it in this phase. |
+
+#### Differentiators (do-if-trivial)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Idempotency on `POST /payroll/accruals` | Payroll accrual is financial; double-submit creates a double-payment | S | Low risk to add; mirrors existing pattern. |
+| Idempotency on `POST /visits` (check-in) | Prevents double check-in on network retry | S | Already has DB-level uniqueness via `UNIQUE(client_id, gym_date)` — returns 409 on true duplicate, but the `verify_idempotency` layer provides a cleaner 200-replay instead of 409. Optional. |
+| `Idempotency-Replayed: true` response header on replayed responses | Lets consumers distinguish a real 200 from a cached replay | S | Single header add in `idempotent_response` helper. Low effort, good DX. |
+
+#### Anti-Features
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Idempotency on all 57 mutating endpoints (blanket) | "Safer" | Auth flows (login, logout, OTP, refresh), soft-delete, status transitions are not idempotent in the traditional sense — applying the header requirement universally adds friction and breaks anti-oracle flows where the server intentionally does NOT reveal whether a prior attempt succeeded | Classify endpoints into A/B/C; only add to category-B financial + scheduling mutations |
+| Changing the idempotency key format requirement to UUID-only | "Cleaner" | The current regex `[A-Za-z0-9_:-]{1,128}` is already documented in `IDEMPOTENCY_KEY_PATTERN`; the ЮKassa integration generates deterministic sha256 keys. Narrowing to UUID-only breaks existing callsites. | Keep the current regex; document the recommended format (UUIDv4) without enforcing it |
+| Database persistence for idempotency keys | Redis eviction could theoretically replay a request | Adds a write to every mutating endpoint; defeats the purpose of a lightweight idempotency layer; Redis TTL 24h covers all real-world retry windows | Keep Redis-only with 24h TTL |
+
+---
+
+### Phase 67 — Operator-Pending Runbook Execution
+
+#### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| RUN-01: ЮKassa sandbox walkthrough (v1.7 VER-03) | VER-03 was explicitly deferred at v1.7 close as operator-credential-gated; cannot ship a billing product without a live payment confirmation | M | Requires ЮKassa sandbox credentials in `.env`. Script `apps/backend/scripts/` (sandbox-evidence scaffolding already exists per v1.7 PROJECT.md). Evidence appended to `v1.10-OPERATOR-EVIDENCE.md` (append-only per D-62.1-B2). |
+| RUN-02: RU email-deliverability probe (v1.7 CARRY-01 / DEFER-46-01) | SPF/DKIM/DMARC send-to-Gmail/Yandex `Authentication-Results` headers must be captured; fiscal receipts go to real clients | M | Requires live `CLUBCORE_EMAIL_FROM` domain provisioned. If not yet provisioned, mark `N/A-until-production` with trigger condition (same pattern as RUN-08-dns-dkim-DEFERRED). |
+| RUN-03: Owner countersign on 19 locked email templates (v1.7 CARRY-02 / DEFER-46-02) | `LOCKED_EMAIL_TEMPLATES` frozenset contains 19 strings; owner must attest these are correct before production send | S | Read the template IDs from the source file + owner signature in `v1.6-template-countersign.md` (already exists, may need updating from 15 → 19 templates). Evidence: appended to operator file. |
+| RUN-04: Reports runbook walkthrough (v1.8 VER-01) | `v1.8-reports-runbook.md` was authored but never executed (operator-pending per D-12). Revenue golden-path + audit-log filter + CSV download. | M | `docker compose up` → 5 scenarios. Evidence appended to `v1.10-OPERATOR-EVIDENCE.md`. |
+| RUN-05: Trainers runbook walkthrough (v1.9 D-61-12) | `v1.9-trainers-runbook.md` (513 lines, 5 scenarios) was authored but never executed (operator-pending per D-61-12). | M | `docker compose up` → payroll golden-path + recurring schedule + time-off + trainer-usage report + reception-403. Evidence appended. |
+| RUN-06: MailHog `--profile dev` integration (DEFER-46-05) | Email integration tests currently require real SMTP; MailHog provides a local SMTP trap for dev/CI | M | Add MailHog service to `docker-compose.yml` under `--profile dev`. `SMTP_HOST=mailhog` when profile is active. Evidence: `docker compose --profile dev up` screenshot or curl to MailHog API. |
+
+#### Differentiators (do-if-trivial)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Consolidated operator evidence index at top of `v1.10-OPERATOR-EVIDENCE.md` | Makes the file navigable as it grows | S | Update the `## Index` section after all RUN-01..06 sections are appended. |
+| One-line pass/fail verdict per scenario (not just transcript) | Makes evidence file scannable | S | Each RUN-XX section: `VERDICT: PASS/PARTIAL/FAIL` header line before the command transcript. |
+
+#### Anti-Features
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Screenshots as the primary evidence format | "More convincing" | Screenshots cannot be git-diffed, searched, or verified automatically; they also contain secrets (env values, email addresses) if not redacted | Captured curl transcripts as code blocks in the markdown file (existing project convention from RUN-08-local-db-smoke) |
+| Faking evidence (fabricating command output) | "Faster" | This is explicitly prohibited by project convention (D-62.1-B1: "No fabricated evidence is present in this file") and undermines the entire purpose of operator verification | Execute the runbook and capture real output; if credential-gated, mark as N/A with trigger condition |
+| Scattering evidence across per-phase files | "Organized by phase" | Creates N evidence files vs one append-only file; the project convention (D-62.1-B2) is explicit: append to `v1.10-OPERATOR-EVIDENCE.md` | All v1.11 RUN-01..06 evidence appends to the single `v1.10-OPERATOR-EVIDENCE.md` |
 
 ---
 
 ## Feature Dependencies
 
 ```
-PAY-01 (compensation config on trainer)
-    └──required by──> PAY-02 (payroll preview computation)
-                          └──required by──> PAY-03 (accrue to ledger)
-                                                └──required by──> PAY-04 (mark paid)
-                                                └──required by──> PAY-05 (list accruals)
-                                                └──enhances──> RPT-04 (payroll in trainer report)
+Phase 63 (Tech-Debt Sweep)
+    └──unblocks──> Phase 64 (Contract Freeze)
+                       └──unblocks──> Phase 65 (Handoff Artifacts)
+                       └──unblocks──> Phase 66 (Idempotency Hardening)
+                                          └──enhances──> Phase 65 (Postman idempotency folder)
+                       └──unblocks──> Phase 67 (Operator Runbook — needs stable backend)
 
-REC-01 (recurring pattern)
-    └──required by──> REC-02 (materialization cron)
-                          └──depends on──> REC-03 (time-off blocks, checked before materializing)
-REC-03 (time-off blocks)
-    └──uses──> existing slot cancellation machinery (trainer_availability_slots FSM)
-    └──uses──> existing booking cancellation + notification machinery (bookings FSM + DMs)
+Phase 65 OpenAPI doc-site
+    └──requires──> Phase 64 curated spec (doc-site sourced from openapi.json)
 
-RPT-01 (trainer load report)
-    └──reads──> pt_sessions (existing, no new FK)
-    └──reads──> trainer_availability_slots (existing, for utilization_pct)
-    └──enhances with──> RPT-02 (revenue attribution)
-RPT-02 (PT revenue attribution)
-    └──reads──> payments WHERE subject_kind='pt_package' (existing)
-RPT-03 (CSV)
-    └──wraps──> RPT-01 + RPT-02
+Phase 65 Postman collection
+    └──requires──> Phase 64 explicit operation_ids + tags (folder organization)
 
-PAY-02 and RPT-02 share the same "PT-package revenue attribution" logic (JOIN pattern);
-    → define a shared raw-SQL fragment or extract to a shared reports helper.
+Phase 66 `components.parameters.IdempotencyKey`
+    └──requires──> Phase 64 `components` hygiene pass
+
+Phase 67 Trainers runbook (RUN-05)
+    └──requires──> DEFER-40-01 fix from Phase 63 (run.sh hardening)
+
+Phase 67 RUN-01 (ЮKassa sandbox)
+    └──requires──> Phase 65 auth runbook (documents CSRF + cookie flow needed for sandbox test)
 ```
 
 ### Dependency Notes
 
-- **REC-03 before REC-02:** The cron must know about time-off blocks before materializing slots; both should land in the same phase.
-- **PAY-01 before PAY-02/03:** The compensation config must exist on the trainer record before any payroll computation is possible.
-- **RPT can proceed independently of PAY and REC:** The report reads only from existing tables (`pt_sessions`, `bookings`, `payments`, `trainers`) plus the new payroll accruals if RPT-04 is included. RPT can be its own phase.
-- **No dependency between REC and PAY:** Recurring slots don't affect payroll computation (payroll works from `pt_sessions.performed_at`, not from slots directly).
+- **Phase 63 must finish before Phase 64:** The drift gate only makes sense on a clean, formatted tree. Running `ruff format` after freezing would change the spec.
+- **Phase 64 must finish before Phase 65:** All handoff artifacts (Postman, doc-site, runbook) are sourced from the curated OpenAPI spec. Doing them before curation locks in the uncurated operationIds.
+- **Phase 66 can run parallel with Phase 65** after Phase 64 completes. The idempotency OpenAPI parameter is added to the same spec being documented in Phase 65.
+- **Phase 67 can run any time after Phase 63** cleans the runbook tooling, but is logically last since it validates everything.
 
 ---
 
-## MVP Definition
+## MVP Definition (What Phase Completion Means)
 
-### This Milestone (v1.9 — must deliver)
+### Phase 63 closes when:
+- [ ] `uv run ruff check` exits 0 (0 errors, no suppressions added)
+- [ ] `uv run ruff format --check` exits 0
+- [ ] `uv run mypy --strict` exits 0 with 0 warnings
+- [ ] `v1.5-verification-evidence/run.sh` executes end-to-end against `docker compose up` with exit 0
 
-- [x] **PAY-01** — compensation model columns on `trainers` (schema + PATCH endpoint extension)
-- [x] **PAY-02** — payroll preview computation endpoint (read-only, no persistence)
-- [x] **PAY-03** — payroll accrual recording (`trainer_payroll_accruals` table, append-only)
-- [x] **PAY-04** — mark accrual as paid (single mutation allowed on accrual row)
-- [x] **PAY-05** — list accruals per trainer
-- [x] **REC-01** — recurring pattern table + CRUD
-- [x] **REC-02** — slot materialization cron (ARQ daily)
-- [x] **REC-03** — time-off blocks (table + create/delete + conflict guard + slot cancellation)
-- [x] **REC-04** — list patterns + time-off blocks
-- [x] **RPT-01** — trainer load report endpoint
-- [x] **RPT-02** — PT-package revenue attribution in trainer report
-- [x] **RPT-03** — trainer report CSV export
+### Phase 64 closes when:
+- [ ] All 104 operations have explicit `operation_id=` (no auto-generated `*_api_v1_*` names)
+- [ ] `info.title = "clubcore API"`, `info.version = "1.11.0"`, `info.description` populated
+- [ ] `servers` array includes `http://localhost:8000`
+- [ ] `securitySchemes` defines cookie auth + CSRF header scheme
+- [ ] `components.responses` defines at minimum 4 shared error envelopes (401/403/404/422)
+- [ ] `app.openapi_tags` defines tag order
+- [ ] `git diff --exit-code openapi.json` passes in CI
 
-### Add After Validation (v1.10+)
+### Phase 65 closes when:
+- [ ] Postman v2.1 collection file exists at `.planning/handoff/clubcore-v1.11.postman_collection.json` with auth pre-request script + test assertions
+- [ ] `clubcore-local.postman_environment.json` exists
+- [ ] Newman smoke (`make smoke`) runs 10+ requests with exit 0 against local stack
+- [ ] `clubcore-auth-runbook.md` replaces `v1.4-auth-runbook.md` with all 6 expanded scenarios documented
+- [ ] `make docs` (Redocly preview) starts without errors; `docs/` in `.gitignore`
 
-- [ ] **RPT-04** — payroll accrual summary in trainer report — easy add once PAY-03 ships
-- [ ] Trainer report frontend integration — v2.0 (frozen `admin-web` not touched in v1.9)
-- [ ] Partial refund for PT-packages (B-02 deferred from v1.4) — affects payroll commission attribution
+### Phase 66 closes when:
+- [ ] Per-endpoint idempotency classification table exists (A/B/C)
+- [ ] `IDEMPOTENCY_TTL_SECONDS = 86400` (24h)
+- [ ] `components.parameters.IdempotencyKey` defined in spec; `$ref` on all category-A/B endpoints
+- [ ] Double-submit integration tests pass for 3 financial endpoints
+- [ ] Idempotency section in `clubcore-auth-runbook.md`
 
-### Future Consideration (v2.0+)
-
-- [ ] Trainer self-service portal (view own schedule, payroll statements)
-- [ ] Per-session commission proration across period boundaries
-- [ ] 1C / external payroll export
-- [ ] iCal sync for trainer schedules
-- [ ] Recurring client-trainer booking automation
+### Phase 67 closes when:
+- [ ] All 6 RUN items have evidence appended to `v1.10-OPERATOR-EVIDENCE.md`
+- [ ] Any credential-gated items (RUN-02 email delivery if domain not provisioned) have explicit `N/A-until-production` rows with documented trigger conditions
+- [ ] No `OPERATOR-PENDING` markers remain in the repo without a corresponding evidence section or explicit deferral
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| PAY-01 (compensation config) | HIGH | LOW | P1 |
-| PAY-02 (payroll preview) | HIGH | MEDIUM | P1 |
-| PAY-03 (accrue to ledger) | HIGH | MEDIUM | P1 |
-| PAY-04 (mark paid) | HIGH | LOW | P1 |
-| PAY-05 (list accruals) | MEDIUM | LOW | P1 |
-| REC-01 (recurring pattern) | HIGH | MEDIUM | P1 |
-| REC-02 (slot materialization cron) | HIGH | LOW | P1 |
-| REC-03 (time-off blocks) | HIGH | MEDIUM | P1 |
-| REC-04 (list patterns + time-off) | MEDIUM | LOW | P1 |
-| RPT-01 (trainer load report) | HIGH | LOW | P1 |
-| RPT-02 (revenue attribution) | HIGH | LOW | P1 |
-| RPT-03 (CSV export) | MEDIUM | LOW | P1 |
-| RPT-04 (payroll in report) | MEDIUM | LOW | P2 |
+| Feature | Consumer Value | Implementation Cost | Priority |
+|---------|----------------|---------------------|----------|
+| Explicit operation_ids (FRZ-04) | HIGH — SDK generators break on auto-gen names | MEDIUM | P1 |
+| CSRF + cookie securitySchemes (FRZ-05) | HIGH — undocumented auth model blocks integration | MEDIUM | P1 |
+| Postman pre-request auth script (HND-01) | HIGH — collection is unusable without it | MEDIUM | P1 |
+| Idempotency TTL 24h (IDM-02) | HIGH — 1h TTL causes spurious replay failures | LOW | P1 |
+| Tech-debt sweep ruff/mypy (DEBT-01..03) | HIGH — prerequisite for stable spec generation | LOW | P1 |
+| `components.parameters.IdempotencyKey` (IDM-04) | MEDIUM — spec consumers need this documented | MEDIUM | P1 |
+| Newman smoke (HND-02) | MEDIUM — validation tool for integration team | MEDIUM | P1 |
+| Private Redocly doc-site (HND-04) | MEDIUM — browseable alternative to raw JSON | LOW | P2 |
+| ЮKassa sandbox RUN-01 | MEDIUM — billing validation | MEDIUM | P2 |
+| RU email deliverability RUN-02 | MEDIUM — production readiness | MEDIUM — depends on domain | P2 |
+| Double-submit integration tests (IDM-03) | MEDIUM — regression protection | MEDIUM | P2 |
+| `info.contact`, `x-clubcore-rbac` extensions | LOW — nice-to-have for consumers | LOW | P3 |
+| Code samples `x-codeSamples` | LOW — Redocly DX enhancement | MEDIUM | P3 |
+| `Idempotency-Replayed` response header | LOW — consumer DX | LOW | P3 |
 
----
-
-## Behavior Notes and Edge Cases by Category
-
-### PAYROLL edge cases
-
-1. **Trainer with no compensation config (both NULL):** `GET /preview` returns `total_kopecks=0` with a note. `POST /accrue` should still be allowed (owner may want to record a manual amount — or block it and require config first). Recommendation: block with 422 `trainer_has_no_compensation_config`.
-
-2. **PT-package sale payment attribution across period boundaries:** A 10-session package sold in April with sessions running May–June. For May payroll, should the commission be on the full package price or prorated? Recommendation (already stated in PAY-02): commission is on the full package sale payment if ANY session from that package falls in the period. This means a trainer could get commission on a package sold before the period. Document this as a known limitation.
-
-3. **Cancelled sessions:** `pt_sessions` rows with `cancelled_at IS NOT NULL` are excluded from both session count and commission computation. This is table stakes — you don't pay for sessions that didn't happen.
-
-4. **Duplicate accrual attempt (same period):** UNIQUE `(trainer_id, period_start, period_end)` on `trainer_payroll_accruals` returns 409 `accrual_already_exists_for_period`. Owner must explicitly note corrections out-of-band.
-
-5. **Trainer deactivated mid-period:** `is_active=false` trainers still have historical `pt_sessions`; payroll still computes correctly over past sessions. No special handling needed.
-
-6. **Rounding:** All amounts in integer kopecks. Commission = `ROUND(sum_pt_revenue_kopecks * commission_pct / 100)` using Python `round()` (banker's rounding) or `math.ceil()` — pick one and document. Recommendation: `round()` (consistent with Python default; industry standard for financial calculations is half-even). Do not use float arithmetic — multiply then integer-divide.
-
-### RECURRING SCHEDULE edge cases
-
-1. **Pattern created with past `valid_from`:** Cron only materializes slots from `today` forward. Slots for dates before today are not retroactively created. If owner wants historical slots, they create them manually (existing flow).
-
-2. **Two patterns overlap for same trainer (same day+time):** UNIQUE `(trainer_id, day_of_week, start_time, valid_from)` on `trainer_recurring_patterns` prevents exact duplicates, but two patterns for the same trainer on the same day with different `valid_from` dates can coexist. The cron must deduplicate before inserting (SELECT existing slot for exact trainer+datetime before INSERT). The slot table already has no UNIQUE on trainer+time, so overlapping patterns would create duplicate slots. Mitigation: cron checks `EXISTS (SELECT 1 FROM trainer_availability_slots WHERE trainer_id=? AND start_time=? AND status != 'cancelled')` before inserting.
-
-3. **Pattern deactivated (`is_active=false`):** Cron skips it. Already-generated future slots remain `active` unless explicitly cancelled. Owner must cancel them manually or via a time-off block if desired. This is correct behavior — deactivating a pattern stops future generation but doesn't retroactively cancel the slots it already created.
-
-4. **Time-off block applied to already-booked slot:** REC-03 conflict guard checks for `booked` slots in the window. Owner must confirm with `?force=true`. When confirmed: booking is cancelled (existing booking FSM), client DM sent (existing notification machinery). This reuses existing infrastructure with no new code paths for notifications.
-
-5. **Materialization cron race (two containers):** ARQ `unique=True` on the cron job prevents parallel runs. The INSERT...ON CONFLICT DO NOTHING pattern handles the edge case of two slots being materialized for the same trainer+datetime.
-
-6. **`valid_until` in the past:** Cron skips patterns where `valid_until < today`. Owner-visible note: patterns automatically stop generating.
-
-### REPORT edge cases
-
-1. **Trainer with no sessions in period:** Returns a row with all counts at 0. Alternatively, filter out zero-session trainers. Recommendation: include only trainers with `session_count > 0` (configurable via `?include_inactive=true` param). Consistent with "top trainers" framing.
-
-2. **`utilization_pct` computation when slot count is 0:** Return NULL for `utilization_pct` when no slots exist for the trainer in the period (avoid division by zero).
-
-3. **Revenue attribution when a PT-package has multiple trainers:** A client buys a 10-session package and trains with two different trainers (5 sessions each). Both trainers appear in the trainer-level report. Revenue is attributed to both — this means revenue is double-counted at the "total" level. This is a known limitation of attribution by trainer participation, not by package. Document clearly; at single-gym scale where one package typically has one trainer, this is acceptable.
-
-4. **`performed_at` timezone consistency:** Must use Europe/Moscow AT TIME ZONE conversion, same as `visits.gym_date` discipline. `pt_sessions.performed_at` is TIMESTAMPTZ; filter as `performed_at >= period_start AT TIME ZONE 'Europe/Moscow'` and `< (period_end + 1 day) AT TIME ZONE 'Europe/Moscow'`.
-
----
-
-## New LOCKED_AUDIT_EVENTS to Pre-Register (INFRA-15 discipline)
-
-All of the following must be added to `LOCKED_AUDIT_EVENTS` frozenset **before** any callsite lands (per v1.3 precedent):
-
-- `trainer_payroll_accrued`
-- `trainer_payroll_paid`
-- `trainer_time_off_created`
-- `trainer_time_off_deleted`
-
-Optional (if recurring pattern mutations are audited):
-- `trainer_recurring_pattern_created`
-- `trainer_recurring_pattern_deactivated`
-
----
-
-## New RBAC Entries Required (three-way parity: backend → admin-web `can.ts` → `registry.ts`)
-
-Existing `Resource.TRAINERS` covers catalog CRUD. New operations stay owner-only:
-
-| Action | Resource | Notes |
-|--------|---------|-------|
-| VIEW | TRAINER_PAYROLL | New resource — payroll preview + accrual list |
-| CREATE | TRAINER_PAYROLL | Accrue + mark paid |
-| VIEW | REPORTS | Already exists (v1.8); trainer report reuses this |
-
-Simplest path: add `Resource.TRAINER_PAYROLL` owner-only (both VIEW and CREATE). The trainer report (`RPT-01`) reuses existing `(VIEW, REPORTS)` permission — no new resource needed.
-
----
-
-## Suggested Phase Grouping
-
-Based on dependencies and complexity, v1.9 naturally splits into 3–4 phases:
-
-1. **Phase 58 — Payroll foundations:** PAY-01 (compensation config columns + PATCH), PAY-02 (preview endpoint), PAY-03 (accruals table + endpoint), PAY-04 (mark paid), PAY-05 (list). LOCKED_AUDIT_EVENTS pre-registration for payroll events.
-
-2. **Phase 59 — Recurring schedule:** REC-01 (patterns table + CRUD), REC-02 (materialization cron), REC-03 (time-off blocks table + endpoint + conflict guard + slot cancellation), REC-04 (list endpoints). LOCKED_AUDIT_EVENTS pre-registration for time-off events.
-
-3. **Phase 60 — Trainer report:** RPT-01 + RPT-02 + RPT-03 (trainer load + revenue + CSV). Optional: RPT-04 (payroll in report).
-
-4. **Phase 61 — OpenAPI handoff:** Byte-stable regen `openapi.json` + `schema.d.ts` + `AssertNonNever` forward-guards (per-milestone discipline). RBAC three-way parity test green.
-
-Phases 58 and 59 can be ordered either way (no inter-dependency). The report (Phase 60) benefits from coming after payroll (accruals available for RPT-04) but can proceed immediately since RPT-01/02/03 have no payroll dependency.
+**Priority key:**
+- P1: Must have for milestone to close
+- P2: Should have; implement before milestone verification
+- P3: Nice to have; do only if time permits
 
 ---
 
 ## Sources
 
-- [ISSA: Gym Commission Structure for Personal Trainers](https://www.issaonline.com/blog/post/breaking-down-big-gym-pay) — MEDIUM confidence (industry survey)
-- [NESTA: How Do Personal Trainers Get Paid at a Gym?](https://www.nestacertified.com/how-do-personal-trainers-get-paid-at-a-gym/) — MEDIUM confidence
-- [Wellyx: Gym Commission Structure](https://wellyx.com/blog/gym-commission-structure/) — MEDIUM confidence
-- [Gymdesk: Gym Payroll Management](https://gymdesk.com/blog/gym-payroll-management) — MEDIUM confidence
-- [SchedulingKit: Fitness Scheduling Best Practices](https://schedulingkit.com/hub/industry-guides/fitness-scheduling-best-practices) — MEDIUM confidence
-- [Trainerize: Personal Training KPIs](https://www.trainerize.com/blog/key-performance-indicators-for-personal-trainers/) — MEDIUM confidence
-- [SmartHealthClubs: Gym Analytics](https://smarthealthclubs.com/blog/gym-analytics-how-to-use-gym-software-data-for-growth-in-2026/) — MEDIUM confidence
-- Existing codebase: `trainers/models.py`, `schedule/models.py`, `pt_sessions/models.py`, `payments/models.py`, `payments/constants.py` — HIGH confidence (direct code inspection)
-- `.planning/PROJECT.md` v1.9 milestone scope — HIGH confidence (authoritative)
+- Current codebase inspection: `apps/backend/openapi.json` (81 paths, 104 ops, 0 shared components, auto-gen operationIds confirmed)
+- `apps/backend/app/core/idempotency.py` — `IDEMPOTENCY_TTL_SECONDS = 3600`; `verify_idempotency` Depends pattern
+- `apps/backend/app/main.py` — `FastAPI(title="Sportzal API", version="1.1.0")` — no servers/securitySchemes
+- `.planning/milestones/v1.10-REQUIREMENTS.md` — IDM-01..04, DEBT-01..05, RUN-01..06, HND-01..04, FRZ-01..05 requirement snapshot
+- `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` — append-only convention per D-62.1-B2
+- `.planning/handoff/v1.9-trainers-runbook.md` — existing CSRF extraction pattern `awk '/sportzal_csrf/'`
+- [Stripe: Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) — POST-only scope, 24h TTL, placeholder-in-flight pattern
+- [Stripe API: Idempotent requests](https://docs.stripe.com/api/idempotent_requests) — scope to POST, key format, TTL
+- [FastAPI: Metadata and Docs URLs](https://fastapi.tiangolo.com/tutorial/metadata/) — `openapi_tags`, `info.contact`, `info.license`
+- [Redocly CLI commands](https://redocly.com/docs/cli/commands) — `preview-docs`, `bundle` commands
+- [Redocly CLI preview-docs](https://redocly.com/docs/cli/v1/commands/preview-docs) — `npx @redocly/cli preview-docs`, default port 8080
 
 ---
-*Feature research for: v1.9 Trainers Complete (trainer payroll, recurring schedule, time-off blocks, trainer-utilization report)*
-*Researched: 2026-05-24*
+*Feature research for: v1.11 API Handoff + Production Hardening (clubcore gym CRM)*
+*Researched: 2026-05-26*

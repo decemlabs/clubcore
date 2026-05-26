@@ -1,677 +1,761 @@
 # Architecture Research
 
-**Domain:** v1.9 Trainers Complete — payroll-ledger, recurring slots, time-off, trainer-usage report
-**Researched:** 2026-05-24
-**Confidence:** HIGH (based on direct codebase inspection of all relevant modules)
+**Domain:** v1.11 API Handoff + Production Hardening — Phases 63–67
+**Researched:** 2026-05-26
+**Confidence:** HIGH (direct codebase inspection; all integration points verified in source)
 
 ---
 
-## System Overview
+## How v1.11 Integrates with the Existing Architecture
 
-The existing backend is a FastAPI modular monolith with four structural zones enforced by import-linter. The key constraint for v1.9 is that `app.core` may not import `app.modules`, and modules may not import each other directly. All cross-module communication flows through Protocol slots registered in `app/main.py`.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    app/main.py (composition root)            │
-│  register_*(slot) wires Protocol slots at startup            │
-│  only file allowed to import across core ↔ modules          │
-├──────────────────────┬──────────────────────────────────────┤
-│   app/core/          │   app/modules/<domain>/              │
-│   permissions.py     │   router.py  service.py  models.py   │
-│   dependencies.py    │   schemas.py repository.py ...       │
-│   audit.py           │                                      │
-│   (Protocol slots)   │   NO cross-module imports (linter)   │
-├──────────────────────┴──────────────────────────────────────┤
-│   app/integrations/       app/workers/                      │
-│   telegram/               scheduled/ (ARQ crons)             │
-│   email/                  tasks/ (ARQ jobs)                  │
-│   yookassa/               telegram_bot.py                    │
-└─────────────────────────────────────────────────────────────┘
-```
+v1.11 is infrastructure-only: no new ORM entities, no new business modules, no new Protocol
+slots. It touches four layers — the FastAPI app factory (`app/main.py`), the v1 router aggregator
+(`app/api/v1/router.py`), individual module routers (Idempotency-Key adoption), and the handoff
+tooling orbit around `scripts/` and `.planning/handoff/`. Each phase is mapped to its exact
+integration points below.
 
 ---
 
-## Question 1: Where Does Payroll Live?
+## Phase 63: Tech-Debt Sweep
 
-### Decision: New `app/modules/payroll/` module
-
-Payroll is a new business entity with its own ledger table (`payroll_accruals`), endpoints, and audit chain. It belongs in a new module, not in `trainers` (which is catalog-only reference data with soft-delete, no financial logic) and not in `payments` (which is the generic incoming-money ledger, not an outgoing-wages ledger).
-
-**Module file layout:**
-```
-app/modules/payroll/
-├── __init__.py
-├── models.py           # TrainerCompConfig + PayrollAccrual ORM
-├── schemas.py          # Pydantic request/response + wire shapes
-├── repository.py       # DB reads/writes for payroll tables
-├── service.py          # run_payroll_period, mark_accrual_paid, list_accruals
-├── router.py           # POST /payroll/run, PATCH /{id}/paid, GET /payroll/accruals
-└── constants.py        # comp model literals, LOCKED audit events pre-declared
-```
-
-### The `payroll_accruals` Table (v1.4 payments discipline)
-
-The payroll ledger follows the same append-only discipline as `payments`. Each accrual is an immutable row; marking it paid is a single-column status flip allowed only once (UNIQUE (trainer_id, period_start, period_end) enforces one run per trainer per period).
+### Current State (Verified)
 
 ```
-payroll_accruals
-├── id                UUID PK
-├── trainer_id        FK -> trainers.id ON DELETE RESTRICT
-├── period_start      Date NOT NULL          -- MSK inclusive
-├── period_end        Date NOT NULL          -- MSK inclusive
-├── comp_model        Text NOT NULL          -- 'pct_of_revenue' | 'fixed_per_session' | 'both'
-├── sessions_count    Integer NOT NULL        -- pt_sessions in period (snapshot at run time)
-├── revenue_kopecks   Integer NOT NULL        -- sum of pt_package payments in period (snapshot)
-├── fixed_per_session_kopecks  Integer NOT NULL DEFAULT 0
-├── pct_of_revenue_bps         Integer NOT NULL DEFAULT 0  -- basis points (1% = 100 bps)
-├── accrual_kopecks   Integer NOT NULL CHECK (accrual_kopecks >= 0)
-├── status            Text NOT NULL CHECK IN ('pending','paid')  server_default='pending'
-├── paid_at           DateTime(tz) nullable
-├── paid_by_user_id   FK -> users.id ON DELETE RESTRICT nullable
-├── audit_log_id      FK -> audit_log.id ON DELETE SET NULL nullable
-├── created_at        DateTime(tz) NOT NULL server_default=now()
-│
-── UNIQUE (trainer_id, period_start, period_end)  -- one run per trainer per period
-── INDEX (trainer_id, period_start DESC)
-── INDEX (status, period_start DESC)              -- pending accruals listing
+ruff check:   158 errors  (RUF100 × 42, F401 × 21, E501 × 14, F811 × 13, RUF059 × 12, ...)
+ruff format:  widespread (205 files per DEFER-46-04 note)
+mypy:         394 errors across 117 files — concentrated in:
+              tests/integration/payroll/  (operator × 4)
+              tests/integration/online_payments/  (~10 no-untyped-def)
+              residual across other test + app files
 ```
 
-This follows the v1.4 append-only discipline: no `updated_at`, no `deleted_at`, no UPDATE to `accrual_kopecks`. The `status` flip to `paid` is the only mutation allowed (mirrors the `pt_packages.status` single-transition pattern).
+Also in scope: `DEFER-36-04-B` (unknown; surfaced in v1.4 roadmap) and `DEFER-40-01` (v1.5
+runbook `scripts/verify/run.sh` hardening — the script needed 4 hotfixes during Phase 40 UAT
+and the fixes were deferred).
 
-### Where Does Trainer Comp Config Live?
+### Integration Points
 
-**In the `payroll` module, NOT `trainers`.**
+**Files modified (no new files needed):**
 
-Rationale: comp config is payroll domain data (rate settings, compensation model). The `trainers` module is catalog-only reference data (CRUD with soft-delete + active flag). Mixing financial configuration into the catalog module would couple a financial concept into a non-financial module. A new table `trainer_comp_configs` lives under `payroll/models.py`.
+- `apps/backend/app/**/*.py` — ruff auto-fixes (`--fix`) for F401, UP, I001, F541, UP017, UP037
+- `apps/backend/tests/**/*.py` — mypy fixes (most are type annotations on test fixtures in
+  `tests/integration/payroll/` and `tests/integration/online_payments/`)
+- `apps/backend/scripts/verify/run.sh` — DEFER-40-01 runbook hardening
+- `apps/backend/app/main.py` — the `title="Sportzal API"` and `version="1.1.0"` on line 184–185
+  are Phase 63 tech-debt targets (should become `"clubcore API"` and `"1.11.0"`)
 
+**Remaining sportzal shim residue** (Phase 63 sweep targets, not Phase 62.1 which was
+code-identifier-only):
+
+| File | Item | Nature |
+|------|------|--------|
+| `app/main.py:184` | `title="Sportzal API"` | String literal (API metadata) |
+| `app/main.py:185` | `version="1.1.0"` | Version string (stale) |
+| `app/core/security.py:247,287` | `key="sportzal_csrf"` | Cookie name — LOCKED (client contract) |
+| `app/core/dependencies.py:914` | `cookies.get("sportzal_csrf")` | Cookie read — LOCKED |
+| `app/core/actor_context.py:40` | `"sportzal_actor_context"` | ContextVar name — low priority |
+| `app/integrations/yookassa/factory.py:86` | `User-Agent: "Sportzal/1.7 ..."` | HTTP header |
+| `app/integrations/telegram/handlers.py:125` | Russian DM mentioning Sportzal | LOCKED copy (CLUB_BRAND) |
+
+Note: `sportzal_csrf` cookie name is a **runtime client contract** — changing it would require
+coordinated admin-web update. This is either Phase 63 (if doing a full cookie rename) or deferred
+to v2.0. The sweep should change the `title=` / `version=` / User-Agent strings but leave the
+cookie name decision explicit.
+
+**CI gate impact:** Sweep produces zero CI regressions if done correctly — ruff/mypy are the
+gates being fixed. The `openapi.json` drift gate WILL fire if `title=` or `version=` changes
+because `export_openapi.py` regenerates the spec: the sweep PR must include the regenerated
+`openapi.json` and `schema.d.ts`.
+
+### Order of Operations
+
+1. `ruff format` first (whitespace/formatting changes; produces the largest diff but is
+   semantically inert — no logic changes)
+2. `ruff check --fix` second (auto-fixable: F401 unused imports, I001 import sort, UP037
+   quoted annotations, F541 f-strings, UP017 datetime.timezone.utc)
+3. Manual fixes for non-auto-fixable: E501 long lines, F811 redefined-while-unused, RUF059,
+   B017 assert-raises, S106 hardcoded passwords in test fixtures, DTZ011 date.today calls,
+   N806 non-lowercase variable
+4. `mypy app tests` — fix type annotation gaps in tests; most are `no-untyped-def` on test
+   conftest fixtures
+
+**One PR vs per-module:** One sweep PR is correct. Split PRs generate multiple intermediate states
+where some files are formatted and others are not, causing ruff-format drift gate failures for the
+intermediate commits. The sweep is a tree-wide pass; one atomic PR keeps the CI history clean.
+
+**Pre-commit hooks:** Do NOT install pre-commit hooks in Phase 63. Pre-commit hooks change the
+developer workflow contract and should be a deliberate opt-in decision. The existing CI gates
+(`ruff check`, `ruff format --check`, `mypy`) provide the same coverage without runtime surprises.
+If hooks are desired, that is a Phase 67 / v2.0 decision.
+
+---
+
+## Phase 64: Contract Freeze — OpenAPI Curation
+
+### Current State (Verified)
+
+The OpenAPI spec has **103 endpoints**. All have `operationId` values — but they are
+FastAPI's **auto-generated** form: `{function_name}_api_v1_{path_fragment}_{method}`.
+
+Examples (representative ugliness):
 ```
-trainer_comp_configs
-├── id                UUID PK
-├── trainer_id        FK -> trainers.id ON DELETE RESTRICT UNIQUE  -- one config per trainer
-├── comp_model        Text NOT NULL CHECK IN ('pct_of_revenue','fixed_per_session','both')
-├── fixed_per_session_kopecks  Integer NOT NULL DEFAULT 0 CHECK (>= 0)
-├── pct_of_revenue_bps         Integer NOT NULL DEFAULT 0 CHECK (>= 0, <= 10000)
-├── effective_from    Date NOT NULL
-├── created_at        DateTime(tz) NOT NULL server_default=now()
-├── updated_by_user_id  FK -> users.id ON DELETE RESTRICT nullable
-│
-── INDEX (trainer_id)   -- resolver
+email_webhook_api_v1__internal_email_webhook_post
+password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post
+list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get
 ```
 
-`UNIQUE (trainer_id)` enforces one active config per trainer. Owner can `PUT /payroll/trainer-configs/{trainer_id}` to create or overwrite (upsert semantics: INSERT ... ON CONFLICT DO UPDATE SET ...).
+The spec also lacks:
+- `securitySchemes` (no cookie-auth + CSRF definition in `components`)
+- `servers` block (no `http://localhost:8000` dev server entry)
+- `info.title` says `"Sportzal API"` (Phase 63 fixes this to `"clubcore API"`)
+- `info.version` says `"1.1.0"` (should be `"1.11.0"`)
+- `openapi_tags` list in `create_app()` for tag descriptions
 
-### Cross-Module Read for Payroll Calculation
+### Integration Points
 
-`payroll.service.run_payroll_period` needs two cross-module reads:
+**Primary integration: `app/main.py`**
 
-1. **PT-package revenue (from `payments`):** How much revenue came in for this trainer's sessions during the period.
-2. **PT-sessions count (from `pt_sessions`):** How many sessions this trainer conducted.
-
-**Mechanism: raw-SQL `text()` reads -- NOT Protocol slots.**
-
-Protocol slots are for callback/write operations (activating memberships, recording payments, completing bookings). Read-only cross-module data is handled with raw-SQL `text()` reads exactly as the v1.8 `reports` module does it (D-54-08 precedent). The payroll service calls a helper in `payroll/repository.py`:
+The `FastAPI(...)` constructor call currently sets only `title=` and `version=`. Phase 64 expands
+this to:
 
 ```python
-# payroll/repository.py (cross-module read discipline)
-# CROSS-MODULE READ: pt_sessions + pt_packages + payments
-# Verified columns:
-#   pt_sessions: trainer_id, pt_package_id, performed_at, cancelled_at
-#     (apps/backend/app/modules/pt_sessions/models.py:52-97)
-#   payments: subject_kind, subject_id, amount_kopecks, received_at
-#     (apps/backend/app/modules/payments/models.py:52-64)
-#   pt_packages: id (FK bridge between pt_sessions.pt_package_id and payments.subject_id)
-async def fetch_trainer_session_revenue(
-    session: AsyncSession,
-    trainer_id: UUID,
-    period_start: date,
-    period_end: date,
-) -> dict[str, int]:
-    row = (
-        await session.execute(
-            text(
-                "SELECT "
-                "  COUNT(DISTINCT ps.id) FILTER (WHERE ps.cancelled_at IS NULL) "
-                "    AS session_count, "
-                "  COALESCE(SUM(p.amount_kopecks) FILTER ("
-                "    WHERE p.subject_kind = 'pt_package' AND p.amount_kopecks > 0"
-                "  ), 0) AS revenue_kopecks "
-                "FROM pt_sessions ps "
-                "JOIN pt_packages pkg ON pkg.id = ps.pt_package_id "
-                "JOIN payments p "
-                "  ON p.subject_id = pkg.id "
-                "  AND p.subject_kind = 'pt_package' "
-                "  AND p.amount_kopecks > 0 "
-                "WHERE ps.trainer_id = :trainer_id "
-                "  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date "
-                "      BETWEEN :period_start AND :period_end "
+app = FastAPI(
+    title="clubcore API",
+    version="1.11.0",
+    lifespan=combined_lifespan,
+    docs_url="/docs" if settings.environment == "dev" else None,
+    redoc_url=None,
+    openapi_tags=[              # NEW: tag metadata for Redocly/Stoplight rendering
+        {"name": "auth",        "description": "Authentication + session management"},
+        {"name": "clients",     "description": "Client (member) CRUD"},
+        {"name": "memberships", "description": "Membership plan catalog + instances"},
+        {"name": "visits",      "description": "Visit check-in"},
+        {"name": "schedule",    "description": "Trainer slots + recurring templates + time-off"},
+        {"name": "bookings",    "description": "PT slot booking FSM"},
+        {"name": "trainers",    "description": "Trainer catalog"},
+        {"name": "payments",    "description": "Cash payment ledger"},
+        {"name": "online-payments", "description": "ЮKassa online payments + refunds"},
+        {"name": "pt-packages", "description": "PT package plans + instances"},
+        {"name": "pt-sessions", "description": "PT session recording"},
+        {"name": "payroll",     "description": "Trainer compensation + accrual ledger"},
+        {"name": "users",       "description": "Admin user management"},
+        {"name": "reports",     "description": "Aggregate reports (owner-only, read-only)"},
+        {"name": "audit-log",   "description": "Audit log read API (owner-only)"},
+        {"name": "_internal",   "description": "Transport-layer webhooks (not for client use)"},
+    ],
+)
+```
+
+**`openapi_tags` vs `tags=` on routes:** The `openapi_tags` list in `FastAPI()` provides
+**descriptions** for already-existing tags. Tags are already set on every `include_router()` call
+in `app/api/v1/router.py` (lines 48–113 — confirmed in source). The `openapi_tags` entries do
+not change existing route tags; they attach human-readable descriptions to the tag names.
+
+**Explicit `operation_id=` placement:**
+
+FastAPI allows `operation_id=` on both the `@router.post(...)` decorator AND on
+`include_router(..., generate_unique_id_function=...)`. The recommended pattern for this codebase
+is **decorator-level `operation_id=` on the function definition**, not a centralized function.
+Rationale: the generate_unique_id_function hook is called at router include time and receives only
+the route; it cannot introspect the module name without fragile path parsing. Decorator-level is
+explicit, co-located with the handler, and survives refactors.
+
+**Naming convention:** Use `{module}_{verb}_{resource}` snake_case, not camelCase (RPC-style).
+The existing prefix auto-generated IDs start with the function name which already follows this
+pattern partially (`list_memberships`, `create_membership`, `freeze_membership`). The explicit IDs
+should match the first segment (before `_api_v1_...`) of the current auto-generated IDs, stripping
+the path suffix.
+
+Example translations:
+```
+auto:     freeze_membership_api_v1_memberships__membership_id__freeze_post
+explicit: freeze_membership
+
+auto:     list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get
+explicit: list_pt_sessions_by_package
+
+auto:     password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post
+explicit: auth_confirm_password_reset
+```
+
+The `endpoint` suffix in auto-generated IDs like `*_endpoint_*` is a Python function name
+artifact; strip it in the explicit ID.
+
+**Where `securitySchemes` lives:**
+
+FastAPI does not natively render cookie-auth security schemes in the same way OpenAPI 3.0 Bearer
+schemes work. The correct approach is to define a `components/securitySchemes` block via a custom
+`openapi()` override method on the FastAPI app. This is done in `app/main.py` by overriding
+`app.openapi` with a thin wrapper that injects the schemes after the standard spec is generated:
+
+```python
+# In create_app(), after app = FastAPI(...)
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi() -> dict:
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+        servers=[{"url": "http://localhost:8000", "description": "Local dev"}],
+    )
+    schema.setdefault("components", {})
+    schema["components"]["securitySchemes"] = {
+        "cookieAuth": {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": "sz_access",
+            "description": "HTTP-only JWT access cookie set by POST /api/v1/auth/login",
+        },
+        "csrfHeader": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "description": (
+                "CSRF token from the `sportzal_csrf` cookie. "
+                "Required on all mutating endpoints."
             ),
-            {
-                "trainer_id": str(trainer_id),
-                "period_start": period_start,
-                "period_end": period_end,
-            },
-        )
-    ).mappings().one()
-    return {"session_count": int(row["session_count"]), "revenue_kopecks": int(row["revenue_kopecks"])}
+        },
+    }
+    app.openapi_schema = schema
+    return schema
+
+app.openapi = custom_openapi  # type: ignore[method-assign]
 ```
 
-No `from app.modules.pt_sessions import ...` or `from app.modules.payments import ...` in `payroll/`. Zero new `ignore_imports` edges in `.importlinter`. The `payroll` module is added to the `modules-independent` contract list before any code lands (INFRA-15 discipline).
+This keeps all OpenAPI metadata in `app/main.py` without a separate `app/api/openapi.py` module.
+One file owns the spec customization; no new module is warranted for 40 lines of override.
 
-**Why not a Protocol slot for this?**
+**Byte-stability after curation:**
 
-Protocol slots are for bi-directional callbacks where the callee needs to reach back into a different module's write path. The payroll calculation only needs a read-only projection from two tables. Raw-SQL text() reads are cheaper, more direct, and keep the dependency graph flat -- the same choice made for `reports` in v1.8.
+The `export_openapi.py` script calls `create_app().openapi()` which is deterministic (FastAPI
+caches `openapi_schema` after first call; `sort_keys=True` in `json.dumps`). After Phase 64
+lands, re-running the script must produce zero git diff — the byte-stable gate still applies.
+The migration strategy: one PR that adds all `operation_id=` annotations AND regenerates
+`openapi.json`. Split per-module rollout is risky because the `export_openapi.py` drift gate
+will fail on any intermediate commit that has some operation IDs changed but not all regenerated.
+One atomic PR avoids this.
 
-### Atomic Audit Chain for Payroll
+**Files modified:**
 
-`payroll.service.run_payroll_period` follows the v1.4 UoW discipline:
+| File | Change |
+|------|--------|
+| `app/main.py` | `title=`, `version=`, `openapi_tags=`, `servers=`, `custom_openapi()` |
+| `app/modules/auth/router.py` | Add `operation_id=` to all 17 endpoint decorators |
+| `app/modules/clients/router.py` | Add `operation_id=` to 5 endpoint decorators |
+| `app/modules/memberships/router.py` | Add `operation_id=` to 14 endpoint decorators |
+| `app/modules/visits/router.py` | Add `operation_id=` to 4 endpoint decorators |
+| `app/modules/schedule/router.py` | Add `operation_id=` to 9 endpoint decorators |
+| `app/modules/bookings/router.py` | Add `operation_id=` to 4 endpoint decorators |
+| `app/modules/trainers/router.py` | Add `operation_id=` to 5 endpoint decorators |
+| `app/modules/payments/router.py` | Add `operation_id=` to 3 endpoint decorators |
+| `app/modules/online_payments/router.py` | Add `operation_id=` to 6 endpoint decorators |
+| `app/modules/pt_packages/router.py` | Add `operation_id=` to 10 endpoint decorators |
+| `app/modules/pt_sessions/router.py` | Add `operation_id=` to 3 endpoint decorators |
+| `app/modules/payroll/router.py` | Add `operation_id=` to 5 endpoint decorators |
+| `app/modules/users/router.py` | Add `operation_id=` to 7 endpoint decorators |
+| `app/modules/reports/router.py` | Add `operation_id=` to 8 endpoint decorators |
+| `apps/backend/openapi.json` | Regenerated (byte-stable regen with new IDs + metadata) |
+| `packages/api-client/src/schema.d.ts` | Regenerated (drift gate) |
 
-```
-1. SELECT trainer comp config (own table, no cross-module)
-2. fetch_trainer_session_revenue (raw SQL, same session)
-3. compute accrual_kopecks
-4. INSERT payroll_accruals row
-5. audit.emit("payroll_accrual_created", resource_type="payroll_accrual", ...)
-6. session.commit()  -- accrual row + audit row atomic
-```
-
-`mark_accrual_paid` is a separate UoW:
-```
-1. SELECT payroll_accrual FOR UPDATE
-2. Verify status == 'pending' (409 if already paid)
-3. UPDATE status='paid', paid_at=now(), paid_by_user_id=actor.id
-4. audit.emit("payroll_accrual_paid", resource_type="payroll_accrual", ...)
-5. session.commit()
-```
+**No new files created in Phase 64.**
 
 ---
 
-## Question 2: Recurring Slots and Time-Off Blocks
+## Phase 65: Handoff Artifacts
 
-### Decision: Extend `app/modules/schedule/`, NOT a new module
+### Existing Precedent (Verified)
 
-Both recurring slots and time-off blocks are schedule domain concerns. They reference `trainer_availability_slots` (the existing table) and `trainers`. A new module would require either cross-module imports (violating the linter) or Protocol slots for what is fundamentally schedule data. The schedule module already owns slot creation, overlap detection, and the `restore_slot_to_active` Protocol slot.
+`.planning/handoff/` already contains:
+- `v1.4-postman.json` — early Postman draft
+- `v1.6-postman.json` — 3199-line Postman v2.1 collection (145 KB, 74 leaf items, stdlib-only
+  generator script at `apps/backend/scripts/export_postman.py`)
+- `v1.4-auth-runbook.md`, `v1.8-reports-runbook.md`, `v1.9-trainers-runbook.md` — operator runbooks
+- `clubcore-db-rename-runbook.md` — ops runbook
 
-### New Tables in `schedule/models.py`
+The `export_postman.py` script at `apps/backend/scripts/` is a stdlib-only generator (no third-party
+deps) that reads `openapi.json` and writes a filtered Postman collection (filters out `_internal`
+tag). It is hardcoded to write `v1.6-postman.json` — Phase 65 updates it to write
+`v1.11-clubcore.postman_collection.json`.
 
-**`recurring_slot_templates`** -- defines the weekly recurrence pattern:
+### Integration Points
 
-```
-recurring_slot_templates
-├── id                UUID PK
-├── trainer_id        FK -> trainers.id ON DELETE RESTRICT
-├── day_of_week       SmallInteger NOT NULL CHECK (0..6)  -- 0=Mon ISO
-├── start_hour        SmallInteger NOT NULL CHECK (0..23)
-├── start_minute      SmallInteger NOT NULL CHECK (0..59)
-├── duration_minutes  SmallInteger NOT NULL CHECK (> 0)
-├── is_active         Boolean NOT NULL DEFAULT TRUE
-├── created_by_user_id  FK -> users.id ON DELETE RESTRICT
-├── created_at        DateTime(tz) NOT NULL
-├── cancelled_at      DateTime(tz) nullable
-│
-── INDEX (trainer_id, day_of_week)
-── PARTIAL INDEX (trainer_id) WHERE is_active = TRUE
-```
+**Postman collection:**
 
-**`trainer_time_off`** -- blocks of unavailability:
+Path: `.planning/handoff/v1.11-clubcore.postman_collection.json`
 
-```
-trainer_time_off
-├── id              UUID PK
-├── trainer_id      FK -> trainers.id ON DELETE RESTRICT
-├── starts_at       DateTime(tz) NOT NULL
-├── ends_at         DateTime(tz) NOT NULL
-├── reason          Text nullable
-├── created_by_user_id  FK -> users.id ON DELETE RESTRICT
-├── created_at      DateTime(tz) NOT NULL
-├── cancelled_at    DateTime(tz) nullable  -- soft-cancel (keeps history)
-│
-── CHECK (ends_at > starts_at)
-── INDEX (trainer_id, starts_at)
-── PARTIAL INDEX (trainer_id, starts_at, ends_at) WHERE cancelled_at IS NULL
-```
+Generated by updating `apps/backend/scripts/export_postman.py`:
+- Update `TARGET` path constant (line ~37): `v1.6-postman.json` → `v1.11-clubcore.postman_collection.json`
+- Update `COLLECTION_NAME` constant: `"Sportzal v1.6 — ..."` → `"clubcore API v1.11"`
+- Regenerate from the Phase 64 curated `openapi.json` (103 endpoints minus `_internal` ones)
 
-### Recurring Slot Expansion Strategy
+**Newman CLI smoke:**
 
-**ARQ cron generate-ahead, NOT expand-on-read.**
+Newman is installed as a root workspace devDependency (`pnpm add -Dw newman`). The smoke script
+lives at `tools/newman/smoke.sh` (new directory). It references the Postman collection at
+`.planning/handoff/v1.11-clubcore.postman_collection.json` and a Newman environment JSON at
+`tools/newman/clubcore-dev.postman_environment.json`.
 
-Expand-on-read would require the slot-listing endpoint to dynamically materialize virtual slots on every GET -- adding virtual/real reconciliation logic, complicating the booking FSM (you cannot book a virtual slot), and breaking the `bookings -> schedule` Protocol slot dependency. The existing `trainer_availability_slots` table is the single source of truth for bookable slots; this must stay.
+Trigger: **not wired into CI** for v1.11. Newman requires a live backend (Postgres + Redis +
+running uvicorn). The CI backend job runs in a GitHub Actions environment without Docker Compose.
+Wiring Newman into CI properly (service containers + migrations + seed data) is a v2.0 concern.
+Phase 65 delivers the Newman smoke as a **local operator tool**, documented in the auth runbook.
 
-The `generate_recurring_slots` ARQ cron runs daily (07:00 MSK, after the 06:35 reminder cron) and materializes slots for a rolling 14-day window ahead of the current date. Idempotency is enforced by extending the UNIQUE constraint on `trainer_availability_slots` to include `(trainer_id, start_time)` -- the cron uses INSERT ... ON CONFLICT DO NOTHING.
+**Auth runbook:**
 
-```
-generate_recurring_slots cron (ARQ, 07:00 MSK):
-  For each active recurring_slot_template:
-    For each day in [today+1 .. today+14]:
-      Compute start_time = date + start_hour:start_minute (MSK -> UTC)
-      Compute end_time = start_time + duration_minutes
-      Check: any active trainer_time_off overlaps (start_time, end_time)?
-        SELECT WHERE trainer_id=? AND cancelled_at IS NULL
-        AND tstzrange(starts_at, ends_at) && tstzrange(start_time, end_time)
-      If overlap: skip
-      INSERT INTO trainer_availability_slots
-        (trainer_id, start_time, end_time, status='active', created_by_user_id=NULL)
-        ON CONFLICT (trainer_id, start_time) DO NOTHING
-      If rowcount == 1: audit.emit("slot_published", ...)  -- only on real insert
-  session.commit()
-```
+Path: `.planning/handoff/clubcore-auth-runbook.md` (new file; the existing `v1.4-auth-runbook.md`
+is the predecessor but stays as-is per append-only convention).
 
-`created_by_user_id` on `trainer_availability_slots` must become nullable (Alembic migration). System-generated slots carry NULL -- distinguishable from manually published slots.
+Content expands `v1.4-auth-runbook.md` to cover the full v1.11 API surface:
+- Cookie-auth + CSRF flow (how `sz_access` + `sportzal_csrf` cookies work)
+- Idempotency-Key semantics (from Phase 66)
+- Role/RBAC overview (owner vs reception)
+- Newman smoke invocation
+- Docker Compose bring-up (mirrors `v1.8-reports-runbook.md` Section 1 format)
 
-### Time-Off Interaction with Confirmed Bookings
+**Private OpenAPI doc-site:**
 
-When a time-off block is created that overlaps with existing `status='booked'` slots, the system blocks time-off creation with a 409 conflict.
+Path: `apps/backend/docs-site/` (gitignored output; generated locally on demand).
 
-**Recommended: 409 conflict listing affected slot IDs, requiring owner to resolve manually.**
+Generated by: `npx @redocly/cli build-docs apps/backend/openapi.json --output apps/backend/docs-site/index.html`
 
-Automatic cancellation without notifying clients is operationally dangerous and requires cross-module writes (bookings FSM). The owner should manually cancel conflicting bookings via the existing `PATCH /bookings/{id}/cancel` endpoint, then create the time-off block. The time-off creation service queries:
+`apps/backend/docs-site/` is added to `apps/backend/.gitignore`. No CI step — the design team
+runs this locally against the committed `openapi.json`. The `@redocly/cli` package is installed
+as a root workspace devDependency (`pnpm add -Dw @redocly/cli`). A `make handoff` target (or
+`pnpm run handoff` in root `package.json`) would chain `export_openapi → export_postman →
+redocly build-docs`; whether this wrapper is implemented is a Phase 65 detail.
 
-```python
-# schedule/repository.py
-# SELECT COUNT(*) FROM trainer_availability_slots
-# WHERE trainer_id = :trainer_id AND status = 'booked'
-# AND tstzrange(start_time, end_time) && tstzrange(:starts_at, :ends_at)
-```
+**Files created/modified:**
 
-If count > 0, raise `409 TimeOffConflictsWithBookings` with affected slot IDs.
-
-The `generate_recurring_slots` cron skips slot generation for any window covered by active `trainer_time_off` rows. It does NOT retroactively cancel already-booked slots that fall within a newly created time-off window; only forward-looking slot generation is blocked.
+| File | Status | Notes |
+|------|--------|-------|
+| `.planning/handoff/v1.11-clubcore.postman_collection.json` | NEW | Generated artifact |
+| `.planning/handoff/clubcore-auth-runbook.md` | NEW | Full v1.11 auth + Idempotency runbook |
+| `tools/newman/smoke.sh` | NEW | Newman smoke invocation |
+| `tools/newman/clubcore-dev.postman_environment.json` | NEW | Newman env (dev defaults) |
+| `apps/backend/scripts/export_postman.py` | MODIFIED | Update TARGET + COLLECTION_NAME constants |
+| `apps/backend/docs-site/` | NEW (gitignored) | Redocly HTML output |
+| `apps/backend/.gitignore` | MODIFIED | Add `docs-site/` |
+| Root `package.json` (optional) | MODIFIED | Add `handoff` script |
 
 ---
 
-## Question 3: Trainer-Usage Report
+## Phase 66: Idempotency Hardening
 
-### Decision: Extend `app/modules/reports/` -- pure read-only raw-SQL reads
+### Current State (Verified)
 
-The v1.8 reports module established the D-54-07/D-54-08 discipline: no `models.py`, raw-SQL `text()` cross-module reads, no writes. The trainer-usage report fits exactly in this module with no structural changes to the discipline.
+`app/core/idempotency.py` **already exists** (Phase 32 D-32-18). It provides:
+- `verify_idempotency` — Depends() that validates the `Idempotency-Key` header and returns a
+  route-bound key `{method}:{path}:{header_value}`
+- `begin_idempotency` / `store_idempotency_response` / `load_idempotency_response` — two-phase
+  Redis SET NX + envelope persistence
+- `idempotent_response` — composed helper (NOT yet used in any router — all existing callers use
+  the manual begin/load/store pattern)
+- Redis key: `cc:idem:{key}`, TTL 3600s, JSON envelope (`status_code` + `body_hash` + `body_b64`)
 
-**New endpoint:** `GET /api/v1/reports/trainers` (owner-only)
-**New CSV endpoint:** `GET /api/v1/reports/trainers.csv`
+**Current idempotency coverage across routers (verified by AST scan):**
 
-**Report shape:**
+| Module | Has `verify_idempotency` | Endpoints covered |
+|--------|--------------------------|-------------------|
+| `pt_sessions` | YES | POST record, POST cancel (2 endpoints) |
+| `schedule` | YES | 6 endpoints (publish, cancel, recurring template, time-off) |
+| `pt_packages` | YES | 3 endpoints (create, cancel, refund) |
+| `bookings` | YES | 2 endpoints (create, cancel) |
+| `online_payments` | YES | 4 endpoints (sell membership redirect/QR, sell PT redirect/QR) |
+| `memberships` | PARTIAL | Only POST create (sell) — cancel/freeze/unfreeze/renew/refund MISSING |
+| `online_refunds` | PARTIAL | create_membership_refund_online/pt_package_refund_online MISSING |
+| `clients` | NO | create, update, delete — arguably safe (natural idempotency from DB) |
+| `trainers` | NO | create, update, delete — same |
+| `users` | NO | all 6 mutations |
+| `payroll` | NO | 3 mutations |
+| `auth` | NO | login, logout, refresh, etc. — auth endpoints are deliberately exempt |
+| `visits` | NO | create_visit — `UNIQUE (client_id, gym_date)` provides natural DB idempotency |
 
+**ЮKassa webhook** uses a different Redis mechanism (`cc:yookassa:webhook:{event}:{id}` SET NX EX
+86400) — this is NOT `cc:idem:*` and should NOT be unified with the client-facing idempotency flow.
+The webhook dedup is IP-allowlisted transport deduplication; the client-facing Idempotency-Key is a
+user-supplied retry primitive. They are separate concerns.
+
+**ЮKassa client** (`integrations/yookassa/client.py`) uses ЮKassa's own `Idempotence-Key` header
+(one `t`, not two — D-48-12) with a deterministic sha256 key generated by the `online_payments`
+module. This is the outbound idempotency from our backend to ЮKassa, unrelated to the inbound
+client idempotency key.
+
+### Integration Points
+
+**Where the dependency lives:** `app/core/idempotency.py` — **no move, no new file.** The module
+is already in `app/core/` and correctly namespaced. Adding Phase 66 capabilities means adding the
+`components/parameters/IdempotencyKey` OpenAPI reusable parameter definition and potentially
+backfilling idempotency to endpoints identified in the audit.
+
+**FastAPI middleware vs `Depends()` — which is idiomatic:**
+
+`Depends()` is the correct pattern for this codebase. Reasons:
+1. The existing `verify_idempotency` is already a `Depends()` dependency used on 16 endpoints.
+   Changing to middleware would require touching all 16 callsites to remove the explicit dep.
+2. Middleware-level idempotency requires response interception AFTER the route handler runs, which
+   FastAPI's middleware model makes awkward (you'd need to buffer the full response body). The
+   current `begin_idempotency / store_idempotency_response` two-phase pattern in the route handler
+   is explicit and testable.
+3. Middleware cannot discriminate which endpoints require idempotency; `Depends()` is opt-in per
+   endpoint, which matches the business reality that not all endpoints need it (GET requests,
+   auth, catalog CRUD).
+
+**Redis key naming:** already correct — `cc:idem:{route_bound_key}` where `route_bound_key =
+f"{method}:{path}:{header_value}"`. The route-binding prevents cross-endpoint replay (CR-01 from
+Phase 33). No change needed.
+
+**Audit emit semantics on replay:**
+
+When `idempotent_response` (or the manual begin/load pattern) detects a cached response and
+replays it, **the service method is never called** — the router short-circuits by returning the
+cached `body_b64` as a `Response` object before the `service.*` call. This means:
+- No audit row is emitted on replay (correct behavior — the original operation is the canonical event)
+- No DB write occurs on replay (correct behavior — the idempotency envelope is Redis-only)
+- No ARQ tasks are enqueued on replay (correct behavior)
+
+The existing implementation already satisfies this. The router pattern is:
 ```python
-class TrainerUsageItem(BaseModel):
-    trainer_id: UUID
-    trainer_name: str
-    sessions_count: int           # non-cancelled pt_sessions in period
-    bookings_count: int           # confirmed + completed bookings in period
-    utilization_hours: float      # sum of (end_time - start_time) hours for booked slots
-    revenue_kopecks: int          # sum of positive pt_package payments for trainer's sessions
-
-class TrainerUsageReportResponse(BaseModel):
-    trainers: list[TrainerUsageItem]
-    from_date: date
-    to_date: date
+is_first = await begin_idempotency(redis, idempotency_key)
+if not is_first:
+    stored = await load_idempotency_response(redis, idempotency_key)
+    if isinstance(stored, str):    # "__in_flight__" placeholder
+        raise ConflictError("idempotency_in_flight")
+    if stored is not None:
+        return Response(content=base64.b64decode(stored["body_b64"]),
+                        status_code=stored["status_code"],
+                        media_type="application/json")
+    raise ValidationAppError("idempotency_key_reuse")
+# ... run handler, store response ...
 ```
 
-**Cross-module raw-SQL read in `reports/repository.py`:**
+The service layer is only called on the `is_first == True` branch. No gating logic needed in
+service; the contract is enforced at the router layer.
+
+**Race tolerance:** Two concurrent requests with the same key — first wins (`SET NX` claims the
+placeholder), second reads the placeholder and raises `409 idempotency_in_flight`. The client
+retries after a short backoff and gets the cached envelope on the third attempt. This is the
+existing behavior (Phase 32 D-32-20); no change in Phase 66.
+
+**Request hashing strategy:** Current implementation hashes only the **request body bytes**
+(`body_sha256` = `hashlib.sha256(body_bytes).hexdigest()`). The route binding in the key
+`{method}:{path}:{header_value}` already disambiguates endpoint + actor-supplied key. There is
+no need to include `actor_user_id` in the hash — two different actors using the same idempotency
+key string but hitting different paths get different Redis keys due to the path segment. Adding
+actor to the hash would break legitimate use cases where a retry from a refreshed session (new
+cookie but same logical actor) sends the same key.
+
+**`components/parameters/IdempotencyKey` OpenAPI reusable parameter:**
+
+This is added in the `custom_openapi()` hook in `app/main.py` (same function that adds
+`securitySchemes`). It adds to `schema["components"]["parameters"]`:
 
 ```python
-# CROSS-MODULE READ (D-54-08): pt_sessions, bookings, trainer_availability_slots,
-#   payments, pt_packages, trainers
-# Verified columns:
-#   trainers: id, full_name, deleted_at (apps/.../trainers/models.py:24-43)
-#   pt_sessions: trainer_id, pt_package_id, performed_at, cancelled_at, booking_id
-#     (apps/.../pt_sessions/models.py:52-111)
-#   bookings: id, status, slot_id (apps/.../bookings/models.py)
-#   trainer_availability_slots: id, start_time, end_time
-#     (apps/.../schedule/models.py:52-130)
-#   payments: subject_id, subject_kind, amount_kopecks
-#     (apps/.../payments/models.py:52-64)
-#   pt_packages: id (FK bridge)
-async def fetch_trainer_usage(session, from_date, to_date):
-    rows = (await session.execute(
-        text("""
-            SELECT
-                t.id AS trainer_id,
-                t.full_name AS trainer_name,
-                COUNT(DISTINCT ps.id) FILTER (WHERE ps.cancelled_at IS NULL)
-                    AS sessions_count,
-                COUNT(DISTINCT b.id) FILTER (
-                    WHERE b.status IN ('confirmed','completed')
-                ) AS bookings_count,
-                COALESCE(SUM(
-                    EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 3600.0
-                ) FILTER (WHERE b.status IN ('confirmed','completed')), 0.0)
-                    AS utilization_hours,
-                COALESCE(SUM(p.amount_kopecks) FILTER (
-                    WHERE p.subject_kind = 'pt_package' AND p.amount_kopecks > 0
-                ), 0) AS revenue_kopecks
-            FROM trainers t
-            LEFT JOIN pt_sessions ps
-                ON ps.trainer_id = t.id
-                AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date
-                    BETWEEN :from_date AND :to_date
-            LEFT JOIN bookings b ON b.id = ps.booking_id
-            LEFT JOIN trainer_availability_slots s ON s.id = b.slot_id
-            LEFT JOIN pt_packages pkg ON pkg.id = ps.pt_package_id
-            LEFT JOIN payments p
-                ON p.subject_id = pkg.id AND p.subject_kind = 'pt_package'
-            WHERE t.deleted_at IS NULL
-            GROUP BY t.id, t.full_name
-            ORDER BY sessions_count DESC, t.full_name
-        """),
-        {"from_date": from_date, "to_date": to_date},
-    )).mappings().all()
-    return [dict(r) for r in rows]
+schema["components"]["parameters"]["IdempotencyKey"] = {
+    "name": "Idempotency-Key",
+    "in": "header",
+    "required": True,
+    "schema": {
+        "type": "string",
+        "pattern": r"^[A-Za-z0-9_:-]{1,128}$",
+        "description": "Client-supplied idempotency key for safe retries.",
+    },
+}
 ```
 
-No new `ignore_imports` edges needed. The `reports` module already has the infrastructure: date range validation, csv_export.py, StreamingResponse pattern, RBAC owner-only guard. The new trainer-usage endpoint reuses all of it verbatim.
+Individual endpoints that use `Depends(verify_idempotency)` get a `$ref:
+"#/components/parameters/IdempotencyKey"` added to their `parameters` list. FastAPI does NOT do
+this automatically from `Depends()` — the `custom_openapi()` hook must post-process the generated
+schema to inject the parameter ref on the matching endpoint operation objects.
+
+The post-processing logic in `custom_openapi()`:
+```python
+# Inject IdempotencyKey parameter ref on endpoints that use verify_idempotency.
+# These endpoint paths are identified by scanning operationId values.
+IDEMPOTENCY_OPERATION_IDS = frozenset({
+    "create_membership",
+    "freeze_membership",
+    "unfreeze_membership",
+    "cancel_membership",
+    "renew_membership",
+    "refund_membership",
+    # ... etc (full list from Phase 64 explicit operation_id assignment)
+})
+for path_data in schema.get("paths", {}).values():
+    for op in path_data.values():
+        if isinstance(op, dict) and op.get("operationId") in IDEMPOTENCY_OPERATION_IDS:
+            op.setdefault("parameters", []).append(
+                {"$ref": "#/components/parameters/IdempotencyKey"}
+            )
+```
+
+**Phase 66 vs Phase 64 ordering dependency:**
+
+Phase 66 adds `components/parameters/IdempotencyKey` and backfills idempotency on several
+endpoints. Both changes are reflected in `openapi.json`. Therefore:
+- Phase 64 must happen before Phase 65 (Postman collection sourced from spec)
+- Phase 66 changes the spec shape (adds `components/parameters`) — therefore Phase 66 must
+  happen BEFORE Phase 65 is finalized, OR Phase 65 must be regenerated after Phase 66
+
+**Recommended ordering: 63 → 64 → 66 → 65 → 67**
+
+Phase 66 CAN run in parallel with Phase 64 code changes (adding `Depends(verify_idempotency)` to
+more endpoints does not break Phase 64's `operation_id=` annotations). But Phase 65 artifact
+generation should happen AFTER both 64 and 66 are merged, to ensure the Postman collection and
+auth runbook reflect the final spec including the `IdempotencyKey` parameter.
+
+**Endpoints needing idempotency backfill (Phase 66 audit results):**
+
+High-priority (financial/state-mutating, no natural DB idempotency):
+- `memberships/cancel_membership` — currently missing, has payment/FSM side effects
+- `memberships/freeze_membership` — missing, FSM transition + `membership_freeze_periods` write
+- `memberships/unfreeze_membership` — missing, FSM transition
+- `memberships/renew_membership` — missing, creates new membership row
+- `memberships/refund_membership` — missing, payment ledger write
+- `online_payments/refund_membership_online` — missing, ЮKassa refund call
+- `online_payments/refund_pt_package_online` — missing, ЮKassa refund call
+
+Lower-priority (catalog CRUD — natural idempotency from DB constraints or soft-delete):
+- `clients/create_client`, `update_client`, `delete_client` — UNIQUE phone/email + soft-delete
+  provide natural idempotency; skip in Phase 66
+- `trainers/*`, `users/*`, `payroll/*` — same rationale; skip in Phase 66
+- `visits/create_visit` — `UNIQUE (client_id, gym_date)` is the natural idempotency; skip
+
+**Files modified in Phase 66:**
+
+| File | Change |
+|------|--------|
+| `app/main.py` | Extend `custom_openapi()` with `components/parameters/IdempotencyKey` + inject on matching endpoints |
+| `app/modules/memberships/router.py` | Add `Depends(verify_idempotency)` + begin/load/store pattern to 5 endpoints |
+| `app/modules/online_payments/router.py` | Add `Depends(verify_idempotency)` to 2 refund endpoints |
+| `apps/backend/openapi.json` | Regenerated (new components/parameters, idempotency refs on more endpoints) |
+| `packages/api-client/src/schema.d.ts` | Regenerated |
 
 ---
 
-## Question 4: New LOCKED Audit Events
+## Phase 67: Operator-Pending Runbook Execution
 
-All new events must be pre-registered in `LOCKED_AUDIT_EVENTS` in `app/core/audit.py` BEFORE any callsite is added (INFRA-15 discipline). Pre-register in the Phase 58 foundations phase.
+### Integration Points
 
-**New events (7 total):**
+**Evidence file:** `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md`
 
-| Event | Resource Type | When Emitted |
-|---|---|---|
-| `payroll_accrual_created` | `payroll_accrual` | `run_payroll_period` -- owner triggers payroll run |
-| `payroll_accrual_paid` | `payroll_accrual` | `mark_accrual_paid` -- owner marks paid |
-| `trainer_comp_config_set` | `trainer` | `set_trainer_comp_config` -- owner sets comp config |
-| `recurring_slot_template_created` | `schedule_slot` | template published |
-| `recurring_slot_template_cancelled` | `schedule_slot` | template deactivated |
-| `trainer_time_off_created` | `trainer` | time-off block created |
-| `trainer_time_off_cancelled` | `trainer` | time-off block cancelled |
+Per D-62.1-B2 (frontmatter `convention: append-only`), v1.11 Phase 67 evidence is **appended to
+the existing v1.10 file**, not scattered across per-phase files. The YAML frontmatter documents
+the convention; existing RUN-08 sections are immutable.
 
-`payroll_accrual_created` payload (new `PayrollAccrualCreatedPayload`):
-```python
-class PayrollAccrualCreatedPayload(AuditPayloadBase):
-    accrual_id: UUID
-    trainer_id: UUID
-    period_start: str       # ISO date
-    period_end: str         # ISO date
-    comp_model: str
-    sessions_count: int
-    revenue_kopecks: int
-    accrual_kopecks: int
+**Pending items to execute:**
+
+| Item | Source | What operator does |
+|------|--------|--------------------|
+| v1.7 VER-03 | `v1.7-yookassa-sandbox-evidence/` | Live ЮKassa sandbox payment walkthrough |
+| v1.7 CARRY-01 | `.planning/handoff/v1.7-email-deliverability-evidence/` | Live RU email deliverability probe |
+| v1.7 CARRY-02 | `.planning/handoff/v1.6-template-countersign.md` precedent | Owner countersign 15-template LOCKED_EMAIL_TEMPLATES |
+| v1.8 VER-01 | `.planning/handoff/v1.8-reports-runbook.md` | Live `docker compose up` reports walkthrough |
+| v1.9 D-61-12 | `.planning/handoff/v1.9-trainers-runbook.md` | Live trainers walkthrough |
+| MailHog `--profile dev` | `apps/backend/docker-compose.yml` | Add MailHog service, capture evidence |
+
+**MailHog integration point:**
+
+`apps/backend/docker-compose.yml` currently has 5 services: `backend`, `telegram-bot`, `arq-worker`,
+`migrate`, `postgres`, `redis`. MailHog is added as a **`--profile dev`** optional service:
+
+```yaml
+mailhog:
+  image: mailhog/mailhog:v1.0.1
+  ports:
+    - "8025:8025"    # Web UI
+    - "1025:1025"    # SMTP
+  profiles:
+    - dev
 ```
 
-`payroll_accrual_paid` payload:
-```python
-class PayrollAccrualPaidPayload(AuditPayloadBase):
-    accrual_id: UUID
-    trainer_id: UUID
-    paid_by_user_id: UUID
-    accrual_kopecks: int
-```
+The `.env` (or `.env.example`) gains a `MAILHOG_ENABLED=true` toggle alongside an `EMAIL_SMTP_*`
+override for `localhost:1025` when the `dev` profile is active. This does not affect the production
+path (MailHog is `profiles: dev` gated and never starts in the default `docker compose up`).
+
+**Files modified in Phase 67:**
+
+| File | Change |
+|------|--------|
+| `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` | APPEND sections for RUN-01..06 |
+| `apps/backend/docker-compose.yml` | Add MailHog service under `profiles: dev` |
+| `apps/backend/.env.example` | Add MailHog SMTP override entries |
 
 ---
 
-## Question 5: RBAC Resource / OWNER_ONLY Entries
+## Phase Build Order and Cross-Phase Dependencies
 
-The existing `Resource.PAYROLL` and `Resource.COMPENSATION` are already declared in `app/core/permissions.py` (they appear in the existing `OWNER_ONLY` entries `(VIEW, PAYROLL)` and `(VIEW, COMPENSATION)`). v1.9 adds the write-side pairs.
+```
+Phase 63 (Tech-Debt Sweep)
+    └─► Phase 64 (Contract Freeze — OpenAPI Curation)
+            ├─► Phase 66 (Idempotency Hardening) [can start in parallel with 64,
+            │       must complete before 65 artifact generation]
+            │
+            └─► Phase 65 (Handoff Artifacts)
+                    └─► Phase 67 (Operator-Pending Runbook Execution)
+```
 
-**New `OWNER_ONLY` entries to add:**
+**Why 63 before 64:**
 
-| Action | Resource | Notes |
-|---|---|---|
-| `(CREATE, PAYROLL)` | | run payroll period |
-| `(EDIT, PAYROLL)` | | mark accrual paid |
-| `(LIST, PAYROLL)` | | list accruals (owner-only visibility) |
-| `(CREATE, COMPENSATION)` | | set comp config |
-| `(EDIT, COMPENSATION)` | | update comp config |
+Phase 64 changes `openapi.json`. If ruff/mypy errors exist in the tree, the CI backend gate will
+fail on the Phase 64 PR before the drift check even runs. Phase 63 sweep brings CI green first so
+Phase 64 can land cleanly.
 
-`(VIEW, COMPENSATION)` and `(VIEW, PAYROLL)` are already in OWNER_ONLY (pre-existing frontend entries).
+**Why 64 before 65:**
 
-Recurring slots and time-off use the existing `SCHEDULE_SLOTS` resource. Time-off creation/cancellation maps to `(CREATE, SCHEDULE_SLOTS)` and `(CANCEL, SCHEDULE_SLOTS)` which are already owner-only in the existing OWNER_ONLY set.
+All handoff artifacts (Postman collection, auth runbook, doc-site) are sourced from the curated
+`openapi.json`. Generating Postman before `operation_id=` values are stable means the collection
+will have ugly auto-generated IDs. Phase 64 must be merged before Phase 65 artifact generation.
 
-**Mandatory three-way parity update:** any new `(Action, Resource)` pairs added to backend `OWNER_ONLY` must be mirrored byte-for-byte in `apps/admin-web/src/shared/session/can.ts` (OWNER_ONLY array) and `apps/admin-web/src/shared/session/registry.ts`. The existing parity test (`tests/unit/test_rbac_parity.py`) enforces this at CI. The admin-web files are updated in Phase 58 even though no UI ships in v1.9 (backend-only milestone).
+**Why 66 should complete before 65 is finalized:**
+
+Phase 66 adds `components/parameters/IdempotencyKey` to the spec, which changes the Postman
+collection shape (endpoints that require the key get a `Idempotency-Key` param pre-populated in
+Postman). If Phase 65 generates the collection before Phase 66 merges, the Postman collection is
+incomplete. The auth runbook also documents Idempotency-Key semantics — easier to write after
+the full picture is known.
+
+**Phase 66 parallel window:**
+
+The code changes in Phase 66 (adding `Depends(verify_idempotency)` to memberships/online_payments
+routers) do NOT depend on Phase 64 being complete — you can add `operation_id=` and
+`Depends(verify_idempotency)` in the same PR if preferred. However, the `openapi.json` regen at
+the end of Phase 66 must include BOTH the Phase 64 `operation_id=` changes AND the Phase 66
+`IdempotencyKey` parameter additions to remain byte-stable going forward. Simplest approach:
+merge Phase 64 first, then open Phase 66.
 
 ---
 
 ## Component Boundaries Summary
 
-| Component | Status | Type | Cross-Module Access Mechanism |
-|---|---|---|---|
-| `app/modules/payroll/` | NEW | Write + read | Raw-SQL reads from `pt_sessions`, `payments`, `pt_packages` (D-54-08) |
-| `app/modules/schedule/` | EXTENDED | Write | Adds 2 new tables; new service methods; new ARQ cron |
-| `app/modules/reports/` | EXTENDED | Read-only | Adds `fetch_trainer_usage` raw-SQL reader |
-| `app/core/audit.py` | EXTENDED | Core | 7 new events pre-registered |
-| `app/core/permissions.py` | EXTENDED | Core | ~5 new OWNER_ONLY entries |
-| `app/workers/scheduled/generate_recurring_slots.py` | NEW | ARQ cron | Imports `schedule.service` directly |
-| `app/main.py` | NO CHANGE | Composition root | No new Protocol slots needed |
+| Component | Phase | Status | Change Type |
+|-----------|-------|--------|-------------|
+| `app/main.py` | 63 + 64 + 66 | MODIFIED | `title=`, `version=`, `openapi_tags=`, `servers=`, `custom_openapi()` override with `securitySchemes` + `parameters` |
+| `app/api/v1/router.py` | — | NO CHANGE | Tags already set on all `include_router()` calls |
+| `app/modules/*/router.py` (15 files) | 64 | MODIFIED | Add `operation_id=` to all 103 decorators |
+| `app/modules/memberships/router.py` | 66 | MODIFIED | Add `Depends(verify_idempotency)` to 5 endpoints |
+| `app/modules/online_payments/router.py` | 66 | MODIFIED | Add `Depends(verify_idempotency)` to 2 endpoints |
+| `app/core/idempotency.py` | — | NO CHANGE | Already correct; `idempotent_response` helper is unused but correct |
+| `apps/backend/scripts/export_postman.py` | 65 | MODIFIED | Update TARGET + COLLECTION_NAME |
+| `apps/backend/docker-compose.yml` | 67 | MODIFIED | Add MailHog service under `profiles: dev` |
+| `.planning/handoff/v1.11-clubcore.postman_collection.json` | 65 | NEW (generated) | |
+| `.planning/handoff/clubcore-auth-runbook.md` | 65 | NEW | |
+| `tools/newman/smoke.sh` | 65 | NEW | |
+| `tools/newman/clubcore-dev.postman_environment.json` | 65 | NEW | |
+| `apps/backend/docs-site/` | 65 | NEW (gitignored) | Redocly HTML |
+| `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` | 67 | APPEND-ONLY | RUN-01..06 evidence |
 
-**No new Protocol slots needed for v1.9.** All cross-module access is either raw-SQL text() reads or direct module imports in worker files.
-
----
-
-## Data Flow Diagrams
-
-### Payroll Run Flow
-
-```
-POST /api/v1/payroll/run  (owner only)
-    |
-    v
-payroll.service.run_payroll_period(trainer_id, period_start, period_end)
-    |
-    +-- payroll.repository.fetch_trainer_comp_config(trainer_id)
-    |       SELECT trainer_comp_configs WHERE trainer_id = ...
-    |
-    +-- payroll.repository.fetch_trainer_session_revenue(trainer_id, period)
-    |       Raw SQL text(): JOIN pt_sessions + pt_packages + payments
-    |
-    +-- compute accrual_kopecks (fixed_per_session * count + pct * revenue)
-    |
-    +-- payroll.repository.insert_accrual(...)
-    |
-    +-- audit.emit("payroll_accrual_created", resource_type="payroll_accrual", ...)
-    |
-    +-- session.commit()  -- accrual + audit row atomic
-```
-
-### Recurring Slot Expansion Flow
-
-```
-ARQ cron: generate_recurring_slots (daily 07:00 MSK)
-    |
-    +-- SELECT active recurring_slot_templates
-    |
-    |   FOR EACH template x day in [today+1 .. today+14]:
-    |       |
-    |       +-- Check: any active trainer_time_off overlaps this window?
-    |       |       SELECT WHERE trainer_id=? AND cancelled_at IS NULL
-    |       |       AND tstzrange overlaps computed slot window
-    |       |
-    |       +-- IF overlap: skip (no insert, no audit)
-    |       |
-    |       +-- INSERT trainer_availability_slots ON CONFLICT DO NOTHING
-    |           IF rowcount == 1:
-    |               audit.emit("slot_published", ...)
-    |
-    +-- session.commit()
-```
-
-### Time-Off Creation Flow
-
-```
-POST /api/v1/trainer-time-off  (owner only)
-    |
-    v
-schedule.service.create_time_off(trainer_id, starts_at, ends_at)
-    |
-    +-- schedule.repository.count_booked_slots_in_window(trainer_id, window)
-    |       SELECT COUNT(*) FROM trainer_availability_slots
-    |       WHERE trainer_id=? AND status='booked'
-    |       AND tstzrange(start_time, end_time) && tstzrange(starts_at, ends_at)
-    |
-    +-- IF count > 0: raise TimeOffConflictsWithBookings (409)
-    |
-    +-- schedule.repository.insert_time_off(...)
-    |
-    +-- audit.emit("trainer_time_off_created", resource_type="trainer", ...)
-    |
-    +-- session.commit()
-```
+**No new `app.modules.*` modules. No new Protocol slots. No new ORM models. No Alembic migrations.**
 
 ---
 
-## Alembic Migrations Required
+## Data Flow Changes
 
-| Migration # | Content |
-|---|---|
-| 0041 | CREATE TABLE `trainer_comp_configs` |
-| 0042 | CREATE TABLE `payroll_accruals` |
-| 0043 | CREATE TABLE `recurring_slot_templates` |
-| 0044 | CREATE TABLE `trainer_time_off` |
-| 0045 | ALTER TABLE `trainer_availability_slots` DROP NOT NULL on `created_by_user_id`; ADD UNIQUE (trainer_id, start_time) if not already present |
-| 0046 | Performance indexes: payroll_accruals (status, period_start) + trainer_time_off partial |
+v1.11 adds no new data flows. The only runtime behavior changes are:
 
----
-
-## Suggested Phase Build Order
-
-### Phase 58 -- Foundations: RBAC parity + audit pre-registration + comp-config API
-
-**Why first:** INFRA-15 discipline requires all new LOCKED_AUDIT_EVENTS and OWNER_ONLY entries to exist before any callsite. RBAC parity test must be green before any protected endpoints land. Comp config is a prerequisite for payroll calculation.
-
-Deliverables:
-- 7 new LOCKED_AUDIT_EVENTS pre-registered in `audit.py`
-- New OWNER_ONLY entries in `permissions.py` + admin-web `can.ts`/`registry.ts` parity (3-way parity test green)
-- `app/modules/payroll/` scaffold registered in `.importlinter` modules-independent list
-- `TrainerCompConfig` model + Alembic 0041
-- `GET /payroll/trainer-configs/{trainer_id}` + `PUT /payroll/trainer-configs/{trainer_id}` endpoints
-- `trainer_comp_config_set` audit event wired
-
-### Phase 59 -- Payroll Ledger
-
-**Why second:** depends on comp config from Phase 58.
-
-Deliverables:
-- `payroll_accruals` model + Alembic 0042
-- `payroll/repository.py` cross-module raw-SQL reader (`fetch_trainer_session_revenue`)
-- `payroll.service.run_payroll_period` + `mark_accrual_paid`
-- `POST /api/v1/payroll/run`, `PATCH /api/v1/payroll/accruals/{id}/paid`, `GET /api/v1/payroll/accruals`
-- `payroll_accrual_created` + `payroll_accrual_paid` audit events wired
-
-### Phase 60 -- Recurring Slots + Time-Off
-
-**Why third:** independent of payroll; pure schedule module extension.
-
-Deliverables:
-- `recurring_slot_templates` + `trainer_time_off` models + Alembic 0043/0044
-- Alembic 0045: `created_by_user_id` nullable on `trainer_availability_slots` + UNIQUE (trainer_id, start_time)
-- Template CRUD endpoints (`POST /trainer-slot-templates`, `DELETE /trainer-slot-templates/{id}`, `GET /trainer-slot-templates`)
-- `POST /trainer-time-off`, `DELETE /trainer-time-off/{id}`, `GET /trainer-time-off` endpoints
-- `schedule.service.create_time_off` with conflict check (409 on booked slots overlap)
-- `recurring_slot_template_created/cancelled` + `trainer_time_off_created/cancelled` audit events wired
-
-### Phase 61 -- Recurring Slot ARQ Cron
-
-**Why fourth:** depends on Phase 60 tables and service methods.
-
-Deliverables:
-- `app/workers/scheduled/generate_recurring_slots.py` ARQ cron (07:00 MSK)
-- Alembic 0046 performance indexes
-- `WorkerSettings` cron list extension + structlog summary line convention
-- Integration tests: cron skips time-off windows; idempotent on re-run (ON CONFLICT DO NOTHING); `slot_published` only on actual insert
-
-### Phase 62 -- Trainer-Usage Report
-
-**Why fifth:** depends on pt_sessions/payments data (already exists from v1.4) and schedule data from Phase 60/61. Low risk -- read-only addition to the already-built reports module.
-
-Deliverables:
-- `reports/repository.py`: `fetch_trainer_usage` raw-SQL reader
-- `reports/service.py`: `get_trainer_usage_report` + `trainer_usage_csv_rows`
-- `GET /api/v1/reports/trainers` + `GET /api/v1/reports/trainers.csv`
-- Reuses existing RBAC guard, date range validation, CSV export infrastructure
-
-### Phase 63 -- OpenAPI Handoff + Milestone Verification
-
-**Why last:** all business surfaces must be stable before regenerating the OpenAPI artifact.
-
-Deliverables:
-- `openapi.json` + `schema.d.ts` byte-stable regen with all v1.9 paths
-- `_v19Checks` AssertNonNever guards in `schema.contract.test.ts` (`toHaveLength(N)`)
-- Operator runbook `.planning/handoff/v1.9-trainers-runbook.md`
-- Milestone verification gate
+1. More endpoints enforce idempotency (Phase 66 backfill) — same Redis `cc:idem:*` namespace,
+   same TTL, same envelope shape.
+2. `sportzal_csrf` cookie name is unchanged (locked runtime contract); `X-CSRF-Token` header name
+   is unchanged. OpenAPI spec now documents these in `securitySchemes`.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Payroll ORM Importing pt_sessions or payments ORM
+### Anti-Pattern 1: Centralized generate_unique_id_function for operation_id
 
-**What people do:** `from app.modules.pt_sessions.models import PtSession` in `payroll/service.py`.
+**What people try:** pass `generate_unique_id_function=lambda route: f"{route.tags[0]}_{route.name}"`
+to `include_router()` or `FastAPI()` to avoid per-decorator `operation_id=` annotations.
 
-**Why it's wrong:** violates `modules-independent` import-linter contract. Fails CI immediately.
+**Why it's wrong here:** the function receives a `fastapi.routing.APIRoute` object. Getting the
+module tag from it requires parsing `route.path` (fragile) or assuming `route.tags[0]` is always
+set (not true for routes without explicit tags, or for `_internal` routes). The 15 router files
+already have explicit `tags=[...]` on `include_router()` so the tags ARE available — but the
+function-name segment (which needs deduplication) is still the function name anyway.
 
-**Do this instead:** raw-SQL `text()` read in `payroll/repository.py` (D-54-08 pattern).
+**Do this instead:** explicit `operation_id=` on each decorator. It is mechanical work (103
+endpoints) but produces a stable, searchable, codebase-local identifier.
 
-### Anti-Pattern 2: Protocol Slot for Payroll Revenue Read
+### Anti-Pattern 2: Idempotency middleware instead of Depends()
 
-**What people do:** add a `PayrollRevenueProvider` Protocol slot in `core/dependencies.py` and wire it in `main.py`.
+**What people try:** an ASGI middleware that intercepts POST/PATCH/DELETE requests, checks Redis
+before dispatching, and intercepts the response to store it.
 
-**Why it's wrong:** Protocol slots are for write-callback dependencies. A read-only aggregation does not need the indirection overhead. The v1.8 reports module has proven that raw-SQL reads are the correct pattern for cross-module aggregations.
+**Why it's wrong here:** 16 existing callsites already use `Depends(verify_idempotency)`.
+Switching to middleware would require removing those 16 `Depends()` lines AND implementing
+response buffering in middleware (complex). The `Depends()` pattern is already tested,
+working, and consistent with the project's FastAPI idioms.
 
-**Do this instead:** raw-SQL `text()` read in `payroll/repository.py`.
+**Do this instead:** continue with `Depends(verify_idempotency)` + manual two-phase pattern.
 
-### Anti-Pattern 3: Time-Off Auto-Cancelling Confirmed Bookings
+### Anti-Pattern 3: Unifying webhook Redis dedup with client idempotency
 
-**What people do:** create time-off block and auto-cancel all `status='booked'` slots within the window.
+**What people try:** consolidate `cc:yookassa:webhook:{event}:{id}` (SET NX EX 86400) and
+`cc:idem:{key}` (SET NX EX 3600) into a single idempotency subsystem.
 
-**Why it's wrong:** requires the schedule module to write into the bookings FSM, a cross-module write dependency. The booking FSM is owned by `bookings.service`; calling it from `schedule.service` would require violating import-linter or adding a `BookingCanceller` Protocol slot.
+**Why it's wrong:** the webhook dedup key is constructed from ЮKassa event types and payment IDs
+(opaque to the client). Its TTL is 86400s (matches ЮKassa retry window). The client-facing
+idempotency key is caller-supplied, route-bound, and has a 3600s TTL. Different purposes,
+different key shapes, different TTLs, different error responses (webhook returns 200 always;
+client endpoints return 409). Unifying them would create a confusing abstraction over two
+distinct security/reliability primitives.
 
-**Do this instead:** 409 conflict response listing affected slot IDs. Owner resolves conflicts manually via existing `/bookings/{id}/cancel` endpoint.
+**Do this instead:** leave them as separate subsystems.
 
-### Anti-Pattern 4: Emitting Audit Events for ON CONFLICT Rows in the Cron
+### Anti-Pattern 4: Regenerating handoff artifacts before spec is frozen
 
-**What people do:** emit `slot_published` for every slot in the template expansion loop, including rows that already existed (ON CONFLICT DO NOTHING).
+**What people try:** generate Postman collection after Phase 64 but before Phase 66, then do a
+"quick update" after Phase 66 as a fixup.
 
-**Why it's wrong:** creates spurious audit spam on every daily cron run for slots already generated.
+**Why it's wrong:** the `openapi.json` drift gate will fail if Phase 66 changes the spec but the
+committed collection was generated from the pre-Phase-66 spec. Every handoff artifact is derived
+from `openapi.json`; the collection, runbook, and doc-site must all be generated in one pass from
+the final frozen spec.
 
-**Do this instead:** check `result.rowcount == 1` after each INSERT; only emit audit when a real new insert occurred.
+**Do this instead:** complete Phase 64 + Phase 66, then generate all artifacts in Phase 65 from
+the final `openapi.json`.
 
-### Anti-Pattern 5: Comp Config Columns on the Trainers Table
+### Anti-Pattern 5: MailHog in the default docker-compose profile
 
-**What people do:** add `fixed_per_session_kopecks` and `pct_of_revenue_bps` columns directly onto the `trainers` table.
+**What people try:** add MailHog as a regular service (no `profiles: dev` tag) so it always
+starts.
 
-**Why it's wrong:** mixes financial configuration into a catalog module. Harder to version comp config history. Creates financial coupling in a non-financial module.
+**Why it's wrong:** MailHog is a dev-only email catch-all. Production deployments (and CI) should
+never start a MailHog container by default. Starting it without the `--profile dev` flag gives
+operators a silent mail sink in production.
 
-**Do this instead:** separate `trainer_comp_configs` table in the `payroll` module, FK'd to `trainers.id`.
-
-### Anti-Pattern 6: Expand-on-Read for Recurring Slots
-
-**What people do:** don't generate real `trainer_availability_slots` rows; instead, compute virtual slots dynamically in the slot-listing endpoint from `recurring_slot_templates`.
-
-**Why it's wrong:** bookings require a real `trainer_availability_slots` row (the booking FSM transitions `status='active' -> 'booked'`). Virtual slots can't be booked. The `resolve_slot_by_id` Protocol slot in `bookings.service` looks up the real table. This would require a parallel virtual-slot system alongside the real one.
-
-**Do this instead:** ARQ cron generate-ahead writes real rows with ON CONFLICT idempotency.
-
----
-
-## Integration Points Summary
-
-| Cross-Module Boundary | Mechanism | Notes |
-|---|---|---|
-| `payroll` reads `pt_sessions` | Raw-SQL `text()` in `payroll/repository.py` | Zero new linter ignores |
-| `payroll` reads `payments` | Raw-SQL `text()` in `payroll/repository.py` (same query) | Zero new linter ignores |
-| `payroll` reads `pt_packages` | Raw-SQL `text()` in `payroll/repository.py` (JOIN bridge) | Zero new linter ignores |
-| `reports` reads `pt_sessions`, `bookings`, `trainer_availability_slots`, `payments`, `trainers` | Raw-SQL `text()` in `reports/repository.py` | Extends v1.8 repository |
-| `schedule` cron checks `trainer_time_off` | Direct import within schedule module (same module) | No cross-module boundary |
-| `schedule.service` resolves trainer | Existing `resolve_trainer_by_id` Protocol slot | No change needed |
-| Worker cron -> `schedule.service` | Direct import in `generate_recurring_slots.py` | Same pattern as `expire_memberships.py` |
+**Do this instead:** `profiles: [dev]` on the MailHog service definition. Operator evidence
+captured with `docker compose --profile dev up`.
 
 ---
 
 ## Sources
 
-- Direct codebase: `apps/backend/app/core/dependencies.py` (all 16 Protocol slots, lines 1-1223)
-- Direct codebase: `apps/backend/app/core/permissions.py` (RBAC, OWNER_ONLY, Resource enum)
-- Direct codebase: `apps/backend/app/modules/payments/models.py` (Payment ledger schema)
-- Direct codebase: `apps/backend/app/modules/reports/repository.py` (D-54-08 raw-SQL pattern)
-- Direct codebase: `apps/backend/app/modules/reports/service.py` (D-54-07 read-only discipline)
-- Direct codebase: `apps/backend/app/modules/schedule/models.py` (TrainerAvailabilitySlot)
-- Direct codebase: `apps/backend/app/modules/pt_sessions/models.py` (PtSession, existing indexes)
-- Direct codebase: `apps/backend/app/modules/trainers/models.py` (Trainer catalog model)
-- Direct codebase: `apps/backend/app/workers/scheduled/expire_memberships.py` (ARQ cron pattern)
-- Direct codebase: `apps/backend/app/main.py` (composition root, Protocol slot registrations)
-- Direct codebase: `apps/backend/.importlinter` (all contracts + ignore_imports edges)
-- `.planning/PROJECT.md` (v1.9 scope, architectural decisions log, LOCKED_AUDIT_EVENTS history)
+- Direct codebase: `apps/backend/app/main.py` (FastAPI constructor, lifespan, composition root)
+- Direct codebase: `apps/backend/app/api/v1/router.py` (all 103 endpoint mounts with tags)
+- Direct codebase: `apps/backend/app/core/idempotency.py` (full idempotency subsystem)
+- Direct codebase: `apps/backend/app/modules/*/router.py` (AST scan of all 15 module routers)
+- Direct codebase: `apps/backend/app/api/v1/_internal/yookassa/router.py` (webhook dedup pattern)
+- Direct codebase: `apps/backend/app/integrations/yookassa/client.py` (IDEMPOTENCE_KEY_HEADER)
+- Direct codebase: `apps/backend/scripts/export_postman.py` (existing Postman generator)
+- Direct codebase: `apps/backend/scripts/export_openapi.py` (byte-stable export)
+- Direct codebase: `apps/backend/openapi.json` (103 endpoints, 0 securitySchemes, 0 parameters)
+- Direct codebase: `apps/backend/.importlinter` (architectural contracts)
+- Direct codebase: `apps/backend/pyproject.toml` + `ruff.toml` (tooling config)
+- Direct codebase: `.github/workflows/ci.yml` (2-job CI: backend static gates + frontend drift)
+- Direct codebase: `apps/backend/docker-compose.yml` (5-service stack, no MailHog)
+- Direct codebase: `.planning/handoff/` (precedent for artifact placement and naming)
+- Direct codebase: `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` (append-only convention)
+- Direct codebase: `apps/backend/app/modules/auth/router.py` (CSRF dependency pattern)
+- Ruff live run: 158 errors categorized (RUF100 × 42, F401 × 21, E501 × 14, ...)
+- Mypy live run: 394 errors across 117 files
 
 ---
-*Architecture research for: v1.9 Trainers Complete (Sportzal FastAPI modular monolith)*
-*Researched: 2026-05-24*
+
+*Architecture research for: v1.11 API Handoff + Production Hardening (clubcore FastAPI modular monolith)*
+*Researched: 2026-05-26*
