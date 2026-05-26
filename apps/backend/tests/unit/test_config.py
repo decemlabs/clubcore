@@ -76,9 +76,9 @@ class TestGymHoursValidator:
 class TestEmailFromResolution:
     """Phase 62 D-62-03 — env-driven email FROM resolver.
 
-    Precedence: CLUBCORE_EMAIL_FROM → hardcoded default (D-62-02 invariant).
-    The hardcoded literal ``"noreply@mail.sportzal.ru"`` is preserved per
-    CONTEXT line 172 — operator DNS work, not a code rename.
+    Resolution: CLUBCORE_EMAIL_FROM env override, else hardcoded brand default
+    ``"noreply@mail.sportzal.ru"`` (preserved per D-62-02 / D-10-BRAND-DISTINCTION:
+    brand-mail literal is operator DNS work, NOT part of the source rename).
     """
 
     def test_neither_env_set_preserves_hardcoded_default(self) -> None:
