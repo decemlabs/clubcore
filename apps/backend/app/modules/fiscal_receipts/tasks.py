@@ -33,6 +33,7 @@ from uuid import UUID
 import structlog
 from arq import Retry
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.audit_models import AuditLog
@@ -78,7 +79,7 @@ def _backoff_with_jitter(job_try: int) -> int:
 
 
 async def _resolve_yookassa_object_id(
-    session: Any,
+    session: AsyncSession,
     fr_row: FiscalReceipt,
 ) -> str | None:
     """Resolve the ЮKassa-side object_id (payment_id or refund_id) for a fiscal_receipt.
@@ -150,7 +151,7 @@ async def _resolve_yookassa_object_id(
 
 
 async def _resolve_refund_id_via_db_join(
-    session: Any,
+    session: AsyncSession,
     fr_row: FiscalReceipt,
 ) -> str | None:
     """Resolve yookassa_refund_id for kind='refund' fiscal receipts via DB join.
@@ -181,7 +182,7 @@ async def _resolve_refund_id_via_db_join(
 
 
 async def _resolve_amount_kopecks(
-    session: Any,
+    session: AsyncSession,
     fr_row: FiscalReceipt,
 ) -> int | None:
     """Resolve the amount (kopecks) for the fiscal_receipt via the parent Payment row.

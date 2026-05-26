@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
+from typing import Final, Literal
 
 
 class ErrorCode(StrEnum):
@@ -27,15 +28,18 @@ STATUS_SUCCEEDED = "succeeded"
 STATUS_CANCELED = "canceled"
 STATUS_VALUES: tuple[str, ...] = (STATUS_PENDING, STATUS_SUCCEEDED, STATUS_CANCELED)
 
-CONFIRMATION_TYPE_REDIRECT = "redirect"
-CONFIRMATION_TYPE_QR = "qr"
+# Phase 63 DEBT-03: ``Literal[...]`` so router callsites passing these constants
+# into ``confirmation_type: Literal["redirect", "qr"]`` service args type-check
+# under mypy --strict without ``# type: ignore`` (D-63-06).
+CONFIRMATION_TYPE_REDIRECT: Final[Literal["redirect"]] = "redirect"
+CONFIRMATION_TYPE_QR: Final[Literal["qr"]] = "qr"
 CONFIRMATION_TYPE_VALUES: tuple[str, ...] = (
     CONFIRMATION_TYPE_REDIRECT,
     CONFIRMATION_TYPE_QR,
 )
 
-SUBJECT_KIND_MEMBERSHIP = "membership"
-SUBJECT_KIND_PT_PACKAGE = "pt_package"
+SUBJECT_KIND_MEMBERSHIP: Final[Literal["membership"]] = "membership"
+SUBJECT_KIND_PT_PACKAGE: Final[Literal["pt_package"]] = "pt_package"
 SUBJECT_KIND_VALUES: tuple[str, ...] = (
     SUBJECT_KIND_MEMBERSHIP,
     SUBJECT_KIND_PT_PACKAGE,

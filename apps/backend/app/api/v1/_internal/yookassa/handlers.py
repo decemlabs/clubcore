@@ -414,6 +414,9 @@ async def handle_payment_succeeded(
         # `(membership_plan_id IS NOT NULL) <> (pt_package_plan_id IS NOT NULL)`
         # guarantees exactly one is non-None — the assert below is defense in
         # depth and would only fail on a DB-level constraint violation.
+        # Explicit union annotation (Phase 63 DEBT-03) so mypy --strict accepts
+        # both branch assignments without narrowing the first to a single Literal.
+        subject_kind: Literal["membership", "pt_package"]
         if row.membership_plan_id is not None:
             subject_kind = SUBJECT_KIND_MEMBERSHIP
             subject_id: UUID = row.membership_plan_id
@@ -503,7 +506,7 @@ async def handle_payment_succeeded(
 
         # Capture locals for the post-commit hook — row is detached after commit.
         op_row_id: UUID = row.id
-        subject_kind_local: Literal["membership", "pt_package"] = subject_kind  # type: ignore[assignment]
+        subject_kind_local: Literal["membership", "pt_package"] = subject_kind
         subject_id_local: UUID = subject_id
         fiscal_receipt_row_id_local: UUID = fiscal_receipt_row_id
 

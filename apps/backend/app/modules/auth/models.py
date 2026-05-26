@@ -27,12 +27,30 @@ from app.core.database import Base, TimestampMixin, UUIDPkMixin
 # Phase 41 INFRA-40 / D-41-01 — one-milestone shim. v1.7 DEFER-41-shim
 # removes this re-export; downstream callers should migrate to
 # `from app.core.models import User` at their convenience.
-from app.core.models import User  # noqa: F401 — public re-export
+# Phase 63 DEBT-03: the pyflakes F401 suppression that previously sat on
+# this line was REMOVED — the explicit ``__all__`` below (added per
+# PITFALLS Pitfall #6) declares ``User`` as part of the module's public
+# surface, which satisfies ruff/pyflakes' "imported but unused" check
+# without needing a suppression directive.
+from app.core.models import User
 
 # Phase 42 AUTH-EM-01 / D-42-20 — OTP channel discriminator. Mirrors
 # password_reset_token_model.py:38 PasswordResetTokenPurpose shape
 # (Literal-as-TypeAlias). CHECK enforced at the DB layer via Alembic 0027.
 OtpChannel = Literal["telegram", "email"]
+
+# Phase 63 DEBT-03 / PITFALLS Pitfall #6 — explicit public surface so mypy
+# --strict accepts the ``User`` re-export from ``app.core.models`` (line 34
+# above). Without this, downstream ``from app.modules.auth.models import User``
+# fires ``[attr-defined]``. Declaring ``User`` here in ``__all__`` also
+# satisfies ruff's F401 (imported-but-unused) check, so the prior pyflakes
+# suppression on the re-export line is no longer required.
+__all__ = [
+    "OtpChannel",  # Phase 42 AUTH-EM-01 / D-42-20 (line 35 above)
+    "OtpCode",  # this module
+    "RefreshToken",  # this module
+    "User",  # Phase 41 INFRA-40 / D-41-01 re-export shim (line 30 above)
+]
 
 
 class RefreshToken(Base, UUIDPkMixin, TimestampMixin):

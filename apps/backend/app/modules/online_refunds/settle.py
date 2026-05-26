@@ -142,6 +142,11 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
     op = await session.get(OnlinePayment, row.online_payment_id)
     if op is None:
         raise RuntimeError(f"OnlinePayment {row.online_payment_id} missing — FK RESTRICT violated")
+    # Explicit union annotation so mypy --strict accepts both branch assignments
+    # (Phase 63 DEBT-03 — without this, the first branch narrows ``subject_kind``
+    # to ``Literal["membership"]`` and the elif branch's ``Literal["pt_package"]``
+    # is rejected as ``[assignment]``).
+    subject_kind: Literal["membership", "pt_package"]
     if op.membership_plan_id is not None:
         subject_kind = SUBJECT_KIND_MEMBERSHIP
     elif op.pt_package_plan_id is not None:
@@ -171,7 +176,7 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
         subject_id=subject_id,
         refund_user_id=row.requested_by_user_id,
         reason=row.reason or "online_refund",
-        audit_actor=None,  # type: ignore[arg-type]
+        audit_actor=None,
     )
 
     # Step 6: direct subject transition (Errata #4 — NOT activator). The
