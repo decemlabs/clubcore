@@ -85,21 +85,25 @@ Per D-62-11 ATOMIC-PACKAGE-RENAME, Task 1 (file edits) and Task 2 (lockfile rege
 | `jq '.name'` on three package.json files | PASS (`@clubcore/api-client`, `@clubcore/ui`, `clubcore-adminka`) |
 | `grep -c '@clubcore/api-client' pnpm-lock.yaml` >= 1 | PASS (1 workspace dep entry) |
 | Second `pnpm install --frozen-lockfile` is diff-clean (md5 stable) | PASS |
-| `pnpm -r typecheck` exits 0 | **FAIL** (see "Deviations" — explicitly deferred to G-2 per plan Task 2 STOP directive) |
+| `pnpm -r typecheck` exits 0 | PASS (after orchestrator-added Task 3 closing the residual-import gap — see "Deviations") |
 
 ## Deviations from Plan
 
-### Plan-directed deferral (not a deviation in the usual sense)
+### Orchestrator-added Task 3: close residual-import gap
 
-**Residual `@sportzal/api-client` imports in `apps/admin-web/src/*` source files cause `pnpm -r typecheck` to fail at this commit tip.**
+**Initial executor run (commit `a937090b`) followed Task 2's STOP directive and left 12 `apps/admin-web/src/*` files importing `@sportzal/api-client`.** The orchestrator subsequently confirmed those 12 sites were not owned by any downstream plan (62-PATTERNS.md G-1..G-6 surface tables do not enumerate them, and `files_modified` of plans 62-02..62-07 do not include them either), making the deferral an orphan-set rather than a legitimate hand-off.
 
-- **Plan instruction (Task 2, verbatim):** "If typecheck surfaces residual @sportzal import references in source files, STOP — those belong to G-2..G-6 plans and must not be fixed here; report them in the SUMMARY for downstream awareness."
-- **Tension with success criterion:** The plan's `must_haves.truths` list includes `"pnpm -r typecheck exits 0"`, which directly contradicts the Task 2 STOP directive. The Task 2 directive is more specific and tied to the atomic-commit-group decomposition (D-62-11) — it takes precedence. The success-criterion line appears to be an oversight in the plan; the planner explicitly anticipated this residual via the STOP language.
-- **Action taken:** STOPPED at Task 2 verification per plan instruction. Reporting downstream in this SUMMARY.
+To honor D-62-11 ATOMIC-PACKAGE-RENAME and the `must_haves.truths` requirement for green typecheck at tip, the orchestrator added a third commit (`2cc1d690`) doing a mechanical `@sportzal/api-client → @clubcore/api-client` rename across the 12 source files. Verification ran cleanly afterwards:
 
-### Pre-existing baseline noise (not introduced by this plan)
+- `pnpm install --frozen-lockfile` — PASS
+- `pnpm -r typecheck` — PASS (exit 0, both workspace projects clean)
+- `grep -rln '@sportzal/api-client' apps/admin-web/src` — 0 matches
 
-Backend route-tree typecheck errors of the form `Property 'queryClient' does not exist on type 'never'` / `Argument of type '"/_protected/…"' is not assignable to parameter of type 'undefined'` in `apps/admin-web/src/routes/**` were observed at the base commit (`9034b951`) **before any rename**, verified by stashing this plan's changes and re-running `pnpm -r typecheck`. They reflect a stale/missing `routeTree.gen.ts` regen that this plan does not touch and is out of scope per `<scope_boundary>` (only fix issues DIRECTLY caused by current task's changes).
+The original Task 2 STOP directive was a planning defect (referenced "G-2..G-6 plans" that did not in fact own the work). The plan's `must_haves.truths` line was correct; the in-task STOP was wrong. Logged as a planning-quality issue for retrospective.
+
+### Worktree-isolation artifact, not pre-existing baseline noise
+
+The earlier executor report flagged routes/* TS2339/TS2345 errors as "pre-existing baseline noise". On follow-up the orchestrator established these were a worktree-isolation artifact, not a real codebase problem: `apps/admin-web/src/routeTree.gen.ts` is gitignored and produced by the `@tanstack/router-plugin` Vite plugin on dev/build startup. The main checkout has the file present; fresh worktrees do not, which makes `tsc -b --noEmit` fail with cascading `getSession` / `queryClient` "does not exist on type 'never'" errors against `RouterContext`. Running `pnpm exec vite build` once in the worktree regenerates `routeTree.gen.ts`; subsequent typecheck passes cleanly. No real code defect.
 
 ## Known Stubs
 
@@ -107,24 +111,10 @@ None.
 
 ## Deferred Issues / Residual @sportzal in Source Code
 
-The following 12 source files in `apps/admin-web/src/` still import `@sportzal/api-client` (or reference the old scope in test/auth flows) and are scheduled for fix-up by the parallel G-2..G-6 plans. These are **deliberate residuals**, not bugs:
+None remaining. The 12 source-import sites listed in the initial executor pass were closed by orchestrator-added commit `2cc1d690` (see "Deviations from Plan" above). At tip:
 
-| File | Type | Target plan |
-| ---- | ---- | ----------- |
-| `apps/admin-web/src/shared/api/errors.ts` | `import type { … } from '@sportzal/api-client'` | G-2 (frontend rename pass) |
-| `apps/admin-web/src/shared/api/services/http/_clientsAdapter.test.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/_clientsAdapter.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/_membershipsAdapter.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/_visitsAdapter.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/auth.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/clients.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/memberships.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/visits.ts` | import | G-2 |
-| `apps/admin-web/src/shared/api/services/http/index.ts` | barrel re-export | G-2 |
-| `apps/admin-web/src/features/auth/api/redirect-on-session-expired.ts` | import | G-2 |
-| `apps/admin-web/src/features/auth/api/redirect-on-session-expired.test.ts` | import | G-2 |
-
-Until G-2 rewrites these import sites to `@clubcore/api-client`, the admin-web TypeScript build is broken at runtime — which is exactly the predicted blast radius of "atomic at workspace-graph layer, parallel sweep at source-import layer".
+- `grep -rln '@sportzal/api-client' apps/admin-web/src` → 0 matches
+- `grep -rn '@sportzal' apps/admin-web/src` → 0 matches outside of intentional v1.10 shim sites (which belong to G-2/G-4, not G-1)
 
 ## Threat Flags
 
@@ -149,6 +139,8 @@ Not applicable. Plan type is `execute`, not `tdd`. No `<behavior>` blocks. Tasks
   - FOUND: `.github/workflows/ci.yml`
   - FOUND: `pnpm-lock.yaml`
 - Commits exist:
-  - FOUND: `a937090b` (G-1 atomic rename)
+  - FOUND: `a937090b` (G-1 atomic rename — workspace config)
+  - FOUND: `2482f186` (G-1 SUMMARY scaffold)
+  - FOUND: `2cc1d690` (G-1 orchestrator-added closure — 12 admin-web src/* import fixups)
 - Plan-touched files contain expected literals: confirmed via `jq` + `grep` (see Verification Results).
 - Zero `@sportzal` residue across the six plan-touched files: confirmed.
