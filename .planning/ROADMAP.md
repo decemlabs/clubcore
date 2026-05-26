@@ -77,7 +77,7 @@ Plans:
 **Goal:** Close v1.10 by removing the 4 sportzal-era back-compat shims (A — main.tsx + index.html + config.py + runbook), capturing local operator-pending evidence with explicit production-deferral for DNS/DKIM (B), and recording the 5/6 email_templates count corrigendum (C) — all pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-SCOPE so v1.11 opens against a fully-clean clubcore tree
 **Requirements**: REB-09, REB-10
 **Depends on:** Phase 62 (REB-01..08 satisfied 2026-05-26)
-**Plans:** 3/9 plans executed
+**Plans:** 7/9 plans executed
 
 Plans:
 **Wave 1**
@@ -88,10 +88,10 @@ Plans:
 
 **Wave 2** *(4 atomic commits per D-62.1-A2, blocked on Wave 1 plan 01)*
 
-- [ ] 62.1-04-PLAN.md — A1 main.tsx STORE_MIGRATIONS shim removal + companion test delete
-- [ ] 62.1-05-PLAN.md — A2 index.html theme-bootstrap sportzal:ui:v1 fallback removal + companion test delete
-- [ ] 62.1-06-PLAN.md — A3 config.py SPORTZAL_EMAIL_FROM legacy env removal + legacy-path test cleanup
-- [ ] 62.1-07-PLAN.md — A4 clubcore-db-rename-runbook.md §3 cc:* cutover note retirement
+- [x] 62.1-04-PLAN.md — A1 main.tsx STORE_MIGRATIONS shim removal + companion test delete
+- [x] 62.1-05-PLAN.md — A2 index.html theme-bootstrap sportzal:ui:v1 fallback removal + companion test delete
+- [x] 62.1-06-PLAN.md — A3 config.py SPORTZAL_EMAIL_FROM legacy env removal + legacy-path test cleanup
+- [x] 62.1-07-PLAN.md — A4 clubcore-db-rename-runbook.md §3 cc:* cutover note retirement
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
