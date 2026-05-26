@@ -14,7 +14,7 @@ updated: 2026-05-25
 
 ### 1. Rounding algorithm reconciliation (financial-correctness decision)
 expected: A single, intentional rounding policy for commission_kopecks, consistent between the milestone-level locked decision and the shipped code.
-result: [pending]
+result: pass
 
 REQUIREMENTS.md "Locked Decisions" **D-PAYROLL-ROUNDING** specifies
 `decimal.Decimal` + `ROUND_HALF_EVEN` (banker's rounding). The shipped
@@ -33,7 +33,7 @@ D-PAYROLL-ROUNDING corrected to integer ceil-in-trainer's-favor. No code change.
 
 ### 2. ROADMAP SC#5 audit-event count wording
 expected: ROADMAP Phase 58 SC#5 count matches the registered LOCKED_AUDIT_EVENTS so Phase 61 milestone verification does not re-raise it as a gap.
-result: [pending]
+result: pass
 
 ROADMAP SC#5 says "all **6** new LOCKED_AUDIT_EVENTS." Only **4** were registered
 (trainer_comp_config_set, payroll_accrual_created, payroll_accrual_paid,
