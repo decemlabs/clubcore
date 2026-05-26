@@ -13,13 +13,7 @@
     <script>
       (function () {
         try {
-          // TODO Phase 67 / RUN-07: drop sportzal:ui:v1 fallback (v1.10 shim).
-          // Bootstrap runs before main.tsx migrator; the fallback prevents a
-          // one-boot FOUC for returning users whose theme still lives under
-          // the legacy key. New users only ever touch clubcore:ui:v2.
-          var raw =
-            localStorage.getItem('clubcore:ui:v2') ||
-            localStorage.getItem('sportzal:ui:v1');
+          var raw = localStorage.getItem('clubcore:ui:v2');
           var theme = 'system';
           if (raw) {
             var parsed = JSON.parse(raw);
