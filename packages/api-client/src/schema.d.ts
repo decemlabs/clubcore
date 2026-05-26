@@ -27,7 +27,7 @@ export interface paths {
          *       6. On hard-bounce/complaint: audit.emit('email_send_failed', ...) with
          *          LOCKED reason value ('bounce' or 'complaint').
          */
-        post: operations["email_webhook_api_v1__internal_email_webhook_post"];
+        post: operations["email_webhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -59,7 +59,7 @@ export interface paths {
          *     to < from -> 422 (D-06).
          *     No try/except -- AppError bubbles to _app_error_handler.
          */
-        get: operations["list_audit_log_api_v1_audit_log_get"];
+        get: operations["list_audit_log"];
         put?: never;
         post?: never;
         delete?: never;
@@ -103,7 +103,7 @@ export interface paths {
          *     can intercept them. If validation lived inside the async generator body it would fire
          *     after headers are sent (inside StreamingResponse) and could not be intercepted.
          */
-        get: operations["get_audit_log_csv_api_v1_audit_log_csv_get"];
+        get: operations["get_audit_log_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -125,7 +125,7 @@ export interface paths {
          * Login
          * @description Authenticate email+password; issue cookies + envelope (AUTH-EP-01..02, AUTH-EP-05).
          */
-        post: operations["login_api_v1_auth_login_post"];
+        post: operations["login"];
         delete?: never;
         options?: never;
         head?: never;
@@ -148,7 +148,7 @@ export interface paths {
          *     Idempotent: if the refresh cookie is absent or already revoked, the cookie
          *     clear still runs so the browser ends in a clean state.
          */
-        post: operations["logout_api_v1_auth_logout_post"];
+        post: operations["logout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -168,7 +168,7 @@ export interface paths {
          * Logout All
          * @description Revoke ALL alive families for the user + clear caller's cookies (AUTH-LO-02).
          */
-        post: operations["logout_all_api_v1_auth_logout_all_post"];
+        post: operations["logout_all"];
         delete?: never;
         options?: never;
         head?: never;
@@ -191,7 +191,7 @@ export interface paths {
          *     in app.main.create_app), so we cast for access to email / full_name /
          *     telegram_chat_id. The cast is safe because the loader is fixed at composition.
          */
-        get: operations["me_api_v1_auth_me_get"];
+        get: operations["me"];
         put?: never;
         post?: never;
         delete?: never;
@@ -219,7 +219,7 @@ export interface paths {
          *     422 BEFORE the route fires — not an anti-oracle leak because invalid
          *     body SHAPE is not a success-vs-unknown discriminator).
          */
-        post: operations["otp_request_api_v1_auth_otp_request_post"];
+        post: operations["otp_request"];
         delete?: never;
         options?: never;
         head?: never;
@@ -244,7 +244,7 @@ export interface paths {
          *     Returns 200 envelope(None) on success; 410 invalid_or_expired_token /
          *     422 weak_password on failure (translated by the global AppError handler).
          */
-        post: operations["password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post"];
+        post: operations["password_reset_confirm_endpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -269,7 +269,7 @@ export interface paths {
          *     across the rate-limit-hit branch. 500ms wall-clock floor + audit emit
          *     in BOTH known/unknown branches live entirely inside the service layer.
          */
-        post: operations["password_reset_request_endpoint_api_v1_auth_password_reset_request_post"];
+        post: operations["password_reset_request_endpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -294,7 +294,7 @@ export interface paths {
          *     success: the new tokens travel in cookies. CSRF dep is exempt (Phase 6
          *     CSRF-02 / D-09 list).
          */
-        post: operations["refresh_api_v1_auth_refresh_post"];
+        post: operations["refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -316,7 +316,7 @@ export interface paths {
          *     manages their own sessions. is_current resolved server-side via sha256(sz_refresh)
          *     token_hash lookup (D-23-3).
          */
-        get: operations["list_sessions_api_v1_auth_sessions_get"];
+        get: operations["list_sessions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -344,7 +344,7 @@ export interface paths {
          *       clear the cookie matrix identical to /logout (D-23-8).
          *     - Audit: session_revoked with resource_type='auth_session' (D-23-10).
          */
-        post: operations["revoke_session_family_api_v1_auth_sessions__family_id__revoke_post"];
+        post: operations["revoke_session_family"];
         delete?: never;
         options?: never;
         head?: never;
@@ -367,7 +367,7 @@ export interface paths {
          *     Returns the deep-link URL the FE shows to the operator. The OtpCode row
          *     is created with code_hash=NULL — the bot will fill it after /start <token>.
          */
-        post: operations["telegram_start_api_v1_auth_telegram_start_post"];
+        post: operations["telegram_start"];
         delete?: never;
         options?: never;
         head?: never;
@@ -388,7 +388,7 @@ export interface paths {
          *     Per D-19: never raises; unknown / expired / consumed all return bound=False
          *     (do NOT leak token validity).
          */
-        get: operations["telegram_status_api_v1_auth_telegram_status_get"];
+        get: operations["telegram_status"];
         put?: never;
         post?: never;
         delete?: never;
@@ -416,7 +416,7 @@ export interface paths {
          *     with `fields={'deepLinkUrl': ...}` so the FE can re-display the deep-link
          *     button (D-13 row 1).
          */
-        post: operations["telegram_verify_api_v1_auth_telegram_verify_post"];
+        post: operations["telegram_verify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -438,7 +438,7 @@ export interface paths {
          *     reception sees the same list as owner (gym-staff trust model).
          *     Default ±30d Moscow window bounds enumeration (T-38-03-05 mitigation).
          */
-        get: operations["list_bookings_api_v1_bookings_get"];
+        get: operations["list_bookings"];
         put?: never;
         /**
          * Create a confirmed booking (reception+owner; 404 slot_not_found; 409 slot_not_available / slot_already_booked / trainer_mismatch / pt_package_not_active / pt_package_exhausted / pt_package_expired_before_slot; requires Idempotency-Key — D-38-14)
@@ -468,7 +468,7 @@ export interface paths {
          *       - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).
          *       - 422 idempotency_key_reuse (same key, different body).
          */
-        post: operations["create_booking_api_v1_bookings_post"];
+        post: operations["create_booking"];
         delete?: never;
         options?: never;
         head?: never;
@@ -490,7 +490,7 @@ export interface paths {
          *     N+1 prevention). Returns BookingDetailResponse with inline
          *     SlotSnapshot (no cross-module schema import per D-38-08).
          */
-        get: operations["get_booking_api_v1_bookings__booking_id__get"];
+        get: operations["get_booking"];
         put?: never;
         post?: never;
         delete?: never;
@@ -533,7 +533,7 @@ export interface paths {
          *       - 409 cancel_window_expired (reception <24h before slot.start_time).
          *       - 422 idempotency_key_reuse (same key, different body).
          */
-        post: operations["cancel_booking_api_v1_bookings__booking_id__cancel_post"];
+        post: operations["cancel_booking"];
         delete?: never;
         options?: never;
         head?: never;
@@ -551,13 +551,13 @@ export interface paths {
          * List alive clients with filters and pagination
          * @description List alive clients (CLIENTS-03/04). VIEW permission required (D-21).
          */
-        get: operations["list_clients_api_v1_clients_get"];
+        get: operations["list_clients"];
         put?: never;
         /**
          * Create a new client (E.164 phone; 409 phone_exists on partial-unique conflict)
          * @description Create a client (CLIENTS-06). EDIT permission + CSRF required (D-21).
          */
-        post: operations["create_client_api_v1_clients_post"];
+        post: operations["create_client"];
         delete?: never;
         options?: never;
         head?: never;
@@ -575,7 +575,7 @@ export interface paths {
          * Get a single alive client by id (404 if soft-deleted or missing)
          * @description Read one alive client (CLIENTS-05). 404 for missing or soft-deleted ids.
          */
-        get: operations["get_client_api_v1_clients__client_id__get"];
+        get: operations["get_client"];
         put?: never;
         post?: never;
         /**
@@ -586,14 +586,14 @@ export interface paths {
          *     require_permission. CSRF required on the mutation. Returns 204 No Content;
          *     FastAPI emits an empty body for 204 status_code.
          */
-        delete: operations["soft_delete_client_api_v1_clients__client_id__delete"];
+        delete: operations["soft_delete_client"];
         options?: never;
         head?: never;
         /**
          * Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)
          * @description Partial update of an alive client (CLIENTS-07). EDIT + CSRF (D-21).
          */
-        patch: operations["update_client_api_v1_clients__client_id__patch"];
+        patch: operations["update_client"];
         trace?: never;
     };
     "/api/v1/clients/{client_id}/bookings": {
@@ -619,7 +619,7 @@ export interface paths {
          *     the REQUIREMENTS BOOK-08 URL contract. lint-imports stays green; the
          *     bookings → clients edge lives only in the v1 composition root.
          */
-        get: operations["list_bookings_for_client_api_v1_clients__client_id__bookings_get"];
+        get: operations["list_bookings_for_client"];
         put?: never;
         post?: never;
         delete?: never;
@@ -639,13 +639,13 @@ export interface paths {
          * List alive membership plans (owner-only); paginated; ?active filter
          * @description List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.
          */
-        get: operations["list_plans_api_v1_membership_plans_get"];
+        get: operations["membership_plans_list_plans"];
         put?: never;
         /**
          * Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)
          * @description Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.
          */
-        post: operations["create_plan_api_v1_membership_plans_post"];
+        post: operations["membership_plans_create_plan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -663,7 +663,7 @@ export interface paths {
          * Fetch a single alive membership plan (owner-only)
          * @description Read one alive membership plan. 404 for missing or soft-deleted ids.
          */
-        get: operations["get_plan_api_v1_membership_plans__plan_id__get"];
+        get: operations["membership_plans_get_plan"];
         put?: never;
         post?: never;
         /**
@@ -676,14 +676,14 @@ export interface paths {
          *     D-15: Phase 16 ships soft-delete only — no 409 plan_in_use. The memberships table
          *     FK plan_id ON DELETE RESTRICT and _is_plan_in_use_conflict helper arrive in Phase 17.
          */
-        delete: operations["soft_delete_plan_api_v1_membership_plans__plan_id__delete"];
+        delete: operations["soft_delete_plan"];
         options?: never;
         head?: never;
         /**
          * Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)
          * @description Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.
          */
-        patch: operations["update_plan_api_v1_membership_plans__plan_id__patch"];
+        patch: operations["membership_plans_update_plan"];
         trace?: never;
     };
     "/api/v1/memberships": {
@@ -709,7 +709,7 @@ export interface paths {
          *       - within   — int (default 7, bounded 1..30); window size in days when
          *                    expiring=true. Silently ignored when expiring=false.
          */
-        get: operations["list_memberships_api_v1_memberships_get"];
+        get: operations["list_memberships"];
         put?: never;
         /**
          * Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)
@@ -733,7 +733,7 @@ export interface paths {
          *
          *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
          */
-        post: operations["create_membership_api_v1_memberships_post"];
+        post: operations["create_membership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -751,7 +751,7 @@ export interface paths {
          * Get a membership by id (404 membership_not_found)
          * @description Read one membership (MEM-EP-02). 404 `membership_not_found` for missing ids.
          */
-        get: operations["get_membership_api_v1_memberships__membership_id__get"];
+        get: operations["get_membership"];
         put?: never;
         post?: never;
         delete?: never;
@@ -787,7 +787,7 @@ export interface paths {
          *     (days_added=0) before `membership_cancelled` in the same UoW. Owner-only
          *     via existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.
          */
-        post: operations["cancel_membership_api_v1_memberships__membership_id__cancel_post"];
+        post: operations["cancel_membership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -817,7 +817,7 @@ export interface paths {
          *       - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)
          *       - 409 already_frozen (concurrent INSERT race)
          */
-        post: operations["freeze_membership_api_v1_memberships__membership_id__freeze_post"];
+        post: operations["freeze_membership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -860,7 +860,7 @@ export interface paths {
          *
          *     RBAC-04 ordering: auth → require_permission → verify_csrf.
          */
-        post: operations["refund_membership_api_v1_memberships__membership_id__refund_post"];
+        post: operations["refund_membership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -895,7 +895,7 @@ export interface paths {
          *       - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)
          *       - 409 plan_archived          (source's plan soft-deleted by owner)
          */
-        post: operations["renew_membership_api_v1_memberships__membership_id__renew_post"];
+        post: operations["renew_membership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -922,7 +922,7 @@ export interface paths {
          *       - 404 membership_not_found
          *       - 409 invalid_transition (source not frozen)
          */
-        post: operations["unfreeze_membership_api_v1_memberships__membership_id__unfreeze_post"];
+        post: operations["unfreeze_membership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -955,7 +955,7 @@ export interface paths {
          *       - 503 yookassa_unavailable
          *       - 502 yookassa_permanent_error
          */
-        post: operations["refund_membership_online_api_v1_online_payments_memberships__membership_id__refund_post"];
+        post: operations["refund_membership_online"];
         delete?: never;
         options?: never;
         head?: never;
@@ -981,7 +981,7 @@ export interface paths {
          *     422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,
          *     502 ``yookassa_permanent_error``.
          */
-        post: operations["sell_membership_redirect_api_v1_online_payments_memberships__plan_id__sell_post"];
+        post: operations["sell_membership_redirect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1006,7 +1006,7 @@ export interface paths {
          *     upstream so the second click also receives a valid ``qr_payload``
          *     (D-49-09 + Plan 49-03 BLOCKER #1).
          */
-        post: operations["sell_membership_qr_api_v1_online_payments_memberships__plan_id__sell_qr_post"];
+        post: operations["sell_membership_qr"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1026,7 +1026,7 @@ export interface paths {
          * Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required
          * @description PAY-04 — PT-package redirect flow. Same shape as membership variant.
          */
-        post: operations["sell_pt_package_redirect_api_v1_online_payments_pt_packages__plan_id__sell_post"];
+        post: operations["sell_pt_package_redirect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1046,7 +1046,7 @@ export interface paths {
          * Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required
          * @description PAY-05 — PT-package QR flow. Same shape as membership QR variant.
          */
-        post: operations["sell_pt_package_qr_api_v1_online_payments_pt_packages__plan_id__sell_qr_post"];
+        post: operations["sell_pt_package_qr"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1069,7 +1069,7 @@ export interface paths {
          *     Mirrors ``refund_membership_online``. No freeze / renewed-source guards
          *     for PT-packages (no freeze concept, no renewal chain in v1.x).
          */
-        post: operations["refund_pt_package_online_api_v1_online_payments_pt_packages__pt_package_id__refund_post"];
+        post: operations["refund_pt_package_online"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1091,7 +1091,7 @@ export interface paths {
          *     on the global route receives 403 — they use the scoped ``/by-client`` and
          *     ``/by-membership`` routes instead.
          */
-        get: operations["list_payments_api_v1_payments_get"];
+        get: operations["list_payments"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1115,7 +1115,7 @@ export interface paths {
          *     the customer's payment history. Includes refund rows whose
          *     ``refund_of`` references this client's membership sales.
          */
-        get: operations["list_payments_by_client_api_v1_payments_by_client__client_id__get"];
+        get: operations["list_payments_by_client"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1138,7 +1138,7 @@ export interface paths {
          *     Returns the sale row plus the refund row (if any) for the same
          *     membership.
          */
-        get: operations["list_payments_by_membership_api_v1_payments_by_membership__membership_id__get"];
+        get: operations["list_payments_by_membership"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1173,7 +1173,7 @@ export interface paths {
          *     Threat T-58-33: trainer_id is a bound WHERE parameter; owner sees all trainers
          *     by design (no cross-trainer leakage).
          */
-        get: operations["list_payroll_accruals_api_v1_payroll_accruals_get"];
+        get: operations["list_payroll_accruals"];
         put?: never;
         /**
          * Record payroll accrual with run-time-snapshotted rate (append-only; owner-only PAY-03 / D-58-03)
@@ -1190,7 +1190,7 @@ export interface paths {
          *     Router-layer 422 remap for CompConfigMissingError (same as preview; D-58-07 / D-58-09).
          *     PayrollPeriodAlreadyRunError propagates through AppError handler → 409.
          */
-        post: operations["create_accrual_api_v1_payroll_accruals_post"];
+        post: operations["create_accrual"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1220,7 +1220,7 @@ export interface paths {
          *     ``AlreadyPaidError`` propagates through AppError handler → 409.
          *     ``AccrualNotFoundError`` (NotFoundError) propagates → 404.
          */
-        post: operations["mark_accrual_paid_api_v1_payroll_accruals__accrual_id__mark_paid_post"];
+        post: operations["mark_accrual_paid"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1250,7 +1250,7 @@ export interface paths {
          *       ``ValidationAppError`` with the same ``comp_config_missing`` code and 422 status.
          *       This is the router-remap approach (one error class; PAY-01 GET path keeps 404).
          */
-        get: operations["preview_payroll_api_v1_payroll_preview_get"];
+        get: operations["preview_payroll"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1276,7 +1276,7 @@ export interface paths {
          *     Reception receives 403 (T-58-17 mitigate).
          *     ``CompConfigMissingError`` propagates to the centralised AppError handler → 404.
          */
-        get: operations["get_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__get"];
+        get: operations["get_trainer_comp_config"];
         /**
          * Set/replace trainer comp config (INSERT-only versioned; owner-only PAY-01 / D-58-10)
          * @description INSERT a new versioned compensation config for the given trainer (PAY-01 / D-58-02).
@@ -1286,7 +1286,7 @@ export interface paths {
          *     Owner-only: ``(CREATE, COMPENSATION) ∈ OWNER_ONLY`` (Plan 58-01 pre-registration).
          *     Reception receives 403 (T-58-17 mitigate).
          */
-        put: operations["set_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__put"];
+        put: operations["set_trainer_comp_config"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1305,13 +1305,13 @@ export interface paths {
          * List PT-package plans (owner-only); paginated; ?includeArchived toggle
          * @description List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.
          */
-        get: operations["list_plans_api_v1_pt_package_plans_get"];
+        get: operations["pt_package_plans_list_plans"];
         put?: never;
         /**
          * Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)
          * @description Create a PT-package plan (PT-02). CREATE + CSRF required.
          */
-        post: operations["create_plan_api_v1_pt_package_plans_post"];
+        post: operations["pt_package_plans_create_plan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1329,7 +1329,7 @@ export interface paths {
          * Fetch a single alive PT-package plan (owner-only)
          * @description Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.
          */
-        get: operations["get_plan_api_v1_pt_package_plans__plan_id__get"];
+        get: operations["pt_package_plans_get_plan"];
         put?: never;
         post?: never;
         /**
@@ -1340,7 +1340,7 @@ export interface paths {
          *     for any pt_packages row referencing this plan (409 plan_in_use) before
          *     flipping deleted_at. Returns 204 No Content on success.
          */
-        delete: operations["archive_plan_api_v1_pt_package_plans__plan_id__delete"];
+        delete: operations["archive_plan"];
         options?: never;
         head?: never;
         /**
@@ -1351,7 +1351,7 @@ export interface paths {
          *     price_kopecks / validity_days raises 409 ``field_immutable`` with
          *     ``fields.field`` carrying the offending field name.
          */
-        patch: operations["update_plan_api_v1_pt_package_plans__plan_id__patch"];
+        patch: operations["pt_package_plans_update_plan"];
         trace?: never;
     };
     "/api/v1/pt-packages": {
@@ -1368,7 +1368,7 @@ export interface paths {
          *     (VIEW, PT_PACKAGES) is NOT in OWNER_ONLY — reception sees the same list
          *     as owner (B-07 / Phase 35 PT-session form prefill — FE-10..18).
          */
-        get: operations["list_pt_packages_api_v1_pt_packages_get"];
+        get: operations["list_pt_packages"];
         put?: never;
         /**
          * Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)
@@ -1387,7 +1387,7 @@ export interface paths {
          *     verify_idempotency. Two-phase Redis claim + replay block mirrors
          *     ``memberships.router.create_membership``.
          */
-        post: operations["create_pt_package_api_v1_pt_packages_post"];
+        post: operations["create_pt_package"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1407,7 +1407,7 @@ export interface paths {
          *
          *     404 ``pt_package_not_found`` for missing ids.
          */
-        get: operations["get_pt_package_api_v1_pt_packages__pt_package_id__get"];
+        get: operations["get_pt_package"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1442,7 +1442,7 @@ export interface paths {
          *       - 409 invalid_transition    (cancelled source — FSM terminal).
          *       - 422 (schema layer)        (extra field / empty reason / >200 chars).
          */
-        post: operations["cancel_pt_package_api_v1_pt_packages__pt_package_id__cancel_post"];
+        post: operations["cancel_pt_package"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1494,7 +1494,7 @@ export interface paths {
          *     operator UX consistency, beyond the DB partial UNIQUE which is the
          *     load-bearing race defence on its own).
          */
-        post: operations["refund_pt_package_api_v1_pt_packages__pt_package_id__refund_post"];
+        post: operations["refund_pt_package"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1524,7 +1524,7 @@ export interface paths {
          *     package-existence check is out of scope for list endpoints per
          *     `pt_packages` list precedent).
          */
-        get: operations["list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get"];
+        get: operations["list_sessions_by_pt_package"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1572,7 +1572,7 @@ export interface paths {
          *         performed_at_out_of_window.
          *       - 422 idempotency_key_reuse (same key, different body).
          */
-        post: operations["record_pt_session_api_v1_pt_sessions_post"];
+        post: operations["record_pt_session"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1593,7 +1593,7 @@ export interface paths {
          *     Reception + owner both pass (single-zone CRM, T-34-M accepted). Returns
          *     404 `pt_session_not_found` if the id is unknown.
          */
-        get: operations["get_pt_session_api_v1_pt_sessions__pt_session_id__get"];
+        get: operations["get_pt_session"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1637,7 +1637,7 @@ export interface paths {
          *       - 403 cancel_window_expired (reception >24h since created_at).
          *       - 422 idempotency_key_reuse (same key, different body).
          */
-        post: operations["cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post"];
+        post: operations["cancel_pt_session"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1657,7 +1657,7 @@ export interface paths {
          *
          *     (LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.
          */
-        get: operations["list_recurring_templates_api_v1_recurring_templates_get"];
+        get: operations["list_recurring_templates"];
         put?: never;
         /**
          * Create a recurring slot template (owner-only; 409 recurring_template_duplicate on duplicate trainer+dow+start+valid_from; requires Idempotency-Key — D-38-14)
@@ -1669,7 +1669,7 @@ export interface paths {
          *     Error surface:
          *       - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)
          */
-        post: operations["create_recurring_template_api_v1_recurring_templates_post"];
+        post: operations["create_recurring_template"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1692,7 +1692,7 @@ export interface paths {
          *     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
          *     Forward-only: does not cancel materialized slots.
          */
-        post: operations["deactivate_recurring_template_api_v1_recurring_templates__template_id__deactivate_post"];
+        post: operations["deactivate_recurring_template"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1717,7 +1717,7 @@ export interface paths {
          *     Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
          *     Range cap: 366 days (D-06); toDate<fromDate → 422.
          */
-        get: operations["get_clients_report_api_v1_reports_clients_get"];
+        get: operations["get_clients_report"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1742,7 +1742,7 @@ export interface paths {
          *
          *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
          */
-        get: operations["get_clients_csv_api_v1_reports_clients_csv_get"];
+        get: operations["get_clients_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1768,7 +1768,7 @@ export interface paths {
          *     Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
          *     Range cap: 366 days (D-06); to<from → 422.
          */
-        get: operations["get_revenue_report_api_v1_reports_revenue_get"];
+        get: operations["get_revenue_report"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1795,7 +1795,7 @@ export interface paths {
          *     Range validation: to<from → 422; range>366 days → 422.
          *     No try/except — errors bubble to _app_error_handler.
          */
-        get: operations["get_revenue_csv_api_v1_reports_revenue_csv_get"];
+        get: operations["get_revenue_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1815,7 +1815,7 @@ export interface paths {
          * Trainer-usage report (owner-only; RPT-01..02, RPT-04)
          * @description Per-trainer aggregate for [fromDate, toDate] MSK: session counts, hours, unique clients, utilization %, revenue, accrued vs paid compensation. Revenue is attributed to the trainer assigned at PT-package sale time. Range cap: 366 days (D-06); toDate<fromDate → 422; reception → 403.
          */
-        get: operations["get_trainers_report_api_v1_reports_trainers_get"];
+        get: operations["get_trainers_report"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1835,7 +1835,7 @@ export interface paths {
          * Trainer-usage CSV download (owner-only; RPT-03)
          * @description Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV. Same query params as GET /reports/trainers. One row per trainer; money columns in period-decimal rubles; None/NULL cells render as empty string. Filename: trainer-usage-YYYY-MM-DD-YYYY-MM-DD.csv (EXP-01 precedent). Owner-only; reception → 403.
          */
-        get: operations["get_trainers_csv_api_v1_reports_trainers_csv_get"];
+        get: operations["get_trainers_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1863,7 +1863,7 @@ export interface paths {
          *     Owner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.
          *     Range cap: 366 days (D-06); toDate<fromDate → 422.
          */
-        get: operations["get_visits_report_api_v1_reports_visits_get"];
+        get: operations["get_visits_report"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1889,7 +1889,7 @@ export interface paths {
          *
          *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
          */
-        get: operations["get_visits_csv_api_v1_reports_visits_csv_get"];
+        get: operations["get_visits_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1911,7 +1911,7 @@ export interface paths {
          *
          *     (LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.
          */
-        get: operations["list_time_off_api_v1_time_off_get"];
+        get: operations["list_time_off"];
         put?: never;
         /**
          * Create a trainer time-off block (owner-only; 409 time_off_booked_conflict when booked slots overlap and ?force not set; ?force=true cascades booking cancellations + client DMs; requires Idempotency-Key — D-38-14)
@@ -1923,7 +1923,7 @@ export interface paths {
          *     Error surface:
          *       - 409 time_off_booked_conflict  (booked slots overlap and force=False)
          */
-        post: operations["create_time_off_api_v1_time_off_post"];
+        post: operations["create_time_off"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1947,7 +1947,7 @@ export interface paths {
          *     (DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
          *     Does NOT resurrect cancelled slots — next cron tick re-materializes new ones.
          */
-        delete: operations["delete_time_off_api_v1_time_off__time_off_id__delete"];
+        delete: operations["delete_time_off"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1969,7 +1969,7 @@ export interface paths {
          *     to 14 days forward (T-38-01-04 mitigation — prevents unbounded
          *     enumeration).
          */
-        get: operations["list_slots_api_v1_trainer_slots_get"];
+        get: operations["list_slots"];
         put?: never;
         /**
          * Publish a trainer availability slot (owner-only; 409 slot_overlap / slot_too_close / slot_in_past / trainer_inactive / trainer_not_found; requires Idempotency-Key — D-38-14)
@@ -1987,7 +1987,7 @@ export interface paths {
          *       - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)
          *       - 422 idempotency_key_reuse   (same key, different body)
          */
-        post: operations["publish_slot_api_v1_trainer_slots_post"];
+        post: operations["publish_slot"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2005,7 +2005,7 @@ export interface paths {
          * Read a single trainer slot (reception+owner; 404 slot_not_found)
          * @description Read a single slot (SLOT-08 detail). 404 slot_not_found for missing id.
          */
-        get: operations["get_slot_api_v1_trainer_slots__slot_id__get"];
+        get: operations["get_slot"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2041,7 +2041,7 @@ export interface paths {
          *
          *     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.
          */
-        patch: operations["cancel_slot_api_v1_trainer_slots__slot_id__cancel_patch"];
+        patch: operations["cancel_slot"];
         trace?: never;
     };
     "/api/v1/trainers": {
@@ -2055,13 +2055,13 @@ export interface paths {
          * List alive trainers with optional is_active filter and pagination
          * @description List alive trainers (TRN-04). VIEW permission required — reception allowed (D-31-09).
          */
-        get: operations["list_trainers_api_v1_trainers_get"];
+        get: operations["list_trainers"];
         put?: never;
         /**
          * Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)
          * @description Create a trainer (TRN-02). CREATE permission + CSRF required (RBAC-04 ordering).
          */
-        post: operations["create_trainer_api_v1_trainers_post"];
+        post: operations["create_trainer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2079,7 +2079,7 @@ export interface paths {
          * Get a single alive trainer by id (404 if soft-deleted or missing)
          * @description Read one alive trainer (TRN-02). 404 for missing or soft-deleted ids.
          */
-        get: operations["get_trainer_api_v1_trainers__trainer_id__get"];
+        get: operations["get_trainer"];
         put?: never;
         post?: never;
         /**
@@ -2090,14 +2090,14 @@ export interface paths {
          *     require_permission. CSRF required on the mutation. Returns 204 No Content.
          *     Maps IntegrityError pgcode=23503 → 409 trainer_in_use (pre-emptive D-31-07).
          */
-        delete: operations["delete_trainer_api_v1_trainers__trainer_id__delete"];
+        delete: operations["delete_trainer"];
         options?: never;
         head?: never;
         /**
          * Partial update (PATCH semantics; handles deactivate/reactivate via isActive)
          * @description Partial update of an alive trainer (TRN-03). EDIT + CSRF (RBAC-04 ordering).
          */
-        patch: operations["update_trainer_api_v1_trainers__trainer_id__patch"];
+        patch: operations["update_trainer"];
         trace?: never;
     };
     "/api/v1/users": {
@@ -2111,13 +2111,13 @@ export interface paths {
          * List users with optional active/deleted filters and pagination
          * @description USERS-02 — paginated list (D-43-15). LIST permission required; no CSRF (read).
          */
-        get: operations["list_users_endpoint_api_v1_users_get"];
+        get: operations["list_users_endpoint"];
         put?: never;
         /**
          * Create user + send invitation (idempotent re-invite; 409 on active email)
          * @description USERS-03 / D-43-13 — create user + invite. CREATE permission + CSRF required.
          */
-        post: operations["create_user_endpoint_api_v1_users_post"];
+        post: operations["create_user_endpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2152,7 +2152,7 @@ export interface paths {
          *       5. NO explicit session.commit() between (3) and (4) — mirrors /auth/login.
          *       6. envelope(LoginResponse(user=UserPublic.model_validate(user))).
          */
-        post: operations["accept_invitation_endpoint_api_v1_users_invitations_accept_post"];
+        post: operations["accept_invitation_endpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2172,7 +2172,7 @@ export interface paths {
          * Revoke a pending invitation by token row id (404 missing, 409 already accepted)
          * @description USERS-03 / D-43-19 — atomic-consume invitation token by row UUID (NOT raw token).
          */
-        post: operations["revoke_invitation_endpoint_api_v1_users_invitations__token_id__revoke_post"];
+        post: operations["revoke_invitation_endpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2196,7 +2196,7 @@ export interface paths {
          *     DELETE permission + CSRF required. `(Action.DELETE, Resource.USERS)` is in
          *     `OWNER_ONLY`, so reception → 403 from `require_permission`.
          */
-        delete: operations["soft_delete_user_endpoint_api_v1_users__user_id__delete"];
+        delete: operations["soft_delete_user_endpoint"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2219,7 +2219,7 @@ export interface paths {
          * Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)
          * @description USERS-04 / D-43-16 — self + last-owner guards; UPDATE permission + CSRF required.
          */
-        patch: operations["deactivate_user_endpoint_api_v1_users__user_id__deactivate_patch"];
+        patch: operations["deactivate_user_endpoint"];
         trace?: never;
     };
     "/api/v1/users/{user_id}/reactivate": {
@@ -2239,7 +2239,7 @@ export interface paths {
          * Reactivate a previously-deactivated user (404 missing, 409 if already active)
          * @description USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required.
          */
-        patch: operations["reactivate_user_endpoint_api_v1_users__user_id__reactivate_patch"];
+        patch: operations["reactivate_user_endpoint"];
         trace?: never;
     };
     "/api/v1/visits": {
@@ -2253,7 +2253,7 @@ export interface paths {
          * List visits filtered by clientId/from/to with pagination
          * @description List visits, paginated (VIS-EP-01). VIEW permission required.
          */
-        get: operations["list_visits_api_v1_visits_get"];
+        get: operations["list_visits"];
         put?: never;
         /**
          * Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)
@@ -2269,7 +2269,7 @@ export interface paths {
          *     errors. (CHECK_IN, VISITS) is NOT in OWNER_ONLY — reception receives
          *     201 on success.
          */
-        post: operations["create_visit_api_v1_visits_post"];
+        post: operations["create_visit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2291,7 +2291,7 @@ export interface paths {
          *     Reads Settings.gym_hours_start / gym_hours_end (lru_cache) and serialises
          *     via .isoformat()[:5] → HH:MM strings.
          */
-        get: operations["get_visits_meta_api_v1_visits__meta_get"];
+        get: operations["get_visits_meta"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2311,7 +2311,7 @@ export interface paths {
          * Get a single visit by id (404 visit_not_found)
          * @description Read one visit (VIS-EP-02). 404 `visit_not_found` for missing ids.
          */
-        get: operations["get_visit_api_v1_visits__visit_id__get"];
+        get: operations["get_visit"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2331,7 +2331,7 @@ export interface paths {
          * Health
          * @description Liveness probe. Returns {"status": "ok"} with HTTP 200.
          */
-        get: operations["health_healthz_get"];
+        get: operations["health"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4781,7 +4781,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    email_webhook_api_v1__internal_email_webhook_post: {
+    email_webhook: {
         parameters: {
             query?: never;
             header?: never;
@@ -4799,7 +4799,7 @@ export interface operations {
             };
         };
     };
-    list_audit_log_api_v1_audit_log_get: {
+    list_audit_log: {
         parameters: {
             query?: {
                 from?: string | null;
@@ -4837,7 +4837,7 @@ export interface operations {
             };
         };
     };
-    get_audit_log_csv_api_v1_audit_log_csv_get: {
+    get_audit_log_csv: {
         parameters: {
             query?: {
                 from?: string | null;
@@ -4873,7 +4873,7 @@ export interface operations {
             };
         };
     };
-    login_api_v1_auth_login_post: {
+    login: {
         parameters: {
             query?: never;
             header?: never;
@@ -4906,7 +4906,7 @@ export interface operations {
             };
         };
     };
-    logout_api_v1_auth_logout_post: {
+    logout: {
         parameters: {
             query?: never;
             header?: never;
@@ -4926,7 +4926,7 @@ export interface operations {
             };
         };
     };
-    logout_all_api_v1_auth_logout_all_post: {
+    logout_all: {
         parameters: {
             query?: never;
             header?: never;
@@ -4946,7 +4946,7 @@ export interface operations {
             };
         };
     };
-    me_api_v1_auth_me_get: {
+    me: {
         parameters: {
             query?: never;
             header?: never;
@@ -4966,7 +4966,7 @@ export interface operations {
             };
         };
     };
-    otp_request_api_v1_auth_otp_request_post: {
+    otp_request: {
         parameters: {
             query?: never;
             header?: never;
@@ -4999,7 +4999,7 @@ export interface operations {
             };
         };
     };
-    password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post: {
+    password_reset_confirm_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -5032,7 +5032,7 @@ export interface operations {
             };
         };
     };
-    password_reset_request_endpoint_api_v1_auth_password_reset_request_post: {
+    password_reset_request_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -5065,7 +5065,7 @@ export interface operations {
             };
         };
     };
-    refresh_api_v1_auth_refresh_post: {
+    refresh: {
         parameters: {
             query?: never;
             header?: never;
@@ -5085,7 +5085,7 @@ export interface operations {
             };
         };
     };
-    list_sessions_api_v1_auth_sessions_get: {
+    list_sessions: {
         parameters: {
             query?: {
                 page?: number;
@@ -5117,7 +5117,7 @@ export interface operations {
             };
         };
     };
-    revoke_session_family_api_v1_auth_sessions__family_id__revoke_post: {
+    revoke_session_family: {
         parameters: {
             query?: never;
             header?: never;
@@ -5148,7 +5148,7 @@ export interface operations {
             };
         };
     };
-    telegram_start_api_v1_auth_telegram_start_post: {
+    telegram_start: {
         parameters: {
             query?: never;
             header?: never;
@@ -5168,7 +5168,7 @@ export interface operations {
             };
         };
     };
-    telegram_status_api_v1_auth_telegram_status_get: {
+    telegram_status: {
         parameters: {
             query: {
                 token: string;
@@ -5199,7 +5199,7 @@ export interface operations {
             };
         };
     };
-    telegram_verify_api_v1_auth_telegram_verify_post: {
+    telegram_verify: {
         parameters: {
             query?: never;
             header?: never;
@@ -5232,7 +5232,7 @@ export interface operations {
             };
         };
     };
-    list_bookings_api_v1_bookings_get: {
+    list_bookings: {
         parameters: {
             query?: {
                 page?: number;
@@ -5269,7 +5269,7 @@ export interface operations {
             };
         };
     };
-    create_booking_api_v1_bookings_post: {
+    create_booking: {
         parameters: {
             query?: never;
             header?: never;
@@ -5302,7 +5302,7 @@ export interface operations {
             };
         };
     };
-    get_booking_api_v1_bookings__booking_id__get: {
+    get_booking: {
         parameters: {
             query?: never;
             header?: never;
@@ -5333,7 +5333,7 @@ export interface operations {
             };
         };
     };
-    cancel_booking_api_v1_bookings__booking_id__cancel_post: {
+    cancel_booking: {
         parameters: {
             query?: never;
             header?: never;
@@ -5368,7 +5368,7 @@ export interface operations {
             };
         };
     };
-    list_clients_api_v1_clients_get: {
+    list_clients: {
         parameters: {
             query?: {
                 page?: number;
@@ -5407,7 +5407,7 @@ export interface operations {
             };
         };
     };
-    create_client_api_v1_clients_post: {
+    create_client: {
         parameters: {
             query?: never;
             header?: never;
@@ -5440,7 +5440,7 @@ export interface operations {
             };
         };
     };
-    get_client_api_v1_clients__client_id__get: {
+    get_client: {
         parameters: {
             query?: never;
             header?: never;
@@ -5471,7 +5471,7 @@ export interface operations {
             };
         };
     };
-    soft_delete_client_api_v1_clients__client_id__delete: {
+    soft_delete_client: {
         parameters: {
             query?: never;
             header?: never;
@@ -5500,7 +5500,7 @@ export interface operations {
             };
         };
     };
-    update_client_api_v1_clients__client_id__patch: {
+    update_client: {
         parameters: {
             query?: never;
             header?: never;
@@ -5535,7 +5535,7 @@ export interface operations {
             };
         };
     };
-    list_bookings_for_client_api_v1_clients__client_id__bookings_get: {
+    list_bookings_for_client: {
         parameters: {
             query?: {
                 page?: number;
@@ -5572,7 +5572,7 @@ export interface operations {
             };
         };
     };
-    list_plans_api_v1_membership_plans_get: {
+    membership_plans_list_plans: {
         parameters: {
             query?: {
                 page?: number;
@@ -5606,7 +5606,7 @@ export interface operations {
             };
         };
     };
-    create_plan_api_v1_membership_plans_post: {
+    membership_plans_create_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -5639,7 +5639,7 @@ export interface operations {
             };
         };
     };
-    get_plan_api_v1_membership_plans__plan_id__get: {
+    membership_plans_get_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -5670,7 +5670,7 @@ export interface operations {
             };
         };
     };
-    soft_delete_plan_api_v1_membership_plans__plan_id__delete: {
+    soft_delete_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -5699,7 +5699,7 @@ export interface operations {
             };
         };
     };
-    update_plan_api_v1_membership_plans__plan_id__patch: {
+    membership_plans_update_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -5734,7 +5734,7 @@ export interface operations {
             };
         };
     };
-    list_memberships_api_v1_memberships_get: {
+    list_memberships: {
         parameters: {
             query?: {
                 page?: number;
@@ -5771,7 +5771,7 @@ export interface operations {
             };
         };
     };
-    create_membership_api_v1_memberships_post: {
+    create_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5804,7 +5804,7 @@ export interface operations {
             };
         };
     };
-    get_membership_api_v1_memberships__membership_id__get: {
+    get_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5835,7 +5835,7 @@ export interface operations {
             };
         };
     };
-    cancel_membership_api_v1_memberships__membership_id__cancel_post: {
+    cancel_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5870,7 +5870,7 @@ export interface operations {
             };
         };
     };
-    freeze_membership_api_v1_memberships__membership_id__freeze_post: {
+    freeze_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5901,7 +5901,7 @@ export interface operations {
             };
         };
     };
-    refund_membership_api_v1_memberships__membership_id__refund_post: {
+    refund_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5936,7 +5936,7 @@ export interface operations {
             };
         };
     };
-    renew_membership_api_v1_memberships__membership_id__renew_post: {
+    renew_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5967,7 +5967,7 @@ export interface operations {
             };
         };
     };
-    unfreeze_membership_api_v1_memberships__membership_id__unfreeze_post: {
+    unfreeze_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -5998,7 +5998,7 @@ export interface operations {
             };
         };
     };
-    refund_membership_online_api_v1_online_payments_memberships__membership_id__refund_post: {
+    refund_membership_online: {
         parameters: {
             query?: never;
             header?: never;
@@ -6033,7 +6033,7 @@ export interface operations {
             };
         };
     };
-    sell_membership_redirect_api_v1_online_payments_memberships__plan_id__sell_post: {
+    sell_membership_redirect: {
         parameters: {
             query?: never;
             header?: never;
@@ -6068,7 +6068,7 @@ export interface operations {
             };
         };
     };
-    sell_membership_qr_api_v1_online_payments_memberships__plan_id__sell_qr_post: {
+    sell_membership_qr: {
         parameters: {
             query?: never;
             header?: never;
@@ -6103,7 +6103,7 @@ export interface operations {
             };
         };
     };
-    sell_pt_package_redirect_api_v1_online_payments_pt_packages__plan_id__sell_post: {
+    sell_pt_package_redirect: {
         parameters: {
             query?: never;
             header?: never;
@@ -6138,7 +6138,7 @@ export interface operations {
             };
         };
     };
-    sell_pt_package_qr_api_v1_online_payments_pt_packages__plan_id__sell_qr_post: {
+    sell_pt_package_qr: {
         parameters: {
             query?: never;
             header?: never;
@@ -6173,7 +6173,7 @@ export interface operations {
             };
         };
     };
-    refund_pt_package_online_api_v1_online_payments_pt_packages__pt_package_id__refund_post: {
+    refund_pt_package_online: {
         parameters: {
             query?: never;
             header?: never;
@@ -6208,7 +6208,7 @@ export interface operations {
             };
         };
     };
-    list_payments_api_v1_payments_get: {
+    list_payments: {
         parameters: {
             query?: {
                 page?: number;
@@ -6245,7 +6245,7 @@ export interface operations {
             };
         };
     };
-    list_payments_by_client_api_v1_payments_by_client__client_id__get: {
+    list_payments_by_client: {
         parameters: {
             query?: {
                 page?: number;
@@ -6279,7 +6279,7 @@ export interface operations {
             };
         };
     };
-    list_payments_by_membership_api_v1_payments_by_membership__membership_id__get: {
+    list_payments_by_membership: {
         parameters: {
             query?: {
                 page?: number;
@@ -6313,7 +6313,7 @@ export interface operations {
             };
         };
     };
-    list_payroll_accruals_api_v1_payroll_accruals_get: {
+    list_payroll_accruals: {
         parameters: {
             query: {
                 trainerId: string;
@@ -6346,7 +6346,7 @@ export interface operations {
             };
         };
     };
-    create_accrual_api_v1_payroll_accruals_post: {
+    create_accrual: {
         parameters: {
             query?: never;
             header?: never;
@@ -6379,7 +6379,7 @@ export interface operations {
             };
         };
     };
-    mark_accrual_paid_api_v1_payroll_accruals__accrual_id__mark_paid_post: {
+    mark_accrual_paid: {
         parameters: {
             query?: never;
             header?: never;
@@ -6410,7 +6410,7 @@ export interface operations {
             };
         };
     };
-    preview_payroll_api_v1_payroll_preview_get: {
+    preview_payroll: {
         parameters: {
             query: {
                 trainerId: string;
@@ -6443,7 +6443,7 @@ export interface operations {
             };
         };
     };
-    get_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__get: {
+    get_trainer_comp_config: {
         parameters: {
             query?: never;
             header?: never;
@@ -6474,7 +6474,7 @@ export interface operations {
             };
         };
     };
-    set_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__put: {
+    set_trainer_comp_config: {
         parameters: {
             query?: never;
             header?: never;
@@ -6509,7 +6509,7 @@ export interface operations {
             };
         };
     };
-    list_plans_api_v1_pt_package_plans_get: {
+    pt_package_plans_list_plans: {
         parameters: {
             query?: {
                 page?: number;
@@ -6543,7 +6543,7 @@ export interface operations {
             };
         };
     };
-    create_plan_api_v1_pt_package_plans_post: {
+    pt_package_plans_create_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6576,7 +6576,7 @@ export interface operations {
             };
         };
     };
-    get_plan_api_v1_pt_package_plans__plan_id__get: {
+    pt_package_plans_get_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6607,7 +6607,7 @@ export interface operations {
             };
         };
     };
-    archive_plan_api_v1_pt_package_plans__plan_id__delete: {
+    archive_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6636,7 +6636,7 @@ export interface operations {
             };
         };
     };
-    update_plan_api_v1_pt_package_plans__plan_id__patch: {
+    pt_package_plans_update_plan: {
         parameters: {
             query?: never;
             header?: never;
@@ -6671,7 +6671,7 @@ export interface operations {
             };
         };
     };
-    list_pt_packages_api_v1_pt_packages_get: {
+    list_pt_packages: {
         parameters: {
             query?: {
                 page?: number;
@@ -6706,7 +6706,7 @@ export interface operations {
             };
         };
     };
-    create_pt_package_api_v1_pt_packages_post: {
+    create_pt_package: {
         parameters: {
             query?: never;
             header?: never;
@@ -6739,7 +6739,7 @@ export interface operations {
             };
         };
     };
-    get_pt_package_api_v1_pt_packages__pt_package_id__get: {
+    get_pt_package: {
         parameters: {
             query?: never;
             header?: never;
@@ -6770,7 +6770,7 @@ export interface operations {
             };
         };
     };
-    cancel_pt_package_api_v1_pt_packages__pt_package_id__cancel_post: {
+    cancel_pt_package: {
         parameters: {
             query?: never;
             header?: never;
@@ -6805,7 +6805,7 @@ export interface operations {
             };
         };
     };
-    refund_pt_package_api_v1_pt_packages__pt_package_id__refund_post: {
+    refund_pt_package: {
         parameters: {
             query?: never;
             header?: never;
@@ -6840,7 +6840,7 @@ export interface operations {
             };
         };
     };
-    list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get: {
+    list_sessions_by_pt_package: {
         parameters: {
             query?: {
                 page?: number;
@@ -6875,7 +6875,7 @@ export interface operations {
             };
         };
     };
-    record_pt_session_api_v1_pt_sessions_post: {
+    record_pt_session: {
         parameters: {
             query?: never;
             header?: never;
@@ -6908,7 +6908,7 @@ export interface operations {
             };
         };
     };
-    get_pt_session_api_v1_pt_sessions__pt_session_id__get: {
+    get_pt_session: {
         parameters: {
             query?: never;
             header?: never;
@@ -6939,7 +6939,7 @@ export interface operations {
             };
         };
     };
-    cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post: {
+    cancel_pt_session: {
         parameters: {
             query?: never;
             header?: never;
@@ -6974,7 +6974,7 @@ export interface operations {
             };
         };
     };
-    list_recurring_templates_api_v1_recurring_templates_get: {
+    list_recurring_templates: {
         parameters: {
             query?: {
                 trainerId?: string | null;
@@ -7007,7 +7007,7 @@ export interface operations {
             };
         };
     };
-    create_recurring_template_api_v1_recurring_templates_post: {
+    create_recurring_template: {
         parameters: {
             query?: never;
             header?: never;
@@ -7040,7 +7040,7 @@ export interface operations {
             };
         };
     };
-    deactivate_recurring_template_api_v1_recurring_templates__template_id__deactivate_post: {
+    deactivate_recurring_template: {
         parameters: {
             query?: never;
             header?: never;
@@ -7071,7 +7071,7 @@ export interface operations {
             };
         };
     };
-    get_clients_report_api_v1_reports_clients_get: {
+    get_clients_report: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7104,7 +7104,7 @@ export interface operations {
             };
         };
     };
-    get_clients_csv_api_v1_reports_clients_csv_get: {
+    get_clients_csv: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7135,7 +7135,7 @@ export interface operations {
             };
         };
     };
-    get_revenue_report_api_v1_reports_revenue_get: {
+    get_revenue_report: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7168,7 +7168,7 @@ export interface operations {
             };
         };
     };
-    get_revenue_csv_api_v1_reports_revenue_csv_get: {
+    get_revenue_csv: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7199,7 +7199,7 @@ export interface operations {
             };
         };
     };
-    get_trainers_report_api_v1_reports_trainers_get: {
+    get_trainers_report: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7236,7 +7236,7 @@ export interface operations {
             };
         };
     };
-    get_trainers_csv_api_v1_reports_trainers_csv_get: {
+    get_trainers_csv: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7266,7 +7266,7 @@ export interface operations {
             };
         };
     };
-    get_visits_report_api_v1_reports_visits_get: {
+    get_visits_report: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7298,7 +7298,7 @@ export interface operations {
             };
         };
     };
-    get_visits_csv_api_v1_reports_visits_csv_get: {
+    get_visits_csv: {
         parameters: {
             query: {
                 fromDate: string;
@@ -7328,7 +7328,7 @@ export interface operations {
             };
         };
     };
-    list_time_off_api_v1_time_off_get: {
+    list_time_off: {
         parameters: {
             query?: {
                 trainerId?: string | null;
@@ -7361,7 +7361,7 @@ export interface operations {
             };
         };
     };
-    create_time_off_api_v1_time_off_post: {
+    create_time_off: {
         parameters: {
             query?: {
                 force?: boolean;
@@ -7396,7 +7396,7 @@ export interface operations {
             };
         };
     };
-    delete_time_off_api_v1_time_off__time_off_id__delete: {
+    delete_time_off: {
         parameters: {
             query?: never;
             header?: never;
@@ -7425,7 +7425,7 @@ export interface operations {
             };
         };
     };
-    list_slots_api_v1_trainer_slots_get: {
+    list_slots: {
         parameters: {
             query?: {
                 page?: number;
@@ -7461,7 +7461,7 @@ export interface operations {
             };
         };
     };
-    publish_slot_api_v1_trainer_slots_post: {
+    publish_slot: {
         parameters: {
             query?: never;
             header?: never;
@@ -7494,7 +7494,7 @@ export interface operations {
             };
         };
     };
-    get_slot_api_v1_trainer_slots__slot_id__get: {
+    get_slot: {
         parameters: {
             query?: never;
             header?: never;
@@ -7525,7 +7525,7 @@ export interface operations {
             };
         };
     };
-    cancel_slot_api_v1_trainer_slots__slot_id__cancel_patch: {
+    cancel_slot: {
         parameters: {
             query?: never;
             header?: never;
@@ -7560,7 +7560,7 @@ export interface operations {
             };
         };
     };
-    list_trainers_api_v1_trainers_get: {
+    list_trainers: {
         parameters: {
             query?: {
                 page?: number;
@@ -7593,7 +7593,7 @@ export interface operations {
             };
         };
     };
-    create_trainer_api_v1_trainers_post: {
+    create_trainer: {
         parameters: {
             query?: never;
             header?: never;
@@ -7626,7 +7626,7 @@ export interface operations {
             };
         };
     };
-    get_trainer_api_v1_trainers__trainer_id__get: {
+    get_trainer: {
         parameters: {
             query?: never;
             header?: never;
@@ -7657,7 +7657,7 @@ export interface operations {
             };
         };
     };
-    delete_trainer_api_v1_trainers__trainer_id__delete: {
+    delete_trainer: {
         parameters: {
             query?: never;
             header?: never;
@@ -7686,7 +7686,7 @@ export interface operations {
             };
         };
     };
-    update_trainer_api_v1_trainers__trainer_id__patch: {
+    update_trainer: {
         parameters: {
             query?: never;
             header?: never;
@@ -7721,7 +7721,7 @@ export interface operations {
             };
         };
     };
-    list_users_endpoint_api_v1_users_get: {
+    list_users_endpoint: {
         parameters: {
             query?: {
                 page?: number;
@@ -7755,7 +7755,7 @@ export interface operations {
             };
         };
     };
-    create_user_endpoint_api_v1_users_post: {
+    create_user_endpoint: {
         parameters: {
             query?: {
                 /** @description When true, the response carries the raw invitation URL (D-43-14). Audited via link_copied=true. */
@@ -7791,7 +7791,7 @@ export interface operations {
             };
         };
     };
-    accept_invitation_endpoint_api_v1_users_invitations_accept_post: {
+    accept_invitation_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -7824,7 +7824,7 @@ export interface operations {
             };
         };
     };
-    revoke_invitation_endpoint_api_v1_users_invitations__token_id__revoke_post: {
+    revoke_invitation_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -7857,7 +7857,7 @@ export interface operations {
             };
         };
     };
-    soft_delete_user_endpoint_api_v1_users__user_id__delete: {
+    soft_delete_user_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -7886,7 +7886,7 @@ export interface operations {
             };
         };
     };
-    deactivate_user_endpoint_api_v1_users__user_id__deactivate_patch: {
+    deactivate_user_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -7915,7 +7915,7 @@ export interface operations {
             };
         };
     };
-    reactivate_user_endpoint_api_v1_users__user_id__reactivate_patch: {
+    reactivate_user_endpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -7944,7 +7944,7 @@ export interface operations {
             };
         };
     };
-    list_visits_api_v1_visits_get: {
+    list_visits: {
         parameters: {
             query?: {
                 page?: number;
@@ -7979,7 +7979,7 @@ export interface operations {
             };
         };
     };
-    create_visit_api_v1_visits_post: {
+    create_visit: {
         parameters: {
             query?: never;
             header?: never;
@@ -8012,7 +8012,7 @@ export interface operations {
             };
         };
     };
-    get_visits_meta_api_v1_visits__meta_get: {
+    get_visits_meta: {
         parameters: {
             query?: never;
             header?: never;
@@ -8032,7 +8032,7 @@ export interface operations {
             };
         };
     };
-    get_visit_api_v1_visits__visit_id__get: {
+    get_visit: {
         parameters: {
             query?: never;
             header?: never;
@@ -8063,7 +8063,7 @@ export interface operations {
             };
         };
     };
-    health_healthz_get: {
+    health: {
         parameters: {
             query?: never;
             header?: never;

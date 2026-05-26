@@ -4919,7 +4919,7 @@
     "/api/v1/_internal/email/webhook": {
       "post": {
         "description": "Yandex Cloud Postbox bounce/complaint webhook (D-42-17 / EMAIL-07).\n\nFlow:\n  1. Read raw body bytes (no parse yet).\n  2. Compute HMAC-SHA256 of raw body with settings.email.webhook_secret.\n  3. hmac.compare_digest against X-Email-Webhook-Signature header.\n  4. Mismatch / missing -> 401 (no audit emit -- would amplify noise from\n     unsigned probes; structlog WARN is the visibility surface).\n  5. Parse body, route by eventType -> UPDATE EmailSendLog status.\n  6. On hard-bounce/complaint: audit.emit('email_send_failed', ...) with\n     LOCKED reason value ('bounce' or 'complaint').",
-        "operationId": "email_webhook_api_v1__internal_email_webhook_post",
+        "operationId": "email_webhook",
         "responses": {
           "202": {
             "description": "Successful Response"
@@ -4934,7 +4934,7 @@
     "/api/v1/audit-log": {
       "get": {
         "description": "Paginated audit-log listing with optional AND-combined filters (AUD-01..06).\n\nResults ordered created_at DESC, id DESC (stable pagination, AUD-06, D-08).\nFilter params: ?actorUserId=...&actorEmailSnapshot=...&resourceType=...&action=...\nDate window (inclusive MSK day bounds): ?from=YYYY-MM-DD&to=YYYY-MM-DD\nPagination: ?page=1&pageSize=20 (max pageSize=100).\n\n``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —\nlive-verified: Field(alias=\"from\") on a Depends() model does NOT bind ``?from=`` on\nthis FastAPI + Pydantic v2 stack.\n\nOwner-only: (LIST, AUDIT_LOG) in OWNER_ONLY; reception -> 403 (AUD-05, SC#1).\nUnknown action/resource_type -> 422 audit_filter_invalid (AUD-03, D-05).\nto < from -> 422 (D-06).\nNo try/except -- AppError bubbles to _app_error_handler.",
-        "operationId": "list_audit_log_api_v1_audit_log_get",
+        "operationId": "list_audit_log",
         "parameters": [
           {
             "in": "query",
@@ -5091,7 +5091,7 @@
     "/api/v1/audit-log.csv": {
       "get": {
         "description": "Stream audit-log as UTF-8 BOM + RFC-4180 CSV (all matching rows, D-16).\n\nSame filters as GET /audit-log JSON endpoint (EXP-02, SC#5):\n  ?action=...&resourceType=...&actorUserId=...&actorEmailSnapshot=...\n  ?from=YYYY-MM-DD&to=YYYY-MM-DD (route-level Query(alias=...) params)\n\nStreams ALL matching rows (no pagination) row-by-row — memory bounded by\nstream_scalars cursor (T-56-08, D-16).\n\ncreatedAt formatted as 'YYYY-MM-DD HH:MM:SS' Europe/Moscow (D-14).\npayload serialized as compact JSON string (ensure_ascii=False, Cyrillic literal).\n\n``from``/``to`` are route-level Query(alias=...) params (NOT AuditLogQuery fields) —\nmirrors the JSON handler pattern (live-verified: Field(alias=\"from\") on Depends()\nmodel does NOT bind ``?from=`` on this FastAPI + Pydantic v2 stack).\n\nOwner-only: (LIST, AUDIT_LOG) ∈ OWNER_ONLY; reception → 403 (T-56-06).\nUnknown action/resource_type → 422 audit_filter_invalid (T-56-10, SC#5).\nto < from → 422.\nNo try/except — AppError bubbles to _app_error_handler.\n\nIMPORTANT: validate_audit_filters is called EAGERLY here (before StreamingResponse)\nso validation errors are raised in the request-response phase where _app_error_handler\ncan intercept them. If validation lived inside the async generator body it would fire\nafter headers are sent (inside StreamingResponse) and could not be intercepted.",
-        "operationId": "get_audit_log_csv_api_v1_audit_log_csv_get",
+        "operationId": "get_audit_log_csv",
         "parameters": [
           {
             "in": "query",
@@ -5241,7 +5241,7 @@
     "/api/v1/auth/login": {
       "post": {
         "description": "Authenticate email+password; issue cookies + envelope (AUTH-EP-01..02, AUTH-EP-05).",
-        "operationId": "login_api_v1_auth_login_post",
+        "operationId": "login",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5283,7 +5283,7 @@
     "/api/v1/auth/logout": {
       "post": {
         "description": "Revoke current family + clear cookies (AUTH-LO-01).\n\nIdempotent: if the refresh cookie is absent or already revoked, the cookie\nclear still runs so the browser ends in a clean state.",
-        "operationId": "logout_api_v1_auth_logout_post",
+        "operationId": "logout",
         "responses": {
           "200": {
             "content": {
@@ -5305,7 +5305,7 @@
     "/api/v1/auth/logout-all": {
       "post": {
         "description": "Revoke ALL alive families for the user + clear caller's cookies (AUTH-LO-02).",
-        "operationId": "logout_all_api_v1_auth_logout_all_post",
+        "operationId": "logout_all",
         "responses": {
           "200": {
             "content": {
@@ -5327,7 +5327,7 @@
     "/api/v1/auth/me": {
       "get": {
         "description": "Return the authenticated user's profile (AUTH-LO-04).\n\n`CurrentUser` is a Protocol with `id` + `role` only. The route knows the\nruntime instance is the SA `User` model (registered via register_user_loader\nin app.main.create_app), so we cast for access to email / full_name /\ntelegram_chat_id. The cast is safe because the loader is fixed at composition.",
-        "operationId": "me_api_v1_auth_me_get",
+        "operationId": "me",
         "responses": {
           "200": {
             "content": {
@@ -5349,7 +5349,7 @@
     "/api/v1/auth/otp/request": {
       "post": {
         "description": "Request an OTP via the configured channel (AUTH-EM-02 / D-42-22).\n\nAlways returns 202 with IDENTICAL body shape regardless of channel,\nsuccess/silent-drop branch, or known/unknown user. The Pydantic body\nvalidator enforces ``email`` presence when ``channel='email'`` (returns\n422 BEFORE the route fires — not an anti-oracle leak because invalid\nbody SHAPE is not a success-vs-unknown discriminator).",
-        "operationId": "otp_request_api_v1_auth_otp_request_post",
+        "operationId": "otp_request",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5391,7 +5391,7 @@
     "/api/v1/auth/password-reset/confirm": {
       "post": {
         "description": "RESET-02 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Atomic-consume + Argon2 rehash +\nrevoke-all sessions + audit emit live in the service layer.\nReturns 200 envelope(None) on success; 410 invalid_or_expired_token /\n422 weak_password on failure (translated by the global AppError handler).",
-        "operationId": "password_reset_confirm_endpoint_api_v1_auth_password_reset_confirm_post",
+        "operationId": "password_reset_confirm_endpoint",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5433,7 +5433,7 @@
     "/api/v1/auth/password-reset/request": {
       "post": {
         "description": "RESET-01 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Anti-oracle: response is byte-identical\nacross all 4 cases (active / deactivated / owner / nonexistent) AND\nacross the rate-limit-hit branch. 500ms wall-clock floor + audit emit\nin BOTH known/unknown branches live entirely inside the service layer.",
-        "operationId": "password_reset_request_endpoint_api_v1_auth_password_reset_request_post",
+        "operationId": "password_reset_request_endpoint",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5475,7 +5475,7 @@
     "/api/v1/auth/refresh": {
       "post": {
         "description": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `sz_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
-        "operationId": "refresh_api_v1_auth_refresh_post",
+        "operationId": "refresh",
         "responses": {
           "200": {
             "content": {
@@ -5497,7 +5497,7 @@
     "/api/v1/auth/sessions": {
       "get": {
         "description": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(sz_refresh)\ntoken_hash lookup (D-23-3).",
-        "operationId": "list_sessions_api_v1_auth_sessions_get",
+        "operationId": "list_sessions",
         "parameters": [
           {
             "in": "query",
@@ -5554,7 +5554,7 @@
     "/api/v1/auth/sessions/{family_id}/revoke": {
       "post": {
         "description": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's sz_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
-        "operationId": "revoke_session_family_api_v1_auth_sessions__family_id__revoke_post",
+        "operationId": "revoke_session_family",
         "parameters": [
           {
             "in": "path",
@@ -5598,7 +5598,7 @@
     "/api/v1/auth/telegram/start": {
       "post": {
         "description": "Mint a deep-link token (AUTH-TG-01).\n\nReturns the deep-link URL the FE shows to the operator. The OtpCode row\nis created with code_hash=NULL — the bot will fill it after /start <token>.",
-        "operationId": "telegram_start_api_v1_auth_telegram_start_post",
+        "operationId": "telegram_start",
         "responses": {
           "200": {
             "content": {
@@ -5620,7 +5620,7 @@
     "/api/v1/auth/telegram/status": {
       "get": {
         "description": "Poll: has the bot DMed the code yet? (AUTH-TG-03).\n\nPer D-19: never raises; unknown / expired / consumed all return bound=False\n(do NOT leak token validity).",
-        "operationId": "telegram_status_api_v1_auth_telegram_status_get",
+        "operationId": "telegram_status",
         "parameters": [
           {
             "in": "query",
@@ -5663,7 +5663,7 @@
     "/api/v1/auth/telegram/verify": {
       "post": {
         "description": "Verify the 6-digit OTP and issue session cookies (AUTH-TG-04, AUTH-TG-06).\n\nOn success: mints tokens + cookies identical to /login, then emits\n`login_success` with `channel='telegram'` (D-14). Distinct error codes\nper D-13 ride the AppError envelope handler. BotNotStarted is re-raised\nwith `fields={'deepLinkUrl': ...}` so the FE can re-display the deep-link\nbutton (D-13 row 1).",
-        "operationId": "telegram_verify_api_v1_auth_telegram_verify_post",
+        "operationId": "telegram_verify",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5705,7 +5705,7 @@
     "/api/v1/bookings": {
       "get": {
         "description": "Paginated booking list (Phase 38 BOOK-07).\n\n`(LIST, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —\nreception sees the same list as owner (gym-staff trust model).\nDefault ±30d Moscow window bounds enumeration (T-38-03-05 mitigation).",
-        "operationId": "list_bookings_api_v1_bookings_get",
+        "operationId": "list_bookings",
         "parameters": [
           {
             "in": "query",
@@ -5844,7 +5844,7 @@
       },
       "post": {
         "description": "Create a confirmed booking (Phase 38 BOOK-02).\n\n`(CREATE, BOOKINGS)` is NOT in `OWNER_ONLY` (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel; audit records actor_user_id for accountability).\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would attempt\ntwo slot UPDATE active→booked + two booking INSERTs — the second\nwould be caught by the partial UNIQUE, but the cost is paid).\n\nError surface (service layer):\n  - 404 slot_not_found.\n  - 409 slot_not_available (slot status != 'active' before INSERT).\n  - 409 slot_already_booked (DB race-loser via partial UNIQUE — BOOK-10).\n  - 409 trainer_mismatch (pt_package.trainer_id != slot.trainer_id).\n  - 409 pt_package_not_active (no active package for client or id mismatch).\n  - 409 pt_package_exhausted (sessions_remaining <= 0).\n  - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).\n  - 422 idempotency_key_reuse (same key, different body).",
-        "operationId": "create_booking_api_v1_bookings_post",
+        "operationId": "create_booking",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5886,7 +5886,7 @@
     "/api/v1/bookings/{booking_id}": {
       "get": {
         "description": "Read a single booking with denormalized slot + pt_package (BOOK-09).\n\nEager-loaded via repository.get_booking_with_relations (Pitfall 19 —\nN+1 prevention). Returns BookingDetailResponse with inline\nSlotSnapshot (no cross-module schema import per D-38-08).",
-        "operationId": "get_booking_api_v1_bookings__booking_id__get",
+        "operationId": "get_booking",
         "parameters": [
           {
             "in": "path",
@@ -5930,7 +5930,7 @@
     "/api/v1/bookings/{booking_id}/cancel": {
       "post": {
         "description": "Cancel a confirmed booking (Phase 38 BOOK-06 / D-38-09 / D-38-16).\n\n`(CANCEL, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel). The 24h cancel-window (BOOK-06, measured against\n`booking.slot.start_time`, NOT `created_at` per D-38-16) is enforced\napplication-layer in `service.cancel_booking` and surfaces as 409\n`cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 — verbatim from\npt_sessions/router.py:200-227): SAME-key concurrent callers cannot\ndouble-execute the orchestrator (which would emit two\nbooking_cancelled audit rows AND attempt two slot restores).\n\nError surface (service layer):\n  - 404 booking_not_found.\n  - 409 invalid_transition (non-confirmed source).\n  - 409 cancel_window_expired (reception <24h before slot.start_time).\n  - 422 idempotency_key_reuse (same key, different body).",
-        "operationId": "cancel_booking_api_v1_bookings__booking_id__cancel_post",
+        "operationId": "cancel_booking",
         "parameters": [
           {
             "in": "path",
@@ -5984,7 +5984,7 @@
     "/api/v1/clients": {
       "get": {
         "description": "List alive clients (CLIENTS-03/04). VIEW permission required (D-21).",
-        "operationId": "list_clients_api_v1_clients_get",
+        "operationId": "list_clients",
         "parameters": [
           {
             "in": "query",
@@ -6148,7 +6148,7 @@
       },
       "post": {
         "description": "Create a client (CLIENTS-06). EDIT permission + CSRF required (D-21).",
-        "operationId": "create_client_api_v1_clients_post",
+        "operationId": "create_client",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6190,7 +6190,7 @@
     "/api/v1/clients/{client_id}": {
       "delete": {
         "description": "Soft-delete an alive client (CLIENTS-08).\n\nOwner-only: (DELETE, CLIENTS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content;\nFastAPI emits an empty body for 204 status_code.",
-        "operationId": "soft_delete_client_api_v1_clients__client_id__delete",
+        "operationId": "soft_delete_client",
         "parameters": [
           {
             "in": "path",
@@ -6225,7 +6225,7 @@
       },
       "get": {
         "description": "Read one alive client (CLIENTS-05). 404 for missing or soft-deleted ids.",
-        "operationId": "get_client_api_v1_clients__client_id__get",
+        "operationId": "get_client",
         "parameters": [
           {
             "in": "path",
@@ -6267,7 +6267,7 @@
       },
       "patch": {
         "description": "Partial update of an alive client (CLIENTS-07). EDIT + CSRF (D-21).",
-        "operationId": "update_client_api_v1_clients__client_id__patch",
+        "operationId": "update_client",
         "parameters": [
           {
             "in": "path",
@@ -6321,7 +6321,7 @@
     "/api/v1/clients/{client_id}/bookings": {
       "get": {
         "description": "Paginated per-client booking list (Phase 38 BOOK-08).\n\nMount: `GET /api/v1/clients/{client_id}/bookings` (BOOK-08 locked\ncontract). The route is *declared* in bookings/router.py (this file) on\nthe `client_scoped_bookings_router`, then composed by\n`app.api.v1.router` at the `/clients` prefix — mirroring the v1.4\npt-sessions package-scoped router precedent\n(pt_sessions.router.package_scoped_router mounted at `/pt-packages`).\n\nThis split keeps clients/ a dependency-leaf module — clients/router.py\ncontains zero `from app.modules.bookings` imports — while honouring\nthe REQUIREMENTS BOOK-08 URL contract. lint-imports stays green; the\nbookings → clients edge lives only in the v1 composition root.",
-        "operationId": "list_bookings_for_client_api_v1_clients__client_id__bookings_get",
+        "operationId": "list_bookings_for_client",
         "parameters": [
           {
             "in": "path",
@@ -6438,7 +6438,7 @@
     "/api/v1/membership-plans": {
       "get": {
         "description": "List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.",
-        "operationId": "list_plans_api_v1_membership_plans_get",
+        "operationId": "membership_plans_list_plans",
         "parameters": [
           {
             "in": "query",
@@ -6518,7 +6518,7 @@
       },
       "post": {
         "description": "Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.",
-        "operationId": "create_plan_api_v1_membership_plans_post",
+        "operationId": "membership_plans_create_plan",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6560,7 +6560,7 @@
     "/api/v1/membership-plans/{plan_id}": {
       "delete": {
         "description": "Soft-delete an alive membership plan (MEM-PLAN-EP-04).\n\nOwner-only: (DELETE, MEMBERSHIP_PLANS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content.\n\nD-15: Phase 16 ships soft-delete only — no 409 plan_in_use. The memberships table\nFK plan_id ON DELETE RESTRICT and _is_plan_in_use_conflict helper arrive in Phase 17.",
-        "operationId": "soft_delete_plan_api_v1_membership_plans__plan_id__delete",
+        "operationId": "soft_delete_plan",
         "parameters": [
           {
             "in": "path",
@@ -6595,7 +6595,7 @@
       },
       "get": {
         "description": "Read one alive membership plan. 404 for missing or soft-deleted ids.",
-        "operationId": "get_plan_api_v1_membership_plans__plan_id__get",
+        "operationId": "membership_plans_get_plan",
         "parameters": [
           {
             "in": "path",
@@ -6637,7 +6637,7 @@
       },
       "patch": {
         "description": "Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.",
-        "operationId": "update_plan_api_v1_membership_plans__plan_id__patch",
+        "operationId": "membership_plans_update_plan",
         "parameters": [
           {
             "in": "path",
@@ -6691,7 +6691,7 @@
     "/api/v1/memberships": {
       "get": {
         "description": "List memberships, paginated (MEM-EP-01).\n\nQuery parameters (Phase 17 D-09; Phase 24 DEBT-02 adds expiring/within):\n  - clientId — optional UUID filter; omit for global feed (owner)\n  - status   — optional single-value enum (active|expired|cancelled); omit for all\n  - sort     — created_at_desc (default) | end_date_desc | start_date_desc\n  - page / pageSize — PageQuery contract (default 1 / 20, max 100)\n  - expiring — bool (default false); when true, forces status='active' and\n               adds inclusive end_date window [today, today + (within - 1)]\n               (Europe/Moscow today). Conflict with status != active -> 422\n               query_invalid {status: incompatible_with_expiring}.\n  - within   — int (default 7, bounded 1..30); window size in days when\n               expiring=true. Silently ignored when expiring=false.",
-        "operationId": "list_memberships_api_v1_memberships_get",
+        "operationId": "list_memberships",
         "parameters": [
           {
             "in": "query",
@@ -6810,7 +6810,7 @@
       },
       "post": {
         "description": "Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).\n\nPhase 32 PAY-09 idempotency contract (D-32-18..D-32-20):\n  - Header `Idempotency-Key` is required; missing or malformed → 422\n    (idempotency_key_required / idempotency_key_invalid_format).\n  - First call: SET NX claims the key with an in-flight placeholder, runs\n    the service, stores the response envelope under the same key, returns.\n  - Replay with identical key + identical body → 200 with the cached\n    envelope bytes (byte-identical to the original response). Status code\n    is also replayed from the stored envelope.\n  - Replay with identical key + different body → 422 idempotency_key_reuse;\n    no second sale is recorded.\n  - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.",
-        "operationId": "create_membership_api_v1_memberships_post",
+        "operationId": "create_membership",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6852,7 +6852,7 @@
     "/api/v1/memberships/{membership_id}": {
       "get": {
         "description": "Read one membership (MEM-EP-02). 404 `membership_not_found` for missing ids.",
-        "operationId": "get_membership_api_v1_memberships__membership_id__get",
+        "operationId": "get_membership",
         "parameters": [
           {
             "in": "path",
@@ -6896,7 +6896,7 @@
     "/api/v1/memberships/{membership_id}/cancel": {
       "post": {
         "description": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and\n`frozen → cancelled` are both allowed; `expired` and `cancelled` source\nstates raise 409 `invalid_transition` with payload `{from_status, to_status}`.\n\nPhase 25 D-25-20: also accepts frozen source. When called on a frozen\nmembership, the open freeze period is closed without end_date extension\n(cancellation supersedes freeze) and audit emits `membership_unfrozen`\n(days_added=0) before `membership_cancelled` in the same UoW. Owner-only\nvia existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.",
-        "operationId": "cancel_membership_api_v1_memberships__membership_id__cancel_post",
+        "operationId": "cancel_membership",
         "parameters": [
           {
             "in": "path",
@@ -6950,7 +6950,7 @@
     "/api/v1/memberships/{membership_id}/freeze": {
       "post": {
         "description": "Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.\n\nTransitions active -> frozen and opens a freeze period. Returns the\nupdated MembershipResponse including freezeDaysUsed/Remaining and\ncurrentFreezePeriod populated.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not active)\n  - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)\n  - 409 already_frozen (concurrent INSERT race)",
-        "operationId": "freeze_membership_api_v1_memberships__membership_id__freeze_post",
+        "operationId": "freeze_membership",
         "parameters": [
           {
             "in": "path",
@@ -6994,7 +6994,7 @@
     "/api/v1/memberships/{membership_id}/refund": {
       "post": {
         "description": "Refund a membership (Phase 32 REF-01). REFUND permission + CSRF required.\n\n(REFUND, MEMBERSHIPS) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (H-13 AlertDialog mitigation handled at admin-web FE-13 in\nPhase 35). NO Idempotency-Key dependency — refund flow uses DB partial\nUNIQUE ``uq_payments_refund_of_alive`` for natural idempotency (D-32-20);\nrepeat POST → 409 ``already_refunded``.\n\nStatus-guard ordering (D-32-11 invariant — specific code wins):\n  1. status='frozen'                        → 409 must_unfreeze_first   (B-08)\n  2. has_renewal_descendants(membership_id) → 409 cannot_refund_renewed_source (B-09)\n  3. generic _assert_can_transition         → 409 invalid_transition\n     (already cancelled / expired)\n\nDB-side / refunder-side error mapping:\n  - uq_payments_refund_of_alive race → 409 already_refunded (AlreadyRefundedError)\n  - no original sale row (legacy)    → 404 original_payment_not_found\n    (OriginalPaymentNotFoundError)\n\nSchema-layer validation (REF-05):\n  - amountKopecks or any other extra field → 422 (BackendSchemaBase extra='forbid')\n  - empty reason / reason >200 chars       → 422\n\nRBAC-04 ordering: auth → require_permission → verify_csrf.",
-        "operationId": "refund_membership_api_v1_memberships__membership_id__refund_post",
+        "operationId": "refund_membership",
         "parameters": [
           {
             "in": "path",
@@ -7048,7 +7048,7 @@
     "/api/v1/memberships/{membership_id}/renew": {
       "post": {
         "description": "Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.\n\nCreates a follow-up membership chained via ``previous_membership_id`` to\nthe source. Snapshots from the CURRENT plan (so price increases between\nsale and renewal apply — PROJECT.md). Returns 201 + new\n``MembershipResponse`` including ``previousMembershipId`` field.\n\nDate strategy:\n  - source 'active' / 'frozen' → start_date = source.end_date + 1 day\n  - source 'expired'           → start_date = today (Europe/Moscow)\n\nErrors:\n  - 404 membership_not_found  (source missing)\n  - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)\n  - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)\n  - 409 plan_archived          (source's plan soft-deleted by owner)",
-        "operationId": "renew_membership_api_v1_memberships__membership_id__renew_post",
+        "operationId": "renew_membership",
         "parameters": [
           {
             "in": "path",
@@ -7092,7 +7092,7 @@
     "/api/v1/memberships/{membership_id}/unfreeze": {
       "post": {
         "description": "Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.\n\nCloses the open freeze period, extends end_date by ceil(delta_seconds /\n86400) (minimum 1 day), and transitions frozen -> active.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not frozen)",
-        "operationId": "unfreeze_membership_api_v1_memberships__membership_id__unfreeze_post",
+        "operationId": "unfreeze_membership",
         "parameters": [
           {
             "in": "path",
@@ -7136,7 +7136,7 @@
     "/api/v1/online-payments/memberships/{membership_id}/refund": {
       "post": {
         "description": "REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.\n\nRBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →\nverify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-\nsource / FSM) BEFORE calling ЮKassa; emits the\n``online_refund_initiated`` audit row inside the single UoW.\n\nError mapping (raised from the service layer):\n  - 404 membership_not_found / online_payment_not_found / original_payment_not_found\n  - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition\n    / refund_already_in_flight\n  - 422 yookassa_validation_error\n  - 503 yookassa_unavailable\n  - 502 yookassa_permanent_error",
-        "operationId": "refund_membership_online_api_v1_online_payments_memberships__membership_id__refund_post",
+        "operationId": "refund_membership_online",
         "parameters": [
           {
             "in": "path",
@@ -7190,7 +7190,7 @@
     "/api/v1/online-payments/memberships/{plan_id}/sell": {
       "post": {
         "description": "PAY-03 — membership redirect flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with\n``confirmation_url`` populated and ``qr_payload`` NULL on success.\nError mapping (service layer): 422 ``client_email_required_for_online_payment``,\n422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,\n502 ``yookassa_permanent_error``.",
-        "operationId": "sell_membership_redirect_api_v1_online_payments_memberships__plan_id__sell_post",
+        "operationId": "sell_membership_redirect",
         "parameters": [
           {
             "in": "path",
@@ -7244,7 +7244,7 @@
     "/api/v1/online-payments/memberships/{plan_id}/sell-qr": {
       "post": {
         "description": "PAY-05 — membership QR flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with ``qr_payload``\npopulated and ``confirmation_url`` NULL on success. QR replays re-fetch\nupstream so the second click also receives a valid ``qr_payload``\n(D-49-09 + Plan 49-03 BLOCKER #1).",
-        "operationId": "sell_membership_qr_api_v1_online_payments_memberships__plan_id__sell_qr_post",
+        "operationId": "sell_membership_qr",
         "parameters": [
           {
             "in": "path",
@@ -7298,7 +7298,7 @@
     "/api/v1/online-payments/pt-packages/{plan_id}/sell": {
       "post": {
         "description": "PAY-04 — PT-package redirect flow. Same shape as membership variant.",
-        "operationId": "sell_pt_package_redirect_api_v1_online_payments_pt_packages__plan_id__sell_post",
+        "operationId": "sell_pt_package_redirect",
         "parameters": [
           {
             "in": "path",
@@ -7352,7 +7352,7 @@
     "/api/v1/online-payments/pt-packages/{plan_id}/sell-qr": {
       "post": {
         "description": "PAY-05 — PT-package QR flow. Same shape as membership QR variant.",
-        "operationId": "sell_pt_package_qr_api_v1_online_payments_pt_packages__plan_id__sell_qr_post",
+        "operationId": "sell_pt_package_qr",
         "parameters": [
           {
             "in": "path",
@@ -7406,7 +7406,7 @@
     "/api/v1/online-payments/pt-packages/{pt_package_id}/refund": {
       "post": {
         "description": "REFUND-01 — POST /api/v1/online-payments/pt-packages/{id}/refund.\n\nMirrors ``refund_membership_online``. No freeze / renewed-source guards\nfor PT-packages (no freeze concept, no renewal chain in v1.x).",
-        "operationId": "refund_pt_package_online_api_v1_online_payments_pt_packages__pt_package_id__refund_post",
+        "operationId": "refund_pt_package_online",
         "parameters": [
           {
             "in": "path",
@@ -7460,7 +7460,7 @@
     "/api/v1/payments": {
       "get": {
         "description": "List payments globally with filter parity (Phase 32 PAY-06).\n\nOwner-only because ``(VIEW, PAYMENTS)`` is in ``OWNER_ONLY``. Reception\non the global route receives 403 — they use the scoped ``/by-client`` and\n``/by-membership`` routes instead.",
-        "operationId": "list_payments_api_v1_payments_get",
+        "operationId": "list_payments",
         "parameters": [
           {
             "in": "query",
@@ -7602,7 +7602,7 @@
     "/api/v1/payments/by-client/{client_id}": {
       "get": {
         "description": "List payments scoped to a client (Phase 32 PAY-07).\n\nReception is admitted because the client detail page (Phase 35 UI) needs\nthe customer's payment history. Includes refund rows whose\n``refund_of`` references this client's membership sales.",
-        "operationId": "list_payments_by_client_api_v1_payments_by_client__client_id__get",
+        "operationId": "list_payments_by_client",
         "parameters": [
           {
             "in": "path",
@@ -7666,7 +7666,7 @@
     "/api/v1/payments/by-membership/{membership_id}": {
       "get": {
         "description": "List payments scoped to a single membership (Phase 32 PAY-07).\n\nReturns the sale row plus the refund row (if any) for the same\nmembership.",
-        "operationId": "list_payments_by_membership_api_v1_payments_by_membership__membership_id__get",
+        "operationId": "list_payments_by_membership",
         "parameters": [
           {
             "in": "path",
@@ -7730,7 +7730,7 @@
     "/api/v1/payroll/accruals": {
       "get": {
         "description": "List all payroll accrual rows for *trainer_id*, ordered accrued_at DESC (PAY-05 / D-58-14).\n\nBoth paid and pending rows are returned; clawback rows (negative accrual_kopecks)\nare included alongside regular accruals — no status or period filters (deferred per\nCONTEXT.md D-58-14).\n\nPagination (PageQuery): page (default 1) + pageSize (default 20, max 100).\nResponse envelope: { data: { items: [...], total: N, page: P, pageSize: S } }.\n\nOwner-only: (LIST, PAYROLL) ∈ OWNER_ONLY (pre-registered Plan 58-01).\nReception receives 403 (T-58-31 mitigate).\n\nThreat T-58-32: pageSize bounded by PageQuery Field(le=100) — resource exhaustion\nmitigated by the shared pagination validator.\nThreat T-58-33: trainer_id is a bound WHERE parameter; owner sees all trainers\nby design (no cross-trainer leakage).",
-        "operationId": "list_payroll_accruals_api_v1_payroll_accruals_get",
+        "operationId": "list_payroll_accruals",
         "parameters": [
           {
             "in": "query",
@@ -7795,7 +7795,7 @@
       },
       "post": {
         "description": "INSERT an append-only accrual row with snapshotted rate/config (PAY-03 / D-58-03).\n\nResolution: uses ``service.compute_accrual_components`` as the single source of truth\n(same numbers as GET /preview; prevents recompute drift — PITFALL 1 / T-58-23).\nDB-wins-the-race idempotency: INSERT ON CONFLICT DO NOTHING RETURNING; duplicate\nperiod returns 409 ``payroll_period_already_run`` (T-58-27 / D-58-06).\n\nOwner-only: ``(CREATE, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).\nReception receives 403 (T-58-26 mitigate).\n\nRouter-layer 422 remap for CompConfigMissingError (same as preview; D-58-07 / D-58-09).\nPayrollPeriodAlreadyRunError propagates through AppError handler → 409.",
-        "operationId": "create_accrual_api_v1_payroll_accruals_post",
+        "operationId": "create_accrual",
         "requestBody": {
           "content": {
             "application/json": {
@@ -7837,7 +7837,7 @@
     "/api/v1/payroll/accruals/{accrual_id}/mark-paid": {
       "post": {
         "description": "Transition accrual status from 'pending' → 'paid' (PAY-04 / D-58-08).\n\nUses SELECT FOR UPDATE row-lock before status check to prevent concurrent\ndouble-pay races (T-58-30). Second attempt → 409 ``already_paid``.\nNo unpay path — the 'paid' status is terminal.\n\nOwner-only: ``(EDIT, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).\nReception receives 403 (T-58-26 mitigate).\n\n``AlreadyPaidError`` propagates through AppError handler → 409.\n``AccrualNotFoundError`` (NotFoundError) propagates → 404.",
-        "operationId": "mark_accrual_paid_api_v1_payroll_accruals__accrual_id__mark_paid_post",
+        "operationId": "mark_accrual_paid",
         "parameters": [
           {
             "in": "path",
@@ -7881,7 +7881,7 @@
     "/api/v1/payroll/preview": {
       "get": {
         "description": "Return session_count, fixed_kopecks, commission_kopecks, total_kopecks for a period.\n\nRead-only — ZERO rows persisted, ZERO audit events emitted (D-58-12).\nShares compute logic with PAY-03 via ``service.compute_accrual_components`` to\nprevent recompute drift between preview and persisted accrual (PITFALL 1 / T-58-23).\n\nOwner-only: ``(LIST, PAYROLL) ∈ OWNER_ONLY`` (pre-registered Plan 58-01).\nReception receives 403 (T-58-22 mitigate).\n\nRouter-layer 422 remap for CompConfigMissingError (D-58-07 / D-58-09):\n  ``CompConfigMissingError`` from the service is caught HERE and re-raised as a\n  ``ValidationAppError`` with the same ``comp_config_missing`` code and 422 status.\n  This is the router-remap approach (one error class; PAY-01 GET path keeps 404).",
-        "operationId": "preview_payroll_api_v1_payroll_preview_get",
+        "operationId": "preview_payroll",
         "parameters": [
           {
             "in": "query",
@@ -7945,7 +7945,7 @@
     "/api/v1/payroll/trainer-configs/{trainer_id}": {
       "get": {
         "description": "Resolve and return the active compensation config for the given trainer (PAY-01 / D-58-11).\n\n\"Active\" means the row with the latest ``effective_from`` that is <= today (MSK).\nReturns 404 ``comp_config_missing`` when no config exists for the trainer.\nOwner-only: ``(VIEW, COMPENSATION) ∈ OWNER_ONLY`` (pre-registered Phase A).\nReception receives 403 (T-58-17 mitigate).\n``CompConfigMissingError`` propagates to the centralised AppError handler → 404.",
-        "operationId": "get_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__get",
+        "operationId": "get_trainer_comp_config",
         "parameters": [
           {
             "in": "path",
@@ -7987,7 +7987,7 @@
       },
       "put": {
         "description": "INSERT a new versioned compensation config for the given trainer (PAY-01 / D-58-02).\n\nEvery PUT inserts a NEW row — prior config rows are never modified.  The\nresponse body contains the newly created config row with its assigned ``id``.\nOwner-only: ``(CREATE, COMPENSATION) ∈ OWNER_ONLY`` (Plan 58-01 pre-registration).\nReception receives 403 (T-58-17 mitigate).",
-        "operationId": "set_trainer_comp_config_api_v1_payroll_trainer_configs__trainer_id__put",
+        "operationId": "set_trainer_comp_config",
         "parameters": [
           {
             "in": "path",
@@ -8041,7 +8041,7 @@
     "/api/v1/pt-package-plans": {
       "get": {
         "description": "List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.",
-        "operationId": "list_plans_api_v1_pt_package_plans_get",
+        "operationId": "pt_package_plans_list_plans",
         "parameters": [
           {
             "in": "query",
@@ -8115,7 +8115,7 @@
       },
       "post": {
         "description": "Create a PT-package plan (PT-02). CREATE + CSRF required.",
-        "operationId": "create_plan_api_v1_pt_package_plans_post",
+        "operationId": "pt_package_plans_create_plan",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8157,7 +8157,7 @@
     "/api/v1/pt-package-plans/{plan_id}": {
       "delete": {
         "description": "Soft-delete a PT-package plan (PT-02 / D-33-08).\n\nOwner-only — reception → 403 from require_permission. Pre-flight checks\nfor any pt_packages row referencing this plan (409 plan_in_use) before\nflipping deleted_at. Returns 204 No Content on success.",
-        "operationId": "archive_plan_api_v1_pt_package_plans__plan_id__delete",
+        "operationId": "archive_plan",
         "parameters": [
           {
             "in": "path",
@@ -8192,7 +8192,7 @@
       },
       "get": {
         "description": "Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.",
-        "operationId": "get_plan_api_v1_pt_package_plans__plan_id__get",
+        "operationId": "pt_package_plans_get_plan",
         "parameters": [
           {
             "in": "path",
@@ -8234,7 +8234,7 @@
       },
       "patch": {
         "description": "Patch a PT-package plan (PT-02 / D-33-07). EDIT + CSRF required.\n\nOnly ``name`` is mutable post-creation. Mutating session_count /\nprice_kopecks / validity_days raises 409 ``field_immutable`` with\n``fields.field`` carrying the offending field name.",
-        "operationId": "update_plan_api_v1_pt_package_plans__plan_id__patch",
+        "operationId": "pt_package_plans_update_plan",
         "parameters": [
           {
             "in": "path",
@@ -8288,7 +8288,7 @@
     "/api/v1/pt-packages": {
       "get": {
         "description": "Paginated PT-package list (D-33-06 read tier).\n\n(VIEW, PT_PACKAGES) is NOT in OWNER_ONLY — reception sees the same list\nas owner (B-07 / Phase 35 PT-session form prefill — FE-10..18).",
-        "operationId": "list_pt_packages_api_v1_pt_packages_get",
+        "operationId": "list_pt_packages",
         "parameters": [
           {
             "in": "query",
@@ -8385,7 +8385,7 @@
       },
       "post": {
         "description": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Two-phase Redis claim + replay block mirrors\n``memberships.router.create_membership``.",
-        "operationId": "create_pt_package_api_v1_pt_packages_post",
+        "operationId": "create_pt_package",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8427,7 +8427,7 @@
     "/api/v1/pt-packages/{pt_package_id}": {
       "get": {
         "description": "Read a single PT-package instance (D-33-06; D-33-10 ``is_active`` computed).\n\n404 ``pt_package_not_found`` for missing ids.",
-        "operationId": "get_pt_package_api_v1_pt_packages__pt_package_id__get",
+        "operationId": "get_pt_package",
         "parameters": [
           {
             "in": "path",
@@ -8471,7 +8471,7 @@
     "/api/v1/pt-packages/{pt_package_id}/cancel": {
       "post": {
         "description": "Cancel a PT-package without refund (PT-08 / D-33-10).\n\n(CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception\nreceives 403 from the RBAC gate BEFORE any side effect.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db. Two-phase Redis claim + replay pattern\nmirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay\nreturns the cached envelope WITHOUT a second audit emit.\n\nError surface (service layer):\n  - 404 pt_package_not_found  (missing instance).\n  - 409 invalid_transition    (cancelled source — FSM terminal).\n  - 422 (schema layer)        (extra field / empty reason / >200 chars).",
-        "operationId": "cancel_pt_package_api_v1_pt_packages__pt_package_id__cancel_post",
+        "operationId": "cancel_pt_package",
         "parameters": [
           {
             "in": "path",
@@ -8525,7 +8525,7 @@
     "/api/v1/pt-packages/{pt_package_id}/refund": {
       "post": {
         "description": "Refund a PT-package (REF-02 / PT-13 / D-33-11).\n\n(REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (uniform-reception RBAC). RBAC-04 ordering: auth →\nrequire_permission → verify_csrf → verify_idempotency → get_db.\n\nSubject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT\npayments/router.py). Cross-module communication via the\n``get_payment_refunder()`` Protocol slot — service layer NEVER imports\n``app.modules.payments.*`` (modules-independent contract).\n\nError surface:\n  - 404 pt_package_not_found        (missing instance).\n  - 404 original_payment_not_found  (no sale payment row — should not\n                                    occur in v1.4 since PT-packages\n                                    are introduced in Phase 33 with sale\n                                    flow; defence-in-depth for parity\n                                    with memberships).\n  - 409 invalid_transition          (cancelled source — FSM terminal;\n                                    fires BEFORE the refunder so the\n                                    already-cancelled case never reaches\n                                    the DB partial UNIQUE).\n  - 409 already_refunded            (concurrent race on\n                                    uq_payments_refund_of_alive partial\n                                    UNIQUE — REF-TEST-02 exhaustive\n                                    race coverage).\n  - 422 (schema layer)              (extra field / empty reason /\n                                    >200 chars).\n\nIdempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel\nsurfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for\noperator UX consistency, beyond the DB partial UNIQUE which is the\nload-bearing race defence on its own).",
-        "operationId": "refund_pt_package_api_v1_pt_packages__pt_package_id__refund_post",
+        "operationId": "refund_pt_package",
         "parameters": [
           {
             "in": "path",
@@ -8579,7 +8579,7 @@
     "/api/v1/pt-packages/{pt_package_id}/sessions": {
       "get": {
         "description": "Paginated PT-session history for a package (PT-19 / D-34-08).\n\nSubject-side ownership (D-33-18): implementation lives in the\n`pt_sessions` module even though the URL path is rooted at\n`/pt-packages/{id}/sessions`. The `package_scoped_router` is\nmounted at `/api/v1/pt-packages` by `app.api.v1.router`.\n\nReturns the standard `{items, total, page, pageSize}` envelope ordered\n`performed_at DESC, created_at DESC, id DESC`. The `include_cancelled`\nquery param (camelCase `?includeCancelled`) defaults to `true`.\nReturns `items=[], total=0` for unknown `pt_package_id` (no 404 —\npackage-existence check is out of scope for list endpoints per\n`pt_packages` list precedent).",
-        "operationId": "list_sessions_by_pt_package_api_v1_pt_packages__pt_package_id__sessions_get",
+        "operationId": "list_sessions_by_pt_package",
         "parameters": [
           {
             "in": "path",
@@ -8656,7 +8656,7 @@
     "/api/v1/pt-sessions": {
       "post": {
         "description": "Record a PT-session (PT-15 / PT-16 / PT-17).\n\n(CREATE, PT_SESSIONS) is NOT in OWNER_ONLY (Phase 30 INFRA-19) —\nreception + owner both receive 201 from the RBAC gate. The 7-day\nbackdating window (B-11) is enforced application-layer in\n``service.record_pt_session`` and surfaces as 422\n``performed_at_out_of_window`` for reception.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo pt_session_recorded audit rows AND decrement\nsessions_remaining twice). The losing caller falls into the replay\nbranch and either gets the cached envelope (matching body) or 409\n``idempotency_in_flight`` (placeholder still set).\n\nError surface (service layer):\n  - 404 pt_package_not_found / trainer_not_found.\n  - 409 pt_package_not_active (pre-decrement guard fires first).\n  - 409 pt_package_exhausted (race-loser at atomic UPDATE).\n  - 422 trainer_inactive / performed_at_in_future /\n    performed_at_out_of_window.\n  - 422 idempotency_key_reuse (same key, different body).",
-        "operationId": "record_pt_session_api_v1_pt_sessions_post",
+        "operationId": "record_pt_session",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8698,7 +8698,7 @@
     "/api/v1/pt-sessions/{pt_session_id}": {
       "get": {
         "description": "Read a single PT-session row (PT-19 read tier).\n\nReception + owner both pass (single-zone CRM, T-34-M accepted). Returns\n404 `pt_session_not_found` if the id is unknown.",
-        "operationId": "get_pt_session_api_v1_pt_sessions__pt_session_id__get",
+        "operationId": "get_pt_session",
         "parameters": [
           {
             "in": "path",
@@ -8742,7 +8742,7 @@
     "/api/v1/pt-sessions/{pt_session_id}/cancel": {
       "post": {
         "description": "Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).\n\n`(CANCEL, PT_SESSIONS)` is NOT in `OWNER_ONLY` (Plan 34-01 removed it) —\nreception + owner both pass the RBAC gate. The 24h cancel-window (B-12,\nmeasured from `pt_session.created_at`, NOT `performed_at` per D-34-07)\nis enforced application-layer in `service.cancel_pt_session` and surfaces\nas 403 `cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo `pt_session_cancelled` audit rows AND increment\n`sessions_remaining` twice).\n\nError surface (service layer):\n  - 404 pt_session_not_found.\n  - 409 already_cancelled.\n  - 403 cancel_window_expired (reception >24h since created_at).\n  - 422 idempotency_key_reuse (same key, different body).",
-        "operationId": "cancel_pt_session_api_v1_pt_sessions__pt_session_id__cancel_post",
+        "operationId": "cancel_pt_session",
         "parameters": [
           {
             "in": "path",
@@ -8796,7 +8796,7 @@
     "/api/v1/recurring-templates": {
       "get": {
         "description": "List recurring templates (REC-04 — both roles).\n\n(LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.",
-        "operationId": "list_recurring_templates_api_v1_recurring_templates_get",
+        "operationId": "list_recurring_templates",
         "parameters": [
           {
             "in": "query",
@@ -8865,7 +8865,7 @@
       },
       "post": {
         "description": "Create a recurring slot template (REC-01 / D-59-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nTwo-phase Redis idempotency (D-38-14 / Pitfall 14).\n\nError surface:\n  - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)",
-        "operationId": "create_recurring_template_api_v1_recurring_templates_post",
+        "operationId": "create_recurring_template",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8907,7 +8907,7 @@
     "/api/v1/recurring-templates/{template_id}/deactivate": {
       "post": {
         "description": "Flip is_active=False on a recurring template (REC-01 deactivate).\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nForward-only: does not cancel materialized slots.",
-        "operationId": "deactivate_recurring_template_api_v1_recurring_templates__template_id__deactivate_post",
+        "operationId": "deactivate_recurring_template",
         "parameters": [
           {
             "in": "path",
@@ -8951,7 +8951,7 @@
     "/api/v1/reports/clients": {
       "get": {
         "description": "Clients snapshot: active memberships, expiring-within-N count, new-clients in range.\n\nAll counters exclude soft-deleted clients (CLR-04).\n`within` defaults to 7, range 1..30 (D-07); out-of-range → 422.\nActive/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
-        "operationId": "get_clients_report_api_v1_reports_clients_get",
+        "operationId": "get_clients_report",
         "parameters": [
           {
             "in": "query",
@@ -9015,7 +9015,7 @@
     "/api/v1/reports/clients.csv": {
       "get": {
         "description": "Stream clients snapshot as UTF-8 BOM + RFC-4180 CSV (single data row).\n\nSame query params as GET /reports/clients (EXP-03, SC#5).\nHeader row = CSV_CLIENTS_HEADERS; single summary row.\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
-        "operationId": "get_clients_csv_api_v1_reports_clients_csv_get",
+        "operationId": "get_clients_csv",
         "parameters": [
           {
             "in": "query",
@@ -9072,7 +9072,7 @@
     "/api/v1/reports/revenue": {
       "get": {
         "description": "Aggregate payments ledger into period buckets with method/subject_kind breakdown.\n\nRefunds (subject_kind='refund', negative amount_kopecks) net into netKopecks\nonly — they do NOT appear in bySubjectKind (D-01, REV-04).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); to<from → 422.",
-        "operationId": "get_revenue_report_api_v1_reports_revenue_get",
+        "operationId": "get_revenue_report",
         "parameters": [
           {
             "in": "query",
@@ -9140,7 +9140,7 @@
     "/api/v1/reports/revenue.csv": {
       "get": {
         "description": "Stream revenue report as UTF-8 BOM + RFC-4180 CSV.\n\nSame query params as GET /reports/revenue (EXP-03, SC#5).\nMoney columns are period-decimal rubles (D-13); header row = CSV_REVENUE_HEADERS.\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.\nRange validation: to<from → 422; range>366 days → 422.\nNo try/except — errors bubble to _app_error_handler.",
-        "operationId": "get_revenue_csv_api_v1_reports_revenue_csv_get",
+        "operationId": "get_revenue_csv",
         "parameters": [
           {
             "in": "query",
@@ -9201,7 +9201,7 @@
     "/api/v1/reports/trainers": {
       "get": {
         "description": "Per-trainer aggregate for [fromDate, toDate] MSK: session counts, hours, unique clients, utilization %, revenue, accrued vs paid compensation. Revenue is attributed to the trainer assigned at PT-package sale time. Range cap: 366 days (D-06); toDate<fromDate → 422; reception → 403.",
-        "operationId": "get_trainers_report_api_v1_reports_trainers_get",
+        "operationId": "get_trainers_report",
         "parameters": [
           {
             "in": "query",
@@ -9252,7 +9252,7 @@
     "/api/v1/reports/trainers.csv": {
       "get": {
         "description": "Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV. Same query params as GET /reports/trainers. One row per trainer; money columns in period-decimal rubles; None/NULL cells render as empty string. Filename: trainer-usage-YYYY-MM-DD-YYYY-MM-DD.csv (EXP-01 precedent). Owner-only; reception → 403.",
-        "operationId": "get_trainers_csv_api_v1_reports_trainers_csv_get",
+        "operationId": "get_trainers_csv",
         "parameters": [
           {
             "in": "query",
@@ -9300,7 +9300,7 @@
     "/api/v1/reports/visits": {
       "get": {
         "description": "Visits composite report: daily counts, hourly distribution, averagePerDay.\n\nDaily groups by gym_date (MSK STORED column — no secondary TZ conversion, VIS-R-04).\nHourly groups by hour-of-day across the full range (VIS-R-02).\naveragePerDay = total visits / calendar days in range inclusive (D-10).\nSparse buckets: only days/hours with visits appear (D-08).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
-        "operationId": "get_visits_report_api_v1_reports_visits_get",
+        "operationId": "get_visits_report",
         "parameters": [
           {
             "in": "query",
@@ -9354,7 +9354,7 @@
     "/api/v1/reports/visits.csv": {
       "get": {
         "description": "Stream visits daily series as UTF-8 BOM + RFC-4180 CSV.\n\nSame query params as GET /reports/visits (EXP-03, SC#5).\nDaily-only (date, count); hourly section deferred (D-15 discretion).\nHeader row = CSV_VISITS_HEADERS.\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
-        "operationId": "get_visits_csv_api_v1_reports_visits_csv_get",
+        "operationId": "get_visits_csv",
         "parameters": [
           {
             "in": "query",
@@ -9401,7 +9401,7 @@
     "/api/v1/time-off": {
       "get": {
         "description": "List time-off blocks (REC-04 — both roles).\n\n(LIST, SCHEDULE_SLOTS) NOT in OWNER_ONLY — reception sees same list.",
-        "operationId": "list_time_off_api_v1_time_off_get",
+        "operationId": "list_time_off",
         "parameters": [
           {
             "in": "query",
@@ -9470,7 +9470,7 @@
       },
       "post": {
         "description": "Create a trainer time-off block (REC-03 / D-59-06 LOCKED semantics).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403 (on both\nforce=true and force=false — threat model T-59-09).\n\nError surface:\n  - 409 time_off_booked_conflict  (booked slots overlap and force=False)",
-        "operationId": "create_time_off_api_v1_time_off_post",
+        "operationId": "create_time_off",
         "parameters": [
           {
             "in": "query",
@@ -9524,7 +9524,7 @@
     "/api/v1/time-off/{time_off_id}": {
       "delete": {
         "description": "Delete a trainer time-off block (REC-03 delete / forward-only).\n\n(DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nDoes NOT resurrect cancelled slots — next cron tick re-materializes new ones.",
-        "operationId": "delete_time_off_api_v1_time_off__time_off_id__delete",
+        "operationId": "delete_time_off",
         "parameters": [
           {
             "in": "path",
@@ -9561,7 +9561,7 @@
     "/api/v1/trainer-slots": {
       "get": {
         "description": "Paginated slot list (SLOT-08 read tier).\n\n(LIST, SCHEDULE_SLOTS) is NOT in OWNER_ONLY — reception sees the same\nlist as owner (slot picker for booking flow). Default window is bounded\nto 14 days forward (T-38-01-04 mitigation — prevents unbounded\nenumeration).",
-        "operationId": "list_slots_api_v1_trainer_slots_get",
+        "operationId": "list_slots",
         "parameters": [
           {
             "in": "query",
@@ -9676,7 +9676,7 @@
       },
       "post": {
         "description": "Publish a trainer availability slot (Phase 38 SLOT-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY (Phase 37 INFRA-27) — reception\nreceives 403 from the RBAC gate BEFORE any side effect. Two-phase Redis\nclaim + replay (CR-02 from Phase 33 review) closes the same-key race.\n\nError surface (service layer):\n  - 404 trainer_not_found       (no such trainer id)\n  - 409 trainer_inactive        (trainer.is_active=False)\n  - 409 slot_in_past            (start_time <= now() UTC)\n  - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)\n  - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)\n  - 422 idempotency_key_reuse   (same key, different body)",
-        "operationId": "publish_slot_api_v1_trainer_slots_post",
+        "operationId": "publish_slot",
         "requestBody": {
           "content": {
             "application/json": {
@@ -9718,7 +9718,7 @@
     "/api/v1/trainer-slots/{slot_id}": {
       "get": {
         "description": "Read a single slot (SLOT-08 detail). 404 slot_not_found for missing id.",
-        "operationId": "get_slot_api_v1_trainer_slots__slot_id__get",
+        "operationId": "get_slot",
         "parameters": [
           {
             "in": "path",
@@ -9762,7 +9762,7 @@
     "/api/v1/trainer-slots/{slot_id}/cancel": {
       "patch": {
         "description": "Cancel a trainer slot (SLOT-09 — active-only path in plan 38-01).\n\nFor Phase 38 plan 38-01: only the `active → cancelled` transition is\nsupported. Cancelling a `booked` slot triggers the booked-cascade flow\nwhich lands in plan 38-03 (it must atomically cancel the linked confirmed\nbooking + emit both `slot_cancelled` and `booking_cancelled`). In this\nplan, attempting to cancel a booked slot raises\n`InvalidSlotTransitionError` (409 `invalid_transition`) with an explicit\nforward-link message.\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.",
-        "operationId": "cancel_slot_api_v1_trainer_slots__slot_id__cancel_patch",
+        "operationId": "cancel_slot",
         "parameters": [
           {
             "in": "path",
@@ -9816,7 +9816,7 @@
     "/api/v1/trainers": {
       "get": {
         "description": "List alive trainers (TRN-04). VIEW permission required — reception allowed (D-31-09).",
-        "operationId": "list_trainers_api_v1_trainers_get",
+        "operationId": "list_trainers",
         "parameters": [
           {
             "in": "query",
@@ -9887,7 +9887,7 @@
       },
       "post": {
         "description": "Create a trainer (TRN-02). CREATE permission + CSRF required (RBAC-04 ordering).",
-        "operationId": "create_trainer_api_v1_trainers_post",
+        "operationId": "create_trainer",
         "requestBody": {
           "content": {
             "application/json": {
@@ -9929,7 +9929,7 @@
     "/api/v1/trainers/{trainer_id}": {
       "delete": {
         "description": "Hard-delete an alive trainer (TRN-05).\n\nOwner-only: (DELETE, TRAINERS) is in OWNER_ONLY, so reception → 403 from\nrequire_permission. CSRF required on the mutation. Returns 204 No Content.\nMaps IntegrityError pgcode=23503 → 409 trainer_in_use (pre-emptive D-31-07).",
-        "operationId": "delete_trainer_api_v1_trainers__trainer_id__delete",
+        "operationId": "delete_trainer",
         "parameters": [
           {
             "in": "path",
@@ -9964,7 +9964,7 @@
       },
       "get": {
         "description": "Read one alive trainer (TRN-02). 404 for missing or soft-deleted ids.",
-        "operationId": "get_trainer_api_v1_trainers__trainer_id__get",
+        "operationId": "get_trainer",
         "parameters": [
           {
             "in": "path",
@@ -10006,7 +10006,7 @@
       },
       "patch": {
         "description": "Partial update of an alive trainer (TRN-03). EDIT + CSRF (RBAC-04 ordering).",
-        "operationId": "update_trainer_api_v1_trainers__trainer_id__patch",
+        "operationId": "update_trainer",
         "parameters": [
           {
             "in": "path",
@@ -10060,7 +10060,7 @@
     "/api/v1/users": {
       "get": {
         "description": "USERS-02 — paginated list (D-43-15). LIST permission required; no CSRF (read).",
-        "operationId": "list_users_endpoint_api_v1_users_get",
+        "operationId": "list_users_endpoint",
         "parameters": [
           {
             "in": "query",
@@ -10141,7 +10141,7 @@
       },
       "post": {
         "description": "USERS-03 / D-43-13 — create user + invite. CREATE permission + CSRF required.",
-        "operationId": "create_user_endpoint_api_v1_users_post",
+        "operationId": "create_user_endpoint",
         "parameters": [
           {
             "description": "When true, the response carries the raw invitation URL (D-43-14). Audited via link_copied=true.",
@@ -10197,7 +10197,7 @@
     "/api/v1/users/invitations/accept": {
       "post": {
         "description": "RESET-04 anonymous endpoint.\n\nNo CSRF, no RBAC (D-44-34). Cross-module delegate to\n``auth.password_reset_service.accept_invitation`` (D-44-18 — atomic\nconsume + UPDATE-only password set lives in auth bedrock). On\nsuccess, issues session cookies via the SAME verbatim sequence\n/auth/login uses (see auth/router.py:72-92).\n\nCanonical ordering — DO NOT deviate:\n  1. service.accept_invitation owns its own commit (SVC001).\n  2. Re-load User row by id for UserPublic.model_validate.\n  3. issue_tokens(session, redis, user) — 3-tuple (access, refresh, csrf).\n  4. issue_session_cookies(response, access_token=, refresh_token=,\n     csrf_token=, secure=) — kwargs match /auth/login verbatim.\n  5. NO explicit session.commit() between (3) and (4) — mirrors /auth/login.\n  6. envelope(LoginResponse(user=UserPublic.model_validate(user))).",
-        "operationId": "accept_invitation_endpoint_api_v1_users_invitations_accept_post",
+        "operationId": "accept_invitation_endpoint",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10239,7 +10239,7 @@
     "/api/v1/users/invitations/{token_id}/revoke": {
       "post": {
         "description": "USERS-03 / D-43-19 — atomic-consume invitation token by row UUID (NOT raw token).",
-        "operationId": "revoke_invitation_endpoint_api_v1_users_invitations__token_id__revoke_post",
+        "operationId": "revoke_invitation_endpoint",
         "parameters": [
           {
             "in": "path",
@@ -10286,7 +10286,7 @@
     "/api/v1/users/{user_id}": {
       "delete": {
         "description": "USERS-05 / D-43-18 — soft-delete + session revoke + invitation cascade.\n\nDELETE permission + CSRF required. `(Action.DELETE, Resource.USERS)` is in\n`OWNER_ONLY`, so reception → 403 from `require_permission`.",
-        "operationId": "soft_delete_user_endpoint_api_v1_users__user_id__delete",
+        "operationId": "soft_delete_user_endpoint",
         "parameters": [
           {
             "in": "path",
@@ -10323,7 +10323,7 @@
     "/api/v1/users/{user_id}/deactivate": {
       "patch": {
         "description": "USERS-04 / D-43-16 — self + last-owner guards; UPDATE permission + CSRF required.",
-        "operationId": "deactivate_user_endpoint_api_v1_users__user_id__deactivate_patch",
+        "operationId": "deactivate_user_endpoint",
         "parameters": [
           {
             "in": "path",
@@ -10360,7 +10360,7 @@
     "/api/v1/users/{user_id}/reactivate": {
       "patch": {
         "description": "USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required.",
-        "operationId": "reactivate_user_endpoint_api_v1_users__user_id__reactivate_patch",
+        "operationId": "reactivate_user_endpoint",
         "parameters": [
           {
             "in": "path",
@@ -10397,7 +10397,7 @@
     "/api/v1/visits": {
       "get": {
         "description": "List visits, paginated (VIS-EP-01). VIEW permission required.",
-        "operationId": "list_visits_api_v1_visits_get",
+        "operationId": "list_visits",
         "parameters": [
           {
             "in": "query",
@@ -10503,7 +10503,7 @@
       },
       "post": {
         "description": "Reception manual check-in (VIS-EP-03). CHECK_IN permission + CSRF required.\n\nSealed body — only `clientId` accepted (D-01). Every other field is\nserver-derived: membershipId resolved via resolve_active_membership;\ncheckedInAt defaults to DB now(); gymDate is the STORED GENERATED column;\nchannel is 'reception'; checkedInBy is actor.id.\n\nRBAC-04: `actor` (require_permission) parameter is declared BEFORE\n`_csrf` (verify_csrf) so unauthenticated callers see 401, not CSRF\nerrors. (CHECK_IN, VISITS) is NOT in OWNER_ONLY — reception receives\n201 on success.",
-        "operationId": "create_visit_api_v1_visits_post",
+        "operationId": "create_visit",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10545,7 +10545,7 @@
     "/api/v1/visits/_meta": {
       "get": {
         "description": "Return gym hours window. Reception + owner. No DB access.\n\nCache-Control: public, max-age=300 — value travels with route (D-22-1).\nReads Settings.gym_hours_start / gym_hours_end (lru_cache) and serialises\nvia .isoformat()[:5] → HH:MM strings.",
-        "operationId": "get_visits_meta_api_v1_visits__meta_get",
+        "operationId": "get_visits_meta",
         "responses": {
           "200": {
             "content": {
@@ -10567,7 +10567,7 @@
     "/api/v1/visits/{visit_id}": {
       "get": {
         "description": "Read one visit (VIS-EP-02). 404 `visit_not_found` for missing ids.",
-        "operationId": "get_visit_api_v1_visits__visit_id__get",
+        "operationId": "get_visit",
         "parameters": [
           {
             "in": "path",
@@ -10611,7 +10611,7 @@
     "/healthz": {
       "get": {
         "description": "Liveness probe. Returns {\"status\": \"ok\"} with HTTP 200.",
-        "operationId": "health_healthz_get",
+        "operationId": "health",
         "responses": {
           "200": {
             "content": {
@@ -10620,7 +10620,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Health Healthz Get",
+                  "title": "Response Health",
                   "type": "object"
                 }
               }
