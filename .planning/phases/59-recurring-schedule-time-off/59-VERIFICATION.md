@@ -1,24 +1,28 @@
 ---
 phase: 59-recurring-schedule-time-off
 verified: 2026-05-25T12:00:00Z
-status: human_needed
+resolved: 2026-05-26T11:14:00Z
+status: verified
 score: 4/4
 overrides_applied: 0
 human_verification:
   - test: "Run full backend test suite with DB available and confirm all 2161+ tests pass including test_generate_recurring_slots.py, test_recurring_templates.py, test_time_off.py"
     expected: "0 failures; DST golden, idempotency, time-off-skip, and force-cascade tests all PASS"
     why_human: "Test suite requires a live Postgres + Redis stack; cannot execute in static verification"
+    resolution: "RESOLVED 2026-05-26 — full backend suite re-run against live Postgres 16 + Redis 7 dev compose: 2181 passed, 6 skipped, 0 failed in 306s. Phase 59 schedule integration files 21/21 pass including DST golden, idempotency, time-off-skip, and force-cascade tests."
   - test: "WR-06 known limitation: after owner force-cancels a booked slot via ?force=true, verify that the client's PT package sessions_remaining is NOT restored (documented-intentional pre-existing behavior shared with cancel_slot)"
     expected: "sessions_remaining stays decremented; the NOTE WR-06 comment at service.py:937 is the sole documentation; a product decision is needed to decide whether to restore credits on owner-driven cancellations"
     why_human: "This is a product decision that predates Phase 59; verifier cannot make the business call; the behavior is explicitly documented in code"
+    resolution: "RESOLVED 2026-05-26 — owner product decision: **option B — restore sessions_remaining on all owner-initiated cancellations** (both `?force=true` time-off path AND `cancel_slot` booked-cascade). Implementation deferred to backlog Phase 999.1 (commit 24c54d7b). NOTE WR-06 at service.py:937 remains until 999.1 ships."
 ---
 
 # Phase 59: Recurring Schedule + Time-Off Verification Report
 
 **Phase Goal:** Owner can define weekly recurring availability patterns for trainers and block time-off windows; concrete slots are materialized daily by an ARQ cron. (REC-01..04)
 **Verified:** 2026-05-25T12:00:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Resolved:** 2026-05-26T11:14:00Z (human verification items closed)
+**Status:** verified
+**Re-verification:** Yes — human_needed items resolved 2026-05-26 (full suite re-run 2181/6 green; WR-06 product decision recorded → backlog 999.1)
 
 ## Goal Achievement
 
