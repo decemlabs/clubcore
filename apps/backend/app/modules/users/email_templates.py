@@ -28,6 +28,7 @@ from typing import Final
 from jinja2 import Template
 from jinja2.sandbox import SandboxedEnvironment
 
+from app.core.branding import CLUB_BRAND
 from app.core.permissions import Role
 
 _ENV: Final[SandboxedEnvironment] = SandboxedEnvironment(autoescape=True)
@@ -44,11 +45,11 @@ class EmailTemplate:
 
 
 # D-43-OWNER-COPY-LOCK — owner sign-off REQUIRED before mutation.
-_SUBJECT_USER_INVITATION: Final[str] = "Приглашение в Sportzal"
+_SUBJECT_USER_INVITATION: Final[str] = f"Приглашение в {CLUB_BRAND}"
 
 _HTML_USER_INVITATION: Final[Template] = _ENV.from_string(
     "<p>Здравствуйте, {{ full_name }}!</p>"
-    "<p>Вас пригласили в&nbsp;Sportzal в&nbsp;роли «{{ role_ru }}».</p>"  # noqa: RUF001
+    "<p>Вас пригласили в&nbsp;" + CLUB_BRAND + " в&nbsp;роли «{{ role_ru }}».</p>"  # noqa: RUF001
     "<p>Чтобы установить пароль и&nbsp;войти, перейдите по&nbsp;ссылке:</p>"
     '<p><a href="{{ invitation_url }}">{{ invitation_url }}</a></p>'
     "<p>Ссылка действительна до&nbsp;{{ expires_at_human }}.</p>"
@@ -57,7 +58,7 @@ _HTML_USER_INVITATION: Final[Template] = _ENV.from_string(
 
 _TEXT_USER_INVITATION: Final[Template] = _ENV_TEXT.from_string(
     "Здравствуйте, {{ full_name }}!\n\n"
-    "Вас пригласили в Sportzal в роли «{{ role_ru }}».\n\n"  # noqa: RUF001
+    "Вас пригласили в " + CLUB_BRAND + " в роли «{{ role_ru }}».\n\n"  # noqa: RUF001
     "Чтобы установить пароль и войти, перейдите по ссылке:\n"
     "{{ invitation_url }}\n\n"
     "Ссылка действительна до {{ expires_at_human }}.\n\n"

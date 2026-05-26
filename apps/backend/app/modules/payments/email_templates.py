@@ -57,6 +57,8 @@ from typing import Final
 from jinja2 import Template
 from jinja2.sandbox import SandboxedEnvironment
 
+from app.core.branding import CLUB_BRAND
+
 # Two sandboxed Jinja environments: HTML side autoescapes user-supplied
 # variables; text/plain side is explicit passthrough. Mirrors the Phase 42
 # auth/email_templates.py shape (D-42-06).
@@ -91,7 +93,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<p>Дата: {{ paid_at }}</p>"  # noqa: RUF001
             "<p>{{ plan_snapshot }}</p>"
             "<p>Принял: {{ actor_display_name }}</p>"  # noqa: RUF001
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"  # noqa: RUF001
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"  # noqa: RUF001
         ),
         text=_ENV_TEXT.from_string(
             "Чек: оплата\n\n"  # noqa: RUF001
@@ -99,7 +101,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "Дата: {{ paid_at }}\n"  # noqa: RUF001
             "{{ plan_snapshot }}\n\n"
             "Принял: {{ actor_display_name }}\n\n"  # noqa: RUF001
-            "Sportzal · noreply@mail.sportzal.ru"  # noqa: RUF001
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"  # noqa: RUF001
         ),
     ),
     "EMAIL_PAYMENT_RECEIPT_REFUND": EmailTemplate(  # noqa: RUF001
@@ -110,7 +112,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<p>Дата: {{ paid_at }}</p>"  # noqa: RUF001
             "<p>{{ plan_snapshot }}</p>"
             "<p>Оформил: {{ actor_display_name }}</p>"  # noqa: RUF001
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"  # noqa: RUF001
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"  # noqa: RUF001
         ),
         text=_ENV_TEXT.from_string(
             "Чек: возврат\n\n"  # noqa: RUF001
@@ -118,7 +120,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "Дата: {{ paid_at }}\n"  # noqa: RUF001
             "{{ plan_snapshot }}\n\n"
             "Оформил: {{ actor_display_name }}\n\n"  # noqa: RUF001
-            "Sportzal · noreply@mail.sportzal.ru"  # noqa: RUF001
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"  # noqa: RUF001
         ),
     ),
 }
