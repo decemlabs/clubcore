@@ -46,6 +46,8 @@ from typing import Final
 from jinja2 import Template
 from jinja2.sandbox import SandboxedEnvironment
 
+from app.core.branding import CLUB_BRAND
+
 # Two sandboxed Jinja environments: HTML side autoescapes ``{{ otp_code }}``
 # (defence in depth, T-42-05-01); text/plain side is explicit passthrough.
 _ENV: Final[SandboxedEnvironment] = SandboxedEnvironment(autoescape=True)
@@ -72,41 +74,41 @@ class EmailTemplate:
 # line 19 precedent for the locked OTP DM body).
 TEMPLATES: Final[dict[str, EmailTemplate]] = {
     "EMAIL_OTP_LOGIN": EmailTemplate(  # noqa: RUF001
-        subject="Код входа в Sportzal",
+        subject=f"Код входа в {CLUB_BRAND}",
         html=_ENV.from_string(
-            "<h1>Код входа в Sportzal</h1>"
+            f"<h1>Код входа в {CLUB_BRAND}</h1>"
             "<p>Ваш код для входа: <strong>{{ otp_code }}</strong></p>"
             "<p>Срок действия: 10 минут. Если вы не запрашивали код — "
             "проигнорируйте это письмо.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
-            "Код входа в Sportzal\n\n"
+            f"Код входа в {CLUB_BRAND}\n\n"
             "Ваш код для входа: {{ otp_code }}\n\n"
             "Срок действия: 10 минут. Если вы не запрашивали код — "
             "проигнорируйте это письмо.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
     "PASSWORD_RESET_EMAIL": EmailTemplate(  # noqa: RUF001
-        subject="Восстановление пароля Sportzal",
+        subject=f"Восстановление пароля {CLUB_BRAND}",
         html=_ENV.from_string(
-            "<h1>Восстановление пароля Sportzal</h1>"
+            f"<h1>Восстановление пароля {CLUB_BRAND}</h1>"
             "<p>Перейдите по ссылке, чтобы задать новый пароль:</p>"
             '<p><a href="{{ reset_url }}">{{ reset_url }}</a></p>'
             "<p>Ссылка действительна до {{ expires_at_human }}. "
             "Если вы не запрашивали восстановление пароля — "
             "проигнорируйте это письмо.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
-            "Восстановление пароля Sportzal\n\n"
+            f"Восстановление пароля {CLUB_BRAND}\n\n"
             "Перейдите по ссылке, чтобы задать новый пароль:\n"
             "{{ reset_url }}\n\n"
             "Ссылка действительна до {{ expires_at_human }}. "
             "Если вы не запрашивали восстановление пароля — "
             "проигнорируйте это письмо.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
 }

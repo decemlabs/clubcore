@@ -50,6 +50,8 @@ from typing import Final
 from jinja2 import Template
 from jinja2.sandbox import SandboxedEnvironment
 
+from app.core.branding import CLUB_BRAND
+
 # Two sandboxed Jinja environments: HTML side autoescapes ``{{ end_date }}``
 # (defence in depth even for pre-formatted date strings); text/plain side is
 # explicit passthrough. Mirrors ``app/modules/auth/email_templates.py:51-52``.
@@ -83,13 +85,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Ваш абонемент скоро истекает</h1>"
             "<p>Срок действия абонемента истекает {{ end_date }}&nbsp;г. "
             "Самое время продлить — обратитесь к администратору.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Ваш абонемент скоро истекает\n\n"
             "Срок действия абонемента истекает {{ end_date }} г. "
             "Самое время продлить — обратитесь к администратору.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
     "EMAIL_EXPIRING_7D_VARIANT_B": EmailTemplate(  # noqa: RUF001
@@ -98,13 +100,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Напоминание о сроке абонемента</h1>"
             "<p>Напоминаем, что ваш абонемент действует до {{ end_date }}&nbsp;г. "
             "Продление через администратора стойки.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Напоминание о сроке абонемента\n\n"
             "Напоминаем, что ваш абонемент действует до {{ end_date }} г. "
             "Продление через администратора стойки.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
     "EMAIL_EXPIRING_3D_VARIANT_A": EmailTemplate(  # noqa: RUF001
@@ -113,13 +115,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>До конца абонемента осталось 3 дня</h1>"
             "<p>Срок действия абонемента истекает {{ end_date }}&nbsp;г. "
             "Подойдите к стойке для продления.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "До конца абонемента осталось 3 дня\n\n"
             "Срок действия абонемента истекает {{ end_date }} г. "
             "Подойдите к стойке для продления.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
     "EMAIL_EXPIRING_3D_VARIANT_B": EmailTemplate(  # noqa: RUF001
@@ -128,13 +130,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Скоро истекает ваш абонемент</h1>"
             "<p>Ваш абонемент действителен до {{ end_date }}&nbsp;г. "
             "Не забудьте продлить его у администратора.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Скоро истекает ваш абонемент\n\n"
             "Ваш абонемент действителен до {{ end_date }} г. "
             "Не забудьте продлить его у администратора.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
     "EMAIL_EXPIRING_1D_VARIANT_A": EmailTemplate(  # noqa: RUF001
@@ -143,13 +145,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Завтра — последний день абонемента</h1>"
             "<p>Срок действия абонемента истекает завтра, {{ end_date }}&nbsp;г. "
             "Заходите продлевать.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Завтра — последний день абонемента\n\n"
             "Срок действия абонемента истекает завтра, {{ end_date }} г. "
             "Заходите продлевать.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
     "EMAIL_EXPIRING_1D_VARIANT_B": EmailTemplate(  # noqa: RUF001
@@ -158,13 +160,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Последний день вашего абонемента</h1>"
             "<p>Внимание: ваш абонемент истекает завтра, {{ end_date }}&nbsp;г. "
             "Зайдите к нам, чтобы продлить.</p>"
-            "<p>Sportzal · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Последний день вашего абонемента\n\n"
             "Внимание: ваш абонемент истекает завтра, {{ end_date }} г. "
             "Зайдите к нам, чтобы продлить.\n\n"
-            "Sportzal · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
         ),
     ),
 }
