@@ -58,7 +58,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 Plans:
 **Wave 1**
 
-- [ ] 62-01-PLAN.md — G-1 pnpm package rename (@sportzal → @clubcore + workspace lockfile)
+- [x] 62-01-PLAN.md — G-1 pnpm package rename (@sportzal → @clubcore + workspace lockfile)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 62. clubcore Rebrand | v1.10 | 0/7 | Not started | — |
+| 62. clubcore Rebrand | v1.10 | 1/7 | In Progress|  |
 | 63. Tech-Debt Sweep | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/0 | Not started (milestone not opened) | — |
 | 65. Handoff Artifacts | v1.11 | 0/0 | Not started (milestone not opened) | — |
