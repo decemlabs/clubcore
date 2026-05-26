@@ -1,8 +1,29 @@
 # Milestones
 
-## v1.10 clubcore Rebrand (In Progress)
+## v1.10 clubcore Rebrand (Shipped: 2026-05-26)
 
-**Status:** Phase 62 executing (1 phase, 7 plans; narrowed scope per D-10-SPLIT 2026-05-26 — Phases 63-67 moved to v1.11 API Handoff + Production Hardening). Project rename `sportzal → clubcore` across code identifiers (pnpm packages, localStorage, Redis), operator-tier renames (Postgres DB, `CLUBCORE_EMAIL_FROM` env с deprecated-warning fallback, DNS/DKIM checklist), `CLUB_BRAND` constant extraction (placeholder value retained per D-62-02), forward-only `.planning/` rewrite (historical `phases/47-61/*` + `audits/*` immutable per D-62-09 / D-10-HISTORY-IMMUTABLE; `.planning/HISTORICAL_NOTE.md` documents the boundary). Final entry will land at milestone close.
+**Phases completed:** 2 phases (62 + 62.1 closure), 16 plans (7 + 9). **Requirements: 10/10 REB-* satisfied.**
+
+**Delivered:** Full project rename `sportzal → clubcore` — code identifiers (pnpm workspace `@clubcore/*`, localStorage `clubcore:{session,ui,mock}:v2`, Redis `cc:*`), operator-tier renames (Postgres DB rename runbook + `CLUBCORE_EMAIL_FROM` env with deprecated-warning fallback + DNS/DKIM checklist + local pg_dump/restore evidence), `CLUB_BRAND` constant extracted to `app/core/branding.py` (placeholder value `"Sportzal"` retained per D-62-02), forward-only `.planning/` rewrite with `HISTORICAL_NOTE.md` preserving Phases 47–61 + audits as immutable audit-trail. Closure Phase 62.1 stripped the 4 back-compat shims so v1.11 opens against a fully-clean clubcore tree.
+
+**Code:** 185 files changed, ~9.6K insertions / ~15.1K deletions (net negative from sportzal removal + forward-only `.planning/` rewrite).
+**Timeline:** 2026-05-26 (single-day milestone, ~6 hours wall-clock, 83 commits).
+**Git range:** `08da2895 → fc233fc2`.
+**Audit:** `.planning/milestones/v1.10-MILESTONE-AUDIT.md` (8/8 PASSED) + `.planning/milestones/v1.10-MILESTONE-AUDIT-ADDENDUM.md` (10/10 PASSED post-Phase 62.1).
+**Operator evidence:** `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` (local pg_dump/restore round-trip captured; DNS/DKIM marked `N/A-until-production` with documented trigger).
+
+**Key accomplishments:**
+
+- **pnpm workspace rename (Phase 62 / G-1, REB-01)** — `@sportzal/api-client` → `@clubcore/api-client`, `@sportzal/ui` → `@clubcore/ui`, atomic-rename across all `package.json` consumers, `pnpm-lock.yaml` regenerated, ESLint `no-restricted-paths` zones + `.importlinter` contracts updated; admin-web src/* references migrated; zero stale `@sportzal/*` references in active code (back-compat shims explicitly tagged and removed in Phase 62.1).
+- **localStorage + Redis namespace migration (Phase 62 / G-2 + G-3, REB-02 + REB-03)** — Zustand `persist` `version` bumped 1→2 with `migrate` callback for copy-on-read+delete of legacy `sportzal:{session,ui,mock}:v1` keys; theme-bootstrap inline script in `index.html` handles legacy key fallback. Redis prefixes flipped `sz:* → cc:*` across 5 modules (bot updates, email-circuit, yookassa-circuit, idempotency, rate-limit); operator FLUSHDB cutover documented in runbook (no runtime fallback per D-62-02).
+- **`CLUB_BRAND` constant + `CLUBCORE_EMAIL_FROM` env (Phase 62 / G-4, REB-04)** — branding extracted to `app/core/branding.py` (placeholder value `"Sportzal"` preserved per D-62-02; per-club configurable branding deferred). Email FROM env resolved through `CLUBCORE_EMAIL_FROM` → `SPORTZAL_EMAIL_FROM` (deprecated-warning) → hardcoded default fallback chain; 6 email_templates references unified to the single constant (corrigendum 5→6 recorded per D-62.1-01).
+- **Postgres DB rename runbook + DNS/DKIM checklist (Phase 62 / G-5)** — `.planning/handoff/clubcore-db-rename-runbook.md` authored with pg_dump/restore operator-walkthrough + DNS/DKIM cutover checklist; Phase 62.1 captured the local round-trip in `v1.10-OPERATOR-EVIDENCE.md` against a dedicated `clubcore_smoke` DB (live `clubcore` DB untouched) and pinned DNS/DKIM as N/A-until-production with documented trigger condition (REB-10).
+- **Forward-only `.planning/` rewrite + HISTORICAL_NOTE (Phase 62 / G-6, REB-05)** — `PROJECT.md` / `MILESTONES.md` / `ROADMAP.md` / `REQUIREMENTS.md` / `RETROSPECTIVE.md` / `STATE.md` / `handoff/` rewritten under `clubcore` identity; historical `phases/47-61/*` + `audits/*` deliberately left immutable as audit trail; `.planning/HISTORICAL_NOTE.md` documents the boundary and rationale (D-62-09 / D-10-HISTORY-IMMUTABLE). Top-level repo docs (`CLAUDE.md`, `README.md`, `docs/*`) rewritten in lockstep.
+- **Smoke gauntlet + closure (Phase 62 / G-7 + Phase 62.1, REB-08 + REB-09)** — 12-gate smoke gauntlet captured G7-E + G7-H regressions traceable to 62-01 / 62-04; both gap-closed inline before milestone close. Phase 62.1 then stripped the 4 sportzal-era back-compat shims (main.tsx localStorage migrator, index.html theme-bootstrap fallback, `config.py` `SPORTZAL_EMAIL_FROM` resolver, runbook FLUSHDB cutover note); `grep "TODO Phase 67 / RUN-07"` returns 0; full backend `pytest` + admin-web `vitest`/`typecheck`/`lint` green; admin-web boots without emitting the migration log line.
+
+**Scope split rationale (D-10-SPLIT):** v1.10 originally scoped 6 phases (62–67) but during `/gsd:discuss-phase 62` the operator-tier work expanded beyond a pure code-rename. To keep verification homogeneous and risk profiles separate, Phases 63-67 (Tech-Debt Sweep + Contract Freeze + Handoff Artifacts + Idempotency Hardening + Operator-Pending Runbook Execution) were moved to v1.11. Phase 62.1 was inserted post-audit to pull REB-09 + REB-10 forward from v1.11/Phase 67 so v1.11 opens against a fully-clean clubcore tree.
+
+**Next:** v1.11 API Handoff + Production Hardening (Phases 63–67) — Tech-Debt Sweep → OpenAPI Curation → Postman/Newman handoff → Idempotency Hardening → Operator-Pending Runbook Execution. `REQUIREMENTS.md` will be recreated fresh per project convention; 22-requirement snapshot already captured under "Planned for v1.11" in the archived `v1.10-REQUIREMENTS.md`.
 
 ---
 

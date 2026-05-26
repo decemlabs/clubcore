@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: clubcore Rebrand
-status: ready_to_plan
-stopped_at: Phase 62.1 complete (9/9) — ready to discuss Phase 999.1
-last_updated: 2026-05-26T14:29:13.574Z
-last_activity: 2026-05-26
+status: completed
+stopped_at: "Phase 62.1 complete — v1.10 ready for /gsd:complete-milestone"
+last_updated: "2026-05-26T15:16:56.603Z"
+last_activity: 2026-05-26 — Milestone v1.10 completed and archived
 progress:
   total_phases: 8
   completed_phases: 2
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-26 — v1.10 narrowed to Phase 62 (cl
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-05-26
+Phase: Milestone v1.10 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-26 — Milestone v1.10 completed and archived
 
 ## v1.10 Roadmap Summary
 
@@ -49,7 +49,7 @@ Last activity: 2026-05-26
 
 ## Milestone Close — v1.9 Trainers Complete
 
-**Status:** Ready to plan
+**Status:** v1.10 milestone complete
 **Green-state baseline:** `.planning/phases/60-trainer-usage-report/60-VERIFICATION.md` —
 Phase 60 (final feature phase) verification report; all v1.9 payroll +
 recurring-schedule + trainer-report surface shipped and exercised.
@@ -144,6 +144,4 @@ Resume: Run /gsd:complete-milestone v1.10 to archive v1.10 and open v1.11 (Phase
 
 ## Operator Next Steps
 
-- Review `.planning/v1.10-MILESTONE-AUDIT-ADDENDUM.md` for the 10/10 closure summary
-- Run `/gsd:complete-milestone v1.10` to archive v1.10
-- Run `/gsd:new-milestone v1.11` to open API Handoff + Production Hardening
+- Start the next milestone with /gsd-new-milestone
