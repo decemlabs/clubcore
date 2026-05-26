@@ -19,14 +19,14 @@
 
 ### Rebrand (sportzal → clubcore)
 
-- [ ] **REB-01**: pnpm packages переименованы — `@sportzal/api-client` → `@clubcore/api-client` + `@sportzal/ui` → `@clubcore/ui` (с обновлением `package.json` name + всех `workspace:` consumers + `pnpm-workspace.yaml` if needed)
-- [ ] **REB-02**: localStorage keys мигрированы — `sportzal:session:v1` → `clubcore:session:v2`, `sportzal:ui:v1` → `clubcore:ui:v2`, `sportzal:mock:v1` → `clubcore:mock:v2` (Zustand `persist` `version` bump + `migrate` callback c back-compat read из старых ключей ровно один релиз)
-- [ ] **REB-03**: Redis key namespace переименован — `sz:bot:update:*` → `cc:bot:update:*`, `sz:email:circuit:*` → `cc:email:circuit:*`, `sz:yookassa:circuit:*` → `cc:yookassa:circuit:*`, и все другие `sz:*` префиксы (с пометкой в operator-runbook о flush старых ключей при первом деплое)
-- [ ] **REB-04**: env vars без префикса `SPORTZAL_*` (проверить `.env.example` + `apps/backend/app/core/config.py` + `apps/admin-web/.env.*`); если префикс есть — переименовать на `CLUBCORE_*` (с deprecated-warning fallback для одного релиза)
+- [x] **REB-01**: pnpm packages переименованы — `@sportzal/api-client` → `@clubcore/api-client` + `@sportzal/ui` → `@clubcore/ui` (с обновлением `package.json` name + всех `workspace:` consumers + `pnpm-workspace.yaml` if needed) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
+- [x] **REB-02**: localStorage keys мигрированы — `sportzal:session:v1` → `clubcore:session:v2`, `sportzal:ui:v1` → `clubcore:ui:v2`, `sportzal:mock:v1` → `clubcore:mock:v2` (Zustand `persist` `version` bump + `migrate` callback c back-compat read из старых ключей ровно один релиз) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
+- [x] **REB-03**: Redis key namespace переименован — `sz:bot:update:*` → `cc:bot:update:*`, `sz:email:circuit:*` → `cc:email:circuit:*`, `sz:yookassa:circuit:*` → `cc:yookassa:circuit:*`, и все другие `sz:*` префиксы (с пометкой в operator-runbook о flush старых ключей при первом деплое) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
+- [x] **REB-04**: env vars без префикса `SPORTZAL_*` (проверить `.env.example` + `apps/backend/app/core/config.py` + `apps/admin-web/.env.*`); если префикс есть — переименовать на `CLUBCORE_*` (с deprecated-warning fallback для одного релиза) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
 - [x] **REB-05**: docs / comments / planning artifacts обновлены — CLAUDE.md, README.md, `docs/architecture.md`, `docs/conventions.md`, `docs/adr/*`, `.planning/PROJECT.md`, `.planning/MILESTONES.md`, `.planning/ROADMAP.md`, всё под `.planning/handoff/`, `.planning/research/`, `apps/backend/README.md`, `apps/admin-web/README.md` — заменить все упоминания "Sportzal" / "sportzal" / "@sportzal" на "clubcore" / "@clubcore" (с учётом регистра и контекста) *(satisfied 2026-05-26 via Phase 62 Plan 06 + prior plans 62-01..05; forward-only rewrite per D-62-09; HISTORICAL_NOTE.md authored per D-62-10)*
-- [ ] **REB-06**: `import-linter` контракты + ESLint правила обновлены под новые package names — `.importlinter` + `eslint.config.js` `no-restricted-paths` zones (если ссылаются на `@sportzal/*`)
-- [ ] **REB-07**: CI workflow `.github/workflows/ci.yml` пересматривает все ссылки на `@sportzal/*` пакеты в `pnpm --filter` инвокациях; backend Docker image labels / compose service names проверены
-- [ ] **REB-08**: backend + admin-web smoke-проверка после rebrand — backend `pytest` зелёный, admin-web `typecheck` + `lint` + `test` зелёные, `docker compose up` поднимается без ошибок, openapi.json + schema.d.ts регенерируются byte-stably под новым именем
+- [x] **REB-06**: `import-linter` контракты + ESLint правила обновлены под новые package names — `.importlinter` + `eslint.config.js` `no-restricted-paths` zones (если ссылаются на `@sportzal/*`) *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
+- [x] **REB-07**: CI workflow `.github/workflows/ci.yml` пересматривает все ссылки на `@sportzal/*` пакеты в `pnpm --filter` инвокациях; backend Docker image labels / compose service names проверены *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
+- [x] **REB-08**: backend + admin-web smoke-проверка после rebrand — backend `pytest` зелёный, admin-web `typecheck` + `lint` + `test` зелёные, `docker compose up` поднимается без ошибок, openapi.json + schema.d.ts регенерируются byte-stably под новым именем *(verified 2026-05-26 by /gsd:audit-milestone v1.10)*
 
 ## Planned for v1.11 (API Handoff + Production Hardening) — Not Yet Defined
 
@@ -108,14 +108,14 @@ Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 on
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REB-01 | Phase 62 | Pending |
-| REB-02 | Phase 62 | Pending |
-| REB-03 | Phase 62 | Pending |
-| REB-04 | Phase 62 | Pending |
+| REB-01 | Phase 62 | Complete |
+| REB-02 | Phase 62 | Complete |
+| REB-03 | Phase 62 | Complete |
+| REB-04 | Phase 62 | Complete |
 | REB-05 | Phase 62 | Complete |
-| REB-06 | Phase 62 | Pending |
-| REB-07 | Phase 62 | Pending |
-| REB-08 | Phase 62 | Pending |
+| REB-06 | Phase 62 | Complete |
+| REB-07 | Phase 62 | Complete |
+| REB-08 | Phase 62 | Complete |
 
 **Coverage (v1.10 active):**
 - v1.10 requirements: **8 total** (REB:8)
