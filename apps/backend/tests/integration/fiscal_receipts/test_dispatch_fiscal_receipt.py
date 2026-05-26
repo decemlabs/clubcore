@@ -48,9 +48,7 @@ async def _reload_fiscal_receipt(
     fr_id: UUID,
 ) -> FiscalReceipt | None:
     async with session_factory() as session:
-        result = await session.scalar(
-            select(FiscalReceipt).where(FiscalReceipt.id == fr_id)
-        )
+        result = await session.scalar(select(FiscalReceipt).where(FiscalReceipt.id == fr_id))
         return result
 
 
@@ -62,9 +60,7 @@ async def _count_audit_rows(
 ) -> int:
     async with session_factory() as session:
         rows = await session.scalars(
-            select(AuditLog).where(
-                AuditLog.action == action, AuditLog.resource_id == resource_id
-            )
+            select(AuditLog).where(AuditLog.action == action, AuditLog.resource_id == resource_id)
         )
         return len(rows.all())
 
@@ -76,9 +72,7 @@ async def test_dispatch_fiscal_receipt_writes_yookassa_receipt_id_and_emits_audi
     yookassa_create_receipt_ok: respx.MockRouter,
 ) -> None:
     """Test 1 — ok path writes yookassa_receipt_id + emits fiscal_receipt_dispatched."""
-    result = await dispatch_fiscal_receipt(
-        arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-    )
+    result = await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
     assert result == "sent"
 
     fr = await _reload_fiscal_receipt(
@@ -131,9 +125,7 @@ async def test_dispatch_fiscal_receipt_raises_retry_on_transient_error(
     """Test 3 — transient_error → arq.Retry with backoff ≈ 30s on job_try=1."""
     arq_ctx["job_try"] = 1
     with pytest.raises(Retry) as ei:
-        await dispatch_fiscal_receipt(
-            arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-        )
+        await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
     # Backoff base = 30s ±10% → defer must fall in [27, 33].
     # arq.Retry stores defer as milliseconds in defer_score.
     defer_ms = ei.value.defer_score
@@ -157,9 +149,7 @@ async def test_dispatch_fiscal_receipt_short_circuits_when_breaker_open(
         # No return_value: any call would raise inside respx and fail the test.
 
         with pytest.raises(Retry) as ei:
-            await dispatch_fiscal_receipt(
-                arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-            )
+            await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
 
         # Breaker-open defer is the locked 300s value (NOT the per-try backoff).
         # arq.Retry stores defer as milliseconds in defer_score.
@@ -191,9 +181,9 @@ async def test_circuit_breaker_opens_after_5_failures_within_60s(
     for i in range(4):
         await record_failure(fiscal_redis, "receipts")
         # After fewer than 5 failures the breaker stays closed.
-        assert (
-            await is_circuit_open(fiscal_redis, "receipts") is False
-        ), f"breaker opened prematurely after {i + 1} failures"
+        assert await is_circuit_open(fiscal_redis, "receipts") is False, (
+            f"breaker opened prematurely after {i + 1} failures"
+        )
 
     await record_failure(fiscal_redis, "receipts")
     assert await is_circuit_open(fiscal_redis, "receipts") is True
@@ -210,9 +200,7 @@ async def test_dispatch_fiscal_receipt_transitions_to_failed_on_permanent_error(
     yookassa_create_receipt_429: respx.MockRouter,
 ) -> None:
     """Test 6 — permanent_error (429) → status='failed' + fiscal_receipt_failed audit."""
-    result = await dispatch_fiscal_receipt(
-        arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-    )
+    result = await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
     assert result == "failed"
 
     fr = await _reload_fiscal_receipt(
@@ -240,9 +228,7 @@ async def test_dispatch_fiscal_receipt_max_tries_exhausted_transient_transitions
 ) -> None:
     """Test 7 — transient_error at job_try=3 forces terminal failure (no Retry)."""
     arq_ctx["job_try"] = 3
-    result = await dispatch_fiscal_receipt(
-        arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-    )
+    result = await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
     assert result == "failed"
 
     fr = await _reload_fiscal_receipt(
@@ -261,9 +247,7 @@ async def test_dispatch_fiscal_receipt_passes_idempotency_key_eq_fiscal_receipt_
     yookassa_create_receipt_ok: respx.MockRouter,
 ) -> None:
     """Test 8 — Idempotence-Key header == fiscal_receipt.id.hex (D-51-20)."""
-    await dispatch_fiscal_receipt(
-        arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-    )
+    await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
 
     # Find the receipts POST request and inspect its Idempotence-Key header.
     routes = list(yookassa_create_receipt_ok.routes)
@@ -288,9 +272,7 @@ async def test_dispatch_fiscal_receipt_consumes_tax_system_code_from_settings_no
     """
     monkeypatch.setenv("YOOKASSA_TAX_SYSTEM_CODE", "6")
 
-    await dispatch_fiscal_receipt(
-        arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-    )
+    await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
 
     routes = list(yookassa_create_receipt_ok.routes)
     receipts_route = next(r for r in routes if "receipts" in str(r.pattern))
@@ -310,9 +292,7 @@ async def test_dispatch_fiscal_receipt_does_not_leak_customer_email_to_structlog
 ) -> None:
     """Test 10 — Threat T-51-05-03: customer_email never lands in structlog kwargs."""
     with structlog.testing.capture_logs() as cap:
-        await dispatch_fiscal_receipt(
-            arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id)
-        )
+        await dispatch_fiscal_receipt(arq_ctx, str(seeded_dispatch_scenario.fiscal_receipt_id))
 
     email = seeded_dispatch_scenario.customer_email
     # Defensive: the seed factory generates a unique email per test; ensure

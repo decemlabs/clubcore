@@ -63,9 +63,7 @@ async def poll_engine():
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_POLL_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_POLL_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -117,7 +115,9 @@ async def _seed_owner(session: AsyncSession) -> UUID:
     return owner.id
 
 
-async def _seed_minimal_chain_for_refund(session: AsyncSession) -> tuple[UUID, UUID, UUID, UUID, str]:
+async def _seed_minimal_chain_for_refund(
+    session: AsyncSession,
+) -> tuple[UUID, UUID, UUID, UUID, str]:
     """Seed Client + OnlinePayment + Payment + OnlineRefund(status='pending').
 
     Returns (owner_id, online_refund_id, online_payment_id, original_payment_id,
@@ -414,5 +414,7 @@ async def test_poll_pending_refunds_handles_concurrent_webhook_idempotent_replay
         "yookassa_webhook_received used by handlers.py settle delegation)."
     )
 )
-async def test_poll_pending_refunds_chain_root_event_is_online_refund_polled_settled_not_yookassa_webhook_received() -> None:
+async def test_poll_pending_refunds_chain_root_event_is_online_refund_polled_settled_not_yookassa_webhook_received() -> (
+    None
+):
     """SC#6 D-51-28 LOCKED test name — chain-root event discrimination."""

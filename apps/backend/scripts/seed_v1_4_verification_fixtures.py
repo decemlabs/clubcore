@@ -182,9 +182,7 @@ async def _run() -> int:
             )
 
             # --- MembershipPlans ----------------------------------------
-            for name, duration_days, freeze_days_limit, price_kopecks in (
-                _MEMBERSHIP_PLANS
-            ):
+            for name, duration_days, freeze_days_limit, price_kopecks in _MEMBERSHIP_PLANS:
                 await session.execute(
                     pg_insert(MembershipPlan)
                     .values(

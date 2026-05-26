@@ -40,9 +40,7 @@ async def get_alive(session: AsyncSession, trainer_id: UUID) -> Trainer | None:
     return result
 
 
-async def list_alive(
-    session: AsyncSession, query: TrainerListQuery
-) -> PaginatedData[Trainer]:
+async def list_alive(session: AsyncSession, query: TrainerListQuery) -> PaginatedData[Trainer]:
     """Paginated list of alive trainers with optional is_active filter (D-31-09).
 
     Returns a `PaginatedData` instance constructed via `model_construct` to skip

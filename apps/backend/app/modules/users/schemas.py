@@ -10,6 +10,7 @@ Excluded from EVERY response model (D-43-10 explicit denylist):
   - email_verified (D-43-02 — operationally interesting only at invite-accept / login)
   - raw invitation tokens (D-43-13 — token row id only, raw token only in email)
 """
+
 from __future__ import annotations
 
 from datetime import datetime

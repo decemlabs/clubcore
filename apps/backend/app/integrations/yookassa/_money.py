@@ -43,9 +43,7 @@ def kopecks_to_yookassa(kopecks: int) -> str:
     """
     if kopecks < 0:
         raise ValueError(f"kopecks must be non-negative, got {kopecks!r}")
-    rubles = (Decimal(kopecks) / _HUNDRED).quantize(
-        _CENT_QUANTUM, rounding=ROUND_HALF_EVEN
-    )
+    rubles = (Decimal(kopecks) / _HUNDRED).quantize(_CENT_QUANTUM, rounding=ROUND_HALF_EVEN)
     return f"{rubles:.2f}"
 
 

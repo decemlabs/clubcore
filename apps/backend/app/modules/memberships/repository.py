@@ -446,9 +446,7 @@ async def find_active_for_client(
 # ===========================================================================
 
 
-async def expire_due_rows(
-    session: AsyncSession, today: date
-) -> Sequence[Row[tuple[UUID, UUID]]]:
+async def expire_due_rows(session: AsyncSession, today: date) -> Sequence[Row[tuple[UUID, UUID]]]:
     """Bulk-flip overdue active memberships to expired (Phase 18 D-01 / D-04 / ARQ-02).
 
     Single-statement `UPDATE memberships SET status='expired' WHERE end_date < :today
@@ -639,9 +637,7 @@ async def get_freeze_period_by_id(
     return await session.get(MembershipFreezePeriod, period_id)
 
 
-async def has_renewal_descendants(
-    session: AsyncSession, membership_id: UUID
-) -> bool:
+async def has_renewal_descendants(session: AsyncSession, membership_id: UUID) -> bool:
     """REF-04 / B-09: True iff ``membership_id`` is the ``previous_membership_id``
     of any descendant. Used by ``refund_membership`` orchestrator (Plan 32-03)
     to surface 409 ``cannot_refund_renewed_source`` before the refund flow
@@ -654,11 +650,7 @@ async def has_renewal_descendants(
     WHERE previous_membership_id = :membership_id LIMIT 1``. Returns bool via
     ``result is not None``.
     """
-    stmt = (
-        select(Membership.id)
-        .where(Membership.previous_membership_id == membership_id)
-        .limit(1)
-    )
+    stmt = select(Membership.id).where(Membership.previous_membership_id == membership_id).limit(1)
     result = await session.scalar(stmt)
     return result is not None
 
@@ -710,9 +702,7 @@ def _freeze_days_used_subquery() -> Subquery:
                     func.ceil(
                         func.extract(
                             "epoch",
-                            func.coalesce(
-                                MembershipFreezePeriod.ended_at, func.now()
-                            )
+                            func.coalesce(MembershipFreezePeriod.ended_at, func.now())
                             - MembershipFreezePeriod.started_at,
                         )
                         / 86400

@@ -62,13 +62,11 @@ async def test_wh02_refetches_via_get_payment_before_db_write(
             },
         )
 
-    respx_mock.get(
-        url__regex=r"https://api\.yookassa\.ru/v3/payments/[\w-]+"
-    ).mock(side_effect=_record_get_payment)
-
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
+    respx_mock.get(url__regex=r"https://api\.yookassa\.ru/v3/payments/[\w-]+").mock(
+        side_effect=_record_get_payment
     )
+
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post(
         "/api/v1/_internal/yookassa/webhook",
         json=body,
@@ -82,9 +80,7 @@ async def test_wh02_refetches_via_get_payment_before_db_write(
     refetch_ts = get_payment_ts[0]
 
     update_ts_iter = (
-        ts
-        for stmt, ts in sqlalchemy_query_log_timestamps
-        if "UPDATE online_payments" in stmt
+        ts for stmt, ts in sqlalchemy_query_log_timestamps if "UPDATE online_payments" in stmt
     )
     first_update_ts = next(update_ts_iter, None)
     assert first_update_ts is not None, (
@@ -117,9 +113,7 @@ async def test_wh02_refetch_pending_status_skips_db_write(
 ) -> None:
     """If the re-fetch returns status='pending' (webhook arrived before ЮKassa
     internal commit), the handler must return 200 and NOT mutate the row."""
-    respx_mock.get(
-        url__regex=r"https://api\.yookassa\.ru/v3/payments/[\w-]+"
-    ).mock(
+    respx_mock.get(url__regex=r"https://api\.yookassa\.ru/v3/payments/[\w-]+").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -130,9 +124,7 @@ async def test_wh02_refetch_pending_status_skips_db_write(
         )
     )
 
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post(
         "/api/v1/_internal/yookassa/webhook",
         json=body,
@@ -167,13 +159,11 @@ async def test_wh02_refetch_error_classification_skips_db_write(
     emitted deep in the handler stack (production logger cached at
     lifespan time). DB-state is the authoritative invariant here.
     """
-    respx_mock.get(
-        url__regex=r"https://api\.yookassa\.ru/v3/payments/[\w-]+"
-    ).mock(return_value=httpx.Response(500, json={"type": "error"}))
-
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
+    respx_mock.get(url__regex=r"https://api\.yookassa\.ru/v3/payments/[\w-]+").mock(
+        return_value=httpx.Response(500, json={"type": "error"})
     )
+
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post(
         "/api/v1/_internal/yookassa/webhook",
         json=body,

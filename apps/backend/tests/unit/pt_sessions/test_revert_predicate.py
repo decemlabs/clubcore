@@ -158,6 +158,5 @@ async def test_revert_flips_exhausted_only(db_session: AsyncSession) -> None:
         )
         expected = "active" if status_name == "exhausted" else status_name
         assert observed == expected, (
-            f"pt_packages[{status_name}] status drift: expected "
-            f"{expected!r}, got {observed!r}"
+            f"pt_packages[{status_name}] status drift: expected {expected!r}, got {observed!r}"
         )

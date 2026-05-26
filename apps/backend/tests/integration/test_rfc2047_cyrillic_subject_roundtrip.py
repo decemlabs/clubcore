@@ -88,9 +88,9 @@ def test_rfc2047_cyrillic_subject_roundtrip() -> None:
 
     # Sanity: the locked subject contains Cyrillic glyphs (non-ASCII bytes
     # that force RFC 2047 encoded-word emission rather than passthrough).
-    assert any(
-        "Ѐ" <= c <= "ӿ" for c in rendered_subject
-    ), "Subject must contain Cyrillic; otherwise this test would be vacuous."
+    assert any("Ѐ" <= c <= "ӿ" for c in rendered_subject), (
+        "Subject must contain Cyrillic; otherwise this test would be vacuous."
+    )
 
     envelope = EmailEnvelope(
         to="roundtrip+rfc2047@local.dev",

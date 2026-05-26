@@ -24,9 +24,7 @@ from app.modules.auth.email_templates import TEMPLATES
 # Deterministic test inputs — pinned so future edits to copy can be detected
 # via fragment assertions below. The token is a fixed placeholder, never a
 # secret, never a real URL-fragment value.
-_FIXED_RESET_URL = (
-    "https://app.sportzal.ru/auth/password-reset#token=FIXED_TOKEN_FOR_TEST"
-)
+_FIXED_RESET_URL = "https://app.sportzal.ru/auth/password-reset#token=FIXED_TOKEN_FOR_TEST"
 _FIXED_EXPIRES_AT_HUMAN = "19 мая 2026 г. 21:30 (МСК)"  # noqa: RUF001
 
 

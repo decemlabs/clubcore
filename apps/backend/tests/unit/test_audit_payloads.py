@@ -324,10 +324,7 @@ def test_booking_created_payload_extra_forbid_still_enforced() -> None:
 def test_booking_created_payload_registry_unchanged() -> None:
     """LOCKED_AUDIT_EVENTS / AUDIT_PAYLOAD_SCHEMAS shapes are additive-only —
     the ('booking_created', 'booking') key still maps to BookingCreatedPayload."""
-    assert (
-        AUDIT_PAYLOAD_SCHEMAS[("booking_created", "booking")]
-        is BookingCreatedPayload
-    )
+    assert AUDIT_PAYLOAD_SCHEMAS[("booking_created", "booking")] is BookingCreatedPayload
 
 
 # ---------------------------------------------------------------------------
@@ -744,8 +741,7 @@ def test_v16_pairs_all_have_payload_schemas() -> None:
     assert AUDIT_PAYLOAD_SCHEMAS[("email_sent", "email_send_log")] is EmailSentPayload
     assert AUDIT_PAYLOAD_SCHEMAS[("user_invited", "user")] is UserInvitedPayload
     assert (
-        AUDIT_PAYLOAD_SCHEMAS[("password_reset_requested", "user")]
-        is PasswordResetRequestedPayload
+        AUDIT_PAYLOAD_SCHEMAS[("password_reset_requested", "user")] is PasswordResetRequestedPayload
     )
     assert (
         AUDIT_PAYLOAD_SCHEMAS[("payment_receipt_emailed", "payment")]

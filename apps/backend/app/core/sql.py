@@ -33,8 +33,4 @@ def escape_like_pattern(value: str, *, escape_like: bool = True) -> str:
     """
     if not escape_like:
         return value
-    return (
-        value.replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

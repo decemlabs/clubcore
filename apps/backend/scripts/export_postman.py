@@ -43,9 +43,7 @@ TARGET = HERE.parents[3] / ".planning" / "handoff" / "v1.6-postman.json"
 INTERNAL_TAG = "_internal"
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 COLLECTION_NAME = "Sportzal v1.6 — Email channel + Multi-user admin"
-COLLECTION_SCHEMA = (
-    "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-)
+COLLECTION_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 NAMESPACE = uuid.NAMESPACE_URL
 _PATH_PARAM_RE = re.compile(r"\{([^{}]+)\}")
 

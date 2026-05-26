@@ -398,9 +398,7 @@ async def publish_slot(
         # Defensive — the slot was just INSERTed and committed in this UoW;
         # `get_slot_by_id` returning None here would indicate session-state
         # corruption.
-        raise RuntimeError(
-            "publish_slot: just-inserted slot disappeared on reload"
-        )
+        raise RuntimeError("publish_slot: just-inserted slot disappeared on reload")
     return _slot_response_from_orm(reloaded)
 
 
@@ -566,14 +564,10 @@ async def cancel_slot(
         # plan 39-02 execution; see plan SUMMARY Deviation #1).
         import importlib
 
-        bookings_notifications = importlib.import_module(
-            "app.modules.bookings.notifications"
-        )
+        bookings_notifications = importlib.import_module("app.modules.bookings.notifications")
         bookings_service = importlib.import_module("app.modules.bookings.service")
         telegram_bot = importlib.import_module("app.integrations.telegram.bot")
-        telegram_sender_mod = importlib.import_module(
-            "app.integrations.telegram.sender"
-        )
+        telegram_sender_mod = importlib.import_module("app.integrations.telegram.sender")
         from app.core.config import get_settings
 
         cancelled_booking = await bookings_service._load_booking_with_relationships(
@@ -613,9 +607,7 @@ async def cancel_slot(
     if reloaded is None:
         # Defensive — the slot was just cancelled in-place and committed;
         # missing here would mean session-state corruption.
-        raise RuntimeError(
-            "cancel_slot: just-cancelled slot disappeared on reload"
-        )
+        raise RuntimeError("cancel_slot: just-cancelled slot disappeared on reload")
     return _slot_response_from_orm(reloaded)
 
 
@@ -781,9 +773,7 @@ async def deactivate_recurring_template(
       5. session.commit().
       6. Return RecurringSlotTemplateResponse.
     """
-    tmpl = await repository.get_recurring_template_by_id_for_update(
-        session, template_id
-    )
+    tmpl = await repository.get_recurring_template_by_id_for_update(session, template_id)
     if tmpl is None:
         raise RecurringTemplateNotFoundError("recurring_template_not_found")
 
@@ -1072,13 +1062,9 @@ async def create_time_off(
         import importlib
 
         bookings_service = importlib.import_module("app.modules.bookings.service")
-        bookings_notifications = importlib.import_module(
-            "app.modules.bookings.notifications"
-        )
+        bookings_notifications = importlib.import_module("app.modules.bookings.notifications")
         telegram_bot = importlib.import_module("app.integrations.telegram.bot")
-        telegram_sender_mod = importlib.import_module(
-            "app.integrations.telegram.sender"
-        )
+        telegram_sender_mod = importlib.import_module("app.integrations.telegram.sender")
         from app.core.config import get_settings
 
         dm_bot = telegram_bot.build_bot(
@@ -1355,9 +1341,7 @@ async def _generate_recurring_slots(  # noqa: SVC001 caller-owns-txn
 
         freshly_inserted = (
             await session.scalars(
-                _select(TrainerAvailabilitySlot).where(
-                    TrainerAvailabilitySlot.id.in_(inserted_ids)
-                )
+                _select(TrainerAvailabilitySlot).where(TrainerAvailabilitySlot.id.in_(inserted_ids))
             )
         ).all()
 

@@ -20,6 +20,7 @@ TODO Phase 50: tests for X-Forwarded-For trust (gated by
 ``TRUSTED_PROXY_HEADER_ENABLED``) belong in Phase 50 once the reverse-proxy
 topology in front of /_internal/yookassa/webhook is known.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator

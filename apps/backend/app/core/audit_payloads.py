@@ -1156,7 +1156,7 @@ class RecurringSlotTemplateCreatedPayload(BaseModel):
     trainer_id: UUID
     day_of_week: int
     start_time: str  # str(datetime.time) at callsite
-    end_time: str    # str(datetime.time) at callsite
+    end_time: str  # str(datetime.time) at callsite
 
 
 class RecurringSlotTemplateCancelledPayload(BaseModel):
@@ -1186,8 +1186,8 @@ class TrainerTimeOffCreatedPayload(BaseModel):
 
     time_off_id: UUID
     trainer_id: UUID
-    block_start: str   # isoformat() at callsite
-    block_end: str     # isoformat() at callsite
+    block_start: str  # isoformat() at callsite
+    block_end: str  # isoformat() at callsite
     reason: str | None
     force_cascade: bool
     cancelled_slot_count: int

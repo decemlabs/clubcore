@@ -108,8 +108,7 @@ def _read_operator_passwords() -> dict[str, str] | None:
             if val is None
         ]
         print(
-            "ERROR: operator-user seeding requires BOTH env vars; missing: "
-            + ", ".join(missing),
+            "ERROR: operator-user seeding requires BOTH env vars; missing: " + ", ".join(missing),
             file=sys.stderr,
         )
         sys.exit(1)
@@ -224,9 +223,7 @@ async def _run() -> int:
 
             for email_key, telegram_user_id, days_to_end, status in _FIXTURES:
                 client_id = uuid.uuid5(uuid.NAMESPACE_DNS, email_key)
-                membership_id = uuid.uuid5(
-                    uuid.NAMESPACE_DNS, f"{email_key}-membership"
-                )
+                membership_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"{email_key}-membership")
                 first_name, _, _ = email_key.partition("@")
                 phone = _PHONE_BY_EMAIL[email_key]
 

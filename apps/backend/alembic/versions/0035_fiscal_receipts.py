@@ -58,9 +58,7 @@ def upgrade() -> None:
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("succeeded_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("failed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "audit_correlation_id", postgresql.UUID(as_uuid=True), nullable=True
-        ),
+        sa.Column("audit_correlation_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_fiscal_receipts")),
         sa.ForeignKeyConstraint(
             ["payment_id"],

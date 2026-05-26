@@ -38,9 +38,7 @@ _PAYMENT_ROW_HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _csrf_headers(client: AsyncClient, *, idempotency_key: str | None = None) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -86,9 +84,7 @@ async def test_refund_pt_package_owner_happy_path_active(
     """REF-02 happy path from active source — 200, sentinel reason, refund row, audit emit."""
     plan = await make_pt_package_plan(name="refund-active")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     r = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
@@ -104,9 +100,7 @@ async def test_refund_pt_package_owner_happy_path_active(
 
     # DB invariants — refund Payment row with negative amount + refund_of FK.
     payments = (
-        await db_session.scalars(
-            select(Payment).where(Payment.subject_id == pt_package_id)
-        )
+        await db_session.scalars(select(Payment).where(Payment.subject_id == pt_package_id))
     ).all()
     sale_rows = [p for p in payments if p.subject_kind == SUBJECT_KIND_PT_PACKAGE]
     refund_rows = [p for p in payments if p.subject_kind == SUBJECT_KIND_REFUND]
@@ -147,9 +141,7 @@ async def test_refund_pt_package_reception_happy_path_active(
     """B-07: (REFUND, PT_PACKAGES) NOT in OWNER_ONLY → reception 200."""
     plan = await make_pt_package_plan(name="refund-reception")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_reception, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_reception, client_id=client.id, plan=plan)
 
     r = await authed_client_reception.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
@@ -169,16 +161,12 @@ async def test_refund_pt_package_exhausted_owner_happy_path(
     """D-33-04 exhausted → cancelled allowed; refund flow transitions ok."""
     plan = await make_pt_package_plan(name="refund-exhausted")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     # Flip status to exhausted directly (Phase 34 PT-session decrement
     # path doesn't exist yet — simulate the terminal exhausted state).
     pkg = (
-        await db_session.execute(
-            select(PtPackage).where(PtPackage.id == pt_package_id)
-        )
+        await db_session.execute(select(PtPackage).where(PtPackage.id == pt_package_id))
     ).scalar_one()
     pkg.status = "exhausted"
     pkg.sessions_remaining = 0
@@ -202,15 +190,11 @@ async def test_refund_pt_package_expired_owner_happy_path(
     """D-33-04 expired → cancelled allowed; refund flow transitions ok."""
     plan = await make_pt_package_plan(name="refund-expired")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     # Flip status to expired directly (ARQ cron path; simulate terminal state).
     pkg = (
-        await db_session.execute(
-            select(PtPackage).where(PtPackage.id == pt_package_id)
-        )
+        await db_session.execute(select(PtPackage).where(PtPackage.id == pt_package_id))
     ).scalar_one()
     pkg.status = "expired"
     await db_session.commit()
@@ -240,9 +224,7 @@ async def test_refund_pt_package_already_cancelled_409(
     """
     plan = await make_pt_package_plan(name="refund-cancelled")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     # Cancel via the admin path first.
     r1 = await authed_client_owner.post(
@@ -304,9 +286,7 @@ async def test_refund_pt_package_second_attempt_409(
     """
     plan = await make_pt_package_plan(name="refund-second")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     r1 = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
@@ -345,9 +325,7 @@ async def test_refund_pt_package_idempotency_replay(
     """D-33-16 same Idempotency-Key + same body → cached envelope, NO duplicate side effects."""
     plan = await make_pt_package_plan(name="refund-idem")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     idem = uuid4().hex
     body: dict[str, Any] = {"reason": "idem_test"}
 
@@ -408,9 +386,7 @@ async def test_refund_pt_package_audit_chain_traceable(
     """
     plan = await make_pt_package_plan(name="refund-chain")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     # Fetch the sale payment to seed the resource_id filter.
     sale_payment = (
@@ -440,23 +416,25 @@ async def test_refund_pt_package_audit_chain_traceable(
     ).scalar_one()
 
     rows = (
-        await db_session.execute(
-            select(AuditLog)
-            .where(
-                AuditLog.action.in_(
-                    [
-                        "payment_recorded",
-                        "refund_issued",
-                        "pt_package_refunded",
-                    ]
-                ),
-                AuditLog.resource_id.in_(
-                    [pt_package_id, sale_payment.id, refund_payment.id]
-                ),
+        (
+            await db_session.execute(
+                select(AuditLog)
+                .where(
+                    AuditLog.action.in_(
+                        [
+                            "payment_recorded",
+                            "refund_issued",
+                            "pt_package_refunded",
+                        ]
+                    ),
+                    AuditLog.resource_id.in_([pt_package_id, sale_payment.id, refund_payment.id]),
+                )
+                .order_by(AuditLog.created_at.asc())
             )
-            .order_by(AuditLog.created_at.asc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     actions = {r.action for r in rows}
     assert actions == {
@@ -494,9 +472,7 @@ async def test_refund_pt_package_no_csrf_403(
     """RBAC-04: missing X-CSRF-Token → 403."""
     plan = await make_pt_package_plan(name="refund-no-csrf")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     r = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
         json={"reason": "no_csrf"},
@@ -513,9 +489,7 @@ async def test_refund_pt_package_extra_field_422(
     """BackendSchemaBase extra='forbid' → 422 on unknown body field (mirrors REF-05)."""
     plan = await make_pt_package_plan(name="refund-extra")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     r = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
         json={"reason": "ok", "amountKopecks": 1000},
@@ -532,9 +506,7 @@ async def test_refund_pt_package_reason_empty_422(
     """Field(min_length=1) → 422 on empty reason."""
     plan = await make_pt_package_plan(name="refund-empty")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     r = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
         json={"reason": ""},
@@ -551,9 +523,7 @@ async def test_refund_pt_package_reason_too_long_422(
     """Field(max_length=200) → 422 on reason >200 chars."""
     plan = await make_pt_package_plan(name="refund-long")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     r = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
         json={"reason": "x" * 201},

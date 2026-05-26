@@ -62,22 +62,16 @@ async def _create_client(authed: AsyncClient, **overrides: Any) -> dict[str, Any
     return data
 
 
-async def _count_memberships_for_client(
-    db_session: AsyncSession, client_id: UUID
-) -> int:
+async def _count_memberships_for_client(db_session: AsyncSession, client_id: UUID) -> int:
     """Count memberships owned by client_id (used to prove no-side-effect on reject)."""
     return (
         await db_session.scalar(
-            select(func.count())
-            .select_from(Membership)
-            .where(Membership.client_id == client_id)
+            select(func.count()).select_from(Membership).where(Membership.client_id == client_id)
         )
     ) or 0
 
 
-async def _count_renewal_audit_rows_for_source(
-    db_session: AsyncSession, source_id: UUID
-) -> int:
+async def _count_renewal_audit_rows_for_source(db_session: AsyncSession, source_id: UUID) -> int:
     """Count `membership_renewed` audit rows whose payload references this source.
 
     Audit row's `resource_id` is the NEW membership id (D-26-15); the
@@ -86,13 +80,9 @@ async def _count_renewal_audit_rows_for_source(
     rejected POST writes zero.
     """
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "membership_renewed")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "membership_renewed"))
     ).all()
-    return sum(
-        1 for r in rows if r.payload.get("source_membership_id") == str(source_id)
-    )
+    return sum(1 for r in rows if r.payload.get("source_membership_id") == str(source_id))
 
 
 async def test_renew_archived_plan_returns_plan_archived_409(

@@ -517,9 +517,7 @@ async def test_refund_succeeded_dual_channel(
 
     tg_records: list[_TelegramRecord] = []
     email_recorder = _RecordingEmailDispatcher()
-    prior = _install_stubs(
-        monkeypatch, tg_records=tg_records, email_recorder=email_recorder
-    )
+    prior = _install_stubs(monkeypatch, tg_records=tg_records, email_recorder=email_recorder)
     try:
         ctx = _make_ctx(notif_session_factory)
         result = await dispatch_payment_notification(
@@ -566,9 +564,7 @@ async def test_channel_skipped_when_recipient_null(
 
     tg_records: list[_TelegramRecord] = []
     email_recorder = _RecordingEmailDispatcher()
-    prior = _install_stubs(
-        monkeypatch, tg_records=tg_records, email_recorder=email_recorder
-    )
+    prior = _install_stubs(monkeypatch, tg_records=tg_records, email_recorder=email_recorder)
     try:
         ctx = _make_ctx(notif_session_factory)
         result = await dispatch_payment_notification(
@@ -587,13 +583,17 @@ async def test_channel_skipped_when_recipient_null(
         # Only ONE payment_notifications row (email only — no TG idempotency row).
         async with notif_session_factory() as s:
             rows = (
-                await s.execute(
-                    select(PaymentNotification).where(
-                        PaymentNotification.payment_id == payment.id,
-                        PaymentNotification.kind == "payment_succeeded",
+                (
+                    await s.execute(
+                        select(PaymentNotification).where(
+                            PaymentNotification.payment_id == payment.id,
+                            PaymentNotification.kind == "payment_succeeded",
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         assert len(rows) == 1, f"expected 1 row (email only); got {len(rows)}"
         assert rows[0].channel == "email"
     finally:
@@ -798,13 +798,17 @@ async def test_payment_canceled_owner_alert_db_claim_no_fk_violation_idempotent(
         # Two rows: online_payment_id set, payment_id IS NULL.
         async with notif_session_factory() as s:
             rows = (
-                await s.execute(
-                    select(PaymentNotification).where(
-                        PaymentNotification.online_payment_id == op.id,
-                        PaymentNotification.kind == "payment_canceled",
+                (
+                    await s.execute(
+                        select(PaymentNotification).where(
+                            PaymentNotification.online_payment_id == op.id,
+                            PaymentNotification.kind == "payment_canceled",
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         assert len(rows) == 2, f"expected 2 rows; got {len(rows)}"
         for row in rows:
             assert row.payment_id is None, "payment_id must be NULL for canceled path"
@@ -821,13 +825,17 @@ async def test_payment_canceled_owner_alert_db_claim_no_fk_violation_idempotent(
 
         async with notif_session_factory() as s:
             rows2 = (
-                await s.execute(
-                    select(PaymentNotification).where(
-                        PaymentNotification.online_payment_id == op.id,
-                        PaymentNotification.kind == "payment_canceled",
+                (
+                    await s.execute(
+                        select(PaymentNotification).where(
+                            PaymentNotification.online_payment_id == op.id,
+                            PaymentNotification.kind == "payment_canceled",
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         assert len(rows2) == 2, f"row count must stay 2 after restart; got {len(rows2)}"
     finally:
         _restore_email_dispatcher(prior)

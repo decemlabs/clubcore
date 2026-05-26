@@ -100,9 +100,7 @@ _CREATE_REFUND_OK_BODY: dict[str, Any] = {
 @pytest.mark.asyncio
 async def test_create_payment_ok_returns_ok_classification() -> None:
     with respx.mock(base_url=_BASE_URL, assert_all_called=False) as router:
-        router.post("payments").mock(
-            return_value=httpx.Response(200, json=_CREATE_PAYMENT_OK_BODY)
-        )
+        router.post("payments").mock(return_value=httpx.Response(200, json=_CREATE_PAYMENT_OK_BODY))
         async with httpx.AsyncClient(base_url=_BASE_URL) as http:
             client = YooKassaClient(http=http, settings=_test_settings())
             result = await client.create_payment(**_payment_kwargs())
@@ -178,9 +176,7 @@ async def test_create_payment_network_error_returns_transient_error() -> None:
 @pytest.mark.asyncio
 async def test_create_payment_malformed_json_returns_permanent_error() -> None:
     with respx.mock(base_url=_BASE_URL, assert_all_called=False) as router:
-        router.post("payments").mock(
-            return_value=httpx.Response(200, content=b"not-json")
-        )
+        router.post("payments").mock(return_value=httpx.Response(200, content=b"not-json"))
         async with httpx.AsyncClient(base_url=_BASE_URL) as http:
             client = YooKassaClient(http=http, settings=_test_settings())
             result = await client.create_payment(**_payment_kwargs())
@@ -245,9 +241,7 @@ async def test_get_payment_ok_returns_ok_classification() -> None:
 @pytest.mark.asyncio
 async def test_create_refund_ok_returns_refund_result() -> None:
     with respx.mock(base_url=_BASE_URL, assert_all_called=False) as router:
-        router.post("refunds").mock(
-            return_value=httpx.Response(200, json=_CREATE_REFUND_OK_BODY)
-        )
+        router.post("refunds").mock(return_value=httpx.Response(200, json=_CREATE_REFUND_OK_BODY))
         async with httpx.AsyncClient(base_url=_BASE_URL) as http:
             client = YooKassaClient(http=http, settings=_test_settings())
             result = await client.create_refund(

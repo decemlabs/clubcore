@@ -251,9 +251,7 @@ async def test_concurrent_expiring_cron_double_pings_race(
     async def _never_called_send(
         bot: object, chat_id: int, body: str
     ) -> Any:  # pragma: no cover -- never reached
-        raise AssertionError(
-            "sender.send_text_dm must not be called when chat_id is None"
-        )
+        raise AssertionError("sender.send_text_dm must not be called when chat_id is None")
 
     fake_sender = SimpleNamespace(send_text_dm=_never_called_send)
 
@@ -275,8 +273,7 @@ async def test_concurrent_expiring_cron_double_pings_race(
     # sent=1 if it observed the surviving row was theirs. Total winners
     # across both arms is exactly 1.
     assert sum(results) == 1, (
-        f"expected exactly one successful send across both gather arms, "
-        f"got {results!r}"
+        f"expected exactly one successful send across both gather arms, got {results!r}"
     )
 
     # ── DB invariant: exactly one membership_notifications row, channel='email' ──
@@ -306,23 +303,18 @@ async def test_concurrent_expiring_cron_double_pings_race(
             )
         ).scalar_one()
         assert telegram_row_count == 0, (
-            f"telegram channel must be untouched (chat_id IS NULL); "
-            f"got {telegram_row_count} row(s)"
+            f"telegram channel must be untouched (chat_id IS NULL); got {telegram_row_count} row(s)"
         )
 
     # Email dispatcher recorder — at least one literal-template invocation
     # (the loser MAY have dispatched before its INSERT failed, so 1 or 2
     # is acceptable; the DB invariant above is the canonical race assertion).
-    assert len(email_recorder.calls) >= 1, (
-        "expected ≥1 EmailDispatcher invocation during the race"
-    )
+    assert len(email_recorder.calls) >= 1, "expected ≥1 EmailDispatcher invocation during the race"
     for call in email_recorder.calls:
         assert call["template_id"].startswith("EMAIL_EXPIRING_7D_"), (
             f"non-literal expiring_7d template_id observed: {call['template_id']!r}"
         )
-        assert call["to"].startswith("race-cron+"), (
-            f"unexpected recipient: {call['to']!r}"
-        )
+        assert call["to"].startswith("race-cron+"), f"unexpected recipient: {call['to']!r}"
 
     # Suppress unused-import warning on datetime/UTC (imported for parity
     # with the analog test even though not consumed in the body).

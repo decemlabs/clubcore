@@ -190,13 +190,9 @@ async def test_concurrent_record_pt_session_decrement_at_db_layer(
     # DB invariants: exactly 1 pt_sessions row + sessions_remaining=0 +
     # status='exhausted' (auto-transition from PT-17 / D-34-05).
     session_count = await db_session_real_commit.scalar(
-        select(func.count())
-        .select_from(PtSession)
-        .where(PtSession.pt_package_id == pt_package_id)
+        select(func.count()).select_from(PtSession).where(PtSession.pt_package_id == pt_package_id)
     )
-    assert session_count == 1, (
-        f"Expected exactly 1 pt_sessions row after race, got {session_count}"
-    )
+    assert session_count == 1, f"Expected exactly 1 pt_sessions row after race, got {session_count}"
     # Expire identity-map cache so the post-race re-read returns DB-truth
     # values (the route handler committed on a different connection; without
     # expire_all() SQLAlchemy returns the cached pre-race PtPackage instance
@@ -214,9 +210,7 @@ async def test_concurrent_record_pt_session_decrement_at_db_layer(
     # (the 0-row UPDATE returned None and the orchestrator raised
     # PtPackageExhaustedError, never reaching audit.emit).
     recorded_count = await db_session_real_commit.scalar(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.action == "pt_session_recorded")
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "pt_session_recorded")
     )
     assert recorded_count == 1, (
         f"Expected exactly 1 pt_session_recorded audit row, got {recorded_count}"

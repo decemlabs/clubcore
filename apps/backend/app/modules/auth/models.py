@@ -73,9 +73,7 @@ class RefreshToken(Base, UUIDPkMixin, TimestampMixin):
         nullable=True,
     )
 
-    __table_args__ = (
-        Index("ix_refresh_tokens_user_id_family_id", "user_id", "family_id"),
-    )
+    __table_args__ = (Index("ix_refresh_tokens_user_id_family_id", "user_id", "family_id"),)
 
 
 class OtpCode(Base, UUIDPkMixin, TimestampMixin):

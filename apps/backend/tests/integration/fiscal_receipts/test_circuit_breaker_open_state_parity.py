@@ -134,9 +134,7 @@ async def test_fiscal_receipt_dispatch_short_circuits_when_breaker_open_via_5_fa
 
     # Step 3 & 4 — invoke dispatch_fiscal_receipt and assert Retry(defer=300).
     with respx.mock(assert_all_called=False) as router:
-        receipts_route = router.post(
-            "https://api.yookassa.ru/v3/receipts"
-        )
+        receipts_route = router.post("https://api.yookassa.ru/v3/receipts")
 
         with pytest.raises(Retry) as exc_info:
             await dispatch_fiscal_receipt(arq_ctx, str(fr_id))
@@ -158,9 +156,7 @@ async def test_fiscal_receipt_dispatch_short_circuits_when_breaker_open_via_5_fa
 
     # Step 6 — assert fiscal_receipt status is unchanged ('pending').
     async with fiscal_session_factory() as verify_session:
-        row = await verify_session.scalar(
-            select(FiscalReceipt).where(FiscalReceipt.id == fr_id)
-        )
+        row = await verify_session.scalar(select(FiscalReceipt).where(FiscalReceipt.id == fr_id))
         assert row is not None, f"FiscalReceipt {fr_id} disappeared from DB."
         assert row.status == "pending", (
             f"FiscalReceipt status must remain 'pending' under open breaker; "
@@ -197,9 +193,7 @@ async def test_fiscal_receipt_dispatch_short_circuits_when_breaker_open_via_dire
     fr_id = fr.id
 
     with respx.mock(assert_all_called=False) as router:
-        receipts_route = router.post(
-            "https://api.yookassa.ru/v3/receipts"
-        )
+        receipts_route = router.post("https://api.yookassa.ru/v3/receipts")
 
         with pytest.raises(Retry) as exc_info:
             await dispatch_fiscal_receipt(arq_ctx, str(fr_id))
@@ -214,11 +208,8 @@ async def test_fiscal_receipt_dispatch_short_circuits_when_breaker_open_via_dire
     assert defer_seconds == float(_OPEN_DEFER_SECONDS)
 
     async with fiscal_session_factory() as verify_session:
-        row = await verify_session.scalar(
-            select(FiscalReceipt).where(FiscalReceipt.id == fr_id)
-        )
+        row = await verify_session.scalar(select(FiscalReceipt).where(FiscalReceipt.id == fr_id))
         assert row is not None
         assert row.status == "pending", (
-            f"FiscalReceipt status must remain 'pending' (direct-SET variant); "
-            f"got {row.status!r}."
+            f"FiscalReceipt status must remain 'pending' (direct-SET variant); got {row.status!r}."
         )

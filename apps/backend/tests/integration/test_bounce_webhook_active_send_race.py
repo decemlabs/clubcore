@@ -279,8 +279,7 @@ async def test_bounce_webhook_active_send_race(
 
     webhook_status = results[0]
     assert webhook_status == 202, (
-        f"webhook expected 202 Accepted (HMAC valid + row matched), "
-        f"got {webhook_status}"
+        f"webhook expected 202 Accepted (HMAC valid + row matched), got {webhook_status}"
     )
 
     # ── Verify DB invariants ────────────────────────────────────────────

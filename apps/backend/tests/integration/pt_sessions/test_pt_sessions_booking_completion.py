@@ -52,9 +52,7 @@ def _csrf_headers(
     *,
     idempotency_key: str | None = None,
 ) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -71,9 +69,7 @@ def _record_body(
     body: dict[str, Any] = {
         "ptPackageId": str(pt_package_id),
         "trainerId": str(trainer_id),
-        "performedAt": (
-            performed_at or datetime.now(UTC) - timedelta(minutes=10)
-        ).isoformat(),
+        "performedAt": (performed_at or datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
     }
     if booking_id is not None:
         body["bookingId"] = str(booking_id)
@@ -151,9 +147,7 @@ async def test_record_with_booking_id_completes_booking(
     pt_sessions row carries booking_id + audit payload includes booking_id."""
     plan = await make_pt_package_plan(session_count=5)
     client_row = await make_client()
-    pkg = await make_pt_package(
-        client_id=client_row.id, plan=plan, sessions_remaining=5
-    )
+    pkg = await make_pt_package(client_id=client_row.id, plan=plan, sessions_remaining=5)
     trainer = await make_trainer(full_name="Иван Петрович")
     slot = await _seed_slot(
         db_session,
@@ -173,9 +167,7 @@ async def test_record_with_booking_id_completes_booking(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer.id, booking_id=booking.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 201, r.text
     data = r.json()["data"]
@@ -189,9 +181,7 @@ async def test_record_with_booking_id_completes_booking(
     assert booking.completed_at is not None
 
     # pt_sessions row carries booking_id.
-    pt_session = await db_session.scalar(
-        select(PtSession).where(PtSession.id == UUID(data["id"]))
-    )
+    pt_session = await db_session.scalar(select(PtSession).where(PtSession.id == UUID(data["id"])))
     assert pt_session is not None
     assert pt_session.booking_id == booking.id
 
@@ -221,25 +211,19 @@ async def test_record_without_booking_id_unchanged_walk_in_flow(
     audit payload has booking_id=None; pt_sessions.booking_id IS NULL."""
     plan = await make_pt_package_plan(session_count=5)
     client_row = await make_client()
-    pkg = await make_pt_package(
-        client_id=client_row.id, plan=plan, sessions_remaining=5
-    )
+    pkg = await make_pt_package(client_id=client_row.id, plan=plan, sessions_remaining=5)
     trainer = await make_trainer()
 
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 201, r.text
     data = r.json()["data"]
     assert data["bookingId"] is None
 
-    pt_session = await db_session.scalar(
-        select(PtSession).where(PtSession.id == UUID(data["id"]))
-    )
+    pt_session = await db_session.scalar(select(PtSession).where(PtSession.id == UUID(data["id"])))
     assert pt_session is not None
     assert pt_session.booking_id is None
 
@@ -276,9 +260,7 @@ async def test_record_with_unknown_booking_returns_404(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer.id, booking_id=uuid4()),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 404, r.text
     assert r.json()["code"] == "booking_not_found"
@@ -316,9 +298,7 @@ async def test_record_with_cancelled_booking_returns_409(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer.id, booking_id=booking.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 409, r.text
     assert r.json()["code"] == "booking_not_confirmed"
@@ -357,9 +337,7 @@ async def test_record_with_already_completed_booking_returns_409(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer.id, booking_id=booking.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 409, r.text
     assert r.json()["code"] == "booking_not_confirmed"
@@ -406,9 +384,7 @@ async def test_record_with_pt_package_mismatch_returns_409(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg_a.id, trainer.id, booking_id=booking.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 409, r.text
     assert r.json()["code"] == "booking_mismatch"
@@ -447,9 +423,7 @@ async def test_record_with_trainer_mismatch_returns_409(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer_in_request.id, booking_id=booking.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 409, r.text
     assert r.json()["code"] == "booking_mismatch"
@@ -475,9 +449,7 @@ async def test_cancel_pt_session_does_not_revert_completed_booking(
     locks `completed → ∅`). No automatic revert."""
     plan = await make_pt_package_plan(session_count=5)
     client_row = await make_client()
-    pkg = await make_pt_package(
-        client_id=client_row.id, plan=plan, sessions_remaining=5
-    )
+    pkg = await make_pt_package(client_id=client_row.id, plan=plan, sessions_remaining=5)
     trainer = await make_trainer()
     slot = await _seed_slot(
         db_session,
@@ -496,9 +468,7 @@ async def test_cancel_pt_session_does_not_revert_completed_booking(
     r = await authed_client_reception.post(
         "/api/v1/pt-sessions",
         json=_record_body(pkg.id, trainer.id, booking_id=booking.id),
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert r.status_code == 201, r.text
     pt_session_id = UUID(r.json()["data"]["id"])
@@ -509,9 +479,7 @@ async def test_cancel_pt_session_does_not_revert_completed_booking(
     cancel = await authed_client_reception.post(
         f"/api/v1/pt-sessions/{pt_session_id}/cancel",
         json={"cancelReason": "Тестовая отмена PKG-06"},
-        headers=_csrf_headers(
-            authed_client_reception, idempotency_key=uuid4().hex
-        ),
+        headers=_csrf_headers(authed_client_reception, idempotency_key=uuid4().hex),
     )
     assert cancel.status_code == 200, cancel.text
 
@@ -573,5 +541,3 @@ def test_pt_sessions_does_not_import_bookings_or_schedule(module_path: str) -> N
             f"{module_path} contains forbidden import `{needle}` — "
             "use raw sa.text() with TABLE_REF noqa or a Protocol slot instead."
         )
-
-

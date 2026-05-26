@@ -17,6 +17,7 @@ Threat mitigations (Phase 51 T-51-09-01..08):
 - Repudiation safety (T-51-09-08): audit row emitted inside the same
   ``session.begin()`` block before commit (D-32-10 / D-49-13 lineage).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -89,9 +90,7 @@ async def _monitor_stale_fiscal_receipts(
                 resource_type="fiscal_receipt",
                 resource_id=row.id,
                 audit_correlation_id=(
-                    str(row.audit_correlation_id)
-                    if row.audit_correlation_id is not None
-                    else None
+                    str(row.audit_correlation_id) if row.audit_correlation_id is not None else None
                 ),
                 fiscal_receipt_id=str(row.id),
                 failure_reason="stale_pending_no_dispatch",

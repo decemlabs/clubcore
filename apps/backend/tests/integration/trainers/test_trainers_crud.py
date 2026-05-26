@@ -96,9 +96,7 @@ async def test_create_duplicate_phone_after_soft_delete_succeeds(
 
     # Simulate soft-delete by setting deleted_at directly
     await db_session.execute(
-        sa_update(Trainer)
-        .where(Trainer.id == trainer_id)
-        .values(deleted_at=datetime.now(tz=UTC))
+        sa_update(Trainer).where(Trainer.id == trainer_id).values(deleted_at=datetime.now(tz=UTC))
     )
     await db_session.commit()
 
@@ -130,9 +128,7 @@ async def test_get_missing_returns_404_trainer_not_found(
     authed_client_owner: AsyncClient,
 ) -> None:
     """TRN-02: GET random UUID → 404 with code trainer_not_found."""
-    r = await authed_client_owner.get(
-        "/api/v1/trainers/00000000-0000-0000-0000-000000000000"
-    )
+    r = await authed_client_owner.get("/api/v1/trainers/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404, r.text
     assert r.json()["code"] == "trainer_not_found"
 
@@ -180,7 +176,9 @@ async def test_list_active_false_filters(
     """D-31-09: GET ?active=false returns only inactive trainers."""
     active = await _create(authed_client_owner, phone="+79994444443", full_name="Активный2")  # noqa: RUF001
     inactive = await _create(
-        authed_client_owner, phone="+79994444444", full_name="Неактивный2"  # noqa: RUF001
+        authed_client_owner,
+        phone="+79994444444",
+        full_name="Неактивный2",  # noqa: RUF001
     )
 
     # Deactivate the second trainer

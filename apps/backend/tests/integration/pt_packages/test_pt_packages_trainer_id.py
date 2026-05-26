@@ -29,9 +29,7 @@ from app.modules.trainers.models import Trainer
 
 
 def _csrf_headers(client: AsyncClient, *, idempotency_key: str | None = None) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -88,9 +86,7 @@ async def test_create_pt_package_with_active_trainer_id_sets_column(
     assert data["trainerId"] == str(trainer.id)
 
     # DB-level confirmation.
-    pkg = await db_session.scalar(
-        select(PtPackage).where(PtPackage.id == UUID(data["id"]))
-    )
+    pkg = await db_session.scalar(select(PtPackage).where(PtPackage.id == UUID(data["id"])))
     assert pkg is not None
     assert pkg.trainer_id == trainer.id
 
@@ -114,9 +110,7 @@ async def test_create_pt_package_without_trainer_id_stores_null(
     data = r.json()["data"]
     assert data["trainerId"] is None
 
-    pkg = await db_session.scalar(
-        select(PtPackage).where(PtPackage.id == UUID(data["id"]))
-    )
+    pkg = await db_session.scalar(select(PtPackage).where(PtPackage.id == UUID(data["id"])))
     assert pkg is not None
     assert pkg.trainer_id is None
 
@@ -133,9 +127,7 @@ async def test_create_pt_package_with_inactive_trainer_409_or_422(
     """PKG-02: inactive trainer → trainer_inactive code (mirrors pt_sessions)."""
     plan = await make_pt_package_plan(name="trainer-inactive")
     client = await make_client()
-    trainer = await _seed_trainer(
-        db_session, is_active=False, full_name="Inactive Trainer"
-    )
+    trainer = await _seed_trainer(db_session, is_active=False, full_name="Inactive Trainer")
 
     r = await authed_client_owner.post(
         "/api/v1/pt-packages",
@@ -147,9 +139,7 @@ async def test_create_pt_package_with_inactive_trainer_409_or_422(
     assert r.json()["code"] == "trainer_inactive"
 
     # No pt_package row should have been created.
-    count = await db_session.scalar(
-        select(PtPackage).where(PtPackage.client_id == client.id)
-    )
+    count = await db_session.scalar(select(PtPackage).where(PtPackage.client_id == client.id))
     assert count is None
 
 
@@ -172,7 +162,5 @@ async def test_create_pt_package_with_unknown_trainer_404(
     assert r.json()["code"] == "trainer_not_found"
 
     # No pt_package row should exist.
-    count = await db_session.scalar(
-        select(PtPackage).where(PtPackage.client_id == client.id)
-    )
+    count = await db_session.scalar(select(PtPackage).where(PtPackage.client_id == client.id))
     assert count is None

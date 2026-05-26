@@ -64,7 +64,9 @@ async def test_deactivate_atomic_rollback_on_audit_failure(
     original_emit = audit_module.emit
     call_log: list[str] = []
 
-    async def failing_emit(session: AsyncSession, event: str, *args: object, **kwargs: object) -> None:  # type: ignore[override]
+    async def failing_emit(
+        session: AsyncSession, event: str, *args: object, **kwargs: object
+    ) -> None:  # type: ignore[override]
         call_log.append(event)
         if event == "user_deactivated":
             raise RuntimeError("simulated audit_log failure post-revoke")
@@ -113,13 +115,17 @@ async def test_deactivate_atomic_rollback_on_audit_failure(
 
     # The session_revoked_all audit row should ALSO be rolled back (same tx).
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "session_revoked_all",
-                AuditLog.resource_id == target_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "session_revoked_all",
+                    AuditLog.resource_id == target_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 0, (
         f"CR-04 regression — {len(audit_rows)} session_revoked_all audit row(s) "
         "committed despite the user_deactivated failure. The whole flow must "
@@ -159,10 +165,10 @@ async def test_deactivate_happy_path_commits_both_audit_rows(
     audit_actions = {
         row.action
         for row in (
-            await db_session.execute(
-                select(AuditLog).where(AuditLog.resource_id == target_id)
-            )
-        ).scalars().all()
+            await db_session.execute(select(AuditLog).where(AuditLog.resource_id == target_id))
+        )
+        .scalars()
+        .all()
     }
     # session_revoked_all uses resource_id=target_id; user_deactivated also resource_id=target_id.
     assert "session_revoked_all" in audit_actions, (

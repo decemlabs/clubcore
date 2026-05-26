@@ -85,9 +85,7 @@ if TYPE_CHECKING:
 _log = structlog.get_logger("modules.online_payments.service")
 
 
-def _derive_idempotency_key(
-    *, subject_kind: str, plan_id: UUID, client_id: UUID
-) -> str:
+def _derive_idempotency_key(*, subject_kind: str, plan_id: UUID, client_id: UUID) -> str:
     """Deterministic Idempotence-Key per PAY-03 (D-49-08).
 
     UTC today_iso — wire-protocol key must be stable across DST. The
@@ -99,23 +97,15 @@ def _derive_idempotency_key(
     return sha256(raw.encode("utf-8")).hexdigest()
 
 
-async def _read_client_email_or_raise(
-    session: AsyncSession, client_id: UUID
-) -> str:
+async def _read_client_email_or_raise(session: AsyncSession, client_id: UUID) -> str:
     """FIS-05 gate (D-49-12): raise if clients.email IS NULL."""
-    email: str | None = await session.scalar(
-        select(Client.email).where(Client.id == client_id)
-    )
+    email: str | None = await session.scalar(select(Client.email).where(Client.id == client_id))
     if email is None:
-        raise ClientEmailRequiredForOnlinePaymentError(
-            ErrorCode.CLIENT_EMAIL_REQUIRED.value
-        )
+        raise ClientEmailRequiredForOnlinePaymentError(ErrorCode.CLIENT_EMAIL_REQUIRED.value)
     return email
 
 
-async def _read_membership_plan_or_raise(
-    session: AsyncSession, plan_id: UUID
-) -> tuple[int, str]:
+async def _read_membership_plan_or_raise(session: AsyncSession, plan_id: UUID) -> tuple[int, str]:
     """Return (price_kopecks, name) for an alive membership_plans row.
 
     BLOCKER #3 — raw SQL `text()` SELECT against the membership_plans
@@ -129,22 +119,24 @@ async def _read_membership_plan_or_raise(
       - deleted_at    nullable timestamptz
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, price_kopecks, name FROM membership_plans "
-                "WHERE id = :id AND deleted_at IS NULL"
-            ),
-            {"id": str(plan_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, price_kopecks, name FROM membership_plans "
+                    "WHERE id = :id AND deleted_at IS NULL"
+                ),
+                {"id": str(plan_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise NotFoundError("membership_plan_not_found")
     return int(row["price_kopecks"]), str(row["name"])
 
 
-async def _read_pt_package_plan_or_raise(
-    session: AsyncSession, plan_id: UUID
-) -> tuple[int, str]:
+async def _read_pt_package_plan_or_raise(session: AsyncSession, plan_id: UUID) -> tuple[int, str]:
     """Return (price_kopecks, name) for an alive pt_package_plans row.
 
     BLOCKER #3 — raw SQL `text()` SELECT against the pt_package_plans
@@ -158,14 +150,18 @@ async def _read_pt_package_plan_or_raise(
       - deleted_at    nullable timestamptz
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, price_kopecks, name FROM pt_package_plans "
-                "WHERE id = :id AND deleted_at IS NULL"
-            ),
-            {"id": str(plan_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, price_kopecks, name FROM pt_package_plans "
+                    "WHERE id = :id AND deleted_at IS NULL"
+                ),
+                {"id": str(plan_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise NotFoundError("pt_package_plan_not_found")
     return int(row["price_kopecks"]), str(row["name"])
@@ -194,9 +190,7 @@ async def _sell_subject(
     )
 
     # 4. Replay check (D-49-09 + BLOCKER #1 QR re-fetch refinement).
-    existing = await repository.get_online_payment_by_idempotency_key(
-        session, idem_key
-    )
+    existing = await repository.get_online_payment_by_idempotency_key(session, idem_key)
     if existing is not None and existing.status != "canceled":
         provider = get_yookassa_client_provider()
         yookassa_client = await provider()
@@ -204,9 +198,7 @@ async def _sell_subject(
             # BLOCKER #1 — QR replay re-fetches the upstream payment so
             # qr_payload is available; row stores no qr_payload (D-49-04),
             # and stale data is worse than re-computing.
-            refetch = await yookassa_client.get_payment(
-                existing.yookassa_payment_id
-            )
+            refetch = await yookassa_client.get_payment(existing.yookassa_payment_id)
             _log.info(
                 "online_payment_sell_replay",
                 online_payment_id=str(existing.id),
@@ -261,12 +253,8 @@ async def _sell_subject(
         row = await repository.insert_online_payment(
             session,
             client_id=client_id,
-            membership_plan_id=(
-                plan_id if subject_kind == "membership" else None
-            ),
-            pt_package_plan_id=(
-                plan_id if subject_kind == "pt_package" else None
-            ),
+            membership_plan_id=(plan_id if subject_kind == "membership" else None),
+            pt_package_plan_id=(plan_id if subject_kind == "pt_package" else None),
             yookassa_payment_id=result.payment_id,
             idempotency_key=idem_key,
             amount_kopecks=result.amount_kopecks,

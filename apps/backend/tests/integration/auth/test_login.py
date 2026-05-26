@@ -173,9 +173,7 @@ async def test_login_success_writes_audit_row(
     assert r.status_code == 200, r.text
 
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "login_success")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "login_success"))
     ).all()
     assert len(rows) >= 1
     row = next(r for r in rows if r.actor_user_id == seeded_owner.id)
@@ -196,9 +194,7 @@ async def test_login_failed_writes_audit_row_with_null_actor(
     assert r.status_code == 401
 
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "login_failed")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "login_failed"))
     ).all()
     assert len(rows) >= 1
     row = rows[-1]

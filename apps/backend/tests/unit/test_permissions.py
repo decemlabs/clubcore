@@ -92,9 +92,7 @@ def test_owner_area_value_uses_hyphen_not_underscore() -> None:
 # ---- can() body (D-23) ----
 
 
-_ALL_PAIRS: list[tuple[Action, Resource]] = [
-    (a, r) for a in Action for r in Resource
-]
+_ALL_PAIRS: list[tuple[Action, Resource]] = [(a, r) for a in Action for r in Resource]
 _ALL_PAIRS.sort(key=lambda p: (p[0].value, p[1].value))
 
 _OWNER_ONLY_SORTED: list[tuple[Action, Resource]] = sorted(
@@ -127,68 +125,70 @@ def test_specific_owner_only_membership() -> None:
                  + 4 v1.6 Phase 41 INFRA-37 USERS write pairs
                  + 2 v1.8 Phase 54 INFRA-42 AUDIT_LOG read pairs.
     """
-    expected = frozenset({
-        (Action.VIEW, Resource.FINANCE),
-        (Action.VIEW, Resource.REPORTS),
-        (Action.VIEW, Resource.PAYROLL),
-        (Action.VIEW, Resource.COMPENSATION),
-        (Action.VIEW, Resource.SETTINGS),
-        (Action.VIEW, Resource.OWNER_AREA),
-        (Action.EDIT, Resource.TEMPLATES),
-        (Action.DELETE, Resource.CLIENTS),
-        (Action.REFUND, Resource.FINANCE),
-        # Phase 15 INFRA-08
-        (Action.VIEW, Resource.MEMBERSHIP_PLANS),
-        (Action.EDIT, Resource.MEMBERSHIP_PLANS),
-        (Action.CREATE, Resource.MEMBERSHIP_PLANS),
-        (Action.DELETE, Resource.MEMBERSHIP_PLANS),
-        (Action.CANCEL, Resource.MEMBERSHIPS),
-        (Action.DELETE, Resource.MEMBERSHIPS),
-        # Phase 30 INFRA-19 - v1.4 owner-only pairs
-        # (Phase 34 D-34-09a removed (CANCEL, PT_SESSIONS))
-        (Action.CREATE, Resource.TRAINERS),
-        (Action.EDIT, Resource.TRAINERS),
-        (Action.DELETE, Resource.TRAINERS),
-        (Action.VIEW, Resource.PT_PACKAGE_PLANS),
-        (Action.CREATE, Resource.PT_PACKAGE_PLANS),
-        (Action.EDIT, Resource.PT_PACKAGE_PLANS),
-        (Action.DELETE, Resource.PT_PACKAGE_PLANS),
-        (Action.VIEW, Resource.PAYMENTS),
-        (Action.CANCEL, Resource.PT_PACKAGES),
-        (Action.DELETE, Resource.PT_PACKAGES),
-        # Phase 37 INFRA-27 - v1.5 SCHEDULE_SLOTS owner-only writes
-        # (reception RETAINS VIEW + LIST on SCHEDULE_SLOTS for slot-picker per SLOT-08;
-        #  reception RETAINS all BOOKINGS pairs incl. CANCEL with 24h server-side window
-        #  per BOOK-06 / C-05).
-        (Action.CREATE, Resource.SCHEDULE_SLOTS),
-        (Action.EDIT, Resource.SCHEDULE_SLOTS),
-        (Action.DELETE, Resource.SCHEDULE_SLOTS),
-        (Action.CANCEL, Resource.SCHEDULE_SLOTS),
-        # Phase 41 INFRA-37 / D-41-21 - v1.6 USERS owner-only writes
-        # (reception holds ZERO USERS permissions in v1.6 per CONTEXT.md D-41-23;
-        #  deactivate / reactivate / invitation-revoke map to Action.UPDATE;
-        #  soft-delete maps to Action.DELETE per D-41-22).
-        (Action.CREATE, Resource.USERS),
-        (Action.UPDATE, Resource.USERS),
-        (Action.DELETE, Resource.USERS),
-        (Action.LIST, Resource.USERS),
-        # Phase 54 INFRA-42 - v1.8 AUDIT_LOG owner-only reads
-        # (reception holds ZERO audit-log permissions per D-54-04; the audit read
-        #  API is a paginated listing plus filterable reads → VIEW + LIST).
-        (Action.VIEW, Resource.AUDIT_LOG),
-        (Action.LIST, Resource.AUDIT_LOG),
-        # Phase 58 INFRA-15 / D-58-15 - v1.9 payroll + compensation owner-only writes
-        # (reception holds ZERO payroll visibility beyond the pre-existing VIEW pairs
-        #  at lines above; (EDIT, COMPENSATION) collapsed into (CREATE, COMPENSATION)
-        #  per D-58-15 Claude's Discretion — INSERT-only versioned comp-config model.
-        #  PAYROLL gets CREATE (record accrual) / EDIT (mark-paid) / REFUND (clawback
-        #  hook authorization) / LIST (paginated accrual listing)).
-        (Action.CREATE, Resource.COMPENSATION),
-        (Action.CREATE, Resource.PAYROLL),
-        (Action.EDIT, Resource.PAYROLL),
-        (Action.REFUND, Resource.PAYROLL),
-        (Action.LIST, Resource.PAYROLL),
-    })
+    expected = frozenset(
+        {
+            (Action.VIEW, Resource.FINANCE),
+            (Action.VIEW, Resource.REPORTS),
+            (Action.VIEW, Resource.PAYROLL),
+            (Action.VIEW, Resource.COMPENSATION),
+            (Action.VIEW, Resource.SETTINGS),
+            (Action.VIEW, Resource.OWNER_AREA),
+            (Action.EDIT, Resource.TEMPLATES),
+            (Action.DELETE, Resource.CLIENTS),
+            (Action.REFUND, Resource.FINANCE),
+            # Phase 15 INFRA-08
+            (Action.VIEW, Resource.MEMBERSHIP_PLANS),
+            (Action.EDIT, Resource.MEMBERSHIP_PLANS),
+            (Action.CREATE, Resource.MEMBERSHIP_PLANS),
+            (Action.DELETE, Resource.MEMBERSHIP_PLANS),
+            (Action.CANCEL, Resource.MEMBERSHIPS),
+            (Action.DELETE, Resource.MEMBERSHIPS),
+            # Phase 30 INFRA-19 - v1.4 owner-only pairs
+            # (Phase 34 D-34-09a removed (CANCEL, PT_SESSIONS))
+            (Action.CREATE, Resource.TRAINERS),
+            (Action.EDIT, Resource.TRAINERS),
+            (Action.DELETE, Resource.TRAINERS),
+            (Action.VIEW, Resource.PT_PACKAGE_PLANS),
+            (Action.CREATE, Resource.PT_PACKAGE_PLANS),
+            (Action.EDIT, Resource.PT_PACKAGE_PLANS),
+            (Action.DELETE, Resource.PT_PACKAGE_PLANS),
+            (Action.VIEW, Resource.PAYMENTS),
+            (Action.CANCEL, Resource.PT_PACKAGES),
+            (Action.DELETE, Resource.PT_PACKAGES),
+            # Phase 37 INFRA-27 - v1.5 SCHEDULE_SLOTS owner-only writes
+            # (reception RETAINS VIEW + LIST on SCHEDULE_SLOTS for slot-picker per SLOT-08;
+            #  reception RETAINS all BOOKINGS pairs incl. CANCEL with 24h server-side window
+            #  per BOOK-06 / C-05).
+            (Action.CREATE, Resource.SCHEDULE_SLOTS),
+            (Action.EDIT, Resource.SCHEDULE_SLOTS),
+            (Action.DELETE, Resource.SCHEDULE_SLOTS),
+            (Action.CANCEL, Resource.SCHEDULE_SLOTS),
+            # Phase 41 INFRA-37 / D-41-21 - v1.6 USERS owner-only writes
+            # (reception holds ZERO USERS permissions in v1.6 per CONTEXT.md D-41-23;
+            #  deactivate / reactivate / invitation-revoke map to Action.UPDATE;
+            #  soft-delete maps to Action.DELETE per D-41-22).
+            (Action.CREATE, Resource.USERS),
+            (Action.UPDATE, Resource.USERS),
+            (Action.DELETE, Resource.USERS),
+            (Action.LIST, Resource.USERS),
+            # Phase 54 INFRA-42 - v1.8 AUDIT_LOG owner-only reads
+            # (reception holds ZERO audit-log permissions per D-54-04; the audit read
+            #  API is a paginated listing plus filterable reads → VIEW + LIST).
+            (Action.VIEW, Resource.AUDIT_LOG),
+            (Action.LIST, Resource.AUDIT_LOG),
+            # Phase 58 INFRA-15 / D-58-15 - v1.9 payroll + compensation owner-only writes
+            # (reception holds ZERO payroll visibility beyond the pre-existing VIEW pairs
+            #  at lines above; (EDIT, COMPENSATION) collapsed into (CREATE, COMPENSATION)
+            #  per D-58-15 Claude's Discretion — INSERT-only versioned comp-config model.
+            #  PAYROLL gets CREATE (record accrual) / EDIT (mark-paid) / REFUND (clawback
+            #  hook authorization) / LIST (paginated accrual listing)).
+            (Action.CREATE, Resource.COMPENSATION),
+            (Action.CREATE, Resource.PAYROLL),
+            (Action.EDIT, Resource.PAYROLL),
+            (Action.REFUND, Resource.PAYROLL),
+            (Action.LIST, Resource.PAYROLL),
+        }
+    )
     assert expected == OWNER_ONLY
 
 
@@ -200,8 +200,8 @@ def test_reception_retains_v1_4_rights() -> None:
     (VIEW, TRAINERS) — owner-only is CRUD writes only (CREATE/EDIT/DELETE).
     """
     retained_pairs = [
-        (Action.VIEW, Resource.TRAINERS),       # TRN-04 reception picker
-        (Action.CREATE, Resource.PAYMENTS),     # PAY-04 sale-flow
+        (Action.VIEW, Resource.TRAINERS),  # TRN-04 reception picker
+        (Action.CREATE, Resource.PAYMENTS),  # PAY-04 sale-flow
         (Action.REFUND, Resource.MEMBERSHIPS),  # B-07 uniform-reception
         (Action.CREATE, Resource.PT_PACKAGES),  # PT-07 reception sells
         (Action.REFUND, Resource.PT_PACKAGES),  # B-07 / REF-02

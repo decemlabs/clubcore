@@ -289,8 +289,9 @@ def _apply_booking_list_filters(
         # Trainer FK lives on the slot — predicate uses sa.text() against the
         # joined table to avoid naming TrainerAvailabilitySlot directly.
         predicates.append(
-            sa.text("trainer_availability_slots.trainer_id = :trainer_id_param")
-            .bindparams(trainer_id_param=trainer_id)
+            sa.text("trainer_availability_slots.trainer_id = :trainer_id_param").bindparams(
+                trainer_id_param=trainer_id
+            )
         )
     return stmt.where(and_(*predicates)), predicates
 

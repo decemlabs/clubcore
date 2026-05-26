@@ -118,13 +118,17 @@ async def test_generate_recurring_slots_inserts_and_audits(
 
     # Audit rows emitted: exactly count_first slot_published rows.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "slot_published",
-                AuditLog.actor_user_id.is_(None),
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "slot_published",
+                    AuditLog.actor_user_id.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == count_first, (
         f"expected {count_first} slot_published audit rows, got {len(audit_rows)}"
     )
@@ -134,13 +138,17 @@ async def test_generate_recurring_slots_inserts_and_audits(
 
     # created_by_user_id IS NULL on all inserted slots.
     slots = (
-        await db_session.execute(
-            select(TrainerAvailabilitySlot).where(
-                TrainerAvailabilitySlot.trainer_id == trainer.id,
-                TrainerAvailabilitySlot.status == "active",
+        (
+            await db_session.execute(
+                select(TrainerAvailabilitySlot).where(
+                    TrainerAvailabilitySlot.trainer_id == trainer.id,
+                    TrainerAvailabilitySlot.status == "active",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(slots) == count_first
     for slot in slots:
         assert slot.created_by_user_id is None, (
@@ -157,13 +165,17 @@ async def test_generate_recurring_slots_inserts_and_audits(
 
     # Audit row count must be unchanged (no new slot_published).
     audit_rows_after = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "slot_published",
-                AuditLog.actor_user_id.is_(None),
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "slot_published",
+                    AuditLog.actor_user_id.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows_after) == count_first, (
         f"idempotency FAILED: new audit rows emitted on re-run "
         f"({len(audit_rows_after)} total, expected {count_first})"

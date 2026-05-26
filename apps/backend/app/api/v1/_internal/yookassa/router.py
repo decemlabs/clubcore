@@ -119,9 +119,7 @@ async def yookassa_webhook(
         # leave the attribute unset, in which case the handler receives
         # ``None`` and the enqueue branch is a no-op.
         arq_pool = getattr(request.app.state, "arq_pool", None)
-        await handle_payment_succeeded(
-            session, yookassa_client, body=body, arq_pool=arq_pool
-        )
+        await handle_payment_succeeded(session, yookassa_client, body=body, arq_pool=arq_pool)
     elif event_type == "payment.canceled":
         # Phase 52 D-52-10 — thread arq_pool so the owner alert can be enqueued
         # post-commit. Mirrors the payment.succeeded branch (line 121).
@@ -134,9 +132,7 @@ async def yookassa_webhook(
         # dispatch_fiscal_receipt for the refund-side fiscal_receipts row —
         # symmetric to the payment.succeeded branch above (verification gap fix).
         arq_pool = getattr(request.app.state, "arq_pool", None)
-        await handle_refund_succeeded(
-            session, yookassa_client, body=body, arq_pool=arq_pool
-        )
+        await handle_refund_succeeded(session, yookassa_client, body=body, arq_pool=arq_pool)
     elif event_type == "receipt.succeeded":
         # Phase 51 D-51-21 — receipt handlers do NOT take yookassa_client
         # (D-51-03 — no re-fetch; receipt status is informational, the body is

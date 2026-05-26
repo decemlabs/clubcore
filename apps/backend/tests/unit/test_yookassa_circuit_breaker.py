@@ -114,8 +114,7 @@ async def test_atomic_pipeline_used_for_record_failure() -> None:
     # transaction=True is the load-bearing kwarg (MULTI/EXEC).
     _, kwargs = spy.call_args
     assert kwargs.get("transaction") is True, (
-        f"record_failure must call redis.pipeline(transaction=True); "
-        f"got kwargs={kwargs!r}"
+        f"record_failure must call redis.pipeline(transaction=True); got kwargs={kwargs!r}"
     )
 
 

@@ -104,15 +104,11 @@ async def test_self_checkin_unknown_telegram_id_raises_client_not_linked(
     # (Phase 20 owns telegram_unknown_checkin; Phase 19 raises with zero side effects)
     rows = (
         await db_session.scalars(
-            select(AuditLog).where(
-                AuditLog.action == "visit_rejected_no_membership"
-            )
+            select(AuditLog).where(AuditLog.action == "visit_rejected_no_membership")
         )
     ).all()
     # No rows should exist in this SAVEPOINT context
-    assert len(rows) == 0, (
-        "D-12 violated: audit row was written for unknown telegram_user_id"
-    )
+    assert len(rows) == 0, "D-12 violated: audit row was written for unknown telegram_user_id"
 
 
 # ── Outside gym hours via direct service call ─────────────────────────────────

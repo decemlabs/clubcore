@@ -104,9 +104,7 @@ def _pivot_revenue_buckets(
         period_raw = row["period"]
         # period_raw is a Python date object from Postgres (both day + month date_trunc).
         # day -> "YYYY-MM-DD"; month date_trunc returns month-start date -> "YYYY-MM".
-        period_str = (
-            str(period_raw)[:7] if query.group_by == GRAIN_MONTH else str(period_raw)
-        )
+        period_str = str(period_raw)[:7] if query.group_by == GRAIN_MONTH else str(period_raw)
 
         if period_str not in buckets:
             buckets[period_str] = (
@@ -196,15 +194,11 @@ async def get_clients_report(
     """
     _validate_date_range(query.from_date, query.to_date)
     if query.within < 1 or query.within > 30:
-        raise ValidationAppError(
-            f"within must be between 1 and 30, got {query.within}"
-        )
+        raise ValidationAppError(f"within must be between 1 and 30, got {query.within}")
 
     active = await repository.fetch_active_memberships_count(session)
     expiring = await repository.fetch_expiring_memberships_count(session, query.within)
-    new_clients = await repository.fetch_new_clients_count(
-        session, query.from_date, query.to_date
-    )
+    new_clients = await repository.fetch_new_clients_count(session, query.from_date, query.to_date)
 
     return ClientsReportResponse(
         active_count=active,
@@ -232,12 +226,8 @@ async def get_visits_report(
     """
     _validate_date_range(query.from_date, query.to_date)
 
-    daily_rows = await repository.fetch_visits_daily(
-        session, query.from_date, query.to_date
-    )
-    hourly_rows = await repository.fetch_visits_hourly(
-        session, query.from_date, query.to_date
-    )
+    daily_rows = await repository.fetch_visits_daily(session, query.from_date, query.to_date)
+    hourly_rows = await repository.fetch_visits_hourly(session, query.from_date, query.to_date)
 
     total = sum(int(r["count"]) for r in daily_rows)  # type: ignore[call-overload]
     calendar_days = (query.to_date - query.from_date).days + 1
@@ -398,10 +388,7 @@ async def visits_csv_rows(
     Caller should validate date range before calling this function.
     """
     r = await get_visits_report(session, query)
-    return [
-        [d.date.isoformat(), d.count]
-        for d in r.daily
-    ]
+    return [[d.date.isoformat(), d.count] for d in r.daily]
 
 
 async def get_trainer_usage_report(

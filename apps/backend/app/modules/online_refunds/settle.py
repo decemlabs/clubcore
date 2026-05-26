@@ -22,6 +22,7 @@ PII discipline (Threat T-51-07-07): ``customer_email`` MAY appear in audit-DB
 rows (the audit DB is PII-acceptable per project policy) but MUST NOT appear in
 structlog event kwargs. This module emits no structlog lines with customer_email.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -85,9 +86,7 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
     *,
     online_refund_id: UUID,
     chain_root_corr: UUID,
-    chain_root_event: Literal[
-        "yookassa_webhook_received", "online_refund_polled_settled"
-    ],
+    chain_root_event: Literal["yookassa_webhook_received", "online_refund_polled_settled"],
     chain_root_event_payload_kwargs: dict[str, Any] | None = None,
 ) -> SettledRefundLocals:
     """Phase 51 D-51-18 shared settle UoW (D-51-11 steps 3d-3i).
@@ -142,9 +141,7 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
     # Step 3: load parent OnlinePayment and derive subject_kind from XOR'd FKs.
     op = await session.get(OnlinePayment, row.online_payment_id)
     if op is None:
-        raise RuntimeError(
-            f"OnlinePayment {row.online_payment_id} missing — FK RESTRICT violated"
-        )
+        raise RuntimeError(f"OnlinePayment {row.online_payment_id} missing — FK RESTRICT violated")
     if op.membership_plan_id is not None:
         subject_kind = SUBJECT_KIND_MEMBERSHIP
     elif op.pt_package_plan_id is not None:
@@ -234,13 +231,9 @@ async def _settle_online_refund(  # noqa: SVC001 caller-owns-txn
 
     # Step 7: narrow scalar SELECT of clients.email (Phase 50 Blocker #4 mirror).
     # MUST NOT log this value to structlog (T-51-07-07).
-    customer_email = await session.scalar(
-        select(Client.email).where(Client.id == row.client_id)
-    )
+    customer_email = await session.scalar(select(Client.email).where(Client.id == row.client_id))
     if customer_email is None:
-        raise RuntimeError(
-            f"Client {row.client_id} has no email at refund settle time"
-        )
+        raise RuntimeError(f"Client {row.client_id} has no email at refund settle time")
 
     # Step 8: INSERT fiscal_receipts(kind='refund', status='sent').
     fr_row = await insert_fiscal_receipt(

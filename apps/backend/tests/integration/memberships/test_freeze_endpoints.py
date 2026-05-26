@@ -108,9 +108,7 @@ async def test_freeze_csrf_missing_returns_403(
     """RBAC-04: auth OK but no CSRF header → 403 (csrf fires after auth/rbac)."""
     plan = await make_plan(name="EP CSRF")
     client = await _create_client(authed_client_reception, phone="+79991234073")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     # No CSRF header
     r = await authed_client_reception.post(
@@ -127,9 +125,7 @@ async def test_unfreeze_reception_returns_200(
     """Reception can unfreeze a frozen membership."""
     plan = await make_plan(name="EP Unfreeze Recep")
     client = await _create_client(authed_client_reception, phone="+79991234074")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     # Freeze first
     r = await authed_client_reception.post(
@@ -158,9 +154,7 @@ async def test_freeze_response_shape_includes_4_new_fields(
     """MEM-FRZ-EP-03: response carries the 4 new camelCase keys."""
     plan = await make_plan(name="EP Shape", freeze_days_limit=14)
     client = await _create_client(authed_client_reception, phone="+79991234075")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{membership.id}/freeze",
@@ -186,9 +180,7 @@ async def test_freeze_response_currentFreezePeriod_object_shape(  # noqa: N802 -
     """currentFreezePeriod is a dict with id, startedAt, startedBy, endedAt, endedBy keys."""
     plan = await make_plan(name="EP Period Shape")
     client = await _create_client(authed_client_reception, phone="+79991234076")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{membership.id}/freeze",
@@ -215,9 +207,7 @@ async def test_membership_get_after_unfreeze_currentFreezePeriod_null(  # noqa: 
     """After unfreeze, GET /memberships/{id} returns currentFreezePeriod=null."""
     plan = await make_plan(name="EP After Unfreeze")
     client = await _create_client(authed_client_reception, phone="+79991234077")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{membership.id}/freeze",
@@ -249,9 +239,7 @@ async def test_freeze_invalid_transition_from_cancelled_returns_409(
     """Cancelled membership → POST /freeze → 409 invalid_transition."""
     plan = await make_plan(name="EP InvFreeze")
     client = await _create_client(authed_client_owner, phone="+79991234078")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="cancelled"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="cancelled")
 
     r = await authed_client_owner.post(
         f"/api/v1/memberships/{membership.id}/freeze",
@@ -272,9 +260,7 @@ async def test_unfreeze_invalid_transition_from_active_returns_409(
     """Active (non-frozen) membership → POST /unfreeze → 409 invalid_transition."""
     plan = await make_plan(name="EP InvUnfreeze")
     client = await _create_client(authed_client_reception, phone="+79991234079")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{membership.id}/unfreeze",

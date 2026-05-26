@@ -88,13 +88,17 @@ async def test_cancellation_audit_carries_party_and_reason(
 
     # Audit row must carry both fields.
     rows = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "online_payment_canceled",
-                AuditLog.resource_id == seeded_online_payment_pending.online_payment_id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "online_payment_canceled",
+                    AuditLog.resource_id == seeded_online_payment_pending.online_payment_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1, f"expected 1 online_payment_canceled audit row; got {len(rows)}"
 
     payload = rows[0].payload

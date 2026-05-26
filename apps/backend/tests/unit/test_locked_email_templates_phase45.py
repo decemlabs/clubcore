@@ -139,9 +139,7 @@ def test_phase45_dispatcher_callsites_are_literal(source_file: Path) -> None:
 
     violations: list[str] = []
     for lineno, value_node in _iter_template_id_kwargs(tree):
-        if not isinstance(value_node, ast.Constant) or not isinstance(
-            value_node.value, str
-        ):
+        if not isinstance(value_node, ast.Constant) or not isinstance(value_node.value, str):
             violations.append(
                 f"{source_file}:{lineno} — template_id is not ast.Constant(str): "
                 f"{ast.dump(value_node)}"
@@ -156,15 +154,12 @@ def test_phase45_dispatcher_callsites_are_literal(source_file: Path) -> None:
     assert not violations, (
         f"Phase 45 D-45-27 violation: non-literal or unlocked template_id "
         f"callsite(s) in {source_file}. Fix by reverting to ast.Constant(str) "
-        f"or extending LOCKED_EMAIL_TEMPLATES.\nOffenders:\n  "
-        + "\n  ".join(violations)
+        f"or extending LOCKED_EMAIL_TEMPLATES.\nOffenders:\n  " + "\n  ".join(violations)
     )
 
 
 @pytest.mark.parametrize(("source_file", "spec"), list(EXPECTED_COUNTS.items()))
-def test_phase45_callsite_counts(
-    source_file: Path, spec: tuple[int, str]
-) -> None:
+def test_phase45_callsite_counts(source_file: Path, spec: tuple[int, str]) -> None:
     """Per-module literal-callsite counts pin the expected fanout shape.
 
     A refactor that collapses (e.g.) the 6 expiring branches into a single

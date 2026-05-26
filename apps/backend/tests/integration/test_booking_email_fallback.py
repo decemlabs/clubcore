@@ -344,9 +344,7 @@ async def test_booking_confirmed_telegram_blocked_fanouts_email(
     sender_module, sender_state = _make_sender_stub()
     sender_state.next_result = SendResult(ok=False, blocked=True, error="forbidden")
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: object(),
@@ -367,12 +365,14 @@ async def test_booking_confirmed_telegram_blocked_fanouts_email(
 
     # booking_notifications row — channel='email'.
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == response.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == response.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1, "exactly one email-channel row"
     assert notif_rows[0].kind == "confirmed"
     assert notif_rows[0].channel == "email"
@@ -418,9 +418,7 @@ async def test_booking_cancelled_by_client_fanouts_email(
 
     sender_module, sender_state = _make_sender_stub()
     sender_state.next_result = SendResult(ok=False, blocked=True, error="forbidden")
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: object(),
@@ -436,12 +434,14 @@ async def test_booking_cancelled_by_client_fanouts_email(
     assert len(sender_state.calls) == 1
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "cancelled_by_client"
     assert notif_rows[0].channel == "email"
@@ -474,9 +474,7 @@ async def test_booking_cancelled_by_owner_fanouts_email(
 
     sender_module, sender_state = _make_sender_stub()
     sender_state.next_result = SendResult(ok=False, blocked=True, error="forbidden")
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: object(),
@@ -492,12 +490,14 @@ async def test_booking_cancelled_by_owner_fanouts_email(
     assert len(sender_state.calls) == 1
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "cancelled_by_owner"
     assert notif_rows[0].channel == "email"
@@ -546,12 +546,14 @@ async def test_booking_reminder_24h_fanouts_email(
     assert len(sender_state.calls) == 1
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "reminder_24h"
     assert notif_rows[0].channel == "email"
@@ -604,12 +606,14 @@ async def test_booking_reminder_telegram_success_no_email(
     assert len(email_recorder.calls) == 0, "Telegram success → no email"
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "reminder_24h"
     assert notif_rows[0].channel == "telegram"

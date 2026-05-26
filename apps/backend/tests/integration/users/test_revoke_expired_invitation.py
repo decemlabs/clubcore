@@ -69,9 +69,7 @@ async def test_revoke_expired_invitation_returns_409(
     # Back-date expires_at by 1 hour (direct UPDATE — bypass service layer).
     past = datetime.now(tz=UTC) - timedelta(hours=1)
     await db_session.execute(
-        update(PasswordResetToken)
-        .where(PasswordResetToken.id == token_id)
-        .values(expires_at=past)
+        update(PasswordResetToken).where(PasswordResetToken.id == token_id).values(expires_at=past)
     )
     await db_session.commit()
 
@@ -92,10 +90,14 @@ async def test_revoke_expired_invitation_returns_409(
 
     # Audit log MUST NOT contain a user_invitation_revoked row for this token.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.action == "user_invitation_revoked")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.action == "user_invitation_revoked")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for row in audit_rows:
         # invitation_token_id is in payload as str(UUID) — JSONB roundtrip.
         assert str(token_id) not in str(row.payload), (

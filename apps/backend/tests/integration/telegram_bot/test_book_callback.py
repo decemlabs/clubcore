@@ -234,7 +234,9 @@ async def test_book_callback_happy_path_edits_to_confirmed_dm(
     chat_id = _CHAT_BASE + 1
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     trainer = await _seed_trainer(db_session, full_name="Анна Петрова")
     await _seed_active_pt_package(db_session, client=client)
@@ -242,7 +244,10 @@ async def test_book_callback_happy_path_edits_to_confirmed_dm(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     update = _build_callback_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=3001, slot_id=slot.id,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=3001,
+        slot_id=slot.id,
     )
     ctx = _build_ctx(db_session, fake_redis)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -293,11 +298,7 @@ def test_anti_oracle_dm_byte_stable() -> None:
     """``_BOT_BOOK_DENIED_DM`` RHS must be an ``ast.Constant`` (str), NOT a
     JoinedStr (f-string). C-12 anti-oracle invariant — Phase 40 D-40-10."""
     notifications_path = Path(
-        Path(__file__).resolve().parents[3]
-        / "app"
-        / "modules"
-        / "bookings"
-        / "notifications.py"
+        Path(__file__).resolve().parents[3] / "app" / "modules" / "bookings" / "notifications.py"
     )
     tree = ast.parse(notifications_path.read_text(encoding="utf-8"))
     found = False
@@ -309,17 +310,13 @@ def test_anti_oracle_dm_byte_stable() -> None:
         ):
             found = True
             rhs = node.value
-            assert rhs is not None, (
-                "_BOT_BOOK_DENIED_DM must have a value (Final[str] assignment)"
-            )
+            assert rhs is not None, "_BOT_BOOK_DENIED_DM must have a value (Final[str] assignment)"
             assert isinstance(rhs, ast.Constant), (
                 "_BOT_BOOK_DENIED_DM must be an ast.Constant (str), "
                 "NOT an f-string / JoinedStr — anti-oracle invariant. "
                 f"Actual node type: {type(rhs).__name__}"
             )
-            assert isinstance(rhs.value, str), (
-                "_BOT_BOOK_DENIED_DM constant value must be str"
-            )
+            assert isinstance(rhs.value, str), "_BOT_BOOK_DENIED_DM constant value must be str"
             break
     assert found, "_BOT_BOOK_DENIED_DM annotation not found in notifications.py"
 
@@ -340,7 +337,10 @@ async def test_book_callback_dedupe_replay_skipped(
     # No client seeded → first call hits the anti-oracle path; replay must skip.
     fake_redis = fakeredis.aioredis.FakeRedis()
     update = _build_callback_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=3004, slot_id=uuid4(),
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=3004,
+        slot_id=uuid4(),
     )
     ctx = _build_ctx(db_session, fake_redis)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -384,7 +384,9 @@ async def test_book_callback_anti_oracle_on_domain_error(
     chat_id = _CHAT_BASE + 10
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     await _seed_active_pt_package(db_session, client=client)
     # A real slot id keeps the regex valid (PTB filter is conceptually upstream;
@@ -401,11 +403,15 @@ async def test_book_callback_anti_oracle_on_domain_error(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     update = _build_callback_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=3100,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=3100,
         slot_id=slot_uuid,
     )
     ctx = _build_ctx(
-        db_session, fake_redis, bookings_service=stub_bookings_service,
+        db_session,
+        fake_redis,
+        bookings_service=stub_bookings_service,
     )
     context: Any = SimpleNamespace(bot=SimpleNamespace())
 
@@ -449,17 +455,23 @@ async def test_book_callback_logs_error_class_on_denial(
         chat_id = _CHAT_BASE + 30
         creator = await _seed_user(db_session)
         client = await _seed_linked_client(
-            db_session, telegram_user_id=tg_user_id, creator=creator,
+            db_session,
+            telegram_user_id=tg_user_id,
+            creator=creator,
         )
         await _seed_active_pt_package(db_session, client=client)
 
         fake_redis = fakeredis.aioredis.FakeRedis()
         update = _build_callback_update(
-            telegram_user_id=tg_user_id, chat_id=chat_id, update_id=3300,
+            telegram_user_id=tg_user_id,
+            chat_id=chat_id,
+            update_id=3300,
             slot_id=uuid4(),
         )
         ctx = _build_ctx(
-            db_session, fake_redis, bookings_service=stub_bookings_service,
+            db_session,
+            fake_redis,
+            bookings_service=stub_bookings_service,
         )
         context: Any = SimpleNamespace(bot=SimpleNamespace())
 
@@ -472,7 +484,8 @@ async def test_book_callback_logs_error_class_on_denial(
         handlers_mod.logger = structlog.get_logger("telegram.handler")
 
     denial_events = [
-        e for e in captured
+        e
+        for e in captured
         if e.get("event") == "book_callback_denied"
         and e.get("error_class") == "SlotAlreadyBookedError"
     ]
@@ -498,7 +511,9 @@ async def test_book_callback_emits_audit_with_telegram_bot_actor_role(
     chat_id = _CHAT_BASE + 40
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     trainer = await _seed_trainer(db_session)
     await _seed_active_pt_package(db_session, client=client)
@@ -506,7 +521,9 @@ async def test_book_callback_emits_audit_with_telegram_bot_actor_role(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     update = _build_callback_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=3400,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=3400,
         slot_id=slot.id,
     )
     ctx = _build_ctx(db_session, fake_redis)
@@ -515,18 +532,11 @@ async def test_book_callback_emits_audit_with_telegram_bot_actor_role(
     await book_callback_handler(update, context, ctx)
 
     rows = (
-        (
-            await db_session.execute(
-                select(AuditLog).where(AuditLog.action == "booking_created")
-            )
-        )
+        (await db_session.execute(select(AuditLog).where(AuditLog.action == "booking_created")))
         .scalars()
         .all()
     )
-    bot_rows = [
-        r for r in rows
-        if (r.payload or {}).get("actor_role") == "telegram_bot"
-    ]
+    bot_rows = [r for r in rows if (r.payload or {}).get("actor_role") == "telegram_bot"]
     assert len(bot_rows) >= 1, (
         f"Expected at least 1 booking_created audit row with "
         f"actor_role='telegram_bot'; got rows: "
@@ -555,10 +565,14 @@ async def test_two_concurrent_book_callbacks_one_wins(
     chat_b = _CHAT_BASE + 51
     creator = await _seed_user(db_session)
     client_a = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_a, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_a,
+        creator=creator,
     )
     client_b = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_b, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_b,
+        creator=creator,
     )
     trainer = await _seed_trainer(db_session)
     await _seed_active_pt_package(db_session, client=client_a)
@@ -570,10 +584,16 @@ async def test_two_concurrent_book_callbacks_one_wins(
     context: Any = SimpleNamespace(bot=SimpleNamespace())
 
     update_a = _build_callback_update(
-        telegram_user_id=tg_user_a, chat_id=chat_a, update_id=3501, slot_id=slot.id,
+        telegram_user_id=tg_user_a,
+        chat_id=chat_a,
+        update_id=3501,
+        slot_id=slot.id,
     )
     update_b = _build_callback_update(
-        telegram_user_id=tg_user_b, chat_id=chat_b, update_id=3502, slot_id=slot.id,
+        telegram_user_id=tg_user_b,
+        chat_id=chat_b,
+        update_id=3502,
+        slot_id=slot.id,
     )
 
     # NOTE: SQLAlchemy AsyncSession is not safe for concurrent use across tasks,
@@ -598,11 +618,7 @@ async def test_two_concurrent_book_callbacks_one_wins(
     for upd in (update_a, update_b):
         edit = upd.callback_query.edit_message_text
         assert edit.await_count == 1
-        text = (
-            edit.await_args.args[0]
-            if edit.await_args.args
-            else edit.await_args.kwargs["text"]
-        )
+        text = edit.await_args.args[0] if edit.await_args.args else edit.await_args.kwargs["text"]
         sent_texts.append(text)
 
     confirmed = [t for t in sent_texts if t != _BOT_BOOK_DENIED_DM]
@@ -636,9 +652,5 @@ async def test_book_callback_client_not_linked_anti_oracle(
     await book_callback_handler(update, context, ctx)
     edit = update.callback_query.edit_message_text
     assert edit.await_count == 1
-    text = (
-        edit.await_args.args[0]
-        if edit.await_args.args
-        else edit.await_args.kwargs["text"]
-    )
+    text = edit.await_args.args[0] if edit.await_args.args else edit.await_args.kwargs["text"]
     assert text == _BOT_BOOK_DENIED_DM

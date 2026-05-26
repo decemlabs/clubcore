@@ -144,9 +144,7 @@ async def test_expire_due_rows_skips_cancelled_rows(
     assert len(rows) == 0
 
     refreshed = (
-        await db_session.execute(
-            select(Membership).where(Membership.id == m_cancelled.id)
-        )
+        await db_session.execute(select(Membership).where(Membership.id == m_cancelled.id))
     ).scalar_one()
     assert refreshed.status == "cancelled"
 

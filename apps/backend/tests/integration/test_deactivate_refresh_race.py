@@ -98,10 +98,7 @@ async def real_commit_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    "TRUNCATE refresh_tokens, users, audit_log "
-                    "RESTART IDENTITY CASCADE"
-                )
+                text("TRUNCATE refresh_tokens, users, audit_log RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -194,9 +191,7 @@ async def test_deactivate_refresh_race(
         # Flush Redis so prior-test rate-limit / idempotency keys don't bleed.
         await app.state.redis.flushdb()
 
-        owner_client = await _build_authed_client(
-            app, email=owner_email, password=_OWNER_PASSWORD
-        )
+        owner_client = await _build_authed_client(app, email=owner_email, password=_OWNER_PASSWORD)
         target_client = await _build_authed_client(
             app, email=target_email, password=_TARGET_PASSWORD
         )
@@ -220,9 +215,7 @@ async def test_deactivate_refresh_race(
                 _deactivate(), _refresh()
             )
 
-            assert deact_status in {200, 204}, (
-                f"deactivate expected 200/204, got {deact_status}"
-            )
+            assert deact_status in {200, 204}, f"deactivate expected 200/204, got {deact_status}"
 
             # Two race orderings — both are valid per Phase 43 Plan 43-10 lineage.
             #
@@ -249,8 +242,7 @@ async def test_deactivate_refresh_race(
                 )
             else:
                 assert refresh_status == 200, (
-                    f"refresh expected 200 or 401, got {refresh_status} "
-                    f"(body: {refresh_body!r})"
+                    f"refresh expected 200 or 401, got {refresh_status} (body: {refresh_body!r})"
                 )
                 # Ordering B — the SVC001 UoW invariant says the next
                 # refresh must fail because deactivate atomically revoked
@@ -274,9 +266,7 @@ async def test_deactivate_refresh_race(
 
     # ── DB invariant: target row reflects the deactivation (atomic UoW) ──
     async with session_factory() as verify_session:
-        is_active = await verify_session.scalar(
-            select(User.is_active).where(User.id == target_id)
-        )
+        is_active = await verify_session.scalar(select(User.is_active).where(User.id == target_id))
         assert is_active is False, (
             f"SVC001 UoW invariant broken: target user.is_active={is_active!r} "
             f"after deactivate race (expected False — the atomic UoW must "

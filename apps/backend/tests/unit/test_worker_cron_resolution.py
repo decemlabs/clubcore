@@ -27,9 +27,7 @@ def test_expire_pt_packages_cron_entry_resolves_to_registered_function() -> None
     on_startup invariant exactly and survives ARQ version bumps that change
     the CronJob.name prefix scheme.
     """
-    matching = [
-        c for c in WorkerSettings.cron_jobs if c.coroutine is expire_pt_packages
-    ]
+    matching = [c for c in WorkerSettings.cron_jobs if c.coroutine is expire_pt_packages]
     assert len(matching) == 1, (
         "Exactly one cron entry must reference the expire_pt_packages function. "
         f"Found {len(matching)} matching entries — registration drift in "
@@ -78,9 +76,7 @@ def test_expire_pt_packages_cron_schedule_locked() -> None:
     `keep_result_s` attribute (see test_worker_settings module docstring
     W-1 follow-up).
     """
-    matching = [
-        c for c in WorkerSettings.cron_jobs if c.coroutine is expire_pt_packages
-    ]
+    matching = [c for c in WorkerSettings.cron_jobs if c.coroutine is expire_pt_packages]
     assert len(matching) == 1, "expire_pt_packages cron entry not registered"
     c = matching[0]
     assert c.hour == 3, c.hour

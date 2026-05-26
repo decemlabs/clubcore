@@ -82,9 +82,7 @@ async def test_create_booking_via_bot_happy_path(
     assert response.slot_start_time == slot.start_time
 
     # DB invariants — booking row exists with NULL actor; slot flipped to 'booked'.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert booking_row is not None
     assert booking_row.status == "confirmed"
     assert booking_row.created_by_user_id is None
@@ -94,13 +92,17 @@ async def test_create_booking_via_bot_happy_path(
     # Audit invariant — booking_created emitted with telegram_bot role and
     # NULL actor_user_id at the DB column level + NULL payload.created_by_user_id.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "booking_created",
-                AuditLog.resource_id == response.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "booking_created",
+                    AuditLog.resource_id == response.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1
     audit_row = audit_rows[0]
     assert audit_row.actor_user_id is None

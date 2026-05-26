@@ -17,9 +17,7 @@ from structlog.testing import capture_logs
 from app.core.permissions import OWNER_ONLY, Action, Resource
 
 # Sort for stable parametrize output (StrEnum comparison falls back to underlying str).
-_PAIRS: list[tuple[Action, Resource]] = sorted(
-    OWNER_ONLY, key=lambda p: (p[0].value, p[1].value)
-)
+_PAIRS: list[tuple[Action, Resource]] = sorted(OWNER_ONLY, key=lambda p: (p[0].value, p[1].value))
 
 
 @pytest.mark.parametrize("action,resource", _PAIRS)

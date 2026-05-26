@@ -7,6 +7,7 @@ PASSWORD_RESET_TOKEN_TTL (D-44-05 / RESET-03): 1-hour password-reset window
 
 Mirrors users/constants.py:INVITATION_TOKEN_TTL shape (Phase 43 D-43-12).
 """
+
 from __future__ import annotations
 
 from datetime import timedelta

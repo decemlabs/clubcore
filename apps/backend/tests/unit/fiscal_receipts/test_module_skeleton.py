@@ -89,9 +89,7 @@ def test_transitions_pending_to_sent_only() -> None:
 
 def test_transitions_sent_to_succeeded_or_failed() -> None:
     """D-50-32: sent → {succeeded, failed} (Phase 51 ARQ task flips terminal status)."""
-    assert FISCAL_RECEIPT_STATUS_TRANSITIONS["sent"] == frozenset(
-        {"succeeded", "failed"}
-    )
+    assert FISCAL_RECEIPT_STATUS_TRANSITIONS["sent"] == frozenset({"succeeded", "failed"})
 
 
 def test_transitions_succeeded_is_terminal() -> None:

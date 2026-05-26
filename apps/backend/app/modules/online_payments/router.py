@@ -184,8 +184,7 @@ async def _outer_idempotency_replay_or_run(
     response_model=ResponseEnvelope[SellResponse],
     status_code=status.HTTP_201_CREATED,
     summary=(
-        "Sell a membership online (redirect flow); reception+owner; "
-        "CSRF + Idempotency-Key required"
+        "Sell a membership online (redirect flow); reception+owner; CSRF + Idempotency-Key required"
     ),
 )
 async def sell_membership_redirect(
@@ -234,8 +233,7 @@ async def sell_membership_redirect(
     response_model=ResponseEnvelope[SellResponse],
     status_code=status.HTTP_201_CREATED,
     summary=(
-        "Sell a membership online (QR flow); reception+owner; "
-        "CSRF + Idempotency-Key required"
+        "Sell a membership online (QR flow); reception+owner; CSRF + Idempotency-Key required"
     ),
 )
 async def sell_membership_qr(
@@ -286,8 +284,7 @@ async def sell_membership_qr(
     response_model=ResponseEnvelope[SellResponse],
     status_code=status.HTTP_201_CREATED,
     summary=(
-        "Sell a PT-package online (redirect flow); reception+owner; "
-        "CSRF + Idempotency-Key required"
+        "Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required"
     ),
 )
 async def sell_pt_package_redirect(
@@ -329,8 +326,7 @@ async def sell_pt_package_redirect(
     response_model=ResponseEnvelope[SellResponse],
     status_code=status.HTTP_201_CREATED,
     summary=(
-        "Sell a PT-package online (QR flow); reception+owner; "
-        "CSRF + Idempotency-Key required"
+        "Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required"
     ),
 )
 async def sell_pt_package_qr(

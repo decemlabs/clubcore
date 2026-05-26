@@ -67,20 +67,26 @@ async def test_send_expiring_skips_frozen_membership(
     assert sender_state.calls == []
 
     notifs = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert notifs == []
 
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audits == []

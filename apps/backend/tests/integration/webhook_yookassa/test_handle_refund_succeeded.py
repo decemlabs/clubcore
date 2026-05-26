@@ -322,9 +322,7 @@ async def seeded_refund_membership(
     webhook_db_session: AsyncSession,
 ) -> dict[str, Any]:
     """Bundle: OnlinePayment + Membership + original Payment + pending OnlineRefund."""
-    op, membership, original_payment = await _seed_succeeded_membership_op(
-        webhook_db_session
-    )
+    op, membership, original_payment = await _seed_succeeded_membership_op(webhook_db_session)
     refund = await _seed_pending_refund(webhook_db_session, op, original_payment)
     return {
         "op": op,
@@ -339,9 +337,7 @@ async def seeded_refund_pt_package(
     webhook_db_session: AsyncSession,
 ) -> dict[str, Any]:
     """Bundle: OnlinePayment + PtPackage + original Payment + pending OnlineRefund."""
-    op, pt_package, original_payment = await _seed_succeeded_pt_package_op(
-        webhook_db_session
-    )
+    op, pt_package, original_payment = await _seed_succeeded_pt_package_op(webhook_db_session)
     refund = await _seed_pending_refund(webhook_db_session, op, original_payment)
     return {
         "op": op,
@@ -382,9 +378,7 @@ async def test_handle_refund_succeeded_writes_signed_payment_row_transitions_sub
     # registered YooKassaClientProvider — pin a respx route matching the URL
     # the client builds for refund_id == refund.yookassa_refund_id.
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-        router.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-        ).mock(
+        router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
                 json=_refund_succeeded_response(
@@ -395,9 +389,7 @@ async def test_handle_refund_succeeded_writes_signed_payment_row_transitions_sub
             )
         )
         body = _webhook_refund_succeeded_body(refund_yookassa_id)
-        response = await webhook_client.post(
-            "/api/v1/_internal/yookassa/webhook", json=body
-        )
+        response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
         assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -453,26 +445,28 @@ async def test_handle_refund_succeeded_writes_signed_payment_row_transitions_sub
 
     # Audit chain: online_payment_refunded + membership_refunded + root.
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action.in_(
-                    (
-                        "online_payment_refunded",
-                        "membership_refunded",
-                        "yookassa_webhook_received",
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action.in_(
+                        (
+                            "online_payment_refunded",
+                            "membership_refunded",
+                            "yookassa_webhook_received",
+                        )
                     )
                 )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     actions = {a.action for a in audits}
     assert "online_payment_refunded" in actions
     assert "membership_refunded" in actions
     assert "yookassa_webhook_received" in actions
     # Chain root yookassa_webhook_received should carry idempotency_outcome='processed'.
-    root_audit = next(
-        a for a in audits if a.action == "yookassa_webhook_received"
-    )
+    root_audit = next(a for a in audits if a.action == "yookassa_webhook_received")
     assert root_audit.payload.get("idempotency_outcome") == "processed"
 
 
@@ -486,9 +480,7 @@ async def test_handle_refund_succeeded_skips_when_refetch_classification_not_ok(
     """Re-fetch returns transient_error → 200 + no DB mutation."""
     refund: OnlineRefund = seeded_refund_membership["refund"]
     body = _webhook_refund_succeeded_body(refund.yookassa_refund_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -502,10 +494,10 @@ async def test_handle_refund_succeeded_skips_when_refetch_classification_not_ok(
 
     # No negative-amount Payment inserted.
     refund_payments = (
-        await webhook_db_session.execute(
-            select(Payment).where(Payment.amount_kopecks < 0)
-        )
-    ).scalars().all()
+        (await webhook_db_session.execute(select(Payment).where(Payment.amount_kopecks < 0)))
+        .scalars()
+        .all()
+    )
     assert refund_payments == []
 
 
@@ -519,9 +511,7 @@ async def test_handle_refund_succeeded_skips_when_refetch_status_not_succeeded(
     """Re-fetch returns status='pending' → 200 + no DB mutation."""
     refund: OnlineRefund = seeded_refund_membership["refund"]
     body = _webhook_refund_succeeded_body(refund.yookassa_refund_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -572,9 +562,7 @@ async def test_handle_refund_succeeded_returns_200_silently_on_integrityerror_pa
     await webhook_db_session.commit()
 
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-        router.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-        ).mock(
+        router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
                 json=_refund_succeeded_response(
@@ -585,9 +573,7 @@ async def test_handle_refund_succeeded_returns_200_silently_on_integrityerror_pa
             )
         )
         body = _webhook_refund_succeeded_body(refund_yookassa_id)
-        response = await webhook_client.post(
-            "/api/v1/_internal/yookassa/webhook", json=body
-        )
+        response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
         assert response.status_code == 200, response.text
 
     # Behavioural assertions prove the replay path was taken:
@@ -606,9 +592,7 @@ async def test_handle_refund_succeeded_returns_200_silently_on_integrityerror_pa
     assert after_status == "pending"
 
     refund_payment_count = await webhook_db_session.scalar(
-        select(func.count())
-        .select_from(Payment)
-        .where(Payment.refund_of == original_payment_id)
+        select(func.count()).select_from(Payment).where(Payment.refund_of == original_payment_id)
     )
     assert refund_payment_count == 1
 
@@ -621,28 +605,26 @@ async def test_handle_refund_succeeded_emits_audit_with_idempotency_outcome_orph
     """No OnlineRefund matches the object_id → orphan audit row, no mutation."""
     orphan_refund_id = f"rfnd-orphan-{uuid4().hex[:16]}"
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-        router.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-        ).mock(
+        router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
-                json=_refund_succeeded_response(
-                    orphan_refund_id, "pay-x-orphan", 100_000
-                ),
+                json=_refund_succeeded_response(orphan_refund_id, "pay-x-orphan", 100_000),
             )
         )
         body = _webhook_refund_succeeded_body(orphan_refund_id)
-        response = await webhook_client.post(
-            "/api/v1/_internal/yookassa/webhook", json=body
-        )
+        response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
         assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(AuditLog.action == "yookassa_webhook_received")
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(AuditLog.action == "yookassa_webhook_received")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) >= 1
     outcomes = [a.payload.get("idempotency_outcome") for a in audits]
     assert "orphan" in outcomes
@@ -666,9 +648,7 @@ async def test_handle_refund_succeeded_uses_pt_package_refunded_audit_when_subje
     pt_package_id = pt_package.id
 
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-        router.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-        ).mock(
+        router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
                 json=_refund_succeeded_response(
@@ -679,9 +659,7 @@ async def test_handle_refund_succeeded_uses_pt_package_refunded_audit_when_subje
             )
         )
         body = _webhook_refund_succeeded_body(refund_yookassa_id)
-        response = await webhook_client.post(
-            "/api/v1/_internal/yookassa/webhook", json=body
-        )
+        response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
         assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -689,12 +667,16 @@ async def test_handle_refund_succeeded_uses_pt_package_refunded_audit_when_subje
 
     # pt_package_refunded audit present; membership_refunded NOT present.
     actions = (
-        await webhook_db_session.execute(
-            select(AuditLog.action).where(
-                AuditLog.action.in_(("pt_package_refunded", "membership_refunded"))
+        (
+            await webhook_db_session.execute(
+                select(AuditLog.action).where(
+                    AuditLog.action.in_(("pt_package_refunded", "membership_refunded"))
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert "pt_package_refunded" in actions
     assert "membership_refunded" not in actions
 
@@ -736,17 +718,13 @@ async def test_handle_refund_succeeded_uses_direct_repository_call_not_activator
         online_payment_id: UUID,
         audit_correlation_id: UUID | None,
     ) -> Any:
-        raise AssertionError(
-            "activator slot invoked from refund path — Errata #4 violated"
-        )
+        raise AssertionError("activator slot invoked from refund path — Errata #4 violated")
 
     register_membership_activator(_explosive_activator)
     register_pt_package_activator(_explosive_activator)
     try:
         with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-            router.get(
-                url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-            ).mock(
+            router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
                 return_value=httpx.Response(
                     200,
                     json=_refund_succeeded_response(
@@ -757,9 +735,7 @@ async def test_handle_refund_succeeded_uses_direct_repository_call_not_activator
                 )
             )
             body = _webhook_refund_succeeded_body(refund.yookassa_refund_id)
-            response = await webhook_client.post(
-                "/api/v1/_internal/yookassa/webhook", json=body
-            )
+            response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
             assert response.status_code == 200, response.text
     finally:
         # Restore (best-effort; tests can re-register on next run too).
@@ -788,9 +764,7 @@ async def test_handle_refund_succeeded_does_not_leak_customer_email_to_structlog
     assert client_email, "test setup should have a non-empty client email"
 
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-        router.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-        ).mock(
+        router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
                 json=_refund_succeeded_response(
@@ -802,9 +776,7 @@ async def test_handle_refund_succeeded_does_not_leak_customer_email_to_structlog
         )
         with structlog.testing.capture_logs() as captured:
             body = _webhook_refund_succeeded_body(refund.yookassa_refund_id)
-            response = await webhook_client.post(
-                "/api/v1/_internal/yookassa/webhook", json=body
-            )
+            response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
             assert response.status_code == 200, response.text
 
     # Scan every captured event-kwargs map for the email substring.
@@ -850,9 +822,7 @@ async def test_handle_refund_succeeded_enqueues_dispatch_fiscal_receipt_post_com
     app.state.arq_pool = spy_pool
     try:
         with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
-            router.get(
-                url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$"
-            ).mock(
+            router.get(url__regex=r"^https://api\.yookassa\.ru/v3/refunds/[\w-]+$").mock(
                 return_value=httpx.Response(
                     200,
                     json=_refund_succeeded_response(
@@ -863,9 +833,7 @@ async def test_handle_refund_succeeded_enqueues_dispatch_fiscal_receipt_post_com
                 )
             )
             body = _webhook_refund_succeeded_body(refund_yookassa_id)
-            response = await webhook_client.post(
-                "/api/v1/_internal/yookassa/webhook", json=body
-            )
+            response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
             assert response.status_code == 200, response.text
     finally:
         if prior_pool is None:
@@ -898,9 +866,7 @@ async def test_handle_refund_succeeded_enqueues_dispatch_fiscal_receipt_post_com
     assert fiscal_calls[0].args[1] == str(fr_id)
     assert fiscal_calls[0].kwargs == {"_max_tries": 3, "_expires": 60}
 
-    notify_calls = [
-        c for c in calls if c.args and c.args[0] == "dispatch_payment_notification"
-    ]
+    notify_calls = [c for c in calls if c.args and c.args[0] == "dispatch_payment_notification"]
     assert len(notify_calls) == 1
     assert notify_calls[0].kwargs["_kwargs"]["kind"] == "refund_succeeded"
     assert notify_calls[0].kwargs["_max_tries"] == 3

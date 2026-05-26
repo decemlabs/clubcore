@@ -64,9 +64,7 @@ class TestAssertWithinGymHours:
         _assert_within_gym_hours(time(12, 0))
 
     @patch("app.modules.visits.service.get_settings")
-    def test_exception_carries_open_close_fields(
-        self, mock_get_settings: MagicMock
-    ) -> None:
+    def test_exception_carries_open_close_fields(self, mock_get_settings: MagicMock) -> None:
         """OutsideGymHoursError.fields must carry open and close ISO strings."""
         mock_get_settings.return_value = _mock_settings(time(7, 0), time(23, 0))
         with pytest.raises(OutsideGymHoursError) as exc_info:

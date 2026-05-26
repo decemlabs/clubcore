@@ -81,9 +81,7 @@ def _call_first_arg_is_payment(call: ast.Call, payment_names: set[str]) -> bool:
     return isinstance(first, ast.Name) and first.id in payment_names
 
 
-def _is_forbidden_sql_against_payment(
-    call: ast.Call, payment_names: set[str]
-) -> bool:
+def _is_forbidden_sql_against_payment(call: ast.Call, payment_names: set[str]) -> bool:
     """Detect `update(Payment)` / `delete(Payment)` — `sqlalchemy.update` /
     `sqlalchemy.delete` called with a Payment-typed first arg.
     """
@@ -98,9 +96,7 @@ def _is_forbidden_sql_against_payment(
     return _call_first_arg_is_payment(call, payment_names)
 
 
-def _is_on_conflict_do_update_against_payment(
-    call: ast.Call, payment_names: set[str]
-) -> bool:
+def _is_on_conflict_do_update_against_payment(call: ast.Call, payment_names: set[str]) -> bool:
     """Detect `insert(Payment).on_conflict_do_update(...)` — a chained call
     on an `insert(...)` against Payment.
     """
@@ -122,9 +118,7 @@ def _is_on_conflict_do_update_against_payment(
             inner_name = inner.func.id
         elif isinstance(inner.func, ast.Attribute):
             inner_name = inner.func.attr
-        if inner_name == "insert" and _call_first_arg_is_payment(
-            inner, payment_names
-        ):
+        if inner_name == "insert" and _call_first_arg_is_payment(inner, payment_names):
             return True
         # Step into the attribute chain (e.g. `insert(P).values()` →
         # examine `insert(P)` next).
@@ -135,9 +129,7 @@ def _is_on_conflict_do_update_against_payment(
     return False
 
 
-def _is_session_delete_of_payment(
-    call: ast.Call, payment_names: set[str]
-) -> bool:
+def _is_session_delete_of_payment(call: ast.Call, payment_names: set[str]) -> bool:
     """Detect `session.delete(<Payment-typed name>)` — Attribute call where
     `.attr == 'delete'` and the receiver is `session`.
 
@@ -200,21 +192,16 @@ def test_payments_appendonly_against_app_modules() -> None:
     """
     offenders: list[str] = []
     for service_path in sorted(_BACKEND_APP.glob(_SERVICE_GLOB)):
-        tree = ast.parse(
-            service_path.read_text(encoding="utf-8"), filename=str(service_path)
-        )
+        tree = ast.parse(service_path.read_text(encoding="utf-8"), filename=str(service_path))
         payment_names = _resolve_payment_binding(tree)
         if not payment_names:
             continue  # module doesn't reference Payment — no-op (D-30-06)
         for func in _iter_functions_in_file(service_path):
-            msg = _function_violates_appendonly(
-                service_path, func, payment_names
-            )
+            msg = _function_violates_appendonly(service_path, func, payment_names)
             if msg is not None:
                 offenders.append(msg)
-    assert not offenders, (
-        "Payments append-only gate (B-01) failed.\n"
-        "Offenders:\n  " + "\n  ".join(offenders)
+    assert not offenders, "Payments append-only gate (B-01) failed.\nOffenders:\n  " + "\n  ".join(
+        offenders
     )
 
 

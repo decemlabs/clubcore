@@ -61,9 +61,9 @@ class Settings(BaseSettings):
     secret_key: SecretStr
 
     # Phase 4 additions (D-05, D-25): JWT TTLs + cookie Secure flag, env-driven
-    access_token_ttl_seconds: int = 900           # 15 min — access JWT lifetime
-    refresh_token_ttl_seconds: int = 2_592_000    # 30 days — refresh token lifetime
-    jwt_clock_leeway_seconds: int = 30            # PyJWT decode leeway for cross-container drift
+    access_token_ttl_seconds: int = 900  # 15 min — access JWT lifetime
+    refresh_token_ttl_seconds: int = 2_592_000  # 30 days — refresh token lifetime
+    jwt_clock_leeway_seconds: int = 30  # PyJWT decode leeway for cross-container drift
     cookie_secure: bool = False  # prod startup must ASSERT True (Phase 5 adds assertion)
 
     # Phase 5 addition (D-13, AUTH-06): refresh-rotation reuse-window in seconds.
@@ -79,8 +79,8 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr = SecretStr("placeholder-telegram-bot-token-not-real")
     telegram_bot_username: str = "placeholder_bot"  # without leading `@`
     otp_deep_link_ttl_seconds: int = 600  # 10 min — AUTH-TG-01
-    otp_code_ttl_seconds: int = 300       # 5 min  — AUTH-TG-02
-    otp_max_attempts: int = 5             # AUTH-TG-02
+    otp_code_ttl_seconds: int = 300  # 5 min  — AUTH-TG-02
+    otp_max_attempts: int = 5  # AUTH-TG-02
 
     # Phase 52 additions (D-52-09, NOT-04): Owner operator-alert recipients.
     # Consumed by the dispatch_payment_notification task for the payment_canceled

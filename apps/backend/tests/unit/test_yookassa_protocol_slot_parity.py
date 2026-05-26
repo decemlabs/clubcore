@@ -151,10 +151,7 @@ def test_arq_worker_startup_structural_parity() -> None:
     )
 
     # FiscalReceiptDispatcher — Phase 51 FISCAL-05 STRUCTURAL check.
-    assert (
-        "register_fiscal_receipt_dispatcher(_real_fiscal_receipt_dispatcher)"
-        in worker_src
-    ), (
+    assert "register_fiscal_receipt_dispatcher(_real_fiscal_receipt_dispatcher)" in worker_src, (
         "workers/__init__.py must register the lazy _real_fiscal_receipt_dispatcher "
         "closure (Phase 51 FISCAL-05)."
     )
@@ -167,10 +164,9 @@ def test_arq_worker_startup_structural_parity() -> None:
     )
     # Positive control — dispatch_fiscal_receipt itself must be imported +
     # registered in WorkerSettings.functions.
-    assert (
-        "from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt"
-        in worker_src
-    ), "workers/__init__.py must import dispatch_fiscal_receipt (Phase 51 FISCAL-05)."
+    assert "from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt" in worker_src, (
+        "workers/__init__.py must import dispatch_fiscal_receipt (Phase 51 FISCAL-05)."
+    )
 
 
 def test_arq_worker_does_not_wire_single_wired_slots() -> None:

@@ -84,9 +84,7 @@ async def test_handle_receipt_succeeded_transitions_fsm_sent_to_succeeded(
     fr_id = fr.id
     assert fr.yookassa_receipt_id is not None
     body = _webhook_receipt_succeeded_body(fr.yookassa_receipt_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -112,20 +110,22 @@ async def test_handle_receipt_succeeded_emits_fiscal_receipt_succeeded_audit_wit
     assert fr.yookassa_receipt_id is not None
     expected_corr: UUID | None = fr.audit_correlation_id
     body = _webhook_receipt_succeeded_body(fr.yookassa_receipt_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "fiscal_receipt_succeeded",
-                AuditLog.resource_id == fr.id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "fiscal_receipt_succeeded",
+                    AuditLog.resource_id == fr.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) == 1
     payload = audits[0].payload
     if expected_corr is not None:
@@ -159,9 +159,7 @@ async def test_handle_receipt_succeeded_does_not_refetch_via_yookassa(
     yk_client_mod.YooKassaClient.get_refund = _explosive  # type: ignore[method-assign]
     try:
         body = _webhook_receipt_succeeded_body(fr.yookassa_receipt_id)
-        response = await webhook_client.post(
-            "/api/v1/_internal/yookassa/webhook", json=body
-        )
+        response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
         assert response.status_code == 200, response.text
     finally:
         yk_client_mod.YooKassaClient.get_payment = original_get_payment  # type: ignore[method-assign]
@@ -176,17 +174,19 @@ async def test_handle_receipt_succeeded_emits_orphan_audit_when_row_missing(
     """No FiscalReceipt matches the object_id → orphan audit row."""
     orphan_id = f"rcpt-orphan-{uuid4().hex[:16]}"
     body = _webhook_receipt_succeeded_body(orphan_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(AuditLog.action == "yookassa_webhook_received")
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(AuditLog.action == "yookassa_webhook_received")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     outcomes = [a.payload.get("idempotency_outcome") for a in audits]
     assert "orphan" in outcomes
 
@@ -202,9 +202,7 @@ async def test_handle_receipt_succeeded_rejects_illegal_transition(
     fr_id = fr.id
     fr_yookassa_id = fr.yookassa_receipt_id
     # Flip to terminal manually.
-    row = await webhook_db_session.scalar(
-        select(FiscalReceipt).where(FiscalReceipt.id == fr_id)
-    )
+    row = await webhook_db_session.scalar(select(FiscalReceipt).where(FiscalReceipt.id == fr_id))
     assert row is not None
     row.status = "succeeded"
     row.succeeded_at = datetime.now(UTC)
@@ -213,9 +211,7 @@ async def test_handle_receipt_succeeded_rejects_illegal_transition(
 
     assert fr_yookassa_id is not None
     body = _webhook_receipt_succeeded_body(fr_yookassa_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -226,12 +222,16 @@ async def test_handle_receipt_succeeded_rejects_illegal_transition(
     assert after_status == "succeeded"
 
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "yookassa_webhook_received",
-                AuditLog.resource_id == fr_id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "yookassa_webhook_received",
+                    AuditLog.resource_id == fr_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     outcomes = [a.payload.get("idempotency_outcome") for a in audits]
     assert "illegal_transition" in outcomes

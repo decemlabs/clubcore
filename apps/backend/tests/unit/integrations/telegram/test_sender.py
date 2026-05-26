@@ -25,7 +25,9 @@ async def test_send_text_dm_accepts_reply_markup_kwarg() -> None:
     result = await send_text_dm(bot, 123, "hi", reply_markup=markup_sentinel)
     assert result.ok is True
     bot.send_message.assert_awaited_once_with(
-        chat_id=123, text="hi", reply_markup=markup_sentinel,
+        chat_id=123,
+        text="hi",
+        reply_markup=markup_sentinel,
     )
 
 
@@ -37,5 +39,7 @@ async def test_send_text_dm_three_arg_backward_compat() -> None:
     result = await send_text_dm(bot, 456, "hi")
     assert result.ok is True
     bot.send_message.assert_awaited_once_with(
-        chat_id=456, text="hi", reply_markup=None,
+        chat_id=456,
+        text="hi",
+        reply_markup=None,
     )

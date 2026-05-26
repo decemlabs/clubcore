@@ -86,13 +86,17 @@ async def _fetch_audit_chain(
     Callers consume the returned list by ``.action`` not by index.
     """
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action.in_(["payment_recorded", "membership_created"]),
-                AuditLog.resource_id.in_([membership_id, payment_id]),
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action.in_(["payment_recorded", "membership_created"]),
+                    AuditLog.resource_id.in_([membership_id, payment_id]),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 

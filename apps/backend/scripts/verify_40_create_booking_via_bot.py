@@ -145,18 +145,14 @@ async def _seed_active_pt_package(
 
 
 async def _resolve_owner_id(session: AsyncSession) -> UUID:
-    row = await session.execute(
-        text("SELECT id FROM users WHERE role = 'owner' LIMIT 1")
-    )
+    row = await session.execute(text("SELECT id FROM users WHERE role = 'owner' LIMIT 1"))
     owner_id = row.scalar_one_or_none()
     if owner_id is None:
         raise SystemExit("FATAL: seed missing owner user")
     return UUID(str(owner_id))
 
 
-async def _seed_active_slot(
-    session: AsyncSession, *, trainer_id: UUID, owner_id: UUID
-) -> UUID:
+async def _seed_active_slot(session: AsyncSession, *, trainer_id: UUID, owner_id: UUID) -> UUID:
     """Publish a fresh slot 1 hour from now (idempotent — wipes priors)."""
     await session.execute(
         text(
@@ -231,9 +227,7 @@ async def main() -> int:
 
         # 3. Verify the four invariants via a fresh read session.
         async with sessionmaker() as verify_session:
-            row = await verify_session.execute(
-                select(Booking).where(Booking.id == booking.id)
-            )
+            row = await verify_session.execute(select(Booking).where(Booking.id == booking.id))
             persisted_booking = row.scalar_one()
 
             # Latest booking_created audit row for this client
@@ -280,9 +274,7 @@ async def main() -> int:
         else:
             print(f"✓ Invariant 3a: BookingResponse.trainer_full_name = {TRAINER_NAME!r}")
         if booking.slot_start_time is None:
-            failures.append(
-                "Invariant 3b FAIL: BookingResponse.slot_start_time is None"
-            )
+            failures.append("Invariant 3b FAIL: BookingResponse.slot_start_time is None")
         else:
             print(f"✓ Invariant 3b: BookingResponse.slot_start_time populated")
 
@@ -306,13 +298,10 @@ async def main() -> int:
                 )
             if actor_user_id is not None:
                 failures.append(
-                    f"Invariant 4b FAIL: audit.actor_user_id = {actor_user_id!r}, "
-                    "expected NULL"
+                    f"Invariant 4b FAIL: audit.actor_user_id = {actor_user_id!r}, expected NULL"
                 )
             else:
-                print(
-                    "✓ Invariant 4b: audit_log.actor_user_id IS NULL (WARNING-1 fix)"
-                )
+                print("✓ Invariant 4b: audit_log.actor_user_id IS NULL (WARNING-1 fix)")
 
         if failures:
             print("\n=== VERIFICATION FAILED ===")

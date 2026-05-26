@@ -308,12 +308,14 @@ async def test_telegram_blocked_with_email_fanouts_to_email(
 
     # membership_notifications row — channel='email', telegram_chat_id IS NULL.
     notif_rows = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "expiring_7d"
     assert notif_rows[0].channel == "email"
@@ -321,13 +323,17 @@ async def test_telegram_blocked_with_email_fanouts_to_email(
 
     # audit_log row — channel='email' in payload.
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) == 1
     assert audits[0].payload["channel"] == "email"
     assert audits[0].payload["telegram_chat_id"] is None
@@ -378,22 +384,28 @@ async def test_telegram_blocked_without_email_skips_fallback(
     assert len(email_recorder.calls) == 0, "dispatcher must NOT be called"
 
     notif_rows = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert notif_rows == []
 
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audits == []
 
 
@@ -434,24 +446,30 @@ async def test_telegram_success_with_email_no_email_fanout(
     assert len(email_recorder.calls) == 0, "Telegram success → no email fallback"
 
     notif_rows = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].channel == "telegram"
     assert notif_rows[0].telegram_chat_id == 900_003
 
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) == 1
     assert audits[0].payload["channel"] == "telegram"
     assert audits[0].payload["telegram_chat_id"] == 900_003

@@ -168,7 +168,5 @@ async def authed_client_reception(
     """Authenticated httpx client for the seeded reception user."""
     transport = ASGITransport(app=_trainer_app_overrides)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        await _login(
-            client, email=TRAINERS_RECEPTION_EMAIL, password=TRAINERS_RECEPTION_PASSWORD
-        )
+        await _login(client, email=TRAINERS_RECEPTION_EMAIL, password=TRAINERS_RECEPTION_PASSWORD)
         yield client

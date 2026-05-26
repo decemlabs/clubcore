@@ -94,10 +94,7 @@ async def real_commit_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    "TRUNCATE users, password_reset_tokens, audit_log "
-                    "RESTART IDENTITY CASCADE"
-                )
+                text("TRUNCATE users, password_reset_tokens, audit_log RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -201,9 +198,7 @@ async def test_soft_delete_reinvite_race(
                     json={"email": owner_email, "password": _RACE_OWNER_PASSWORD},
                 )
                 assert login.status_code == 200, f"owner login failed: {login.text}"
-                csrf_headers = {
-                    "X-CSRF-Token": owner_client.cookies.get("sportzal_csrf") or ""
-                }
+                csrf_headers = {"X-CSRF-Token": owner_client.cookies.get("sportzal_csrf") or ""}
 
                 # ── Race: DELETE old user || POST new user with same email ──
                 async def _delete_old() -> tuple[int, str]:
@@ -239,9 +234,7 @@ async def test_soft_delete_reinvite_race(
     #         409 (Branch C / Branch A IntegrityError translation — POST
     #              raced ahead while old row still had deleted_at IS NULL).
     assert del_status == 204, f"DELETE expected 204, got {del_status}: {del_body}"
-    assert post_status in {201, 409}, (
-        f"POST expected 201 or 409, got {post_status}: {post_body}"
-    )
+    assert post_status in {201, 409}, f"POST expected 201 or 409, got {post_status}: {post_body}"
 
     # ── DB invariants ──
     async with session_factory() as verify:
@@ -281,8 +274,7 @@ async def test_soft_delete_reinvite_race(
         #              and it is soft-deleted ⇒ active_count==0.
         if post_status == 201:
             assert active_count == 1, (
-                f"POST returned 201 but active_count={active_count} "
-                f"(expected 1)"
+                f"POST returned 201 but active_count={active_count} (expected 1)"
             )
             new_row_count = (
                 await verify.execute(
@@ -306,14 +298,10 @@ async def test_soft_delete_reinvite_race(
             )
             total_rows = (
                 await verify.execute(
-                    text(
-                        "SELECT count(*) FROM users "
-                        "WHERE lower(email) = lower(:e)"
-                    ),
+                    text("SELECT count(*) FROM users WHERE lower(email) = lower(:e)"),
                     {"e": shared_email},
                 )
             ).scalar_one()
             assert total_rows == 1, (
-                f"POST=409 expected exactly 1 row (the soft-deleted old "
-                f"row); got {total_rows}"
+                f"POST=409 expected exactly 1 row (the soft-deleted old row); got {total_rows}"
             )

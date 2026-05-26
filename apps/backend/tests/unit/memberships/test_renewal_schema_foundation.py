@@ -49,8 +49,7 @@ def test_membership_table_args_includes_previous_membership_id_index() -> None:
     indexes = [
         item
         for item in Membership.__table_args__
-        if isinstance(item, Index)
-        and item.name == "ix_memberships_previous_membership_id"
+        if isinstance(item, Index) and item.name == "ix_memberships_previous_membership_id"
     ]
     assert len(indexes) == 1, "expected exactly one ix_memberships_previous_membership_id Index"
     cols = [c.name for c in indexes[0].columns]
@@ -65,12 +64,7 @@ def test_membership_table_args_includes_previous_membership_id_index() -> None:
 @pytest.fixture(scope="module")
 def migration_source() -> str:
     """Return raw text of 0009_renewal.py."""
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "alembic"
-        / "versions"
-        / "0009_renewal.py"
-    )
+    path = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "0009_renewal.py"
     assert path.exists(), f"migration file missing: {path}"
     return path.read_text(encoding="utf-8")
 
@@ -83,7 +77,7 @@ def test_migration_revision_header(migration_source: str) -> None:
 
 def test_migration_upgrade_adds_column(migration_source: str) -> None:
     """upgrade() adds the previous_membership_id column as nullable UUID."""
-    assert 'op.add_column(' in migration_source
+    assert "op.add_column(" in migration_source
     assert '"previous_membership_id"' in migration_source
     assert "nullable=True" in migration_source
 

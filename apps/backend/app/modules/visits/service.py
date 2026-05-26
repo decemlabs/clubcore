@@ -263,9 +263,7 @@ async def create_visit_self_checkin(
 
 
 # ─── Read-side ───────────────────────────────────────────────────────────────
-async def list_visits(
-    session: AsyncSession, query: VisitListQuery
-) -> PaginatedData[VisitResponse]:
+async def list_visits(session: AsyncSession, query: VisitListQuery) -> PaginatedData[VisitResponse]:
     """GET /api/v1/visits — paginated list, default sort checked_in_at DESC (VIS-EP-01)."""
     page = await repository.list_by_query(session, query)
     return PaginatedData.model_construct(

@@ -28,9 +28,7 @@ def test_membership_activator_protocol_uses_online_payment_id_kwarg() -> None:
         "Plan 50-03 renamed MembershipActivator kwarg to online_payment_id; "
         "got params=" + ", ".join(params)
     )
-    assert "membership_id" not in params, (
-        "old kwarg `membership_id` must be removed (Blocker #3)"
-    )
+    assert "membership_id" not in params, "old kwarg `membership_id` must be removed (Blocker #3)"
 
 
 def test_pt_package_activator_protocol_uses_online_payment_id_kwarg() -> None:
@@ -39,9 +37,7 @@ def test_pt_package_activator_protocol_uses_online_payment_id_kwarg() -> None:
         "Plan 50-03 renamed PtPackageActivator kwarg to online_payment_id; "
         "got params=" + ", ".join(params)
     )
-    assert "pt_package_id" not in params, (
-        "old kwarg `pt_package_id` must be removed (Blocker #3)"
-    )
+    assert "pt_package_id" not in params, "old kwarg `pt_package_id` must be removed (Blocker #3)"
 
 
 def test_membership_activator_kwarg_is_uuid_typed() -> None:

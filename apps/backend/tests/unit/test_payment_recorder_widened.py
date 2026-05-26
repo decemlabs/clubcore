@@ -69,9 +69,7 @@ def test_payment_recorder_kwargs_have_optional_defaults() -> None:
 def test_payment_recorder_protocol_preserves_existing_kwargs() -> None:
     params = inspect.signature(PaymentRecorder.__call__).parameters
     for required in ("subject_kind", "subject_id", "amount_kopecks", "method"):
-        assert required in params, (
-            f"PaymentRecorder Protocol must still expose `{required}` kwarg"
-        )
+        assert required in params, f"PaymentRecorder Protocol must still expose `{required}` kwarg"
 
 
 def test_current_user_protocol_still_referenced() -> None:

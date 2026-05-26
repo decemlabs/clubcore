@@ -488,10 +488,13 @@ async def test_e2e_refund_full_cycle_membership(
         # resource_id is op.id; membership_refunded resource_id is membership.id.
         # Query each event type by its known resource_id shape.
         wh_row = await verify_session.scalar(
-            select(AuditLog).where(
+            select(AuditLog)
+            .where(
                 AuditLog.action == "yookassa_webhook_received",
                 AuditLog.resource_type == "yookassa_webhook",
-            ).order_by(AuditLog.created_at.desc()).limit(1)
+            )
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
         )
         assert wh_row is not None, "yookassa_webhook_received audit row missing"
 
@@ -526,7 +529,9 @@ async def test_e2e_refund_full_cycle_membership(
             "job_try": 1,
         }
         result = await dispatch_fiscal_receipt(arq_ctx, str(refund_fr.id))
-        assert result == "sent"  # task returns "sent" on success (status stays 'sent' until receipt.succeeded webhook)
+        assert (
+            result == "sent"
+        )  # task returns "sent" on success (status stays 'sent' until receipt.succeeded webhook)
     finally:
         await yookassa_client.aclose()
 
@@ -590,12 +595,14 @@ async def test_e2e_refund_full_cycle_idempotent_replay_returns_same_refund_id(
     # Only one OnlineRefund row in the DB.
     async with e2e_session_factory() as verify_session:
         all_refunds = (
-            await verify_session.execute(
-                select(OnlineRefund).where(
-                    OnlineRefund.online_payment_id == op.id
+            (
+                await verify_session.execute(
+                    select(OnlineRefund).where(OnlineRefund.online_payment_id == op.id)
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(all_refunds) == 1
 
 
@@ -656,10 +663,14 @@ async def test_e2e_refund_full_cycle_webhook_replay_returns_200_silently(
     # Only one negative Payment row should exist.
     async with e2e_session_factory() as verify_session:
         neg_payments = (
-            await verify_session.execute(
-                select(Payment).where(Payment.refund_of == original_payment.id)
+            (
+                await verify_session.execute(
+                    select(Payment).where(Payment.refund_of == original_payment.id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(neg_payments) == 1
 
 
@@ -752,10 +763,13 @@ async def test_e2e_refund_full_cycle_pt_package(
 
         # Query audit events by action + resource_id.
         wh_row = await verify_session.scalar(
-            select(AuditLog).where(
+            select(AuditLog)
+            .where(
                 AuditLog.action == "yookassa_webhook_received",
                 AuditLog.resource_type == "yookassa_webhook",
-            ).order_by(AuditLog.created_at.desc()).limit(1)
+            )
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
         )
         assert wh_row is not None, "yookassa_webhook_received audit row missing"
 

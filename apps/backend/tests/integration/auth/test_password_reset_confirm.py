@@ -188,7 +188,7 @@ async def test_confirm_happy_path_atomic_consume_password_rotate_sessions_revoke
     assert pre_refresh is not None, "login should have set sz_refresh cookie"
 
     # Snapshot the original hash so we can assert rotation.
-    original_hash = (await db_session.scalar(select(User.password_hash).where(User.id == user.id)))
+    original_hash = await db_session.scalar(select(User.password_hash).where(User.id == user.id))
     assert original_hash is not None
 
     # 2. /password-reset/confirm — happy path.
@@ -206,9 +206,7 @@ async def test_confirm_happy_path_atomic_consume_password_rotate_sessions_revoke
     assert consumed_at is not None, "atomic-consume must mark consumed_at"
 
     # 4. ``password_hash`` rotated.
-    rotated_hash = await db_session.scalar(
-        select(User.password_hash).where(User.id == user.id)
-    )
+    rotated_hash = await db_session.scalar(select(User.password_hash).where(User.id == user.id))
     assert rotated_hash is not None
     assert rotated_hash != original_hash, "password_hash should differ after rotate"
 

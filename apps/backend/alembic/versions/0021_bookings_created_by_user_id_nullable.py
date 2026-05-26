@@ -55,9 +55,7 @@ def downgrade() -> None:
     """
     conn = op.get_bind()
     null_count = conn.execute(
-        sa.text(
-            "SELECT COUNT(*) FROM bookings WHERE created_by_user_id IS NULL"
-        )
+        sa.text("SELECT COUNT(*) FROM bookings WHERE created_by_user_id IS NULL")
     ).scalar_one()
     if null_count > 0:
         raise RuntimeError(

@@ -271,9 +271,7 @@ async def test_no_audit_on_failed_sale(
 
     # Zero membership_created rows for this client (no membership row was inserted).
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "membership_created")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "membership_created"))
     ).all()
     # Filter to rows for this specific client (other tests may have run in same
     # SAVEPOINT — but each test gets its own SAVEPOINT, so this is total count).

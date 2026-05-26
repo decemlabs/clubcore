@@ -111,6 +111,7 @@ def test_phase_51_new_payload_classes_registered_in_audit_payload_schemas() -> N
 # 4. refund.succeeded webhook audit chain shape.
 # ---------------------------------------------------------------------------
 
+
 def test_refund_succeeded_webhook_audit_chain_shape_is_documented() -> None:
     """Audit chain for refund.succeeded webhook: documents the expected 3-event shape.
 
@@ -129,10 +130,7 @@ def test_refund_succeeded_webhook_audit_chain_shape_is_documented() -> None:
     This static test verifies the settle.py source emits all 3 expected event names
     using AST analysis (does not require a running DB).
     """
-    settle_path = (
-        Path(__file__).parent.parent.parent
-        / "app/modules/online_refunds/settle.py"
-    )
+    settle_path = Path(__file__).parent.parent.parent / "app/modules/online_refunds/settle.py"
     source = settle_path.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
@@ -179,24 +177,15 @@ def test_settle_online_refund_emits_root_event_yookassa_webhook_received_last() 
     """
     import ast
 
-    settle_path = (
-        Path(__file__).parent.parent.parent
-        / "app/modules/online_refunds/settle.py"
-    )
+    settle_path = Path(__file__).parent.parent.parent / "app/modules/online_refunds/settle.py"
     source = settle_path.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     emit_event_names: list[str] = []
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Await)
-            and isinstance(node.value, ast.Call)
-        ):
+        if isinstance(node, ast.Await) and isinstance(node.value, ast.Call):
             func = node.value.func
-            if (
-                isinstance(func, ast.Attribute)
-                and func.attr == "emit"
-            ):
+            if isinstance(func, ast.Attribute) and func.attr == "emit":
                 args = node.value.args
                 # audit.emit(session, event_name, ...) — event_name is args[1]
                 if len(args) >= 2 and isinstance(args[1], ast.Constant):
@@ -211,12 +200,16 @@ def test_settle_online_refund_emits_root_event_yookassa_webhook_received_last() 
     )
     # Root events are always last in the function body (D-50-18 step 8).
     last_root_idx = max(
-        i for i, e in enumerate(emit_event_names)
+        i
+        for i, e in enumerate(emit_event_names)
         if e in ("yookassa_webhook_received", "online_refund_polled_settled")
     )
     first_child_idx_after_root = next(
-        (i for i, e in enumerate(emit_event_names[last_root_idx + 1:], last_root_idx + 1)
-         if e in ("online_payment_refunded", "membership_refunded", "pt_package_refunded")),
+        (
+            i
+            for i, e in enumerate(emit_event_names[last_root_idx + 1 :], last_root_idx + 1)
+            if e in ("online_payment_refunded", "membership_refunded", "pt_package_refunded")
+        ),
         None,
     )
     assert first_child_idx_after_root is None, (
@@ -231,14 +224,14 @@ def test_settle_online_refund_emits_root_event_yookassa_webhook_received_last() 
 
 # Phase 51 source files that contain audit.emit calls.
 _PHASE_51_AUDIT_FILES: list[Path] = [
-    path for path in [
+    path
+    for path in [
         Path(__file__).parent.parent.parent / "app/modules/online_refunds/service.py",
         Path(__file__).parent.parent.parent / "app/modules/online_refunds/settle.py",
         Path(__file__).parent.parent.parent / "app/modules/online_refunds/cron.py",
         Path(__file__).parent.parent.parent / "app/modules/fiscal_receipts/tasks.py",
         Path(__file__).parent.parent.parent / "app/modules/fiscal_receipts/service.py",
-        Path(__file__).parent.parent.parent
-        / "app/api/v1/_internal/yookassa/handlers.py",
+        Path(__file__).parent.parent.parent / "app/api/v1/_internal/yookassa/handlers.py",
     ]
     if path.exists()
 ]
@@ -290,8 +283,7 @@ def test_all_phase_51_audit_emit_callsites_use_literal_event_names() -> None:
                     )
 
     assert not violations, (
-        f"Phase 51 audit.emit callsites with non-literal event names:\n"
-        + "\n".join(violations)
+        f"Phase 51 audit.emit callsites with non-literal event names:\n" + "\n".join(violations)
     )
 
 
@@ -315,13 +307,15 @@ def test_all_phase_51_audit_emit_uuid_kwargs_are_str_cast() -> None:
     Checked: all other ``_id``-suffixed kwargs that flow into the JSONB payload.
     """
     # Typed params that audit.emit handles natively (UUID or str, function handles conversion).
-    _TYPED_PARAMS = frozenset({
-        "actor_user_id",
-        "resource_id",
-        "actor_email_snapshot",
-        "audit_correlation_id",
-        "resource_type",
-    })
+    _TYPED_PARAMS = frozenset(
+        {
+            "actor_user_id",
+            "resource_id",
+            "actor_email_snapshot",
+            "audit_correlation_id",
+            "resource_type",
+        }
+    )
 
     violations: list[str] = []
 
@@ -349,10 +343,7 @@ def test_all_phase_51_audit_emit_uuid_kwargs_are_str_cast() -> None:
                 # Name nodes (plain variables) are excluded because they could be
                 # string variables (e.g., `object_id: str`, `yookassa_refund_id: str`).
                 # Only `something.id` attribute access is a reliable UUID indicator.
-                if (
-                    isinstance(val, ast.Attribute)
-                    and val.attr == "id"
-                ):
+                if isinstance(val, ast.Attribute) and val.attr == "id":
                     violations.append(
                         f"{path.name}:{lineno} — payload kwarg {kw.arg!r} value "
                         f"{ast.dump(val)!r} not wrapped in str() "

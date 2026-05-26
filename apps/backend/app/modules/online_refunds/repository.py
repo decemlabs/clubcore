@@ -54,13 +54,9 @@ async def insert_online_refund(  # noqa: SVC001 caller-owns-txn — service UoW 
     return row
 
 
-async def get_online_refund_by_id(
-    session: AsyncSession, refund_id: UUID
-) -> OnlineRefund | None:
+async def get_online_refund_by_id(session: AsyncSession, refund_id: UUID) -> OnlineRefund | None:
     """Return OnlineRefund by id, or None."""
-    stmt: Select[tuple[OnlineRefund]] = select(OnlineRefund).where(
-        OnlineRefund.id == refund_id
-    )
+    stmt: Select[tuple[OnlineRefund]] = select(OnlineRefund).where(OnlineRefund.id == refund_id)
     result: OnlineRefund | None = await session.scalar(stmt)
     return result
 

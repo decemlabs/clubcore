@@ -276,9 +276,7 @@ async def test_e2e_fiscal_receipt_full_cycle_payment_succeeded_to_receipt_succee
             "amount": {"value": "1000.00", "currency": "RUB"},
         },
     }
-    response = await e2e_fiscal_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=webhook_body
-    )
+    response = await e2e_fiscal_client.post("/api/v1/_internal/yookassa/webhook", json=webhook_body)
     assert response.status_code == 200, response.text
 
     # Phase 50 UoW result: FiscalReceipt(kind='payment', status='sent') inserted.
@@ -288,9 +286,12 @@ async def test_e2e_fiscal_receipt_full_cycle_payment_succeeded_to_receipt_succee
         assert op.status == "succeeded"
 
         fr = await verify_session.scalar(
-            select(FiscalReceipt).where(
+            select(FiscalReceipt)
+            .where(
                 FiscalReceipt.kind == KIND_PAYMENT,
-            ).order_by(FiscalReceipt.id.desc()).limit(1)
+            )
+            .order_by(FiscalReceipt.id.desc())
+            .limit(1)
         )
         assert fr is not None
         assert fr.status == STATUS_SENT
@@ -343,9 +344,7 @@ async def test_e2e_fiscal_receipt_full_cycle_payment_succeeded_to_receipt_succee
             "status": "succeeded",
         },
     }
-    response = await e2e_fiscal_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=receipt_body
-    )
+    response = await e2e_fiscal_client.post("/api/v1/_internal/yookassa/webhook", json=receipt_body)
     assert response.status_code == 200, response.text
 
     # Step 4: Verify status flipped to 'succeeded' (SC#1).
@@ -410,7 +409,8 @@ async def test_e2e_fiscal_receipt_dispatch_failure_path_transitions_status_faile
     # Locate the fiscal_receipt row.
     async with e2e_fiscal_session_factory() as verify_session:
         fr = await verify_session.scalar(
-            select(FiscalReceipt).where(FiscalReceipt.kind == KIND_PAYMENT)
+            select(FiscalReceipt)
+            .where(FiscalReceipt.kind == KIND_PAYMENT)
             .order_by(FiscalReceipt.id.desc())
             .limit(1)
         )
@@ -547,9 +547,7 @@ async def test_e2e_fiscal_receipt_canceled_webhook_transitions_to_failed(
     2. dispatch_fiscal_receipt → yookassa_receipt_id set.
     3. receipt.canceled webhook → status='failed', failure_reason set.
     """
-    yk_payment_id, _op_id, _email = await _seed_pending_online_payment(
-        e2e_fiscal_db_session
-    )
+    yk_payment_id, _op_id, _email = await _seed_pending_online_payment(e2e_fiscal_db_session)
     await _flush_webhook_dedup_keys(app)
 
     # Step 1: Deliver payment.succeeded.
@@ -569,7 +567,8 @@ async def test_e2e_fiscal_receipt_canceled_webhook_transitions_to_failed(
     # Locate fiscal_receipt.
     async with e2e_fiscal_session_factory() as verify_session:
         fr = await verify_session.scalar(
-            select(FiscalReceipt).where(FiscalReceipt.kind == KIND_PAYMENT)
+            select(FiscalReceipt)
+            .where(FiscalReceipt.kind == KIND_PAYMENT)
             .order_by(FiscalReceipt.id.desc())
             .limit(1)
         )

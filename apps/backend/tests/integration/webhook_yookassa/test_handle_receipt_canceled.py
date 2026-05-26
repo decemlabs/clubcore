@@ -86,18 +86,14 @@ async def test_handle_receipt_canceled_transitions_fsm_sent_to_failed(
     fr_yookassa_id = fr.yookassa_receipt_id
     assert fr_yookassa_id is not None
     body = _webhook_receipt_canceled_body(fr_yookassa_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     webhook_db_session.expire_all()
     after_row = (
         await webhook_db_session.execute(
-            select(FiscalReceipt.status, FiscalReceipt.failed_at).where(
-                FiscalReceipt.id == fr_id
-            )
+            select(FiscalReceipt.status, FiscalReceipt.failed_at).where(FiscalReceipt.id == fr_id)
         )
     ).one()
     assert after_row.status == "failed"
@@ -115,9 +111,7 @@ async def test_handle_receipt_canceled_extracts_failure_reason_from_cancellation
     fr_yookassa_id = fr.yookassa_receipt_id
     assert fr_yookassa_id is not None
     body = _webhook_receipt_canceled_body(fr_yookassa_id, reason="ofd_offline")
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -137,20 +131,22 @@ async def test_handle_receipt_canceled_emits_fiscal_receipt_failed_audit_with_fa
     fr = seeded_fiscal_receipt_sent
     assert fr.yookassa_receipt_id is not None
     body = _webhook_receipt_canceled_body(fr.yookassa_receipt_id, reason="ofd_offline")
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "fiscal_receipt_failed",
-                AuditLog.resource_id == fr.id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "fiscal_receipt_failed",
+                    AuditLog.resource_id == fr.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) == 1
     assert audits[0].payload.get("failure_reason") == "ofd_offline"
 
@@ -166,9 +162,7 @@ async def test_handle_receipt_canceled_falls_back_to_default_reason_when_cancell
     fr_yookassa_id = fr.yookassa_receipt_id
     assert fr_yookassa_id is not None
     body = _webhook_receipt_canceled_body(fr_yookassa_id, reason=None)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
@@ -186,16 +180,18 @@ async def test_handle_receipt_canceled_emits_orphan_audit_when_row_missing(
 ) -> None:
     orphan_id = f"rcpt-orphan-{uuid4().hex[:16]}"
     body = _webhook_receipt_canceled_body(orphan_id)
-    response = await webhook_client.post(
-        "/api/v1/_internal/yookassa/webhook", json=body
-    )
+    response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     audits = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(AuditLog.action == "yookassa_webhook_received")
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(AuditLog.action == "yookassa_webhook_received")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     outcomes = [a.payload.get("idempotency_outcome") for a in audits]
     assert "orphan" in outcomes

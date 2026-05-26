@@ -184,5 +184,3 @@ async def test_unauth_post_cancel(async_client: AsyncClient) -> None:
         json={},
     )
     assert r.status_code == 401, r.text
-
-

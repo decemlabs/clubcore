@@ -22,15 +22,11 @@ from app.core.permissions import OWNER_ONLY, Action, Resource
 # the repo root (parents[0]=integration, [1]=tests, [2]=backend, [3]=apps, [4]=repo root).
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CAN_TS = _REPO_ROOT / "apps" / "admin-web" / "src" / "shared" / "session" / "can.ts"
-_REGISTRY_TS = (
-    _REPO_ROOT / "apps" / "admin-web" / "src" / "shared" / "session" / "registry.ts"
-)
+_REGISTRY_TS = _REPO_ROOT / "apps" / "admin-web" / "src" / "shared" / "session" / "registry.ts"
 
 # D-15: regex anchors the file shape; intentional that any reformat that breaks
 # the regex is a parity failure (forces a deliberate update on both sides).
-_PAIR_RE = re.compile(
-    r"\{\s*action:\s*'([^']+)',\s*resource:\s*'([^']+)'\s*\}"
-)
+_PAIR_RE = re.compile(r"\{\s*action:\s*'([^']+)',\s*resource:\s*'([^']+)'\s*\}")
 
 # Top-level TS declaration prefixes — `_parse_ts_union` stops when it encounters
 # any of these AFTER its anchor line, which is the only stable signal that the
@@ -122,9 +118,7 @@ def test_resource_values_match() -> None:
     fe = _parse_ts_union(_read_text(_REGISTRY_TS), "Resource")
     be = {r.value for r in Resource}
     assert fe == be, (
-        f"Resource drift detected.\n"
-        f"  BE-only: {sorted(be - fe)}\n"
-        f"  FE-only: {sorted(fe - be)}"
+        f"Resource drift detected.\n  BE-only: {sorted(be - fe)}\n  FE-only: {sorted(fe - be)}"
     )
 
 
@@ -133,9 +127,7 @@ def test_action_values_match() -> None:
     fe = _parse_ts_union(_read_text(_REGISTRY_TS), "Action")
     be = {a.value for a in Action}
     assert fe == be, (
-        f"Action drift detected.\n"
-        f"  BE-only: {sorted(be - fe)}\n"
-        f"  FE-only: {sorted(fe - be)}"
+        f"Action drift detected.\n  BE-only: {sorted(be - fe)}\n  FE-only: {sorted(fe - be)}"
     )
 
 

@@ -321,13 +321,17 @@ async def test_cancel_booking_audit_row_written(
     )
 
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "booking_cancelled",
-                AuditLog.resource_id == response.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "booking_cancelled",
+                    AuditLog.resource_id == response.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     payload = rows[0].payload
     # Exact 4 keys (extra='forbid' would have rejected any extras at emit).

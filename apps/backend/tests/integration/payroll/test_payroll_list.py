@@ -109,9 +109,7 @@ async def test_list_returns_accrued_at_desc_ordering(
     Seeds 3 accruals with staggered accrued_at; asserts items[0] is newer than
     items[1] and items[1] newer than items[2].
     """
-    trainer_id, _, _ = await _seed_accruals(
-        make_trainer, make_comp_config, make_accrual, count=3
-    )
+    trainer_id, _, _ = await _seed_accruals(make_trainer, make_comp_config, make_accrual, count=3)
 
     r = await authed_client_owner.get(_accruals_url(trainer_id))
     assert r.status_code == 200, r.text
@@ -120,9 +118,7 @@ async def test_list_returns_accrued_at_desc_ordering(
 
     # accrued_at DESC: items[0] >= items[1] >= items[2]
     times = [item["accruedAt"] for item in items]
-    assert times[0] >= times[1] >= times[2], (
-        f"Expected descending accrued_at order, got {times}"
-    )
+    assert times[0] >= times[1] >= times[2], f"Expected descending accrued_at order, got {times}"
 
 
 async def test_envelope_keys_present(
@@ -132,9 +128,7 @@ async def test_envelope_keys_present(
     make_accrual: Any,
 ) -> None:
     """Response envelope contains items, total, page, pageSize keys (PAY-05 / D-58-14)."""
-    trainer_id, _, _ = await _seed_accruals(
-        make_trainer, make_comp_config, make_accrual, count=2
-    )
+    trainer_id, _, _ = await _seed_accruals(make_trainer, make_comp_config, make_accrual, count=2)
 
     r = await authed_client_owner.get(_accruals_url(trainer_id))
     assert r.status_code == 200, r.text
@@ -158,9 +152,7 @@ async def test_pagination_math(
 
     Verifies LIMIT/OFFSET logic + total is always the unpaginated count (PAY-05 / D-58-14).
     """
-    trainer_id, _, _ = await _seed_accruals(
-        make_trainer, make_comp_config, make_accrual, count=5
-    )
+    trainer_id, _, _ = await _seed_accruals(make_trainer, make_comp_config, make_accrual, count=5)
 
     # Page 1: 2 items, total 5
     r1 = await authed_client_owner.get(_accruals_url(trainer_id, page=1, page_size=2))
@@ -345,12 +337,8 @@ async def test_trainer_id_scopes_results(
     Seeds accruals for two different trainers; querying by trainer A returns only
     trainer A's accruals, not trainer B's.
     """
-    trainer_a_id, _, _ = await _seed_accruals(
-        make_trainer, make_comp_config, make_accrual, count=2
-    )
-    trainer_b_id, _, _ = await _seed_accruals(
-        make_trainer, make_comp_config, make_accrual, count=3
-    )
+    trainer_a_id, _, _ = await _seed_accruals(make_trainer, make_comp_config, make_accrual, count=2)
+    trainer_b_id, _, _ = await _seed_accruals(make_trainer, make_comp_config, make_accrual, count=3)
 
     # Query trainer A — should see only 2 items
     r_a = await authed_client_owner.get(_accruals_url(trainer_a_id))

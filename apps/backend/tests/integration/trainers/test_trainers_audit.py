@@ -243,9 +243,7 @@ async def test_trainer_noop_patch_emits_no_audit(
     assert r.status_code == 200, r.text
 
     all_rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.resource_id == trainer_id)
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.resource_id == trainer_id))
     ).all()
     assert len(all_rows) == 1, "no-op PATCH must not emit additional audit rows"
     assert all_rows[0].action == "trainer_created"

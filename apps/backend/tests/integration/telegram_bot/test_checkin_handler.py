@@ -223,7 +223,8 @@ async def test_checkin_happy_path(
     chat_id = _CHAT_ID + 1
     _open_gym_hours(monkeypatch)
     client, _membership = await _seed_client_with_membership(
-        db_session, telegram_user_id=tg_user_id,
+        db_session,
+        telegram_user_id=tg_user_id,
     )
 
     fake_redis = fakeredis.aioredis.FakeRedis()
@@ -240,9 +241,7 @@ async def test_checkin_happy_path(
     assert "Отмечено" in sent_text
     assert "Абонемент действует ещё" in sent_text
 
-    visits = (
-        await db_session.scalars(select(Visit).where(Visit.client_id == client.id))
-    ).all()
+    visits = (await db_session.scalars(select(Visit).where(Visit.client_id == client.id))).all()
     assert len(visits) == 1
     assert visits[0].channel == "telegram_bot"
     assert visits[0].checked_in_by is None
@@ -285,9 +284,7 @@ async def test_checkin_no_active_membership(
 
     await checkin_handler(update, context, ctx)
 
-    expected_dm = (
-        "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
-    )
+    expected_dm = "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
     assert stub_telegram_sender.text_calls == [(chat_id, expected_dm)]
 
     rows = (
@@ -318,7 +315,8 @@ async def test_checkin_duplicate(
     chat_id = _CHAT_ID + 3
     _open_gym_hours(monkeypatch)
     client, membership = await _seed_client_with_membership(
-        db_session, telegram_user_id=tg_user_id,
+        db_session,
+        telegram_user_id=tg_user_id,
     )
     client_id_str = str(client.id)
 
@@ -367,7 +365,8 @@ async def test_checkin_outside_hours(
     chat_id = _CHAT_ID + 4
     _close_gym_hours(monkeypatch)
     client, _membership = await _seed_client_with_membership(
-        db_session, telegram_user_id=tg_user_id,
+        db_session,
+        telegram_user_id=tg_user_id,
     )
     client_id_str = str(client.id)
 
@@ -417,9 +416,7 @@ async def test_checkin_client_not_linked(
 
     await checkin_handler(update, context, ctx)
 
-    expected_dm = (
-        "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
-    )
+    expected_dm = "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
     assert stub_telegram_sender.text_calls == [(chat_id, expected_dm)]
 
     # Handler-emitted telegram_unknown_checkin audit row with hashed tg id.
@@ -459,7 +456,8 @@ async def test_checkin_replay_silent(
     chat_id = _CHAT_ID + 6
     _open_gym_hours(monkeypatch)
     client, _membership = await _seed_client_with_membership(
-        db_session, telegram_user_id=tg_user_id,
+        db_session,
+        telegram_user_id=tg_user_id,
     )
 
     fake_redis = fakeredis.aioredis.FakeRedis()
@@ -481,9 +479,7 @@ async def test_checkin_replay_silent(
     assert stub_telegram_sender.text_calls == []  # no DM on replay
 
     # Exactly one Visit row total — the dedup prevented even reaching the service.
-    visits = (
-        await db_session.scalars(select(Visit).where(Visit.client_id == client.id))
-    ).all()
+    visits = (await db_session.scalars(select(Visit).where(Visit.client_id == client.id))).all()
     assert len(visits) == 1
 
     # structlog event bot_replay_skipped emitted with update_id=42.
@@ -508,7 +504,8 @@ async def test_checkin_redis_outage_fail_open(
     chat_id = _CHAT_ID + 7
     _open_gym_hours(monkeypatch)
     client, _membership = await _seed_client_with_membership(
-        db_session, telegram_user_id=tg_user_id,
+        db_session,
+        telegram_user_id=tg_user_id,
     )
 
     fake_redis = fakeredis.aioredis.FakeRedis()
@@ -535,7 +532,5 @@ async def test_checkin_redis_outage_fail_open(
     assert "bot_redis_dedup_unavailable" in events, f"events={events}"
 
     # Visit row created — DB UNIQUE on (client_id, gym_date) is the real anti-replay invariant.
-    visits = (
-        await db_session.scalars(select(Visit).where(Visit.client_id == client.id))
-    ).all()
+    visits = (await db_session.scalars(select(Visit).where(Visit.client_id == client.id))).all()
     assert len(visits) == 1

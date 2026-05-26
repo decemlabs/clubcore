@@ -53,8 +53,7 @@ def test_bookings_router_mounted(app: FastAPI) -> None:
     """Smoke: POST /api/v1/bookings is registered on the FastAPI route table."""
     paths = {r.path for r in app.routes}  # type: ignore[attr-defined]
     assert "/api/v1/bookings" in paths, (
-        f"/api/v1/bookings not mounted; "
-        f"saw: {sorted(p for p in paths if 'book' in p.lower())}"
+        f"/api/v1/bookings not mounted; saw: {sorted(p for p in paths if 'book' in p.lower())}"
     )
 
 
@@ -64,18 +63,12 @@ def test_repository_caller_owns_txn_discipline() -> None:
     from pathlib import Path
 
     repo_path = (
-        Path(__file__).resolve().parents[3]
-        / "app"
-        / "modules"
-        / "bookings"
-        / "repository.py"
+        Path(__file__).resolve().parents[3] / "app" / "modules" / "bookings" / "repository.py"
     )
     src = repo_path.read_text(encoding="utf-8")
     # Strip docstrings/comments to avoid false positives from the module
     # top-doc that *describes* the caller-owns-txn discipline.
-    code_only = "\n".join(
-        line for line in src.splitlines() if not line.lstrip().startswith("#")
-    )
+    code_only = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
     # Crude but sufficient: strip triple-quoted blocks.
     import re
 
@@ -92,11 +85,7 @@ def test_repository_no_direct_schedule_import() -> None:
     from pathlib import Path
 
     repo_path = (
-        Path(__file__).resolve().parents[3]
-        / "app"
-        / "modules"
-        / "bookings"
-        / "repository.py"
+        Path(__file__).resolve().parents[3] / "app" / "modules" / "bookings" / "repository.py"
     )
     src = repo_path.read_text(encoding="utf-8")
 
@@ -115,9 +104,7 @@ def test_repository_no_direct_schedule_import() -> None:
                 schedule_imports.append(node.module)
         elif isinstance(node, ast.Import):
             schedule_imports.extend(
-                alias.name
-                for alias in node.names
-                if alias.name.startswith("app.modules.schedule")
+                alias.name for alias in node.names if alias.name.startswith("app.modules.schedule")
             )
 
     assert not schedule_imports, (

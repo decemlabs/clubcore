@@ -404,9 +404,7 @@ async def rotate_refresh(
     # walker requires a literal `session.commit()` token in every public write
     # path, which the context-manager auto-commit shape did not provide.
     row = await session.scalar(
-        select(RefreshToken)
-        .where(RefreshToken.token_hash == presented_hash)
-        .with_for_update()
+        select(RefreshToken).where(RefreshToken.token_hash == presented_hash).with_for_update()
     )
 
     if row is None:
@@ -421,11 +419,7 @@ async def rotate_refresh(
         raise InvalidSession("invalid_session")
 
     # ---- Branch (A): ACTIVE — rotate ------------------------------------
-    if (
-        row.revoked_at is None
-        and row.replaced_by_id is None
-        and row.expires_at > now
-    ):
+    if row.revoked_at is None and row.replaced_by_id is None and row.expires_at > now:
         # Phase 43 D-43-20 — USERS-06 anti-oracle refresh chokepoint.
         # Single SELECT race-tight against parallel deactivate / soft-delete
         # (Pitfall 5 case 3). Predicate filtered IN the SQL — NOT a post-fetch
@@ -746,7 +740,10 @@ async def revoke_all_sessions(
     directly with the owner's id as ``actor_user_id``.
     """
     family_count = await _revoke_all_sessions_no_commit(
-        session, redis, user_id, actor_user_id=user_id,
+        session,
+        redis,
+        user_id,
+        actor_user_id=user_id,
     )
     await session.commit()
     return family_count
@@ -1016,10 +1013,7 @@ async def request_otp_email(
     # through to the constant-time floor + None return — anti-oracle uniformity.
     # is_active and deleted_at are now filtered at the SQL layer (CR-03), so any
     # user object returned is by definition active+alive.
-    is_eligible = (
-        user is not None
-        and user.email_verified is True
-    )
+    is_eligible = user is not None and user.email_verified is True
 
     if is_eligible:
         assert user is not None  # narrowed by is_eligible
@@ -1033,9 +1027,7 @@ async def request_otp_email(
             )
             .order_by(OtpCode.created_at.desc())
         )
-        if cooldown_row is not None and cooldown_row.created_at > now - timedelta(
-            seconds=60
-        ):
+        if cooldown_row is not None and cooldown_row.created_at > now - timedelta(seconds=60):
             await _constant_time_floor(t_start)
             return
 
@@ -1223,5 +1215,8 @@ async def invalidate_all_families_for_user(
         reason=reason,
     )
     return await _revoke_all_sessions_no_commit(
-        session, redis, user_id, actor_user_id=actor_user_id,
+        session,
+        redis,
+        user_id,
+        actor_user_id=actor_user_id,
     )

@@ -94,9 +94,7 @@ async def test_login_with_corrupted_argon2_hash_returns_401_and_emits_warning(
     # Audit DB: login_failed row written with generic reason='invalid_credentials'.
     # This is the Phase 5 AUTH-EP-02 timing/info equivalence invariant.
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "login_failed")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "login_failed"))
     ).all()
     assert rows, "Expected at least one login_failed audit row"
     row = rows[-1]
@@ -137,7 +135,5 @@ async def test_login_rate_limit_chokepoints_before_verify_call(
         "/api/v1/auth/login",
         json={"email": HYGIENE_EMAIL, "password": "hunter22hunter22"},
     )
-    assert r6.status_code == 429, (
-        f"Expected 429 on 6th attempt, got {r6.status_code}: {r6.text}"
-    )
+    assert r6.status_code == 429, f"Expected 429 on 6th attempt, got {r6.status_code}: {r6.text}"
     assert r6.json()["code"] == "rate_limited"

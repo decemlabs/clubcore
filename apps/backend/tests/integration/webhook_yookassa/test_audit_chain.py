@@ -37,9 +37,7 @@ async def test_success_path_emits_exactly_4_audit_rows(
 ) -> None:
     """4 audit rows per commit: payment_recorded + membership_activated_online +
     online_payment_succeeded + yookassa_webhook_received."""
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
     await webhook_db_session.commit()
@@ -62,18 +60,22 @@ async def test_success_path_emits_exactly_4_audit_rows(
     assert payment is not None
 
     audit_rows = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.resource_id.in_(
-                    [
-                        seeded_online_payment_pending.online_payment_id,
-                        membership.id,
-                        payment.id,
-                    ]
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.resource_id.in_(
+                        [
+                            seeded_online_payment_pending.online_payment_id,
+                            membership.id,
+                            payment.id,
+                        ]
+                    )
                 )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     events = sorted(r.action for r in audit_rows)
     assert events == sorted(
@@ -96,18 +98,20 @@ async def test_success_path_emits_no_membership_created(
 ) -> None:
     """Blocker #6: activator emits only membership_activated_online — never
     membership_created (the in-person event)."""
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
     await webhook_db_session.commit()
 
     membership_created = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(AuditLog.action == "membership_created")
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(AuditLog.action == "membership_created")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert membership_created == [], (
         f"Blocker #6: webhook flow must NOT emit membership_created; "
         f"found {len(membership_created)} row(s)"
@@ -131,10 +135,14 @@ async def test_pt_package_success_path_emits_no_pt_package_sold(
     await webhook_db_session.commit()
 
     sold = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(AuditLog.action == "pt_package_sold")
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(AuditLog.action == "pt_package_sold")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert sold == [], (
         f"Blocker #6 (PT path): webhook flow must NOT emit pt_package_sold; "
         f"found {len(sold)} row(s)"
@@ -155,9 +163,7 @@ async def test_webhook_intake_audit_is_chain_root(
     ``created_at`` (DB-clock timestamps; the audit emit order is sequential
     inside a single session).
     """
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
     await webhook_db_session.commit()
@@ -204,9 +210,7 @@ async def test_child_audit_rows_carry_webhook_intake_correlation_id(
     """CHILD events (online_payment_succeeded + membership_activated_online)
     carry the same ``audit_correlation_id`` (the handler's webhook_intake_corr).
     """
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
     await webhook_db_session.commit()

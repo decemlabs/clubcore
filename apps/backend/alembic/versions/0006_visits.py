@@ -111,8 +111,7 @@ def upgrade() -> None:
     # SQLAlchemy's Index() representation of DESC inside a multi-column mixed
     # index is not autogenerate-stable (mirrors Phase 17 pattern).
     op.execute(
-        "CREATE INDEX ix_visits_client_id_checked_in_at "
-        "ON visits (client_id, checked_in_at DESC)"
+        "CREATE INDEX ix_visits_client_id_checked_in_at ON visits (client_id, checked_in_at DESC)"
     )
 
 

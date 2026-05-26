@@ -100,9 +100,7 @@ async def test_get_returns_404_for_missing_id(
     authed_client_owner: AsyncClient,
 ) -> None:
     """CLIENTS-05: GET on a non-existent UUID -> 404 client_not_found."""
-    r = await authed_client_owner.get(
-        "/api/v1/clients/00000000-0000-0000-0000-000000000000"
-    )
+    r = await authed_client_owner.get("/api/v1/clients/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404, r.text
     assert r.json()["code"] == "client_not_found"
 
@@ -217,9 +215,7 @@ async def test_delete_is_soft_delete_phone_reusable(
     assert second_id != first_id, "new client must have a different id"
 
     # Direct DB assertion: deleted row remains with deleted_at set.
-    deleted_row = await db_session.scalar(
-        select(Client).where(Client.id == first_id)
-    )
+    deleted_row = await db_session.scalar(select(Client).where(Client.id == first_id))
     assert deleted_row is not None
     assert deleted_row.deleted_at is not None
 

@@ -81,9 +81,7 @@ async def test_expire_pt_packages_cron_3_row_fixture(
         end_date=None,
     )
 
-    count = await pt_packages_service._expire_due_pt_packages(
-        db_session, today=today
-    )
+    count = await pt_packages_service._expire_due_pt_packages(db_session, today=today)
     await db_session.commit()
     assert count == 1, f"expected 1 flipped row, got {count}"
 
@@ -153,9 +151,7 @@ async def test_expire_pt_packages_cron_null_end_date_never_expires(
     )
 
     far_future = date(9999, 12, 31)
-    count = await pt_packages_service._expire_due_pt_packages(
-        db_session, today=far_future
-    )
+    count = await pt_packages_service._expire_due_pt_packages(db_session, today=far_future)
     await db_session.commit()
     assert count == 0
 
@@ -202,9 +198,7 @@ async def test_expire_pt_packages_worker_e2e_summary_log(
         count = await expire_pt_packages(ctx)
 
     assert count == 1
-    completion = [
-        e for e in captured if e.get("event") == "expire_pt_packages_complete"
-    ]
+    completion = [e for e in captured if e.get("event") == "expire_pt_packages_complete"]
     assert len(completion) == 1
     assert completion[0].get("count") == 1
 

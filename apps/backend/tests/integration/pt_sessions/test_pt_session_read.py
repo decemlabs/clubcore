@@ -38,9 +38,7 @@ def _csrf_headers(
     *,
     idempotency_key: str | None = None,
 ) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers

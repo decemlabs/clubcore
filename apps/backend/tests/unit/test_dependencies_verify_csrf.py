@@ -55,17 +55,13 @@ async def test_safe_methods_short_circuit_returns_none(method: str) -> None:
 
 async def test_post_with_matching_cookie_and_header_returns_none() -> None:
     token = "abc123" * 6  # 36 chars; identical for cookie + header
-    result = await verify_csrf(
-        _req(method="POST", cookie=token, header=token), session=_session()
-    )
+    result = await verify_csrf(_req(method="POST", cookie=token, header=token), session=_session())
     assert result is None
 
 
 async def test_post_with_missing_header_raises_and_emits() -> None:
     with capture_logs() as captured, pytest.raises(CsrfMismatch):
-        await verify_csrf(
-            _req(method="POST", cookie="abc", header=None), session=_session()
-        )
+        await verify_csrf(_req(method="POST", cookie="abc", header=None), session=_session())
     events = [c for c in captured if c.get("event") == "csrf_mismatch"]
     assert len(events) == 1
     ev = events[0]
@@ -80,9 +76,7 @@ async def test_post_with_missing_header_raises_and_emits() -> None:
 
 async def test_post_with_missing_cookie_raises_and_emits() -> None:
     with capture_logs() as captured, pytest.raises(CsrfMismatch):
-        await verify_csrf(
-            _req(method="POST", cookie=None, header="abc"), session=_session()
-        )
+        await verify_csrf(_req(method="POST", cookie=None, header="abc"), session=_session())
     ev = next(c for c in captured if c.get("event") == "csrf_mismatch")
     assert ev["has_cookie"] is False
     assert ev["has_header"] is True
@@ -90,9 +84,7 @@ async def test_post_with_missing_cookie_raises_and_emits() -> None:
 
 async def test_post_with_mismatched_values_raises() -> None:
     with capture_logs() as captured, pytest.raises(CsrfMismatch):
-        await verify_csrf(
-            _req(method="POST", cookie="aaa", header="bbb"), session=_session()
-        )
+        await verify_csrf(_req(method="POST", cookie="aaa", header="bbb"), session=_session())
     ev = next(c for c in captured if c.get("event") == "csrf_mismatch")
     assert ev["has_cookie"] is True
     assert ev["has_header"] is True
@@ -103,9 +95,7 @@ async def test_post_uses_secrets_compare_digest() -> None:
         "app.core.dependencies.secrets.compare_digest",
         wraps=secrets_mod.compare_digest,
     ) as spy:
-        await verify_csrf(
-            _req(method="POST", cookie="x", header="x"), session=_session()
-        )
+        await verify_csrf(_req(method="POST", cookie="x", header="x"), session=_session())
         assert spy.called
 
 
@@ -122,9 +112,7 @@ async def test_emit_ip_none_when_client_missing() -> None:
 async def test_csrf_mismatch_message_is_locked_code() -> None:
     """D-21 envelope: message string is 'csrf_mismatch' so client retry branch matches."""
     with pytest.raises(CsrfMismatch) as excinfo:
-        await verify_csrf(
-            _req(method="POST", cookie="a", header="b"), session=_session()
-        )
+        await verify_csrf(_req(method="POST", cookie="a", header="b"), session=_session())
     assert excinfo.value.message == "csrf_mismatch"
     assert excinfo.value.code == "csrf_mismatch"
     assert excinfo.value.status_code == 403

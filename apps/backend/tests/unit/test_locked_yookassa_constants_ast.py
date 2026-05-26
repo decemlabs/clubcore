@@ -63,9 +63,7 @@ _RESERVED_VERIFIER_PREFIXES: frozenset[str] = frozenset(
 
 # Builtin container constructors that, when wrapping YOOKASSA_TRUSTED_IPS,
 # create a dynamic copy that defeats the Final[frozenset[str]] lock.
-_DYNAMIC_CONTAINER_BUILTINS: frozenset[str] = frozenset(
-    {"frozenset", "set", "list", "tuple"}
-)
+_DYNAMIC_CONTAINER_BUILTINS: frozenset[str] = frozenset({"frozenset", "set", "list", "tuple"})
 
 
 def _is_build_receipt_item_call(node: ast.Call) -> bool:
@@ -205,9 +203,7 @@ def _collect_violations(py_path: Path) -> list[str]:
     for lineno, message in _iter_violations(tree):
         violations.append(f"{rel}:{lineno} — {message}")
     # Rebind-detection is scoped to files OTHER than the canonical declaration.
-    canonical_path = (
-        _BACKEND_APP / "integrations" / "yookassa" / "webhook_verifier.py"
-    )
+    canonical_path = _BACKEND_APP / "integrations" / "yookassa" / "webhook_verifier.py"
     if py_path.resolve() != canonical_path.resolve():
         for lineno, message in _iter_trusted_ips_rebinds(tree):
             violations.append(f"{rel}:{lineno} — {message}")
@@ -481,7 +477,7 @@ def _find_webhook_post_decorator(tree: ast.AST) -> ast.Call:
             if isinstance(first_arg, ast.Constant) and first_arg.value == "/webhook":
                 return dec
     raise AssertionError(
-        "D-50-05 violated: no `@router.post(\"/webhook\", ...)` decorator found in router.py. "
+        'D-50-05 violated: no `@router.post("/webhook", ...)` decorator found in router.py. '
         "ROADMAP success-criterion #1 requires the ЮKassa webhook intake at this path."
     )
 
@@ -510,7 +506,7 @@ def test_webhook_route_has_verify_ip_dependency_at_decorator_level() -> None:
             deps_kwarg = kw
             break
     assert deps_kwarg is not None, (
-        "D-50-05 violated: @router.post(\"/webhook\", ...) decorator has NO "
+        'D-50-05 violated: @router.post("/webhook", ...) decorator has NO '
         "`dependencies=` keyword argument. WH-01 requires the IP allowlist to "
         "run BEFORE body parse via route-level dependencies=[Depends(verify_yookassa_ip)]; "
         "a signature-level Depends would run AFTER body parse and is forbidden."
@@ -539,7 +535,7 @@ def test_webhook_route_has_verify_ip_dependency_at_decorator_level() -> None:
             break
 
     assert found_verify_ip, (
-        "D-50-05 violated: @router.post(\"/webhook\", ...) decorator's `dependencies=[...]` "
+        'D-50-05 violated: @router.post("/webhook", ...) decorator\'s `dependencies=[...]` '
         "list does NOT contain `Depends(verify_yookassa_ip)` as a literal. ROADMAP "
         "success-criterion #1 + CONTEXT.md D-50-05 require this structural gate so the "
         "IP allowlist cannot silently be demoted, replaced, or removed."

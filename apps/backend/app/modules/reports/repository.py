@@ -78,19 +78,23 @@ async def fetch_revenue_buckets(
         else "date_trunc('month', (received_at AT TIME ZONE 'Europe/Moscow')::date)"
     )
     rows = (
-        await session.execute(
-            text(
-                f"SELECT {period_expr} AS period, method, subject_kind, "  # noqa: S608 — period_expr is chosen from internal literals (GRAIN_DAY/GRAIN_MONTH), never from user input
-                "SUM(amount_kopecks) AS total_kopecks "
-                "FROM payments "
-                "WHERE (received_at AT TIME ZONE 'Europe/Moscow')::date "
-                "    BETWEEN :from_date AND :to_date "
-                "GROUP BY period, method, subject_kind "
-                "ORDER BY period"
-            ),
-            {"from_date": query.from_date, "to_date": query.to_date},
+        (
+            await session.execute(
+                text(
+                    f"SELECT {period_expr} AS period, method, subject_kind, "  # noqa: S608 — period_expr is chosen from internal literals (GRAIN_DAY/GRAIN_MONTH), never from user input
+                    "SUM(amount_kopecks) AS total_kopecks "
+                    "FROM payments "
+                    "WHERE (received_at AT TIME ZONE 'Europe/Moscow')::date "
+                    "    BETWEEN :from_date AND :to_date "
+                    "GROUP BY period, method, subject_kind "
+                    "ORDER BY period"
+                ),
+                {"from_date": query.from_date, "to_date": query.to_date},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -169,9 +173,10 @@ async def fetch_trainer_usage(
       deterministic tie-breaking in golden tests.
     """
     rows = (
-        await session.execute(
-            text(
-                """
+        (
+            await session.execute(
+                text(
+                    """
 WITH session_agg AS (
     -- conducting-trainer aggregation; period filter on performed_at MSK date (PITFALL 12)
     SELECT
@@ -262,10 +267,13 @@ LEFT JOIN revenue_agg ra  ON ra.trainer_id  = t.id
 LEFT JOIN payroll_agg pa  ON pa.trainer_id  = t.id
 ORDER BY session_count DESC, t.full_name ASC, t.id ASC
 """
-            ),
-            {"from_date": from_date, "to_date": to_date},
+                ),
+                {"from_date": from_date, "to_date": to_date},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -282,14 +290,18 @@ async def fetch_active_memberships_count(session: AsyncSession) -> int:
     This is a point-in-time ("as of now") count — ignores the report date range (D-05).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM memberships m "
-                "JOIN clients c ON c.id = m.client_id "
-                "WHERE m.status = 'active' AND c.deleted_at IS NULL"
+        (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM memberships m "
+                    "JOIN clients c ON c.id = m.client_id "
+                    "WHERE m.status = 'active' AND c.deleted_at IS NULL"
+                )
             )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return int(row["cnt"])
 
 
@@ -306,20 +318,24 @@ async def fetch_expiring_memberships_count(session: AsyncSession, within: int) -
     `within` is a service-layer-validated int in 1..30 — safe to bind (T-55-06).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM memberships m "
-                "JOIN clients c ON c.id = m.client_id "
-                "WHERE m.status = 'active' "
-                "  AND c.deleted_at IS NULL "
-                "  AND m.end_date BETWEEN "
-                "    (now() AT TIME ZONE 'Europe/Moscow')::date "
-                "    AND (now() AT TIME ZONE 'Europe/Moscow')::date "
-                "    + CAST(:within AS integer)"
-            ),
-            {"within": within},
+        (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM memberships m "
+                    "JOIN clients c ON c.id = m.client_id "
+                    "WHERE m.status = 'active' "
+                    "  AND c.deleted_at IS NULL "
+                    "  AND m.end_date BETWEEN "
+                    "    (now() AT TIME ZONE 'Europe/Moscow')::date "
+                    "    AND (now() AT TIME ZONE 'Europe/Moscow')::date "
+                    "    + CAST(:within AS integer)"
+                ),
+                {"within": within},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return int(row["cnt"])
 
 
@@ -338,16 +354,20 @@ async def fetch_new_clients_count(
     Bounds are inclusive MSK dates (D-04). Soft-deleted clients excluded (CLR-04).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM clients "
-                "WHERE deleted_at IS NULL "
-                "  AND (created_at AT TIME ZONE 'Europe/Moscow')::date "
-                "    BETWEEN :from_date AND :to_date"
-            ),
-            {"from_date": from_date, "to_date": to_date},
+        (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM clients "
+                    "WHERE deleted_at IS NULL "
+                    "  AND (created_at AT TIME ZONE 'Europe/Moscow')::date "
+                    "    BETWEEN :from_date AND :to_date"
+                ),
+                {"from_date": from_date, "to_date": to_date},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return int(row["cnt"])
 
 
@@ -366,16 +386,20 @@ async def fetch_visits_daily(
     Sparse buckets: only dates with visits appear (D-08).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT gym_date AS date, COUNT(*) AS count "
-                "FROM visits "
-                "WHERE gym_date BETWEEN :from_date AND :to_date "
-                "GROUP BY gym_date ORDER BY gym_date"
-            ),
-            {"from_date": from_date, "to_date": to_date},
+        (
+            await session.execute(
+                text(
+                    "SELECT gym_date AS date, COUNT(*) AS count "
+                    "FROM visits "
+                    "WHERE gym_date BETWEEN :from_date AND :to_date "
+                    "GROUP BY gym_date ORDER BY gym_date"
+                ),
+                {"from_date": from_date, "to_date": to_date},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -395,18 +419,22 @@ async def fetch_visits_hourly(
     Sparse buckets: only hours with visits appear (D-08).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT "
-                "EXTRACT(HOUR FROM checked_in_at AT TIME ZONE 'Europe/Moscow')::int AS hour, "
-                "COUNT(*) AS count "
-                "FROM visits "
-                "WHERE gym_date BETWEEN :from_date AND :to_date "
-                "GROUP BY hour ORDER BY hour"
-            ),
-            {"from_date": from_date, "to_date": to_date},
+        (
+            await session.execute(
+                text(
+                    "SELECT "
+                    "EXTRACT(HOUR FROM checked_in_at AT TIME ZONE 'Europe/Moscow')::int AS hour, "
+                    "COUNT(*) AS count "
+                    "FROM visits "
+                    "WHERE gym_date BETWEEN :from_date AND :to_date "
+                    "GROUP BY hour ORDER BY hour"
+                ),
+                {"from_date": from_date, "to_date": to_date},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -442,9 +470,7 @@ def _build_audit_predicates(
         # corrupt filter semantics (WR-01): a bare '%' matches every row, '_' any char.
         # Escape \, %, _ and declare the escape char so the substring is matched literally.
         escaped = (
-            query.actor_email_snapshot.replace("\\", "\\\\")
-            .replace("%", "\\%")
-            .replace("_", "\\_")
+            query.actor_email_snapshot.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         )
         like_pattern = f"%{escaped}%"
         predicates.append(AuditLog.actor_email_snapshot.ilike(like_pattern, escape="\\"))
@@ -489,9 +515,7 @@ async def fetch_audit_log_page(
 
     # COUNT with the same predicates (no ORDER/LIMIT).
     # Use and_(true(), *predicates) to avoid SADeprecationWarning when predicates is empty.
-    total_stmt = (
-        select(func.count()).select_from(AuditLog).where(and_(true(), *predicates))
-    )
+    total_stmt = select(func.count()).select_from(AuditLog).where(and_(true(), *predicates))
     total: int = (await session.scalar(total_stmt)) or 0
 
     # List with keyset ordering and offset/limit.

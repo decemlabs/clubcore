@@ -197,9 +197,7 @@ async def compute_accrual_components(
     """
     # Step 1 — resolve config as of period_end (D-58-02 INSERT-only versioned resolver).
     config = await repository.resolve_active_comp_config(session, trainer_id, period_end)
-    if config is None or (
-        config.commission_pct_bps is None and config.session_fee_kopecks is None
-    ):
+    if config is None or (config.commission_pct_bps is None and config.session_fee_kopecks is None):
         raise CompConfigMissingError("comp_config_missing")
 
     # Step 2 — cross-module revenue + session count read.
@@ -238,9 +236,13 @@ async def preview_accrual(
     CompConfigMissingError propagates to the router, which remaps it to 422 for this
     endpoint (see module docstring). This is the router-remap approach (one error class).
     """
-    session_count, fixed_kopecks, commission_kopecks, total_kopecks, _config = (
-        await compute_accrual_components(session, trainer_id, period_start, period_end)
-    )
+    (
+        session_count,
+        fixed_kopecks,
+        commission_kopecks,
+        total_kopecks,
+        _config,
+    ) = await compute_accrual_components(session, trainer_id, period_start, period_end)
     return PayrollPreviewResponse(
         session_count=session_count,
         fixed_kopecks=fixed_kopecks,
@@ -274,10 +276,14 @@ async def run_payroll_period(
     No unpay / void / reverse function — this is an append-only ledger.
     """
     # Step 1 — resolve config + compute amounts (PITFALL 1: reuse shared helper, no drift).
-    session_count, _fixed_kopecks, _commission_kopecks, total_kopecks, resolved_config = (
-        await compute_accrual_components(
-            session, body.trainer_id, body.period_start, body.period_end
-        )
+    (
+        session_count,
+        _fixed_kopecks,
+        _commission_kopecks,
+        total_kopecks,
+        resolved_config,
+    ) = await compute_accrual_components(
+        session, body.trainer_id, body.period_start, body.period_end
     )
     total_kopecks_signed: int = total_kopecks  # positive for regular accruals (D-58-03)
 

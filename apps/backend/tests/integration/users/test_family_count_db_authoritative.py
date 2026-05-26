@@ -83,7 +83,9 @@ async def test_family_count_reports_db_truth_when_redis_drifted(
 
     # Verify Redis has all 3 families before the drift.
     redis_members = await redis.smembers(f"auth:user_sessions:{target_id}")
-    assert len(redis_members) == 3, f"Expected 3 Redis members before drift, got {len(redis_members)}"
+    assert len(redis_members) == 3, (
+        f"Expected 3 Redis members before drift, got {len(redis_members)}"
+    )
 
     # Drift — wipe the Redis SMEMBERS entry but leave DB rows intact and unrevoked.
     # This simulates a TTL expiry, FLUSHDB, or replica lag scenario.
@@ -102,22 +104,30 @@ async def test_family_count_reports_db_truth_when_redis_drifted(
 
     # Locate the audit rows.
     session_revoked_row = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "session_revoked_all",
-                AuditLog.resource_id == target_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "session_revoked_all",
+                    AuditLog.resource_id == target_id,
+                )
             )
         )
-    ).scalars().one()
+        .scalars()
+        .one()
+    )
 
     user_deactivated_row = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_deactivated",
-                AuditLog.resource_id == target_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_deactivated",
+                    AuditLog.resource_id == target_id,
+                )
             )
         )
-    ).scalars().one()
+        .scalars()
+        .one()
+    )
 
     # WR-04 invariant: family_count == 3 from the DB UPDATE, despite Redis drift.
     # The pre-fix code read from Redis SMEMBERS and would have reported 0 here.

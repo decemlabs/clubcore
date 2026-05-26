@@ -661,9 +661,7 @@ async def test_trainers_ordered_by_session_count_desc_then_name(
         ("Г Григорьев", 0),
     ]
     assert actual == expected, (
-        f"Ordering golden failed (D-60-03).\n"
-        f"Expected: {expected}\n"
-        f"Got:      {actual}"
+        f"Ordering golden failed (D-60-03).\nExpected: {expected}\nGot:      {actual}"
     )
 
     # Also assert DESC invariant
@@ -687,9 +685,7 @@ async def test_utilization_pct_null_when_zero_active_slots(
     trainer = await make_trainer(full_name="Без Слотов Тренер")
     client = await make_client()
     plan = await make_pt_package_plan()
-    pkg = await make_pt_package_with_trainer(
-        client_id=client.id, plan=plan, trainer_id=trainer.id
-    )
+    pkg = await make_pt_package_with_trainer(client_id=client.id, plan=plan, trainer_id=trainer.id)
     ts = datetime(2026, 5, 15, 10, 0, 0, tzinfo=UTC)
     await make_pt_session(
         pt_package_id=pkg.id,
@@ -723,8 +719,8 @@ async def test_utilization_pct_zero_when_slots_but_no_bookings(
     trainer = await make_trainer(full_name="Активный Слот Тренер")
 
     # 2 active slots in May 2026 (MSK = UTC+3, so 09:00 MSK = 06:00 UTC)
-    slot_start1 = datetime(2026, 5, 10, 6, 0, 0, tzinfo=UTC)   # 09:00 MSK
-    slot_end1 = datetime(2026, 5, 10, 7, 0, 0, tzinfo=UTC)     # 10:00 MSK
+    slot_start1 = datetime(2026, 5, 10, 6, 0, 0, tzinfo=UTC)  # 09:00 MSK
+    slot_end1 = datetime(2026, 5, 10, 7, 0, 0, tzinfo=UTC)  # 10:00 MSK
     await make_slot(
         trainer_id=trainer.id,
         start_time=slot_start1,
@@ -768,9 +764,7 @@ async def test_walkin_session_contributes_zero_hours(
     trainer = await make_trainer(full_name="Вокин Тренер")
     client = await make_client()
     plan = await make_pt_package_plan()
-    pkg = await make_pt_package_with_trainer(
-        client_id=client.id, plan=plan, trainer_id=trainer.id
-    )
+    pkg = await make_pt_package_with_trainer(client_id=client.id, plan=plan, trainer_id=trainer.id)
     ts = datetime(2026, 5, 20, 10, 0, 0, tzinfo=UTC)
     await make_pt_session(
         pt_package_id=pkg.id,
@@ -920,9 +914,7 @@ async def test_trainers_csv_header_row_matches_constant(
     assert len(rows) >= 1, "CSV must have at least a header row"
     header_row = rows[0]
     assert header_row == list(CSV_TRAINER_USAGE_HEADERS), (
-        f"CSV header mismatch.\n"
-        f"Expected: {list(CSV_TRAINER_USAGE_HEADERS)}\n"
-        f"Got:      {header_row}"
+        f"CSV header mismatch.\nExpected: {list(CSV_TRAINER_USAGE_HEADERS)}\nGot:      {header_row}"
     )
 
 
@@ -939,9 +931,7 @@ async def test_trainers_csv_cyrillic_trainer_name_round_trip(
     trainer = await make_trainer(full_name=cyrillic_name)
     client = await make_client()
     plan = await make_pt_package_plan()
-    pkg = await make_pt_package_with_trainer(
-        client_id=client.id, plan=plan, trainer_id=trainer.id
-    )
+    pkg = await make_pt_package_with_trainer(client_id=client.id, plan=plan, trainer_id=trainer.id)
     ts = datetime(2026, 5, 14, 10, 0, 0, tzinfo=UTC)
     await make_pt_session(
         pt_package_id=pkg.id,
@@ -976,9 +966,7 @@ async def test_trainers_csv_formula_injection_sanitized(
     trainer = await make_trainer(full_name=malicious_name)
     client = await make_client()
     plan = await make_pt_package_plan()
-    pkg = await make_pt_package_with_trainer(
-        client_id=client.id, plan=plan, trainer_id=trainer.id
-    )
+    pkg = await make_pt_package_with_trainer(client_id=client.id, plan=plan, trainer_id=trainer.id)
     ts = datetime(2026, 5, 13, 10, 0, 0, tzinfo=UTC)
     await make_pt_session(
         pt_package_id=pkg.id,
@@ -998,12 +986,10 @@ async def test_trainers_csv_formula_injection_sanitized(
     # Find the row for our trainer (trainerNameSnapshot is column index 0)
     name_col = list(CSV_TRAINER_USAGE_HEADERS).index("trainerNameSnapshot")
     trainer_rows = [
-        row for row in rows[1:]
-        if row and len(row) > name_col and malicious_name in row[name_col]
+        row for row in rows[1:] if row and len(row) > name_col and malicious_name in row[name_col]
     ]
     assert trainer_rows, (
-        f"Row with formula-injection trainer name must be present in CSV. "
-        f"rows[1:] = {rows[1:]!r}"
+        f"Row with formula-injection trainer name must be present in CSV. rows[1:] = {rows[1:]!r}"
     )
     cell = trainer_rows[0][name_col]
     assert cell == f"'{malicious_name}", (
@@ -1026,9 +1012,7 @@ async def test_trainers_csv_utilization_null_renders_empty_cell(
     trainer = await make_trainer(full_name="Нуль Утилизация Тренер")
     client = await make_client()
     plan = await make_pt_package_plan()
-    pkg = await make_pt_package_with_trainer(
-        client_id=client.id, plan=plan, trainer_id=trainer.id
-    )
+    pkg = await make_pt_package_with_trainer(client_id=client.id, plan=plan, trainer_id=trainer.id)
     ts = datetime(2026, 5, 12, 10, 0, 0, tzinfo=UTC)
     await make_pt_session(
         pt_package_id=pkg.id,
@@ -1049,7 +1033,8 @@ async def test_trainers_csv_utilization_null_renders_empty_cell(
     name_col = list(CSV_TRAINER_USAGE_HEADERS).index("trainerNameSnapshot")
 
     trainer_rows = [
-        row for row in rows[1:]
+        row
+        for row in rows[1:]
         if row and len(row) > name_col and trainer.full_name in row[name_col]
     ]
     assert trainer_rows, f"Trainer row must be present. rows[1:] = {rows[1:]!r}"
@@ -1092,8 +1077,7 @@ async def test_pitfall_10_no_orm_imports_in_reports_module() -> None:
         f"REPORTS_DIR={REPORTS_DIR}"
     )
     assert result.stdout == "", (
-        f"PITFALL 10: grep stdout must be empty when no ORM imports found, "
-        f"got {result.stdout!r}"
+        f"PITFALL 10: grep stdout must be empty when no ORM imports found, got {result.stdout!r}"
     )
 
     # Also assert lint-imports exit 0 (RPT-04 ship gate — zero new ignore_imports edges)

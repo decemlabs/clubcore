@@ -205,7 +205,9 @@ async def test_book_handler_renders_up_to_5_slot_keyboard(
     chat_id = _CHAT_BASE + 1
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     trainer = await _seed_trainer(db_session, full_name="Иван Тренеров")
     await _seed_active_pt_package(db_session, client=client)
@@ -219,8 +221,11 @@ async def test_book_handler_renders_up_to_5_slot_keyboard(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2001,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2001,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -269,8 +274,11 @@ async def test_book_handler_anti_oracle_client_not_linked(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2002,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2002,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -299,14 +307,19 @@ async def test_book_handler_anti_oracle_no_pt_package(
     chat_id = _CHAT_BASE + 3
     creator = await _seed_user(db_session)
     await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     # Note: no _seed_active_pt_package call.
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2003,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2003,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -334,16 +347,23 @@ async def test_book_handler_anti_oracle_pt_package_exhausted(
     chat_id = _CHAT_BASE + 4
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     await _seed_active_pt_package(
-        db_session, client=client, sessions_remaining=0,
+        db_session,
+        client=client,
+        sessions_remaining=0,
     )
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2004,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2004,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -372,7 +392,9 @@ async def test_book_handler_anti_oracle_no_slots(
     chat_id = _CHAT_BASE + 5
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     await _seed_active_pt_package(db_session, client=client)
     # Trainer exists but NO slots.
@@ -380,8 +402,11 @@ async def test_book_handler_anti_oracle_no_slots(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2005,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2005,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -411,8 +436,11 @@ async def test_book_handler_dedupe_replay_skipped(
     # No client → first invocation hits anti-oracle path; replay must skip.
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2006,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2006,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())
@@ -440,7 +468,9 @@ async def test_book_handler_callback_data_byte_length_under_64(
     chat_id = _CHAT_BASE + 7
     creator = await _seed_user(db_session)
     client = await _seed_linked_client(
-        db_session, telegram_user_id=tg_user_id, creator=creator,
+        db_session,
+        telegram_user_id=tg_user_id,
+        creator=creator,
     )
     trainer = await _seed_trainer(db_session)
     await _seed_active_pt_package(db_session, client=client)
@@ -454,8 +484,11 @@ async def test_book_handler_callback_data_byte_length_under_64(
 
     fake_redis = fakeredis.aioredis.FakeRedis()
     from app.integrations.telegram import sender as sender_mod
+
     update = _build_update(
-        telegram_user_id=tg_user_id, chat_id=chat_id, update_id=2007,
+        telegram_user_id=tg_user_id,
+        chat_id=chat_id,
+        update_id=2007,
     )
     ctx = _build_ctx(db_session, fake_redis, sender_mod)
     context: Any = SimpleNamespace(bot=SimpleNamespace())

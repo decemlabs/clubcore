@@ -106,10 +106,10 @@ async def test_refund_happy_path(
 
     # DB invariant: exactly 1 negative-amount refund row pointing at the sale.
     payments = (
-        await db_session.execute(
-            select(Payment).where(Payment.subject_id == membership_id)
-        )
-    ).scalars().all()
+        (await db_session.execute(select(Payment).where(Payment.subject_id == membership_id)))
+        .scalars()
+        .all()
+    )
     sale_rows = [p for p in payments if p.subject_kind == SUBJECT_KIND_MEMBERSHIP]
     refund_rows = [p for p in payments if p.subject_kind == SUBJECT_KIND_REFUND]
     assert len(sale_rows) == 1
@@ -259,9 +259,7 @@ async def test_refund_already_refunded_409(
     # (exercising uq_payments_refund_of_alive specifically rather than the
     # transition guard).
     membership = (
-        await db_session.execute(
-            select(Membership).where(Membership.id == membership_id)
-        )
+        await db_session.execute(select(Membership).where(Membership.id == membership_id))
     ).scalar_one()
     membership.status = "active"
     membership.cancelled_at = None
@@ -319,9 +317,7 @@ async def test_refund_legacy_membership_no_payment(
     """
     plan = await make_plan(name=f"LegacyPlan-{uuid4().hex[:6]}")
     client = await make_client(phone="+79912340099")
-    membership = await make_membership(
-        client_id=client.id, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client.id, plan=plan, status="active")
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{membership.id}/refund",
         json={"reason": "test"},

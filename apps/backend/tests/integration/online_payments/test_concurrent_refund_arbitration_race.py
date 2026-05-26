@@ -116,9 +116,7 @@ async def ver02c_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -295,11 +293,8 @@ async def test_concurrent_refund_loses_at_db_layer_uq_payments_refund_of_alive(
         )
 
         refund_issued_count = await verify.scalar(
-            select(func.count())
-            .select_from(AuditLog)
-            .where(AuditLog.action == "refund_issued")
+            select(func.count()).select_from(AuditLog).where(AuditLog.action == "refund_issued")
         )
         assert refund_issued_count == 1, (
-            f"VER-02(c): expected exactly 1 refund_issued audit row, "
-            f"got {refund_issued_count}"
+            f"VER-02(c): expected exactly 1 refund_issued audit row, got {refund_issued_count}"
         )

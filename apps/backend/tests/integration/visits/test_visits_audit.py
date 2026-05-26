@@ -304,9 +304,9 @@ async def test_reject_paths_are_persisted(
     await db_session.commit()
 
     count_before = await db_session.scalar(
-        select(func.count()).select_from(AuditLog).where(
-            AuditLog.action == "visit_rejected_no_membership"
-        )
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.action == "visit_rejected_no_membership")
     )
 
     r = await authed_client_reception.post(
@@ -317,9 +317,9 @@ async def test_reject_paths_are_persisted(
     assert r.status_code == 409, r.text
 
     count_after = await db_session.scalar(
-        select(func.count()).select_from(AuditLog).where(
-            AuditLog.action == "visit_rejected_no_membership"
-        )
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.action == "visit_rejected_no_membership")
     )
     assert count_after == (count_before or 0) + 1, (
         "D-05 violated: rejection audit row was NOT committed "

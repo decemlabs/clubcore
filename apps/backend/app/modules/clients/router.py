@@ -56,9 +56,7 @@ router = APIRouter()
 )
 async def list_clients(
     query: Annotated[ClientListQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.CLIENTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.CLIENTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PaginatedData[ClientResponse]]:
     """List alive clients (CLIENTS-03/04). VIEW permission required (D-21)."""
@@ -73,9 +71,7 @@ async def list_clients(
 )
 async def get_client(
     client_id: UUID,
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.CLIENTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.CLIENTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[ClientResponse]:
     """Read one alive client (CLIENTS-05). 404 for missing or soft-deleted ids."""
@@ -91,9 +87,7 @@ async def get_client(
 )
 async def create_client(
     payload: ClientCreateRequest,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.EDIT, Resource.CLIENTS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.EDIT, Resource.CLIENTS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[ClientResponse]:
@@ -110,9 +104,7 @@ async def create_client(
 async def update_client(
     client_id: UUID,
     payload: ClientUpdateRequest,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.EDIT, Resource.CLIENTS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.EDIT, Resource.CLIENTS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[ClientResponse]:
@@ -128,9 +120,7 @@ async def update_client(
 )
 async def soft_delete_client(
     client_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.DELETE, Resource.CLIENTS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.DELETE, Resource.CLIENTS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:

@@ -65,13 +65,17 @@ async def test_session_revoked_all_actor_is_owner_not_target(
 
     # Locate the session_revoked_all audit row for this target.
     session_revoked_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "session_revoked_all",
-                AuditLog.resource_id == target_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "session_revoked_all",
+                    AuditLog.resource_id == target_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(session_revoked_rows) == 1, (
         f"Expected exactly 1 session_revoked_all row for target {target_id}, "
         f"got {len(session_revoked_rows)}"

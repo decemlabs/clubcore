@@ -102,9 +102,7 @@ async def direct_engine_session() -> AsyncIterator[AsyncSession]:
             await probe.execute(text("select 1"))
     except Exception as exc:  # broad: skip on any connectivity failure
         await engine.dispose()
-        pytest.skip(
-            f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})"
-        )
+        pytest.skip(f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})")
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
@@ -130,16 +128,14 @@ async def test_0033_upgrade_clean_no_duplicates(
     history = _run_alembic("history")
     _assert_alembic_ok(history, "history (revision-applied probe)")
     assert _REV_HEAD in history.stdout, (
-        f"expected revision {_REV_HEAD} to be present in alembic history; got:\n"
-        f"{history.stdout}"
+        f"expected revision {_REV_HEAD} to be present in alembic history; got:\n{history.stdout}"
     )
 
     # The partial UNIQUE index must exist in pg_indexes with the documented predicate.
     rows = (
         await session.execute(
             text(
-                "SELECT indexdef FROM pg_indexes "
-                "WHERE schemaname = 'public' AND indexname = :name"
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"
             ),
             {"name": _INDEX_NAME},
         )
@@ -214,16 +210,11 @@ async def test_0033_upgrade_aborts_on_duplicate(
         # Index must NOT exist after the failed upgrade.
         rows = (
             await session.execute(
-                text(
-                    "SELECT 1 FROM pg_indexes "
-                    "WHERE schemaname = 'public' AND indexname = :name"
-                ),
+                text("SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"),
                 {"name": _INDEX_NAME},
             )
         ).fetchall()
-        assert len(rows) == 0, (
-            f"index {_INDEX_NAME} must NOT exist after aborted upgrade"
-        )
+        assert len(rows) == 0, f"index {_INDEX_NAME} must NOT exist after aborted upgrade"
 
     finally:
         # Clean up seeded rows + restore head for downstream tests.
@@ -231,13 +222,9 @@ async def test_0033_upgrade_aborts_on_duplicate(
             text("DELETE FROM clients WHERE created_by_user_id = :uid"),
             {"uid": str(user_id)},
         )
-        await session.execute(
-            text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)}
-        )
+        await session.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)})
         await session.commit()
-        _assert_alembic_ok(
-            _run_alembic("upgrade", "head"), "upgrade head (post-test restore)"
-        )
+        _assert_alembic_ok(_run_alembic("upgrade", "head"), "upgrade head (post-test restore)")
 
 
 async def test_0033_soft_deleted_duplicate_allowed(
@@ -291,10 +278,7 @@ async def test_0033_soft_deleted_duplicate_allowed(
         # Index now exists.
         rows = (
             await session.execute(
-                text(
-                    "SELECT 1 FROM pg_indexes "
-                    "WHERE schemaname = 'public' AND indexname = :name"
-                ),
+                text("SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"),
                 {"name": _INDEX_NAME},
             )
         ).fetchall()
@@ -305,13 +289,9 @@ async def test_0033_soft_deleted_duplicate_allowed(
             text("DELETE FROM clients WHERE created_by_user_id = :uid"),
             {"uid": str(user_id)},
         )
-        await session.execute(
-            text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)}
-        )
+        await session.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)})
         await session.commit()
-        _assert_alembic_ok(
-            _run_alembic("upgrade", "head"), "upgrade head (post-test restore)"
-        )
+        _assert_alembic_ok(_run_alembic("upgrade", "head"), "upgrade head (post-test restore)")
 
 
 async def test_0033_round_trip_drops_index_but_keeps_column(
@@ -324,28 +304,20 @@ async def test_0033_round_trip_drops_index_but_keeps_column(
     _assert_alembic_ok(_run_alembic("upgrade", "head"), "upgrade head (pre round-trip)")
     rows_before = (
         await session.execute(
-            text(
-                "SELECT 1 FROM pg_indexes "
-                "WHERE schemaname = 'public' AND indexname = :name"
-            ),
+            text("SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"),
             {"name": _INDEX_NAME},
         )
     ).fetchall()
     assert len(rows_before) == 1, "index must exist at head before round-trip"
 
     # Downgrade to 0032 — drops only the index.
-    _assert_alembic_ok(
-        _run_alembic("downgrade", _REV_PREV), f"downgrade {_REV_PREV} (round-trip)"
-    )
+    _assert_alembic_ok(_run_alembic("downgrade", _REV_PREV), f"downgrade {_REV_PREV} (round-trip)")
 
     try:
         # Index gone.
         rows_after = (
             await session.execute(
-                text(
-                    "SELECT 1 FROM pg_indexes "
-                    "WHERE schemaname = 'public' AND indexname = :name"
-                ),
+                text("SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"),
                 {"name": _INDEX_NAME},
             )
         ).fetchall()

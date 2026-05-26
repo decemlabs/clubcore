@@ -23,6 +23,7 @@ Threat mitigations:
 - T-51-09-05 (PII): structlog event kwargs never include customer_email
   (mirrors settle.py PII discipline).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -86,9 +87,7 @@ async def _poll_pending_refunds(
         rows = await refund_repo.select_pending_older_than(
             session, cutoff=cutoff, limit=_LOOP_BUDGET_PER_TICK
         )
-        row_refund_ids: list[tuple[Any, str]] = [
-            (r.id, r.yookassa_refund_id) for r in rows
-        ]
+        row_refund_ids: list[tuple[Any, str]] = [(r.id, r.yookassa_refund_id) for r in rows]
 
     for refund_row_id, yookassa_refund_id in row_refund_ids:
         # Step 2 — HTTPS call OUTSIDE any session block.
@@ -157,9 +156,7 @@ async def _poll_pending_refunds(
             # Step 3b — UPDATE row to canceled, emit online_refund_canceled
             # audit (chain-root — no audit_correlation_id available).
             async with session_factory() as session, session.begin():
-                row = await refund_repo.get_online_refund_by_id(
-                    session, refund_row_id
-                )
+                row = await refund_repo.get_online_refund_by_id(session, refund_row_id)
                 if row is None:
                     _log.warning(
                         "yookassa_refund_poll_row_disappeared",

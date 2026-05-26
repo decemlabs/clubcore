@@ -74,13 +74,17 @@ async def test_expire_due_memberships_with_one_due_row_returns_one_and_emits_aud
     await db_session.flush()
 
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "membership_expired",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "membership_expired",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     audit_row = rows[0]
     assert audit_row.action == "membership_expired"
@@ -113,10 +117,10 @@ async def test_expire_due_memberships_with_zero_due_rows_returns_zero_no_audits(
 
     await db_session.flush()
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.action == "membership_expired")
-        )
-    ).scalars().all()
+        (await db_session.execute(select(AuditLog).where(AuditLog.action == "membership_expired")))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 0
 
 
@@ -152,15 +156,10 @@ def test_expire_due_memberships_source_carries_svc001_marker_and_no_commit() -> 
 
     target: ast.AsyncFunctionDef | None = None
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.AsyncFunctionDef)
-            and node.name == "_expire_due_memberships"
-        ):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_expire_due_memberships":
             target = node
             break
-    assert target is not None, (
-        "expected private async def _expire_due_memberships in service.py"
-    )
+    assert target is not None, "expected private async def _expire_due_memberships in service.py"
 
     # Marker MUST be on the same source line as `async def`.
     lines = src.splitlines()

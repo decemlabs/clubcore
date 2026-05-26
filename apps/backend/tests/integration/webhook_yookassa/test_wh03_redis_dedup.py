@@ -30,9 +30,7 @@ async def test_wh03_second_identical_delivery_returns_200_no_second_refetch(
     redis_test_client: Redis,
 ) -> None:
     """Second POST same body short-circuits at Redis dedup BEFORE re-fetch."""
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
 
     # First delivery — full flow runs (re-fetch happens once).
     r1 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
@@ -73,16 +71,13 @@ async def test_wh03_dedup_key_format(
     redis_test_client: Redis,
 ) -> None:
     """Dedup key prefix matches ``WEBHOOK_DEDUP_KEY_PREFIX`` constant."""
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     r = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert r.status_code == 200, r.text
 
     keys = await redis_test_client.keys(f"{WEBHOOK_DEDUP_KEY_PREFIX}*")
     assert len(keys) >= 1, (
-        f"expected at least one dedup key with prefix "
-        f"{WEBHOOK_DEDUP_KEY_PREFIX!r}; got: {keys}"
+        f"expected at least one dedup key with prefix {WEBHOOK_DEDUP_KEY_PREFIX!r}; got: {keys}"
     )
     # The keys returned by ``Redis.keys`` are bytes by default.
     decoded = [k.decode() if isinstance(k, bytes) else k for k in keys]

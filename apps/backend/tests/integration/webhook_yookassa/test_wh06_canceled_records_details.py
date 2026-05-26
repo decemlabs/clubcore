@@ -51,14 +51,17 @@ async def test_wh06_canceled_records_cancellation_details(
 
     # Audit row carries cancellation_party + cancellation_reason.
     rows = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "online_payment_canceled",
-                AuditLog.resource_id
-                == seeded_online_payment_pending.online_payment_id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "online_payment_canceled",
+                    AuditLog.resource_id == seeded_online_payment_pending.online_payment_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     payload = rows[0].payload
     assert payload.get("cancellation_party") == "yoo_money"
@@ -88,14 +91,17 @@ async def test_wh06_canceled_missing_cancellation_details_is_none(
 
     await webhook_db_session.commit()
     rows = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "online_payment_canceled",
-                AuditLog.resource_id
-                == seeded_online_payment_pending.online_payment_id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "online_payment_canceled",
+                    AuditLog.resource_id == seeded_online_payment_pending.online_payment_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     payload = rows[0].payload
     assert payload.get("cancellation_party") is None
@@ -118,9 +124,7 @@ async def test_wh06_canceled_no_fiscal_receipt_inserted(
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
-    receipts = (
-        await webhook_db_session.execute(select(FiscalReceipt))
-    ).scalars().all()
+    receipts = (await webhook_db_session.execute(select(FiscalReceipt))).scalars().all()
     assert len(receipts) == 0, (
         f"WH-06: cancellation must NOT insert a fiscal_receipt; found {len(receipts)}"
     )

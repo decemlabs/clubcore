@@ -66,13 +66,9 @@ async def test_create_booking_sends_confirmed_dm(
     trainer = await make_active_trainer(full_name="Пётр Сидоров")
     slot = await make_future_slot(trainer=trainer)
     client = await make_linked_client(telegram_user_id=100001, first_name="Иван")
-    pkg = await make_active_pt_package(
-        client=client, trainer=trainer, sessions_remaining=5
-    )
+    pkg = await make_active_pt_package(client=client, trainer=trainer, sessions_remaining=5)
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -91,9 +87,7 @@ async def test_create_booking_sends_confirmed_dm(
     assert response.status == BookingStatus.CONFIRMED
 
     # DB persistence — booking row exists with status='confirmed'.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert booking_row is not None
     assert booking_row.status == "confirmed"
 
@@ -107,9 +101,9 @@ async def test_create_booking_sends_confirmed_dm(
     expected_text = BOOKING_CONFIRMED_DM.format(
         client_name="Иван",
         trainer_name="Пётр Сидоров",
-        slot_start_msk=slot.start_time.astimezone(
-            bookings_service.MOSCOW_TZ
-        ).strftime("%d.%m.%Y %H:%M"),
+        slot_start_msk=slot.start_time.astimezone(bookings_service.MOSCOW_TZ).strftime(
+            "%d.%m.%Y %H:%M"
+        ),
     )
     assert call.text == expected_text
 
@@ -137,9 +131,7 @@ async def test_create_booking_skips_dm_for_unlinked_client(
     client = await make_unlinked_client()
     pkg = await make_active_pt_package(client=client, trainer=trainer)
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -158,14 +150,12 @@ async def test_create_booking_skips_dm_for_unlinked_client(
 
     assert response.status == BookingStatus.CONFIRMED
     assert len(sender_state.calls) == 0
-    assert any(
-        e.get("event") == "booking_dm_skipped_unlinked" for e in cap
-    ), f"expected booking_dm_skipped_unlinked INFO-log; got {[e.get('event') for e in cap]}"
+    assert any(e.get("event") == "booking_dm_skipped_unlinked" for e in cap), (
+        f"expected booking_dm_skipped_unlinked INFO-log; got {[e.get('event') for e in cap]}"
+    )
 
     # Booking persisted regardless of the DM-skip.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert booking_row is not None
     assert booking_row.status == "confirmed"
 
@@ -188,18 +178,14 @@ async def test_create_booking_swallows_send_failure(
     back the booking row or raises through the HTTP path.
     """
     sender_module, sender_state = sender_stub
-    sender_state.queue(
-        SendResult(ok=False, blocked=True, error="403 Forbidden — bot blocked")
-    )
+    sender_state.queue(SendResult(ok=False, blocked=True, error="403 Forbidden — bot blocked"))
 
     trainer = await make_active_trainer()
     slot = await make_future_slot(trainer=trainer)
     client = await make_linked_client(telegram_user_id=100002)
     pkg = await make_active_pt_package(client=client, trainer=trainer)
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -221,9 +207,7 @@ async def test_create_booking_swallows_send_failure(
 
     # Booking row durable despite the DM-send failure.
     assert response.status == BookingStatus.CONFIRMED
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert booking_row is not None
     assert booking_row.status == "confirmed"
 
@@ -232,8 +216,7 @@ async def test_create_booking_swallows_send_failure(
     matching = [
         e
         for e in cap_snapshot
-        if e.get("event") == "booking_dm_send_failed"
-        and e.get("reason") == "bot_blocked"
+        if e.get("event") == "booking_dm_send_failed" and e.get("reason") == "bot_blocked"
     ]
     assert matching, (
         f"expected booking_dm_send_failed WARNING-log with reason='bot_blocked'; "

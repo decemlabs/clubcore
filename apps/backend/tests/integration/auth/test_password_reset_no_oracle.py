@@ -182,8 +182,7 @@ async def test_password_reset_request_no_oracle(
     # Body parity — byte-for-byte identical response body across all 4 cases.
     bodies = {r[1] for r in responses}
     assert len(bodies) == 1, (
-        "response body diverges across the 4 cases — anti-oracle leak: "
-        f"{[r[1] for r in responses]}"
+        f"response body diverges across the 4 cases — anti-oracle leak: {[r[1] for r in responses]}"
     )
 
     # Timing parity — bounded-equal within 100 ms per RESET-06.
@@ -247,9 +246,7 @@ async def test_password_reset_request_no_oracle(
 
     # Known-email branch: target_user_id is the resolved user UUID (stringified).
     assert by_email[active.email.lower()].payload["target_user_id"] == str(active.id)
-    assert by_email[deactivated.email.lower()].payload["target_user_id"] == str(
-        deactivated.id
-    )
+    assert by_email[deactivated.email.lower()].payload["target_user_id"] == str(deactivated.id)
     assert by_email[owner.email.lower()].payload["target_user_id"] == str(owner.id)
 
     # Unknown-email branch (D-41-10 / D-44-08): target_user_id IS NULL.

@@ -60,9 +60,7 @@ async def test_get_single_reception_returns_403(
 ) -> None:
     """(VIEW, MEMBERSHIP_PLANS) is in OWNER_ONLY -> reception 403 on GET /{id}."""
     created = await _create(authed_client_owner)
-    r = await authed_client_reception.get(
-        f"/api/v1/membership-plans/{created['id']}"
-    )
+    r = await authed_client_reception.get(f"/api/v1/membership-plans/{created['id']}")
     assert r.status_code == 403, r.text
     assert r.json()["code"] == "forbidden"
 

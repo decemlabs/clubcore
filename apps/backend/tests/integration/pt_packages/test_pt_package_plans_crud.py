@@ -246,9 +246,7 @@ async def test_list_pt_package_plans_include_archived(
     assert p2["id"] in default_ids
 
     # Include-archived — both visible.
-    r_all = await authed_client_owner.get(
-        "/api/v1/pt-package-plans?includeArchived=true"
-    )
+    r_all = await authed_client_owner.get("/api/v1/pt-package-plans?includeArchived=true")
     all_ids = {item["id"] for item in r_all.json()["data"]["items"]}
     assert p1["id"] in all_ids
     assert p2["id"] in all_ids

@@ -71,9 +71,7 @@ async def test_delete_plan_with_active_membership_returns_409(
     assert r.json()["code"] == "plan_in_use"
 
     # Plan row still alive — soft-delete was rolled back.
-    plan_row = await db_session.scalar(
-        select(MembershipPlan).where(MembershipPlan.id == plan.id)
-    )
+    plan_row = await db_session.scalar(select(MembershipPlan).where(MembershipPlan.id == plan.id))
     assert plan_row is not None
     assert plan_row.deleted_at is None
 
@@ -154,9 +152,7 @@ async def test_delete_plan_after_hard_delete_membership_succeeds(
     )
 
     # Hard-delete the membership row directly
-    await db_session.execute(
-        delete(Membership).where(Membership.id == membership.id)
-    )
+    await db_session.execute(delete(Membership).where(Membership.id == membership.id))
     await db_session.commit()
 
     r = await authed_client_owner.delete(

@@ -175,9 +175,7 @@ async def test_create_time_off_active_only_cancels_slots(
     slot2 = await make_slot(trainer=trainer, hours_ahead=3)
 
     data = _time_off_covering(trainer, [slot1, slot2])
-    time_off_resp = await schedule_service.create_time_off(
-        db_session, seeded_owner, data
-    )
+    time_off_resp = await schedule_service.create_time_off(db_session, seeded_owner, data)
     assert time_off_resp.trainer_id == trainer.id
 
     # Slots are cancelled.
@@ -191,28 +189,36 @@ async def test_create_time_off_active_only_cancels_slots(
     # slot_cancelled audit rows (had_booking=False).
     for slot in [slot1, slot2]:
         audits = (
-            await db_session.execute(
-                select(AuditLog).where(
-                    AuditLog.action == "slot_cancelled",
-                    AuditLog.resource_id == slot.id,
+            (
+                await db_session.execute(
+                    select(AuditLog).where(
+                        AuditLog.action == "slot_cancelled",
+                        AuditLog.resource_id == slot.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(audits) == 1
         assert audits[0].payload["had_booking"] is False
         assert audits[0].payload["cancel_reason"] == "trainer_time_off"
 
     # trainer_time_off_created audit row.
     time_off_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "trainer_time_off_created",
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "trainer_time_off_created",
+                )
             )
         )
-    ).scalars().all()
-    assert any(
-        str(a.resource_id) == str(time_off_resp.id) for a in time_off_audits
-    ), "trainer_time_off_created audit not found"
+        .scalars()
+        .all()
+    )
+    assert any(str(a.resource_id) == str(time_off_resp.id) for a in time_off_audits), (
+        "trainer_time_off_created audit not found"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,9 +258,7 @@ async def test_create_time_off_booked_without_force_returns_409_and_preserves_bo
 
     data = _time_off_covering(trainer, [slot])
     with pytest.raises(schedule_service.TimeOffBookedConflictError) as excinfo:
-        await schedule_service.create_time_off(
-            db_session, seeded_owner, data, force=False
-        )
+        await schedule_service.create_time_off(db_session, seeded_owner, data, force=False)
 
     exc = excinfo.value
     assert exc.code == "time_off_booked_conflict"
@@ -349,38 +353,50 @@ async def test_create_time_off_force_cascades_booking_and_dispatches_dm(
 
     # slot_cancelled audit with had_booking=True.
     slot_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "slot_cancelled",
-                AuditLog.resource_id == captured_slot_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "slot_cancelled",
+                    AuditLog.resource_id == captured_slot_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(slot_audits) == 1
     assert slot_audits[0].payload["had_booking"] is True
     assert slot_audits[0].payload["cancel_reason"] == "trainer_time_off"
 
     # booking_cancelled audit per cascaded booking.
     booking_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "booking_cancelled",
-                AuditLog.resource_id == captured_booking_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "booking_cancelled",
+                    AuditLog.resource_id == captured_booking_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(booking_audits) == 1
     assert booking_audits[0].payload["cancel_reason"] == "trainer_time_off"
     assert booking_audits[0].payload["booking_id"] == str(captured_booking_id)
 
     # trainer_time_off_created audit row.
     time_off_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "trainer_time_off_created",
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "trainer_time_off_created",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(str(a.resource_id) == str(time_off_resp.id) for a in time_off_audits)
 
     # DM dispatch helper was called exactly once per cascaded booking.
@@ -518,15 +534,19 @@ async def test_delete_time_off_emits_cancelled_and_does_not_resurrect_slots(
 
     # trainer_time_off_cancelled audit emitted.
     cancelled_audit = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "trainer_time_off_cancelled",
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "trainer_time_off_cancelled",
+                )
             )
         )
-    ).scalars().all()
-    assert any(
-        str(a.resource_id) == time_off_id for a in cancelled_audit
-    ), "trainer_time_off_cancelled audit not found"
+        .scalars()
+        .all()
+    )
+    assert any(str(a.resource_id) == time_off_id for a in cancelled_audit), (
+        "trainer_time_off_cancelled audit not found"
+    )
 
     # Slot still cancelled (forward-only — no resurrection).
     slot_status_after = await db_session.scalar(
@@ -623,6 +643,4 @@ async def test_http_create_time_off_without_force_returns_409_with_conflict_deta
         text("SELECT status FROM bookings WHERE id = :bid"),
         {"bid": booking_resp.id},
     )
-    assert booking_status == "confirmed", (
-        "Booking MUST remain confirmed after 409-without-force"
-    )
+    assert booking_status == "confirmed", "Booking MUST remain confirmed after 409-without-force"

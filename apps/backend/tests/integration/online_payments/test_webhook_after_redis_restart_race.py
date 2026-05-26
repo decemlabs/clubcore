@@ -106,9 +106,7 @@ async def ver02b_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -236,19 +234,11 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
 
         # ── Step 1: First delivery ───────────────────────────────────────────
         with respx.mock(assert_all_called=False) as mock_router:
-            mock_router.get(
-                url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-            ).mock(
-                return_value=__import__("httpx").Response(
-                    200, json=succeeded_refetch
-                )
+            mock_router.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+                return_value=__import__("httpx").Response(200, json=succeeded_refetch)
             )
-            async with AsyncClient(
-                transport=transport, base_url="http://testserver"
-            ) as client:
-                r1 = await client.post(
-                    "/api/v1/_internal/yookassa/webhook", json=webhook_body
-                )
+            async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+                r1 = await client.post("/api/v1/_internal/yookassa/webhook", json=webhook_body)
 
         assert r1.status_code == 200, f"1st delivery failed: {r1.text}"
 
@@ -264,19 +254,11 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
 
         # ── Step 3: Re-deliver the identical webhook (restart gap simulated) ─
         with respx.mock(assert_all_called=False) as mock_router2:
-            mock_router2.get(
-                url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-            ).mock(
-                return_value=__import__("httpx").Response(
-                    200, json=succeeded_refetch
-                )
+            mock_router2.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+                return_value=__import__("httpx").Response(200, json=succeeded_refetch)
             )
-            async with AsyncClient(
-                transport=transport, base_url="http://testserver"
-            ) as client2:
-                r2 = await client2.post(
-                    "/api/v1/_internal/yookassa/webhook", json=webhook_body
-                )
+            async with AsyncClient(transport=transport, base_url="http://testserver") as client2:
+                r2 = await client2.post("/api/v1/_internal/yookassa/webhook", json=webhook_body)
 
         # ЮKassa contract: webhook must receive 2xx.
         assert r2.status_code == 200, f"2nd delivery failed: {r2.text}"
@@ -286,9 +268,7 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
 
     # ── DB invariant: exactly ONE fiscal_receipts row after both deliveries ─
     async with session_factory() as verify:
-        fiscal_count = await verify.scalar(
-            select(func.count()).select_from(FiscalReceipt)
-        )
+        fiscal_count = await verify.scalar(select(func.count()).select_from(FiscalReceipt))
         assert fiscal_count == 1, (
             f"VER-02(b): expected exactly 1 fiscal_receipts row after 2 deliveries "
             f"(Redis dedup key was absent for the 2nd delivery), got {fiscal_count}. "
@@ -297,9 +277,7 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
 
         # The OnlinePayment must be 'succeeded' exactly once.
         op_status = await verify.scalar(
-            select(OnlinePayment.status).where(
-                OnlinePayment.yookassa_payment_id == yk_payment_id
-            )
+            select(OnlinePayment.status).where(OnlinePayment.yookassa_payment_id == yk_payment_id)
         )
         assert op_status == "succeeded", (
             f"VER-02(b): expected online_payment.status='succeeded', got {op_status!r}"
@@ -314,8 +292,7 @@ async def test_webhook_after_redis_restart_db_unique_is_sole_catcher(
             .where(AuditLog.action == "online_payment_succeeded")
         )
         assert audit_count == 1, (
-            f"VER-02(b): expected exactly 1 'online_payment_succeeded' audit row, "
-            f"got {audit_count}"
+            f"VER-02(b): expected exactly 1 'online_payment_succeeded' audit row, got {audit_count}"
         )
 
     # VER-02(b) is sequential-not-concurrent by design: the race window is the

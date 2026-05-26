@@ -78,9 +78,7 @@ os.environ.setdefault("TELEGRAM_BOT_USERNAME", "placeholder_bot")
 # EMAIL_PROVIDER_API_KEY is the locked plan vocabulary (Plan 46-12 truths);
 # under the hood Yandex Postbox / SES-V2 expects AWS_SECRET_ACCESS_KEY +
 # AWS_ACCESS_KEY_ID, so we accept either naming and normalise.
-_secret_key = os.environ.get("EMAIL_PROVIDER_API_KEY") or os.environ.get(
-    "AWS_SECRET_ACCESS_KEY"
-)
+_secret_key = os.environ.get("EMAIL_PROVIDER_API_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
 if not _secret_key:
     print(
         "FATAL: EMAIL_PROVIDER_API_KEY (or AWS_SECRET_ACCESS_KEY) must be set; no default.",
@@ -162,9 +160,7 @@ async def main() -> int:
         sandbox_mode=False,
         aws_access_key_id=_access_key,  # type: ignore[arg-type]
         aws_secret_access_key=_secret_key,  # type: ignore[arg-type]
-        endpoint_url=os.environ.get(
-            "EMAIL_ENDPOINT_URL", "https://postbox.cloud.yandex.net"
-        ),
+        endpoint_url=os.environ.get("EMAIL_ENDPOINT_URL", "https://postbox.cloud.yandex.net"),
         from_address=_from_address,
         from_domain=_from_domain,
         webhook_secret=os.environ.get(  # type: ignore[arg-type]
@@ -234,11 +230,11 @@ async def main() -> int:
     for provider_domain, addr in RECIPIENTS.items():
         assert addr is not None
         print(f"  {provider_domain.replace('.', '_')}:")
-        print(f"    to: \"{_redact(addr)}\"")
-        print(f"    provider_message_id: \"{results.get(provider_domain, '')}\"")
+        print(f'    to: "{_redact(addr)}"')
+        print(f'    provider_message_id: "{results.get(provider_domain, "")}"')
         print(
-            '    authentication_results: '
-            '"<paste verbatim from recipient mailbox \'show original\'>"'
+            "    authentication_results: "
+            "\"<paste verbatim from recipient mailbox 'show original'>\""
         )
         print('    timestamp: ""')
 

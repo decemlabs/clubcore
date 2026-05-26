@@ -276,15 +276,19 @@ async def test_audit_events_emitted_on_create_and_deactivate(
     template_id = create_r.json()["data"]["id"]
 
     created_audit = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "recurring_slot_template_created",
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "recurring_slot_template_created",
+                )
             )
         )
-    ).scalars().all()
-    assert any(
-        str(a.resource_id) == template_id for a in created_audit
-    ), "recurring_slot_template_created audit not found"
+        .scalars()
+        .all()
+    )
+    assert any(str(a.resource_id) == template_id for a in created_audit), (
+        "recurring_slot_template_created audit not found"
+    )
 
     deact_r = await authed_client_owner.post(
         f"/api/v1/recurring-templates/{template_id}/deactivate",
@@ -296,12 +300,16 @@ async def test_audit_events_emitted_on_create_and_deactivate(
     assert deact_r.status_code == 200, deact_r.text
 
     cancelled_audit = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "recurring_slot_template_cancelled",
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "recurring_slot_template_cancelled",
+                )
             )
         )
-    ).scalars().all()
-    assert any(
-        str(a.resource_id) == template_id for a in cancelled_audit
-    ), "recurring_slot_template_cancelled audit not found"
+        .scalars()
+        .all()
+    )
+    assert any(str(a.resource_id) == template_id for a in cancelled_audit), (
+        "recurring_slot_template_cancelled audit not found"
+    )

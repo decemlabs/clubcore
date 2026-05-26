@@ -94,9 +94,7 @@ async def test_list_filter_active_true(
         headers=_csrf_headers(authed_client_owner),
     )
 
-    r = await authed_client_owner.get(
-        "/api/v1/membership-plans", params={"active": "true"}
-    )
+    r = await authed_client_owner.get("/api/v1/membership-plans", params={"active": "true"})
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["total"] == 2
@@ -117,9 +115,7 @@ async def test_list_filter_active_false(
         headers=_csrf_headers(authed_client_owner),
     )
 
-    r = await authed_client_owner.get(
-        "/api/v1/membership-plans", params={"active": "false"}
-    )
+    r = await authed_client_owner.get("/api/v1/membership-plans", params={"active": "false"})
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["total"] == 1
@@ -155,9 +151,7 @@ async def test_list_sort_name_asc_case_insensitive(
     await _create(authed_client_owner, name="GAMMA")
     await _create(authed_client_owner, name="alpha")
 
-    r = await authed_client_owner.get(
-        "/api/v1/membership-plans", params={"sort": "name_asc"}
-    )
+    r = await authed_client_owner.get("/api/v1/membership-plans", params={"sort": "name_asc"})
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert len(items) == 3
@@ -197,9 +191,7 @@ async def test_list_pagination_boundary(
             name=f"Тест {i:02d}",
         )
 
-    r = await authed_client_owner.get(
-        "/api/v1/membership-plans", params={"page": 2}
-    )
+    r = await authed_client_owner.get("/api/v1/membership-plans", params={"page": 2})
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["total"] == 21
@@ -211,7 +203,5 @@ async def test_list_invalid_active_value_returns_422(
     authed_client_owner: AsyncClient,
 ) -> None:
     """`?active=maybe` fails Pydantic bool parse -> 422."""
-    r = await authed_client_owner.get(
-        "/api/v1/membership-plans", params={"active": "maybe"}
-    )
+    r = await authed_client_owner.get("/api/v1/membership-plans", params={"active": "maybe"})
     assert r.status_code == 422, r.text

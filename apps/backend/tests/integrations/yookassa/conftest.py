@@ -20,6 +20,7 @@ Fixture index (D-48-22 + Phase 49 PAY-05 / BLOCKER #1):
    11. yookassa_create_receipt_429        — POST /receipts → 429 permanent (51-03)
    12. yookassa_create_receipt_500        — POST /receipts → 500 transient (51-03)
 """
+
 from __future__ import annotations
 
 import json

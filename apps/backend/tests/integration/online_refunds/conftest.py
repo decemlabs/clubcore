@@ -103,9 +103,7 @@ def yookassa_create_refund_404() -> Generator[respx.MockRouter, None, None]:
     """POST /v3/refunds → 404 → permanent_error per _classify_http_status_error."""
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
         router.post("refunds").mock(
-            return_value=httpx.Response(
-                404, json={"type": "error", "code": "not_found"}
-            )
+            return_value=httpx.Response(404, json={"type": "error", "code": "not_found"})
         )
         yield router
 

@@ -118,9 +118,7 @@ async def make_pt_package(db_session: AsyncSession) -> Any:
 
 
 @pytest_asyncio.fixture
-async def make_slot(
-    db_session: AsyncSession, seeded_owner: User
-) -> Any:
+async def make_slot(db_session: AsyncSession, seeded_owner: User) -> Any:
     _counter = {"i": 0}
 
     async def _make(*, trainer_id, status="active") -> TrainerAvailabilitySlot:
@@ -167,25 +165,27 @@ async def test_cancel_active_slot_emits_single_slot_cancelled_no_cascade(
     assert response.status == SlotStatus.CANCELLED
 
     slot_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "slot_cancelled",
-                AuditLog.resource_id == slot.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "slot_cancelled",
+                    AuditLog.resource_id == slot.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(slot_rows) == 1
     assert slot_rows[0].payload["had_booking"] is False
 
     booking_rows = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.action == "booking_cancelled")
-        )
-    ).scalars().all()
-    # No booking_cancelled rows for the active path.
-    assert all(
-        r.payload.get("slot_id") != str(slot.id) for r in booking_rows
+        (await db_session.execute(select(AuditLog).where(AuditLog.action == "booking_cancelled")))
+        .scalars()
+        .all()
     )
+    # No booking_cancelled rows for the active path.
+    assert all(r.payload.get("slot_id") != str(slot.id) for r in booking_rows)
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +235,7 @@ async def test_cancel_booked_slot_cascades_to_booking_atomically(
 
     # Booking row was atomically flipped to 'cancelled' via the cross-module
     # raw UPDATE in the same UoW.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == booking_response.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == booking_response.id))
     assert booking_row is not None
     # Force a fresh read (the cross-module UPDATE bypasses ORM identity map).
     await db_session.refresh(booking_row, attribute_names=["status", "cancel_reason"])
@@ -246,24 +244,32 @@ async def test_cancel_booked_slot_cascades_to_booking_atomically(
 
     # BOTH audit rows present.
     slot_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "slot_cancelled",
-                AuditLog.resource_id == slot.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "slot_cancelled",
+                    AuditLog.resource_id == slot.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(slot_audits) == 1
     assert slot_audits[0].payload["had_booking"] is True
 
     booking_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "booking_cancelled",
-                AuditLog.resource_id == booking_response.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "booking_cancelled",
+                    AuditLog.resource_id == booking_response.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(booking_audits) == 1
     payload = booking_audits[0].payload
     # 4-key BookingCancelledPayload — booking_id, slot_id, cancelled_by_user_id, cancel_reason
@@ -383,9 +389,7 @@ async def test_cascade_rolls_back_atomically_on_emit_failure(
     await db_session.rollback()
 
     slot_status = await db_session.scalar(
-        text(
-            "SELECT status FROM trainer_availability_slots WHERE id = :sid"
-        ),
+        text("SELECT status FROM trainer_availability_slots WHERE id = :sid"),
         {"sid": captured_slot_id},
     )
     booking_status = await db_session.scalar(
@@ -396,8 +400,7 @@ async def test_cascade_rolls_back_atomically_on_emit_failure(
         f"slot status MUST remain 'booked' after cascade rollback; got {slot_status!r}"
     )
     assert booking_status == "confirmed", (
-        f"booking status MUST remain 'confirmed' after cascade rollback; "
-        f"got {booking_status!r}"
+        f"booking status MUST remain 'confirmed' after cascade rollback; got {booking_status!r}"
     )
 
 
@@ -432,10 +435,7 @@ async def test_cancel_booked_slot_with_missing_booking_row_raises_500(
     # Manually flip to 'booked' without creating a paired booking row —
     # this is the seeded inconsistent state.
     await db_session.execute(
-        text(
-            "UPDATE trainer_availability_slots SET status='booked' "
-            "WHERE id = :sid"
-        ),
+        text("UPDATE trainer_availability_slots SET status='booked' WHERE id = :sid"),
         {"sid": slot.id},
     )
     await db_session.commit()
@@ -468,23 +468,25 @@ async def test_cancel_booked_slot_with_missing_booking_row_raises_500(
 
     # No audit rows written for this slot.
     slot_audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "slot_cancelled",
-                AuditLog.resource_id == slot.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "slot_cancelled",
+                    AuditLog.resource_id == slot.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert slot_audits == []
 
     booking_audits_for_slot = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.action == "booking_cancelled")
-        )
-    ).scalars().all()
-    assert all(
-        a.payload.get("slot_id") != str(slot.id) for a in booking_audits_for_slot
+        (await db_session.execute(select(AuditLog).where(AuditLog.action == "booking_cancelled")))
+        .scalars()
+        .all()
     )
+    assert all(a.payload.get("slot_id") != str(slot.id) for a in booking_audits_for_slot)
 
     # structlog error event — capture_logs() only proxies loggers created
     # INSIDE its context, but the service's `_log` is created at module-
@@ -518,10 +520,7 @@ async def http_inconsistent_slot(
     trainer = await make_trainer()
     slot = await make_slot(trainer_id=trainer.id, status="active")
     await db_session.execute(
-        text(
-            "UPDATE trainer_availability_slots SET status='booked' "
-            "WHERE id = :sid"
-        ),
+        text("UPDATE trainer_availability_slots SET status='booked' WHERE id = :sid"),
         {"sid": slot.id},
     )
     await db_session.commit()

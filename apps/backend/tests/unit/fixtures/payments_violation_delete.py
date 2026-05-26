@@ -1,4 +1,5 @@
 """Synthetic negative fixture — DELETE against Payment (B-01 violation)."""
+
 from sqlalchemy import delete  # type: ignore[import-not-found]
 
 from app.modules.payments.models import Payment  # type: ignore[import-not-found]

@@ -48,8 +48,6 @@ async def poll_pending_refunds(ctx: dict[str, Any]) -> int:
     session_factory = ctx["sessionmaker"]
     yookassa_client = ctx["yookassa_client"]
     arq_pool = ctx.get("redis")
-    count = await _poll_pending_refunds(
-        session_factory, yookassa_client, arq_pool=arq_pool
-    )
+    count = await _poll_pending_refunds(session_factory, yookassa_client, arq_pool=arq_pool)
     _log.info("poll_pending_refunds_complete", count=count)
     return count

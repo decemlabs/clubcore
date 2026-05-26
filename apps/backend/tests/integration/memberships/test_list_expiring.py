@@ -253,9 +253,7 @@ async def test_list_expiring_status_conflict_returns_422(
     `{"code": ..., "message": ..., "fields": ...}` — NOT nested under
     `body["error"]`.
     """
-    resp = await authed_client_owner.get(
-        "/api/v1/memberships?expiring=true&status=expired"
-    )
+    resp = await authed_client_owner.get("/api/v1/memberships?expiring=true&status=expired")
     assert resp.status_code == 422, resp.text
     body = resp.json()
     assert body["code"] == "query_invalid"
@@ -320,8 +318,7 @@ async def test_list_non_expiring_ignores_within(
     # The far-future-end-date row is returned because `within` is ignored when expiring=false.
     assert body["total"] >= 1
     assert any(
-        item["endDate"] == (today + timedelta(days=180)).isoformat()
-        for item in body["items"]
+        item["endDate"] == (today + timedelta(days=180)).isoformat() for item in body["items"]
     )
 
 

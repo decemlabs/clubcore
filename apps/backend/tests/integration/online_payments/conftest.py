@@ -118,9 +118,7 @@ def yookassa_create_payment_404() -> Generator[respx.MockRouter, None, None]:
     """Plan 49-07 D-49-27 — POST /v3/payments → 404 (permanent_error)."""
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as router:
         router.post("payments").mock(
-            return_value=httpx.Response(
-                404, json={"type": "error", "code": "not_found"}
-            )
+            return_value=httpx.Response(404, json={"type": "error", "code": "not_found"})
         )
         yield router
 

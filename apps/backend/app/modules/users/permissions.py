@@ -6,6 +6,7 @@ of dragging the full enum import into router/service.
 
 No new Action verbs (D-41-22 — reuses CREATE/UPDATE/DELETE/LIST).
 """
+
 from __future__ import annotations
 
 from app.core.permissions import Resource

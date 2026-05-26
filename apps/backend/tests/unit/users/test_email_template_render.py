@@ -5,6 +5,7 @@ test asserts byte-exact equality so any accidental copy mutation (a missing
 NBSP, a moved comma, a stray period) is caught at unit-test time before
 deployment.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

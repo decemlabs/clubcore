@@ -122,10 +122,7 @@ async def test_list_visits_from_to_inclusive(
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert len(items) >= 1
-    assert all(
-        today_msk.isoformat() <= item["gymDate"] <= today_msk.isoformat()
-        for item in items
-    )
+    assert all(today_msk.isoformat() <= item["gymDate"] <= today_msk.isoformat() for item in items)
 
 
 async def test_list_visits_default_sort_checked_in_at_desc(
@@ -169,9 +166,7 @@ async def test_list_visits_default_sort_checked_in_at_desc(
 
     # Verify descending order by checked_in_at
     timestamps = [item["checkedInAt"] for item in items]
-    assert timestamps == sorted(timestamps, reverse=True), (
-        f"Expected DESC order, got: {timestamps}"
-    )
+    assert timestamps == sorted(timestamps, reverse=True), f"Expected DESC order, got: {timestamps}"
 
 
 async def test_get_visit_404_visit_not_found(

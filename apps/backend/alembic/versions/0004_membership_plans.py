@@ -33,9 +33,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("duration_days", sa.Integer(), nullable=False),
         sa.Column("price_kopecks", sa.BigInteger(), nullable=False),
-        sa.Column(
-            "active", sa.Boolean(), server_default=sa.text("true"), nullable=False
-        ),
+        sa.Column("active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

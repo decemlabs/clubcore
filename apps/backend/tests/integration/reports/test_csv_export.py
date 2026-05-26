@@ -396,9 +396,7 @@ async def test_audit_log_csv_action_filter_narrows(
     action_col = list(CSV_AUDIT_LOG_HEADERS).index("action")
     for row in data_rows:
         if row:  # skip empty trailing rows
-            assert row[action_col] == "login_success", (
-                f"Non-login_success row found: {row}"
-            )
+            assert row[action_col] == "login_success", f"Non-login_success row found: {row}"
 
 
 async def test_audit_log_csv_bad_action_422(
@@ -419,7 +417,7 @@ async def test_audit_log_csv_date_window_narrows(
 ) -> None:
     """audit-log.csv?from=..&to=.. narrows results by MSK date window (D-16, SC#5)."""
     # Two rows: one inside the window, one outside
-    inside_ts = datetime(2026, 5, 15, 10, 0, tzinfo=UTC)   # MSK: 2026-05-15
+    inside_ts = datetime(2026, 5, 15, 10, 0, tzinfo=UTC)  # MSK: 2026-05-15
     outside_ts = datetime(2026, 5, 20, 10, 0, tzinfo=UTC)  # MSK: 2026-05-20
 
     await make_audit_log_row(
@@ -449,9 +447,7 @@ async def test_audit_log_csv_date_window_narrows(
     # The outside row's createdAt (2026-05-20) should NOT appear
     created_at_col = list(CSV_AUDIT_LOG_HEADERS).index("createdAt")
     for row in data_rows:
-        assert "2026-05-20" not in row[created_at_col], (
-            f"Row outside date window found: {row}"
-        )
+        assert "2026-05-20" not in row[created_at_col], f"Row outside date window found: {row}"
 
 
 async def test_audit_log_csv_to_before_from_422(

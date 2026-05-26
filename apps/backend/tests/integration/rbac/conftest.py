@@ -58,6 +58,7 @@ async def app_with_fixture_routes(
     _app.include_router(_owner_routes_router)
 
     async with LifespanManager(_app):
+
         async def _override_get_db() -> AsyncIterator[AsyncSession]:
             yield db_session
 
@@ -134,9 +135,7 @@ async def owner_client(
     Uses a dedicated AsyncClient so its cookie jar does not collide with
     `reception_client` when both fixtures are pulled in by the same test.
     """
-    await _seed_user(
-        db_session, role=Role.OWNER, email=OWNER_EMAIL, password=OWNER_PASSWORD
-    )
+    await _seed_user(db_session, role=Role.OWNER, email=OWNER_EMAIL, password=OWNER_PASSWORD)
     transport = ASGITransport(app=app_with_fixture_routes)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         await _login(client, email=OWNER_EMAIL, password=OWNER_PASSWORD)

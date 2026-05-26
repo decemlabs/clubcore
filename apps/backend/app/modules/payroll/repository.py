@@ -80,55 +80,59 @@ async def fetch_trainer_session_revenue(
       - ORM model imports from other modules: FORBIDDEN (D-58-19).
     """
     row = (
-        await session.execute(
-            text(
-                # ----------------------------------------------------------------
-                # commission_revenue_kopecks — attribution: assigned-at-sale
-                # ----------------------------------------------------------------
-                # SUM net payments (sale + refunds via refund_of FK) for packages
-                # whose assigned trainer is :trainer_id AND have >= 1 non-cancelled
-                # session in the MSK-inclusive period.  Refund payments carry a
-                # negative amount_kopecks, so SUM naturally nets them out.
-                # COALESCE handles trainers with no matching packages (returns 0).
-                "SELECT "
-                "  COALESCE(( "
-                "    SELECT SUM(p.amount_kopecks) "
-                "    FROM payments p "
-                "    WHERE p.subject_kind = :subject_kind "
-                "      AND p.subject_id IN ( "
-                "        SELECT pkg.id "
-                "        FROM pt_packages pkg "
-                "        WHERE pkg.trainer_id = :trainer_id "  # attribution: assigned-at-sale
-                "          AND EXISTS ( "
-                "            SELECT 1 FROM pt_sessions s "
-                "            WHERE s.pt_package_id = pkg.id "
-                "              AND s.cancelled_at IS NULL "
-                "              AND (s.performed_at AT TIME ZONE 'Europe/Moscow')::date "
-                "                  BETWEEN :period_start AND :period_end "
-                "          ) "
-                "      ) "
-                "  ), 0) AS commission_revenue_kopecks, "
-                # ----------------------------------------------------------------
-                # conducting_session_count — attribution: conducting
-                # ----------------------------------------------------------------
-                # COUNT non-cancelled sessions conducted by :trainer_id in the period.
-                "  COALESCE(( "
-                "    SELECT COUNT(*) "
-                "    FROM pt_sessions s "
-                "    WHERE s.trainer_id = :trainer_id "  # attribution: conducting
-                "      AND s.cancelled_at IS NULL "
-                "      AND (s.performed_at AT TIME ZONE 'Europe/Moscow')::date "
-                "          BETWEEN :period_start AND :period_end "
-                "  ), 0) AS conducting_session_count"
-            ),
-            {
-                "trainer_id": str(trainer_id),
-                "subject_kind": PAYMENT_SUBJECT_KIND_PT_PACKAGE,
-                "period_start": period_start,
-                "period_end": period_end,
-            },
+        (
+            await session.execute(
+                text(
+                    # ----------------------------------------------------------------
+                    # commission_revenue_kopecks — attribution: assigned-at-sale
+                    # ----------------------------------------------------------------
+                    # SUM net payments (sale + refunds via refund_of FK) for packages
+                    # whose assigned trainer is :trainer_id AND have >= 1 non-cancelled
+                    # session in the MSK-inclusive period.  Refund payments carry a
+                    # negative amount_kopecks, so SUM naturally nets them out.
+                    # COALESCE handles trainers with no matching packages (returns 0).
+                    "SELECT "
+                    "  COALESCE(( "
+                    "    SELECT SUM(p.amount_kopecks) "
+                    "    FROM payments p "
+                    "    WHERE p.subject_kind = :subject_kind "
+                    "      AND p.subject_id IN ( "
+                    "        SELECT pkg.id "
+                    "        FROM pt_packages pkg "
+                    "        WHERE pkg.trainer_id = :trainer_id "  # attribution: assigned-at-sale
+                    "          AND EXISTS ( "
+                    "            SELECT 1 FROM pt_sessions s "
+                    "            WHERE s.pt_package_id = pkg.id "
+                    "              AND s.cancelled_at IS NULL "
+                    "              AND (s.performed_at AT TIME ZONE 'Europe/Moscow')::date "
+                    "                  BETWEEN :period_start AND :period_end "
+                    "          ) "
+                    "      ) "
+                    "  ), 0) AS commission_revenue_kopecks, "
+                    # ----------------------------------------------------------------
+                    # conducting_session_count — attribution: conducting
+                    # ----------------------------------------------------------------
+                    # COUNT non-cancelled sessions conducted by :trainer_id in the period.
+                    "  COALESCE(( "
+                    "    SELECT COUNT(*) "
+                    "    FROM pt_sessions s "
+                    "    WHERE s.trainer_id = :trainer_id "  # attribution: conducting
+                    "      AND s.cancelled_at IS NULL "
+                    "      AND (s.performed_at AT TIME ZONE 'Europe/Moscow')::date "
+                    "          BETWEEN :period_start AND :period_end "
+                    "  ), 0) AS conducting_session_count"
+                ),
+                {
+                    "trainer_id": str(trainer_id),
+                    "subject_kind": PAYMENT_SUBJECT_KIND_PT_PACKAGE,
+                    "period_start": period_start,
+                    "period_end": period_end,
+                },
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return int(row["commission_revenue_kopecks"]), int(row["conducting_session_count"])
 
 

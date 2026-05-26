@@ -183,8 +183,7 @@ async def test_action_and_resource_type_and_narrows(
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert all(
-        item["action"] == "login_success" and item["resourceType"] == "session"
-        for item in items
+        item["action"] == "login_success" and item["resourceType"] == "session" for item in items
     )
 
 
@@ -218,8 +217,7 @@ async def test_cyrillic_actor_email_snapshot_filter(
     items = r.json()["data"]["items"]
     # All returned items must contain 'иван' in actorEmailSnapshot
     assert all(
-        item["actorEmailSnapshot"] is not None
-        and "иван" in item["actorEmailSnapshot"].lower()
+        item["actorEmailSnapshot"] is not None and "иван" in item["actorEmailSnapshot"].lower()
         for item in items
     ), f"Unexpected items: {items}"
 
@@ -296,9 +294,7 @@ async def test_ordering_created_at_desc(
     created_ats = [item["createdAt"] for item in items[:3]]
     # Verify DESC order: each item's createdAt >= next
     for i in range(len(created_ats) - 1):
-        assert created_ats[i] >= created_ats[i + 1], (
-            f"Expected DESC order but got {created_ats}"
-        )
+        assert created_ats[i] >= created_ats[i + 1], f"Expected DESC order but got {created_ats}"
 
 
 async def test_pagination_stability_under_concurrent_insert(

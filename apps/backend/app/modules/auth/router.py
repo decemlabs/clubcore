@@ -448,9 +448,7 @@ async def password_reset_request_endpoint(
     # without explicit client) — it is a sentinel string, never bound to a port.
     xff = request.headers.get("x-forwarded-for")
     client_ip = (
-        xff.split(",")[0].strip()
-        if xff
-        else (request.client.host if request.client else "0.0.0.0")  # noqa: S104
+        xff.split(",")[0].strip() if xff else (request.client.host if request.client else "0.0.0.0")  # noqa: S104
     )
     await password_reset_service.request_password_reset(
         session, redis, email=body.email, client_ip=client_ip

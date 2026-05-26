@@ -32,9 +32,7 @@ from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 
 
 def _csrf_headers(client: AsyncClient, *, idempotency_key: str | None = None) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -80,9 +78,7 @@ async def test_create_pt_package_sale_happy_path_reception(
     assert data["endDate"] is not None
 
     # DB verification.
-    pkg = await db_session.scalar(
-        select(PtPackage).where(PtPackage.id == new_id)
-    )
+    pkg = await db_session.scalar(select(PtPackage).where(PtPackage.id == new_id))
     assert pkg is not None
     assert pkg.status == "active"
 
@@ -181,15 +177,11 @@ async def test_create_pt_package_sale_amount_mismatch_422(
 
     # No pt_packages row, no payments row, no audit row.
     rows = (
-        await db_session.scalars(
-            select(PtPackage).where(PtPackage.client_id == client.id)
-        )
+        await db_session.scalars(select(PtPackage).where(PtPackage.client_id == client.id))
     ).all()
     assert len(rows) == 0
     payment_rows = (
-        await db_session.scalars(
-            select(Payment).where(Payment.subject_kind == "pt_package")
-        )
+        await db_session.scalars(select(Payment).where(Payment.subject_kind == "pt_package"))
     ).all()
     assert len(payment_rows) == 0
 
@@ -204,6 +196,7 @@ async def test_create_pt_package_sale_archived_plan_404(
     plan = await make_pt_package_plan(name="archived-plan")
     # Soft-delete the plan directly via DB.
     from datetime import UTC, datetime
+
     plan.deleted_at = datetime.now(tz=UTC)
     db_session.add(plan)
     await db_session.commit()
@@ -277,9 +270,7 @@ async def test_create_pt_package_sale_idempotency_key_replay(
 
     # Only 1 pt_packages row + 1 payments row.
     pkgs = (
-        await db_session.scalars(
-            select(PtPackage).where(PtPackage.client_id == client.id)
-        )
+        await db_session.scalars(select(PtPackage).where(PtPackage.client_id == client.id))
     ).all()
     assert len(pkgs) == 1
 

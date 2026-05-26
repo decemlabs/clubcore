@@ -76,22 +76,28 @@ async def test_pre_inserted_notification_blocks_send(
 
     # Still exactly 1 row (pre-inserted, no second one written).
     notifs = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notifs) == 1
     assert notifs[0].telegram_chat_id == 999  # the pre-inserted row, not a fresh one.
 
     # No audit row — pre-insert was a manual seed, not a service-driven send.
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audits == []

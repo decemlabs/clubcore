@@ -28,9 +28,7 @@ async def test_compute_freeze_days_used_zero_rows_returns_zero(
     """No freeze periods exist → returns 0 (COALESCE(SUM(...), 0) safe path)."""
     plan = await make_plan(name="Freeze zero")
     client = await make_client(phone="+79991239001")
-    membership = await make_membership(
-        client_id=client.id, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client.id, plan=plan, status="active")
 
     days = await repository.compute_freeze_days_used(
         db_session, membership.id, today_msk=date(2026, 5, 8)
@@ -50,9 +48,7 @@ async def test_compute_freeze_days_used_one_closed_period_ceil_rounds_up(
     actor = await make_user(role="reception", email="freeze-actor@example.com")
     plan = await make_plan(name="Freeze ceil")
     client = await make_client(phone="+79991239002")
-    membership = await make_membership(
-        client_id=client.id, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client.id, plan=plan, status="active")
 
     started = datetime.now(tz=UTC) - timedelta(days=2)
     ended = started + timedelta(days=1, hours=12)  # 1.5 days

@@ -27,12 +27,8 @@ from app.core.permissions import Action, Resource
 from app.main import create_app
 
 # New Phase 51 POST /refund routes that MUST be gated.
-_NEW_REFUND_ROUTE_MEMBERSHIP = (
-    "/api/v1/online-payments/memberships/{membership_id}/refund"
-)
-_NEW_REFUND_ROUTE_PT_PACKAGE = (
-    "/api/v1/online-payments/pt-packages/{pt_package_id}/refund"
-)
+_NEW_REFUND_ROUTE_MEMBERSHIP = "/api/v1/online-payments/memberships/{membership_id}/refund"
+_NEW_REFUND_ROUTE_PT_PACKAGE = "/api/v1/online-payments/pt-packages/{pt_package_id}/refund"
 
 # Gate qualifier prefixes — mirrored from test_route_introspection.py.
 _GATE_PREFIXES: tuple[str, ...] = (
@@ -208,12 +204,8 @@ def test_phase51_refund_routes_rbac_pairs_registered() -> None:
     the route's require_permission call with a ValueError at startup.
     """
     assert Action.REFUND is not None, "Action.REFUND not defined in permissions.py"
-    assert Resource.MEMBERSHIPS is not None, (
-        "Resource.MEMBERSHIPS not defined in permissions.py"
-    )
-    assert Resource.PT_PACKAGES is not None, (
-        "Resource.PT_PACKAGES not defined in permissions.py"
-    )
+    assert Resource.MEMBERSHIPS is not None, "Resource.MEMBERSHIPS not defined in permissions.py"
+    assert Resource.PT_PACKAGES is not None, "Resource.PT_PACKAGES not defined in permissions.py"
 
     # Verify require_permission accepts these pairs without raising.
     from app.core.dependencies import require_permission

@@ -31,9 +31,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-_WORKERS_INIT_PATH = (
-    Path(__file__).resolve().parents[2] / "app" / "workers" / "__init__.py"
-)
+_WORKERS_INIT_PATH = Path(__file__).resolve().parents[2] / "app" / "workers" / "__init__.py"
 
 
 def _eager_imported_symbols() -> set[str]:
@@ -64,9 +62,7 @@ def test_password_reset_tokens_eager_imported() -> None:
     import app.workers  # noqa: F401 — trigger eager-import side effect
     from app.core.database import Base
 
-    assert "password_reset_tokens" in Base.metadata.tables, sorted(
-        Base.metadata.tables.keys()
-    )
+    assert "password_reset_tokens" in Base.metadata.tables, sorted(Base.metadata.tables.keys())
 
 
 def test_payment_receipts_eager_imported() -> None:
@@ -85,9 +81,7 @@ def test_payment_receipts_eager_imported() -> None:
     import app.workers  # noqa: F401 — trigger eager-import side effect
     from app.core.database import Base
 
-    assert "payment_receipts" in Base.metadata.tables, sorted(
-        Base.metadata.tables.keys()
-    )
+    assert "payment_receipts" in Base.metadata.tables, sorted(Base.metadata.tables.keys())
 
 
 def test_payment_receipts_import_statement_present() -> None:
@@ -145,9 +139,7 @@ def test_email_send_log_eager_imported() -> None:
     import app.workers  # noqa: F401 — trigger eager-import side effect
     from app.core.database import Base
 
-    assert "email_send_log" in Base.metadata.tables, sorted(
-        Base.metadata.tables.keys()
-    )
+    assert "email_send_log" in Base.metadata.tables, sorted(Base.metadata.tables.keys())
 
 
 def test_v15_critical_tables_still_visible() -> None:

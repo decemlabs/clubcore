@@ -66,15 +66,9 @@ class FiscalReceipt(Base, UUIDPkMixin):
     yookassa_receipt_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     customer_email: Mapped[str] = mapped_column(Text, nullable=False)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    sent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    succeeded_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    failed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     audit_correlation_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
     )

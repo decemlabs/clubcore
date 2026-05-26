@@ -6,6 +6,7 @@ NOTE: this file is allowed to fail ruff/mypy in isolation. CI excludes
 tests/unit/fixtures/* from mypy via [[tool.mypy.overrides]] in
 apps/backend/pyproject.toml (Phase 30 INFRA-22 pattern).
 """
+
 # mypy: ignore-errors
 # ruff: noqa
 from typing import Any

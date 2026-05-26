@@ -51,6 +51,7 @@ def _today_msk() -> date:
 
     return datetime.now(_MSK).date()
 
+
 OWNER_EMAIL = "visits-owner@example.com"
 OWNER_PASSWORD = "hunter22hunter22"  # noqa: S105 -- test password literal (>=12 chars)
 RECEPTION_EMAIL = "visits-reception@example.com"
@@ -234,7 +235,7 @@ async def make_visit_setup(
             plan_id=plan.id,
             duration_days_snapshot=plan.duration_days,
             price_kopecks_snapshot=plan.price_kopecks,
-        freeze_days_limit_snapshot=plan.freeze_days_limit,
+            freeze_days_limit_snapshot=plan.freeze_days_limit,
             plan_name_snapshot=plan.name,
             start_date=_today_msk() - timedelta(days=1),
             end_date=end_date or (_today_msk() + timedelta(days=29)),

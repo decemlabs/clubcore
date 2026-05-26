@@ -37,9 +37,7 @@ from app.modules.trainers.models import Trainer
 
 
 def _csrf_headers(client: AsyncClient, *, idempotency_key: str | None = None) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -167,9 +165,7 @@ async def test_refund_blocked_by_outstanding_confirmed_booking_409(
     """PKG-03 main path: confirmed booking → refund 409 outstanding_bookings_exist."""
     plan = await make_pt_package_plan(name="refund-blocked")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     trainer = await _seed_trainer(db_session)
     slot_id = await _seed_slot(db_session, trainer_id=trainer.id, owner_id=seeded_owner.id)
     await _seed_confirmed_booking(
@@ -199,14 +195,10 @@ async def test_refund_blocked_with_two_confirmed_bookings_409(
     """2 confirmed bookings → still single 409 (count > 0 is the gate)."""
     plan = await make_pt_package_plan(name="refund-blocked-2")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     trainer = await _seed_trainer(db_session)
     for _ in range(2):
-        slot_id = await _seed_slot(
-            db_session, trainer_id=trainer.id, owner_id=seeded_owner.id
-        )
+        slot_id = await _seed_slot(db_session, trainer_id=trainer.id, owner_id=seeded_owner.id)
         await _seed_confirmed_booking(
             db_session,
             client_id=client.id,
@@ -234,9 +226,7 @@ async def test_refund_allowed_after_booking_cancelled_200(
     """Cancelled booking → guard count = 0 → refund 200."""
     plan = await make_pt_package_plan(name="refund-after-cancel")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     trainer = await _seed_trainer(db_session)
     slot_id = await _seed_slot(db_session, trainer_id=trainer.id, owner_id=seeded_owner.id)
     booking_id = await _seed_confirmed_booking(
@@ -266,9 +256,7 @@ async def test_refund_allowed_with_no_bookings_at_all_200(
     """No bookings ever exist → refund 200 happy path (regression for Task 2)."""
     plan = await make_pt_package_plan(name="refund-clean")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
 
     r = await authed_client_owner.post(
         f"/api/v1/pt-packages/{pt_package_id}/refund",
@@ -289,16 +277,12 @@ async def test_refund_ignores_non_confirmed_booking_statuses_200(
     """completed / no_show / cancelled bookings do NOT trigger the guard."""
     plan = await make_pt_package_plan(name="refund-ignores-nonconfirmed")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     trainer = await _seed_trainer(db_session)
     # Seed one each: completed, no_show, cancelled. All should be invisible to
     # the `WHERE status='confirmed'` filter in the production guard.
     for status_value in ("completed", "no_show", "cancelled"):
-        slot_id = await _seed_slot(
-            db_session, trainer_id=trainer.id, owner_id=seeded_owner.id
-        )
+        slot_id = await _seed_slot(db_session, trainer_id=trainer.id, owner_id=seeded_owner.id)
         booking_id = await _seed_confirmed_booking(
             db_session,
             client_id=client.id,
@@ -344,9 +328,7 @@ async def test_refund_guard_fires_before_fsm_invalid_transition(
     """
     plan = await make_pt_package_plan(name="refund-ordering")
     client = await make_client()
-    pt_package_id = await _sell_pt_package(
-        authed_client_owner, client_id=client.id, plan=plan
-    )
+    pt_package_id = await _sell_pt_package(authed_client_owner, client_id=client.id, plan=plan)
     trainer = await _seed_trainer(db_session)
     slot_id = await _seed_slot(db_session, trainer_id=trainer.id, owner_id=seeded_owner.id)
     await _seed_confirmed_booking(

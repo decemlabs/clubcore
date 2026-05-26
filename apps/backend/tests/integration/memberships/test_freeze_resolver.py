@@ -84,9 +84,7 @@ async def test_frozen_membership_excluded_from_resolver(
     plan = await make_plan(name="Resolver Frozen")
     client = await _create_client(authed_client_reception, phone="+79991234081")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
 
     # Freeze the active membership via HTTP
     r = await authed_client_reception.post(
@@ -120,9 +118,7 @@ async def test_frozen_membership_visits_endpoint_no_active_membership(
     plan = await make_plan(name="Resolver Visits")
     client = await _create_client(authed_client_reception, phone="+79991234082")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
 
     # Freeze
     r = await authed_client_reception.post(
@@ -275,9 +271,7 @@ async def test_telegram_checkin_frozen_oracle_safe_dm(
     await checkin_handler(update, context, ctx)
 
     # Oracle-safe DM: same string as a client without ANY membership.
-    expected_dm = (
-        "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
-    )
+    expected_dm = "У вас нет активного абонемента. Обратитесь к администратору."  # noqa: RUF001
     assert stub_telegram_sender.text_calls == [(chat_id, expected_dm)], (
         "MEM-FRZ-06: frozen client MUST receive the same generic 'no active "
         "membership' DM as a stranger — Phase 20 D-5 oracle-safe invariant."

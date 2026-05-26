@@ -44,9 +44,7 @@ def _csrf_headers(
     *,
     idempotency_key: str | None = None,
 ) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -62,9 +60,7 @@ def _record_body(
     body: dict[str, Any] = {
         "ptPackageId": str(pt_package_id),
         "trainerId": str(trainer_id),
-        "performedAt": (
-            performed_at or datetime.now(UTC) - timedelta(minutes=10)
-        ).isoformat(),
+        "performedAt": (performed_at or datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
     }
     if notes is not None:
         body["notes"] = notes
@@ -410,9 +406,7 @@ async def test_record_idempotency_replay_returns_cached_201(
 
     # Exactly 1 pt_sessions row.
     rows = (
-        await db_session.scalars(
-            select(PtSession).where(PtSession.pt_package_id == pkg.id)
-        )
+        await db_session.scalars(select(PtSession).where(PtSession.pt_package_id == pkg.id))
     ).all()
     assert len(rows) == 1
 

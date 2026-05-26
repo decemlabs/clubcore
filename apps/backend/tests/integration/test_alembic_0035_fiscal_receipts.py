@@ -236,8 +236,8 @@ async def test_0035_unique_payment_id_kind_enforced(
 
     # Verify two rows present.
     count = await db_session.scalar(
-        text(
-            "SELECT COUNT(*) FROM fiscal_receipts WHERE payment_id = :pid"
-        ).bindparams(pid=payment_id)
+        text("SELECT COUNT(*) FROM fiscal_receipts WHERE payment_id = :pid").bindparams(
+            pid=payment_id
+        )
     )
     assert count == 2

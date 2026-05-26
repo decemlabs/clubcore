@@ -82,9 +82,7 @@ async def test_owner_put_creates_new_row_does_not_update(
 
     # Assert 2 rows exist in DB for this trainer.
     count_result = await db_session.execute(
-        sa.text(
-            "SELECT COUNT(*) FROM trainer_comp_configs WHERE trainer_id = :tid"
-        ),
+        sa.text("SELECT COUNT(*) FROM trainer_comp_configs WHERE trainer_id = :tid"),
         {"tid": str(trainer.id)},
     )
     assert count_result.scalar() == 2, "Expected 2 config rows (INSERT-only versioned)"
@@ -171,9 +169,7 @@ async def test_get_resolves_latest_effective_from(
     )
     assert r.status_code == 200, r.text
     data = r.json()["data"]
-    assert data["id"] == str(latest.id), (
-        f"Expected latest row (bps=300, {latest.id}), got {data}"
-    )
+    assert data["id"] == str(latest.id), f"Expected latest row (bps=300, {latest.id}), got {data}"
     assert data["commissionPctBps"] == 300
 
 
@@ -241,19 +237,21 @@ async def test_audit_emitted_on_put(
 
     # Verify audit_log row exists with the expected event + payload.
     rows = (
-        await db_session.execute(
-            sa.text(
-                "SELECT payload FROM audit_log "
-                "WHERE action = 'trainer_comp_config_set' "
-                "  AND resource_type = 'trainer_comp_config' "
-                "ORDER BY created_at DESC"
-            ),
+        (
+            await db_session.execute(
+                sa.text(
+                    "SELECT payload FROM audit_log "
+                    "WHERE action = 'trainer_comp_config_set' "
+                    "  AND resource_type = 'trainer_comp_config' "
+                    "ORDER BY created_at DESC"
+                ),
+            )
         )
-    ).mappings().all()
-
-    assert len(rows) >= 1, (
-        "Expected at least 1 audit_log row with event='trainer_comp_config_set'"
+        .mappings()
+        .all()
     )
+
+    assert len(rows) >= 1, "Expected at least 1 audit_log row with event='trainer_comp_config_set'"
     payload = dict(rows[0]["payload"])
     assert str(payload["trainer_id"]) == str(trainer.id)
     assert payload["commission_pct_bps"] == 500

@@ -136,9 +136,7 @@ async def test_emailclient_message_rejected_is_blocked() -> None:
 @pytest.mark.asyncio
 async def test_emailclient_account_sending_paused_is_blocked() -> None:
     """ClientError Code=AccountSendingPausedException → blocked."""
-    fake = _FakeSesClient(
-        send_side_effect=_client_error("AccountSendingPausedException", 400)
-    )
+    fake = _FakeSesClient(send_side_effect=_client_error("AccountSendingPausedException", 400))
     c = _make_email_client_with_fake_send(fake)
     r = await c.send_email(_envelope())
     assert r.classification == "blocked"

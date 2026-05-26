@@ -173,9 +173,7 @@ async def _resolve_refund_id_via_db_join(
 
     # Find the OnlineRefund whose original_payment_id matches the original payment.
     online_refund = await session.scalar(
-        select(OnlineRefund).where(
-            OnlineRefund.original_payment_id == refund_payment.refund_of
-        )
+        select(OnlineRefund).where(OnlineRefund.original_payment_id == refund_payment.refund_of)
     )
     if online_refund is None:
         return None
@@ -315,9 +313,7 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
     vat_code = VatCode(int(settings.default_vat_code))
 
     # 54-ФЗ-compliant item description (<= 128 chars per build_receipt_item guard).
-    description = (
-        "Возврат услуги клуба" if kind == KIND_REFUND else "Услуга фитнес-клуба"
-    )
+    description = "Возврат услуги клуба" if kind == KIND_REFUND else "Услуга фитнес-клуба"
 
     items = [
         build_receipt_item(
@@ -356,9 +352,7 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
                 f"{result.http_status or ''}:"
                 f"{result.error_code or ''}"
             )
-            return await _terminal_failure(
-                session_factory, receipt_uuid, reason, arq_pool=redis
-            )
+            return await _terminal_failure(session_factory, receipt_uuid, reason, arq_pool=redis)
 
         defer = _backoff_with_jitter(job_try)
         _log.warning(
@@ -371,9 +365,7 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
 
     if result.classification in ("validation_error", "permanent_error"):
         failure_reason = (
-            f"{result.classification}:"
-            f"{result.http_status or ''}:"
-            f"{result.error_code or ''}"
+            f"{result.classification}:{result.http_status or ''}:{result.error_code or ''}"
         )
         return await _terminal_failure(
             session_factory, receipt_uuid, failure_reason, arq_pool=redis

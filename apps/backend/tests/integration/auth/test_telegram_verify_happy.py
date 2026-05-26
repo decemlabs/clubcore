@@ -122,9 +122,7 @@ async def test_telegram_verify_happy_path(
 
     # 8. AUDIT-02: otp_consumed audit_log row exists with the upserted user.id.
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "otp_consumed")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "otp_consumed"))
     ).all()
     assert len(rows) >= 1
     row = rows[-1]

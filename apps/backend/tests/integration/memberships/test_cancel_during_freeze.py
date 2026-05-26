@@ -68,9 +68,7 @@ async def test_cancel_during_freeze_emits_unfrozen_then_cancelled_no_end_date_ch
     plan = await make_plan(name="Cancel During Freeze", freeze_days_limit=14)
     client = await _create_client(authed_client_reception, phone="+79991234091")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
     pre_freeze_end_date = membership.end_date
     membership_id = membership.id
 
@@ -94,8 +92,7 @@ async def test_cancel_during_freeze_emits_unfrozen_then_cancelled_no_end_date_ch
 
     # 3. end_date UNCHANGED (cancellation supersedes freeze; no extension)
     assert body["endDate"] == pre_freeze_end_date.isoformat(), (
-        f"Expected end_date {pre_freeze_end_date.isoformat()} (unchanged), "
-        f"got {body['endDate']}"
+        f"Expected end_date {pre_freeze_end_date.isoformat()} (unchanged), got {body['endDate']}"
     )
 
     # 4. Audit log: 3 rows (membership_frozen + membership_unfrozen + membership_cancelled).
@@ -106,9 +103,7 @@ async def test_cancel_during_freeze_emits_unfrozen_then_cancelled_no_end_date_ch
     # of actions and payload-level invariants (days_added=0 on the unfrozen
     # row identifies the cancel-during-freeze branch unambiguously).
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.resource_id == membership_id)
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.resource_id == membership_id))
     ).all()
     actions = sorted(r.action for r in rows)
     assert actions == sorted(
@@ -126,12 +121,10 @@ async def test_cancel_during_freeze_emits_unfrozen_then_cancelled_no_end_date_ch
     unfrozen_row = by_action["membership_unfrozen"]
     cancelled_row = by_action["membership_cancelled"]
     assert frozen_row.created_at <= unfrozen_row.created_at, (
-        "membership_frozen (freeze tx) must precede membership_unfrozen "
-        "(cancel tx)"
+        "membership_frozen (freeze tx) must precede membership_unfrozen (cancel tx)"
     )
     assert frozen_row.created_at <= cancelled_row.created_at, (
-        "membership_frozen (freeze tx) must precede membership_cancelled "
-        "(cancel tx)"
+        "membership_frozen (freeze tx) must precede membership_cancelled (cancel tx)"
     )
 
     # days_added=0 sentinel on the unfrozen row (cancel-from-frozen marker;
@@ -168,9 +161,7 @@ async def test_reception_cannot_cancel_frozen_membership_owner_only(
     """(CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY → reception 403 even on frozen source."""
     plan = await make_plan(name="Reception Cancel Frozen")
     client = await _create_client(authed_client_owner, phone="+79991234092")
-    membership = await make_membership(
-        client_id=UUID(client["id"]), plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=UUID(client["id"]), plan=plan, status="active")
 
     # Freeze first (reception is allowed)
     r = await authed_client_reception.post(

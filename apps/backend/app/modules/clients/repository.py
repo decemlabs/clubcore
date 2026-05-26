@@ -54,9 +54,7 @@ async def get_alive(session: AsyncSession, client_id: UUID) -> Client | None:
     return result
 
 
-async def list_alive(
-    session: AsyncSession, query: ClientListQuery
-) -> PaginatedData[Client]:
+async def list_alive(session: AsyncSession, query: ClientListQuery) -> PaginatedData[Client]:
     """Paginated list of alive clients with filters + sort applied (CLIENTS-03/04).
 
     Returns a `PaginatedData` instance constructed via `model_construct` to skip
@@ -79,11 +77,7 @@ async def list_alive(
         escaped_q = escape_like_pattern(query.q.lower())
         like_pattern = f"%{escaped_q}%"
         full_name_expr = func.lower(
-            Client.last_name
-            + " "
-            + Client.first_name
-            + " "
-            + func.coalesce(Client.middle_name, "")
+            Client.last_name + " " + Client.first_name + " " + func.coalesce(Client.middle_name, "")
         )
         predicates.append(
             or_(
@@ -182,11 +176,7 @@ async def update_client(
 
     for key, value in updates.items():
         # emergency_contact arrives as Pydantic instance; serialise to dict for JSONB.
-        if (
-            key == "emergency_contact"
-            and value is not None
-            and isinstance(value, EmergencyContact)
-        ):
+        if key == "emergency_contact" and value is not None and isinstance(value, EmergencyContact):
             value = value.model_dump()
         # otherwise it's already a dict (model_dump above produced it)
         previous = getattr(client, key)

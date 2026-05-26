@@ -157,8 +157,7 @@ async def test_concurrent_refund_loses_at_db_layer(
 
     statuses = sorted(r.status_code for r in responses)
     assert statuses == [200] + [409] * (n_concurrent - 1), (
-        f"REF-TEST-01 failed: expected [200] + [409]*{n_concurrent - 1}, "
-        f"got {statuses}"
+        f"REF-TEST-01 failed: expected [200] + [409]*{n_concurrent - 1}, got {statuses}"
     )
 
     bodies_409 = [r.json() for r in responses if r.status_code == 409]
@@ -177,9 +176,7 @@ async def test_concurrent_refund_loses_at_db_layer(
             Payment.subject_kind == SUBJECT_KIND_REFUND,
         )
     )
-    assert refund_count == 1, (
-        f"Expected exactly 1 refund row, got {refund_count}"
-    )
+    assert refund_count == 1, f"Expected exactly 1 refund row, got {refund_count}"
 
     # Audit invariant: exactly 1 membership_refunded row + 1 refund_issued row.
     # Losing tasks rollback BEFORE both audit emits (issue_refund rolls back on
@@ -196,9 +193,7 @@ async def test_concurrent_refund_loses_at_db_layer(
         f"Expected exactly 1 membership_refunded audit row, got {refunded_audit_count}"
     )
     refund_issued_count = await db_session_real_commit.scalar(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.action == "refund_issued")
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "refund_issued")
     )
     assert refund_issued_count == 1, (
         f"Expected exactly 1 refund_issued audit row, got {refund_issued_count}"

@@ -102,9 +102,7 @@ async def test_e2e_sc2_membership_qr(
     assert data["confirmationUrl"] is None
 
     row = await db_session.scalar(
-        select(OnlinePayment).where(
-            OnlinePayment.id == UUID(data["onlinePaymentId"])
-        )
+        select(OnlinePayment).where(OnlinePayment.id == UUID(data["onlinePaymentId"]))
     )
     assert row is not None
     assert row.confirmation_type == "qr"
@@ -137,9 +135,7 @@ async def test_e2e_sc1_pt_package_redirect(
     data = response.json()["data"]
 
     row = await db_session.scalar(
-        select(OnlinePayment).where(
-            OnlinePayment.id == UUID(data["onlinePaymentId"])
-        )
+        select(OnlinePayment).where(OnlinePayment.id == UUID(data["onlinePaymentId"]))
     )
     assert row is not None
     assert row.pt_package_plan_id == plan.id
@@ -335,8 +331,7 @@ async def test_e2e_sc4_return_screen_concurrent_identical_body(
 
     async def one() -> Any:
         return await async_client.get(
-            "/api/v1/online-payments/return"
-            "?payment_id=29ab1a59-000f-5000-8000-1399cb40ba0e"
+            "/api/v1/online-payments/return?payment_id=29ab1a59-000f-5000-8000-1399cb40ba0e"
         )
 
     responses = await asyncio.gather(*[one() for _ in range(10)])
@@ -345,5 +340,3 @@ async def test_e2e_sc4_return_screen_concurrent_identical_body(
     for r in responses:
         assert r.status_code == 200
         assert r.headers.get("cache-control", "").startswith("no-store")
-
-

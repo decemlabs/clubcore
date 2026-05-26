@@ -36,15 +36,13 @@ async def _run() -> int:
     password = os.environ.get("SEED_OWNER_PASSWORD")
     if not email or not password:
         print(
-            "SEED_OWNER_EMAIL and SEED_OWNER_PASSWORD must be set "
-            "(see .env.example).",
+            "SEED_OWNER_EMAIL and SEED_OWNER_PASSWORD must be set (see .env.example).",
             file=sys.stderr,
         )
         return 1
     if len(password) < 12:
         print(
-            "SEED_OWNER_PASSWORD must be at least 12 characters "
-            "(AUTH-EP-05 / NIST 800-63B 2024).",
+            "SEED_OWNER_PASSWORD must be at least 12 characters (AUTH-EP-05 / NIST 800-63B 2024).",
             file=sys.stderr,
         )
         return 1
@@ -79,18 +77,13 @@ async def _run() -> int:
             telegram_username = os.environ.get("TELEGRAM_OWNER_USERNAME")
             if telegram_username:
                 tg_lower = telegram_username.lstrip("@").lower()
-                user = await session.scalar(
-                    select(User).where(User.email == email_lower)
-                )
+                user = await session.scalar(select(User).where(User.email == email_lower))
                 if user is not None and user.telegram_username != tg_lower:
                     user.telegram_username = tg_lower
                     await session.commit()
                     print(f"Bound telegram_username={tg_lower} to {email_lower}.")
                 elif user is not None:
-                    print(
-                        f"telegram_username for {email_lower} already set to "
-                        f"{tg_lower} (no-op)."
-                    )
+                    print(f"telegram_username for {email_lower} already set to {tg_lower} (no-op).")
     finally:
         await engine.dispose()
     return 0

@@ -296,9 +296,7 @@ async def _build_membership_response(  # noqa: SVC001 caller-owns-txn — read-o
     if membership.status == "frozen":
         period = await repository.get_open_freeze_period(session, membership.id)
         if period is not None:
-            current_period = FreezePeriodResponse.model_validate(
-                period, from_attributes=True
-            )
+            current_period = FreezePeriodResponse.model_validate(period, from_attributes=True)
 
     # Build dict from ORM attributes (explicit list — avoids `**membership.__dict__`
     # pattern that leaks SA state attributes), then merge the 3 service-computed
@@ -482,9 +480,7 @@ async def soft_delete_plan(
     # Status is irrelevant — cancelled and expired rows keep their FK pointer
     # for audit-trail integrity (D-06).
     in_use_count = await session.scalar(
-        select(func.count())
-        .select_from(Membership)
-        .where(Membership.plan_id == plan.id)
+        select(func.count()).select_from(Membership).where(Membership.plan_id == plan.id)
     )
     if in_use_count and in_use_count > 0:
         raise PlanInUseError("plan_in_use")
@@ -592,9 +588,7 @@ async def _fanout_payment_receipt_email(  # noqa: SVC001 caller-owns-txn
         )
     ).first()
     client_email: str | None = row.email if row is not None else None
-    actor_full_name: str = (
-        row.full_name if row is not None and row.full_name is not None else ""
-    )
+    actor_full_name: str = row.full_name if row is not None and row.full_name is not None else ""
 
     # 2. Skip fanout when client.email IS NULL (D-45-10).
     if client_email is None:
@@ -1243,9 +1237,7 @@ async def renew_membership(
         )
 
     # 3: load plan (renewal-specific — bypasses soft-delete to discriminate)
-    plan, is_archived = await repository.get_plan_for_renewal(
-        session, source.plan_id
-    )
+    plan, is_archived = await repository.get_plan_for_renewal(session, source.plan_id)
     if plan is None:
         raise PlanNotFoundError("plan_not_found")
     if is_archived:
@@ -1286,9 +1278,7 @@ async def renew_membership(
     )
 
     # 8: refresh server-side timestamps for response
-    await session.refresh(
-        new_membership, attribute_names=["created_at", "updated_at"]
-    )
+    await session.refresh(new_membership, attribute_names=["created_at", "updated_at"])
 
     # 9: commit (SVC001 gate enforces)
     await session.commit()
@@ -1341,9 +1331,7 @@ async def list_memberships(
                         func.ceil(
                             func.extract(
                                 "epoch",
-                                func.coalesce(
-                                    MembershipFreezePeriod.ended_at, func.now()
-                                )
+                                func.coalesce(MembershipFreezePeriod.ended_at, func.now())
                                 - MembershipFreezePeriod.started_at,
                             )
                             / 86400
@@ -1362,13 +1350,17 @@ async def list_memberships(
 
     # Bulk-fetch open freeze periods for the page in a single IN-list query.
     open_period_rows = (
-        await session.execute(
-            select(MembershipFreezePeriod).where(
-                MembershipFreezePeriod.membership_id.in_(page_ids),
-                MembershipFreezePeriod.ended_at.is_(None),
+        (
+            await session.execute(
+                select(MembershipFreezePeriod).where(
+                    MembershipFreezePeriod.membership_id.in_(page_ids),
+                    MembershipFreezePeriod.ended_at.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     open_period_map: dict[UUID, MembershipFreezePeriod] = {
         p.membership_id: p for p in open_period_rows
     }
@@ -1381,9 +1373,7 @@ async def list_memberships(
         if m.status == "frozen":
             p = open_period_map.get(m.id)
             if p is not None:
-                current_period = FreezePeriodResponse.model_validate(
-                    p, from_attributes=True
-                )
+                current_period = FreezePeriodResponse.model_validate(p, from_attributes=True)
         # Same explicit-dict projection pattern as `_build_membership_response`
         # — avoids `model_validate(ORM, from_attributes=True)` which fails
         # because the 3 freeze-derived fields have no defaults on the schema
@@ -1677,9 +1667,7 @@ async def _send_expiring_notifications(  # noqa: SVC001 caller-owns-txn
 
     # 1) Read session — SELECT candidates, close before send loop.
     async with session_factory() as read_session:
-        candidates = await repository.find_expiring_candidates(
-            read_session, today=today
-        )
+        candidates = await repository.find_expiring_candidates(read_session, today=today)
 
     sent = 0
     for cand in candidates:
@@ -1866,14 +1854,14 @@ async def activate_membership_from_webhook(  # noqa: SVC001 caller-owns-txn — 
         """
     )
     op_row = (
-        await session.execute(op_stmt, {"online_payment_id": online_payment_id})
-    ).mappings().one_or_none()
+        (await session.execute(op_stmt, {"online_payment_id": online_payment_id}))
+        .mappings()
+        .one_or_none()
+    )
 
     # 2: preconditions.
     if op_row is None:
-        raise MembershipNotFoundError(
-            f"online_payment_not_found: {online_payment_id}"
-        )
+        raise MembershipNotFoundError(f"online_payment_not_found: {online_payment_id}")
     if op_row["membership_plan_id"] is None:
         raise ConflictError(
             "online_payment_not_membership_sale",

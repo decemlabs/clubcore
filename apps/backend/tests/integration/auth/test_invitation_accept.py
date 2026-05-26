@@ -238,8 +238,7 @@ async def _owner_create_invite(
     user_id = UUID(r.json()["data"]["id"])
 
     assert len(sandbox_email_client.sent_emails) == 1, (
-        f"expected 1 captured invitation; got "
-        f"{len(sandbox_email_client.sent_emails)}"
+        f"expected 1 captured invitation; got {len(sandbox_email_client.sent_emails)}"
     )
     envelope = sandbox_email_client.sent_emails[0]
     raw_token = _extract_raw_token(envelope["invitation_url"])
@@ -333,13 +332,17 @@ async def test_accept_happy_path_atomic_consume_password_set_email_verified_cook
 
     # Audit — exactly one user_invitation_accepted row pinned to this user.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_invitation_accepted",
-                AuditLog.resource_id == user_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_invitation_accepted",
+                    AuditLog.resource_id == user_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1, (
         f"expected 1 user_invitation_accepted audit row; got {len(audit_rows)}"
     )
@@ -397,16 +400,18 @@ async def test_accept_replay_returns_410_with_identical_body(
 
     # Exactly ONE audit row — replay did NOT emit a second.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_invitation_accepted",
-                AuditLog.resource_id == user_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_invitation_accepted",
+                    AuditLog.resource_id == user_id,
+                )
             )
         )
-    ).scalars().all()
-    assert len(audit_rows) == 1, (
-        f"replay must NOT emit a 2nd audit row; got {len(audit_rows)}"
+        .scalars()
+        .all()
     )
+    assert len(audit_rows) == 1, f"replay must NOT emit a 2nd audit row; got {len(audit_rows)}"
 
 
 # ---------------------------------------------------------------------------
@@ -625,16 +630,18 @@ async def test_accept_race_with_soft_delete_returns_409(
     # here is that the audit_log table contains no user_invitation_accepted
     # row for THIS user_id.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_invitation_accepted",
-                AuditLog.resource_id == user_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_invitation_accepted",
+                    AuditLog.resource_id == user_id,
+                )
             )
         )
-    ).scalars().all()
-    assert audit_rows == [], (
-        f"409 path must NOT emit user_invitation_accepted; got {audit_rows!r}"
+        .scalars()
+        .all()
     )
+    assert audit_rows == [], f"409 path must NOT emit user_invitation_accepted; got {audit_rows!r}"
 
 
 # ---------------------------------------------------------------------------

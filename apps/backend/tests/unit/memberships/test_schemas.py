@@ -299,9 +299,7 @@ def test_create_accepts_paid_at_iso() -> None:
 
 def test_create_paid_at_omitted_is_none() -> None:
     """D-03: omitting paidAt yields None."""
-    m = MembershipCreateRequest.model_validate(
-        {"clientId": str(uuid4()), "planId": str(uuid4())}
-    )
+    m = MembershipCreateRequest.model_validate({"clientId": str(uuid4()), "planId": str(uuid4())})
     assert m.paid_at is None
 
 
@@ -420,9 +418,7 @@ def test_create_camel_case_aliasing_client_id() -> None:
     """Wire alias: clientId -> client_id (validated population)."""
     cid = str(uuid4())
     pid = str(uuid4())
-    m = MembershipCreateRequest.model_validate(
-        {"clientId": cid, "planId": pid}
-    )
+    m = MembershipCreateRequest.model_validate({"clientId": cid, "planId": pid})
     assert str(m.client_id) == cid
     assert str(m.plan_id) == pid
 

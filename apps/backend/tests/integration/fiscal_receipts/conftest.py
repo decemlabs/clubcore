@@ -103,9 +103,7 @@ async def fiscal_engine() -> AsyncIterator[Any]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 

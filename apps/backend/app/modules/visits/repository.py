@@ -35,9 +35,7 @@ async def get(session: AsyncSession, visit_id: UUID) -> Visit | None:
     return result
 
 
-async def list_by_query(
-    session: AsyncSession, query: VisitListQuery
-) -> PaginatedData[Visit]:
+async def list_by_query(session: AsyncSession, query: VisitListQuery) -> PaginatedData[Visit]:
     """List Visit rows filtered by client_id / from / to (D-09).
 
     Default sort `checked_in_at DESC` (D-09 — no sort enum). Filters use

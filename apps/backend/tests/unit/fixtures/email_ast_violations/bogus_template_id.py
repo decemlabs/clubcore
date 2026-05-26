@@ -8,6 +8,7 @@ This file is never imported at runtime — it is parsed by ast.parse() from
 the walker test only. If this file's violation goes undetected, the walker
 is broken.
 """
+
 from typing import Any
 
 

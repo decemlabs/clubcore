@@ -85,9 +85,7 @@ async def _get_sessions(client: AsyncClient, **params: object) -> dict:  # type:
     return r.json()
 
 
-async def _revoke(
-    client: AsyncClient, family_id: str, *, csrf: str | None = None
-) -> dict | None:
+async def _revoke(client: AsyncClient, family_id: str, *, csrf: str | None = None) -> dict | None:
     csrf_val = csrf if csrf is not None else client.cookies.get("sportzal_csrf", "")
     r = await client.post(
         f"/api/v1/auth/sessions/{family_id}/revoke",
@@ -152,9 +150,7 @@ async def test_get_sessions_sort_is_current_first_then_last_used_desc(
     assert len(items) >= 2, f"Expected >= 2 session families, got {len(items)}"
 
     # The first item (current session) must have isCurrent=True.
-    assert items[0]["isCurrent"] is True, (
-        f"Expected items[0].isCurrent to be True, got: {items[0]}"
-    )
+    assert items[0]["isCurrent"] is True, f"Expected items[0].isCurrent to be True, got: {items[0]}"
     # Subsequent items must not be current.
     for item in items[1:]:
         assert item["isCurrent"] is False, (
@@ -324,8 +320,7 @@ async def test_revoke_idempotent_on_second_call(
         )
     ).all()
     assert len(rows_after) == count_before, (
-        f"Audit row count increased on idempotent second revoke: "
-        f"{count_before} → {len(rows_after)}"
+        f"Audit row count increased on idempotent second revoke: {count_before} → {len(rows_after)}"
     )
     _ = first_cookies, first_csrf  # first session is still alive (different device)
 
@@ -414,8 +409,7 @@ async def test_cross_revoke_does_not_clear_cookie_matrix(
     ]
     # The current session's cookies should NOT appear in deletion headers.
     current_cookies_cleared = any(
-        h.startswith("sz_access=") or h.startswith("sz_refresh=")
-        for h in deletion_headers
+        h.startswith("sz_access=") or h.startswith("sz_refresh=") for h in deletion_headers
     )
     assert not current_cookies_cleared, (
         f"Cookies were cleared on cross-revoke (should only happen on self-revoke). "

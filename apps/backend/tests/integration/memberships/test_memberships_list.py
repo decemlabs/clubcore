@@ -350,5 +350,3 @@ async def test_list_response_includes_all_snapshot_fields(
         "updatedAt",
     ):
         assert key in item, f"missing {key} in response item"
-
-

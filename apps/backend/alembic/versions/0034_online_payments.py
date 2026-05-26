@@ -141,26 +141,18 @@ def upgrade() -> None:
         "online_payments",
         ["client_id", "membership_plan_id", _msk_date],
         unique=True,
-        postgresql_where=text(
-            "status != 'canceled' AND membership_plan_id IS NOT NULL"
-        ),
+        postgresql_where=text("status != 'canceled' AND membership_plan_id IS NOT NULL"),
     )
     op.create_index(
         "uq_online_payments_pt_package_double_tap",
         "online_payments",
         ["client_id", "pt_package_plan_id", _msk_date],
         unique=True,
-        postgresql_where=text(
-            "status != 'canceled' AND pt_package_plan_id IS NOT NULL"
-        ),
+        postgresql_where=text("status != 'canceled' AND pt_package_plan_id IS NOT NULL"),
     )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "uq_online_payments_pt_package_double_tap", table_name="online_payments"
-    )
-    op.drop_index(
-        "uq_online_payments_membership_double_tap", table_name="online_payments"
-    )
+    op.drop_index("uq_online_payments_pt_package_double_tap", table_name="online_payments")
+    op.drop_index("uq_online_payments_membership_double_tap", table_name="online_payments")
     op.drop_table("online_payments")

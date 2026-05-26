@@ -85,9 +85,7 @@ async def test_freeze_limit_exceeded_returns_409(
     plan = await make_plan(name="Limit Plan At", freeze_days_limit=14)
     client = await _create_client(authed_client_reception, phone="+79991234061")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
 
     # Pre-seed a closed period of EXACTLY 14 days
     await _seed_closed_period(
@@ -120,9 +118,7 @@ async def test_freeze_limit_exceeded_above_limit_returns_409(
     plan = await make_plan(name="Limit Plan Over", freeze_days_limit=14)
     client = await _create_client(authed_client_reception, phone="+79991234062")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
 
     await _seed_closed_period(
         db_session,
@@ -154,9 +150,7 @@ async def test_freeze_limit_below_limit_succeeds(
     plan = await make_plan(name="Limit Plan Under", freeze_days_limit=14)
     client = await _create_client(authed_client_reception, phone="+79991234063")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
 
     await _seed_closed_period(
         db_session,

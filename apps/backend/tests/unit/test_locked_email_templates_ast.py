@@ -107,14 +107,10 @@ def _collect_violations(py_path: Path) -> list[str]:
             continue
         literal_value = _resolve_str_literal(arg_node)
         if literal_value is None:
-            violations.append(
-                f"{prefix} is not a literal str (got {ast.dump(arg_node)})"
-            )
+            violations.append(f"{prefix} is not a literal str (got {ast.dump(arg_node)})")
             continue
         if literal_value not in LOCKED_EMAIL_TEMPLATES:
-            violations.append(
-                f"{prefix} value {literal_value!r} is not in LOCKED_EMAIL_TEMPLATES"
-            )
+            violations.append(f"{prefix} value {literal_value!r} is not in LOCKED_EMAIL_TEMPLATES")
     return violations
 
 

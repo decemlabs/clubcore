@@ -276,10 +276,6 @@ async def test_concurrent_create_booking_partial_unique_at_db_layer(
     # session.rollback() and the orchestrator raised SlotAlreadyBookedError,
     # never reaching audit.emit).
     created_count = await db_session_real_commit.scalar(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.action == "booking_created")
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "booking_created")
     )
-    assert created_count == 1, (
-        f"Expected exactly 1 booking_created audit row, got {created_count}"
-    )
+    assert created_count == 1, f"Expected exactly 1 booking_created audit row, got {created_count}"

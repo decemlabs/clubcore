@@ -47,9 +47,7 @@ router = APIRouter()
 )
 async def list_trainers(
     query: Annotated[TrainerListQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.TRAINERS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.TRAINERS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PaginatedData[TrainerResponse]]:
     """List alive trainers (TRN-04). VIEW permission required — reception allowed (D-31-09)."""
@@ -64,9 +62,7 @@ async def list_trainers(
 )
 async def get_trainer(
     trainer_id: UUID,
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.TRAINERS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.TRAINERS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[TrainerResponse]:
     """Read one alive trainer (TRN-02). 404 for missing or soft-deleted ids."""
@@ -82,9 +78,7 @@ async def get_trainer(
 )
 async def create_trainer(
     payload: TrainerCreateRequest,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.CREATE, Resource.TRAINERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.CREATE, Resource.TRAINERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[TrainerResponse]:
@@ -101,9 +95,7 @@ async def create_trainer(
 async def update_trainer(
     trainer_id: UUID,
     payload: TrainerUpdateRequest,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.EDIT, Resource.TRAINERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.EDIT, Resource.TRAINERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[TrainerResponse]:
@@ -119,9 +111,7 @@ async def update_trainer(
 )
 async def delete_trainer(
     trainer_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.DELETE, Resource.TRAINERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.DELETE, Resource.TRAINERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:

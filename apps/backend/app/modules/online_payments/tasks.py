@@ -60,9 +60,7 @@ _log: Final = structlog.get_logger("modules.online_payments.tasks")
 _MAX_TRIES: Final[int] = 3
 
 # Notification kinds whose recipient is the owner (operator alert — NOT a client DM).
-_OWNER_ALERT_KINDS: Final[frozenset[str]] = frozenset(
-    {"payment_canceled", "fiscal_failed"}
-)
+_OWNER_ALERT_KINDS: Final[frozenset[str]] = frozenset({"payment_canceled", "fiscal_failed"})
 
 
 # ---------------------------------------------------------------------------
@@ -218,9 +216,7 @@ async def _resolve_payment_amount(session: AsyncSession, payment_uuid: UUID) -> 
     return abs(kopecks) if kopecks is not None else 0
 
 
-async def _resolve_yookassa_payment_id(
-    session: AsyncSession, online_payment_uuid: UUID
-) -> str:
+async def _resolve_yookassa_payment_id(session: AsyncSession, online_payment_uuid: UUID) -> str:
     """Return the ЮKassa payment_id string from an online_payments row.
 
     Used for the payment_canceled owner-alert DM which needs yookassa_payment_id.
@@ -300,9 +296,7 @@ async def _dispatch_email(
 # ---------------------------------------------------------------------------
 
 
-async def dispatch_payment_notification(
-    ctx: dict[str, Any], *, payment_id: str, kind: str
-) -> str:
+async def dispatch_payment_notification(ctx: dict[str, Any], *, payment_id: str, kind: str) -> str:
     """ARQ task body. Returns ``'sent'`` | ``'partial'`` | ``'skipped'``.
 
     ctx keys required (wired in WorkerSettings.on_startup):
@@ -445,9 +439,7 @@ async def dispatch_payment_notification(
                 elif kind == "payment_canceled":
                     # Fetch yookassa_payment_id for the owner-alert DM.
                     async with session_factory() as session:
-                        yookassa_pid = await _resolve_yookassa_payment_id(
-                            session, payment_uuid
-                        )
+                        yookassa_pid = await _resolve_yookassa_payment_id(session, payment_uuid)
                     text = payment_notifications.render_online_payment_canceled_dm(
                         payment_id=payment_id,
                         yookassa_payment_id=yookassa_pid,
@@ -471,9 +463,7 @@ async def dispatch_payment_notification(
                     }
                 elif kind == "payment_canceled":
                     async with session_factory() as session:
-                        yookassa_pid = await _resolve_yookassa_payment_id(
-                            session, payment_uuid
-                        )
+                        yookassa_pid = await _resolve_yookassa_payment_id(session, payment_uuid)
                     kwargs = {
                         "payment_id": payment_id,
                         "yookassa_payment_id": yookassa_pid,

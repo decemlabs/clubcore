@@ -4,6 +4,7 @@ Calls get_email_dispatcher() with template_id as a *variable* rather than
 a literal. Walker must reject because the gate is literal-only (mirrors
 audit.emit literal-only gate from Phase 15).
 """
+
 from typing import Any
 
 

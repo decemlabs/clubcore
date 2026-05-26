@@ -108,9 +108,7 @@ async def set_trainer_comp_config(
 )
 async def get_trainer_comp_config(
     trainer_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.COMPENSATION))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.COMPENSATION))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[TrainerCompConfigResponse]:
     """Resolve and return the active compensation config for the given trainer (PAY-01 / D-58-11).
@@ -134,9 +132,7 @@ async def get_trainer_comp_config(
     ),
 )
 async def preview_payroll(
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.LIST, Resource.PAYROLL))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.LIST, Resource.PAYROLL))],
     session: Annotated[AsyncSession, Depends(get_db)],
     trainer_id: Annotated[UUID, Query(alias="trainerId")],
     period_start: Annotated[date, Query(alias="periodStart")],
@@ -169,16 +165,13 @@ async def preview_payroll(
     "/accruals",
     response_model=ResponseEnvelope[PaginatedData[PayrollAccrualResponse]],
     summary=(
-        "List a trainer's payroll accruals paginated, accrued_at DESC"
-        " (owner-only PAY-05 / D-58-14)"
+        "List a trainer's payroll accruals paginated, accrued_at DESC (owner-only PAY-05 / D-58-14)"
     ),
 )
 async def list_payroll_accruals(
     trainer_id: Annotated[UUID, Query(alias="trainerId")],
     query: Annotated[PageQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.LIST, Resource.PAYROLL))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.LIST, Resource.PAYROLL))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PaginatedData[PayrollAccrualResponse]]:
     """List all payroll accrual rows for *trainer_id*, ordered accrued_at DESC (PAY-05 / D-58-14).
@@ -201,9 +194,7 @@ async def list_payroll_accruals(
     rows, total = await service.list_accruals(
         session, trainer_id, page=query.page, page_size=query.page_size
     )
-    items = [
-        PayrollAccrualResponse.model_validate(row, from_attributes=True) for row in rows
-    ]
+    items = [PayrollAccrualResponse.model_validate(row, from_attributes=True) for row in rows]
     return envelope(
         PaginatedData(
             items=items,
@@ -225,9 +216,7 @@ async def list_payroll_accruals(
 )
 async def create_accrual(
     body: PayrollAccrualCreate,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.CREATE, Resource.PAYROLL))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.CREATE, Resource.PAYROLL))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PayrollAccrualResponse]:
     """INSERT an append-only accrual row with snapshotted rate/config (PAY-03 / D-58-03).
@@ -258,15 +247,12 @@ async def create_accrual(
     status_code=200,
     response_model=ResponseEnvelope[PayrollAccrualResponse],
     summary=(
-        "Mark payroll accrual as paid (pending→paid single transition;"
-        " owner-only PAY-04 / D-58-08)"
+        "Mark payroll accrual as paid (pending→paid single transition; owner-only PAY-04 / D-58-08)"
     ),
 )
 async def mark_accrual_paid(
     accrual_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.EDIT, Resource.PAYROLL))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.EDIT, Resource.PAYROLL))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PayrollAccrualResponse]:
     """Transition accrual status from 'pending' → 'paid' (PAY-04 / D-58-08).

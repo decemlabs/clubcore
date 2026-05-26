@@ -174,15 +174,11 @@ async def test_list_filter_by_has_telegram(
     )
     await _create(authed_client_owner, lastName="Without", phone="+79990000051")
 
-    r = await authed_client_owner.get(
-        "/api/v1/clients", params={"hasTelegram": "true"}
-    )
+    r = await authed_client_owner.get("/api/v1/clients", params={"hasTelegram": "true"})
     assert r.json()["data"]["total"] == 1
     assert r.json()["data"]["items"][0]["telegramUserId"] == 123456
 
-    r2 = await authed_client_owner.get(
-        "/api/v1/clients", params={"hasTelegram": "false"}
-    )
+    r2 = await authed_client_owner.get("/api/v1/clients", params={"hasTelegram": "false"})
     assert r2.json()["data"]["total"] == 1
     assert r2.json()["data"]["items"][0]["telegramUserId"] is None
 
@@ -221,9 +217,7 @@ async def test_list_sort_last_name_asc(
     await _create(authed_client_owner, lastName="Петров", phone="+79990000070")
     await _create(authed_client_owner, lastName="Иванов", phone="+79990000071")
 
-    r = await authed_client_owner.get(
-        "/api/v1/clients", params={"sort": "last_name_asc"}
-    )
+    r = await authed_client_owner.get("/api/v1/clients", params={"sort": "last_name_asc"})
     items = r.json()["data"]["items"]
     assert items[0]["lastName"] == "Иванов"
     assert items[1]["lastName"] == "Петров"
@@ -240,9 +234,7 @@ async def test_list_pagination(
             phone=f"+7999000{i:04d}",
         )
 
-    r = await authed_client_owner.get(
-        "/api/v1/clients", params={"page": 2, "pageSize": 10}
-    )
+    r = await authed_client_owner.get("/api/v1/clients", params={"page": 2, "pageSize": 10})
     assert r.status_code == 200
     body = r.json()["data"]
     assert len(body["items"]) == 10

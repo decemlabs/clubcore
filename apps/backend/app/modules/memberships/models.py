@@ -61,9 +61,7 @@ class MembershipPlan(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
     price_kopecks: Mapped[int] = mapped_column(BigInteger, nullable=False)
     freeze_days_limit: Mapped[int] = mapped_column(Integer, nullable=False)
-    active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
-    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     __table_args__ = (
         CheckConstraint(

@@ -80,8 +80,7 @@ async def _run() -> int:
     sandbox_chat = os.environ.get("TELEGRAM_SANDBOX_CHAT_ID")
     if not sandbox_chat:
         print(
-            "ERROR: TELEGRAM_SANDBOX_CHAT_ID must be set; refusing to fire cron "
-            "(TM-29-03).",
+            "ERROR: TELEGRAM_SANDBOX_CHAT_ID must be set; refusing to fire cron (TM-29-03).",
             file=sys.stderr,
         )
         return 1

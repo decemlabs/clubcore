@@ -56,9 +56,9 @@ def _render_owner_cancel(*, client_name: str, trainer_name: str, slot) -> str:  
     return BOOKING_CANCELLED_BY_OWNER_DM.format(
         client_name=client_name,
         trainer_name=trainer_name,
-        slot_start_msk=slot.start_time.astimezone(
-            bookings_service.MOSCOW_TZ
-        ).strftime("%d.%m.%Y %H:%M"),
+        slot_start_msk=slot.start_time.astimezone(bookings_service.MOSCOW_TZ).strftime(
+            "%d.%m.%Y %H:%M"
+        ),
     )
 
 
@@ -67,9 +67,9 @@ def _render_client_cancel(*, client_name: str, trainer_name: str, slot) -> str: 
     return BOOKING_CANCELLED_BY_CLIENT_DM.format(
         client_name=client_name,
         trainer_name=trainer_name,
-        slot_start_msk=slot.start_time.astimezone(
-            bookings_service.MOSCOW_TZ
-        ).strftime("%d.%m.%Y %H:%M"),
+        slot_start_msk=slot.start_time.astimezone(bookings_service.MOSCOW_TZ).strftime(
+            "%d.%m.%Y %H:%M"
+        ),
     )
 
 
@@ -102,9 +102,7 @@ async def test_cancel_booking_by_owner_sends_owner_dm(
         slot=slot, client=client, pt_package=pkg, actor_user_id=seeded_owner.id
     )
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -164,9 +162,7 @@ async def test_cancel_booking_by_reception_sends_client_dm(
         slot=slot, client=client, pt_package=pkg, actor_user_id=seeded_owner.id
     )
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -219,9 +215,7 @@ async def test_cancel_booking_skips_dm_for_unlinked_client(
         slot=slot, client=client, pt_package=pkg, actor_user_id=seeded_owner.id
     )
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -238,14 +232,12 @@ async def test_cancel_booking_skips_dm_for_unlinked_client(
 
     assert response.status == BookingStatus.CANCELLED
     assert len(sender_state.calls) == 0
-    assert any(
-        e.get("event") == "booking_dm_skipped_unlinked" for e in cap_snapshot
-    ), f"expected booking_dm_skipped_unlinked; got {[e.get('event') for e in cap_snapshot]}"
+    assert any(e.get("event") == "booking_dm_skipped_unlinked" for e in cap_snapshot), (
+        f"expected booking_dm_skipped_unlinked; got {[e.get('event') for e in cap_snapshot]}"
+    )
 
     # Booking row durable; HTTP path unaffected.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == booking.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == booking.id))
     assert booking_row is not None
     assert booking_row.status == "cancelled"
 
@@ -269,9 +261,7 @@ async def test_cancel_booking_swallows_send_failure(
     rolls back the booking row or raises through the HTTP path.
     """
     sender_module, sender_state = sender_stub
-    sender_state.queue(
-        SendResult(ok=False, blocked=True, error="403 Forbidden — bot blocked")
-    )
+    sender_state.queue(SendResult(ok=False, blocked=True, error="403 Forbidden — bot blocked"))
 
     trainer = await make_active_trainer()
     slot = await make_future_slot(trainer=trainer)
@@ -281,9 +271,7 @@ async def test_cancel_booking_swallows_send_failure(
         slot=slot, client=client, pt_package=pkg, actor_user_id=seeded_owner.id
     )
 
-    monkeypatch.setattr(
-        "app.modules.bookings.service.telegram_sender", sender_module
-    )
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
     monkeypatch.setattr(
         "app.modules.bookings.service.build_bot",
         lambda *, token: fake_bot,
@@ -302,9 +290,7 @@ async def test_cancel_booking_swallows_send_failure(
     assert len(sender_state.calls) == 1
 
     # Booking row durable despite the DM-send failure.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == booking.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == booking.id))
     assert booking_row is not None
     assert booking_row.status == "cancelled"
 
@@ -312,8 +298,7 @@ async def test_cancel_booking_swallows_send_failure(
     matching = [
         e
         for e in cap_snapshot
-        if e.get("event") == "booking_dm_send_failed"
-        and e.get("reason") == "bot_blocked"
+        if e.get("event") == "booking_dm_send_failed" and e.get("reason") == "bot_blocked"
     ]
     assert matching, (
         f"expected booking_dm_send_failed WARNING-log with reason='bot_blocked'; "
@@ -391,9 +376,7 @@ async def test_slot_cancel_cascade_sends_owner_dm_per_booking(
     # (otherwise a plain `select(...).where(...)` returns the cached
     # pre-cascade ORM instance with status='confirmed').
     booking_row = await db_session.scalar(
-        select(Booking)
-        .where(Booking.id == booking.id)
-        .execution_options(populate_existing=True)
+        select(Booking).where(Booking.id == booking.id).execution_options(populate_existing=True)
     )
     assert booking_row is not None
     assert booking_row.status == "cancelled"

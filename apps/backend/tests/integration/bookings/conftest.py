@@ -281,11 +281,7 @@ async def make_pt_package(
             end = today + timedelta(days=plan.validity_days - 1)
         else:
             end = end_date
-        sessions = (
-            sessions_remaining
-            if sessions_remaining is not None
-            else plan.session_count
-        )
+        sessions = sessions_remaining if sessions_remaining is not None else plan.session_count
         pt_package = PtPackage(
             client_id=client_id,
             plan_id=plan.id,

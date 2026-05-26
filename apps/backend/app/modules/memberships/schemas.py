@@ -242,8 +242,7 @@ class MembershipRefundRequest(BackendSchemaBase):
         min_length=1,
         max_length=200,
         description=(
-            "Refund reason (REF-06). Backend rejects extra fields including "
-            "amountKopecks (REF-05)."
+            "Refund reason (REF-06). Backend rejects extra fields including amountKopecks (REF-05)."
         ),
     )
 

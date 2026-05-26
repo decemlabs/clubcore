@@ -98,12 +98,8 @@ class OnlinePayment(Base, UUIDPkMixin):
         nullable=False,
         server_default=func.now(),
     )
-    succeeded_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    canceled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey(
@@ -113,9 +109,7 @@ class OnlinePayment(Base, UUIDPkMixin):
         ),
         nullable=True,
     )
-    audit_correlation_id: Mapped[UUIDType] = mapped_column(
-        PgUUID(as_uuid=True), nullable=False
-    )
+    audit_correlation_id: Mapped[UUIDType] = mapped_column(PgUUID(as_uuid=True), nullable=False)
 
     __table_args__ = (
         CheckConstraint(
@@ -152,9 +146,7 @@ class OnlinePayment(Base, UUIDPkMixin):
             "membership_plan_id",
             text("((initiated_at AT TIME ZONE 'Europe/Moscow')::date)"),
             unique=True,
-            postgresql_where=text(
-                "status != 'canceled' AND membership_plan_id IS NOT NULL"
-            ),
+            postgresql_where=text("status != 'canceled' AND membership_plan_id IS NOT NULL"),
         ),
         Index(
             "uq_online_payments_pt_package_double_tap",
@@ -162,9 +154,7 @@ class OnlinePayment(Base, UUIDPkMixin):
             "pt_package_plan_id",
             text("((initiated_at AT TIME ZONE 'Europe/Moscow')::date)"),
             unique=True,
-            postgresql_where=text(
-                "status != 'canceled' AND pt_package_plan_id IS NOT NULL"
-            ),
+            postgresql_where=text("status != 'canceled' AND pt_package_plan_id IS NOT NULL"),
         ),
     )
 

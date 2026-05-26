@@ -151,9 +151,7 @@ async def bind_and_issue(
     if otp_row.expires_at < datetime.now(tz=UTC):
         raise OtpExpired("deep_link_expired")
 
-    user = await session.scalar(
-        select(User).where(User.telegram_username == username_lower)
-    )
+    user = await session.scalar(select(User).where(User.telegram_username == username_lower))
     if user is None:
         raise TelegramUnknownAccount("no_user_for_username")
     if user.telegram_chat_id is not None and user.telegram_chat_id != telegram_chat_id:

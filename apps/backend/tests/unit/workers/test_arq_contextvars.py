@@ -48,9 +48,7 @@ async def test_on_job_start_binds_job_id_and_job_name() -> None:
 @pytest.mark.asyncio
 async def test_on_job_end_clears_contextvars() -> None:
     """on_job_end empties contextvars (prevents leak across runs)."""
-    await WorkerSettings.on_job_start(
-        {"job_id": "abc-123", "function_name": "expire_memberships"}
-    )
+    await WorkerSettings.on_job_start({"job_id": "abc-123", "function_name": "expire_memberships"})
     assert structlog.contextvars.get_contextvars(), "precondition: bound"
 
     await WorkerSettings.on_job_end({})
@@ -67,22 +65,16 @@ async def test_bind_end_bind_end_no_leakage_between_runs() -> None:
     because the bind shape is clear+bind, not merge).
     """
     # Run 1
-    await WorkerSettings.on_job_start(
-        {"job_id": "run-1", "function_name": "expire_memberships"}
-    )
+    await WorkerSettings.on_job_start({"job_id": "run-1", "function_name": "expire_memberships"})
     assert structlog.contextvars.get_contextvars().get("job_id") == "run-1"
     await WorkerSettings.on_job_end({})
     assert structlog.contextvars.get_contextvars() == {}
 
     # Run 2 — different job_id; must not see run-1's id at any point.
-    await WorkerSettings.on_job_start(
-        {"job_id": "run-2", "function_name": "expire_memberships"}
-    )
+    await WorkerSettings.on_job_start({"job_id": "run-2", "function_name": "expire_memberships"})
     bound = structlog.contextvars.get_contextvars()
     assert bound.get("job_id") == "run-2"
-    assert "run-1" not in bound.values(), (
-        f"leakage from run-1 into run-2 contextvars: {bound}"
-    )
+    assert "run-1" not in bound.values(), f"leakage from run-1 into run-2 contextvars: {bound}"
     await WorkerSettings.on_job_end({})
     assert structlog.contextvars.get_contextvars() == {}
 
@@ -99,12 +91,8 @@ async def test_on_job_start_clears_stale_bindings_before_binding() -> None:
     structlog.contextvars.bind_contextvars(stale_key="must_be_cleared")
     assert structlog.contextvars.get_contextvars().get("stale_key") == "must_be_cleared"
 
-    await WorkerSettings.on_job_start(
-        {"job_id": "x", "function_name": "expire_memberships"}
-    )
+    await WorkerSettings.on_job_start({"job_id": "x", "function_name": "expire_memberships"})
 
     bound = structlog.contextvars.get_contextvars()
-    assert "stale_key" not in bound, (
-        f"on_job_start failed to clear stale bindings; got {bound}"
-    )
+    assert "stale_key" not in bound, f"on_job_start failed to clear stale bindings; got {bound}"
     assert bound.get("job_id") == "x"

@@ -44,9 +44,7 @@ def _csrf_headers(
     *,
     idempotency_key: str | None = None,
 ) -> dict[str, str]:
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -104,9 +102,7 @@ async def test_cancel_pt_session_happy_path_reception_within_24h(
     """PT-18 happy path: reception records + cancels same session in <24h."""
     plan = await make_pt_package_plan(session_count=5)
     client = await make_client()
-    pkg = await make_pt_package(
-        client_id=client.id, plan=plan, sessions_remaining=5
-    )
+    pkg = await make_pt_package(client_id=client.id, plan=plan, sessions_remaining=5)
     trainer = await make_trainer(full_name="Иван Иванович")
 
     # Record via HTTP so created_at is "now-ish".
@@ -467,9 +463,5 @@ async def test_cancel_idempotency_replay_returns_cached_200(
     assert remaining == 5
 
     # Single pt_sessions row referenced (no extra cancel-side INSERT).
-    rows = (
-        await db_session.scalars(
-            select(PtSession).where(PtSession.id == pt_session_id)
-        )
-    ).all()
+    rows = (await db_session.scalars(select(PtSession).where(PtSession.id == pt_session_id))).all()
     assert len(rows) == 1

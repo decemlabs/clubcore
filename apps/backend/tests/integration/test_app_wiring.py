@@ -83,15 +83,11 @@ def test_create_app_registers_all_protocol_slots() -> None:
     )
 
     # Phase 37 INFRA-33 slots (new — D-37-06).
-    assert deps._slot_by_id_resolver is not None, (
-        "Phase 37 register_slot_by_id_resolver missing"
-    )
+    assert deps._slot_by_id_resolver is not None, "Phase 37 register_slot_by_id_resolver missing"
     assert deps._booking_slot_restorer is not None, (
         "Phase 37 register_booking_slot_restorer missing"
     )
-    assert deps._booking_completer is not None, (
-        "Phase 37 register_booking_completer missing"
-    )
+    assert deps._booking_completer is not None, "Phase 37 register_booking_completer missing"
 
     # Phase 42 D-42-26 slot — EmailDispatcher (REG-29-03 double-wire).
     # create_app() registers the FastAPI-side dispatcher; the ARQ worker

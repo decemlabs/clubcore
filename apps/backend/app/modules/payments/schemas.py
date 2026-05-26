@@ -33,9 +33,7 @@ class PaymentListQuery(PageQuery):
     Wire form: ``?subjectKind=membership&receivedFrom=2026-05-01`` etc.
     """
 
-    subject_kind: str | None = Field(
-        default=None, pattern=r"^(membership|pt_package|refund)$"
-    )
+    subject_kind: str | None = Field(default=None, pattern=r"^(membership|pt_package|refund)$")
     subject_id: UUID | None = None
     received_by_user_id: UUID | None = None
     received_from: date | None = None
@@ -72,7 +70,6 @@ class MembershipRefundRequest(BackendSchemaBase):
         min_length=1,
         max_length=200,
         description=(
-            "Refund reason (REF-06). Backend rejects extra fields including "
-            "amountKopecks (REF-05)."
+            "Refund reason (REF-06). Backend rejects extra fields including amountKopecks (REF-05)."
         ),
     )

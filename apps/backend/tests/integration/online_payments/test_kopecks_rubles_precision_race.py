@@ -122,9 +122,7 @@ async def ver02d_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -200,9 +198,7 @@ async def test_kopecks_rubles_round_trip_no_drift_concurrent(kopecks: int) -> No
     async def _round_trip(k: int) -> int:
         wire_str = kopecks_to_yookassa(k)
         back = yookassa_to_kopecks(wire_str)
-        assert back == k, (
-            f"VER-02(d) round-trip drift: {k} → '{wire_str}' → {back}"
-        )
+        assert back == k, f"VER-02(d) round-trip drift: {k} → '{wire_str}' → {back}"
         return back
 
     results = await asyncio.gather(*[_round_trip(kopecks) for _ in range(_N_CONCURRENT)])
@@ -306,7 +302,9 @@ async def test_kopecks_rubles_db_amount_preserved(
 
     # Concurrent INSERTs + verification for all non-zero edge values,
     # each using a distinct (client_id, plan_id) to avoid double-tap UNIQUE.
-    await asyncio.gather(*[
-        _seed_and_verify(k, owner_client_plan[1], owner_client_plan[2])
-        for k, owner_client_plan in zip(nonzero_edges, fixtures, strict=True)
-    ])
+    await asyncio.gather(
+        *[
+            _seed_and_verify(k, owner_client_plan[1], owner_client_plan[2])
+            for k, owner_client_plan in zip(nonzero_edges, fixtures, strict=True)
+        ]
+    )

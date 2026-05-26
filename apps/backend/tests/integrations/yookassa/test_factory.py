@@ -67,9 +67,7 @@ async def test_probe_success_returns_client_and_logs_ok() -> None:
         structlog.testing.capture_logs() as captured,
         respx.mock(base_url=_BASE_URL, assert_all_called=False) as router,
     ):
-        router.get("me").mock(
-            return_value=httpx.Response(200, json={"account_id": 123456})
-        )
+        router.get("me").mock(return_value=httpx.Response(200, json={"account_id": 123456}))
         client = await build_yookassa_client(settings=_test_settings())
     assert isinstance(client, YooKassaClient)
     probe_logs = _probe_logs(captured)
@@ -132,9 +130,7 @@ async def test_probe_shop_id_mismatch_logs_warning() -> None:
         structlog.testing.capture_logs() as captured,
         respx.mock(base_url=_BASE_URL, assert_all_called=False) as router,
     ):
-        router.get("me").mock(
-            return_value=httpx.Response(200, json={"account_id": 999999})
-        )
+        router.get("me").mock(return_value=httpx.Response(200, json={"account_id": 999999}))
         client = await build_yookassa_client(settings=_test_settings(shop_id=123456))
     assert isinstance(client, YooKassaClient)
     probe_logs = _probe_logs(captured)

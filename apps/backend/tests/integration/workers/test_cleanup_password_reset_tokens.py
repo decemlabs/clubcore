@@ -125,9 +125,7 @@ async def test_cleanup_deletes_beyond_30d_retention_preserves_within(
     )
 
     # Snapshot pre-run audit count — must not change after the cron.
-    pre_audit_count = (
-        await db_session.execute(select(AuditLog))
-    ).scalars().all()
+    pre_audit_count = (await db_session.execute(select(AuditLog))).scalars().all()
     pre_audit_len = len(pre_audit_count)
 
     with structlog.testing.capture_logs() as captured:
@@ -141,9 +139,7 @@ async def test_cleanup_deletes_beyond_30d_retention_preserves_within(
         for t in (
             (
                 await db_session.execute(
-                    select(PasswordResetToken).where(
-                        PasswordResetToken.user_id == seeded_user.id
-                    )
+                    select(PasswordResetToken).where(PasswordResetToken.user_id == seeded_user.id)
                 )
             )
             .scalars()
@@ -158,9 +154,7 @@ async def test_cleanup_deletes_beyond_30d_retention_preserves_within(
     assert old_90d.id not in surviving_ids, "-90d row must be deleted"
 
     # No audit emission (D-44-31 housekeeping invariant).
-    post_audit_count = (
-        await db_session.execute(select(AuditLog))
-    ).scalars().all()
+    post_audit_count = (await db_session.execute(select(AuditLog))).scalars().all()
     assert len(post_audit_count) == pre_audit_len, (
         f"cleanup_password_reset_tokens emitted audit rows "
         f"(pre={pre_audit_len}, post={len(post_audit_count)}); "
@@ -169,13 +163,10 @@ async def test_cleanup_deletes_beyond_30d_retention_preserves_within(
 
     # Structlog summary emitted with the deleted count.
     summary_lines = [
-        ln
-        for ln in captured
-        if ln.get("event") == "cleanup_password_reset_tokens_complete"
+        ln for ln in captured if ln.get("event") == "cleanup_password_reset_tokens_complete"
     ]
     assert len(summary_lines) == 1, (
-        f"expected exactly 1 cleanup_password_reset_tokens_complete log, "
-        f"got {len(summary_lines)}"
+        f"expected exactly 1 cleanup_password_reset_tokens_complete log, got {len(summary_lines)}"
     )
     assert summary_lines[0]["count"] == 3, summary_lines[0]
 
@@ -187,9 +178,7 @@ async def test_cleanup_noop_when_nothing_to_delete(
 ) -> None:
     """Empty-window run: only fresh tokens, cron returns 0, no audit, no error."""
     now = datetime.now(tz=UTC)
-    await _insert_token(
-        db_session, user_id=seeded_user.id, expires_at=now - timedelta(days=5)
-    )
+    await _insert_token(db_session, user_id=seeded_user.id, expires_at=now - timedelta(days=5))
     # Use a different purpose so the partial-UNIQUE doesn't conflict with
     # the consumed (-5d) row above. Both stay in the table; cron deletes neither.
     await _insert_token(
@@ -205,9 +194,5 @@ async def test_cleanup_noop_when_nothing_to_delete(
 
     assert deleted == 0
 
-    summary = [
-        ln
-        for ln in captured
-        if ln.get("event") == "cleanup_password_reset_tokens_complete"
-    ]
+    summary = [ln for ln in captured if ln.get("event") == "cleanup_password_reset_tokens_complete"]
     assert len(summary) == 1 and summary[0]["count"] == 0

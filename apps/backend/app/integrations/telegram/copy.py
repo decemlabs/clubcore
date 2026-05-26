@@ -24,8 +24,18 @@ from typing import Final, Literal
 from uuid import UUID
 
 _RU_MONTHS_GENITIVE: Final[tuple[str, ...]] = (
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
 )
 
 
@@ -37,12 +47,24 @@ Variant = Literal["A", "B"]
 # RUF001 per-line: Cyrillic letters mixed with Latin look-alikes (e.g. {end_date} placeholder)
 # are intentional (Russian-only product per PROJECT.md i18n locked decision).
 # E501 per-line: locked DM copy strings are kept on a single line so reviewers diff exact text.
-EXPIRING_7D_VARIANT_A: Final[str] = "Привет! Ваш абонемент истекает {end_date}. Самое время продлить — обратитесь к администратору."  # noqa: E501, RUF001
-EXPIRING_7D_VARIANT_B: Final[str] = "Напоминаем: ваш абонемент действует до {end_date}. Продление через администратора."  # noqa: E501, RUF001
-EXPIRING_3D_VARIANT_A: Final[str] = "Через 3 дня заканчивается ваш абонемент ({end_date}). Подойдите к стойке для продления."  # noqa: E501, RUF001
-EXPIRING_3D_VARIANT_B: Final[str] = "Ваш абонемент действителен до {end_date}. Не забудьте продлить!"  # noqa: E501, RUF001
-EXPIRING_1D_VARIANT_A: Final[str] = "Завтра ({end_date}) — последний день вашего абонемента. Заходите продлевать."  # noqa: E501, RUF001
-EXPIRING_1D_VARIANT_B: Final[str] = "Внимание: ваш абонемент истекает завтра, {end_date}. Зайдите к нам, чтобы продлить."  # noqa: E501, RUF001
+EXPIRING_7D_VARIANT_A: Final[str] = (
+    "Привет! Ваш абонемент истекает {end_date}. Самое время продлить — обратитесь к администратору."  # noqa: E501, RUF001
+)
+EXPIRING_7D_VARIANT_B: Final[str] = (
+    "Напоминаем: ваш абонемент действует до {end_date}. Продление через администратора."  # noqa: E501, RUF001
+)
+EXPIRING_3D_VARIANT_A: Final[str] = (
+    "Через 3 дня заканчивается ваш абонемент ({end_date}). Подойдите к стойке для продления."  # noqa: E501, RUF001
+)
+EXPIRING_3D_VARIANT_B: Final[str] = (
+    "Ваш абонемент действителен до {end_date}. Не забудьте продлить!"  # noqa: E501, RUF001
+)
+EXPIRING_1D_VARIANT_A: Final[str] = (
+    "Завтра ({end_date}) — последний день вашего абонемента. Заходите продлевать."  # noqa: E501, RUF001
+)
+EXPIRING_1D_VARIANT_B: Final[str] = (
+    "Внимание: ваш абонемент истекает завтра, {end_date}. Зайдите к нам, чтобы продлить."  # noqa: E501, RUF001
+)
 
 
 _TEMPLATES: Final[dict[tuple[Kind, Variant], str]] = {

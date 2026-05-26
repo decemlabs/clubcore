@@ -114,9 +114,7 @@ class EmailClient:
             err = exc.response.get("Error", {}) if isinstance(exc.response, dict) else {}
             code = err.get("Code", "") if isinstance(err, dict) else ""
             meta = (
-                exc.response.get("ResponseMetadata", {})
-                if isinstance(exc.response, dict)
-                else {}
+                exc.response.get("ResponseMetadata", {}) if isinstance(exc.response, dict) else {}
             )
             http_status = meta.get("HTTPStatusCode", 0) if isinstance(meta, dict) else 0
             if code in _BLOCKED_ERROR_CODES:

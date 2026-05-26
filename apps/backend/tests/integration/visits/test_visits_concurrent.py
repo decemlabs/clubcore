@@ -145,18 +145,14 @@ async def test_concurrent_check_in_one_wins(
 
     # Audit row count assertions
     created_count = await db_session_real_commit.scalar(
-        select(func.count()).select_from(AuditLog).where(
-            AuditLog.action == "visit_created"
-        )
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "visit_created")
     )
     rejected_count = await db_session_real_commit.scalar(
-        select(func.count()).select_from(AuditLog).where(
-            AuditLog.action == "visit_rejected_duplicate"
-        )
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.action == "visit_rejected_duplicate")
     )
-    assert created_count == 1, (
-        f"Expected exactly 1 visit_created audit row, got {created_count}"
-    )
+    assert created_count == 1, f"Expected exactly 1 visit_created audit row, got {created_count}"
     assert rejected_count == 9, (
         f"Expected exactly 9 visit_rejected_duplicate audit rows, got {rejected_count}"
     )

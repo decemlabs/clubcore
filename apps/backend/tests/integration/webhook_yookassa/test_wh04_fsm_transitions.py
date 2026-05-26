@@ -41,9 +41,7 @@ async def test_wh04_illegal_transition_returns_200_with_audit_row(
     await webhook_db_session.flush()
     await webhook_db_session.commit()
 
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
@@ -58,14 +56,17 @@ async def test_wh04_illegal_transition_returns_200_with_audit_row(
 
     # Audit row exists with idempotency_outcome='illegal_transition'.
     rows = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "yookassa_webhook_received",
-                AuditLog.resource_id
-                == seeded_online_payment_pending.online_payment_id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "yookassa_webhook_received",
+                    AuditLog.resource_id == seeded_online_payment_pending.online_payment_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) >= 1, "expected at least one yookassa_webhook_received audit row"
     outcomes = [r.payload.get("idempotency_outcome") for r in rows]
     assert "illegal_transition" in outcomes, outcomes
@@ -80,9 +81,7 @@ async def test_wh04_legal_pending_to_succeeded(
     webhook_payment_succeeded_body: Any,
 ) -> None:
     """The legal pending → succeeded transition flips the row to 'succeeded'."""
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
@@ -104,9 +103,7 @@ async def test_wh04_legal_pending_to_canceled(
     webhook_payment_canceled_body: Any,
 ) -> None:
     """The legal pending → canceled transition flips the row to 'canceled'."""
-    body = webhook_payment_canceled_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_canceled_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
@@ -138,21 +135,22 @@ async def test_wh04_succeeded_terminal_no_re_transition(
     await webhook_db_session.flush()
     await webhook_db_session.commit()
 
-    body = webhook_payment_succeeded_body(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
     await webhook_db_session.commit()
     rows = (
-        await webhook_db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "yookassa_webhook_received",
-                AuditLog.resource_id
-                == seeded_online_payment_pending.online_payment_id,
+        (
+            await webhook_db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "yookassa_webhook_received",
+                    AuditLog.resource_id == seeded_online_payment_pending.online_payment_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     outcomes = [r.payload.get("idempotency_outcome") for r in rows]
     assert "illegal_transition" in outcomes, outcomes

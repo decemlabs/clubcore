@@ -54,20 +54,13 @@ def test_renewal_strategy_from_today_expired_source_literal() -> None:
 
 def test_renewal_strategies_are_distinct() -> None:
     """Defence-in-depth: copy-paste accident would collapse the two literals."""
-    assert (
-        RENEWAL_STRATEGY_FROM_SOURCE_END_DATE
-        != RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE
-    )
+    assert RENEWAL_STRATEGY_FROM_SOURCE_END_DATE != RENEWAL_STRATEGY_FROM_TODAY_EXPIRED_SOURCE
 
 
 def test_membership_status_transitions_unchanged_in_phase_26() -> None:
     """D-26-24: renewal is INSERT, not transition. State machine 4x4 untouched."""
-    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset(
-        {"expired", "cancelled", "frozen"}
-    )
-    assert MEMBERSHIP_STATUS_TRANSITIONS["frozen"] == frozenset(
-        {"active", "cancelled"}
-    )
+    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset({"expired", "cancelled", "frozen"})
+    assert MEMBERSHIP_STATUS_TRANSITIONS["frozen"] == frozenset({"active", "cancelled"})
     assert MEMBERSHIP_STATUS_TRANSITIONS["expired"] == frozenset()
     assert MEMBERSHIP_STATUS_TRANSITIONS["cancelled"] == frozenset()
 
@@ -107,7 +100,8 @@ def test_renewal_error_codes_are_distinct_from_plan_inactive() -> None:
 
 
 def _build_minimal_membership_response(
-    *, previous_membership_id: object | None = ...,
+    *,
+    previous_membership_id: object | None = ...,
 ) -> MembershipResponse:
     """Build a minimal MembershipResponse for schema-shape assertions."""
     base: dict[str, object] = {

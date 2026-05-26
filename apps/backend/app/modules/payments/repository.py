@@ -95,9 +95,7 @@ async def insert_payment(
     return payment
 
 
-async def get_payment_by_id(
-    session: AsyncSession, payment_id: UUID
-) -> Payment | None:
+async def get_payment_by_id(session: AsyncSession, payment_id: UUID) -> Payment | None:
     """Return Payment by id, or None."""
     stmt: Select[tuple[Payment]] = select(Payment).where(Payment.id == payment_id)
     result: Payment | None = await session.scalar(stmt)
@@ -239,20 +237,14 @@ async def list_payments_for_client(
     )
 
     where_clause = (
-        (Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP)
-        & Payment.subject_id.in_(membership_subq)
-    ) | (
-        (Payment.subject_kind == SUBJECT_KIND_REFUND)
-        & Payment.refund_of.in_(refund_origin_subq)
-    )
+        (Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP) & Payment.subject_id.in_(membership_subq)
+    ) | ((Payment.subject_kind == SUBJECT_KIND_REFUND) & Payment.refund_of.in_(refund_origin_subq))
 
     total_stmt = select(func.count()).select_from(Payment).where(where_clause)
     total = await session.scalar(total_stmt) or 0
 
     stmt: Select[tuple[Payment]] = (
-        select(Payment)
-        .where(where_clause)
-        .order_by(Payment.received_at.desc(), Payment.id.desc())
+        select(Payment).where(where_clause).order_by(Payment.received_at.desc(), Payment.id.desc())
     )
     offset = (page - 1) * page_size
     stmt = stmt.offset(offset).limit(page_size)
@@ -289,20 +281,14 @@ async def list_payments_for_membership(
     )
 
     where_clause = (
-        (Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP)
-        & (Payment.subject_id == membership_id)
-    ) | (
-        (Payment.subject_kind == SUBJECT_KIND_REFUND)
-        & Payment.refund_of.in_(refund_origin_subq)
-    )
+        (Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP) & (Payment.subject_id == membership_id)
+    ) | ((Payment.subject_kind == SUBJECT_KIND_REFUND) & Payment.refund_of.in_(refund_origin_subq))
 
     total_stmt = select(func.count()).select_from(Payment).where(where_clause)
     total = await session.scalar(total_stmt) or 0
 
     stmt: Select[tuple[Payment]] = (
-        select(Payment)
-        .where(where_clause)
-        .order_by(Payment.received_at.desc(), Payment.id.desc())
+        select(Payment).where(where_clause).order_by(Payment.received_at.desc(), Payment.id.desc())
     )
     offset = (page - 1) * page_size
     stmt = stmt.offset(offset).limit(page_size)

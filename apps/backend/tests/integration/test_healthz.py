@@ -8,6 +8,7 @@ Two assertions:
 
 No DB needed (`/healthz` makes no DB query — Phase 2 D-14 / CONTEXT D-10).
 """
+
 from __future__ import annotations
 
 import uuid

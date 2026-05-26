@@ -138,9 +138,7 @@ async def test_record_failure_concurrent_open_at_threshold() -> None:
     provider = "test_provider_concurrent"
 
     # Race N=threshold parallel record_failure calls.
-    await asyncio.gather(
-        *[record_failure(redis, provider) for _ in range(_FAILURE_THRESHOLD)]
-    )
+    await asyncio.gather(*[record_failure(redis, provider) for _ in range(_FAILURE_THRESHOLD)])
 
     # Open-marker key MUST exist after threshold is reached.
     exists = await redis.exists(f"{_CIRCUIT_KEY_PREFIX}{provider}")

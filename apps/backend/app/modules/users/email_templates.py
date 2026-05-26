@@ -20,6 +20,7 @@ Template variables (Jinja2 SandboxedEnvironment, autoescape=True for HTML):
   - invitation_url: full URL https://<frontend_base>/auth/accept-invite#token=<raw>
   - expires_at_human: Russian long-form datetime (e.g. '26 мая 2026 в 12:00')
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

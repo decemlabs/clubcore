@@ -36,6 +36,7 @@ from app.integrations.yookassa._money import kopecks_to_yookassa, yookassa_to_ko
 
 # ---------- kopecks_to_yookassa ----------
 
+
 def test_kopecks_to_yookassa_zero() -> None:
     assert kopecks_to_yookassa(0) == "0.00"
 
@@ -62,6 +63,7 @@ def test_kopecks_to_yookassa_rejects_negative() -> None:
 
 
 # ---------- yookassa_to_kopecks ----------
+
 
 def test_yookassa_to_kopecks_round_trip_199_00() -> None:
     assert yookassa_to_kopecks("199.00") == 19_900
@@ -93,6 +95,7 @@ def test_yookassa_to_kopecks_rejects_three_decimal_places() -> None:
 
 # ---------- round-trip grid ----------
 
+
 @pytest.mark.parametrize(
     "k",
     [0, 1, 99, 100, 999, 1_000, 9_999, 10_000, 99_999_999],
@@ -104,6 +107,7 @@ def test_round_trip_random_int_grid(k: int) -> None:
 
 # ---------- rounding-mode pin ----------
 
+
 def test_kopecks_to_yookassa_half_even_rounding_pin() -> None:
     """Module must explicitly reference ROUND_HALF_EVEN (pinning the rounding mode).
 
@@ -112,11 +116,7 @@ def test_kopecks_to_yookassa_half_even_rounding_pin() -> None:
     inspecting the module source — the import + quantize call must both exist.
     """
     source = Path(
-        Path(__file__).resolve().parents[4]
-        / "app"
-        / "integrations"
-        / "yookassa"
-        / "_money.py"
+        Path(__file__).resolve().parents[4] / "app" / "integrations" / "yookassa" / "_money.py"
     ).read_text(encoding="utf-8")
     assert "ROUND_HALF_EVEN" in source
     assert "quantize" in source

@@ -168,25 +168,19 @@ async def has_instances_for_plan(session: AsyncSession, plan_id: UUID) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def get_pt_package(
-    session: AsyncSession, pt_package_id: UUID
-) -> PtPackage | None:
+async def get_pt_package(session: AsyncSession, pt_package_id: UUID) -> PtPackage | None:
     """Return PtPackage by id, or None.
 
     NO soft-delete filter — PtPackage has no `deleted_at` column (D-33-03 /
     Phase 17 D-12 mirror). Cancelled / expired / exhausted rows are still
     returned; lifecycle is purely status-based.
     """
-    stmt: Select[tuple[PtPackage]] = select(PtPackage).where(
-        PtPackage.id == pt_package_id
-    )
+    stmt: Select[tuple[PtPackage]] = select(PtPackage).where(PtPackage.id == pt_package_id)
     result: PtPackage | None = await session.scalar(stmt)
     return result
 
 
-async def find_active_for_client(
-    session: AsyncSession, client_id: UUID
-) -> PtPackage | None:
+async def find_active_for_client(session: AsyncSession, client_id: UUID) -> PtPackage | None:
     """Return the canonical active PT-package for ``client_id`` (D-33-12 resolver).
 
     Consumed by:

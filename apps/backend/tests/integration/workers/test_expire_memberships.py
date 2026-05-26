@@ -40,11 +40,7 @@ async def test_expire_memberships_flips_only_overdue_active_rows(
 
     # Audit row check — exactly 1 membership_expired with the overdue row's id.
     audit_rows = (
-        (
-            await db_session.execute(
-                select(AuditLog).where(AuditLog.action == "membership_expired")
-            )
-        )
+        (await db_session.execute(select(AuditLog).where(AuditLog.action == "membership_expired")))
         .scalars()
         .all()
     )
@@ -68,9 +64,7 @@ async def test_expire_memberships_flips_only_overdue_active_rows(
     assert future.status == "active"
 
     # Summary log check — exactly 1 expire_memberships_complete with count=1.
-    completion_events = [
-        e for e in captured if e.get("event") == "expire_memberships_complete"
-    ]
+    completion_events = [e for e in captured if e.get("event") == "expire_memberships_complete"]
     assert len(completion_events) == 1, (
         f"expected 1 expire_memberships_complete log line, got {len(completion_events)}"
     )

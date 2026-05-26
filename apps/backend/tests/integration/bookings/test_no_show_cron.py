@@ -244,9 +244,7 @@ async def test_no_show_cron_idempotent_second_run_zero(
     # no_show row, so the per-row audit loop is never entered on the 2nd
     # tick).
     audit_rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "booking_no_show")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "booking_no_show"))
     ).all()
     assert len(audit_rows) == 1, len(audit_rows)
 
@@ -296,9 +294,7 @@ async def test_no_show_cron_worker_e2e_via_sessionmaker_emits_summary_log(
         count = await mark_no_show_bookings(ctx)
 
     assert count == 1
-    completion = [
-        e for e in captured if e.get("event") == "mark_no_show_bookings_complete"
-    ]
+    completion = [e for e in captured if e.get("event") == "mark_no_show_bookings_complete"]
     assert len(completion) == 1, (
         f"expected exactly 1 summary log line, got {len(completion)}: "
         f"{[e.get('event') for e in captured]}"

@@ -269,10 +269,14 @@ async def test_pt_package_sale_with_email_fanouts_receipt(
 
     # (a) Exactly 1 payment_receipts row with channel='email'.
     receipts = (
-        await db_session.execute(
-            select(PaymentReceipt).where(PaymentReceipt.payment_id == sale_payment.id)
+        (
+            await db_session.execute(
+                select(PaymentReceipt).where(PaymentReceipt.payment_id == sale_payment.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(receipts) == 1
     assert receipts[0].channel == "email"
     assert receipts[0].to_address == "pt-sale-receipt@example.com"
@@ -281,14 +285,18 @@ async def test_pt_package_sale_with_email_fanouts_receipt(
     # (b) Exactly 1 audit_log row for ('payment_receipt_emailed', 'payment')
     # with receipt_kind='sale' in payload.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "payment_receipt_emailed",
-                AuditLog.resource_type == "payment",
-                AuditLog.resource_id == sale_payment.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "payment_receipt_emailed",
+                    AuditLog.resource_type == "payment",
+                    AuditLog.resource_id == sale_payment.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1
     payload = audit_rows[0].payload
     assert payload["receipt_kind"] == "sale"
@@ -298,8 +306,7 @@ async def test_pt_package_sale_with_email_fanouts_receipt(
 
     # (c) Recorder captured exactly 1 dispatch call with the SALE template.
     sale_calls = [
-        c for c in sandbox_email_recorder.calls
-        if c["template_id"] == "EMAIL_PAYMENT_RECEIPT_SALE"
+        c for c in sandbox_email_recorder.calls if c["template_id"] == "EMAIL_PAYMENT_RECEIPT_SALE"
     ]
     assert len(sale_calls) == 1
     call = sale_calls[0]
@@ -364,33 +371,40 @@ async def test_pt_package_refund_with_email_fanouts_receipt(
 
     # (a) payment_receipts row for the REFUND payment, channel='email'.
     refund_receipts = (
-        await db_session.execute(
-            select(PaymentReceipt).where(
-                PaymentReceipt.payment_id == refund_payment.id
+        (
+            await db_session.execute(
+                select(PaymentReceipt).where(PaymentReceipt.payment_id == refund_payment.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(refund_receipts) == 1
     assert refund_receipts[0].channel == "email"
     assert refund_receipts[0].to_address == "pt-refund-receipt@example.com"
 
     # (b) audit_log row with receipt_kind='refund'.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "payment_receipt_emailed",
-                AuditLog.resource_type == "payment",
-                AuditLog.resource_id == refund_payment.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "payment_receipt_emailed",
+                    AuditLog.resource_type == "payment",
+                    AuditLog.resource_id == refund_payment.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1
     assert audit_rows[0].payload["receipt_kind"] == "refund"
     assert audit_rows[0].payload["payment_id"] == str(refund_payment.id)
 
     # (c) Recorder captured exactly one REFUND-template dispatch.
     refund_calls = [
-        c for c in sandbox_email_recorder.calls
+        c
+        for c in sandbox_email_recorder.calls
         if c["template_id"] == "EMAIL_PAYMENT_RECEIPT_REFUND"
     ]
     assert len(refund_calls) == 1

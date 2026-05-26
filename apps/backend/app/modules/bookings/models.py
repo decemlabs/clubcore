@@ -246,8 +246,7 @@ class BookingNotification(Base, UUIDPkMixin, TimestampMixin):
             # expands `kind` -> ck_booking_notifications_kind (matches Migration
             # 0020 op.f()-derived name + Migration 0032 drop-and-recreate
             # letter-for-letter).
-            "kind IN ('reminder_24h', 'confirmed', "
-            "'cancelled_by_client', 'cancelled_by_owner')",
+            "kind IN ('reminder_24h', 'confirmed', 'cancelled_by_client', 'cancelled_by_owner')",
             name="kind",
         ),
         # Phase 45 D-45-13 — UNIQUE renamed by Alembic 0024 to include channel.

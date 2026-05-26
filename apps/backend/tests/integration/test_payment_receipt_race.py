@@ -72,10 +72,7 @@ async def real_commit_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    "TRUNCATE payment_receipts, payments, users "
-                    "RESTART IDENTITY CASCADE"
-                )
+                text("TRUNCATE payment_receipts, payments, users RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -142,12 +139,9 @@ async def test_payment_receipt_concurrent_fanout_race(
     integrity_errors = [r for r in results if isinstance(r, IntegrityError)]
     successes = [r for r in results if r is None]
     assert len(integrity_errors) == 1, (
-        f"expected exactly 1 IntegrityError on uq_payment_receipts_payment_channel, "
-        f"got {results!r}"
+        f"expected exactly 1 IntegrityError on uq_payment_receipts_payment_channel, got {results!r}"
     )
-    assert len(successes) == 1, (
-        f"expected exactly 1 successful commit, got {results!r}"
-    )
+    assert len(successes) == 1, f"expected exactly 1 successful commit, got {results!r}"
     # The losing IntegrityError must reference our UNIQUE constraint.
     err_text = str(integrity_errors[0].orig)
     assert "uq_payment_receipts_payment_channel" in err_text, (
@@ -164,9 +158,7 @@ async def test_payment_receipt_concurrent_fanout_race(
                 PaymentReceipt.channel == "email",
             )
         )
-        assert count == 1, (
-            f"expected exactly 1 payment_receipts row, got {count}"
-        )
+        assert count == 1, f"expected exactly 1 payment_receipts row, got {count}"
 
         surviving_corr = await verify_session.scalar(
             select(PaymentReceipt.audit_correlation_id).where(

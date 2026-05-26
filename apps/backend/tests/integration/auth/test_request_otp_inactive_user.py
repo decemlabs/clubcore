@@ -54,15 +54,15 @@ async def test_request_otp_email_active_user_creates_otp_row(
 
     count = (
         await db_session.execute(
-            select(func.count()).select_from(OtpCode).where(
+            select(func.count())
+            .select_from(OtpCode)
+            .where(
                 OtpCode.user_id == user.id,
                 OtpCode.channel == "email",
             )
         )
     ).scalar_one()
-    assert count == 1, (
-        f"Expected 1 OTP row for active user, got {count}."
-    )
+    assert count == 1, f"Expected 1 OTP row for active user, got {count}."
 
 
 async def test_request_otp_email_deactivated_user_silent_drops(
@@ -93,7 +93,9 @@ async def test_request_otp_email_deactivated_user_silent_drops(
 
     count = (
         await db_session.execute(
-            select(func.count()).select_from(OtpCode).where(
+            select(func.count())
+            .select_from(OtpCode)
+            .where(
                 OtpCode.user_id == user.id,
                 OtpCode.channel == "email",
             )
@@ -125,9 +127,7 @@ async def test_request_otp_email_soft_deleted_user_silent_drops(
     db_session.add(user)
     await db_session.commit()
     await db_session.execute(
-        update(User)
-        .where(User.id == user.id)
-        .values(deleted_at=datetime.now(tz=UTC))
+        update(User).where(User.id == user.id).values(deleted_at=datetime.now(tz=UTC))
     )
     await db_session.commit()
 
@@ -141,13 +141,14 @@ async def test_request_otp_email_soft_deleted_user_silent_drops(
 
     count = (
         await db_session.execute(
-            select(func.count()).select_from(OtpCode).where(
+            select(func.count())
+            .select_from(OtpCode)
+            .where(
                 OtpCode.user_id == user.id,
                 OtpCode.channel == "email",
             )
         )
     ).scalar_one()
     assert count == 0, (
-        "Soft-deleted user: expected no otp_codes row (silent-drop), "
-        f"got count={count}"
+        f"Soft-deleted user: expected no otp_codes row (silent-drop), got count={count}"
     )

@@ -46,9 +46,7 @@ async def test_wh01_post_from_untrusted_ip_returns_403(
         )
         assert before_status == "pending"
 
-        body = webhook_payment_succeeded_body(
-            seeded_online_payment_pending.yookassa_payment_id
-        )
+        body = webhook_payment_succeeded_body(seeded_online_payment_pending.yookassa_payment_id)
         response = await webhook_client.post(
             "/api/v1/_internal/yookassa/webhook",
             json=body,

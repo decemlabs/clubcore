@@ -132,24 +132,26 @@ async def test_refund_audit_chain_order(
     ).scalar_one()
 
     rows = (
-        await db_session.execute(
-            select(AuditLog)
-            .where(
-                AuditLog.action.in_(
-                    [
-                        "payment_recorded",
-                        "membership_created",
-                        "refund_issued",
-                        "membership_refunded",
-                    ]
-                ),
-                AuditLog.resource_id.in_(
-                    [membership_id, sale_payment.id, refund_payment.id]
-                ),
+        (
+            await db_session.execute(
+                select(AuditLog)
+                .where(
+                    AuditLog.action.in_(
+                        [
+                            "payment_recorded",
+                            "membership_created",
+                            "refund_issued",
+                            "membership_refunded",
+                        ]
+                    ),
+                    AuditLog.resource_id.in_([membership_id, sale_payment.id, refund_payment.id]),
+                )
+                .order_by(AuditLog.created_at.asc())
             )
-            .order_by(AuditLog.created_at.asc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     actions = {r.action for r in rows}
     assert actions == {
@@ -203,9 +205,7 @@ async def test_refund_issued_payload_includes_payment_row_hash(
     await _refund(authed_client_owner, membership_id, reason="hash test")
 
     refund_issued_row = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.action == "refund_issued")
-        )
+        await db_session.execute(select(AuditLog).where(AuditLog.action == "refund_issued"))
     ).scalar_one()
 
     payload = refund_issued_row.payload

@@ -65,9 +65,7 @@ def _is_session_execute_with_mutating_sql(node: ast.Call) -> bool:
         return False
     if isinstance(inner.func, ast.Name) and inner.func.id in _MUTATING_SQL_FUNCS:
         return True
-    return (
-        isinstance(inner.func, ast.Attribute) and inner.func.attr in _MUTATING_SQL_FUNCS
-    )
+    return isinstance(inner.func, ast.Attribute) and inner.func.attr in _MUTATING_SQL_FUNCS
 
 
 def _is_audit_emit_call(node: ast.Call) -> bool:
@@ -102,9 +100,7 @@ def _function_has_commit(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
-def _function_has_svc001_marker(
-    path: Path, func: ast.FunctionDef | ast.AsyncFunctionDef
-) -> bool:
+def _function_has_svc001_marker(path: Path, func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """True if the SVC001 opt-out marker appears on the def line.
 
     The marker MUST appear on the same source line as the `def` / `async def`
@@ -115,9 +111,7 @@ def _function_has_svc001_marker(
     return _SVC001_MARKER in line
 
 
-def _check_function(
-    path: Path, func: ast.FunctionDef | ast.AsyncFunctionDef
-) -> str | None:
+def _check_function(path: Path, func: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
     """Return an offender message if `func` violates SVC001, else None.
 
     Decision tree (D-03 / D-04 / D-05 / D-32-10):
@@ -261,8 +255,7 @@ def test_service_commit_gate_against_app_modules() -> None:
             if msg is not None:
                 offenders.append(msg)
     assert not offenders, (
-        "Service write-path commit-gate (SVC001) failed.\n"
-        "Offenders:\n  " + "\n  ".join(offenders)
+        "Service write-path commit-gate (SVC001) failed.\nOffenders:\n  " + "\n  ".join(offenders)
     )
 
 
@@ -299,9 +292,7 @@ def _check_snippet(src: str, *, fake_filename: str) -> str | None:
         fake_filename,
     )
     tree = ast.parse(src, filename=fake_filename)
-    funcs = [
-        n for n in tree.body if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
-    ]
+    funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)]
     assert len(funcs) == 1, "snippet must define exactly one function"
     return _check_function(Path(fake_filename), funcs[0])
 

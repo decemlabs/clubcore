@@ -51,9 +51,7 @@ async def _seed_online_payment(
         status=status,
         confirmation_type="redirect",
         confirmation_url="https://yookassa.test/confirm",
-        succeeded_at=(
-            datetime.now(ZoneInfo("Europe/Moscow")) if status == "succeeded" else None
-        ),
+        succeeded_at=(datetime.now(ZoneInfo("Europe/Moscow")) if status == "succeeded" else None),
         audit_correlation_id=uuid4(),
     )
     session.add(op)
@@ -101,27 +99,33 @@ async def test_activate_membership_from_webhook_inserts_membership_and_emits_loc
 
     # Audit assertion: exactly ONE membership_activated_online row (Blocker #6).
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "membership_activated_online",
-                AuditLog.resource_id == membership.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "membership_activated_online",
+                    AuditLog.resource_id == membership.id,
+                )
             )
         )
-    ).scalars().all()
-    assert len(rows) == 1, (
-        f"expected exactly 1 membership_activated_online row, got {len(rows)}"
+        .scalars()
+        .all()
     )
+    assert len(rows) == 1, f"expected exactly 1 membership_activated_online row, got {len(rows)}"
 
     # ZERO membership_created rows (Blocker #6 — that locked event is reserved
     # for the in-person sell flow; the activator must NOT emit it).
     created_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "membership_created",
-                AuditLog.resource_id == membership.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "membership_created",
+                    AuditLog.resource_id == membership.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(created_rows) == 0, (
         f"Blocker #6: activator must NOT emit membership_created — got {len(created_rows)} rows"
     )
@@ -201,24 +205,32 @@ async def test_activate_pt_package_from_webhook_inserts_pt_package_and_emits_loc
     assert pt_package.sessions_remaining == plan.session_count
 
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "pt_package_activated_online",
-                AuditLog.resource_id == pt_package.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "pt_package_activated_online",
+                    AuditLog.resource_id == pt_package.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
 
     # Blocker #6 — activator must NOT emit pt_package_sold.
     sold_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "pt_package_sold",
-                AuditLog.resource_id == pt_package.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "pt_package_sold",
+                    AuditLog.resource_id == pt_package.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(sold_rows) == 0
 
     assert rows[0].actor_user_id is None

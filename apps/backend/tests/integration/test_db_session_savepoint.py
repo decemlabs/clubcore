@@ -31,9 +31,7 @@ async def _insert_owner(db_session: AsyncSession, email: str) -> User:
 async def test_savepoint_first_insert(db_session: AsyncSession) -> None:
     """Inserts an owner; relies on the next test to prove rollback happened."""
     await _insert_owner(db_session, "savepoint-smoke@test.local")
-    found = await db_session.scalar(
-        select(User).where(User.email == "savepoint-smoke@test.local")
-    )
+    found = await db_session.scalar(select(User).where(User.email == "savepoint-smoke@test.local"))
     assert found is not None
     assert found.email == "savepoint-smoke@test.local"
 
@@ -41,7 +39,5 @@ async def test_savepoint_first_insert(db_session: AsyncSession) -> None:
 async def test_savepoint_second_insert_same_email(db_session: AsyncSession) -> None:
     """Same email as previous test — must succeed, proving the previous commit was rolled back."""
     await _insert_owner(db_session, "savepoint-smoke@test.local")
-    found = await db_session.scalar(
-        select(User).where(User.email == "savepoint-smoke@test.local")
-    )
+    found = await db_session.scalar(select(User).where(User.email == "savepoint-smoke@test.local"))
     assert found is not None

@@ -1,4 +1,5 @@
 """Synthetic negative fixture — on_conflict_do_update against Payment (B-01 / D-30-08)."""
+
 from sqlalchemy.dialects.postgresql import insert  # type: ignore[import-not-found]
 
 from app.modules.payments.models import Payment  # type: ignore[import-not-found]

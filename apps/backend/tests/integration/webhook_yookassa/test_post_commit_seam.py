@@ -33,9 +33,7 @@ import pytest
 # The handlers.py path is reachable from the backend root via
 # app/api/v1/_internal/yookassa/handlers.py.
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
-_HANDLERS_PATH = (
-    _BACKEND_ROOT / "app" / "api" / "v1" / "_internal" / "yookassa" / "handlers.py"
-)
+_HANDLERS_PATH = _BACKEND_ROOT / "app" / "api" / "v1" / "_internal" / "yookassa" / "handlers.py"
 
 
 def _load_post_commit_enqueue_fn() -> ast.AsyncFunctionDef:
@@ -94,8 +92,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
         f"got {ast.dump(log_stmt)}"
     )
     assert isinstance(log_stmt.value, ast.Call), (
-        "Phase 52 _post_commit_enqueue body[0] must wrap a Call; "
-        f"got {ast.dump(log_stmt.value)}"
+        f"Phase 52 _post_commit_enqueue body[0] must wrap a Call; got {ast.dump(log_stmt.value)}"
     )
     log_target = ast.unparse(log_stmt.value.func)
     assert log_target == "_log.info", (
@@ -108,9 +105,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
         "Phase 52 _post_commit_enqueue body[1] must be an If guard (fiscal branch); "
         f"got {ast.dump(fiscal_if)}"
     )
-    assert isinstance(fiscal_if.test, ast.BoolOp) and isinstance(
-        fiscal_if.test.op, ast.And
-    ), (
+    assert isinstance(fiscal_if.test, ast.BoolOp) and isinstance(fiscal_if.test.op, ast.And), (
         "Phase 52 _post_commit_enqueue fiscal if-guard must be a BoolOp(And, ...); "
         f"got {ast.dump(fiscal_if.test)}"
     )
@@ -144,9 +139,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
         f"got {len(fiscal_inner)}"
     )
     fiscal_enq_stmt = fiscal_inner[0]
-    assert isinstance(fiscal_enq_stmt, ast.Expr) and isinstance(
-        fiscal_enq_stmt.value, ast.Await
-    ), (
+    assert isinstance(fiscal_enq_stmt, ast.Expr) and isinstance(fiscal_enq_stmt.value, ast.Await), (
         f"fiscal if-body must be Expr(Await(Call(...))); got {ast.dump(fiscal_enq_stmt)}"
     )
     fiscal_await_val = fiscal_enq_stmt.value.value
@@ -176,12 +169,12 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
     assert "_expires" in fiscal_kw_map, "fiscal enqueue_job must pass _expires"
     fiscal_max_tries = fiscal_kw_map["_max_tries"]
     fiscal_expires = fiscal_kw_map["_expires"]
-    assert (
-        isinstance(fiscal_max_tries, ast.Constant) and fiscal_max_tries.value == 3
-    ), f"fiscal _max_tries must be the literal 3; got {ast.dump(fiscal_max_tries)}"
-    assert (
-        isinstance(fiscal_expires, ast.Constant) and fiscal_expires.value == 60
-    ), f"fiscal _expires must be the literal 60; got {ast.dump(fiscal_expires)}"
+    assert isinstance(fiscal_max_tries, ast.Constant) and fiscal_max_tries.value == 3, (
+        f"fiscal _max_tries must be the literal 3; got {ast.dump(fiscal_max_tries)}"
+    )
+    assert isinstance(fiscal_expires, ast.Constant) and fiscal_expires.value == 60, (
+        f"fiscal _expires must be the literal 60; got {ast.dump(fiscal_expires)}"
+    )
 
     # Statement 3: notification If whose test is BoolOp(And, [..., ..., ...]).
     notif_if = body[2]
@@ -189,9 +182,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
         "Phase 52 _post_commit_enqueue body[2] must be an If guard (notification branch); "
         f"got {ast.dump(notif_if)}"
     )
-    assert isinstance(notif_if.test, ast.BoolOp) and isinstance(
-        notif_if.test.op, ast.And
-    ), (
+    assert isinstance(notif_if.test, ast.BoolOp) and isinstance(notif_if.test.op, ast.And), (
         "Phase 52 _post_commit_enqueue notification if-guard must be a BoolOp(And, ...); "
         f"got {ast.dump(notif_if.test)}"
     )
@@ -215,8 +206,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
         ), f"notification if-guard clause must compare against None; got {ast.dump(clause)}"
     notif_guard_names = {ast.unparse(c.left) for c in notif_bool_values}  # type: ignore[union-attr]
     assert notif_guard_names == {"arq_pool", "payment_id", "kind"}, (
-        f"notification if-guard must combine arq_pool + payment_id + kind; "
-        f"got {notif_guard_names}"
+        f"notification if-guard must combine arq_pool + payment_id + kind; got {notif_guard_names}"
     )
 
     # notification If.body: single Expr wrapping an Await of arq_pool.enqueue_job(...).
@@ -226,9 +216,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
         f"got {len(notif_inner)}"
     )
     notif_enq_stmt = notif_inner[0]
-    assert isinstance(notif_enq_stmt, ast.Expr) and isinstance(
-        notif_enq_stmt.value, ast.Await
-    ), (
+    assert isinstance(notif_enq_stmt, ast.Expr) and isinstance(notif_enq_stmt.value, ast.Await), (
         f"notification if-body must be Expr(Await(Call(...))); got {ast.dump(notif_enq_stmt)}"
     )
     notif_await_val = notif_enq_stmt.value.value
@@ -250,12 +238,12 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
     assert "_expires" in notif_kw_map, "notification enqueue_job must pass _expires"
     notif_max_tries = notif_kw_map["_max_tries"]
     notif_expires = notif_kw_map["_expires"]
-    assert (
-        isinstance(notif_max_tries, ast.Constant) and notif_max_tries.value == 3
-    ), f"notification _max_tries must be the literal 3; got {ast.dump(notif_max_tries)}"
-    assert (
-        isinstance(notif_expires, ast.Constant) and notif_expires.value == 60
-    ), f"notification _expires must be the literal 60; got {ast.dump(notif_expires)}"
+    assert isinstance(notif_max_tries, ast.Constant) and notif_max_tries.value == 3, (
+        f"notification _max_tries must be the literal 3; got {ast.dump(notif_max_tries)}"
+    )
+    assert isinstance(notif_expires, ast.Constant) and notif_expires.value == 60, (
+        f"notification _expires must be the literal 60; got {ast.dump(notif_expires)}"
+    )
     # The task name for notification is passed as the first positional arg OR via
     # the function call's first arg — check that no positional arg is 'dispatch_fiscal_receipt'
     # (guard against accidentally calling the wrong task).
@@ -289,9 +277,7 @@ def test_post_commit_enqueue_dispatches_fiscal_receipt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_post_commit_enqueue_calls_arq_enqueue_when_fiscal_receipt_id_present() -> (
-    None
-):
+async def test_post_commit_enqueue_calls_arq_enqueue_when_fiscal_receipt_id_present() -> None:
     """Plan 51-06: when both ``arq_pool`` and ``fiscal_receipt_id`` are
     non-None, the helper enqueues ``dispatch_fiscal_receipt`` with the
     locked retry contract (``_max_tries=3``, ``_expires=60``)."""
@@ -319,9 +305,7 @@ async def test_post_commit_enqueue_calls_arq_enqueue_when_fiscal_receipt_id_pres
 
 
 @pytest.mark.asyncio
-async def test_post_commit_enqueue_does_not_enqueue_when_fiscal_receipt_id_is_none() -> (
-    None
-):
+async def test_post_commit_enqueue_does_not_enqueue_when_fiscal_receipt_id_is_none() -> None:
     """Plan 51-06 / Phase 52 D-52-11: with a real pool but no fiscal_receipt_id
     and no payment_id/kind, both guards short-circuit — no enqueue happens."""
     from app.api.v1._internal.yookassa.handlers import _post_commit_enqueue

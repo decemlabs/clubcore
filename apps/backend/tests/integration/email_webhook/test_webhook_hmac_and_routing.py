@@ -275,9 +275,7 @@ async def test_hard_bounce_updates_row_and_emits_audit(
     assert row.bounce_type == "hard"
 
     audit_row = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "email_send_failed")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "email_send_failed"))
     ).first()
     assert audit_row is not None, "audit row must be emitted for hard-bounce"
     assert audit_row.payload["reason"] == "bounce"  # LOCKED Literal
@@ -313,9 +311,7 @@ async def test_complaint_updates_row_and_emits_audit(
     assert row.bounce_type is None
 
     audit_row = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "email_send_failed")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "email_send_failed"))
     ).first()
     assert audit_row is not None
     assert audit_row.payload["reason"] == "complaint"  # LOCKED Literal
@@ -349,9 +345,7 @@ async def test_delivery_updates_row_and_does_not_emit_audit(
 
     audit_count = len(
         (
-            await db_session.scalars(
-                select(AuditLog).where(AuditLog.action == "email_send_failed")
-            )
+            await db_session.scalars(select(AuditLog).where(AuditLog.action == "email_send_failed"))
         ).all()
     )
     assert audit_count == 0, "soft-info events must NOT emit email_send_failed"
@@ -387,9 +381,7 @@ async def test_soft_bounce_updates_row_and_does_not_emit_audit(
 
     audit_count = len(
         (
-            await db_session.scalars(
-                select(AuditLog).where(AuditLog.action == "email_send_failed")
-            )
+            await db_session.scalars(select(AuditLog).where(AuditLog.action == "email_send_failed"))
         ).all()
     )
     assert audit_count == 0, "soft-bounces stay quiet per D-42-19"
@@ -425,9 +417,7 @@ async def test_unknown_message_id_returns_202_without_update_or_audit(
 
     audit_count = len(
         (
-            await db_session.scalars(
-                select(AuditLog).where(AuditLog.action == "email_send_failed")
-            )
+            await db_session.scalars(select(AuditLog).where(AuditLog.action == "email_send_failed"))
         ).all()
     )
     assert audit_count == 0

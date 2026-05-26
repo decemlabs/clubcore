@@ -73,9 +73,7 @@ async def test_resolver_prefers_running_source_over_renewal(
     renewal.previous_membership_id = source.id
     await db_session.flush()
 
-    resolved = await repository.find_active_for_client(
-        db_session, client.id, today=today
-    )
+    resolved = await repository.find_active_for_client(db_session, client.id, today=today)
     assert resolved is not None
     assert resolved.id == source.id, (
         "Phase 26 D-26-17: running source must win over future renewal "
@@ -170,9 +168,7 @@ async def test_resolver_manual_stacking_same_start_date_tiebreaks_created_at_des
         end_date=same_end,
     )
 
-    resolved = await repository.find_active_for_client(
-        db_session, client.id, today=today
-    )
+    resolved = await repository.find_active_for_client(db_session, client.id, today=today)
     assert resolved is not None
     # `later` was created after `earlier` → its created_at is greater → wins.
     # If created_at happens to be identical (single-statement clock), accept
@@ -181,8 +177,7 @@ async def test_resolver_manual_stacking_same_start_date_tiebreaks_created_at_des
     assert resolved.start_date == same_start
     if earlier.created_at != later.created_at:
         assert resolved.id == later.id, (
-            "created_at DESC tiebreak: later-created row must win when "
-            "start_date is equal."
+            "created_at DESC tiebreak: later-created row must win when start_date is equal."
         )
 
 

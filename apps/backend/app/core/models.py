@@ -113,6 +113,4 @@ class User(Base, UUIDPkMixin, TimestampMixin):
         nullable=True,
     )
 
-    __table_args__ = (
-        CheckConstraint("role IN ('owner', 'reception')", name="role"),
-    )
+    __table_args__ = (CheckConstraint("role IN ('owner', 'reception')", name="role"),)

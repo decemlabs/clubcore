@@ -113,9 +113,7 @@ def test_every_audit_emit_uses_literal_strings() -> None:
     offenders: list[str] = []
     for path, lineno, event_node, resource_type_node in _iter_audit_emit_calls(_BACKEND_APP):
         if event_node is None:
-            offenders.append(
-                f"{path.relative_to(_REPO_ROOT)}:{lineno} — missing `event` arg"
-            )
+            offenders.append(f"{path.relative_to(_REPO_ROOT)}:{lineno} — missing `event` arg")
             continue
         if resource_type_node is None:
             offenders.append(

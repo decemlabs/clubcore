@@ -44,9 +44,7 @@ async def test_initiate_pt_package_refund_happy_path(
     assert data["status"] == "pending"
     online_refund_id = UUID(data["onlineRefundId"])
 
-    row = await db_session.scalar(
-        select(OnlineRefund).where(OnlineRefund.id == online_refund_id)
-    )
+    row = await db_session.scalar(select(OnlineRefund).where(OnlineRefund.id == online_refund_id))
     assert row is not None
     assert row.status == "pending"
     assert row.idempotency_key == str(idem_key)

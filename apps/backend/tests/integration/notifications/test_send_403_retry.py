@@ -66,22 +66,28 @@ async def test_send_403_then_retry_then_idempotent(
     assert sender_state.calls[0].chat_id == 345678
 
     notifs_after_1 = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert notifs_after_1 == []
 
     audits_after_1 = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audits_after_1 == []
 
     # Tick 2 — queue empty, default ok=True applies. Candidate is still
@@ -99,23 +105,29 @@ async def test_send_403_then_retry_then_idempotent(
     assert sender_state.calls[1].chat_id == 345678
 
     notifs_after_2 = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notifs_after_2) == 1
     assert notifs_after_2[0].kind == "expiring_7d"
 
     audits_after_2 = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits_after_2) == 1
 
     # Tick 3 — idempotency catches the now-locked (membership_id, '7d') pair.

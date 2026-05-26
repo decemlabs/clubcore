@@ -216,9 +216,7 @@ async def webhook_engine() -> AsyncIterator[Any]:
         # same connection pool as the test.
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -266,9 +264,7 @@ async def sqlalchemy_query_log_timestamps(
         execution_options: Any,
     ) -> None:
         try:
-            stmt_text = str(
-                clauseelement.compile(compile_kwargs={"literal_binds": False})
-            )
+            stmt_text = str(clauseelement.compile(compile_kwargs={"literal_binds": False}))
         except Exception:
             stmt_text = str(clauseelement)
         log.append((stmt_text, time.perf_counter()))
@@ -628,4 +624,3 @@ __all__ = (
 # here — the webhook UoW seeds its rows inline (``_seed_client`` /
 # ``_seed_membership_plan`` / ``_seed_pt_package_plan``) to keep the test
 # wiring self-contained.
-

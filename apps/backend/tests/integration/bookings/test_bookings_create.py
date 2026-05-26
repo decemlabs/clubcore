@@ -77,9 +77,7 @@ async def test_create_booking_happy(
     assert response.created_by_user_id == seeded_owner.id
 
     # DB invariants — booking row exists; slot row flipped to 'booked'.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert booking_row is not None
     assert booking_row.status == "confirmed"
     # The slot status was flipped via raw cross-module sa.text() UPDATE
@@ -91,12 +89,18 @@ async def test_create_booking_happy(
 
     # Audit invariant — booking_created emitted exactly once with the
     # locked payload shape (5 keys, UUIDs stringified per D-38-17).
-    audit_rows = (await db_session.execute(
-        select(AuditLog).where(
-            AuditLog.action == "booking_created",
-            AuditLog.resource_id == response.id,
+    audit_rows = (
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "booking_created",
+                    AuditLog.resource_id == response.id,
+                )
+            )
         )
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1
     payload = audit_rows[0].payload
     assert payload["booking_id"] == str(response.id)
@@ -435,7 +439,9 @@ async def test_create_booking_double_book_serial_409(
 
     # DB invariant — exactly one confirmed booking for the slot.
     count = await db_session.scalar(
-        select(func.count()).select_from(Booking).where(
+        select(func.count())
+        .select_from(Booking)
+        .where(
             Booking.slot_id == slot.id,
             Booking.status == "confirmed",
         )
@@ -473,9 +479,7 @@ async def test_complete_booking_happy(
     await service.complete_booking(db_session, created.id)
     await db_session.commit()
 
-    row = await db_session.scalar(
-        select(Booking).where(Booking.id == created.id)
-    )
+    row = await db_session.scalar(select(Booking).where(Booking.id == created.id))
     assert row is not None
     assert row.status == "completed"
     assert row.completed_at is not None

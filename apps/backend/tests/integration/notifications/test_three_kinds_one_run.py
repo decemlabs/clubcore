@@ -42,16 +42,25 @@ async def test_three_kinds_dispatched_in_one_run(
     c3 = await make_client_with_telegram(telegram_user_id=510_003)
 
     m_7d = await make_membership(
-        client_id=c1, plan=plan, status="active",
-        start_date=today - timedelta(days=23), end_date=today + timedelta(days=7),
+        client_id=c1,
+        plan=plan,
+        status="active",
+        start_date=today - timedelta(days=23),
+        end_date=today + timedelta(days=7),
     )
     m_3d = await make_membership(
-        client_id=c2, plan=plan, status="active",
-        start_date=today - timedelta(days=27), end_date=today + timedelta(days=3),
+        client_id=c2,
+        plan=plan,
+        status="active",
+        start_date=today - timedelta(days=27),
+        end_date=today + timedelta(days=3),
     )
     m_1d = await make_membership(
-        client_id=c3, plan=plan, status="active",
-        start_date=today - timedelta(days=29), end_date=today + timedelta(days=1),
+        client_id=c3,
+        plan=plan,
+        status="active",
+        start_date=today - timedelta(days=29),
+        end_date=today + timedelta(days=1),
     )
 
     count = await memberships_service._send_expiring_notifications(
@@ -70,31 +79,39 @@ async def test_three_kinds_dispatched_in_one_run(
     # MembershipNotification rows — one per kind.
     membership_ids = {m_7d.id, m_3d.id, m_1d.id}
     notif_rows = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id.in_(membership_ids)
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(
+                    MembershipNotification.membership_id.in_(membership_ids)
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 3
     notif_kinds = {row.kind for row in notif_rows}
     assert notif_kinds == {"expiring_7d", "expiring_3d", "expiring_1d"}
 
     # AuditLog — three rows, one per locked kind action.
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action.in_(
-                    [
-                        "expiring_notification_sent_7d",
-                        "expiring_notification_sent_3d",
-                        "expiring_notification_sent_1d",
-                    ]
-                ),
-                AuditLog.resource_id.in_(membership_ids),
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action.in_(
+                        [
+                            "expiring_notification_sent_7d",
+                            "expiring_notification_sent_3d",
+                            "expiring_notification_sent_1d",
+                        ]
+                    ),
+                    AuditLog.resource_id.in_(membership_ids),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) == 3
     actions = {a.action for a in audits}
     assert actions == {

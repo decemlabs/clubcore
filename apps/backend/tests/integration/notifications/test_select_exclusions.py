@@ -82,9 +82,7 @@ async def test_select_exclusions(
         await db_session.commit()
     elif scenario == "client_soft_deleted":
         await db_session.execute(
-            update(Client)
-            .where(Client.id == client_id)
-            .values(deleted_at=datetime.now(tz=UTC))
+            update(Client).where(Client.id == client_id).values(deleted_at=datetime.now(tz=UTC))
         )
         await db_session.commit()
 
@@ -100,10 +98,12 @@ async def test_select_exclusions(
     assert sender_state.calls == []
 
     notifs = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert notifs == []

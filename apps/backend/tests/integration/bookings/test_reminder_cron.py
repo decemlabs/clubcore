@@ -144,9 +144,7 @@ async def test_reminders_cron_inserts_idempotency_row_per_send(
     expected_text = bookings_notifications.render_booking_reminder_24h_dm(
         client_name=client.first_name,
         trainer_name=trainer.full_name,
-        slot_start_msk=slot.start_time.astimezone(MOSCOW_TZ).strftime(
-            "%d.%m.%Y %H:%M"
-        ),
+        slot_start_msk=slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M"),
     )
 
     count = await bookings_service._send_booking_reminders(
@@ -163,12 +161,14 @@ async def test_reminders_cron_inserts_idempotency_row_per_send(
 
     # Idempotency row inserted via the helper's per-send write session.
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "reminder_24h"
 
@@ -221,12 +221,14 @@ async def test_reminders_cron_idempotent_second_run_zero(
     )
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
 
 
@@ -266,23 +268,24 @@ async def test_reminders_cron_skips_403_blocked_no_row(
 
     assert count == 0
     assert len(sender_state.calls) == 1, (
-        "the failed send is still recorded as a call — only the post-send "
-        "INSERT is skipped"
+        "the failed send is still recorded as a call — only the post-send INSERT is skipped"
     )
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 0
 
     failed_events = [
-        e for e in captured
-        if e.get("event") == "booking_reminder_send_failed"
-        and e.get("reason") == "bot_blocked"
+        e
+        for e in captured
+        if e.get("event") == "booking_reminder_send_failed" and e.get("reason") == "bot_blocked"
     ]
     assert len(failed_events) == 1
     assert failed_events[0].get("booking_id") == str(booking.id)
@@ -328,12 +331,14 @@ async def test_reminders_cron_skips_unlinked_client(
     )
 
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking.id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 0
 
 
@@ -391,9 +396,7 @@ async def test_reminders_cron_collision_rollback_on_pre_inserted_row(
     pre_insert_done = {"fired": False}
     real_sender = sender_module.send_text_dm
 
-    async def _pre_insert_then_send(
-        bot: object, chat_id: int, text: str
-    ) -> SendResult:
+    async def _pre_insert_then_send(bot: object, chat_id: int, text: str) -> SendResult:
         # Insert the colliding row through the SAME savepoint factory the
         # helper uses, so the INSERT lives inside the outer test
         # transaction (no real cross-process race needed for the
@@ -426,7 +429,8 @@ async def test_reminders_cron_collision_rollback_on_pre_inserted_row(
 
     # Exactly ONE collision INFO event for this booking.
     collisions = [
-        e for e in captured
+        e
+        for e in captured
         if e.get("event") == "booking_reminder_idempotency_collision"
         and e.get("booking_id") == str(booking_id)
     ]
@@ -435,10 +439,12 @@ async def test_reminders_cron_collision_rollback_on_pre_inserted_row(
     # Exactly one row survives (the pre-inserted one; the helper's
     # write_session was rolled back).
     notif_rows = (
-        await db_session.execute(
-            select(BookingNotification).where(
-                BookingNotification.booking_id == booking_id
+        (
+            await db_session.execute(
+                select(BookingNotification).where(BookingNotification.booking_id == booking_id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1

@@ -54,9 +54,7 @@ async def get_alive(session: AsyncSession, user_id: UUID) -> User | None:
     return result
 
 
-async def get_by_email_for_create(
-    session: AsyncSession, email_lower: str
-) -> User | None:
+async def get_by_email_for_create(session: AsyncSession, email_lower: str) -> User | None:
     """Lookup an alive (``deleted_at IS NULL``) user by lowercased email.
 
     Used by ``service.create_user`` (D-43-13) to branch between INSERT-new vs
@@ -271,9 +269,7 @@ async def deactivate_user(
     )
 
 
-async def reactivate_user(
-    session: AsyncSession, *, target_user_id: UUID
-) -> None:
+async def reactivate_user(session: AsyncSession, *, target_user_id: UUID) -> None:
     """D-43-17 — atomic flip back to ``is_active=true``, clear deactivated_* fields.
 
     Mirrors the column-consistency CHECK constraint from migration 0030:
@@ -328,7 +324,8 @@ async def soft_delete_user(
             is_active=False,
             deactivated_at=func.coalesce(User.deactivated_at, now),
             deactivated_by_user_id=func.coalesce(
-                User.deactivated_by_user_id, actor_user_id,
+                User.deactivated_by_user_id,
+                actor_user_id,
             ),
         )
     )
@@ -383,9 +380,7 @@ async def atomic_consume_invitation_token_by_id(
     return row.id if row else None
 
 
-async def count_active_owners_excluding(
-    session: AsyncSession, *, excluded_user_id: UUID
-) -> int:
+async def count_active_owners_excluding(session: AsyncSession, *, excluded_user_id: UUID) -> int:
     """D-43-16 last-owner guard — lock candidate owner ROWS, count Python-side.
 
     CR-02 / WR-05 (Phase 43 review) — the pre-fix code used

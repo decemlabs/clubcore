@@ -121,10 +121,7 @@ async def _dedupe_update_id(redis: Redis, update_id: int, chat_id: int) -> bool:
 
 
 # Russian copy -- locked per specifics line 253. Single-language by design.
-_DM_STRANGER = (
-    "Этот Telegram не привязан к аккаунту Sportzal. "
-    "Обратитесь к администратору."
-)
+_DM_STRANGER = "Этот Telegram не привязан к аккаунту Sportzal. Обратитесь к администратору."
 _DM_REPLAY = "Этот код уже использован, запросите новый."
 
 # Phase 20 — locked Russian DM copy per AUTH-TG-11. Owner-signed-off (gated in 20-03).
@@ -450,9 +447,7 @@ async def book_handler(
 
     # Resolve the modules-level constants + types we need WITHOUT static
     # imports (preserves `integrations must not import modules`).
-    bookings_notifications = importlib.import_module(
-        "app.modules.bookings.notifications"
-    )
+    bookings_notifications = importlib.import_module("app.modules.bookings.notifications")
     schedule_schemas = importlib.import_module("app.modules.schedule.schemas")
     bot_book_denied_dm: str = bookings_notifications._BOT_BOOK_DENIED_DM
     slot_list_query_cls = schedule_schemas.SlotListQuery
@@ -475,11 +470,7 @@ async def book_handler(
         if pt_package is None or pt_package.sessions_remaining <= 0:
             logger.warning(
                 "book_handler_denied",
-                reason=(
-                    "pt_package_not_active"
-                    if pt_package is None
-                    else "pt_package_exhausted"
-                ),
+                reason=("pt_package_not_active" if pt_package is None else "pt_package_exhausted"),
                 chat_id=chat_id,
                 client_id=str(client.id),
             )
@@ -519,10 +510,7 @@ async def book_handler(
         # (39 bytes total, < 64-byte Telegram limit — test asserts).
         buttons: list[list[InlineKeyboardButton]] = []
         for s in slots:
-            label = (
-                f"{s.start_time.astimezone(_MOSCOW_TZ):%d.%m %H:%M} "
-                f"— {s.trainer_full_name}"
-            )
+            label = f"{s.start_time.astimezone(_MOSCOW_TZ):%d.%m %H:%M} — {s.trainer_full_name}"
             buttons.append(
                 [
                     InlineKeyboardButton(
@@ -618,9 +606,7 @@ async def book_callback_handler(
 
     # Resolve modules-level constants WITHOUT static imports
     # (preserves `integrations must not import modules` import-linter contract).
-    bookings_notifications = importlib.import_module(
-        "app.modules.bookings.notifications"
-    )
+    bookings_notifications = importlib.import_module("app.modules.bookings.notifications")
     bot_book_denied_dm: str = bookings_notifications._BOT_BOOK_DENIED_DM
     render_confirmed = bookings_notifications.render_booking_confirmed_dm
 

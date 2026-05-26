@@ -31,11 +31,21 @@ from app.core.dependencies import get_email_dispatcher
 # === Phase 39 NOTIFY-01 -- locked Russian DM copy. Owner sign-off pending in plan 39-01. ===
 # RUF001/E501/RUF003 per-line: Cyrillic letters + locked single-line format are intentional
 # (Russian-only product per PROJECT.md i18n locked decision; reviewers diff exact text).
-BOOKING_CONFIRMED_DM: Final[str] = "Здравствуйте, {client_name}! Ваша запись подтверждена: тренер {trainer_name}, {slot_start_msk} (МСК). Ждём вас в зале!"  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
-BOOKING_CANCELLED_BY_CLIENT_DM: Final[str] = "Здравствуйте, {client_name}! Ваша запись к тренеру {trainer_name} на {slot_start_msk} (МСК) отменена по вашей просьбе. Будем рады видеть вас снова — обратитесь к администратору, чтобы записаться заново."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
-BOOKING_CANCELLED_BY_OWNER_DM: Final[str] = "Здравствуйте, {client_name}! К сожалению, ваша запись к тренеру {trainer_name} на {slot_start_msk} (МСК) отменена. Приносим извинения за неудобства — администратор поможет подобрать другое время."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
-BOOKING_REMINDER_24H_DM: Final[str] = "Здравствуйте, {client_name}! Напоминаем о вашей записи: завтра, {slot_start_msk} (МСК), вас ждёт тренер {trainer_name}. Пожалуйста, не опаздывайте."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
-_BOT_BOOK_DENIED_DM: Final[str] = "Сейчас бронирование недоступно. Пожалуйста, свяжитесь с администратором — он подскажет ближайшее свободное время."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md  # NOTIFY-02 anti-oracle: NO placeholders, NO failure-cause disclosure (C-12)
+BOOKING_CONFIRMED_DM: Final[str] = (
+    "Здравствуйте, {client_name}! Ваша запись подтверждена: тренер {trainer_name}, {slot_start_msk} (МСК). Ждём вас в зале!"  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
+)
+BOOKING_CANCELLED_BY_CLIENT_DM: Final[str] = (
+    "Здравствуйте, {client_name}! Ваша запись к тренеру {trainer_name} на {slot_start_msk} (МСК) отменена по вашей просьбе. Будем рады видеть вас снова — обратитесь к администратору, чтобы записаться заново."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
+)
+BOOKING_CANCELLED_BY_OWNER_DM: Final[str] = (
+    "Здравствуйте, {client_name}! К сожалению, ваша запись к тренеру {trainer_name} на {slot_start_msk} (МСК) отменена. Приносим извинения за неудобства — администратор поможет подобрать другое время."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
+)
+BOOKING_REMINDER_24H_DM: Final[str] = (
+    "Здравствуйте, {client_name}! Напоминаем о вашей записи: завтра, {slot_start_msk} (МСК), вас ждёт тренер {trainer_name}. Пожалуйста, не опаздывайте."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md
+)
+_BOT_BOOK_DENIED_DM: Final[str] = (
+    "Сейчас бронирование недоступно. Пожалуйста, свяжитесь с администратором — он подскажет ближайшее свободное время."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md  # NOTIFY-02 anti-oracle: NO placeholders, NO failure-cause disclosure (C-12)
+)
 
 
 def render_booking_confirmed_dm(

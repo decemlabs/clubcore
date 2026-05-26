@@ -83,13 +83,17 @@ async def test_sale_records_payment_with_snapshot_symmetry(
     membership_id = UUID(data["id"])
 
     payments = (
-        await db_session.execute(
-            select(Payment).where(
-                Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP,
-                Payment.subject_id == membership_id,
+        (
+            await db_session.execute(
+                select(Payment).where(
+                    Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP,
+                    Payment.subject_id == membership_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(payments) == 1, f"expected exactly 1 payment row, got {len(payments)}"
     payment = payments[0]
 
@@ -154,9 +158,7 @@ async def test_recorder_failure_rolls_back_uow(
     async def _exploding_recorder(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("test-induced recorder failure")
 
-    monkeypatch.setattr(
-        core_dependencies, "_payment_recorder", _exploding_recorder, raising=False
-    )
+    monkeypatch.setattr(core_dependencies, "_payment_recorder", _exploding_recorder, raising=False)
 
     # Starlette propagates unhandled exceptions through ASGITransport by
     # default (raise_app_exceptions=True). RuntimeError is not registered

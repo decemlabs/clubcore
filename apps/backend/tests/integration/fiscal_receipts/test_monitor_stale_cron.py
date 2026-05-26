@@ -83,9 +83,7 @@ async def _seed_pending_fr(
     # Force the created_at field to a stale or fresh value (the server_default
     # is now(); overwrite with raw UPDATE so we can simulate aged rows).
     await session.execute(
-        text(
-            "UPDATE fiscal_receipts SET created_at = :ts WHERE id = :id"
-        ),
+        text("UPDATE fiscal_receipts SET created_at = :ts WHERE id = :id"),
         {"ts": datetime.now(UTC) - timedelta(seconds=created_at_offset_seconds), "id": fr.id},
     )
     await session.flush()

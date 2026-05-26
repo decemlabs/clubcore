@@ -4,6 +4,7 @@ The _assert_can_transition guard lands in Phase 38 alongside schedule/service.py
 (mirrors v1.3/v1.4 precedent at app/modules/pt_packages/service.py:184-197).
 This file pins ONLY the declarative matrix contents + immutability.
 """
+
 from types import MappingProxyType
 
 import pytest

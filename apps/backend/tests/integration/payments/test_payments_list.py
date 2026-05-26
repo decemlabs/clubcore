@@ -90,9 +90,7 @@ async def test_owner_filters_by_subject_kind(
         refund_of=sale.id,
     )
 
-    r = await authed_client_owner.get(
-        "/api/v1/payments?subjectKind=membership"
-    )
+    r = await authed_client_owner.get("/api/v1/payments?subjectKind=membership")
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert all(item["subjectKind"] == SUBJECT_KIND_MEMBERSHIP for item in items)
@@ -116,9 +114,7 @@ async def test_owner_filters_by_received_by_user_id(
     await make_payment(subject_id=mem1.id, received_by_user_id=seeded_owner.id)
     p_other = await make_payment(subject_id=mem2.id, received_by_user_id=other.id)
 
-    r = await authed_client_owner.get(
-        f"/api/v1/payments?receivedByUserId={other.id}"
-    )
+    r = await authed_client_owner.get(f"/api/v1/payments?receivedByUserId={other.id}")
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert len(items) == 1
@@ -207,9 +203,7 @@ async def test_reception_lists_by_membership(
         refund_of=sale.id,
     )
 
-    r = await authed_client_reception.get(
-        f"/api/v1/payments/by-membership/{mem.id}"
-    )
+    r = await authed_client_reception.get(f"/api/v1/payments/by-membership/{mem.id}")
     assert r.status_code == 200, r.text
     item_ids = {item["id"] for item in r.json()["data"]["items"]}
     assert str(sale.id) in item_ids

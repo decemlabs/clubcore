@@ -271,16 +271,13 @@ async def initiate_online_refund(
     # 0. Cross-XOR defensive guard (router enforces; this is a depth-in-defense).
     if (membership_id is None) == (pt_package_id is None):
         raise ValueError(
-            "initiate_online_refund: exactly one of membership_id or "
-            "pt_package_id must be set"
+            "initiate_online_refund: exactly one of membership_id or pt_package_id must be set"
         )
 
     # 1. Idempotency-Key replay check (D-51-Discretion). Runs BEFORE step 2
     #    guards so a benign double-click does not pay the guard cost twice
     #    and does NOT re-emit audit.
-    existing = await refund_repo.get_online_refund_by_idempotency_key(
-        session, str(idempotency_key)
-    )
+    existing = await refund_repo.get_online_refund_by_idempotency_key(session, str(idempotency_key))
     if existing is not None:
         _log.info(
             "online_refund_initiate_replay",
@@ -301,9 +298,7 @@ async def initiate_online_refund(
 
     if membership_id is not None:
         # 2a (membership): load.
-        membership = await session.scalar(
-            select(Membership).where(Membership.id == membership_id)
-        )
+        membership = await session.scalar(select(Membership).where(Membership.id == membership_id))
         if membership is None:
             raise NotFoundError("membership_not_found")
 
@@ -334,9 +329,7 @@ async def initiate_online_refund(
     else:
         assert pt_package_id is not None
         # 2a (pt_package): load.
-        pt_package = await session.scalar(
-            select(PtPackage).where(PtPackage.id == pt_package_id)
-        )
+        pt_package = await session.scalar(select(PtPackage).where(PtPackage.id == pt_package_id))
         if pt_package is None:
             raise NotFoundError("pt_package_not_found")
 

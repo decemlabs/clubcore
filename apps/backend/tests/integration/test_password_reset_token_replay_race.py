@@ -92,10 +92,7 @@ async def real_commit_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    "TRUNCATE password_reset_tokens, audit_log, users "
-                    "RESTART IDENTITY CASCADE"
-                )
+                text("TRUNCATE password_reset_tokens, audit_log, users RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -156,9 +153,7 @@ async def test_password_reset_token_replay_race(
         transport = ASGITransport(app=app)
 
         async def _confirm() -> int:
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
                 resp = await client.post(
                     "/api/v1/auth/password-reset/confirm",
                     json={
@@ -179,9 +174,7 @@ async def test_password_reset_token_replay_race(
     # invalid_or_expired_token (410). The loser CANNOT observe a
     # consumed_at-still-NULL row because UPDATE-RETURNING serialises at
     # the row level under PostgreSQL's default READ COMMITTED isolation.
-    assert sorted(statuses) == [200, 410], (
-        f"expected one 200 + one 410, got {sorted(statuses)}"
-    )
+    assert sorted(statuses) == [200, 410], f"expected one 200 + one 410, got {sorted(statuses)}"
 
     # ── DB invariants ───────────────────────────────────────────────────
     # Exactly one password_reset_completed audit row exists for this user.
@@ -200,8 +193,7 @@ async def test_password_reset_token_replay_race(
             )
         )
         assert audit_count == 1, (
-            f"expected exactly 1 password_reset_completed audit row, "
-            f"got {audit_count}"
+            f"expected exactly 1 password_reset_completed audit row, got {audit_count}"
         )
 
         # Exactly one password_reset_tokens row for the seeded user_id
@@ -215,8 +207,7 @@ async def test_password_reset_token_replay_race(
             )
         )
         assert consumed_count == 1, (
-            f"expected exactly 1 consumed password_reset_tokens row, "
-            f"got {consumed_count}"
+            f"expected exactly 1 consumed password_reset_tokens row, got {consumed_count}"
         )
 
         # Sanity: the consumed row is the one we seeded (token_hash match).

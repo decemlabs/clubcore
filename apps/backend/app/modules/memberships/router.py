@@ -557,7 +557,5 @@ async def refund_membership(
 
     RBAC-04 ordering: auth → require_permission → verify_csrf.
     """
-    membership = await service.refund_membership(
-        session, actor, membership_id, payload
-    )
+    membership = await service.refund_membership(session, actor, membership_id, payload)
     return envelope(membership)

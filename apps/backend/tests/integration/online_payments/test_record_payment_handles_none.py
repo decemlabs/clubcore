@@ -46,8 +46,7 @@ async def test_record_payment_with_none_audit_actor_and_none_received_by(
     await db_session.flush()
 
     assert payment.received_by_user_id is None, (
-        "received_by_user_id NULL must round-trip through Alembic 0036's "
-        "nullability flip"
+        "received_by_user_id NULL must round-trip through Alembic 0036's nullability flip"
     )
     assert payment.amount_kopecks == 100000
     assert payment.method == "online"
@@ -55,13 +54,17 @@ async def test_record_payment_with_none_audit_actor_and_none_received_by(
     assert payment.subject_id == subject_id
 
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "payment_recorded",
-                AuditLog.resource_id == payment.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "payment_recorded",
+                    AuditLog.resource_id == payment.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_user_id is None, (
         "system-emit discipline: actor_user_id must be NULL when audit_actor=None"
@@ -108,12 +111,16 @@ async def test_record_payment_with_full_actor_still_works(
     assert payment.received_by_user_id == user.id
 
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "payment_recorded",
-                AuditLog.resource_id == payment.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "payment_recorded",
+                    AuditLog.resource_id == payment.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_user_id == user.id

@@ -279,8 +279,7 @@ async def test_soft_deleted_email_re_invite_accept_lands_as_new_user_id(
 
     # Capture B's invitation token from the recorder.
     assert len(sandbox_email_client.sent_emails) == 1, (
-        f"expected 1 captured invitation for B; got "
-        f"{len(sandbox_email_client.sent_emails)}"
+        f"expected 1 captured invitation for B; got {len(sandbox_email_client.sent_emails)}"
     )
     envelope = sandbox_email_client.sent_emails[0]
     raw_token_b = _extract_raw_token(envelope["invitation_url"])
@@ -326,8 +325,7 @@ async def test_soft_deleted_email_re_invite_accept_lands_as_new_user_id(
         "accept-flow that landed on a DIFFERENT row (B)."
     )
     assert row_a_pre.full_name == row_a_pre_full_name, (
-        "Pitfall 4 — row A's full_name must NOT be overwritten by an "
-        "accept-flow that landed on B."
+        "Pitfall 4 — row A's full_name must NOT be overwritten by an accept-flow that landed on B."
     )
 
     # Row B has the post-accept post-state.
@@ -342,13 +340,17 @@ async def test_soft_deleted_email_re_invite_accept_lands_as_new_user_id(
 
     # Step 7 — audit row pins to B.id, NOT A.id.
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_invitation_accepted",
-                AuditLog.resource_id == user_b_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_invitation_accepted",
+                    AuditLog.resource_id == user_b_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1, (
         f"expected 1 user_invitation_accepted audit row for B; got {len(audit_rows)}"
     )
@@ -361,13 +363,17 @@ async def test_soft_deleted_email_re_invite_accept_lands_as_new_user_id(
 
     # Defence in depth — no accept-audit row should exist for A.id.
     audit_rows_a = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_invitation_accepted",
-                AuditLog.resource_id == user_a_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_invitation_accepted",
+                    AuditLog.resource_id == user_a_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audit_rows_a == [], (
         f"Pitfall 4 — no user_invitation_accepted audit row should "
         f"resolve_id to A.id={user_a_id}. Got {audit_rows_a!r}."

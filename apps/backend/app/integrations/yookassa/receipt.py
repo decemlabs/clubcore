@@ -84,8 +84,7 @@ def build_receipt_item(
     """
     if len(description) > _MAX_DESCRIPTION_LEN:
         raise ValueError(
-            f"description must be ≤ {_MAX_DESCRIPTION_LEN} chars, "
-            f"got {len(description)}"
+            f"description must be ≤ {_MAX_DESCRIPTION_LEN} chars, got {len(description)}"
         )
     return {
         "description": description,

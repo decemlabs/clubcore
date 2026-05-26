@@ -1,4 +1,5 @@
 """Synthetic negative fixture — session.delete(<Payment instance>) (B-01 violation)."""
+
 from app.modules.payments.models import Payment  # type: ignore[import-not-found]
 
 

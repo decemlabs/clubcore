@@ -327,15 +327,9 @@ async def test_derive_idempotency_key_is_deterministic_per_day():
 
     plan_id = uuid4()
     client_id = uuid4()
-    k1 = _derive_idempotency_key(
-        subject_kind="membership", plan_id=plan_id, client_id=client_id
-    )
-    k2 = _derive_idempotency_key(
-        subject_kind="membership", plan_id=plan_id, client_id=client_id
-    )
-    k3 = _derive_idempotency_key(
-        subject_kind="pt_package", plan_id=plan_id, client_id=client_id
-    )
+    k1 = _derive_idempotency_key(subject_kind="membership", plan_id=plan_id, client_id=client_id)
+    k2 = _derive_idempotency_key(subject_kind="membership", plan_id=plan_id, client_id=client_id)
+    k3 = _derive_idempotency_key(subject_kind="pt_package", plan_id=plan_id, client_id=client_id)
     assert k1 == k2
     assert k1 != k3
     assert len(k1) == 64
@@ -347,7 +341,5 @@ async def test_phase49_fiscal_dispatcher_stub_raises_not_implemented():
     from app.modules.online_payments.service import phase49_fiscal_dispatcher_stub
 
     with pytest.raises(NotImplementedError) as ei:
-        await phase49_fiscal_dispatcher_stub(
-            fiscal_receipt_id=uuid4(), audit_correlation_id=None
-        )
+        await phase49_fiscal_dispatcher_stub(fiscal_receipt_id=uuid4(), audit_correlation_id=None)
     assert "Phase 50" in str(ei.value)

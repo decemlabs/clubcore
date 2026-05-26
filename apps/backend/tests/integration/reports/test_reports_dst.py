@@ -142,9 +142,7 @@ async def test_dst_revenue_boundary_payment_buckets_to_next_msk_day(
     buckets = r.json()["data"]["buckets"]
 
     # 1. Boundary payment must appear in GOLDEN_DATE_MSK_NEXT (2026-01-02) bucket.
-    next_day_bucket = next(
-        (b for b in buckets if b["period"] == GOLDEN_DATE_MSK_NEXT), None
-    )
+    next_day_bucket = next((b for b in buckets if b["period"] == GOLDEN_DATE_MSK_NEXT), None)
     assert next_day_bucket is not None, (
         f"Expected a bucket for {GOLDEN_DATE_MSK_NEXT} (boundary payment at 21:30Z "
         f"must bucket to next MSK day), got buckets={buckets}"
@@ -157,9 +155,7 @@ async def test_dst_revenue_boundary_payment_buckets_to_next_msk_day(
 
     # 2. No bucket for GOLDEN_DATE_UTC_PREV (2026-01-01) — the boundary event must NOT
     #    appear on the UTC calendar date, only on the MSK calendar date.
-    prev_day_bucket = next(
-        (b for b in buckets if b["period"] == GOLDEN_DATE_UTC_PREV), None
-    )
+    prev_day_bucket = next((b for b in buckets if b["period"] == GOLDEN_DATE_UTC_PREV), None)
     assert prev_day_bucket is None, (
         f"Found unexpected bucket for {GOLDEN_DATE_UTC_PREV} — payment at 21:30Z "
         f"incorrectly bucketed to the UTC date instead of next MSK day: {prev_day_bucket}"
@@ -209,9 +205,7 @@ async def test_dst_revenue_net_of_refund_golden_amount(
     buckets = r.json()["data"]["buckets"]
 
     bucket = next((b for b in buckets if b["period"] == GOLDEN_DATE_MSK_NEXT), None)
-    assert bucket is not None, (
-        f"Expected bucket for {GOLDEN_DATE_MSK_NEXT}, got buckets={buckets}"
-    )
+    assert bucket is not None, f"Expected bucket for {GOLDEN_DATE_MSK_NEXT}, got buckets={buckets}"
     assert bucket["netKopecks"] == NET_KOPECKS, (
         f"Golden net-of-refund mismatch: expected NET_KOPECKS={NET_KOPECKS}, "
         f"got {bucket['netKopecks']}. "
@@ -246,12 +240,8 @@ async def test_dst_visits_boundary_visit_buckets_to_next_msk_day(
     # Two distinct clients — uq_visits_client_id_gym_date prevents same client twice per day.
     client_boundary = await make_client()
     client_anchor = await make_client()
-    mem_boundary = await make_membership(
-        client_id=client_boundary.id, plan=plan, status="active"
-    )
-    mem_anchor = await make_membership(
-        client_id=client_anchor.id, plan=plan, status="active"
-    )
+    mem_boundary = await make_membership(client_id=client_boundary.id, plan=plan, status="active")
+    mem_anchor = await make_membership(client_id=client_anchor.id, plan=plan, status="active")
 
     # Boundary visit: 21:30Z on 2026-01-01 → gym_date = 2026-01-02 (MSK)
     await make_visit(
@@ -275,9 +265,7 @@ async def test_dst_visits_boundary_visit_buckets_to_next_msk_day(
     daily = r.json()["data"]["daily"]
 
     # 1. Boundary visit must appear in GOLDEN_DATE_MSK_NEXT (2026-01-02) daily bucket.
-    next_day_bucket = next(
-        (b for b in daily if b["date"] == GOLDEN_DATE_MSK_NEXT), None
-    )
+    next_day_bucket = next((b for b in daily if b["date"] == GOLDEN_DATE_MSK_NEXT), None)
     assert next_day_bucket is not None, (
         f"Expected daily bucket for {GOLDEN_DATE_MSK_NEXT} (visit at 21:30Z must "
         f"bucket to next MSK day), got daily={daily}"
@@ -290,9 +278,7 @@ async def test_dst_visits_boundary_visit_buckets_to_next_msk_day(
 
     # 2. No bucket for GOLDEN_DATE_UTC_PREV (2026-01-01) — the boundary visit must NOT
     #    appear on the UTC calendar date.
-    prev_day_bucket = next(
-        (b for b in daily if b["date"] == GOLDEN_DATE_UTC_PREV), None
-    )
+    prev_day_bucket = next((b for b in daily if b["date"] == GOLDEN_DATE_UTC_PREV), None)
     assert prev_day_bucket is None, (
         f"Found unexpected daily bucket for {GOLDEN_DATE_UTC_PREV} — visit at 21:30Z "
         f"incorrectly bucketed to the UTC date instead of next MSK day: {prev_day_bucket}"

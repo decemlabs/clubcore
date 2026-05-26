@@ -748,9 +748,7 @@ async def handle_refund_succeeded(
 
     try:
         async with session.begin():
-            row = await _select_for_update_online_refund(
-                session, yookassa_refund_id=object_id
-            )
+            row = await _select_for_update_online_refund(session, yookassa_refund_id=object_id)
             if row is None:
                 _log.warning(
                     "yookassa_refund_webhook_orphan",
@@ -815,9 +813,7 @@ async def handle_refund_succeeded(
         # _is_refund_of_uniqueness_conflict is still consulted on raw
         # IntegrityError to scope this branch narrowly to the partial-UNIQUE
         # path — other IntegrityErrors (FK violations etc.) propagate.
-        if isinstance(exc, AlreadyRefundedError) or _is_refund_of_uniqueness_conflict(
-            exc
-        ):
+        if isinstance(exc, AlreadyRefundedError) or _is_refund_of_uniqueness_conflict(exc):
             _log.warning(
                 "yookassa_refund_idempotent_replay",
                 yookassa_refund_id=object_id,
@@ -868,9 +864,7 @@ async def handle_receipt_succeeded(
         return
 
     async with session.begin():
-        row = await _select_for_update_fiscal_receipt(
-            session, yookassa_receipt_id=object_id
-        )
+        row = await _select_for_update_fiscal_receipt(session, yookassa_receipt_id=object_id)
         if row is None:
             _log.warning(
                 "yookassa_receipt_webhook_orphan",
@@ -927,9 +921,7 @@ async def handle_receipt_succeeded(
             resource_type="fiscal_receipt",
             resource_id=row.id,
             audit_correlation_id=(
-                str(row.audit_correlation_id)
-                if row.audit_correlation_id is not None
-                else None
+                str(row.audit_correlation_id) if row.audit_correlation_id is not None else None
             ),
             fiscal_receipt_id=str(row.id),
             yookassa_receipt_id=object_id,
@@ -971,9 +963,7 @@ async def handle_receipt_canceled(
         _log.warning("yookassa_webhook_missing_object_id", yk_event="receipt.canceled")
         return
 
-    details_obj = (
-        object_obj.get("cancellation_details") if isinstance(object_obj, dict) else None
-    )
+    details_obj = object_obj.get("cancellation_details") if isinstance(object_obj, dict) else None
     details: dict[str, Any] = details_obj if isinstance(details_obj, dict) else {}
     failure_reason_raw = details.get("reason")
     failure_reason: str = (
@@ -983,9 +973,7 @@ async def handle_receipt_canceled(
     )
 
     async with session.begin():
-        row = await _select_for_update_fiscal_receipt(
-            session, yookassa_receipt_id=object_id
-        )
+        row = await _select_for_update_fiscal_receipt(session, yookassa_receipt_id=object_id)
         if row is None:
             _log.warning(
                 "yookassa_receipt_webhook_orphan",
@@ -1039,9 +1027,7 @@ async def handle_receipt_canceled(
             resource_type="fiscal_receipt",
             resource_id=row.id,
             audit_correlation_id=(
-                str(row.audit_correlation_id)
-                if row.audit_correlation_id is not None
-                else None
+                str(row.audit_correlation_id) if row.audit_correlation_id is not None else None
             ),
             fiscal_receipt_id=str(row.id),
             failure_reason=failure_reason,

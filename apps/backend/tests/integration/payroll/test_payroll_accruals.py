@@ -396,9 +396,7 @@ async def test_post_accrual_audit_row_created(
         user_id=seeded_owner.id,
     )
 
-    count_before = await _count_audit_rows(
-        db_session, "payroll_accrual_created", "payroll_accrual"
-    )
+    count_before = await _count_audit_rows(db_session, "payroll_accrual_created", "payroll_accrual")
 
     r = await authed_client_owner.post(
         "/api/v1/payroll/accruals",
@@ -411,9 +409,7 @@ async def test_post_accrual_audit_row_created(
     )
     assert r.status_code == 201, r.text
 
-    count_after = await _count_audit_rows(
-        db_session, "payroll_accrual_created", "payroll_accrual"
-    )
+    count_after = await _count_audit_rows(db_session, "payroll_accrual_created", "payroll_accrual")
     assert count_after == count_before + 1, (
         f"Expected 1 new payroll_accrual_created audit row, "
         f"before={count_before}, after={count_after}"
@@ -588,6 +584,5 @@ async def test_mark_paid_audit_row_created(
 
     count_after = await _count_audit_rows(db_session, "payroll_accrual_paid", "payroll_accrual")
     assert count_after == count_before + 1, (
-        f"Expected 1 new payroll_accrual_paid audit row, "
-        f"before={count_before}, after={count_after}"
+        f"Expected 1 new payroll_accrual_paid audit row, before={count_before}, after={count_after}"
     )

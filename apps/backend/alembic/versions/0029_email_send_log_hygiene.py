@@ -43,12 +43,8 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _STATUS_OLD = "status IN ('sent','bounced','complained','delivered','rejected')"
-_STATUS_NEW = (
-    "status IN ('sent','bounced','complained','delivered','rejected','circuit_open')"
-)
-_BOUNCE_TYPE_PREDICATE = (
-    "bounce_type IN ('hard','soft','complaint') OR bounce_type IS NULL"
-)
+_STATUS_NEW = "status IN ('sent','bounced','complained','delivered','rejected','circuit_open')"
+_BOUNCE_TYPE_PREDICATE = "bounce_type IN ('hard','soft','complaint') OR bounce_type IS NULL"
 
 
 def upgrade() -> None:

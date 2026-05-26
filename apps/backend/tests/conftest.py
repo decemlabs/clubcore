@@ -10,6 +10,7 @@ Per CONTEXT D-10/D-11:
   rollback wipes on teardown — guarantees a clean DB across tests even when service
   bodies issue real commits.
 """
+
 from __future__ import annotations
 
 import os
@@ -75,10 +76,7 @@ async def db_session(app: FastAPI) -> AsyncIterator[AsyncSession]:
     try:
         connection = await engine.connect()
     except Exception as exc:  # noqa: BLE001 — D-10: skip on any connectivity failure
-        pytest.skip(
-            f"DATABASE_URL not reachable; run "
-            f"`docker compose up postgres` first ({exc!r})"
-        )
+        pytest.skip(f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})")
 
     try:
         try:
@@ -86,8 +84,7 @@ async def db_session(app: FastAPI) -> AsyncIterator[AsyncSession]:
         except Exception as exc:  # noqa: BLE001 — D-10: skip on any connectivity failure
             await connection.close()
             pytest.skip(
-                f"DATABASE_URL not reachable; run "
-                f"`docker compose up postgres` first ({exc!r})"
+                f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})"
             )
 
         # Connectivity probe runs INSIDE the outer transaction so it does not

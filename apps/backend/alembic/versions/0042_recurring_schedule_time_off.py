@@ -214,10 +214,7 @@ def downgrade() -> None:
     # exist so the operator cannot silently violate the restored NOT NULL.
     conn = op.get_bind()
     null_count = conn.execute(
-        sa.text(
-            "SELECT COUNT(*) FROM trainer_availability_slots"
-            " WHERE created_by_user_id IS NULL"
-        )
+        sa.text("SELECT COUNT(*) FROM trainer_availability_slots WHERE created_by_user_id IS NULL")
     ).scalar_one()
     if null_count > 0:
         raise RuntimeError(

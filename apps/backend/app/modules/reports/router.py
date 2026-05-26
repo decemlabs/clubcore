@@ -68,9 +68,7 @@ audit_log_router = APIRouter()
 )
 async def get_revenue_report(
     query: Annotated[RevenueReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[RevenueReportResponse]:
     """Aggregate payments ledger into period buckets with method/subject_kind breakdown.
@@ -92,9 +90,7 @@ async def get_revenue_report(
 )
 async def get_clients_report(
     query: Annotated[ClientsReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[ClientsReportResponse]:
     """Clients snapshot: active memberships, expiring-within-N count, new-clients in range.
@@ -117,9 +113,7 @@ async def get_clients_report(
 )
 async def get_visits_report(
     query: Annotated[VisitsReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[VisitsReportResponse]:
     """Visits composite report: daily counts, hourly distribution, averagePerDay.
@@ -150,9 +144,7 @@ async def get_visits_report(
 )
 async def get_revenue_csv(
     query: Annotated[RevenueReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     """Stream revenue report as UTF-8 BOM + RFC-4180 CSV.
@@ -175,9 +167,7 @@ async def get_revenue_csv(
 )
 async def get_clients_csv(
     query: Annotated[ClientsReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     """Stream clients snapshot as UTF-8 BOM + RFC-4180 CSV (single data row).
@@ -198,9 +188,7 @@ async def get_clients_csv(
 )
 async def get_visits_csv(
     query: Annotated[VisitsReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     """Stream visits daily series as UTF-8 BOM + RFC-4180 CSV.
@@ -233,9 +221,7 @@ async def get_visits_csv(
 )
 async def get_trainers_report(
     query: Annotated[TrainerUsageReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[TrainerUsageReportResponse]:
     """Per-trainer usage aggregate for the given period (RPT-01..02, RPT-04).
@@ -267,9 +253,7 @@ async def get_trainers_report(
 )
 async def get_trainers_csv(
     query: Annotated[TrainerUsageReportQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     """Stream trainer-usage report as UTF-8 BOM + RFC-4180 CSV (RPT-03).

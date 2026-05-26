@@ -30,7 +30,5 @@ class SellResponse(ResponseData):
     @model_validator(mode="after")
     def _exactly_one(self) -> SellResponse:
         if (self.confirmation_url is None) == (self.qr_payload is None):
-            raise ValueError(
-                "exactly one of confirmation_url / qr_payload must be set"
-            )
+            raise ValueError("exactly one of confirmation_url / qr_payload must be set")
         return self

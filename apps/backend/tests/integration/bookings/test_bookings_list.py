@@ -54,13 +54,9 @@ async def _seed_bookings(
     """Seed `count` confirmed bookings for one (client, trainer) pair."""
     ids: list[UUID] = []
     plan = await make_pt_package_plan(session_count=count + 5)
-    pkg = await make_pt_package(
-        client_id=client_id, plan=plan, sessions_remaining=count + 5
-    )
+    pkg = await make_pt_package(client_id=client_id, plan=plan, sessions_remaining=count + 5)
     for i in range(count):
-        slot_start = datetime.now(UTC) + timedelta(
-            hours=start_offset_hours + 2 * i
-        )
+        slot_start = datetime.now(UTC) + timedelta(hours=start_offset_hours + 2 * i)
         slot = await make_slot(
             trainer_id=trainer_id,
             start_time=slot_start,
@@ -145,9 +141,7 @@ async def test_list_bookings_filter_by_client(
         count=2,
         start_offset_hours=200,
     )
-    page = await service.list_bookings(
-        db_session, BookingListQuery(client_id=client_a.id)
-    )
+    page = await service.list_bookings(db_session, BookingListQuery(client_id=client_a.id))
     fetched = {b.id for b in page.items}
     assert set(ids_a).issubset(fetched)
     assert not (set(ids_b) & fetched)
@@ -195,9 +189,7 @@ async def test_list_bookings_filter_by_trainer(
         count=2,
         start_offset_hours=400,
     )
-    page = await service.list_bookings(
-        db_session, BookingListQuery(trainer_id=trainer_a.id)
-    )
+    page = await service.list_bookings(db_session, BookingListQuery(trainer_id=trainer_a.id))
     fetched = {b.id for b in page.items}
     assert set(ids_a).issubset(fetched)
     assert not (set(ids_b) & fetched)
@@ -374,12 +366,11 @@ def test_clients_router_unchanged_no_bookings_import() -> None:
     modules-independent invariant.
     """
     repo_root = Path(__file__).resolve().parents[3]
-    clients_router_src = (
-        repo_root / "app" / "modules" / "clients" / "router.py"
-    ).read_text(encoding="utf-8")
+    clients_router_src = (repo_root / "app" / "modules" / "clients" / "router.py").read_text(
+        encoding="utf-8"
+    )
     assert "from app.modules.bookings" not in clients_router_src, (
-        "clients/router.py must NOT import from app.modules.bookings "
-        "(plan 38-03 locked decision)"
+        "clients/router.py must NOT import from app.modules.bookings (plan 38-03 locked decision)"
     )
 
 
@@ -390,9 +381,9 @@ def test_bookings_router_mounts_per_client_path() -> None:
     applied by the v1 composer so the public URL becomes
     `/api/v1/clients/{client_id}/bookings` per BOOK-08."""
     repo_root = Path(__file__).resolve().parents[3]
-    bookings_router_src = (
-        repo_root / "app" / "modules" / "bookings" / "router.py"
-    ).read_text(encoding="utf-8")
+    bookings_router_src = (repo_root / "app" / "modules" / "bookings" / "router.py").read_text(
+        encoding="utf-8"
+    )
     assert "client_scoped_bookings_router = APIRouter()" in bookings_router_src, (
         "client_scoped_bookings_router must be declared in bookings/router.py "
         "(Phase 38 Gap #2 — per-client URL contract)"
@@ -447,9 +438,7 @@ async def test_get_clients_bookings_endpoint_reachable(
     # client_scoped_bookings_router is mounted by app.api.v1.router at the
     # /clients prefix, so the route resolves at
     # /api/v1/clients/{id}/bookings (BOOK-08 locked contract).
-    r = await authed_client_owner.get(
-        f"/api/v1/clients/{client.id}/bookings"
-    )
+    r = await authed_client_owner.get(f"/api/v1/clients/{client.id}/bookings")
     assert r.status_code == 200, r.text
     body = r.json()
     assert "data" in body

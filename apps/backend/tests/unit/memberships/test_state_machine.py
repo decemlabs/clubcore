@@ -144,9 +144,7 @@ def test_membership_status_transitions_phase25_contents() -> None:
     """
     from app.modules.memberships.constants import MEMBERSHIP_STATUS_TRANSITIONS
 
-    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset(
-        {"expired", "cancelled", "frozen"}
-    )
+    assert MEMBERSHIP_STATUS_TRANSITIONS["active"] == frozenset({"expired", "cancelled", "frozen"})
     assert MEMBERSHIP_STATUS_TRANSITIONS["expired"] == frozenset()
     assert MEMBERSHIP_STATUS_TRANSITIONS["cancelled"] == frozenset()
     assert MEMBERSHIP_STATUS_TRANSITIONS["frozen"] == frozenset({"active", "cancelled"})

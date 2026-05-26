@@ -118,9 +118,7 @@ async def test_reception_at_24h_exactly_proceeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """B-12 / D-34-07: boundary inclusive — age == 24h passes (``>`` not ``>=``)."""
-    boundary_at = datetime.now(UTC) - timedelta(
-        hours=CANCEL_WINDOW_HOURS_RECEPTION
-    )
+    boundary_at = datetime.now(UTC) - timedelta(hours=CANCEL_WINDOW_HOURS_RECEPTION)
     row = _pt_session_row(created_at=boundary_at)
 
     async def _load(_session: object, _pt_session_id: object) -> object:

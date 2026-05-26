@@ -71,20 +71,23 @@ async def test_reinvite_overwrites_full_name_and_role(
         "create_user must overwrite existing.role = data.role."
     )
     assert user.status == "pending_invitation", (
-        f"User status should remain 'pending_invitation' after re-invite; "
-        f"got {user.status!r}"
+        f"User status should remain 'pending_invitation' after re-invite; got {user.status!r}"
     )
 
     # New active invitation token exists (the previous one was atomic-consumed).
     active_tokens = (
-        await db_session.execute(
-            select(PasswordResetToken).where(
-                PasswordResetToken.user_id == user.id,
-                PasswordResetToken.purpose == "invitation",
-                PasswordResetToken.consumed_at.is_(None),
+        (
+            await db_session.execute(
+                select(PasswordResetToken).where(
+                    PasswordResetToken.user_id == user.id,
+                    PasswordResetToken.purpose == "invitation",
+                    PasswordResetToken.consumed_at.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(active_tokens) == 1, (
         f"WR-02 regression — expected exactly 1 active invitation token after re-invite; "
         f"got {len(active_tokens)}. The prior token must be atomic-consumed and a fresh "

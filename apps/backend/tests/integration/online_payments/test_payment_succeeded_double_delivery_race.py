@@ -114,9 +114,7 @@ async def ver02a_engine() -> AsyncIterator[AsyncEngine]:
     finally:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE"
-                )
+                text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
             )
         await engine.dispose()
 
@@ -241,9 +239,7 @@ async def test_payment_succeeded_double_delivery_race(
         # respx intercepts the outbound GET /v3/payments/{id} re-fetch call
         # that the handler issues before the DB write (D-50-12 doctrine).
         with respx.mock(assert_all_called=False) as mock_router:
-            mock_router.get(
-                url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-            ).mock(
+            mock_router.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
                 return_value=__import__("httpx").Response(
                     200,
                     json={
@@ -258,9 +254,7 @@ async def test_payment_succeeded_double_delivery_race(
             )
 
             async def _post(_idx: int) -> Response:
-                async with AsyncClient(
-                    transport=transport, base_url="http://testserver"
-                ) as client:
+                async with AsyncClient(transport=transport, base_url="http://testserver") as client:
                     return await client.post(
                         "/api/v1/_internal/yookassa/webhook", json=webhook_body
                     )
@@ -270,15 +264,11 @@ async def test_payment_succeeded_double_delivery_race(
         app.dependency_overrides.clear()
 
     statuses = [r.status_code for r in responses]
-    assert all(s == 200 for s in statuses), (
-        f"VER-02(a): expected all 200, got {statuses}"
-    )
+    assert all(s == 200 for s in statuses), f"VER-02(a): expected all 200, got {statuses}"
 
     # DB invariant: exactly ONE fiscal_receipts row (Redis dedup + DB UNIQUE).
     async with session_factory() as verify:
-        fiscal_count = await verify.scalar(
-            select(func.count()).select_from(FiscalReceipt)
-        )
+        fiscal_count = await verify.scalar(select(func.count()).select_from(FiscalReceipt))
         assert fiscal_count == 1, (
             f"VER-02(a): expected exactly 1 fiscal_receipts row, got {fiscal_count}. "
             f"DB UNIQUE uq_fiscal_receipts_payment_id_kind must be the backstop."
@@ -286,9 +276,7 @@ async def test_payment_succeeded_double_delivery_race(
 
         # OnlinePayment status must be 'succeeded'.
         op_status = await verify.scalar(
-            select(OnlinePayment.status).where(
-                OnlinePayment.yookassa_payment_id == yk_payment_id
-            )
+            select(OnlinePayment.status).where(OnlinePayment.yookassa_payment_id == yk_payment_id)
         )
         assert op_status == "succeeded", (
             f"VER-02(a): expected online_payment.status='succeeded', got {op_status!r}"

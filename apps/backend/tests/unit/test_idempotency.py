@@ -103,9 +103,7 @@ async def test_valid_format_returns_route_bound_key() -> None:
 async def test_route_binding_distinguishes_endpoints() -> None:
     """Same header value on different routes returns distinct namespaced keys."""
     redis = AsyncMock()
-    sale_req = _make_request(
-        "abc123", method="POST", path="/api/v1/pt-packages"
-    )
+    sale_req = _make_request("abc123", method="POST", path="/api/v1/pt-packages")
     refund_req = _make_request(
         "abc123",
         method="POST",

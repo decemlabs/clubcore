@@ -79,8 +79,7 @@ _KIND_CHECK_NAME = "ck_booking_notifications_kind"
 #   - cancelled_by_client  (Phase 45 NOTIFY-09 FSM transition hook)
 #   - cancelled_by_owner   (Phase 45 NOTIFY-09 FSM transition hook)
 _NEW_KIND_PREDICATE = (
-    "kind IN ('reminder_24h', 'confirmed', "
-    "'cancelled_by_client', 'cancelled_by_owner')"
+    "kind IN ('reminder_24h', 'confirmed', 'cancelled_by_client', 'cancelled_by_owner')"
 )
 _OLD_KIND_PREDICATE = "kind IN ('reminder_24h')"
 

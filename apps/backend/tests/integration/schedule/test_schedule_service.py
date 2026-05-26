@@ -84,13 +84,17 @@ async def test_publish_slot_happy(
 
     # Audit row exists for slot_published with locked event name.
     rows = (
-        await db_session.execute(
-            text(
-                "SELECT action, resource_type, resource_id, payload "
-                "FROM audit_log WHERE action = 'slot_published'"
-            ),
+        (
+            await db_session.execute(
+                text(
+                    "SELECT action, resource_type, resource_id, payload "
+                    "FROM audit_log WHERE action = 'slot_published'"
+                ),
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     matching = [r for r in rows if str(r["resource_id"]) == str(response.id)]
     assert len(matching) == 1, f"expected exactly one slot_published row, got {matching}"
     payload = matching[0]["payload"]
@@ -283,14 +287,18 @@ async def test_cancel_slot_active_to_cancelled(
     assert response.cancel_reason == "operator change of plan"
 
     rows = (
-        await db_session.execute(
-            text(
-                "SELECT payload FROM audit_log WHERE action='slot_cancelled' "
-                "AND resource_id = :sid"
-            ),
-            {"sid": slot.id},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT payload FROM audit_log WHERE action='slot_cancelled' "
+                    "AND resource_id = :sid"
+                ),
+                {"sid": slot.id},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     assert len(rows) == 1
     payload = rows[0]["payload"]
     assert payload["had_booking"] is False
@@ -326,10 +334,7 @@ async def test_cancel_slot_booked_source_no_booking_raises_inconsistency(
     # Seed the inconsistent state: slot status='booked' WITHOUT a paired
     # confirmed booking row (bypasses create_booking's atomic UoW).
     await db_session.execute(
-        text(
-            "UPDATE trainer_availability_slots SET status='booked' "
-            "WHERE id = :sid"
-        ),
+        text("UPDATE trainer_availability_slots SET status='booked' WHERE id = :sid"),
         {"sid": slot.id},
     )
     await db_session.commit()
@@ -472,10 +477,7 @@ async def test_restore_slot_to_active_from_booked(
         SlotCreateRequest(trainer_id=trainer.id, start_time=start, end_time=end),
     )
     await db_session.execute(
-        text(
-            "UPDATE trainer_availability_slots SET status='booked' "
-            "WHERE id = :sid"
-        ),
+        text("UPDATE trainer_availability_slots SET status='booked' WHERE id = :sid"),
         {"sid": slot.id},
     )
     await db_session.commit()

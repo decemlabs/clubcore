@@ -71,9 +71,7 @@ async def test_freeze_cycle_extends_end_date_by_used_days(
     plan = await make_plan(name="Cycle Plan", duration_days=30, freeze_days_limit=14)
     client = await _create_client(authed_client_reception, phone="+79991234050")
     client_uuid = UUID(client["id"])
-    membership = await make_membership(
-        client_id=client_uuid, plan=plan, status="active"
-    )
+    membership = await make_membership(client_id=client_uuid, plan=plan, status="active")
     original_end_date = membership.end_date
     membership_id = membership.id
 
@@ -120,9 +118,7 @@ async def test_freeze_cycle_extends_end_date_by_used_days(
     # Step 5: end_date extended by 5 days
     new_end_date = body["endDate"]
     expected = (original_end_date + timedelta(days=5)).isoformat()
-    assert new_end_date == expected, (
-        f"Expected end_date {expected}, got {new_end_date}"
-    )
+    assert new_end_date == expected, f"Expected end_date {expected}, got {new_end_date}"
 
     # Step 6: Audit pair emitted (membership_frozen + membership_unfrozen, days_added=5)
     frozen_rows = (

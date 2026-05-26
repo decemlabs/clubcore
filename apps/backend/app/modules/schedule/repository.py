@@ -49,9 +49,7 @@ from app.modules.schedule.schemas import (
 )
 
 
-async def get_slot_by_id(
-    session: AsyncSession, slot_id: UUID
-) -> TrainerAvailabilitySlot | None:
+async def get_slot_by_id(session: AsyncSession, slot_id: UUID) -> TrainerAvailabilitySlot | None:
     """Return slot by id, or None for missing (D-38-04 — NO soft-delete filter).
 
     Cancelled / booked rows are still returned; lifecycle is purely status-based.
@@ -128,11 +126,7 @@ async def list_slots_paginated(
 
     where_clause = and_(*predicates)
 
-    total_stmt = (
-        select(func.count())
-        .select_from(TrainerAvailabilitySlot)
-        .where(where_clause)
-    )
+    total_stmt = select(func.count()).select_from(TrainerAvailabilitySlot).where(where_clause)
     total = await session.scalar(total_stmt) or 0
 
     stmt: Select[tuple[TrainerAvailabilitySlot]] = (
@@ -306,7 +300,7 @@ async def insert_recurring_template(
     trainer_id: UUID,
     day_of_week: int,
     start_time: Any,  # datetime.time
-    end_time: Any,    # datetime.time
+    end_time: Any,  # datetime.time
     valid_from: date,
     valid_until: date | None,
 ) -> RecurringSlotTemplate | None:
@@ -384,11 +378,7 @@ async def list_recurring_templates(
 
     where_clause = and_(*predicates) if predicates else sa.true()
 
-    total_stmt = (
-        select(func.count())
-        .select_from(RecurringSlotTemplate)
-        .where(where_clause)
-    )
+    total_stmt = select(func.count()).select_from(RecurringSlotTemplate).where(where_clause)
     total = await session.scalar(total_stmt) or 0
 
     stmt: Select[tuple[RecurringSlotTemplate]] = (
@@ -439,8 +429,8 @@ async def get_time_off_by_id(
     time_off_id: UUID,
 ) -> TrainerTimeOff | None:
     """Return a TrainerTimeOff row by id, or None."""
-    stmt: Select[tuple[TrainerTimeOff]] = (
-        select(TrainerTimeOff).where(TrainerTimeOff.id == time_off_id)
+    stmt: Select[tuple[TrainerTimeOff]] = select(TrainerTimeOff).where(
+        TrainerTimeOff.id == time_off_id
     )
     result: TrainerTimeOff | None = await session.scalar(stmt)
     return result
@@ -460,11 +450,7 @@ async def list_time_off(
 
     where_clause = and_(*predicates) if predicates else sa.true()
 
-    total_stmt = (
-        select(func.count())
-        .select_from(TrainerTimeOff)
-        .where(where_clause)
-    )
+    total_stmt = select(func.count()).select_from(TrainerTimeOff).where(where_clause)
     total = await session.scalar(total_stmt) or 0
 
     stmt: Select[tuple[TrainerTimeOff]] = (

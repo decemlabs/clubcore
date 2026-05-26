@@ -334,9 +334,7 @@ async def _load_booking_with_relationships(
         select(Booking)
         .options(
             joinedload(Booking.client),
-            joinedload(Booking.slot).joinedload(
-                trainer_availability_slot_cls.trainer
-            ),
+            joinedload(Booking.slot).joinedload(trainer_availability_slot_cls.trainer),
         )
         .where(Booking.id == booking_id)
     )
@@ -373,11 +371,7 @@ async def _dispatch_booking_dm(
     only `send_text_dm`). Helper takes no `session` argument and performs no
     DB writes, so SVC001 caller-owns-txn does not apply (no noqa needed).
     """
-    if (
-        booking.client is None
-        or booking.slot is None
-        or booking.slot.trainer is None
-    ):
+    if booking.client is None or booking.slot is None or booking.slot.trainer is None:
         _log.error(
             "booking_dm_missing_joinedload",
             booking_id=str(booking.id),
@@ -392,9 +386,7 @@ async def _dispatch_booking_dm(
     text_body = template.format(
         client_name=booking.client.first_name,
         trainer_name=booking.slot.trainer.full_name,
-        slot_start_msk=booking.slot.start_time.astimezone(MOSCOW_TZ).strftime(
-            "%d.%m.%Y %H:%M"
-        ),
+        slot_start_msk=booking.slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M"),
     )
     result = await sender.send_text_dm(bot, chat_id, text_body)
     if not result.ok:
@@ -457,11 +449,7 @@ async def _dispatch_booking_lifecycle_notification(  # noqa: SVC001 caller-owns-
     FSM transition (that already committed upstream).
     """
     # Guard: missing eager-loaded relationships. Mirror _dispatch_booking_dm.
-    if (
-        booking.client is None
-        or booking.slot is None
-        or booking.slot.trainer is None
-    ):
+    if booking.client is None or booking.slot is None or booking.slot.trainer is None:
         _log.error(
             "booking_lifecycle_dm_missing_joinedload",
             booking_id=str(booking.id),
@@ -472,9 +460,7 @@ async def _dispatch_booking_lifecycle_notification(  # noqa: SVC001 caller-owns-
     chat_id = booking.client.telegram_user_id
     client_email = booking.client.email
     trainer_full_name = booking.slot.trainer.full_name
-    slot_start_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime(
-        "%d.%m.%Y %H:%M"
-    )
+    slot_start_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
 
     # Telegram side — only fire when a chat_id is present. Preserve the
     # Phase 39 log-event names (`booking_dm_skipped_unlinked` /
@@ -745,9 +731,7 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
 
     sent = 0
     for r in rows:
-        slot_start_msk = r.start_time.astimezone(MOSCOW_TZ).strftime(
-            "%d.%m.%Y %H:%M"
-        )
+        slot_start_msk = r.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
 
         # Phase 45 D-45-01 — Telegram-side dispatch only when chat_id present.
         # Email-only clients (telegram_user_id IS NULL but email IS NOT NULL)
@@ -767,9 +751,7 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
 
             # Step 3 — fire the DM. ``sender.send_text_dm`` returns a typed
             # SendResult and never re-raises transport errors (D-07 contract).
-            send_result = await sender.send_text_dm(
-                bot, r.telegram_user_id, text_body
-            )
+            send_result = await sender.send_text_dm(bot, r.telegram_user_id, text_body)
 
         if send_result is not None and send_result.ok:
             # Step 4 (Telegram success) — open a FRESH write session for the
@@ -1137,9 +1119,7 @@ async def create_booking(
     if reloaded is None:
         # Defensive — booking was just INSERTed and committed; missing here
         # would indicate session-state corruption.
-        raise RuntimeError(
-            "create_booking: just-inserted booking disappeared on reload"
-        )
+        raise RuntimeError("create_booking: just-inserted booking disappeared on reload")
     return _booking_response_from_orm(reloaded)
 
 
@@ -1272,9 +1252,7 @@ async def create_booking_via_bot(
     # the confirmation DM without a secondary lookup.
     reloaded = await repository.get_booking_by_id(session, booking.id)
     if reloaded is None:
-        raise RuntimeError(
-            "create_booking_via_bot: just-inserted booking disappeared on reload"
-        )
+        raise RuntimeError("create_booking_via_bot: just-inserted booking disappeared on reload")
     return _booking_response_from_orm(reloaded)
 
 
@@ -1327,9 +1305,7 @@ async def cancel_booking(
      10. Narrow refresh + return BookingResponse.
     """
     # Step 1 — Load with row lock + eager-loaded slot.
-    booking = await repository.get_booking_by_id_for_update_with_slot(
-        session, booking_id
-    )
+    booking = await repository.get_booking_by_id_for_update_with_slot(session, booking_id)
     if booking is None:
         raise BookingNotFoundError("booking_not_found")
 
@@ -1339,8 +1315,7 @@ async def cancel_booking(
     # Step 3 — 24h reception window (D-38-16; compare against slot.start_time).
     now_utc = datetime.now(UTC)
     if actor.role is Role.RECEPTION and (
-        booking.slot.start_time - now_utc
-        < timedelta(hours=CANCEL_WINDOW_HOURS_RECEPTION)
+        booking.slot.start_time - now_utc < timedelta(hours=CANCEL_WINDOW_HOURS_RECEPTION)
     ):
         raise CancelWindowExpiredError("cancel_window_expired")
 
@@ -1392,9 +1367,7 @@ async def cancel_booking(
     # its OWN literal `kind` string per the Plan 45-08 4-literal contract
     # (no shared variable — AST gate parity D-45-22).
     if actor.role is Role.OWNER:
-        booking_for_dm = await _load_booking_with_relationships(
-            session, booking.id
-        )
+        booking_for_dm = await _load_booking_with_relationships(session, booking.id)
         if booking_for_dm is not None:
             dm_bot = build_bot(
                 token=get_settings().telegram_bot_token.get_secret_value(),
@@ -1408,9 +1381,7 @@ async def cancel_booking(
                 session=session,
             )
     elif actor.role is Role.RECEPTION:
-        booking_for_dm = await _load_booking_with_relationships(
-            session, booking.id
-        )
+        booking_for_dm = await _load_booking_with_relationships(session, booking.id)
         if booking_for_dm is not None:
             dm_bot = build_bot(
                 token=get_settings().telegram_bot_token.get_secret_value(),
@@ -1429,9 +1400,7 @@ async def cancel_booking(
     # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2).
     reloaded = await repository.get_booking_by_id(session, booking.id)
     if reloaded is None:
-        raise RuntimeError(
-            "cancel_booking: just-cancelled booking disappeared on reload"
-        )
+        raise RuntimeError("cancel_booking: just-cancelled booking disappeared on reload")
     return _booking_response_from_orm(reloaded)
 
 
@@ -1475,9 +1444,7 @@ async def list_bookings_for_client(
     clients/router.py dependency-leaf (no `from app.modules.bookings`
     import) — Phase 38 verifier Gap #2 closure.
     """
-    page = await repository.list_bookings_for_client_paginated(
-        session, client_id, query
-    )
+    page = await repository.list_bookings_for_client_paginated(session, client_id, query)
     return PaginatedData.model_construct(
         items=[_booking_response_from_orm(b) for b in page.items],
         total=page.total,

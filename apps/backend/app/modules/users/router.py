@@ -81,9 +81,7 @@ router = APIRouter()
 )
 async def list_users_endpoint(
     query: Annotated[UserListQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.LIST, Resource.USERS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.LIST, Resource.USERS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PaginatedData[UserListItemResponse]]:
     """USERS-02 — paginated list (D-43-15). LIST permission required; no CSRF (read)."""
@@ -99,9 +97,7 @@ async def list_users_endpoint(
 )
 async def create_user_endpoint(
     payload: UserCreateRequest,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.CREATE, Resource.USERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.CREATE, Resource.USERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
     include_invite_link: Annotated[
@@ -126,9 +122,7 @@ async def create_user_endpoint(
 )
 async def deactivate_user_endpoint(
     user_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
@@ -144,9 +138,7 @@ async def deactivate_user_endpoint(
 )
 async def reactivate_user_endpoint(
     user_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
@@ -162,9 +154,7 @@ async def reactivate_user_endpoint(
 )
 async def soft_delete_user_endpoint(
     user_id: UUID,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.DELETE, Resource.USERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.DELETE, Resource.USERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
@@ -185,9 +175,7 @@ async def soft_delete_user_endpoint(
 async def revoke_invitation_endpoint(
     token_id: UUID,
     payload: InvitationRevokeRequest,
-    actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))
-    ],
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))],
     _csrf: Annotated[None, Depends(verify_csrf)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:

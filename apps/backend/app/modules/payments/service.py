@@ -157,9 +157,7 @@ async def record_payment(  # noqa: SVC001 caller-owns-txn — sale orchestrator 
         subject_id=str(subject_id),
         amount_kopecks=amount_kopecks,
         method=method,
-        received_by_user_id=(
-            str(received_by_user_id) if received_by_user_id is not None else None
-        ),
+        received_by_user_id=(str(received_by_user_id) if received_by_user_id is not None else None),
         payment_row_hash=row_hash,
     )
     return payment
@@ -194,9 +192,7 @@ async def issue_refund(  # noqa: SVC001 caller-owns-txn — refund orchestrator 
     elif subject_kind == SUBJECT_KIND_PT_PACKAGE:
         original = await repository.get_original_pt_package_payment(session, subject_id)
     else:
-        raise NotImplementedError(
-            f"refund subject_kind={subject_kind!r} not supported"
-        )
+        raise NotImplementedError(f"refund subject_kind={subject_kind!r} not supported")
 
     if original is None:
         raise OriginalPaymentNotFoundError("original_payment_not_found")

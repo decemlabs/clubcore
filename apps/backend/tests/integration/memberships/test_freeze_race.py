@@ -134,15 +134,12 @@ async def test_concurrent_freeze_race_serialised_by_partial_unique_index(
 
     statuses = sorted(r.status_code for r in responses)
     assert statuses == [200] + [409] * (n_concurrent - 1), (
-        f"MEM-FRZ-TEST-03 failed: expected [200] + [409]*{n_concurrent - 1}, "
-        f"got {statuses}"
+        f"MEM-FRZ-TEST-03 failed: expected [200] + [409]*{n_concurrent - 1}, got {statuses}"
     )
 
     bodies_409 = [r.json() for r in responses if r.status_code == 409]
     codes = [b.get("code") for b in bodies_409]
-    assert all(c == "already_frozen" for c in codes), (
-        f"Unexpected 409 codes: {codes}"
-    )
+    assert all(c == "already_frozen" for c in codes), f"Unexpected 409 codes: {codes}"
 
     # DB invariant: exactly 1 row in membership_freeze_periods with ended_at IS NULL
     open_count = await db_session_real_commit.scalar(
@@ -153,9 +150,7 @@ async def test_concurrent_freeze_race_serialised_by_partial_unique_index(
             MembershipFreezePeriod.ended_at.is_(None),
         )
     )
-    assert open_count == 1, (
-        f"Expected exactly 1 open freeze period, got {open_count}"
-    )
+    assert open_count == 1, f"Expected exactly 1 open freeze period, got {open_count}"
 
     # Audit invariant: exactly 1 membership_frozen row.
     # Losing tasks rollback BEFORE audit emit (service.py: rollback then raise),

@@ -33,13 +33,21 @@ from typing import Final
 # RUF001/E501/RUF003 per-line: Cyrillic letters + locked single-line format are intentional
 # (Russian-only product per PROJECT.md i18n locked decision; reviewers diff exact text).
 
-ONLINE_PAYMENT_SUCCEEDED_DM: Final[str] = "Здравствуйте, {client_name}! Оплата на сумму {amount_rub} успешно получена. Ваш абонемент / пакет тренировок активирован. Ждём вас в зале!"  # noqa: E501  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md
+ONLINE_PAYMENT_SUCCEEDED_DM: Final[str] = (
+    "Здравствуйте, {client_name}! Оплата на сумму {amount_rub} успешно получена. Ваш абонемент / пакет тренировок активирован. Ждём вас в зале!"  # noqa: E501  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md
+)
 
-ONLINE_PAYMENT_REFUNDED_DM: Final[str] = "Здравствуйте, {client_name}! Возврат на сумму {amount_rub} успешно обработан. Средства поступят на ваш счёт в течение нескольких рабочих дней. Если у вас есть вопросы — обратитесь к администратору."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md
+ONLINE_PAYMENT_REFUNDED_DM: Final[str] = (
+    "Здравствуйте, {client_name}! Возврат на сумму {amount_rub} успешно обработан. Средства поступят на ваш счёт в течение нескольких рабочих дней. Если у вас есть вопросы — обратитесь к администратору."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md
+)
 
-ONLINE_PAYMENT_CANCELED_DM: Final[str] = "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА] Платёж отменён. payment_id: {payment_id}, yookassa_payment_id: {yookassa_payment_id}. Требуется проверка."  # noqa: E501  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md  # OWNER-ALERT only (NOT-05) — NO client DM
+ONLINE_PAYMENT_CANCELED_DM: Final[str] = (
+    "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА] Платёж отменён. payment_id: {payment_id}, yookassa_payment_id: {yookassa_payment_id}. Требуется проверка."  # noqa: E501  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md  # OWNER-ALERT only (NOT-05) — NO client DM
+)
 
-FISCAL_RECEIPT_FAILED_DM: Final[str] = "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА] Ошибка формирования фискального чека. payment_id: {payment_id}, причина: {failure_reason}. Требуется ручная проверка в ЮKassa."  # noqa: E501  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md  # OWNER-ALERT only (NOT-04)
+FISCAL_RECEIPT_FAILED_DM: Final[str] = (
+    "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА] Ошибка формирования фискального чека. payment_id: {payment_id}, причина: {failure_reason}. Требуется ручная проверка в ЮKassa."  # noqa: E501  # OWNER-COPY-LOCK signed-off 2026-05-23 — see 52-01-SUMMARY.md  # OWNER-ALERT only (NOT-04)
+)
 
 
 def render_online_payment_succeeded_dm(

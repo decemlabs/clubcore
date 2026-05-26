@@ -61,25 +61,31 @@ async def test_send_expiring_7d_happy_path_then_idempotent(
 
     # Notification row.
     notif_rows = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows) == 1
     assert notif_rows[0].kind == "expiring_7d"
     assert notif_rows[0].telegram_chat_id == 123456
 
     # Audit row.
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits) == 1
     assert audits[0].resource_type == "membership"
     assert audits[0].actor_user_id is None
@@ -104,20 +110,26 @@ async def test_send_expiring_7d_happy_path_then_idempotent(
 
     # Still exactly one notification row + one audit row.
     notif_rows_2 = (
-        await db_session.execute(
-            select(MembershipNotification).where(
-                MembershipNotification.membership_id == m.id
+        (
+            await db_session.execute(
+                select(MembershipNotification).where(MembershipNotification.membership_id == m.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notif_rows_2) == 1
 
     audits_2 = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "expiring_notification_sent_7d",
-                AuditLog.resource_id == m.id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "expiring_notification_sent_7d",
+                    AuditLog.resource_id == m.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audits_2) == 1

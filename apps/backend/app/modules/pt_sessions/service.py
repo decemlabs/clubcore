@@ -308,9 +308,7 @@ async def record_pt_session(
     # different driver (or a test stub) returns a string. The narrow ternary
     # keeps the type-narrowing visible to mypy.
     client_id_raw = pkg["client_id"]
-    client_id = (
-        client_id_raw if isinstance(client_id_raw, UUID) else UUID(str(client_id_raw))
-    )
+    client_id = client_id_raw if isinstance(client_id_raw, UUID) else UUID(str(client_id_raw))
     pt_session = await repository.insert_pt_session(
         session,
         pt_package_id=data.pt_package_id,
@@ -559,10 +557,7 @@ async def list_sessions_by_pt_package(
         query,
     )
     return PaginatedData.model_construct(
-        items=[
-            PtSessionResponse.model_validate(s, from_attributes=True)
-            for s in page.items
-        ],
+        items=[PtSessionResponse.model_validate(s, from_attributes=True) for s in page.items],
         total=page.total,
         page=page.page,
         page_size=page.page_size,

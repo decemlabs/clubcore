@@ -65,12 +65,8 @@ async def test_e2e_audit_chain_membership_sell_emits_root_then_child(
         )
     ).all()
 
-    initiated = next(
-        (a for a in audit_rows if a.action == "online_payment_initiated"), None
-    )
-    created = next(
-        (a for a in audit_rows if a.action == "yookassa_payment_created"), None
-    )
+    initiated = next((a for a in audit_rows if a.action == "online_payment_initiated"), None)
+    created = next((a for a in audit_rows if a.action == "yookassa_payment_created"), None)
 
     assert initiated is not None, "online_payment_initiated row missing"
     assert created is not None, "yookassa_payment_created row missing"
@@ -163,11 +159,7 @@ async def test_e2e_audit_chain_no_audit_on_email_gate_failure(
         )
     ).all()
     # Filter to this test's client to avoid pollution from concurrent runs.
-    matching = [
-        a
-        for a in audit_rows
-        if a.payload.get("client_id") == str(client_row.id)
-    ]
+    matching = [a for a in audit_rows if a.payload.get("client_id") == str(client_row.id)]
     assert matching == [], (
         f"D-49-20: no audit row should exist on email-gate failure; got {matching}"
     )

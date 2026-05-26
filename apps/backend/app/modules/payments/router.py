@@ -42,9 +42,7 @@ router = APIRouter()
 )
 async def list_payments(
     query: Annotated[PaymentListQuery, Depends()],
-    _actor: Annotated[
-        CurrentUser, Depends(require_permission(Action.VIEW, Resource.PAYMENTS))
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.PAYMENTS))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ResponseEnvelope[PaginatedData[PaymentResponse]]:
     """List payments globally with filter parity (Phase 32 PAY-06).
@@ -64,9 +62,7 @@ async def list_payments(
 )
 async def list_payments_by_client(
     client_id: UUID,
-    _actor: Annotated[
-        CurrentUser, Depends(require_payments_view_for_subject())
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_payments_view_for_subject())],
     session: Annotated[AsyncSession, Depends(get_db)],
     page: int = 1,
     page_size: int = 50,
@@ -90,9 +86,7 @@ async def list_payments_by_client(
 )
 async def list_payments_by_membership(
     membership_id: UUID,
-    _actor: Annotated[
-        CurrentUser, Depends(require_payments_view_for_subject())
-    ],
+    _actor: Annotated[CurrentUser, Depends(require_payments_view_for_subject())],
     session: Annotated[AsyncSession, Depends(get_db)],
     page: int = 1,
     page_size: int = 50,

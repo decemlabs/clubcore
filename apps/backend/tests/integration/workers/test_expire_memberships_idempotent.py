@@ -45,17 +45,13 @@ async def test_expire_memberships_idempotent(
         first_count = await expire_memberships(worker_ctx)
     assert first_count == 1
 
-    first_summary = [
-        e for e in first_capture if e.get("event") == "expire_memberships_complete"
-    ]
+    first_summary = [e for e in first_capture if e.get("event") == "expire_memberships_complete"]
     assert len(first_summary) == 1
     assert first_summary[0].get("count") == 1
 
     # Audit log after first call — exactly 1 row.
     audit_count_after_first = await db_session.scalar(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.action == "membership_expired")
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "membership_expired")
     )
     assert audit_count_after_first == 1
 
@@ -66,9 +62,7 @@ async def test_expire_memberships_idempotent(
         f"second call must return 0 (SQL idempotency gate); got {second_count}"
     )
 
-    second_summary = [
-        e for e in second_capture if e.get("event") == "expire_memberships_complete"
-    ]
+    second_summary = [e for e in second_capture if e.get("event") == "expire_memberships_complete"]
     assert len(second_summary) == 1, (
         "summary log emitted on every tick (proves cron ran), even on no-op runs"
     )
@@ -76,9 +70,7 @@ async def test_expire_memberships_idempotent(
 
     # Audit log after second call — STILL exactly 1 row (no duplicate).
     audit_count_after_second = await db_session.scalar(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.action == "membership_expired")
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "membership_expired")
     )
     assert audit_count_after_second == 1, (
         f"second call must NOT insert duplicate audit row; "

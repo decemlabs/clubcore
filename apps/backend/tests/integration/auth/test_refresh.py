@@ -198,9 +198,7 @@ async def test_refresh_reuse_writes_family_reuse_detected_audit_row(
     assert r2.status_code == 401, r2.text
 
     rows = (
-        await db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "family_reuse_detected")
-        )
+        await db_session.scalars(select(AuditLog).where(AuditLog.action == "family_reuse_detected"))
     ).all()
     assert len(rows) >= 1
     row = rows[-1]

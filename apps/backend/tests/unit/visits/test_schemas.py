@@ -42,9 +42,7 @@ class TestVisitCreateRequest:
     def test_rejects_extra_field_channel(self) -> None:
         """D-01: 'channel' in body → ValidationError (BackendSchemaBase extra='forbid')."""
         with pytest.raises(ValidationError):
-            VisitCreateRequest.model_validate(
-                {"clientId": str(uuid4()), "channel": "telegram_bot"}
-            )
+            VisitCreateRequest.model_validate({"clientId": str(uuid4()), "channel": "telegram_bot"})
 
     def test_rejects_extra_field_checked_in_by(self) -> None:
         """D-01: 'checkedInBy' in body → ValidationError (server-computed)."""

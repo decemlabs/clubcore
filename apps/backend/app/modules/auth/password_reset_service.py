@@ -370,9 +370,7 @@ async def confirm_password_reset(
 
     # 2. Atomic consume (race-tight; D-44-14). replay/expired/unknown all
     #    collapse to None → identical 410 per D-44-15 anti-oracle.
-    consumed = await _atomic_consume_token(
-        session, raw_token=raw_token, purpose="password_reset"
-    )
+    consumed = await _atomic_consume_token(session, raw_token=raw_token, purpose="password_reset")
     if consumed is None:
         raise InvalidOrExpiredTokenError("invalid_or_expired_token")
     token_id, user_id, corr_id = consumed
@@ -470,9 +468,7 @@ async def accept_invitation(
         raise WeakPasswordError("weak_password")
 
     # 2. Atomic consume invitation token (purpose='invitation').
-    consumed = await _atomic_consume_token(
-        session, raw_token=raw_token, purpose="invitation"
-    )
+    consumed = await _atomic_consume_token(session, raw_token=raw_token, purpose="invitation")
     if consumed is None:
         raise InvalidOrExpiredTokenError("invalid_or_expired_token")
     token_id, user_id, corr_id = consumed

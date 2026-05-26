@@ -62,9 +62,7 @@ async def test_login_deactivated_user_returns_401_no_cookies(
         "/api/v1/auth/login",
         json={"email": target.email, "password": _PLAINTEXT},
     )
-    assert baseline.status_code == 200, (
-        f"Baseline login failed unexpectedly: {baseline.text}"
-    )
+    assert baseline.status_code == 200, f"Baseline login failed unexpectedly: {baseline.text}"
     set_cookies_baseline = [v for k, v in baseline.headers.items() if k.lower() == "set-cookie"]
     assert len(set_cookies_baseline) > 0, "Expected Set-Cookie headers on successful login"
 
@@ -137,8 +135,7 @@ async def test_login_soft_deleted_user_returns_401_no_cookies(
         json={"email": user.email, "password": _PLAINTEXT_2},
     )
     assert response.status_code == 401, (
-        f"CR-03 regression — soft-deleted user returned {response.status_code} "
-        f"instead of 401."
+        f"CR-03 regression — soft-deleted user returned {response.status_code} instead of 401."
     )
     assert response.json().get("code") == "invalid_credentials", (
         f"Expected invalid_credentials, got: {response.json()}"
@@ -202,10 +199,7 @@ async def test_login_anti_oracle_body_parity(
 
     # Byte-identical body across all 4 cases.
     assert (
-        deactivated_resp.text
-        == soft_deleted_resp.text
-        == unknown_resp.text
-        == wrong_pw_resp.text
+        deactivated_resp.text == soft_deleted_resp.text == unknown_resp.text == wrong_pw_resp.text
     ), (
         "Anti-oracle regression — login response bodies differ across "
         f"(deactivated={deactivated_resp.text!r}, "
@@ -243,10 +237,10 @@ async def test_login_deactivated_user_emits_login_failed_audit(
     )
 
     rows = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.action == "login_failed")
-        )
-    ).scalars().all()
+        (await db_session.execute(select(AuditLog).where(AuditLog.action == "login_failed")))
+        .scalars()
+        .all()
+    )
     matching = [r for r in rows if r.payload.get("email") == user.email]
     assert len(matching) >= 1, (
         f"CR-03 regression — no login_failed audit row found for deactivated "

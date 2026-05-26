@@ -149,9 +149,7 @@ async def test_sale_with_paid_at_iso(
 
     # And verify the DB column is non-null.
     membership_id = UUID(data["id"])
-    row = await db_session.scalar(
-        select(Membership).where(Membership.id == membership_id)
-    )
+    row = await db_session.scalar(select(Membership).where(Membership.id == membership_id))
     assert row is not None
     assert row.paid_at is not None
 
@@ -171,9 +169,7 @@ async def test_sale_without_paid_at_persists_null(
     )
     assert r.status_code == 201, r.text
     membership_id = UUID(r.json()["data"]["id"])
-    row = await db_session.scalar(
-        select(Membership).where(Membership.id == membership_id)
-    )
+    row = await db_session.scalar(select(Membership).where(Membership.id == membership_id))
     assert row is not None
     assert row.paid_at is None
 
@@ -200,9 +196,7 @@ async def test_sale_with_notes(
     assert data["notes"] == "renewal"
 
     membership_id = UUID(data["id"])
-    row = await db_session.scalar(
-        select(Membership).where(Membership.id == membership_id)
-    )
+    row = await db_session.scalar(select(Membership).where(Membership.id == membership_id))
     assert row is not None
     assert row.notes == "renewal"
 
@@ -512,5 +506,3 @@ async def test_sale_allows_stacking_on_existing_active(
     assert r.status_code == 201, r.text
     new_id = r.json()["data"]["id"]
     assert new_id != str(existing.id)
-
-

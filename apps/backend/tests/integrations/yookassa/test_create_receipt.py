@@ -188,9 +188,7 @@ async def test_create_receipt_kind_refund_uses_refund_id_field_name(
     refund_id = "44e12f66-1234-5000-8000-aabbccddeeff"
     async with httpx.AsyncClient(base_url=_BASE_URL) as http:
         client = YooKassaClient(http=http, settings=_test_settings())
-        await client.create_receipt(
-            **_receipt_kwargs(payment_id=refund_id, kind="refund")
-        )
+        await client.create_receipt(**_receipt_kwargs(payment_id=refund_id, kind="refund"))
     body = json.loads(route.calls.last.request.content)
     assert body["type"] == "refund"
     assert body["refund_id"] == refund_id

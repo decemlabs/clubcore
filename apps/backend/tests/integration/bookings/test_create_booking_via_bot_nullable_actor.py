@@ -46,9 +46,7 @@ async def test_bookings_created_by_user_id_is_nullable_in_db(
     )
     row = result.first()
     assert row is not None, "bookings.created_by_user_id column not found"
-    assert row[0] == "YES", (
-        "bookings.created_by_user_id must be NULLABLE after Alembic 0021"
-    )
+    assert row[0] == "YES", "bookings.created_by_user_id must be NULLABLE after Alembic 0021"
 
 
 def test_bookings_orm_mapping_marks_created_by_user_id_nullable() -> None:
@@ -122,11 +120,7 @@ async def test_insert_booking_with_null_actor_succeeds(
 
     # Re-fetch via raw SELECT to be sure the row is durable (not just
     # transient SA state).
-    row = (
-        await db_session.execute(
-            select(Booking).where(Booking.id == booking.id)
-        )
-    ).scalar_one()
+    row = (await db_session.execute(select(Booking).where(Booking.id == booking.id))).scalar_one()
     assert row.created_by_user_id is None
 
 

@@ -127,10 +127,7 @@ async def direct_engine_session() -> AsyncIterator[AsyncSession]:
             await probe.execute(text("select 1"))
     except Exception as exc:  # broad: skip on any connectivity failure
         await engine.dispose()
-        pytest.skip(
-            f"DATABASE_URL not reachable; run "
-            f"`docker compose up postgres` first ({exc!r})"
-        )
+        pytest.skip(f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})")
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
@@ -205,9 +202,7 @@ async def test_0027_upgrade_with_colliding_unconsumed_rows(
                 {"uid": str(user_id)},
             )
         ).fetchall()
-        assert len(rows) == 2, (
-            f"expected both seeded rows to survive the upgrade, got {len(rows)}"
-        )
+        assert len(rows) == 2, f"expected both seeded rows to survive the upgrade, got {len(rows)}"
         unconsumed = [r for r in rows if r.consumed_at is None]
         assert len(unconsumed) == 1, (
             f"expected exactly 1 unconsumed row after CR-04 defensive cleanup, "
@@ -221,9 +216,7 @@ async def test_0027_upgrade_with_colliding_unconsumed_rows(
         await session.execute(
             text("DELETE FROM otp_codes WHERE user_id = :uid"), {"uid": str(user_id)}
         )
-        await session.execute(
-            text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)}
-        )
+        await session.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)})
         await session.commit()
 
 
@@ -278,8 +271,7 @@ async def test_0027_round_trip_with_data(
         current_result = _run_alembic("current")
         _assert_alembic_ok(current_result, "current (round-trip verification)")
         assert "(head)" in current_result.stdout, (
-            f"alembic current did not show head revision after upgrade:\n"
-            f"{current_result.stdout}"
+            f"alembic current did not show head revision after upgrade:\n{current_result.stdout}"
         )
 
     finally:
@@ -287,7 +279,5 @@ async def test_0027_round_trip_with_data(
         await session.execute(
             text("DELETE FROM otp_codes WHERE user_id = :uid"), {"uid": str(user_id)}
         )
-        await session.execute(
-            text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)}
-        )
+        await session.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": str(user_id)})
         await session.commit()

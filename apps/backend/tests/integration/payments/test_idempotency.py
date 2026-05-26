@@ -200,11 +200,15 @@ async def test_same_key_different_body_returns_422(
     # Only ONE payment row exists for the first membership; ZERO rows exist
     # for plan_b (no membership was created for it).
     rows = (
-        await db_session.execute(
-            select(Payment).where(
-                Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP,
-                Payment.subject_id == first_membership_id,
+        (
+            await db_session.execute(
+                select(Payment).where(
+                    Payment.subject_kind == SUBJECT_KIND_MEMBERSHIP,
+                    Payment.subject_id == first_membership_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1

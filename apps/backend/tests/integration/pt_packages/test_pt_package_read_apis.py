@@ -80,9 +80,7 @@ async def test_list_pt_packages_filter_by_client_id(
     await make_pt_package(client_id=c_a.id, plan=plan)
     await make_pt_package(client_id=c_b.id, plan=plan)
 
-    r = await authed_client_owner.get(
-        f"/api/v1/pt-packages?clientId={c_a.id}"
-    )
+    r = await authed_client_owner.get(f"/api/v1/pt-packages?clientId={c_a.id}")
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert all(it["clientId"] == str(c_a.id) for it in items)
@@ -101,9 +99,7 @@ async def test_list_pt_packages_filter_by_status(
     c_a = await make_client(phone="+79991130001")
     c_b = await make_client(phone="+79991130002")
     pkg_active = await make_pt_package(client_id=c_a.id, plan=plan)
-    pkg_cancelled = await make_pt_package(
-        client_id=c_b.id, plan=plan, status="cancelled"
-    )
+    pkg_cancelled = await make_pt_package(client_id=c_b.id, plan=plan, status="cancelled")
 
     r = await authed_client_owner.get("/api/v1/pt-packages?status=cancelled")
     assert r.status_code == 200, r.text
