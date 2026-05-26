@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     clubcore_email_from: EmailStr | None = None  # canonical env: CLUBCORE_EMAIL_FROM
 
     @model_validator(mode="after")
-    def _gym_hours_range_invariant(self) -> "Settings":
+    def _gym_hours_range_invariant(self) -> Self:
         # D-11: no midnight-spanning gym hours in v1.2.
         if self.gym_hours_end <= self.gym_hours_start:
             raise ValueError(
@@ -134,7 +134,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _resolve_email_from(self) -> "Settings":
+    def _resolve_email_from(self) -> Self:
         # Phase 62 D-62-03 — canonical env override of EmailProviderSettings.from_address.
         resolved: str | None = self.clubcore_email_from
         if resolved is not None:
