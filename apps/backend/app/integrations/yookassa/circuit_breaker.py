@@ -3,13 +3,13 @@
 Two-key sliding-window-plus-open-marker breaker for the ЮKassa receipts
 endpoint (Pitfall 11):
 
-- ``sz:yookassa:circuit_window:<provider>`` — Redis sorted set of recent
+- ``cc:yookassa:circuit_window:<provider>`` — Redis sorted set of recent
   failure timestamps (ms since epoch). On every ``record_failure`` we ZADD
   a unique member, ZREMRANGEBYSCORE to trim entries older than 60s, and
   ZCARD to count what's left. When the count crosses
   ``_FAILURE_THRESHOLD`` we SET the open-marker key with a fixed TTL.
 
-- ``sz:yookassa:circuit:<provider>`` — open-marker key. ``is_circuit_open``
+- ``cc:yookassa:circuit:<provider>`` — open-marker key. ``is_circuit_open``
   reduces to one ``EXISTS`` so the ARQ task's head-of-body check is O(1).
   Closing is implicit: TTL expiry returns the breaker to closed, with no
   manual reset surface in Phase 51.
@@ -24,7 +24,7 @@ zero domain knowledge — it is a Redis primitive parameterised by
 D-51-14 LOCKED:
 - Threshold: 5 failures / 60s → open
 - Open TTL: 300s (5 minutes)
-- ``provider`` in v1.7: ``"receipts"`` (key suffix → sz:yookassa:circuit:receipts)
+- ``provider`` in v1.7: ``"receipts"`` (key suffix → cc:yookassa:circuit:receipts)
 - Copy-and-adapt of the Phase 42 email circuit_breaker module — ONLY
   key prefixes + structlog logger namespace + docstring changed.
 """
@@ -38,8 +38,8 @@ from uuid import uuid4
 import structlog
 from redis.asyncio import Redis
 
-_CIRCUIT_KEY_PREFIX: Final[str] = "sz:yookassa:circuit:"
-_WINDOW_KEY_PREFIX: Final[str] = "sz:yookassa:circuit_window:"
+_CIRCUIT_KEY_PREFIX: Final[str] = "cc:yookassa:circuit:"
+_WINDOW_KEY_PREFIX: Final[str] = "cc:yookassa:circuit_window:"
 _FAILURE_THRESHOLD: Final[int] = 5
 _WINDOW_SECONDS: Final[int] = 60
 _OPEN_TTL_SECONDS: Final[int] = 300  # 5 minutes (D-51-14)

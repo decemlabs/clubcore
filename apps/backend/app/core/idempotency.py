@@ -15,7 +15,7 @@ Provides:
   ``ConflictError("idempotency_in_flight")`` when the placeholder is still
   present, ``ValidationAppError("idempotency_key_reuse")`` on body diff.
 
-Redis key shape: ``sz:idem:{key}``. TTL: 3600s. Encoding: JSON envelope.
+Redis key shape: ``cc:idem:{key}``. TTL: 3600s. Encoding: JSON envelope.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from app.core.redis import get_redis
 IDEMPOTENCY_KEY_PATTERN: str = r"^[A-Za-z0-9_:-]{1,128}$"
 _IDEMPOTENCY_KEY_RE = re.compile(IDEMPOTENCY_KEY_PATTERN)
 
-IDEMPOTENCY_REDIS_PREFIX: str = "sz:idem:"
+IDEMPOTENCY_REDIS_PREFIX: str = "cc:idem:"
 IDEMPOTENCY_TTL_SECONDS: int = 3600
 _PLACEHOLDER: str = "__in_flight__"
 
@@ -69,7 +69,7 @@ async def verify_idempotency(
 
     Returns ``f"{method}:{path}:{header_value}"`` so the same client-supplied
     header value reused across DIFFERENT endpoints (e.g. sale + cancel +
-    refund) cannot collide in the Redis namespace ``sz:idem:{...}``. This
+    refund) cannot collide in the Redis namespace ``cc:idem:{...}``. This
     is the route-binding invariant referenced by D-32-19 / D-33-16 — the
     prior return of the bare header value allowed cross-route replay where
     a sale envelope could be served as a refund response when bodies

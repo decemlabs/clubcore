@@ -2,13 +2,13 @@
 
 Two-key sliding-window-plus-open-marker breaker for the email transport:
 
-- ``sz:email:circuit_window:<provider>`` — Redis sorted set of recent failure
+- ``cc:email:circuit_window:<provider>`` — Redis sorted set of recent failure
   timestamps (ms since epoch). On every ``record_failure`` we ZADD a unique
   member, ZREMRANGEBYSCORE to trim entries older than 60s, and ZCARD to count
   what's left. When the count crosses ``_FAILURE_THRESHOLD`` we SET the
   open-marker key with a fixed TTL.
 
-- ``sz:email:circuit:<provider>`` — open-marker key. ``is_circuit_open``
+- ``cc:email:circuit:<provider>`` — open-marker key. ``is_circuit_open``
   reduces to one ``EXISTS`` so the ARQ task's head-of-body check is O(1).
   Closing is implicit: TTL expiry returns the breaker to closed, with no
   manual reset surface in Phase 42.
@@ -34,8 +34,8 @@ from uuid import uuid4
 import structlog
 from redis.asyncio import Redis
 
-_CIRCUIT_KEY_PREFIX: Final[str] = "sz:email:circuit:"
-_WINDOW_KEY_PREFIX: Final[str] = "sz:email:circuit_window:"
+_CIRCUIT_KEY_PREFIX: Final[str] = "cc:email:circuit:"
+_WINDOW_KEY_PREFIX: Final[str] = "cc:email:circuit_window:"
 _FAILURE_THRESHOLD: Final[int] = 5
 _WINDOW_SECONDS: Final[int] = 60
 _OPEN_TTL_SECONDS: Final[int] = 300  # 5 minutes (D-42-14)

@@ -16,7 +16,7 @@ The /start <token> handler implements the atomic-after-DM pattern (D-11):
 
 The /checkin handler (Phase 20 D-10):
   1. Defensive update-field guard.
-  2. Redis SET-NX-EX dedup on `sz:bot:update:{update_id}` TTL 1h, fail-open on
+  2. Redis SET-NX-EX dedup on `cc:bot:update:{update_id}` TTL 1h, fail-open on
      Redis errors (D-20-3).
   3. Open SAVEPOINT-rolled session via ctx.session_factory().
   4. ctx.visits_service.create_visit_self_checkin(...) -- service owns commit
@@ -71,7 +71,7 @@ class HandlerContext(NamedTuple):
     visits_service    : the app.modules.visits.service module
                         (workers->modules.visits, D-10 — Phase 20).
     redis             : redis.asyncio.Redis client for /checkin update_id dedup
-                        (Phase 20 D-20-2; keyspace `sz:bot:update:*`).
+                        (Phase 20 D-20-2; keyspace `cc:bot:update:*`).
     bookings_service  : the app.modules.bookings.service module
                         (workers->modules.bookings, Phase 40 D-40-04 —
                         create_booking_via_bot dispatch for /book callback).
@@ -97,12 +97,12 @@ async def _dedupe_update_id(redis: Redis, update_id: int, chat_id: int) -> bool:
     """Return True on first-sight (proceed); False on replay (handler should return).
 
     Fail-open per D-20-3: Redis errors return True (DB UNIQUE is the real
-    anti-replay backstop). Key prefix ``sz:bot:update:{update_id}`` TTL 1h.
+    anti-replay backstop). Key prefix ``cc:bot:update:{update_id}`` TTL 1h.
     Extracted from the Phase 20 checkin_handler inlined block per Phase 40
     D-40-08 so that Phase 40's /book + /book-callback handlers reuse the
     exact same fail-open + structlog-event-name semantics.
     """
-    dedup_key = f"sz:bot:update:{update_id}"
+    dedup_key = f"cc:bot:update:{update_id}"
     try:
         set_result: Any = await redis.set(dedup_key, "1", nx=True, ex=3600)
     except Exception as exc:  # fail-open per D-20-3

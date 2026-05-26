@@ -229,7 +229,7 @@ async def _seed_pending_online_payment(
 async def _flush_webhook_dedup_keys(app: FastAPI) -> None:
     """Flush Redis webhook dedup keys to prevent test pollution."""
     redis = app.state.redis
-    keys = await redis.keys("sz:yookassa:webhook:*")
+    keys = await redis.keys("cc:yookassa:webhook:*")
     if keys:
         await redis.delete(*keys)
 

@@ -54,7 +54,7 @@ from app.modules.fiscal_receipts.constants import (
 from app.modules.fiscal_receipts.models import FiscalReceipt
 
 _log: Final = structlog.get_logger("modules.fiscal_receipts.tasks")
-_PROVIDER: Final[str] = "receipts"  # circuit-breaker scope → sz:yookassa:circuit:receipts
+_PROVIDER: Final[str] = "receipts"  # circuit-breaker scope → cc:yookassa:circuit:receipts
 
 # D-51-14 / Pitfall 11 step 4 backoff schedule (job_try is 1-indexed in ARQ).
 _BACKOFF_BASE_SECONDS: Final[tuple[int, ...]] = (30, 120, 600)

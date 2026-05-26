@@ -15,7 +15,7 @@ D-50-04 / D-50-07 / D-50-08 / D-50-09 / D-50-10 discipline:
    missing ``object.id`` return 200 ``ok`` with structlog warning — ЮKassa retries
    on non-2xx, and a malformed body should not amplify retry storms.
 3. **Redis dedup** (D-50-07 / D-50-09 / D-50-10): ``SET NX EX 86400`` on
-   ``sz:yookassa:webhook:{event_type}:{object_id}``. The 24h TTL covers ЮKassa's
+   ``cc:yookassa:webhook:{event_type}:{object_id}``. The 24h TTL covers ЮKassa's
    maximum retry window. Dedup runs BEFORE re-fetch (D-50-10) so duplicate
    deliveries do not waste outbound rate-budget on GET /v3/payments/{id}.
 4. **Event dispatch**: ``payment.succeeded`` → ``handle_payment_succeeded``;
@@ -53,7 +53,7 @@ _log = structlog.get_logger("api.v1._internal.yookassa")
 # Redis dedup key prefix (D-50-07 / D-50-09). 24h TTL covers ЮKassa's
 # documented retry window — `Phase 50 CONTEXT.md` cites this lifetime
 # explicitly. The full key shape is `{prefix}{event_type}:{object_id}`.
-WEBHOOK_DEDUP_KEY_PREFIX: Final[str] = "sz:yookassa:webhook:"
+WEBHOOK_DEDUP_KEY_PREFIX: Final[str] = "cc:yookassa:webhook:"
 WEBHOOK_DEDUP_TTL_SECONDS: Final[int] = 86400  # 24h matches ЮKassa retry window
 
 router = APIRouter()

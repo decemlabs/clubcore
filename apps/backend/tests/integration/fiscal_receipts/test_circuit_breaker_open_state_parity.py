@@ -7,7 +7,7 @@ was not yet reused in a fiscal dispatch path at that time.
 Phase 53 D-05 (parity decision): now that FISCAL-05 reuses the same
 circuit-breaker primitive (app/integrations/yookassa/circuit_breaker.py) via
 dispatch_fiscal_receipt, this test re-runs the scenario-08 open-state fixture
-against the FISCAL-05 breaker (key ``sz:yookassa:circuit:receipts``) and
+against the FISCAL-05 breaker (key ``cc:yookassa:circuit:receipts``) and
 confirms parity with the v1.6 expectation: the open breaker short-circuits
 dispatch BEFORE any ЮKassa /receipts POST, and the seeded fiscal_receipt row
 remains in its pre-dispatch status (never transitions to 'succeeded').
@@ -46,8 +46,8 @@ from app.modules.payments.models import Payment
 pytestmark = pytest.mark.asyncio
 
 # DEFER-46-03 / D-51-14 locked values (mirror circuit_breaker.py constants).
-_OPEN_MARKER_KEY: str = "sz:yookassa:circuit:receipts"
-_WINDOW_KEY: str = "sz:yookassa:circuit_window:receipts"
+_OPEN_MARKER_KEY: str = "cc:yookassa:circuit:receipts"
+_WINDOW_KEY: str = "cc:yookassa:circuit_window:receipts"
 _FAILURE_THRESHOLD: int = 5
 _OPEN_DEFER_SECONDS: int = 300  # Retry(defer=300) on short-circuit
 
