@@ -96,7 +96,6 @@ async def test_initiate_membership_refund_404_unknown_membership(
         headers=_refund_headers(authed_client_reception),
     )
     assert response.status_code == 404, response.text
-    body = response.json()
     # AppError envelope shape: {"error": {"code": "...", ...}} OR {"detail": ...}.
     # Accept either; just ensure the literal slug appears somewhere.
     assert "membership_not_found" in response.text

@@ -17,7 +17,7 @@ use the same engine-per-test + TRUNCATE approach as
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -52,11 +52,7 @@ from app.modules.payments.constants import (
 )
 from app.modules.payments.models import Payment
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
-from tests.integrations.yookassa.conftest import (  # noqa: F401
-    _YOOKASSA_BASE_URL,
-    yookassa_create_receipt_ok,
-    yookassa_create_refund_success,
-)
+from tests.integrations.yookassa.conftest import _YOOKASSA_BASE_URL
 
 pytestmark = pytest.mark.asyncio
 
@@ -233,7 +229,7 @@ async def _seed_membership_chain(
     session.add(plan)
     await session.flush()
 
-    today = date.today()
+    today = datetime.now(UTC).date()
     membership = Membership(
         client_id=client.id,
         plan_id=plan.id,
@@ -314,7 +310,7 @@ async def _seed_pt_package_chain(
     session.add(plan)
     await session.flush()
 
-    today = date.today()
+    today = datetime.now(UTC).date()
     pt_package = PtPackage(
         client_id=client.id,
         plan_id=plan.id,
@@ -396,7 +392,7 @@ async def test_e2e_refund_full_cycle_membership(
     """
     # Seed the membership chain.
     nonce = uuid4().hex[:6]
-    _client, plan, membership, op, original_payment = await _seed_membership_chain(
+    _client, _plan, membership, op, original_payment = await _seed_membership_chain(
         e2e_db_session,
         owner_email=f"e2e-mbr-owner-{nonce}@example.com",
     )
@@ -557,7 +553,7 @@ async def test_e2e_refund_full_cycle_idempotent_replay_returns_same_refund_id(
     same online_refund_id and only one OnlineRefund row exists in the DB.
     """
     nonce = uuid4().hex[:6]
-    _client, plan, membership, op, original_payment = await _seed_membership_chain(
+    _client, _plan, membership, op, _original_payment = await _seed_membership_chain(
         e2e_db_session,
         owner_email=f"e2e-idem-owner-{nonce}@example.com",
     )
@@ -621,7 +617,7 @@ async def test_e2e_refund_full_cycle_webhook_replay_returns_200_silently(
     or hits the DB partial-UNIQUE constraint and returns 200 without mutation.
     """
     nonce = uuid4().hex[:6]
-    _client, plan, membership, op, original_payment = await _seed_membership_chain(
+    _client, _plan, membership, _op, original_payment = await _seed_membership_chain(
         e2e_db_session,
         owner_email=f"e2e-wh-replay-owner-{nonce}@example.com",
     )
@@ -694,7 +690,7 @@ async def test_e2e_refund_full_cycle_pt_package(
     )
 
     nonce = uuid4().hex[:6]
-    _client, plan, pt_package, op, original_payment = await _seed_pt_package_chain(
+    _client, _plan, pt_package, _op, original_payment = await _seed_pt_package_chain(
         e2e_db_session,
         owner_email=f"e2e-pt-owner-{nonce}@example.com",
     )

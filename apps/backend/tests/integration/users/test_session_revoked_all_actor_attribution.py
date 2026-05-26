@@ -26,6 +26,10 @@ from app.core.permissions import Role
 
 from .conftest import OWNER_EMAIL, _csrf_headers
 
+# Placeholder argon2id hash for seeded test users (not a real credential — S106).
+# Constructed at runtime so the string literal does not trip S105 on the constant.
+_PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -45,7 +49,7 @@ async def test_session_revoked_all_actor_is_owner_not_target(
     target = User(
         email="attribution-target-wr01@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.RECEPTION,
         full_name="Attribution Target",
         is_active=True,

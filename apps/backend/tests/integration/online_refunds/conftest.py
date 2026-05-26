@@ -20,9 +20,9 @@ The ЮKassa adapter is wired via ``register_yookassa_client_provider`` in
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Generator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -55,6 +55,7 @@ from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from tests.integrations.yookassa.conftest import (  # noqa: F401
     _YOOKASSA_BASE_URL,
     _reset_structlog_for_capture,
+    yookassa_create_receipt_ok,
     yookassa_create_refund_success,
 )
 

@@ -26,10 +26,10 @@ from app.modules.auth.models import User
 
 pytestmark = pytest.mark.asyncio
 
-_PLAINTEXT = "TestPassword123!"  # noqa: S105 — test password literal
-_PLAINTEXT_2 = "AnotherPassword456!"  # noqa: S105 — test password literal
-_PLAINTEXT_3 = "Password789!"  # noqa: S105 — test password literal
-_PLAINTEXT_AUDIT = "AuditPassword!"  # noqa: S105 — test password literal
+_PLAINTEXT = "TestPassword123!"
+_PLAINTEXT_2 = "AnotherPassword456!"
+_PLAINTEXT_3 = "Password789!"
+_PLAINTEXT_AUDIT = "AuditPassword!"
 
 
 @pytest_asyncio.fixture

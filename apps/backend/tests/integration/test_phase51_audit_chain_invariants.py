@@ -30,12 +30,8 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import Any
-
-import pytest
 
 from app.core.audit import LOCKED_AUDIT_EVENTS
-
 
 # ---------------------------------------------------------------------------
 # 1. LOCKED_AUDIT_EVENTS count.
@@ -283,7 +279,7 @@ def test_all_phase_51_audit_emit_callsites_use_literal_event_names() -> None:
                     )
 
     assert not violations, (
-        f"Phase 51 audit.emit callsites with non-literal event names:\n" + "\n".join(violations)
+        "Phase 51 audit.emit callsites with non-literal event names:\n" + "\n".join(violations)
     )
 
 
@@ -307,7 +303,7 @@ def test_all_phase_51_audit_emit_uuid_kwargs_are_str_cast() -> None:
     Checked: all other ``_id``-suffixed kwargs that flow into the JSONB payload.
     """
     # Typed params that audit.emit handles natively (UUID or str, function handles conversion).
-    _TYPED_PARAMS = frozenset(
+    _typed_params = frozenset(
         {
             "actor_user_id",
             "resource_id",
@@ -325,7 +321,7 @@ def test_all_phase_51_audit_emit_uuid_kwargs_are_str_cast() -> None:
             for kw in call.keywords:
                 if kw.arg is None:
                     continue  # **kwargs spread — skip
-                if kw.arg in _TYPED_PARAMS:
+                if kw.arg in _typed_params:
                     continue  # typed param — handled by audit.emit signature
                 if not kw.arg.endswith("_id"):
                     continue  # not an _id field — skip
@@ -351,6 +347,6 @@ def test_all_phase_51_audit_emit_uuid_kwargs_are_str_cast() -> None:
                     )
 
     assert not violations, (
-        f"Phase 51 audit.emit JSONB payload UUID kwargs not wrapped in str():\n"
+        "Phase 51 audit.emit JSONB payload UUID kwargs not wrapped in str():\n"
         + "\n".join(violations)
     )

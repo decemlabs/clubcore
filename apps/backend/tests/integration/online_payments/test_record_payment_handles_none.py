@@ -23,9 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_models import AuditLog
-from app.modules.payments.models import Payment
 from app.modules.payments.service import record_payment
-
 
 pytestmark = pytest.mark.asyncio
 

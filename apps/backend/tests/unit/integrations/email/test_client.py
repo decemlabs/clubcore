@@ -12,7 +12,7 @@ outcome rather than an exception surface.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -86,7 +86,7 @@ class _FakeSesClient:
         self._send_side_effect = send_side_effect
         self._send_return = send_return
 
-    async def __aenter__(self) -> "_FakeSesClient":
+    async def __aenter__(self) -> _FakeSesClient:
         return self
 
     async def __aexit__(self, *_a: Any) -> None:

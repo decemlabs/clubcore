@@ -8,7 +8,7 @@ Coverage:
   - Counter-anchor events at a safely mid-day MSK timestamp confirm two distinct MSK
     dates appear and the grouping is not trivially collapsing everything to one date.
   - Revenue net-of-refund: partial refund produces a deterministic golden amount
-    (GROSS_KOPECKS − REFUND_KOPECKS = NET_KOPECKS) so plan 57-03 runbook can
+    (GROSS_KOPECKS - REFUND_KOPECKS = NET_KOPECKS) so plan 57-03 runbook can
     eyeball-match these exact numbers.
 
 Requirement: VER-02.
@@ -16,17 +16,17 @@ Requirement: VER-02.
 RU-no-DST rationale:
     Russia has not observed Daylight Saving Time since October 2014. The real correctness
     risk is therefore NOT DST transitions but the fixed +03:00 (MSK = UTC+3) offset at
-    UTC midnight boundaries. A payment or visit recorded at 21:00–23:59 UTC lands on the
+    UTC midnight boundaries. A payment or visit recorded at 21:00-23:59 UTC lands on the
     *next* Moscow calendar day. This file proves that invariant holds for both the revenue
     and visits report bucketing.
 
 Named constants (referenced by 57-03 runbook):
-    GOLDEN_DATE_UTC_PREV  – the UTC calendar date of the boundary event (2026-01-01)
-    GOLDEN_DATE_MSK_NEXT  – the MSK calendar date the event bucketes into (2026-01-02)
-    GROSS_KOPECKS         – gross sale amount in kopecks (250 000 kop = 2 500 RUB)
-    REFUND_KOPECKS        – partial refund amount in kopecks  (50 000 kop =   500 RUB)
-    NET_KOPECKS           – GROSS − REFUND = deterministic golden net (200 000 kop)
-    ANCHOR_DATE_MSK       – safely mid-day MSK date used for counter-anchor (2026-01-02
+    GOLDEN_DATE_UTC_PREV  - the UTC calendar date of the boundary event (2026-01-01)
+    GOLDEN_DATE_MSK_NEXT  - the MSK calendar date the event bucketes into (2026-01-02)
+    GROSS_KOPECKS         - gross sale amount in kopecks (250 000 kop = 2 500 RUB)
+    REFUND_KOPECKS        - partial refund amount in kopecks  (50 000 kop =   500 RUB)
+    NET_KOPECKS           - GROSS - REFUND = deterministic golden net (200 000 kop)
+    ANCHOR_DATE_MSK       - safely mid-day MSK date used for counter-anchor (2026-01-02
                             at 07:00 UTC = 10:00 MSK, same MSK calendar day)
 
 Wire format: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD[&groupBy=day]
@@ -56,7 +56,7 @@ GROSS_KOPECKS: int = 250_000
 # Partial refund amount in kopecks (500,00 RUB = 50 000 kop).
 REFUND_KOPECKS: int = 50_000
 
-# Net revenue after partial refund: GROSS_KOPECKS − REFUND_KOPECKS = 200 000 kop.
+# Net revenue after partial refund: GROSS_KOPECKS - REFUND_KOPECKS = 200 000 kop.
 NET_KOPECKS: int = GROSS_KOPECKS - REFUND_KOPECKS  # = 200 000
 
 # Counter-anchor: 2026-01-02 10:00 MSK (07:00 UTC) — well within the same MSK calendar
@@ -89,7 +89,7 @@ async def test_dst_revenue_boundary_payment_buckets_to_next_msk_day(
 
     Arithmetic (net-of-refund, deterministic for 57-03 runbook):
         GROSS_KOPECKS = 250 000 kop
-      − REFUND_KOPECKS =  50 000 kop
+      - REFUND_KOPECKS =  50 000 kop
       = NET_KOPECKS    = 200 000 kop
 
     Counter-anchor at 07:00 UTC (10:00 MSK) on GOLDEN_DATE_MSK_NEXT proves the window
@@ -173,7 +173,7 @@ async def test_dst_revenue_net_of_refund_golden_amount(
     """Assert deterministic NET_KOPECKS for 57-03 runbook eyeball-match.
 
     Uses isolated membership so only the boundary sale + refund appear in the window.
-    NET_KOPECKS = GROSS_KOPECKS − REFUND_KOPECKS = 200 000 kop = 2 000,00 RUB.
+    NET_KOPECKS = GROSS_KOPECKS - REFUND_KOPECKS = 200 000 kop = 2 000,00 RUB.
 
     VER-02 / ROADMAP SC#3 / plan 57-03 canonical golden number.
     """
@@ -209,7 +209,7 @@ async def test_dst_revenue_net_of_refund_golden_amount(
     assert bucket["netKopecks"] == NET_KOPECKS, (
         f"Golden net-of-refund mismatch: expected NET_KOPECKS={NET_KOPECKS}, "
         f"got {bucket['netKopecks']}. "
-        f"(GROSS={GROSS_KOPECKS} − REFUND={REFUND_KOPECKS} = {NET_KOPECKS})"
+        f"(GROSS={GROSS_KOPECKS} - REFUND={REFUND_KOPECKS} = {NET_KOPECKS})"
     )
 
 

@@ -80,7 +80,7 @@ async def real_commit_engine() -> AsyncIterator[AsyncEngine]:
     try:
         async with engine.connect() as probe:
             await probe.execute(text("select 1"))
-    except Exception as exc:  # noqa: BLE001 — broad: skip on any connectivity failure
+    except Exception as exc:
         await engine.dispose()
         pytest.skip(
             f"DATABASE_URL not reachable for D-46-14 #1; "

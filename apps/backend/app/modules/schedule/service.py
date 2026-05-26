@@ -912,87 +912,86 @@ async def create_time_off(
 
     # 3. Force cascade — cancel each booked slot + its confirmed booking.
     cascaded_booking_ids: list[UUID] = []
-    if force:
+    if force and booked_slot_ids:
         # Load the booked slots to mutate in-place.
-        if booked_slot_ids:
-            booked_slots_stmt = (
-                select(TrainerAvailabilitySlot)
-                .where(TrainerAvailabilitySlot.id.in_(booked_slot_ids))
-                .with_for_update()
+        booked_slots_stmt = (
+            select(TrainerAvailabilitySlot)
+            .where(TrainerAvailabilitySlot.id.in_(booked_slot_ids))
+            .with_for_update()
+        )
+        booked_slots = list((await session.scalars(booked_slots_stmt)).all())
+
+        for slot in booked_slots:
+            # 3a. Raw UPDATE bookings (D-38-11 — cross-module, no static import).
+            # NOTE WR-06 (Phase 59 review): PT-package session credit is NOT
+            # restored on owner-initiated cancellation. The same omission exists
+            # in cancel_slot's booked-cascade (service.py:~471-504), making this
+            # a pre-existing system-wide pattern, not a Phase-59 regression.
+            # A client whose confirmed booking is force-cancelled silently loses
+            # one prepaid PT session. Restoring sessions on owner-driven cancellation
+            # requires a product decision (cross-module raw sa.text() UPDATE on
+            # pt_packages, same pattern as D-38-11). Pending that decision this
+            # behaviour is intentional and documented here.
+            cascade_stmt = sa.text(
+                """
+                UPDATE bookings
+                SET status='cancelled',
+                    cancelled_at=now(),
+                    cancel_reason=:reason,
+                    updated_at=now()
+                WHERE slot_id=:sid AND status='confirmed'
+                RETURNING id
+                """,  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
             )
-            booked_slots = list((await session.scalars(booked_slots_stmt)).all())
-
-            for slot in booked_slots:
-                # 3a. Raw UPDATE bookings (D-38-11 — cross-module, no static import).
-                # NOTE WR-06 (Phase 59 review): PT-package session credit is NOT
-                # restored on owner-initiated cancellation. The same omission exists
-                # in cancel_slot's booked-cascade (service.py:~471-504), making this
-                # a pre-existing system-wide pattern, not a Phase-59 regression.
-                # A client whose confirmed booking is force-cancelled silently loses
-                # one prepaid PT session. Restoring sessions on owner-driven cancellation
-                # requires a product decision (cross-module raw sa.text() UPDATE on
-                # pt_packages, same pattern as D-38-11). Pending that decision this
-                # behaviour is intentional and documented here.
-                cascade_stmt = sa.text(
-                    """
-                    UPDATE bookings
-                    SET status='cancelled',
-                        cancelled_at=now(),
-                        cancel_reason=:reason,
-                        updated_at=now()
-                    WHERE slot_id=:sid AND status='confirmed'
-                    RETURNING id
-                    """,  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
-                )
-                result = await session.execute(
-                    cascade_stmt,
-                    {"sid": slot.id, "reason": TIME_OFF_CANCEL_REASON},
-                )
-                cancelled_row = result.first()
-                # 3b. 0-row → invariant breach (slot=booked but no confirmed booking).
-                if cancelled_row is None:
-                    _log.error(
-                        "slot_booking_inconsistency",
-                        slot_id=str(slot.id),
-                        slot_status=slot.status,
-                        expected="bookings.status='confirmed' row",
-                    )
-                    raise InternalConsistencyError("slot_booking_inconsistency")
-                booking_id: UUID = cancelled_row.id
-                cascaded_booking_ids.append(booking_id)
-
-                # 3c. Flip the slot's status.
-                slot.status = "cancelled"
-                slot.cancelled_at = datetime.now(UTC)
-                slot.cancel_reason = TIME_OFF_CANCEL_REASON
-                await session.flush()
-
-                # 3e. audit.emit slot_cancelled (had_booking=True) — LITERAL.
-                await audit.emit(
-                    session,
-                    "slot_cancelled",  # LITERAL
-                    actor_user_id=actor.id,
-                    resource_type="schedule_slot",  # LITERAL
-                    resource_id=slot.id,
+            result = await session.execute(
+                cascade_stmt,
+                {"sid": slot.id, "reason": TIME_OFF_CANCEL_REASON},
+            )
+            cancelled_row = result.first()
+            # 3b. 0-row → invariant breach (slot=booked but no confirmed booking).
+            if cancelled_row is None:
+                _log.error(
+                    "slot_booking_inconsistency",
                     slot_id=str(slot.id),
-                    trainer_id=str(slot.trainer_id),
-                    cancelled_by_user_id=str(actor.id),
-                    cancel_reason=TIME_OFF_CANCEL_REASON,
-                    had_booking=True,
+                    slot_status=slot.status,
+                    expected="bookings.status='confirmed' row",
                 )
+                raise InternalConsistencyError("slot_booking_inconsistency")
+            booking_id: UUID = cancelled_row.id
+            cascaded_booking_ids.append(booking_id)
 
-                # 3f. audit.emit booking_cancelled — LITERAL (4-key BookingCancelledPayload).
-                await audit.emit(
-                    session,
-                    "booking_cancelled",  # LITERAL
-                    actor_user_id=actor.id,
-                    resource_type="booking",  # LITERAL
-                    resource_id=booking_id,
-                    booking_id=str(booking_id),
-                    slot_id=str(slot.id),
-                    cancelled_by_user_id=str(actor.id),
-                    cancel_reason=TIME_OFF_CANCEL_REASON,
-                )
+            # 3c. Flip the slot's status.
+            slot.status = "cancelled"
+            slot.cancelled_at = datetime.now(UTC)
+            slot.cancel_reason = TIME_OFF_CANCEL_REASON
+            await session.flush()
+
+            # 3e. audit.emit slot_cancelled (had_booking=True) — LITERAL.
+            await audit.emit(
+                session,
+                "slot_cancelled",  # LITERAL
+                actor_user_id=actor.id,
+                resource_type="schedule_slot",  # LITERAL
+                resource_id=slot.id,
+                slot_id=str(slot.id),
+                trainer_id=str(slot.trainer_id),
+                cancelled_by_user_id=str(actor.id),
+                cancel_reason=TIME_OFF_CANCEL_REASON,
+                had_booking=True,
+            )
+
+            # 3f. audit.emit booking_cancelled — LITERAL (4-key BookingCancelledPayload).
+            await audit.emit(
+                session,
+                "booking_cancelled",  # LITERAL
+                actor_user_id=actor.id,
+                resource_type="booking",  # LITERAL
+                resource_id=booking_id,
+                booking_id=str(booking_id),
+                slot_id=str(slot.id),
+                cancelled_by_user_id=str(actor.id),
+                cancel_reason=TIME_OFF_CANCEL_REASON,
+            )
 
     # 4. Active (un-booked) overlapping slots → flip to cancelled.
     if active_slot_ids:

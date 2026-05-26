@@ -54,7 +54,8 @@ class Resource(StrEnum):
     SCHEDULE_SLOTS = "schedule-slots"  # Phase 37 INFRA-26 — v1.5 slot resource (kebab, multi-word)
     BOOKINGS = "bookings"  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
     USERS = "users"  # NEW Phase 41 INFRA-37 / D-41-21 — multi-user admin module (Phase 43)
-    AUDIT_LOG = "audit-log"  # NEW Phase 54 INFRA-42 — kebab on wire (multi-word, mirrors OWNER_AREA / SCHEDULE_SLOTS)
+    # NEW Phase 54 INFRA-42 — kebab on wire (multi-word, mirrors OWNER_AREA / SCHEDULE_SLOTS)
+    AUDIT_LOG = "audit-log"
 
 
 # Verbatim mirror of apps/admin-web/src/shared/session/can.ts (40 entries after Phase 58 INFRA-15).

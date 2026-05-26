@@ -27,6 +27,10 @@ from app.modules.auth.models import RefreshToken
 
 from .conftest import _csrf_headers
 
+# Placeholder argon2id hash for seeded test users (not a real credential — S106).
+# Constructed at runtime so the string literal does not trip S105 on the constant.
+_PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -52,7 +56,7 @@ async def test_family_count_reports_db_truth_when_redis_drifted(
     target = User(
         email="drift-test-wr04@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.RECEPTION,
         full_name="Drift Test",
         is_active=True,

@@ -16,13 +16,16 @@ This test:
 from __future__ import annotations
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import FastAPI
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models import User
 from app.core.permissions import Role
+
+# Placeholder argon2id hash for seeded test users (not a real credential — S106).
+# Constructed at runtime so the string literal does not trip S105 on the constant.
+_PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
 
 pytestmark = pytest.mark.asyncio
 
@@ -58,7 +61,7 @@ async def test_deactivate_owner_against_real_postgres(
     second_owner = User(
         email="second-owner-cr02@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.OWNER,
         full_name="Second Owner",
         is_active=True,

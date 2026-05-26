@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_models import AuditLog
+from app.core.exceptions import ConflictError, MembershipNotFoundError
 from app.modules.memberships.service import activate_membership_from_webhook
 from app.modules.online_payments.models import OnlinePayment
 from app.modules.pt_packages.service import activate_pt_package_from_webhook
@@ -140,7 +141,7 @@ async def test_activate_membership_from_webhook_raises_on_missing_online_payment
     db_session: AsyncSession,
 ):
     bogus_id = uuid4()
-    with pytest.raises(Exception):
+    with pytest.raises(MembershipNotFoundError):
         await activate_membership_from_webhook(
             db_session,
             online_payment_id=bogus_id,
@@ -162,7 +163,7 @@ async def test_activate_membership_from_webhook_rejects_pt_package_online_paymen
         amount_kopecks=pt_plan.price_kopecks,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ConflictError):
         await activate_membership_from_webhook(
             db_session,
             online_payment_id=op.id,
@@ -250,7 +251,7 @@ async def test_activate_pt_package_from_webhook_rejects_membership_online_paymen
         amount_kopecks=mem_plan.price_kopecks,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ConflictError):
         await activate_pt_package_from_webhook(
             db_session,
             online_payment_id=op.id,

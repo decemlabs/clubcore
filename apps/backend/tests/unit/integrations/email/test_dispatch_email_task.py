@@ -27,7 +27,6 @@ include ``assert "payload" not in kwargs`` as a CR-01 regression guard.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import fakeredis.aioredis
@@ -39,7 +38,6 @@ from app.workers.tasks.dispatch_email import (
     _audit_reason_for,
     dispatch_email,
 )
-
 
 # --------------------------------------------------------------------- helpers
 
@@ -113,7 +111,7 @@ def _envelope_kwargs() -> dict[str, Any]:
     _corr_id = str(uuid4())
     return {
         "to": "user@example.com",
-        "subject": "Тема",  # noqa: RUF001 — Cyrillic in test fixture
+        "subject": "Тема",
         "html": "<p>hi</p>",
         "text": "hi",
         "template_id": "EMAIL_OTP_LOGIN",
@@ -299,7 +297,8 @@ async def test_dispatch_email_transient_5xx_records_failure_and_audits_provider_
     # WR-04 regression: transient provider 5xx uses status='rejected' (not 'circuit_open').
     s = factory.sessions[0]
     assert s.added[0].status == "rejected", (
-        f"transient 5xx EmailSendLog should use status='rejected' (WR-04), got {s.added[0].status!r}"
+        "transient 5xx EmailSendLog should use status='rejected' (WR-04), "
+        f"got {s.added[0].status!r}"
     )
 
 
@@ -384,7 +383,8 @@ async def test_dispatch_email_permanent_error_audits_provider_5xx(
     # WR-04 regression: permanent error uses status='rejected' (not 'circuit_open').
     s = factory.sessions[0]
     assert s.added[0].status == "rejected", (
-        f"permanent_error EmailSendLog should use status='rejected' (WR-04), got {s.added[0].status!r}"
+        "permanent_error EmailSendLog should use status='rejected' (WR-04), "
+        f"got {s.added[0].status!r}"
     )
 
 

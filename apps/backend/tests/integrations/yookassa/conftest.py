@@ -23,6 +23,7 @@ Fixture index (D-48-22 + Phase 49 PAY-05 / BLOCKER #1):
 
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Generator
 from pathlib import Path
@@ -51,12 +52,12 @@ def _reset_structlog_for_capture() -> Generator[None, None, None]:
     import importlib
 
     structlog.reset_defaults()
-    try:
+    # Best-effort reload — failure is acceptable (fixture is structlog-capture defensive
+    # cleanup; the factory module may not be importable in every test environment).
+    with contextlib.suppress(Exception):
         import app.integrations.yookassa.factory as _factory_mod
 
         importlib.reload(_factory_mod)
-    except Exception:  # noqa: BLE001 — best-effort isolation, do not fail tests
-        pass
     yield
 
 

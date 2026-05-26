@@ -13,7 +13,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession

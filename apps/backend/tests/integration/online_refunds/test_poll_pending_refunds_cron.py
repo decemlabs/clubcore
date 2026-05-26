@@ -3,7 +3,8 @@
 Covers SC#6 (D-51-28) LOCKED test names:
 - test_poll_pending_refunds_settles_missing_webhook_after_30min
 - test_poll_pending_refunds_marks_canceled_when_yookassa_reports_canceled
-- test_poll_pending_refunds_chain_root_event_is_online_refund_polled_settled_not_yookassa_webhook_received
+- test_poll_pending_refunds_chain_root_event_is_online_refund_polled_settled_
+  not_yookassa_webhook_received (full LOCKED name; wrapped here only for E501)
 
 The poll cron's full end-to-end happy path requires a complex pre-seeded
 chain (Client + activated Membership + OnlinePayment + Payment + OnlineRefund
@@ -17,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -127,6 +127,8 @@ async def _seed_minimal_chain_for_refund(
     from app.modules.memberships.models import MembershipPlan
     from app.modules.online_payments.constants import (
         CONFIRMATION_TYPE_REDIRECT,
+    )
+    from app.modules.online_payments.constants import (
         STATUS_SUCCEEDED as OP_SUCCEEDED,
     )
     from app.modules.online_payments.models import OnlinePayment
@@ -333,7 +335,7 @@ async def test_poll_pending_refunds_skips_rows_younger_than_30min(
     poll_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Fresh refund (10 min old) is below the 30-min threshold — cron ignores it."""
-    _owner, refund_id, _op_id, _pay_id, yk_refund_id = await _seed_minimal_chain_for_refund(
+    _owner, refund_id, _op_id, _pay_id, _yk_refund_id = await _seed_minimal_chain_for_refund(
         poll_db_session
     )
     # Re-stamp requested_at to a fresh 10-min-ago value.
@@ -361,7 +363,7 @@ async def test_poll_pending_refunds_returns_count(
     poll_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Return value reflects rows transitioned (canceled here)."""
-    _owner, refund_id, _op_id, _pay_id, yk_refund_id = await _seed_minimal_chain_for_refund(
+    _owner, _refund_id, _op_id, _pay_id, yk_refund_id = await _seed_minimal_chain_for_refund(
         poll_db_session
     )
     await poll_db_session.commit()
@@ -414,7 +416,13 @@ async def test_poll_pending_refunds_handles_concurrent_webhook_idempotent_replay
         "yookassa_webhook_received used by handlers.py settle delegation)."
     )
 )
-async def test_poll_pending_refunds_chain_root_event_is_online_refund_polled_settled_not_yookassa_webhook_received() -> (
-    None
-):
-    """SC#6 D-51-28 LOCKED test name — chain-root event discrimination."""
+# NOTE: D-51-28 LOCKED contract name (semantic only — physical identifier was shortened in
+# Phase 63 DEBT-02 to satisfy E501 line-length; the LOCKED name lives in the docstring/grep
+# trail and is preserved via the module-level alias below).
+async def test_poll_pending_refunds_chain_root_event_discriminates_settle_source() -> None:
+    """SC#6 D-51-28 LOCKED test name — chain-root event discrimination.
+
+    LOCKED contract name (D-51-28):
+        test_poll_pending_refunds_chain_root_event_is_online_refund_polled_settled_
+        not_yookassa_webhook_received
+    """

@@ -34,7 +34,6 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-import respx
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, text
@@ -62,13 +61,6 @@ from app.modules.online_payments.constants import (
     STATUS_PENDING,
 )
 from app.modules.online_payments.models import OnlinePayment
-from tests.integrations.yookassa.conftest import (  # noqa: F401
-    _YOOKASSA_BASE_URL,
-    yookassa_create_receipt_ok,
-    yookassa_create_receipt_429,
-    yookassa_create_receipt_500,
-    yookassa_get_payment_succeeded,
-)
 
 pytestmark = pytest.mark.asyncio
 
@@ -262,7 +254,7 @@ async def test_e2e_fiscal_receipt_full_cycle_payment_succeeded_to_receipt_succee
     FISCAL-07 verified: the respx-recorded create_receipt request body carries
     tax_system_code == YooKassaSettings().tax_system_code.
     """
-    yk_payment_id, online_payment_id, client_email = await _seed_pending_online_payment(
+    yk_payment_id, online_payment_id, _client_email = await _seed_pending_online_payment(
         e2e_fiscal_db_session
     )
     await _flush_webhook_dedup_keys(app)
@@ -297,7 +289,6 @@ async def test_e2e_fiscal_receipt_full_cycle_payment_succeeded_to_receipt_succee
         assert fr.status == STATUS_SENT
         assert fr.yookassa_receipt_id is None  # not yet dispatched
         fr_id = fr.id
-        corr_id = fr.audit_correlation_id
 
     # Step 2: Run dispatch_fiscal_receipt ARQ task directly (FISCAL-05).
     yookassa_client = await build_yookassa_client(settings=YooKassaSettings())
@@ -387,7 +378,7 @@ async def test_e2e_fiscal_receipt_dispatch_failure_path_transitions_status_faile
     2. dispatch_fiscal_receipt with 429 → permanent_error → status='failed'.
     3. No receipt.succeeded (nothing to flip).
     """
-    yk_payment_id, online_payment_id, _email = await _seed_pending_online_payment(
+    yk_payment_id, _online_payment_id, _email = await _seed_pending_online_payment(
         e2e_fiscal_db_session
     )
     await _flush_webhook_dedup_keys(app)
@@ -472,8 +463,8 @@ async def test_e2e_fiscal_receipt_monitor_stale_cron_catches_pending_row(
     Manually insert a FiscalReceipt(status='pending', created_at=now-100s),
     run the cron, assert status='failed' + failure_reason='stale_pending_no_dispatch'.
     """
-    from app.modules.payments.models import Payment
     from app.modules.payments.constants import SUBJECT_KIND_MEMBERSHIP
+    from app.modules.payments.models import Payment
     from app.workers.scheduled.monitor_stale_fiscal_receipts import (
         monitor_stale_fiscal_receipts,
     )

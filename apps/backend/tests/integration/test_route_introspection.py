@@ -32,7 +32,8 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/telegram/start",  # Phase 7 — pre-auth deep-link handshake
         "/api/v1/auth/telegram/status",  # Phase 7 — pre-auth poll
         "/api/v1/auth/telegram/verify",  # Phase 7 — body carries token + code
-        "/api/v1/auth/otp/request",  # Phase 42 D-42-22 — pre-auth OTP bootstrap (telegram + email channels)
+        # Phase 42 D-42-22 — pre-auth OTP bootstrap (telegram + email channels)
+        "/api/v1/auth/otp/request",
         # Phase 44 D-44-34 — RESET-01/02/04 anonymous-by-design endpoints.
         # No CSRF, no RBAC: identity is carried by the body (email / opaque
         # token). Anti-oracle + atomic-consume + rate-limit policy lives wholly

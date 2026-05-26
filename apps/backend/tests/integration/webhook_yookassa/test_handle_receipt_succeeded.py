@@ -101,7 +101,7 @@ async def test_handle_receipt_succeeded_transitions_fsm_sent_to_succeeded(
 
 
 @pytest.mark.asyncio
-async def test_handle_receipt_succeeded_emits_fiscal_receipt_succeeded_audit_with_correlation_id_from_row(
+async def test_handle_receipt_succeeded_emits_audit_with_correlation_id_from_row(
     webhook_client: Any,
     webhook_db_session: AsyncSession,
     seeded_fiscal_receipt_sent: FiscalReceipt,

@@ -14,7 +14,6 @@ Covers:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -25,7 +24,6 @@ from app.integrations.email.dispatcher import (
     enqueue_email_dispatch,
     register_arq_pool,
 )
-
 
 # --------------------------------------------------------------------- helpers
 
@@ -57,7 +55,7 @@ def _reset_pool_slot() -> Any:
 def test_resolve_template_returns_email_otp_login_record() -> None:
     """Test 1: _resolve_template('EMAIL_OTP_LOGIN') returns the auth.email_templates record."""
     tpl = _resolve_template("EMAIL_OTP_LOGIN")
-    assert tpl.subject == "Код входа в Sportzal"  # noqa: RUF001 — locked Russian copy
+    assert tpl.subject == "Код входа в Sportzal"
     # Sanity: html + text are Jinja Templates (have .render method).
     assert hasattr(tpl.html, "render")
     assert hasattr(tpl.text, "render")
@@ -112,9 +110,9 @@ async def test_enqueue_email_dispatch_renders_and_enqueues() -> None:
     env = kwargs["envelope_kwargs"]
     assert env["to"] == "user@example.com"
     assert env["template_id"] == "EMAIL_OTP_LOGIN"
-    assert env["subject"] == "Код входа в Sportzal"  # noqa: RUF001 — locked Russian copy
+    assert env["subject"] == "Код входа в Sportzal"
     assert "<strong>123456</strong>" in env["html"]
-    assert "Ваш код для входа: 123456" in env["text"]  # noqa: RUF001 — locked Russian copy
+    assert "Ваш код для входа: 123456" in env["text"]
     # audit_correlation_id is serialised as str(UUID) for cloudpickle safety.
     assert env["audit_correlation_id"] == str(correlation)
 
@@ -132,7 +130,7 @@ async def test_enqueue_email_dispatch_synthesises_correlation_id_when_none() -> 
         otp_code="654321",
     )
 
-    args, kwargs = pool.calls[0]
+    _args, kwargs = pool.calls[0]
     env_corr = kwargs["envelope_kwargs"]["audit_correlation_id"]
     # Should be a valid UUID string (uuid4() fallback).
     parsed = UUID(env_corr)

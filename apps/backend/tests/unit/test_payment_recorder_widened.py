@@ -18,7 +18,6 @@ import inspect
 import typing
 from types import NoneType
 from typing import Union, get_type_hints
-from uuid import UUID
 
 from app.core.dependencies import CurrentUser, PaymentRecorder
 
@@ -28,12 +27,11 @@ def _annotation_includes_none(annotation: object) -> bool:
     origin = typing.get_origin(annotation)
     if origin is Union or origin is type(None) or origin is typing.Union:
         return type(None) in typing.get_args(annotation)
-    # Python 3.10+ X | Y syntax resolves to types.UnionType at runtime
-    try:
-        from types import UnionType
-    except ImportError:
-        UnionType = None  # type: ignore[assignment]
-    if UnionType is not None and isinstance(annotation, UnionType):
+    # Python 3.10+ X | Y syntax resolves to types.UnionType at runtime.
+    # Project targets Python 3.12 (CLAUDE.md), so UnionType is always available.
+    from types import UnionType
+
+    if isinstance(annotation, UnionType):
         return NoneType in typing.get_args(annotation)
     return False
 

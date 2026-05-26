@@ -15,12 +15,8 @@ The existing project-wide gate test is NOT modified — Phase 51 invariants live
 
 from __future__ import annotations
 
-import ast
-import importlib
-from pathlib import Path
 from typing import Any
 
-import pytest
 from fastapi.routing import APIRoute
 
 from app.core.permissions import Action, Resource

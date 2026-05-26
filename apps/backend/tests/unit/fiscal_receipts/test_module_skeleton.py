@@ -44,7 +44,6 @@ from app.modules.fiscal_receipts.repository import (
     insert_fiscal_receipt,
 )
 
-
 # ---------------------------------------------------------------------------
 # constants.py — declarative-FSM transition table (D-50-32)
 # ---------------------------------------------------------------------------

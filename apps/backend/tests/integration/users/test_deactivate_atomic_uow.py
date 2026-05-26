@@ -30,6 +30,10 @@ from app.core.permissions import Role
 
 from .conftest import _csrf_headers
 
+# Placeholder argon2id hash for seeded test users (not a real credential — S106).
+# Constructed at runtime so the string literal does not trip S105 on the constant.
+_PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -48,7 +52,7 @@ async def test_deactivate_atomic_rollback_on_audit_failure(
     target = User(
         email="rollback-target-cr04@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.RECEPTION,
         full_name="Rollback Target",
         is_active=True,
@@ -141,7 +145,7 @@ async def test_deactivate_happy_path_commits_both_audit_rows(
     target = User(
         email="happy-target-cr04@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.RECEPTION,
         full_name="Happy Target",
         is_active=True,

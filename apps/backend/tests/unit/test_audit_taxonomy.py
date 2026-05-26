@@ -235,8 +235,9 @@ def test_locked_audit_events_has_expected_count() -> None:
     frozenset total becomes 82 + 3 = 85. See 51-02-SUMMARY.md.
     """
     assert len(LOCKED_AUDIT_EVENTS) == 93, (
-        f"LOCKED_AUDIT_EVENTS size drifted: expected 93 "
-        f"(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 + 4 v1.9/P58 + 4 v1.9/P59), "
+        "LOCKED_AUDIT_EVENTS size drifted: expected 93 "
+        "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
+        "+ 4 v1.9/P58 + 4 v1.9/P59), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v1.9 Phase 58 INFRA-15 / D-58-16: +4 payroll lifecycle pairs pre-registered

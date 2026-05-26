@@ -13,7 +13,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import UTC, datetime, time
 from uuid import uuid4
 
 import pytest
@@ -37,7 +37,7 @@ def _template_body(trainer: Trainer, *, dow: int = 0) -> dict:
         "dayOfWeek": dow,
         "startTime": "10:00:00",
         "endTime": "11:00:00",
-        "validFrom": date.today().isoformat(),
+        "validFrom": datetime.now(UTC).date().isoformat(),
         "validUntil": None,
     }
 
@@ -232,7 +232,7 @@ async def test_reception_deactivate_recurring_template_forbidden(
         day_of_week=5,
         start_time=time(9, 0),
         end_time=time(10, 0),
-        valid_from=date.today(),
+        valid_from=datetime.now(UTC).date(),
         is_active=True,
     )
     db_session.add(tmpl)

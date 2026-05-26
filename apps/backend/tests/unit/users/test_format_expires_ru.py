@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.modules.users.service import _format_expires_ru  # noqa: SLF001
+from app.modules.users.service import _format_expires_ru
 
 
 def test_format_expires_ru_moscow_time_summer() -> None:

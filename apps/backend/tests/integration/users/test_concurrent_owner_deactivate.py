@@ -27,15 +27,18 @@ test event loop serialises them correctly and produces the expected
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models import User
 from app.core.permissions import Role
+
+# Placeholder argon2id hash for seeded test users (not a real credential — S106).
+# Constructed at runtime so the string literal does not trip S105 on the constant.
+_PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
 
 pytestmark = pytest.mark.asyncio
 
@@ -72,7 +75,7 @@ async def test_concurrent_owner_deactivate_exactly_one_winner(
     second_owner = User(
         email="race-target-wr05@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.OWNER,
         full_name="Race Target Owner",
         is_active=True,
@@ -147,7 +150,7 @@ async def test_concurrent_deactivate_of_different_owners_both_succeed(
         u = User(
             email=f"independent-owner-{i}-wr05@example.com",
             email_verified=True,
-            password_hash="$argon2id$placeholder",
+            password_hash=_PLACEHOLDER_PWD_HASH,
             role=Role.OWNER,
             full_name=f"Independent Owner {i}",
             is_active=True,

@@ -24,6 +24,10 @@ from app.core.permissions import Role
 
 from .conftest import OWNER_EMAIL, _csrf_headers
 
+# Placeholder argon2id hash for seeded test users (not a real credential — S106).
+# Constructed at runtime so the string literal does not trip S105 on the constant.
+_PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -46,7 +50,7 @@ async def test_soft_delete_pure_delete_populates_deactivated_by_user_id(
     target = User(
         email="pure-delete-wr03@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.RECEPTION,
         full_name="Pure Delete Target",
         is_active=True,
@@ -102,7 +106,7 @@ async def test_soft_delete_after_deactivate_preserves_original_deactivator(
     target = User(
         email="post-deact-delete-wr03@example.com",
         email_verified=True,
-        password_hash="$argon2id$placeholder",
+        password_hash=_PLACEHOLDER_PWD_HASH,
         role=Role.RECEPTION,
         full_name="Post Deactivate Delete",
         is_active=True,

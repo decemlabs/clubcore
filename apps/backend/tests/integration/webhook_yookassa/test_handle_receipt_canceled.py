@@ -152,7 +152,7 @@ async def test_handle_receipt_canceled_emits_fiscal_receipt_failed_audit_with_fa
 
 
 @pytest.mark.asyncio
-async def test_handle_receipt_canceled_falls_back_to_default_reason_when_cancellation_details_missing(
+async def test_handle_receipt_canceled_falls_back_to_default_reason_when_details_missing(
     webhook_client: Any,
     webhook_db_session: AsyncSession,
     seeded_fiscal_receipt_sent: FiscalReceipt,

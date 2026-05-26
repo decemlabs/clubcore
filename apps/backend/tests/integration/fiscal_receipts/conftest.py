@@ -64,6 +64,7 @@ from tests.integrations.yookassa.conftest import (  # noqa: F401
     yookassa_create_receipt_429,
     yookassa_create_receipt_500,
     yookassa_create_receipt_ok,
+    yookassa_get_payment_succeeded,
 )
 
 _TRUNCATE_TABLES = (
