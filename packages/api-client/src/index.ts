@@ -1,5 +1,5 @@
 /**
- * @sportzal/api-client — typed transport for the Sportzal backend.
+ * @clubcore/api-client — typed transport for the clubcore backend.
  *
  * Public surface (Phase 9 D-10):
  *  - `request<P, M>(method, path, init?)` — single typed entry point.

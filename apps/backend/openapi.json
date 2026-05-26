@@ -8383,7 +8383,7 @@
         ]
       },
       "post": {
-        "description": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``sz:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Two-phase Redis claim + replay block mirrors\n``memberships.router.create_membership``.",
+        "description": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Two-phase Redis claim + replay block mirrors\n``memberships.router.create_membership``.",
         "operationId": "create_pt_package_api_v1_pt_packages_post",
         "requestBody": {
           "content": {
