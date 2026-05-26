@@ -4,8 +4,8 @@ milestone: v1.10
 milestone_name: clubcore Rebrand
 status: executing
 stopped_at: Phase 62.1 context gathered
-last_updated: "2026-05-26T13:17:20.591Z"
-last_activity: 2026-05-26 -- Phase 62.1 planning complete
+last_updated: "2026-05-26T13:20:17.447Z"
+last_activity: 2026-05-26 -- Phase 62.1 execution started
 progress:
   total_phases: 8
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.10 narrowed to Phase 62 (clubcore Rebrand) per D-10-SPLIT; Phases 63-67 → v1.11)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 62 — clubcore-rebrand
+**Current focus:** Phase 62.1 — finalize-sportzal-clubcore-rename-a-b-c-scope
 
 ## Current Position
 
-Phase: 62 — COMPLETE
-Plan: 7 of 7 (62-07 smoke evidence remaining)
-Status: Ready to execute
-Last activity: 2026-05-26 -- Phase 62.1 planning complete
+Phase: 62.1 (finalize-sportzal-clubcore-rename-a-b-c-scope) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 62.1
+Last activity: 2026-05-26 -- Phase 62.1 execution started
 
 ## v1.10 Roadmap Summary
 
@@ -49,7 +49,7 @@ Last activity: 2026-05-26 -- Phase 62.1 planning complete
 
 ## Milestone Close — v1.9 Trainers Complete
 
-**Status:** Ready to execute
+**Status:** Executing Phase 62.1
 **Green-state baseline:** `.planning/phases/60-trainer-usage-report/60-VERIFICATION.md` —
 Phase 60 (final feature phase) verification report; all v1.9 payroll +
 recurring-schedule + trainer-report surface shipped and exercised.
