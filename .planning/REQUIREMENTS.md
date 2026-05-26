@@ -105,7 +105,7 @@ The 22 requirements below originally appeared in v1.10 and are now scheduled for
 
 ## Traceability
 
-Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 only per D-10-SPLIT. 8/8 active v1.10 requirements mapped; zero orphans, zero duplicates.
+Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 only per D-10-SPLIT. 10/10 active v1.10 requirements mapped; zero orphans, zero duplicates.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -117,16 +117,19 @@ Mapped 2026-05-26 by gsd-roadmapper; re-scoped 2026-05-26 to v1.10 = Phase 62 on
 | REB-06 | Phase 62 | Complete |
 | REB-07 | Phase 62 | Complete |
 | REB-08 | Phase 62 | Complete |
+| REB-09 | Phase 62.1 | Pending |
+| REB-10 | Phase 62.1 | Pending |
 
 **Coverage (v1.10 active):**
-- v1.10 requirements: **8 total** (REB:8)
-- Mapped to phases: **8/8** ✓
+- v1.10 requirements: **10 total** (REB:10 — 8 from Phase 62 + 2 from Phase 62.1)
+- Mapped to phases: **10/10** ✓
 - Unmapped: 0
 
 **Phase distribution (v1.10):**
 - Phase 62 (Rebrand): 8 requirements
+- Phase 62.1 (Closure — shim removal + operator evidence): 2 requirements (REB-09, REB-10)
 
 **v1.11 snapshot (22 requirements; not yet active):** see "Planned for v1.11" section above. Phases 63-67 (DEBT:5 + FRZ:5 + HND:4 + IDM:4 + RUN:4 — RUN-07/08 pulled forward into v1.10 as REB-09/10 per D-62.1-X2) — to be formally re-stated в свежем REQUIREMENTS.md когда v1.11 откроется.
 
 ---
-*Requirements defined: 2026-05-26 — start of milestone v1.10 (originally clubcore Rebrand + API Handoff + Production Hardening, 32 requirements, 6 phases). Re-scoped 2026-05-26 to v1.10 = clubcore Rebrand (Phase 62 only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62 — Phase 62 scope expanded from "code-only rename" to include operator-tier renames (DB rename, CLUBCORE_EMAIL_FROM env, DNS/DKIM, FLUSHDB), making the original 6-phase milestone too heterogeneous to ship as one. Phases 63-67 (22 requirements) deferred to v1.11 API Handoff + Production Hardening (not yet opened).*
+*Requirements defined: 2026-05-26 — start of milestone v1.10 (originally clubcore Rebrand + API Handoff + Production Hardening, 32 requirements, 6 phases). Re-scoped 2026-05-26 to v1.10 = clubcore Rebrand (Phase 62 only, 8 REB requirements) per D-10-SPLIT during /gsd:discuss-phase 62 — Phase 62 scope expanded from "code-only rename" to include operator-tier renames (DB rename, CLUBCORE_EMAIL_FROM env, DNS/DKIM, FLUSHDB), making the original 6-phase milestone too heterogeneous to ship as one. Phases 63-67 (22 requirements) deferred to v1.11 API Handoff + Production Hardening (not yet opened). Updated 2026-05-26: Phase 62.1 inserted post-audit to close v1.10 with REB-09 (shim removal) + REB-10 (operator-pending evidence), pulled forward from v1.11/Phase 67/RUN-07-08 per D-62.1-X1/X2.*
