@@ -101,7 +101,7 @@ from app.modules.memberships.schemas import (
     MembershipResponse,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Memberships"])
 
 
 @router.get(
@@ -225,7 +225,7 @@ async def soft_delete_plan(
 # `Depends(require_permission(...))` appears BEFORE `Depends(verify_csrf)`.
 # `tests/integration/test_route_introspection.py` enforces this statically.
 
-memberships_router = APIRouter()
+memberships_router = APIRouter(tags=["Memberships"])
 
 
 @memberships_router.get(

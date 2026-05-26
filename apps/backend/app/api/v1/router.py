@@ -45,37 +45,36 @@ from app.modules.users.router import router as users_router
 from app.modules.visits.router import router as visits_router
 
 v1 = APIRouter()
-v1.include_router(auth_router, prefix="/auth", tags=["auth"])
-v1.include_router(clients_router, prefix="/clients", tags=["clients"])
-v1.include_router(plans_router, prefix="/membership-plans", tags=["membership-plans"])
-v1.include_router(memberships_router, prefix="/memberships", tags=["memberships"])
+
+# Phase 64 FRZ-03 — tags now declared on each APIRouter; aggregator no longer
+# passes tags= per D-64-TAG-ORDER / PATTERNS.md Notes-for-Planner #1.
+v1.include_router(auth_router, prefix="/auth")
+v1.include_router(clients_router, prefix="/clients")
+v1.include_router(plans_router, prefix="/membership-plans")
+v1.include_router(memberships_router, prefix="/memberships")
 v1.include_router(
     online_payments_router,
     prefix="/online-payments",
-    tags=["online-payments"],
 )
-v1.include_router(payments_router, prefix="/payments", tags=["payments"])
-v1.include_router(payroll_router, prefix="/payroll", tags=["payroll"])
+v1.include_router(payments_router, prefix="/payments")
+v1.include_router(payroll_router, prefix="/payroll")
 v1.include_router(
     pt_package_plans_router,
     prefix="/pt-package-plans",
-    tags=["pt-package-plans"],
 )
-v1.include_router(pt_packages_router, prefix="/pt-packages", tags=["pt-packages"])
-v1.include_router(pt_sessions_router, prefix="/pt-sessions", tags=["pt-sessions"])
+v1.include_router(pt_packages_router, prefix="/pt-packages")
+v1.include_router(pt_sessions_router, prefix="/pt-sessions")
 v1.include_router(
     pt_sessions_package_scoped_router,
     prefix="/pt-packages",
-    tags=["pt-sessions"],
 )
-v1.include_router(schedule_router, prefix="/trainer-slots", tags=["schedule"])
+v1.include_router(schedule_router, prefix="/trainer-slots")
 v1.include_router(
     recurring_templates_router,
     prefix="/recurring-templates",
-    tags=["schedule"],
 )
-v1.include_router(time_off_router, prefix="/time-off", tags=["schedule"])
-v1.include_router(bookings_router, prefix="/bookings", tags=["bookings"])
+v1.include_router(time_off_router, prefix="/time-off")
+v1.include_router(bookings_router, prefix="/bookings")
 # Per-client bookings — mounted under /clients per BOOK-08 locked contract;
 # implementation lives in bookings/router.py (client_scoped_bookings_router)
 # to keep clients/ dependency-leaf. Mirrors pt_sessions_package_scoped_router
@@ -83,13 +82,12 @@ v1.include_router(bookings_router, prefix="/bookings", tags=["bookings"])
 v1.include_router(
     client_scoped_bookings_router,
     prefix="/clients",
-    tags=["bookings"],
 )
-v1.include_router(trainers_router, prefix="/trainers", tags=["trainers"])
-v1.include_router(users_router, prefix="/users", tags=["users"])
-v1.include_router(visits_router, prefix="/visits", tags=["visits"])
-v1.include_router(reports_router, prefix="/reports", tags=["reports"])
-v1.include_router(audit_log_router, prefix="/audit-log", tags=["audit-log"])
+v1.include_router(trainers_router, prefix="/trainers")
+v1.include_router(users_router, prefix="/users")
+v1.include_router(visits_router, prefix="/visits")
+v1.include_router(reports_router, prefix="/reports")
+v1.include_router(audit_log_router, prefix="/audit-log")
 
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
@@ -100,7 +98,6 @@ v1.include_router(audit_log_router, prefix="/audit-log", tags=["audit-log"])
 v1.include_router(
     email_webhook_router,
     prefix="/_internal/email",
-    tags=["_internal"],
 )
 
 # Phase 50 WH-01 / D-50-03 — ЮKassa webhook intake. Second /_internal/* inhabitant.
@@ -109,5 +106,4 @@ v1.include_router(
 v1.include_router(
     yookassa_webhook_router,
     prefix="/_internal/yookassa",
-    tags=["_internal"],
 )

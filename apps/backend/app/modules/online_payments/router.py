@@ -80,7 +80,7 @@ from app.modules.online_refunds.schemas import (
     OnlineRefundResponse,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Payments"])
 
 
 # ─── Phase 49 PAY-07 / D-49-17 — Anti-oracle return-screen constants ────────

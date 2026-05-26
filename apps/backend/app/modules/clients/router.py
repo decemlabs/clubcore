@@ -46,7 +46,7 @@ from app.modules.clients.schemas import (
     ClientUpdateRequest,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Clients"])
 
 
 @router.get(

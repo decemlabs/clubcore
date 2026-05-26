@@ -63,9 +63,9 @@ from app.modules.schedule.schemas import (
     TimeOffResponse,
 )
 
-schedule_router = APIRouter()
-recurring_templates_router = APIRouter()
-time_off_router = APIRouter()
+schedule_router = APIRouter(tags=["Schedule"])
+recurring_templates_router = APIRouter(tags=["Schedule"])
+time_off_router = APIRouter(tags=["Schedule"])
 
 
 @schedule_router.post(

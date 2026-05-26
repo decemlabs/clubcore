@@ -4927,7 +4927,7 @@
         },
         "summary": "Email Webhook",
         "tags": [
-          "_internal"
+          "Internal"
         ]
       }
     },
@@ -5084,7 +5084,7 @@
         },
         "summary": "Paginated audit-log listing (owner-only; AUD-01..06)",
         "tags": [
-          "audit-log"
+          "Audit-log"
         ]
       }
     },
@@ -5234,7 +5234,7 @@
         },
         "summary": "Audit-log CSV download — all matching rows (owner-only; EXP-02)",
         "tags": [
-          "audit-log"
+          "Audit-log"
         ]
       }
     },
@@ -5276,7 +5276,7 @@
         },
         "summary": "Login",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5298,7 +5298,7 @@
         },
         "summary": "Logout",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5320,7 +5320,7 @@
         },
         "summary": "Logout All",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5342,7 +5342,7 @@
         },
         "summary": "Me",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5384,7 +5384,7 @@
         },
         "summary": "Otp Request",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5426,7 +5426,7 @@
         },
         "summary": "Confirm password reset (atomic-consume + revoke-all)",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5468,7 +5468,7 @@
         },
         "summary": "Request a password-reset email (anti-oracle, rate-limited)",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5490,7 +5490,7 @@
         },
         "summary": "Refresh",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5547,7 +5547,7 @@
         },
         "summary": "List the current user's active session families",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5591,7 +5591,7 @@
         },
         "summary": "Revoke a single session family (idempotent)",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5613,7 +5613,7 @@
         },
         "summary": "Telegram Start",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5656,7 +5656,7 @@
         },
         "summary": "Telegram Status",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5698,7 +5698,7 @@
         },
         "summary": "Telegram Verify",
         "tags": [
-          "auth"
+          "Auth"
         ]
       }
     },
@@ -5839,7 +5839,7 @@
         },
         "summary": "List bookings (reception+owner; paginated; client/trainer/status/time-window filters; default ±30d Moscow)",
         "tags": [
-          "bookings"
+          "Bookings"
         ]
       },
       "post": {
@@ -5879,7 +5879,7 @@
         },
         "summary": "Create a confirmed booking (reception+owner; 404 slot_not_found; 409 slot_not_available / slot_already_booked / trainer_mismatch / pt_package_not_active / pt_package_exhausted / pt_package_expired_before_slot; requires Idempotency-Key — D-38-14)",
         "tags": [
-          "bookings"
+          "Bookings"
         ]
       }
     },
@@ -5923,7 +5923,7 @@
         },
         "summary": "Read a booking with denormalized slot + pt_package (reception+owner; 404 booking_not_found; joinedload — Pitfall 19 / D-38-08)",
         "tags": [
-          "bookings"
+          "Bookings"
         ]
       }
     },
@@ -5977,7 +5977,7 @@
         },
         "summary": "Cancel a confirmed booking (reception ≤24h before slot.start per C-05 / owner anytime; 404 booking_not_found; 409 invalid_transition / cancel_window_expired; requires Idempotency-Key — D-38-14)",
         "tags": [
-          "bookings"
+          "Bookings"
         ]
       }
     },
@@ -6143,7 +6143,7 @@
         },
         "summary": "List alive clients with filters and pagination",
         "tags": [
-          "clients"
+          "Clients"
         ]
       },
       "post": {
@@ -6183,7 +6183,7 @@
         },
         "summary": "Create a new client (E.164 phone; 409 phone_exists on partial-unique conflict)",
         "tags": [
-          "clients"
+          "Clients"
         ]
       }
     },
@@ -6220,7 +6220,7 @@
         },
         "summary": "Soft-delete a client (owner-only; sets deleted_at, never hard-deletes)",
         "tags": [
-          "clients"
+          "Clients"
         ]
       },
       "get": {
@@ -6262,7 +6262,7 @@
         },
         "summary": "Get a single alive client by id (404 if soft-deleted or missing)",
         "tags": [
-          "clients"
+          "Clients"
         ]
       },
       "patch": {
@@ -6314,7 +6314,7 @@
         },
         "summary": "Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)",
         "tags": [
-          "clients"
+          "Clients"
         ]
       }
     },
@@ -6431,14 +6431,14 @@
         },
         "summary": "List bookings for a single client (reception+owner; paginated; from/to/status filters; default ±30d Moscow)",
         "tags": [
-          "bookings"
+          "Bookings"
         ]
       }
     },
     "/api/v1/membership-plans": {
       "get": {
         "description": "List alive membership plans (MEM-PLAN-EP-01). VIEW permission required.",
-        "operationId": "membership_plans_list_plans",
+        "operationId": "memberships_list_plans",
         "parameters": [
           {
             "in": "query",
@@ -6513,12 +6513,12 @@
         },
         "summary": "List alive membership plans (owner-only); paginated; ?active filter",
         "tags": [
-          "membership-plans"
+          "Memberships"
         ]
       },
       "post": {
         "description": "Create a membership plan (MEM-PLAN-EP-02). CREATE permission + CSRF required.",
-        "operationId": "membership_plans_create_plan",
+        "operationId": "memberships_create_plan",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6553,7 +6553,7 @@
         },
         "summary": "Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)",
         "tags": [
-          "membership-plans"
+          "Memberships"
         ]
       }
     },
@@ -6590,12 +6590,12 @@
         },
         "summary": "Soft-delete a membership plan (owner-only); frees lower(name) unique slot",
         "tags": [
-          "membership-plans"
+          "Memberships"
         ]
       },
       "get": {
         "description": "Read one alive membership plan. 404 for missing or soft-deleted ids.",
-        "operationId": "membership_plans_get_plan",
+        "operationId": "memberships_get_plan",
         "parameters": [
           {
             "in": "path",
@@ -6632,12 +6632,12 @@
         },
         "summary": "Fetch a single alive membership plan (owner-only)",
         "tags": [
-          "membership-plans"
+          "Memberships"
         ]
       },
       "patch": {
         "description": "Partial update of an alive membership plan (MEM-PLAN-EP-03). EDIT + CSRF required.",
-        "operationId": "membership_plans_update_plan",
+        "operationId": "memberships_update_plan",
         "parameters": [
           {
             "in": "path",
@@ -6684,7 +6684,7 @@
         },
         "summary": "Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)",
         "tags": [
-          "membership-plans"
+          "Memberships"
         ]
       }
     },
@@ -6805,7 +6805,7 @@
         },
         "summary": "List memberships filtered by clientId/status with pagination",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       },
       "post": {
@@ -6845,7 +6845,7 @@
         },
         "summary": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -6889,7 +6889,7 @@
         },
         "summary": "Get a membership by id (404 membership_not_found)",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -6943,7 +6943,7 @@
         },
         "summary": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -6987,7 +6987,7 @@
         },
         "summary": "Freeze membership (reception+owner; 409 freeze_limit_exceeded / already_frozen / invalid_transition)",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -7041,7 +7041,7 @@
         },
         "summary": "Refund a membership (reception+owner per B-07; 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition / already_refunded; 422 if amountKopecks supplied [REF-05])",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -7085,7 +7085,7 @@
         },
         "summary": "Renew membership (reception+owner; 404 plan_not_found / membership_not_found; 409 cannot_renew_cancelled / plan_archived)",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -7129,7 +7129,7 @@
         },
         "summary": "Unfreeze membership (reception+owner; 409 invalid_transition)",
         "tags": [
-          "memberships"
+          "Memberships"
         ]
       }
     },
@@ -7183,7 +7183,7 @@
         },
         "summary": "Initiate online refund of a membership (Phase 51 REFUND-01). Full refund only (partial deferred to v1.8 B-02). Returns 202; completion awaits ЮKassa refund.succeeded webhook.",
         "tags": [
-          "online-payments"
+          "Payments"
         ]
       }
     },
@@ -7237,7 +7237,7 @@
         },
         "summary": "Sell a membership online (redirect flow); reception+owner; CSRF + Idempotency-Key required",
         "tags": [
-          "online-payments"
+          "Payments"
         ]
       }
     },
@@ -7291,7 +7291,7 @@
         },
         "summary": "Sell a membership online (QR flow); reception+owner; CSRF + Idempotency-Key required",
         "tags": [
-          "online-payments"
+          "Payments"
         ]
       }
     },
@@ -7345,7 +7345,7 @@
         },
         "summary": "Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required",
         "tags": [
-          "online-payments"
+          "Payments"
         ]
       }
     },
@@ -7399,7 +7399,7 @@
         },
         "summary": "Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required",
         "tags": [
-          "online-payments"
+          "Payments"
         ]
       }
     },
@@ -7453,7 +7453,7 @@
         },
         "summary": "Initiate online refund of a PT-package (Phase 51 REFUND-01). Full refund only. Returns 202; completion awaits ЮKassa refund.succeeded webhook.",
         "tags": [
-          "online-payments"
+          "Payments"
         ]
       }
     },
@@ -7595,7 +7595,7 @@
         },
         "summary": "List payments globally (owner-only; filters by subject + actor + date window)",
         "tags": [
-          "payments"
+          "Payments"
         ]
       }
     },
@@ -7659,7 +7659,7 @@
         },
         "summary": "List payments tied to a client's memberships (reception+owner; PAY-07)",
         "tags": [
-          "payments"
+          "Payments"
         ]
       }
     },
@@ -7723,7 +7723,7 @@
         },
         "summary": "List payments tied to a single membership (reception+owner; PAY-07)",
         "tags": [
-          "payments"
+          "Payments"
         ]
       }
     },
@@ -7790,7 +7790,7 @@
         },
         "summary": "List a trainer's payroll accruals paginated, accrued_at DESC (owner-only PAY-05 / D-58-14)",
         "tags": [
-          "payroll"
+          "Payments"
         ]
       },
       "post": {
@@ -7830,7 +7830,7 @@
         },
         "summary": "Record payroll accrual with run-time-snapshotted rate (append-only; owner-only PAY-03 / D-58-03)",
         "tags": [
-          "payroll"
+          "Payments"
         ]
       }
     },
@@ -7874,7 +7874,7 @@
         },
         "summary": "Mark payroll accrual as paid (pending→paid single transition; owner-only PAY-04 / D-58-08)",
         "tags": [
-          "payroll"
+          "Payments"
         ]
       }
     },
@@ -7938,7 +7938,7 @@
         },
         "summary": "Preview payroll accrual for a trainer + period (read-only, zero-persistence; owner-only PAY-02 / D-58-12)",
         "tags": [
-          "payroll"
+          "Payments"
         ]
       }
     },
@@ -7982,7 +7982,7 @@
         },
         "summary": "Get the active comp config (latest effective_from <= today; owner-only PAY-01 / D-58-11)",
         "tags": [
-          "payroll"
+          "Payments"
         ]
       },
       "put": {
@@ -8034,14 +8034,14 @@
         },
         "summary": "Set/replace trainer comp config (INSERT-only versioned; owner-only PAY-01 / D-58-10)",
         "tags": [
-          "payroll"
+          "Payments"
         ]
       }
     },
     "/api/v1/pt-package-plans": {
       "get": {
         "description": "List PT-package plans (PT-02). Owner-only via OWNER_ONLY pair.",
-        "operationId": "pt_package_plans_list_plans",
+        "operationId": "payments_list_plans",
         "parameters": [
           {
             "in": "query",
@@ -8110,12 +8110,12 @@
         },
         "summary": "List PT-package plans (owner-only); paginated; ?includeArchived toggle",
         "tags": [
-          "pt-package-plans"
+          "Payments"
         ]
       },
       "post": {
         "description": "Create a PT-package plan (PT-02). CREATE + CSRF required.",
-        "operationId": "pt_package_plans_create_plan",
+        "operationId": "payments_create_plan",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8150,7 +8150,7 @@
         },
         "summary": "Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)",
         "tags": [
-          "pt-package-plans"
+          "Payments"
         ]
       }
     },
@@ -8187,12 +8187,12 @@
         },
         "summary": "Soft-delete a PT-package plan (owner-only); 409 plan_in_use if any pt_packages row references it (D-33-08)",
         "tags": [
-          "pt-package-plans"
+          "Payments"
         ]
       },
       "get": {
         "description": "Read one alive PT-package plan. 404 ``pt_package_plan_not_found`` for missing/archived.",
-        "operationId": "pt_package_plans_get_plan",
+        "operationId": "payments_get_plan",
         "parameters": [
           {
             "in": "path",
@@ -8229,12 +8229,12 @@
         },
         "summary": "Fetch a single alive PT-package plan (owner-only)",
         "tags": [
-          "pt-package-plans"
+          "Payments"
         ]
       },
       "patch": {
         "description": "Patch a PT-package plan (PT-02 / D-33-07). EDIT + CSRF required.\n\nOnly ``name`` is mutable post-creation. Mutating session_count /\nprice_kopecks / validity_days raises 409 ``field_immutable`` with\n``fields.field`` carrying the offending field name.",
-        "operationId": "pt_package_plans_update_plan",
+        "operationId": "payments_update_plan",
         "parameters": [
           {
             "in": "path",
@@ -8281,7 +8281,7 @@
         },
         "summary": "Patch a PT-package plan (owner-only); session_count / price_kopecks / validity_days mutation -> 409 field_immutable (D-33-07)",
         "tags": [
-          "pt-package-plans"
+          "Payments"
         ]
       }
     },
@@ -8380,7 +8380,7 @@
         },
         "summary": "List PT-packages (reception+owner; paginated; ?clientId / ?status filters)",
         "tags": [
-          "pt-packages"
+          "Payments"
         ]
       },
       "post": {
@@ -8420,7 +8420,7 @@
         },
         "summary": "Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)",
         "tags": [
-          "pt-packages"
+          "Payments"
         ]
       }
     },
@@ -8464,7 +8464,7 @@
         },
         "summary": "Read a single PT-package (reception+owner; 404 pt_package_not_found)",
         "tags": [
-          "pt-packages"
+          "Payments"
         ]
       }
     },
@@ -8518,7 +8518,7 @@
         },
         "summary": "Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; 409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)",
         "tags": [
-          "pt-packages"
+          "Payments"
         ]
       }
     },
@@ -8572,7 +8572,7 @@
         },
         "summary": "Refund a PT-package (reception+owner per B-07; 404 pt_package_not_found / original_payment_not_found; 409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)",
         "tags": [
-          "pt-packages"
+          "Payments"
         ]
       }
     },
@@ -8649,7 +8649,7 @@
         },
         "summary": "List PT-sessions for a package (reception+owner; paginated; ?includeCancelled filter; performed_at DESC, created_at DESC)",
         "tags": [
-          "pt-sessions"
+          "Payments"
         ]
       }
     },
@@ -8691,7 +8691,7 @@
         },
         "summary": "Record a PT-session (reception+owner; 404 pt_package_not_found / trainer_not_found; 409 pt_package_not_active / pt_package_exhausted; 422 trainer_inactive / performed_at_in_future / performed_at_out_of_window / idempotency_key_reuse; requires Idempotency-Key — D-34-10)",
         "tags": [
-          "pt-sessions"
+          "Payments"
         ]
       }
     },
@@ -8735,7 +8735,7 @@
         },
         "summary": "Read a single PT-session (reception+owner; 404 pt_session_not_found)",
         "tags": [
-          "pt-sessions"
+          "Payments"
         ]
       }
     },
@@ -8789,7 +8789,7 @@
         },
         "summary": "Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)",
         "tags": [
-          "pt-sessions"
+          "Payments"
         ]
       }
     },
@@ -8860,7 +8860,7 @@
         },
         "summary": "List recurring slot templates (reception+owner; trainer_id filter)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       },
       "post": {
@@ -8900,7 +8900,7 @@
         },
         "summary": "Create a recurring slot template (owner-only; 409 recurring_template_duplicate on duplicate trainer+dow+start+valid_from; requires Idempotency-Key — D-38-14)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -8944,7 +8944,7 @@
         },
         "summary": "Deactivate a recurring slot template (owner-only; 404 recurring_template_not_found; requires Idempotency-Key)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -9008,7 +9008,7 @@
         },
         "summary": "Active/expiring/new clients summary (owner-only; CLR-01..04)",
         "tags": [
-          "reports"
+          "Reports"
         ]
       }
     },
@@ -9065,7 +9065,7 @@
         },
         "summary": "Clients snapshot CSV download — single summary row (owner-only; EXP-03)",
         "tags": [
-          "reports"
+          "Reports"
         ]
       }
     },
@@ -9133,7 +9133,7 @@
         },
         "summary": "Revenue by period (day|month) from payments ledger (owner-only; REV-01..05)",
         "tags": [
-          "reports"
+          "Reports"
         ]
       }
     },
@@ -9194,7 +9194,7 @@
         },
         "summary": "Revenue CSV download — period buckets with ruble amounts (owner-only; EXP-01)",
         "tags": [
-          "reports"
+          "Reports"
         ]
       }
     },
@@ -9244,7 +9244,7 @@
         },
         "summary": "Trainer-usage report (owner-only; RPT-01..02, RPT-04)",
         "tags": [
-          "reports",
+          "Reports",
           "reports"
         ]
       }
@@ -9292,7 +9292,7 @@
         },
         "summary": "Trainer-usage CSV download (owner-only; RPT-03)",
         "tags": [
-          "reports",
+          "Reports",
           "reports"
         ]
       }
@@ -9347,7 +9347,7 @@
         },
         "summary": "Visits by day/hour + average (owner-only; VIS-R-01..04)",
         "tags": [
-          "reports"
+          "Reports"
         ]
       }
     },
@@ -9394,7 +9394,7 @@
         },
         "summary": "Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)",
         "tags": [
-          "reports"
+          "Reports"
         ]
       }
     },
@@ -9465,7 +9465,7 @@
         },
         "summary": "List trainer time-off blocks (reception+owner; trainer_id filter)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       },
       "post": {
@@ -9517,7 +9517,7 @@
         },
         "summary": "Create a trainer time-off block (owner-only; 409 time_off_booked_conflict when booked slots overlap and ?force not set; ?force=true cascades booking cancellations + client DMs; requires Idempotency-Key — D-38-14)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -9554,7 +9554,7 @@
         },
         "summary": "Delete a trainer time-off block (owner-only; 404 time_off_not_found; forward-only — does not resurrect cancelled slots)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -9671,7 +9671,7 @@
         },
         "summary": "List trainer slots (reception+owner; paginated; trainer/status/time-window filters)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       },
       "post": {
@@ -9711,7 +9711,7 @@
         },
         "summary": "Publish a trainer availability slot (owner-only; 409 slot_overlap / slot_too_close / slot_in_past / trainer_inactive / trainer_not_found; requires Idempotency-Key — D-38-14)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -9755,7 +9755,7 @@
         },
         "summary": "Read a single trainer slot (reception+owner; 404 slot_not_found)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -9809,7 +9809,7 @@
         },
         "summary": "Cancel a trainer slot (owner-only; 404 slot_not_found; 409 invalid_transition for cancelled source or booked-cascade deferred to 38-03; requires Idempotency-Key — D-38-14)",
         "tags": [
-          "schedule"
+          "Schedule"
         ]
       }
     },
@@ -9882,7 +9882,7 @@
         },
         "summary": "List alive trainers with optional is_active filter and pagination",
         "tags": [
-          "trainers"
+          "Trainers"
         ]
       },
       "post": {
@@ -9922,7 +9922,7 @@
         },
         "summary": "Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)",
         "tags": [
-          "trainers"
+          "Trainers"
         ]
       }
     },
@@ -9959,7 +9959,7 @@
         },
         "summary": "Hard-delete a trainer (owner-only; 409 trainer_in_use if pt_sessions FK)",
         "tags": [
-          "trainers"
+          "Trainers"
         ]
       },
       "get": {
@@ -10001,7 +10001,7 @@
         },
         "summary": "Get a single alive trainer by id (404 if soft-deleted or missing)",
         "tags": [
-          "trainers"
+          "Trainers"
         ]
       },
       "patch": {
@@ -10053,7 +10053,7 @@
         },
         "summary": "Partial update (PATCH semantics; handles deactivate/reactivate via isActive)",
         "tags": [
-          "trainers"
+          "Trainers"
         ]
       }
     },
@@ -10136,7 +10136,7 @@
         },
         "summary": "List users with optional active/deleted filters and pagination",
         "tags": [
-          "users"
+          "Users"
         ]
       },
       "post": {
@@ -10190,7 +10190,7 @@
         },
         "summary": "Create user + send invitation (idempotent re-invite; 409 on active email)",
         "tags": [
-          "users"
+          "Users"
         ]
       }
     },
@@ -10232,7 +10232,7 @@
         },
         "summary": "Accept a pending invitation: set password + log in (RESET-04)",
         "tags": [
-          "users"
+          "Users"
         ]
       }
     },
@@ -10279,7 +10279,7 @@
         },
         "summary": "Revoke a pending invitation by token row id (404 missing, 409 already accepted)",
         "tags": [
-          "users"
+          "Users"
         ]
       }
     },
@@ -10316,7 +10316,7 @@
         },
         "summary": "Soft-delete user (session revoke + invitation cascade; 409 on self / last-owner)",
         "tags": [
-          "users"
+          "Users"
         ]
       }
     },
@@ -10353,7 +10353,7 @@
         },
         "summary": "Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)",
         "tags": [
-          "users"
+          "Users"
         ]
       }
     },
@@ -10390,7 +10390,7 @@
         },
         "summary": "Reactivate a previously-deactivated user (404 missing, 409 if already active)",
         "tags": [
-          "users"
+          "Users"
         ]
       }
     },
@@ -10498,7 +10498,7 @@
         },
         "summary": "List visits filtered by clientId/from/to with pagination",
         "tags": [
-          "visits"
+          "Visits"
         ]
       },
       "post": {
@@ -10538,7 +10538,7 @@
         },
         "summary": "Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)",
         "tags": [
-          "visits"
+          "Visits"
         ]
       }
     },
@@ -10560,7 +10560,7 @@
         },
         "summary": "Gym hours metadata (cacheable 5 min) (Phase 22 D-22-1)",
         "tags": [
-          "visits"
+          "Visits"
         ]
       }
     },
@@ -10604,7 +10604,7 @@
         },
         "summary": "Get a single visit by id (404 visit_not_found)",
         "tags": [
-          "visits"
+          "Visits"
         ]
       }
     },
@@ -10628,7 +10628,10 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Health"
+        "summary": "Health",
+        "tags": [
+          "Internal"
+        ]
       }
     }
   },
@@ -10636,6 +10639,56 @@
     {
       "description": "Local dev",
       "url": "http://localhost:8000"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Credential lifecycle — login, refresh, password reset, OTP, Telegram.",
+      "name": "Auth"
+    },
+    {
+      "description": "Operator admin — owner and reception account management (D-64-TAG-USERS).",
+      "name": "Users"
+    },
+    {
+      "description": "Gym client CRM — create, read, update, soft-delete clients.",
+      "name": "Clients"
+    },
+    {
+      "description": "Membership plans + active memberships — sell, freeze, renew, cancel.",
+      "name": "Memberships"
+    },
+    {
+      "description": "Gym visit recording — reception check-in and visit history.",
+      "name": "Visits"
+    },
+    {
+      "description": "Class schedule — trainer slots, recurring templates, time-off blocks.",
+      "name": "Schedule"
+    },
+    {
+      "description": "Slot bookings — create, confirm, cancel, no-show lifecycle.",
+      "name": "Bookings"
+    },
+    {
+      "description": "Trainer roster — catalog and availability management.",
+      "name": "Trainers"
+    },
+    {
+      "description": "Payments — cash ledger, online (ЮKassa), PT-packages, PT-sessions, payroll.",
+      "name": "Payments"
+    },
+    {
+      "description": "Financial and operational reports — revenue, clients, visits.",
+      "name": "Reports"
+    },
+    {
+      "description": "Append-only audit log read API — owner-only filterable event stream.",
+      "name": "Audit-log"
+    },
+    {
+      "description": "Internal webhook handlers — email and ЮKassa transport callbacks (D-64-TAG-INTERNAL).",
+      "name": "Internal"
     }
   ]
 }

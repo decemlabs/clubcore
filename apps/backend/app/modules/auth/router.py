@@ -68,7 +68,7 @@ from app.modules.auth.service import (
     rotate_refresh,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Auth"])
 
 
 @router.post("/login", response_model=ResponseEnvelope[LoginResponse])

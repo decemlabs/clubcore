@@ -71,7 +71,7 @@ from app.modules.users.schemas import (
     UserListQuery,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Users"])
 
 
 @router.get(

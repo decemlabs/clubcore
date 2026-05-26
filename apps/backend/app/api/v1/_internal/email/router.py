@@ -53,7 +53,7 @@ from app.integrations.email.models import EmailSendLog
 
 _log = structlog.get_logger("api.v1._internal.email")
 
-router = APIRouter()
+router = APIRouter(tags=["Internal"])
 
 # LOCKED-Literal subset this plan emits (see module docstring). Provides
 # mypy-strict help against the typo class the earlier draft suffered from.

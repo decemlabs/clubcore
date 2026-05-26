@@ -56,7 +56,7 @@ _log = structlog.get_logger("api.v1._internal.yookassa")
 WEBHOOK_DEDUP_KEY_PREFIX: Final[str] = "cc:yookassa:webhook:"
 WEBHOOK_DEDUP_TTL_SECONDS: Final[int] = 86400  # 24h matches ЮKassa retry window
 
-router = APIRouter()
+router = APIRouter(tags=["Internal"])
 
 
 @router.post(

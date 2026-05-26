@@ -32,7 +32,7 @@ from app.modules.payments import repository
 from app.modules.payments.permissions import require_payments_view_for_subject
 from app.modules.payments.schemas import PaymentListQuery, PaymentResponse
 
-router = APIRouter()
+router = APIRouter(tags=["Payments"])
 
 
 @router.get(

@@ -59,7 +59,7 @@ from app.modules.payroll.service import (
     PayrollPeriodAlreadyRunError,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Payments"])
 
 
 class _CompConfigMissing422Error(ValidationAppError):

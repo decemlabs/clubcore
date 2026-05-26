@@ -2,7 +2,9 @@
 
 from fastapi import APIRouter
 
-router = APIRouter()
+# Phase 64 FRZ-03 / D-64-TAG-INTERNAL — liveness probe tagged Internal so
+# Redocly preview does not create a "default" folder for untagged operations.
+router = APIRouter(tags=["Internal"])
 
 
 @router.get("/healthz")

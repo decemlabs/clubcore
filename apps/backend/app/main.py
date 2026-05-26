@@ -112,6 +112,85 @@ _OPID_COLLISION_SET: frozenset[str] = frozenset(
 )
 
 
+# Phase 64 FRZ-03 / D-64-TAG-ORDER / D-64-TAG-INTERNAL / D-64-TAG-USERS
+# Ordered list of OpenAPI tag objects used by Redocly preview to group
+# operations under business-domain headings.  Order mirrors the
+# auth-runbook narrative: identity → operator admin → CRM → product →
+# operations → money → analytics → internal transport.
+#
+# D-64-TAG-USERS (PATTERNS.md open-question #3 resolved): "Users" is
+# added as an 11th tag (between Auth and Clients) rather than folding
+# into "Auth".  The users module manages operator admin identities
+# (owner / reception accounts) — conflating operator management with
+# credential lifecycle would obscure both concerns in Redocly preview.
+#
+# D-64-TAG-INTERNAL: internal webhook handlers (email, yookassa) are
+# listed LAST so the business-domain navigation in Redocly remains clean.
+OPENAPI_TAGS: list[dict[str, str]] = [
+    {
+        "name": "Auth",
+        "description": "Credential lifecycle — login, refresh, password reset, OTP, Telegram.",
+    },
+    {
+        "name": "Users",
+        "description": (
+            "Operator admin — owner and reception account management (D-64-TAG-USERS)."
+        ),
+    },
+    {
+        "name": "Clients",
+        "description": "Gym client CRM — create, read, update, soft-delete clients.",
+    },
+    {
+        "name": "Memberships",
+        "description": (
+            "Membership plans + active memberships — sell, freeze, renew, cancel."
+        ),
+    },
+    {
+        "name": "Visits",
+        "description": "Gym visit recording — reception check-in and visit history.",
+    },
+    {
+        "name": "Schedule",
+        "description": (
+            "Class schedule — trainer slots, recurring templates, time-off blocks."
+        ),
+    },
+    {
+        "name": "Bookings",
+        "description": "Slot bookings — create, confirm, cancel, no-show lifecycle.",
+    },
+    {
+        "name": "Trainers",
+        "description": "Trainer roster — catalog and availability management.",
+    },
+    {
+        "name": "Payments",
+        "description": (
+            "Payments — cash ledger, online (ЮKassa), PT-packages, PT-sessions, payroll."
+        ),
+    },
+    {
+        "name": "Reports",
+        "description": "Financial and operational reports — revenue, clients, visits.",
+    },
+    {
+        "name": "Audit-log",
+        "description": (
+            "Append-only audit log read API — owner-only filterable event stream."
+        ),
+    },
+    {
+        "name": "Internal",
+        "description": (
+            "Internal webhook handlers — email and ЮKassa transport callbacks"
+            " (D-64-TAG-INTERNAL)."
+        ),
+    },
+]
+
+
 def custom_unique_id(route: APIRoute) -> str:
     """Return a clean operation ID by stripping the FastAPI default suffix.
 
@@ -222,17 +301,17 @@ def create_app() -> FastAPI:
             "Set COOKIE_SECURE=true in the environment."
         )
 
-    # Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1: contract-freeze baseline for
-    # the v1.11.0 OpenAPI spec. Rebrands `title` + `version` away from the
-    # v1.10 Sportzal-era values to clubcore + v1.11.0 (same rebrand discipline
-    # as Phase 62 D-62-01). `description` is engineering-targeted (D-11-DOCS-
-    # PRIVATE — private commercial; no marketing copy). `servers=[...]` ships
-    # EXACTLY one localhost entry per D-64-NO-SERVER-LIST-EXPANSION (staging
+    # Phase 64 FRZ-01 + FRZ-03 + FRZ-04 / D-64-PLANS plans 1 + 3: contract-freeze
+    # baseline for the v1.11.0 OpenAPI spec.  Rebrands `title` + `version` away
+    # from the v1.10 Sportzal-era values to clubcore + v1.11.0 (same rebrand
+    # discipline as Phase 62 D-62-01). `description` is engineering-targeted
+    # (D-11-DOCS-PRIVATE — private commercial; no marketing copy). `servers=[...]`
+    # ships EXACTLY one localhost entry per D-64-NO-SERVER-LIST-EXPANSION (staging
     # and prod URLs deferred to v2.0). `contact` and `license_info` are
     # INTENTIONALLY omitted per D-64-NO-OPENAPI-EXTRA-INFO (private commercial;
-    # D-11-DOCS-PRIVATE). `generate_unique_id_function`, `openapi_tags`, and
-    # the `app.openapi` post-processor wire in via later Phase 64 plans
-    # (64-02 / 64-03 / 64-04 / 64-05) — out of scope here.
+    # D-11-DOCS-PRIVATE). `openapi_tags` wired here (64-03 / D-64-TAG-ORDER);
+    # `generate_unique_id_function` wired in 64-02 (D-64-OPID-HOOK); the
+    # `app.openapi` post-processor wires in later Phase 64 plans (64-04 / 64-05).
     app = FastAPI(
         title="clubcore API",
         version="1.11.0",
@@ -252,6 +331,7 @@ def create_app() -> FastAPI:
             "Phase 64-04)."
         ),
         servers=[{"url": "http://localhost:8000", "description": "Local dev"}],
+        openapi_tags=OPENAPI_TAGS,
         generate_unique_id_function=custom_unique_id,
         lifespan=combined_lifespan,
         docs_url="/docs" if settings.environment == "dev" else None,
