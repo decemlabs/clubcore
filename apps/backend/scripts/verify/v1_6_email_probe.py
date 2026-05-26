@@ -193,7 +193,7 @@ async def main() -> int:
         )
         try:
             result = await client.send_email(envelope)
-        except Exception as exc:  # noqa: BLE001 — outbound boundary, classify all
+        except Exception as exc:
             results[provider_domain] = f"FAIL: {exc!r}"
             print(
                 f"{provider_domain}: FAIL ({exc!r})  to={_redact(addr)}",

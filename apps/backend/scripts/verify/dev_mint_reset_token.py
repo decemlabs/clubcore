@@ -20,7 +20,7 @@ import asyncio
 import secrets
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
 from sqlalchemy import select
@@ -61,7 +61,7 @@ async def _run(email: str) -> int:
                 )
             )
             if existing is not None:
-                existing.consumed_at = datetime.now(tz=timezone.utc)
+                existing.consumed_at = datetime.now(tz=UTC)
                 await session.flush()
 
             raw_token = secrets.token_urlsafe(32)
@@ -71,7 +71,7 @@ async def _run(email: str) -> int:
                     user_id=user.id,
                     purpose="password_reset",
                     token_hash=token_hash,
-                    expires_at=datetime.now(tz=timezone.utc) + timedelta(minutes=30),
+                    expires_at=datetime.now(tz=UTC) + timedelta(minutes=30),
                     audit_correlation_id=uuid.uuid4(),
                 )
             )

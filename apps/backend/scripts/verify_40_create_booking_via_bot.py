@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, text
@@ -33,18 +33,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Eager-import every ORM module so the SQLAlchemy mapper registry sees all
 # relationship() targets (REG-29-04 lesson — see scripts/run_*_cron_once.py).
-import app.core.audit_models  # noqa: F401
-import app.modules.auth.models  # noqa: F401
-import app.modules.bookings.models  # noqa: F401
-import app.modules.clients.models  # noqa: F401
-import app.modules.memberships.models  # noqa: F401
-import app.modules.payments.models  # noqa: F401
-import app.modules.pt_packages.models  # noqa: F401
-import app.modules.pt_sessions.models  # noqa: F401
-import app.modules.schedule.models  # noqa: F401
-import app.modules.trainers.models  # noqa: F401
+import app.core.audit_models
+import app.modules.auth.models
+import app.modules.bookings.models
+import app.modules.clients.models
+import app.modules.memberships.models
+import app.modules.payments.models
+import app.modules.pt_packages.models
+import app.modules.pt_sessions.models
+import app.modules.schedule.models
+import app.modules.trainers.models
 import app.modules.visits.models  # noqa: F401
-
 from app.core.database import db_lifespan_manager
 from app.core.dependencies import (
     register_active_pt_package_resolver,
@@ -137,8 +136,8 @@ async def _seed_active_pt_package(
             "client_id": str(client_id),
             "plan_id": str(plan_id),
             "trainer_id": str(trainer_id),
-            "start_date": date.today(),
-            "end_date": date.today() + timedelta(days=90),
+            "start_date": datetime.now(UTC).date(),
+            "end_date": datetime.now(UTC).date() + timedelta(days=90),
         },
     )
     return pkg_id
@@ -254,7 +253,7 @@ async def main() -> int:
                 f"Invariant 1 FAIL: bookings.status={persisted_booking.status!r} != 'confirmed'"
             )
         else:
-            print(f"✓ Invariant 1: bookings.status = 'confirmed'")
+            print("✓ Invariant 1: bookings.status = 'confirmed'")
 
         # Invariant 2: created_by_user_id IS NULL (Alembic 0021 / BLOCKER-4)
         if persisted_booking.created_by_user_id is not None:
@@ -276,7 +275,7 @@ async def main() -> int:
         if booking.slot_start_time is None:
             failures.append("Invariant 3b FAIL: BookingResponse.slot_start_time is None")
         else:
-            print(f"✓ Invariant 3b: BookingResponse.slot_start_time populated")
+            print("✓ Invariant 3b: BookingResponse.slot_start_time populated")
 
         # Invariant 4: audit row carries actor_role='telegram_bot' + actor_user_id IS NULL
         if audit is None:
