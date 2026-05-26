@@ -7,7 +7,7 @@ services:
     command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/clubcore
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
@@ -24,7 +24,7 @@ services:
     command: python -m app.workers.telegram_bot
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/clubcore
       REDIS_URL: redis://redis:6379/0
     restart: unless-stopped
     depends_on:
@@ -38,7 +38,7 @@ services:
     command: arq app.workers.WorkerSettings
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/clubcore
       REDIS_URL: redis://redis:6379/0
       TZ: UTC
     restart: unless-stopped
@@ -53,7 +53,7 @@ services:
     command: alembic upgrade head
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/sportzal
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/clubcore
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,9 +63,9 @@ services:
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
-      POSTGRES_DB: sportzal
+      POSTGRES_DB: clubcore
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d sportzal"]
+      test: ["CMD-SHELL", "pg_isready -U app -d clubcore"]
       interval: 2s
       timeout: 2s
       retries: 10
