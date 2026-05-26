@@ -247,7 +247,7 @@ Plans:
 
 **Plans**: 4 plans
 - [x] 61-01-PLAN.md — Regenerate openapi.json + schema.d.ts byte-stably for v1.9 trainers surface
-- [ ] 61-02-PLAN.md — Add _v19Checks AssertNonNever forward-guards + runtime toHaveLength(14) assertion
+- [x] 61-02-PLAN.md — Add _v19Checks AssertNonNever forward-guards + runtime toHaveLength(14) assertion
 - [x] 61-03-PLAN.md — Author .planning/handoff/v1.9-trainers-runbook.md (5 scenarios + OPERATOR-PENDING + attestation)
 - [ ] 61-04-PLAN.md — Milestone verification pass (RBAC parity + introspection + full suite + drift gates) + STATE.md close
 
@@ -260,7 +260,7 @@ Plans:
 | 58. Payroll Foundations + Ledger | 9/9 | Complete    | 2026-05-25 |
 | 59. Recurring Schedule + Time-Off | 5/5 | Complete   | 2026-05-25 |
 | 60. Trainer-Usage Report | 4/4 | Complete   | 2026-05-25 |
-| 61. OpenAPI Handoff + Milestone Verification | 2/4 | In Progress|  |
+| 61. OpenAPI Handoff + Milestone Verification | 3/4 | In Progress|  |
 
 ---
 
