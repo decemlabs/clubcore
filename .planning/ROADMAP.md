@@ -48,7 +48,14 @@ Note: Phase numbers are sequential (63-67) but execution order is non-monotonic.
   3. `uv run mypy --strict app` exits 0 (11 errors → 0); `auth/models.py __all__` fix + Literal narrowing fixes land in a third separate commit
   4. `v1.5-verification-evidence/run.sh` executes against `docker compose up` without the 4+2 known hotfixes (Alembic 32-char limit, `/healthz`, `trainer_availability_slots`, fixture user defaults, RBAC actor, X-CSRF-Token header); revision log updated
   5. Full backend CI (all 6 gates: ruff + ruff format + mypy + import-linter + openapi drift + export_openapi) exits 0; no new `# type: ignore`, `# noqa`, or `ignore_imports` introduced
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 63-01-PLAN.md — DEBT-01 ruff format tree-wide (~297 files, single atomic commit)
+- [ ] 63-02-PLAN.md — DEBT-02 ruff check --fix safe-only (158 → 0; no --unsafe-fixes)
+- [ ] 63-03-PLAN.md — DEBT-03 mypy strict cleanup (11 → 0) + auth/models.py __all__ fix + tests.* mypy override
+- [ ] 63-04-PLAN.md — DEBT-04 v1.5/run.sh hardening (4 hotfixes + RBAC actor + X-CSRF-Token header)
+- [ ] 63-05-PLAN.md — DEBT-05 verify all 6 backend CI gates exit 0; capture GitHub Actions CI run URL post-merge
 
 ### Phase 64: Contract Freeze — OpenAPI Curation
 **Goal**: The `openapi.json` spec is the authoritative, curated single source of truth under the clubcore name — correct metadata, stable operation IDs, explicit tags for all 10 domains, shared error responses, and a passing Redocly lint gate in CI
@@ -116,7 +123,7 @@ Note: Phase numbers are sequential (63-67) but execution order is non-monotonic.
 | 58-61. Trainers Complete | v1.9 | 22/22 | Complete | 2026-05-26 |
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
-| 63. Tech-Debt Sweep | v1.11 | 0/TBD | Not started | — |
+| 63. Tech-Debt Sweep | v1.11 | 0/5 | Not started | — |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 0/TBD | Not started | — |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
@@ -124,7 +131,7 @@ Note: Phase numbers are sequential (63-67) but execution order is non-monotonic.
 
 ---
 
-*Roadmap last updated: 2026-05-26 — v1.11 API Handoff + Production Hardening roadmap created (34/34 requirements mapped; 5 phases 63-67; execution order 63 → 64 → 66 → 65 → 67 locked per SUMMARY.md + ARCHITECTURE.md + 4 milestone-opening decisions).*
+*Roadmap last updated: 2026-05-26 — Phase 63 plans created (5 plans = 5 atomic commits per D-63-01; serial execution per D-63-02). v1.11 API Handoff + Production Hardening roadmap (34/34 requirements mapped; 5 phases 63-67; execution order 63 → 64 → 66 → 65 → 67 locked per SUMMARY.md + ARCHITECTURE.md + 4 milestone-opening decisions).*
 *v1.11 Coverage: 34/34 requirements mapped (DEBT:5 → Phase 63, FRZ:8 → Phase 64, IDM:7 → Phase 66, HND:6 → Phase 65, RUN:8 → Phase 67) — zero orphans, zero duplicates.*
 
 ## Backlog
