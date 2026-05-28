@@ -4907,6 +4907,20 @@
         "title": "VisitsReportResponse",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "cookieAuth": {
+        "description": "Access-token httpOnly cookie. Refresh-token cookie (cc_refresh) is server-internal flow — sent by the browser automatically; not modelled as a separate security scheme.",
+        "in": "cookie",
+        "name": "cc_access",
+        "type": "apiKey"
+      },
+      "csrfHeader": {
+        "description": "Double-submit CSRF header. Companion cookie named `sportzal_csrf` — v1.x carry-over per D-11-CSRF-DEFER; rename to `clubcore_csrf` deferred to v2.0 with coordinated admin-web cutover (see auth runbook).",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -4925,6 +4939,7 @@
             "description": "Successful Response"
           }
         },
+        "security": [],
         "summary": "Email Webhook",
         "tags": [
           "Internal"
@@ -5274,6 +5289,7 @@
             "description": "Validation Error"
           }
         },
+        "security": [],
         "summary": "Login",
         "tags": [
           "Auth"
@@ -5382,6 +5398,7 @@
             "description": "Validation Error"
           }
         },
+        "security": [],
         "summary": "Otp Request",
         "tags": [
           "Auth"
@@ -5424,6 +5441,7 @@
             "description": "Validation Error"
           }
         },
+        "security": [],
         "summary": "Confirm password reset (atomic-consume + revoke-all)",
         "tags": [
           "Auth"
@@ -5466,6 +5484,7 @@
             "description": "Validation Error"
           }
         },
+        "security": [],
         "summary": "Request a password-reset email (anti-oracle, rate-limited)",
         "tags": [
           "Auth"
@@ -5488,6 +5507,7 @@
             "description": "Successful Response"
           }
         },
+        "security": [],
         "summary": "Refresh",
         "tags": [
           "Auth"
@@ -5611,6 +5631,7 @@
             "description": "Successful Response"
           }
         },
+        "security": [],
         "summary": "Telegram Start",
         "tags": [
           "Auth"
@@ -5654,6 +5675,7 @@
             "description": "Validation Error"
           }
         },
+        "security": [],
         "summary": "Telegram Status",
         "tags": [
           "Auth"
@@ -5696,6 +5718,7 @@
             "description": "Validation Error"
           }
         },
+        "security": [],
         "summary": "Telegram Verify",
         "tags": [
           "Auth"
@@ -10628,6 +10651,7 @@
             "description": "Successful Response"
           }
         },
+        "security": [],
         "summary": "Health",
         "tags": [
           "Internal"
@@ -10635,6 +10659,12 @@
       }
     }
   },
+  "security": [
+    {
+      "cookieAuth": [],
+      "csrfHeader": []
+    }
+  ],
   "servers": [
     {
       "description": "Local dev",
