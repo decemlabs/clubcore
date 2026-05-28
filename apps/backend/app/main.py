@@ -189,8 +189,8 @@ OPENAPI_TAGS: list[dict[str, str]] = [
 
 # Phase 64 FRZ-05 / D-64-SEC-SCHEMES — OpenAPI security scheme definitions.
 # Two schemes declared:
-#   cookieAuth — the cc_access httpOnly cookie that carries the JWT access
-#                token.  The cc_refresh cookie drives the /auth/refresh server-
+#   cookieAuth — the sz_access httpOnly cookie that carries the JWT access
+#                token.  The sz_refresh cookie drives the /auth/refresh server-
 #                internal rotation loop; it is documented in the description but
 #                NOT modelled as a separate scheme (it is never sent by the
 #                client as an auth credential, only by the browser automatically).
@@ -203,9 +203,9 @@ SECURITY_SCHEMES: dict[str, dict[str, str]] = {
     "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "cc_access",
+        "name": "sz_access",
         "description": (
-            "Access-token httpOnly cookie. Refresh-token cookie (cc_refresh) is "
+            "Access-token httpOnly cookie. Refresh-token cookie (sz_refresh) is "
             "server-internal flow — sent by the browser automatically; not modelled "
             "as a separate security scheme."
         ),

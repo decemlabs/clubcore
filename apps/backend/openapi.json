@@ -5110,9 +5110,9 @@
     },
     "securitySchemes": {
       "cookieAuth": {
-        "description": "Access-token httpOnly cookie. Refresh-token cookie (cc_refresh) is server-internal flow — sent by the browser automatically; not modelled as a separate security scheme.",
+        "description": "Access-token httpOnly cookie. Refresh-token cookie (sz_refresh) is server-internal flow — sent by the browser automatically; not modelled as a separate security scheme.",
         "in": "cookie",
-        "name": "cc_access",
+        "name": "sz_access",
         "type": "apiKey"
       },
       "csrfHeader": {
