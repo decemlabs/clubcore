@@ -24,10 +24,12 @@ OPENAPI_ERROR_RESPONSES: dict[str, dict[str, object]] = {
                     "properties": {
                         "code": {"type": "string"},
                         "message": {"type": "string"},
+                        # OpenAPI 3.1: nullability via anyOf, not the 3.0 `nullable` keyword.
                         "fields": {
-                            "type": "object",
-                            "nullable": True,
-                            "additionalProperties": True,
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
                         },
                     },
                     "required": ["code", "message"],
@@ -44,10 +46,12 @@ OPENAPI_ERROR_RESPONSES: dict[str, dict[str, object]] = {
                     "properties": {
                         "code": {"type": "string"},
                         "message": {"type": "string"},
+                        # OpenAPI 3.1: nullability via anyOf, not the 3.0 `nullable` keyword.
                         "fields": {
-                            "type": "object",
-                            "nullable": True,
-                            "additionalProperties": True,
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
                         },
                     },
                     "required": ["code", "message"],
@@ -64,10 +68,12 @@ OPENAPI_ERROR_RESPONSES: dict[str, dict[str, object]] = {
                     "properties": {
                         "code": {"type": "string"},
                         "message": {"type": "string"},
+                        # OpenAPI 3.1: nullability via anyOf, not the 3.0 `nullable` keyword.
                         "fields": {
-                            "type": "object",
-                            "nullable": True,
-                            "additionalProperties": True,
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
                         },
                     },
                     "required": ["code", "message"],
@@ -84,10 +90,12 @@ OPENAPI_ERROR_RESPONSES: dict[str, dict[str, object]] = {
                     "properties": {
                         "code": {"type": "string"},
                         "message": {"type": "string"},
+                        # OpenAPI 3.1: nullability via anyOf, not the 3.0 `nullable` keyword.
                         "fields": {
-                            "type": "object",
-                            "nullable": True,
-                            "additionalProperties": True,
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
                         },
                     },
                     "required": ["code", "message"],
@@ -105,10 +113,12 @@ OPENAPI_ERROR_RESPONSES: dict[str, dict[str, object]] = {
                     "properties": {
                         "code": {"type": "string"},
                         "message": {"type": "string"},
+                        # OpenAPI 3.1: nullability via anyOf, not the 3.0 `nullable` keyword.
                         "fields": {
-                            "type": "object",
-                            "nullable": True,
-                            "additionalProperties": True,
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
                         },
                     },
                     "required": ["code", "message"],
@@ -125,10 +135,12 @@ OPENAPI_ERROR_RESPONSES: dict[str, dict[str, object]] = {
                     "properties": {
                         "code": {"type": "string"},
                         "message": {"type": "string"},
+                        # OpenAPI 3.1: nullability via anyOf, not the 3.0 `nullable` keyword.
                         "fields": {
-                            "type": "object",
-                            "nullable": True,
-                            "additionalProperties": True,
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
                         },
                     },
                     "required": ["code", "message"],

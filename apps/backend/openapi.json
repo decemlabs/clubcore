@@ -10,9 +10,15 @@
                   "type": "string"
                 },
                 "fields": {
-                  "additionalProperties": true,
-                  "nullable": true,
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "message": {
                   "type": "string"
@@ -37,9 +43,15 @@
                   "type": "string"
                 },
                 "fields": {
-                  "additionalProperties": true,
-                  "nullable": true,
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "message": {
                   "type": "string"
@@ -64,9 +76,15 @@
                   "type": "string"
                 },
                 "fields": {
-                  "additionalProperties": true,
-                  "nullable": true,
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "message": {
                   "type": "string"
@@ -91,9 +109,15 @@
                   "type": "string"
                 },
                 "fields": {
-                  "additionalProperties": true,
-                  "nullable": true,
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "message": {
                   "type": "string"
@@ -118,9 +142,15 @@
                   "type": "string"
                 },
                 "fields": {
-                  "additionalProperties": true,
-                  "nullable": true,
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "message": {
                   "type": "string"
@@ -145,9 +175,15 @@
                   "type": "string"
                 },
                 "fields": {
-                  "additionalProperties": true,
-                  "nullable": true,
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "message": {
                   "type": "string"

@@ -1,0 +1,46 @@
+# Redocly CLI lint config — Phase 64 FRZ-07 / D-64-REDOCLY-RULESET.
+#
+# Targets apps/backend/openapi.json — the curated single-source-of-truth
+# spec for clubcore v1.11.0. Wired as the 7th parallel CI gate in
+# .github/workflows/ci.yml (job `redocly-lint`).
+#
+# Ruleset: `recommended` (NOT recommended-strict — see D-64-REDOCLY-RULESET).
+# Strict mode would flag stylistic issues (missing examples, etc.) that are
+# intentionally deferred to Phase 65 (Postman handoff) per D-64-NO-EXAMPLES.
+#
+# Each `off` below MUST carry an inline comment naming the trade-off and the
+# decision reference (D-64-REDOCLY-RULESET requirement).
+
+extends:
+  - recommended
+
+rules:
+  # D-64-NO-OPENAPI-EXTRA-INFO: `info.license` intentionally omitted.
+  # clubcore is a personal commercial project with no public publish path
+  # (D-11-DOCS-PRIVATE). Adding a license field would be misleading — the
+  # spec is a private engineering artifact, not a public API.
+  info-license: off
+
+  # D-64-NO-SERVER-LIST-EXPANSION: `servers[].url = "http://localhost:8000"` is
+  # the intentional single dev-only entry per v1.11 scope. Production / staging
+  # URLs are deferred to v2.0. The `no-server-example.com` rule also rejects
+  # localhost, which is a false positive for a local-dev server entry.
+  no-server-example.com: off
+
+  # D-64-NO-EXAMPLES: 4xx response declarations on individual operations are
+  # deferred to Phase 65 (Postman handoff). FastAPI does not auto-generate
+  # 401/404/409/429 responses for routes that don't explicitly declare them;
+  # only 422 (validation) is injected automatically. Per D-64-RESPONSES-APPLY,
+  # the shared components.responses entries exist for $ref use at callsites that
+  # DO declare those statuses. Requiring a 4xx on every operation would force
+  # router-level changes outside this phase's scope.
+  operation-4xx-response: off
+
+  # Components 401_Unauthorized / 404_NotFound / 409_Conflict / 429_RateLimited
+  # are defined in components.responses for completeness and future $ref use
+  # (only operations that explicitly declare those statuses reference them via
+  # $ref after the post-processor walk). HTTPValidationError is emitted by
+  # FastAPI's auto-schema but only referenced by FastAPI's own 422 inline
+  # schema, which was replaced with a $ref to 422_ValidationError. These are
+  # intentional registry entries, not dead code.
+  no-unused-components: off
