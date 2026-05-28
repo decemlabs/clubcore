@@ -31,10 +31,22 @@ findings:
   warning: 4
   info: 2
   total: 7
-status: issues_found
+status: resolved_blocking
+resolution:
+  CR-01: fixed (fff0be91) — cookieAuth scheme name corrected cc_access -> sz_access to match runtime
+  WR-02: fixed (b1c4126a) — RequestValidationError handler so 422 returns the {code,message,fields} envelope; regression assertion added
+  WR-01: accepted/advisory — global security applies csrfHeader to safe GETs (harmless over-spec; per-method CSRF modeling deferred)
+  WR-03: accepted/advisory — stale operation-ID collision comments in main.py (doc-only)
+  WR-04: accepted/advisory — dead-code regex in custom_unique_id (result correct; doc-only)
+  INFO: accepted — @redocly/cli@latest pin + lint-of-committed-artifact (drift gate covers staleness)
 ---
 
 # Phase 64: Code Review Report
+
+> **Resolution (orchestrator, post-review):** BLOCKER CR-01 and material WARNING
+> WR-02 were fixed and committed during phase execution (see `resolution:`).
+> Full backend suite green (2185 passed) after fixes; drift + Redocly lint clean.
+> Remaining WR-01/03/04 + INFO are low-impact advisory items accepted for this freeze.
 
 **Reviewed:** 2026-05-28T00:00:00Z
 **Depth:** standard
