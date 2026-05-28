@@ -14,8 +14,9 @@ Wire format: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD&within=N
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,7 +116,7 @@ async def test_expiring_count_within_boundary(
     """Membership ending in 3 days: counted when within>=3, absent when within<3 (CLR-02)."""
     plan = await make_plan(name="ExpiringTest")
     cli = await make_client()
-    today = datetime.now(tz=UTC).date()
+    today = datetime.now(tz=ZoneInfo("Europe/Moscow")).date()
     end_in_3_days = today + timedelta(days=3)
 
     await make_membership(
@@ -174,7 +175,7 @@ async def test_new_clients_count_reflects_created_in_range(
     make_client: Any,
 ) -> None:
     """newClientsCount counts clients created_at within [fromDate, toDate] MSK (CLR-03)."""
-    today = datetime.now(tz=UTC).date()
+    today = datetime.now(tz=ZoneInfo("Europe/Moscow")).date()
     today_str = today.isoformat()
 
     # Count before inserting our client
@@ -206,7 +207,7 @@ async def test_new_clients_count_excludes_soft_deleted(
     db_session: AsyncSession,
 ) -> None:
     """newClientsCount excludes soft-deleted clients even if created in range (CLR-04)."""
-    today = datetime.now(tz=UTC).date()
+    today = datetime.now(tz=ZoneInfo("Europe/Moscow")).date()
     today_str = today.isoformat()
 
     cli = await make_client()

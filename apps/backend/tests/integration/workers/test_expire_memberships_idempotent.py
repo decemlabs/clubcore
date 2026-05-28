@@ -16,8 +16,9 @@ Asserts the second call:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import func, select
@@ -32,7 +33,10 @@ async def test_expire_memberships_idempotent(
     make_membership_with_dates: Any,
     worker_ctx: dict[str, Any],
 ) -> None:
-    today = datetime.now(tz=UTC).date()
+    # Worker compares end_date against the Europe/Moscow date (D-18-05); fixtures
+    # must use the same TZ or rows ending "today" are mis-expired in the 21:00-24:00
+    # UTC window (UTC date lags Moscow date by one day).
+    today = datetime.now(tz=ZoneInfo("Europe/Moscow")).date()
     yesterday = today - timedelta(days=1)
     tomorrow = today + timedelta(days=1)
 
