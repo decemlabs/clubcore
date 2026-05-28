@@ -78,6 +78,7 @@ from app.core.dependencies import (
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
+from app.core.openapi_responses import OPENAPI_ERROR_RESPONSES
 from app.core.redis import redis_lifespan
 from app.integrations.email.dispatcher import (
     enqueue_email_dispatch,
@@ -240,6 +241,19 @@ PUBLIC_ENDPOINT_OPERATION_IDS: frozenset[str] = frozenset(
         "email_webhook",  # POST /api/v1/_internal/email/webhook — HMAC-signed transport callback
     }
 )
+
+
+# Phase 64 FRZ-06 / D-64-RESPONSES-APPLY — maps HTTP status code strings to the
+# corresponding component name in OPENAPI_ERROR_RESPONSES / components.responses.
+# Used by _customize_openapi() to rewrite inline operation responses to $ref.
+STATUS_TO_COMPONENT: dict[str, str] = {
+    "401": "401_Unauthorized",
+    "403": "403_Forbidden",
+    "404": "404_NotFound",
+    "409": "409_Conflict",
+    "422": "422_ValidationError",
+    "429": "429_RateLimited",
+}
 
 
 def custom_unique_id(route: APIRoute) -> str:
@@ -604,11 +618,24 @@ def create_app() -> FastAPI:
         )
         # Set global default: every operation requires both schemes unless overridden.
         schema["security"] = [{"cookieAuth": [], "csrfHeader": []}]
-        # Per-operation opt-out: public endpoints advertise security=[] (no auth).
+        # Phase 64 FRZ-06 / D-64-RESPONSES-APPLY — inject shared error response objects
+        # into components.responses so operations can reference them via $ref.
+        schema["components"].setdefault("responses", {}).update(OPENAPI_ERROR_RESPONSES)
+        # Per-operation walk: (a) opt out public endpoints from global security,
+        # (b) replace inline 401/403/404/409/422/429 response values with $ref.
+        # Mutation is order-independent (dict key lookup, no iteration-order dependency)
+        # and idempotent (replacing an existing $ref with the same $ref is a no-op).
         for path_item in schema["paths"].values():
             for op in path_item.values():
-                if isinstance(op, dict) and op.get("operationId") in PUBLIC_ENDPOINT_OPERATION_IDS:
-                    op["security"] = []
+                if isinstance(op, dict):
+                    if op.get("operationId") in PUBLIC_ENDPOINT_OPERATION_IDS:
+                        op["security"] = []
+                    op_responses: dict[str, object] = op.get("responses", {})
+                    for status, component_name in STATUS_TO_COMPONENT.items():
+                        if status in op_responses:
+                            op_responses[status] = {
+                                "$ref": f"#/components/responses/{component_name}"
+                            }
         app.openapi_schema = schema
         return schema
 
