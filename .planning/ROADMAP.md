@@ -88,7 +88,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 64-04-PLAN.md — FRZ-05 (securitySchemes cookieAuth + csrfHeader + per-route PUBLIC_ENDPOINT_OPERATION_IDS opt-out)
+- [x] 64-04-PLAN.md — FRZ-05 (securitySchemes cookieAuth + csrfHeader + per-route PUBLIC_ENDPOINT_OPERATION_IDS opt-out)
 - [ ] 64-05-PLAN.md — FRZ-06 (shared components.responses + $ref migration post-processor)
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -167,7 +167,7 @@ Plans:
 | 62. clubcore Rebrand | v1.10 | 7/7 | Complete | 2026-05-26 |
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
-| 64. Contract Freeze — OpenAPI Curation | v1.11 | 3/7 | In Progress|  |
+| 64. Contract Freeze — OpenAPI Curation | v1.11 | 4/7 | In Progress|  |
 | 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
