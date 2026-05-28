@@ -191,6 +191,62 @@ OPENAPI_TAGS: list[dict[str, str]] = [
 ]
 
 
+# Phase 64 FRZ-05 / D-64-SEC-SCHEMES — OpenAPI security scheme definitions.
+# Two schemes declared:
+#   cookieAuth — the cc_access httpOnly cookie that carries the JWT access
+#                token.  The cc_refresh cookie drives the /auth/refresh server-
+#                internal rotation loop; it is documented in the description but
+#                NOT modelled as a separate scheme (it is never sent by the
+#                client as an auth credential, only by the browser automatically).
+#   csrfHeader — the X-CSRF-Token double-submit header.  The companion readable
+#                cookie is named `sportzal_csrf` — a v1.x carry-over retained
+#                per D-11-CSRF-DEFER; rename to `clubcore_csrf` is deferred to
+#                v2.0 with a coordinated admin-web cutover (see auth runbook at
+#                .planning/handoff/clubcore-auth-runbook.md and D-11-CSRF-DEFER).
+SECURITY_SCHEMES: dict[str, dict[str, str]] = {
+    "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "cc_access",
+        "description": (
+            "Access-token httpOnly cookie. Refresh-token cookie (cc_refresh) is "
+            "server-internal flow — sent by the browser automatically; not modelled "
+            "as a separate security scheme."
+        ),
+    },
+    "csrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": (
+            "Double-submit CSRF header. Companion cookie named `sportzal_csrf` — "
+            "v1.x carry-over per D-11-CSRF-DEFER; rename to `clubcore_csrf` "
+            "deferred to v2.0 with coordinated admin-web cutover (see auth runbook)."
+        ),
+    },
+}
+
+# Phase 64 FRZ-05 / D-64-SEC-APPLY — public endpoints opted out of the global
+# security=[{cookieAuth, csrfHeader}] default applied by _customize_openapi().
+# Frozenset literal so additions are visible in diff (mirrors OWNER_ONLY
+# discipline at app/core/permissions.py:63 and LOCKED_AUDIT_EVENTS at
+# app/core/audit.py:263).
+PUBLIC_ENDPOINT_OPERATION_IDS: frozenset[str] = frozenset(
+    {
+        "health",  # GET /healthz — liveness probe (no auth required)
+        "login",  # POST /api/v1/auth/login — initial credential exchange
+        "refresh",  # POST /api/v1/auth/refresh — token rotation (sz_refresh cookie)
+        "telegram_start",  # POST /api/v1/auth/telegram/start — mint deep-link token
+        "telegram_status",  # GET /api/v1/auth/telegram/status — poll bot DM delivery
+        "telegram_verify",  # POST /api/v1/auth/telegram/verify — consume OTP + issue cookies
+        "otp_request",  # POST /api/v1/auth/otp/request — unified OTP request (pre-auth)
+        "password_reset_request_endpoint",  # POST /api/v1/auth/password-reset/request — anonymous
+        "password_reset_confirm_endpoint",  # POST /api/v1/auth/password-reset/confirm — anonymous
+        "email_webhook",  # POST /api/v1/_internal/email/webhook — HMAC-signed transport callback
+    }
+)
+
+
 def custom_unique_id(route: APIRoute) -> str:
     """Return a clean operation ID by stripping the FastAPI default suffix.
 
