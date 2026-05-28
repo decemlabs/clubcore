@@ -145,9 +145,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     },
     {
         "name": "Memberships",
-        "description": (
-            "Membership plans + active memberships — sell, freeze, renew, cancel."
-        ),
+        "description": ("Membership plans + active memberships — sell, freeze, renew, cancel."),
     },
     {
         "name": "Visits",
@@ -155,9 +153,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     },
     {
         "name": "Schedule",
-        "description": (
-            "Class schedule — trainer slots, recurring templates, time-off blocks."
-        ),
+        "description": ("Class schedule — trainer slots, recurring templates, time-off blocks."),
     },
     {
         "name": "Bookings",
@@ -179,15 +175,12 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     },
     {
         "name": "Audit-log",
-        "description": (
-            "Append-only audit log read API — owner-only filterable event stream."
-        ),
+        "description": ("Append-only audit log read API — owner-only filterable event stream."),
     },
     {
         "name": "Internal",
         "description": (
-            "Internal webhook handlers — email and ЮKassa transport callbacks"
-            " (D-64-TAG-INTERNAL)."
+            "Internal webhook handlers — email and ЮKassa transport callbacks (D-64-TAG-INTERNAL)."
         ),
     },
 ]
