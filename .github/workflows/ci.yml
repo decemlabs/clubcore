@@ -115,3 +115,28 @@ jobs:
         run: |
           git ls-files --error-unmatch packages/api-client/src/schema.d.ts
           git diff --exit-code packages/api-client/src/schema.d.ts
+
+  # FRZ-07 / D-64-REDOCLY-CI-PLACEMENT — 7th parallel CI gate.
+  # Validates apps/backend/openapi.json against the `recommended` Redocly ruleset
+  # declared in redocly.yaml at the repo root. Runs in parallel with `backend` and
+  # `frontend` (no `needs:` dependency) — a spec regression fails CI before merge
+  # without blocking the backend or frontend lint jobs.
+  # Version: @latest — acceptable for a lint-only step (no runtime artifact).
+  # Pin to an exact version (e.g. @redocly/cli@1.34.4) in a future maintenance
+  # commit if byte-stable CI reproducibility becomes a requirement.
+  redocly-lint:
+    name: Redocly lint (openapi.json)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Redocly lint
+        run: npx -y @redocly/cli@latest lint apps/backend/openapi.json
