@@ -1,5 +1,169 @@
 {
   "components": {
+    "responses": {
+      "401_Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "nullable": true,
+                  "type": "object"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Unauthorized — invalid or missing session credentials."
+      },
+      "403_Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "nullable": true,
+                  "type": "object"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Forbidden — insufficient permissions or CSRF mismatch."
+      },
+      "404_NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "nullable": true,
+                  "type": "object"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Not Found — the requested resource does not exist."
+      },
+      "409_Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "nullable": true,
+                  "type": "object"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Conflict — the resource state conflicts with the request."
+      },
+      "422_ValidationError": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "nullable": true,
+                  "type": "object"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Validation Error — request body or parameters failed validation."
+      },
+      "429_RateLimited": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "nullable": true,
+                  "type": "object"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Too Many Requests — per-actor throttle exhausted."
+      }
+    },
     "schemas": {
       "ActiveSessionItem": {
         "description": "Single active session family row in the /sessions list response (D-23-4).\n\ncamelCase serialization is automatic via alias_generator=to_camel on ContractModel.\nWire names: familyId, createdAt, lastUsedAt, userAgent, channel, isCurrent.",
@@ -5087,14 +5251,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Paginated audit-log listing (owner-only; AUD-01..06)",
@@ -5237,14 +5394,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Audit-log CSV download — all matching rows (owner-only; EXP-02)",
@@ -5279,14 +5429,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "security": [],
@@ -5388,14 +5531,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "security": [],
@@ -5431,14 +5567,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "security": [],
@@ -5474,14 +5603,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "security": [],
@@ -5555,14 +5677,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List the current user's active session families",
@@ -5599,14 +5714,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Revoke a single session family (idempotent)",
@@ -5665,14 +5773,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "security": [],
@@ -5708,14 +5809,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "security": [],
@@ -5850,14 +5944,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List bookings (reception+owner; paginated; client/trainer/status/time-window filters; default ±30d Moscow)",
@@ -5890,14 +5977,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a confirmed booking (reception+owner; 404 slot_not_found; 409 slot_not_available / slot_already_booked / trainer_mismatch / pt_package_not_active / pt_package_exhausted / pt_package_expired_before_slot; requires Idempotency-Key — D-38-14)",
@@ -5934,14 +6014,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Read a booking with denormalized slot + pt_package (reception+owner; 404 booking_not_found; joinedload — Pitfall 19 / D-38-08)",
@@ -5988,14 +6061,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Cancel a confirmed booking (reception ≤24h before slot.start per C-05 / owner anytime; 404 booking_not_found; 409 invalid_transition / cancel_window_expired; requires Idempotency-Key — D-38-14)",
@@ -6154,14 +6220,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List alive clients with filters and pagination",
@@ -6194,14 +6253,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a new client (E.164 phone; 409 phone_exists on partial-unique conflict)",
@@ -6231,14 +6283,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Soft-delete a client (owner-only; sets deleted_at, never hard-deletes)",
@@ -6273,14 +6318,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Get a single alive client by id (404 if soft-deleted or missing)",
@@ -6325,14 +6363,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Partial update (PATCH semantics; null-out via PATCH not supported in v1.1)",
@@ -6442,14 +6473,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List bookings for a single client (reception+owner; paginated; from/to/status filters; default ±30d Moscow)",
@@ -6524,14 +6548,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List alive membership plans (owner-only); paginated; ?active filter",
@@ -6564,14 +6581,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a membership plan (owner-only; 409 plan_name_exists on duplicate alive name)",
@@ -6601,14 +6611,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Soft-delete a membership plan (owner-only); frees lower(name) unique slot",
@@ -6643,14 +6646,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Fetch a single alive membership plan (owner-only)",
@@ -6695,14 +6691,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Patch a membership plan (owner-only); durationDays is immutable (rejected with 422)",
@@ -6816,14 +6805,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List memberships filtered by clientId/status with pagination",
@@ -6856,14 +6838,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Sell a membership (reception+owner; 404 plan_not_found, 409 plan_inactive; requires Idempotency-Key — Phase 32 PAY-09)",
@@ -6900,14 +6875,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Get a membership by id (404 membership_not_found)",
@@ -6954,14 +6922,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
@@ -6998,14 +6959,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Freeze membership (reception+owner; 409 freeze_limit_exceeded / already_frozen / invalid_transition)",
@@ -7052,14 +7006,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Refund a membership (reception+owner per B-07; 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition / already_refunded; 422 if amountKopecks supplied [REF-05])",
@@ -7096,14 +7043,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Renew membership (reception+owner; 404 plan_not_found / membership_not_found; 409 cannot_renew_cancelled / plan_archived)",
@@ -7140,14 +7080,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Unfreeze membership (reception+owner; 409 invalid_transition)",
@@ -7194,14 +7127,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Initiate online refund of a membership (Phase 51 REFUND-01). Full refund only (partial deferred to v1.8 B-02). Returns 202; completion awaits ЮKassa refund.succeeded webhook.",
@@ -7248,14 +7174,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Sell a membership online (redirect flow); reception+owner; CSRF + Idempotency-Key required",
@@ -7302,14 +7221,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Sell a membership online (QR flow); reception+owner; CSRF + Idempotency-Key required",
@@ -7356,14 +7268,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required",
@@ -7410,14 +7315,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required",
@@ -7464,14 +7362,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Initiate online refund of a PT-package (Phase 51 REFUND-01). Full refund only. Returns 202; completion awaits ЮKassa refund.succeeded webhook.",
@@ -7606,14 +7497,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List payments globally (owner-only; filters by subject + actor + date window)",
@@ -7670,14 +7554,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List payments tied to a client's memberships (reception+owner; PAY-07)",
@@ -7734,14 +7611,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List payments tied to a single membership (reception+owner; PAY-07)",
@@ -7801,14 +7671,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List a trainer's payroll accruals paginated, accrued_at DESC (owner-only PAY-05 / D-58-14)",
@@ -7841,14 +7704,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Record payroll accrual with run-time-snapshotted rate (append-only; owner-only PAY-03 / D-58-03)",
@@ -7885,14 +7741,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Mark payroll accrual as paid (pending→paid single transition; owner-only PAY-04 / D-58-08)",
@@ -7949,14 +7798,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Preview payroll accrual for a trainer + period (read-only, zero-persistence; owner-only PAY-02 / D-58-12)",
@@ -7993,14 +7835,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Get the active comp config (latest effective_from <= today; owner-only PAY-01 / D-58-11)",
@@ -8045,14 +7880,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Set/replace trainer comp config (INSERT-only versioned; owner-only PAY-01 / D-58-10)",
@@ -8121,14 +7949,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List PT-package plans (owner-only); paginated; ?includeArchived toggle",
@@ -8161,14 +7982,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a PT-package plan (owner-only; 409 pt_package_plan_name_conflict on duplicate alive name)",
@@ -8198,14 +8012,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Soft-delete a PT-package plan (owner-only); 409 plan_in_use if any pt_packages row references it (D-33-08)",
@@ -8240,14 +8047,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Fetch a single alive PT-package plan (owner-only)",
@@ -8292,14 +8092,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Patch a PT-package plan (owner-only); session_count / price_kopecks / validity_days mutation -> 409 field_immutable (D-33-07)",
@@ -8391,14 +8184,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List PT-packages (reception+owner; paginated; ?clientId / ?status filters)",
@@ -8431,14 +8217,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Sell a PT-package (reception+owner; 404 pt_package_plan_not_found, 422 amount_mismatch, 409 active_pt_package_already_exists; requires Idempotency-Key — D-33-16)",
@@ -8475,14 +8254,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Read a single PT-package (reception+owner; 404 pt_package_not_found)",
@@ -8529,14 +8301,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Cancel a PT-package without refund (owner-only; 404 pt_package_not_found; 409 invalid_transition for cancelled source; requires Idempotency-Key — D-33-16)",
@@ -8583,14 +8348,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Refund a PT-package (reception+owner per B-07; 404 pt_package_not_found / original_payment_not_found; 409 invalid_transition / already_refunded; requires Idempotency-Key — D-33-16)",
@@ -8660,14 +8418,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List PT-sessions for a package (reception+owner; paginated; ?includeCancelled filter; performed_at DESC, created_at DESC)",
@@ -8702,14 +8453,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Record a PT-session (reception+owner; 404 pt_package_not_found / trainer_not_found; 409 pt_package_not_active / pt_package_exhausted; 422 trainer_inactive / performed_at_in_future / performed_at_out_of_window / idempotency_key_reuse; requires Idempotency-Key — D-34-10)",
@@ -8746,14 +8490,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Read a single PT-session (reception+owner; 404 pt_session_not_found)",
@@ -8800,14 +8537,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Cancel a recorded PT-session (reception ≤24h since recording per B-12 / owner anytime; 404 pt_session_not_found; 409 already_cancelled; 403 cancel_window_expired; requires Idempotency-Key — D-34-10)",
@@ -8871,14 +8601,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List recurring slot templates (reception+owner; trainer_id filter)",
@@ -8911,14 +8634,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a recurring slot template (owner-only; 409 recurring_template_duplicate on duplicate trainer+dow+start+valid_from; requires Idempotency-Key — D-38-14)",
@@ -8955,14 +8671,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Deactivate a recurring slot template (owner-only; 404 recurring_template_not_found; requires Idempotency-Key)",
@@ -9019,14 +8728,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Active/expiring/new clients summary (owner-only; CLR-01..04)",
@@ -9076,14 +8778,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Clients snapshot CSV download — single summary row (owner-only; EXP-03)",
@@ -9144,14 +8839,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Revenue by period (day|month) from payments ledger (owner-only; REV-01..05)",
@@ -9205,14 +8893,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Revenue CSV download — period buckets with ruble amounts (owner-only; EXP-01)",
@@ -9259,10 +8940,10 @@
             "description": "Successful Response"
           },
           "403": {
-            "description": "reception forbidden — (VIEW, REPORTS) ∈ OWNER_ONLY"
+            "$ref": "#/components/responses/403_Forbidden"
           },
           "422": {
-            "description": "invalid period — toDate<fromDate or range>366 days"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Trainer-usage report (owner-only; RPT-01..02, RPT-04)",
@@ -9303,14 +8984,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Trainer-usage CSV download (owner-only; RPT-03)",
@@ -9358,14 +9032,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Visits by day/hour + average (owner-only; VIS-R-01..04)",
@@ -9405,14 +9072,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)",
@@ -9476,14 +9136,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List trainer time-off blocks (reception+owner; trainer_id filter)",
@@ -9528,14 +9181,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a trainer time-off block (owner-only; 409 time_off_booked_conflict when booked slots overlap and ?force not set; ?force=true cascades booking cancellations + client DMs; requires Idempotency-Key — D-38-14)",
@@ -9565,14 +9211,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Delete a trainer time-off block (owner-only; 404 time_off_not_found; forward-only — does not resurrect cancelled slots)",
@@ -9682,14 +9321,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List trainer slots (reception+owner; paginated; trainer/status/time-window filters)",
@@ -9722,14 +9354,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Publish a trainer availability slot (owner-only; 409 slot_overlap / slot_too_close / slot_in_past / trainer_inactive / trainer_not_found; requires Idempotency-Key — D-38-14)",
@@ -9766,14 +9391,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Read a single trainer slot (reception+owner; 404 slot_not_found)",
@@ -9820,14 +9438,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Cancel a trainer slot (owner-only; 404 slot_not_found; 409 invalid_transition for cancelled source or booked-cascade deferred to 38-03; requires Idempotency-Key — D-38-14)",
@@ -9893,14 +9504,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List alive trainers with optional is_active filter and pagination",
@@ -9933,14 +9537,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create a new trainer (E.164 phone optional; 409 phone_exists on conflict)",
@@ -9970,14 +9567,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Hard-delete a trainer (owner-only; 409 trainer_in_use if pt_sessions FK)",
@@ -10012,14 +9602,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Get a single alive trainer by id (404 if soft-deleted or missing)",
@@ -10064,14 +9647,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Partial update (PATCH semantics; handles deactivate/reactivate via isActive)",
@@ -10147,14 +9723,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List users with optional active/deleted filters and pagination",
@@ -10201,14 +9770,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Create user + send invitation (idempotent re-invite; 409 on active email)",
@@ -10243,14 +9805,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Accept a pending invitation: set password + log in (RESET-04)",
@@ -10290,14 +9845,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Revoke a pending invitation by token row id (404 missing, 409 already accepted)",
@@ -10327,14 +9875,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Soft-delete user (session revoke + invitation cascade; 409 on self / last-owner)",
@@ -10364,14 +9905,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Deactivate user (atomic session-revoke; 409 on self / last-owner / already-inactive)",
@@ -10401,14 +9935,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Reactivate a previously-deactivated user (404 missing, 409 if already active)",
@@ -10509,14 +10036,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "List visits filtered by clientId/from/to with pagination",
@@ -10549,14 +10069,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Reception manual check-in (reception+owner; 409 outside_gym_hours / no_active_membership / duplicate_checkin)",
@@ -10615,14 +10128,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "$ref": "#/components/responses/422_ValidationError"
           }
         },
         "summary": "Get a single visit by id (404 visit_not_found)",
