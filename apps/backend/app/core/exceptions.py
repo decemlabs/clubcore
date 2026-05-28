@@ -1,6 +1,7 @@
 """Domain error hierarchy + FastAPI exception handlers (D-12, D-13)."""
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 
@@ -445,5 +446,35 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "code": exc.code,
                 "message": exc.message,
                 "fields": exc.fields,
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _request_validation_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Normalise FastAPI body/query/path validation 422s to the domain envelope.
+
+        Phase 64 FRZ-06 / CR-WR-02: the curated spec models every 422 as the
+        ``{code, message, fields}`` envelope (shared ``422_ValidationError``
+        response). FastAPI's default handler returns ``{detail: [...]}``
+        (``HTTPValidationError``), which contradicts the frozen contract. This
+        handler maps each validation error to ``fields[<dotted-loc>] = <msg>``
+        so the runtime emits exactly what the spec promises — matching the
+        uniform ``ValidationAppError`` (code ``validation_error``) shape.
+        """
+        fields: dict[str, object] = {}
+        for err in exc.errors():
+            loc = tuple(str(part) for part in err.get("loc", ()))
+            # Drop the leading source segment ("body"/"query"/"path") for a
+            # clean field key; fall back to "__root__" for top-level errors.
+            key = ".".join(loc[1:]) if len(loc) > 1 else (loc[0] if loc else "__root__")
+            fields[key] = err.get("msg", "")
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "validation_error",
+                "message": "Request validation failed",
+                "fields": fields,
             },
         )

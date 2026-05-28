@@ -72,13 +72,23 @@ async def test_create_happy_returns_201_envelope(
 async def test_create_invalid_phone_returns_422_invalid_phone(
     authed_client_owner: AsyncClient,
 ) -> None:
-    """D-10: phone failing E.164 regex -> 422 from Pydantic validation."""
+    """D-10: phone failing E.164 regex -> 422 from Pydantic validation.
+
+    FRZ-06 / CR-WR-02: body-validation 422s return the curated
+    ``{code, message, fields}`` envelope (NOT FastAPI's ``{detail:[...]}``),
+    matching the frozen spec's shared ``422_ValidationError`` response.
+    """
     r = await authed_client_owner.post(
         "/api/v1/clients",
         json={**VALID_CLIENT, "phone": "8-999-12-34"},
         headers=_csrf_headers(authed_client_owner),
     )
     assert r.status_code == 422, r.text
+    body = r.json()
+    assert body["code"] == "validation_error"
+    assert isinstance(body["message"], str) and body["message"]
+    assert "detail" not in body  # framework default shape must NOT leak
+    assert "phone" in body["fields"]  # offending field surfaced under fields
 
 
 async def test_create_duplicate_phone_alive_returns_409_phone_exists(
