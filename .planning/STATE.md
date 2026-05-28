@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: API Handoff + Production Hardening
-status: executing
-stopped_at: Phase 64 Wave 1 complete (64-01 landed); Wave 2 ready
-last_updated: "2026-05-28T20:39:07.536Z"
+status: ready_to_plan
+stopped_at: Phase 64 complete (7/7) — ready to discuss Phase 999.1
+last_updated: 2026-05-28T21:34:09.274Z
 last_activity: 2026-05-28
 progress:
   total_phases: 6
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 64 — contract-freeze-openapi-curation
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
 
 ## Current Position
 
-Phase: 64 (contract-freeze-openapi-curation) — EXECUTING
-Plan: 5 of 7
-Status: Ready to execute
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-28
 
 Progress: [██████████] 100%
