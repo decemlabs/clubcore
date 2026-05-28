@@ -31,7 +31,7 @@ Single source of truth for all downstream handoff artifacts. Atomic plan 1 = "fi
 - [ ] **FRZ-03**: Explicit `openapi_tags=[...]` defined in `app/main.py` with stable order covering all 10 business domains (Auth / Clients / Memberships / Visits / Schedule / Bookings / Trainers / Payments / Reports / Audit-log); every router declares `tags=[...]` explicitly (no auto-derived tags); Redocly preview groups operations under expected tag headings.
 - [ ] **FRZ-04**: OpenAPI `info{}` metadata complete under clubcore name — `title="clubcore API"`, `version="1.11.0"`, `description` documents the contract-freeze status, `contact`/`license` set or explicitly omitted with reason; `servers[]` populated with at least 1 placeholder server (e.g. `{url: "http://localhost:8000", description: "Local dev"}`).
 - [x] **FRZ-05**: `securitySchemes` wired in the curated spec — cookie auth (`cc_access` / `cc_refresh` httpOnly cookies) + CSRF header scheme (current header name `X-CSRF-Token`, cookie name `sportzal_csrf` retained as documented sportzal-era carry-over per **D-11-CSRF-DEFER** 2026-05-26: rename to `clubcore_csrf` deferred to v2.0 to avoid coordinated admin-web cutover mid-handoff); routes apply `Security()` where appropriate so downstream codegen sends auth correctly.
-- [ ] **FRZ-06**: Shared `components.responses` defined for the common error envelopes (`401_Unauthorized`, `403_Forbidden`, `404_NotFound`, `409_Conflict`, `422_ValidationError`, `429_RateLimited`) and referenced via `$ref` at usage sites (no inline duplicates that can drift).
+- [x] **FRZ-06**: Shared `components.responses` defined for the common error envelopes (`401_Unauthorized`, `403_Forbidden`, `404_NotFound`, `409_Conflict`, `422_ValidationError`, `429_RateLimited`) and referenced via `$ref` at usage sites (no inline duplicates that can drift).
 - [ ] **FRZ-07**: Redocly CLI lint config (`redocly.yaml` at repo root) added; `npx @redocly/cli lint openapi.json` exits 0; lint command wired as a CI gate in `.github/workflows/ci.yml` (7th gate, parallel with existing 6).
 - [ ] **FRZ-08**: Pre-freeze drift baseline captured — `git diff --exit-code apps/admin-web/packages/api-client/openapi.json apps/admin-web/packages/api-client/src/generated/schema.d.ts` is clean after curation; baseline tag `contract-freeze-v1.11.0` or equivalent marker committed; `CHANGELOG.md` entry in `packages/api-client/` records the freeze.
 
@@ -139,7 +139,7 @@ Populated by gsd-roadmapper during Phase 10 of `/gsd:new-milestone`.
 | FRZ-03 | Phase 64 | Pending |
 | FRZ-04 | Phase 64 | Pending |
 | FRZ-05 | Phase 64 | Complete |
-| FRZ-06 | Phase 64 | Pending |
+| FRZ-06 | Phase 64 | Complete |
 | FRZ-07 | Phase 64 | Pending |
 | FRZ-08 | Phase 64 | Pending |
 | IDM-01 | Phase 66 | Pending |
