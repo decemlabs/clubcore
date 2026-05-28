@@ -46,9 +46,11 @@ Phase 38 additions:
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
 from app.api.router import api
@@ -575,4 +577,50 @@ def create_app() -> FastAPI:
     register_fiscal_receipt_dispatcher(_real_fiscal_receipt_dispatcher)
 
     app.include_router(api)
+
+    # Phase 64 FRZ-05 / D-64-SEC-APPLY — OpenAPI post-processor (security half).
+    # Injects SECURITY_SCHEMES into components.securitySchemes, sets the global
+    # security requirement, and overrides per-operation security=[] for the public
+    # endpoint allowlist.  Defined as a closure inside create_app() so `app` is in
+    # scope without threading it through a parameter.
+    #
+    # Phase 63 hygiene carve-out: # type: ignore[method-assign] on the assignment
+    # below is the ONLY new type suppression allowed in this task.  It is unavoidable
+    # because FastAPI's app.openapi attribute is typed as a bound method, yet the
+    # documented extension pattern (see FastAPI docs §"Advanced OpenAPI") requires
+    # replacing it with a plain function.  There is no other suppression-free way to
+    # use FastAPI's own documented extension point.
+    #
+    # NOTE: Plan 64-05 will extend this function to also inject
+    # components.responses ($ref migration for 401/403/404/409/422/429).  The
+    # function is intentionally left extensible — do NOT add responses injection here.
+    def _customize_openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema: dict[str, Any] = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+            servers=app.servers,
+        )
+        # Inject securitySchemes (D-64-SEC-SCHEMES).
+        schema.setdefault("components", {}).setdefault("securitySchemes", {}).update(
+            SECURITY_SCHEMES
+        )
+        # Set global default: every operation requires both schemes unless overridden.
+        schema["security"] = [{"cookieAuth": [], "csrfHeader": []}]
+        # Per-operation opt-out: public endpoints advertise security=[] (no auth).
+        for path_item in schema["paths"].values():
+            for op in path_item.values():
+                if isinstance(op, dict) and op.get("operationId") in PUBLIC_ENDPOINT_OPERATION_IDS:
+                    op["security"] = []
+        app.openapi_schema = schema
+        return schema
+
+    # Phase 64 FRZ-05 / D-64-SEC-APPLY / Phase 63 hygiene carve-out —
+    # method-assign is FastAPI's documented extension pattern, unavoidable.
+    app.openapi = _customize_openapi  # type: ignore[method-assign]
+
     return app
