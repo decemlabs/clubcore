@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: API Handoff + Production Hardening
 status: ready_to_plan
-stopped_at: Phase 64 complete (7/7) — ready to discuss Phase 999.1
+stopped_at: Phase 64 complete (7/7, verified 8/8) — next is Phase 66 (Idempotency) per execution order; 999.1 is backlog
 last_updated: 2026-05-28T21:34:09.274Z
 last_activity: 2026-05-28
 progress:
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** Phase 66 — Idempotency Hardening (next per v1.11 execution order 63→64→66→65→67). Phase 999.1 is BACKLOG, not the active next phase.
 
 ## Current Position
 
-Phase: 999.1
+Phase: 66 (idempotency-hardening) — ready to plan
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-05-28
+Last activity: 2026-05-28 — Phase 64 complete (8/8 verified); next is Phase 66 per non-monotonic execution order
 
 Progress: [██████████] 100%
 
