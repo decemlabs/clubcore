@@ -80,8 +80,8 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   4. `pnpm install` at the workspace root installs `client-pwa`; `bun.lock` is removed; the pwa `pnpm build` + `pnpm typecheck` + `pnpm lint` commands all exit 0 with Vite 6 and TypeScript strict mode
   5. The parametrized IDOR enumeration test (covering membership, visits, PT-sessions, payments, bookings as owned resource types) is green — no cross-client leakage is possible
 **Plans**: 3 plans (2 waves)
-- [ ] 69-01-PLAN.md — client_portal read module: raw-SQL repository, client-safe schemas, service (home fan-out), router + mount (CHOME/CHIST/CPLAN)
-- [ ] 69-02-PLAN.md — PWA stack alignment: pnpm workspace + Vite 6 + TS allowJs ramp + ESLint/Vitest + vite-plugin-pwa (/api never cached) + clientFetcher.ts + smoke test (PWA-01..04,06,07)
+- [x] 69-01-PLAN.md — client_portal read module: raw-SQL repository, client-safe schemas, service (home fan-out), router + mount (CHOME/CHIST/CPLAN)
+- [x] 69-02-PLAN.md — PWA stack alignment: pnpm workspace + Vite 6 + TS allowJs ramp + ESLint/Vitest + vite-plugin-pwa (/api never cached) + clientFetcher.ts + smoke test (PWA-01..04,06,07)
 - [ ] 69-03-PLAN.md — verification: parametrized IDOR sweep (both orderings, all owned reads) + behavioral tests (temporal fields, empty-state 200/null, pagination, catalog projection)
 **UI hint**: yes
 
@@ -140,7 +140,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | 62 + 62.1. clubcore Rebrand | v1.10 | 16/16 | Complete | 2026-05-26 |
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
-| 69. Client Read Endpoints + PWA Alignment | v2.0 | 0/3 | Not started | - |
+| 69. Client Read Endpoints + PWA Alignment | v2.0 | 2/3 | In Progress|  |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 0/TBD | Not started | - |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/TBD | Not started | - |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |

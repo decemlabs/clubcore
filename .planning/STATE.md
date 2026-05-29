@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 69 context gathered
-last_updated: "2026-05-29T20:18:44.982Z"
-last_activity: 2026-05-29 -- Phase 69 planning complete
+last_updated: "2026-05-29T20:20:03.725Z"
+last_activity: 2026-05-29 -- Phase 69 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** Phase 69 — client-read-endpoints-pwa-stack-alignment
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-29 -- Phase 69 planning complete
+Phase: 69 (client-read-endpoints-pwa-stack-alignment) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 69
+Last activity: 2026-05-29 -- Phase 69 execution started
 
 Progress: [██████████] 100%
 
