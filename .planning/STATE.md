@@ -4,8 +4,8 @@ milestone: v1.11
 milestone_name: API Handoff + Production Hardening
 status: executing
 stopped_at: Phase 67 context gathered
-last_updated: "2026-05-29T10:40:03.955Z"
-last_activity: 2026-05-29 -- Phase 67 planning complete
+last_updated: "2026-05-29T10:42:34.309Z"
+last_activity: 2026-05-29 -- Phase 67 execution started
 progress:
   total_phases: 6
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 66 — idempotency hardening
+**Current focus:** Phase 67 — operator-pending-runbook-execution
 
 ## Current Position
 
-Phase: 66
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-29 -- Phase 67 planning complete
+Phase: 67 (operator-pending-runbook-execution) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 67
+Last activity: 2026-05-29 -- Phase 67 execution started
 
 Progress: [██████████] 100%
 

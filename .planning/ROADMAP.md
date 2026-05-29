@@ -184,7 +184,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 67-01-PLAN.md — RUN-00 staleness audit (HARD GATE) + RUN-07 evidence-file scaffold (v1.11-OPERATOR-EVIDENCE.md)
+- [x] 67-01-PLAN.md — RUN-00 staleness audit (HARD GATE) + RUN-07 evidence-file scaffold (v1.11-OPERATOR-EVIDENCE.md)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -228,7 +228,7 @@ Plans:
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
 | 65. Handoff Artifacts | v1.11 | 4/4 | Complete    | 2026-05-29 |
-| 67. Operator-Pending Runbook Execution | v1.11 | 0/5 | Planned | — |
+| 67. Operator-Pending Runbook Execution | v1.11 | 1/5 | In Progress|  |
 
 ---
 
