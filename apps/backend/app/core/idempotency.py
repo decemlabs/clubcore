@@ -70,7 +70,6 @@ def body_sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-
 async def verify_idempotency(
     request: Request,
     redis: Annotated[Redis, Depends(get_redis)],
