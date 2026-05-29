@@ -12,18 +12,18 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 ### Client Authentication (phone + OTP)
 
 - [x] **CAUTH-01**: Клиент входит в PWA по номеру телефона + одноразовый код через Telegram OTP (переиспользует существующую OTP-инфраструктуру)
-- [ ] **CAUTH-02**: Запрос OTP для неизвестного / дублирующегося / soft-deleted телефона возвращает ответ, неотличимый от известного (anti-oracle, `_constant_time_floor`)
+- [x] **CAUTH-02**: Запрос OTP для неизвестного / дублирующегося / soft-deleted телефона возвращает ответ, неотличимый от известного (anti-oracle, `_constant_time_floor`)
 - [x] **CAUTH-03**: Номер телефона нормализуется и валидируется в E.164 при запросе OTP
 - [x] **CAUTH-04**: Клиентская сессия (cookie `cc_client_access` + refresh-rotation семейство) персистит между перезапусками браузера; refresh и logout работают
 - [x] **CAUTH-05**: `GET /api/v1/client/me` возвращает профиль клиента; `PATCH /api/v1/client/me` позволяет добавить/изменить email
-- [ ] **CAUTH-06**: OTP-запросы ограничены rate-limit'ом (per-IP + per-phone cooldown + дневной cap) и защищены от перебора кода
+- [x] **CAUTH-06**: OTP-запросы ограничены rate-limit'ом (per-IP + per-phone cooldown + дневной cap) и защищены от перебора кода
 
 ### Client RBAC + Data Isolation
 
 - [x] **CISO-01**: Отдельный `ClientPrincipal` / `require_client()` с JWT-claim `aud:"client"`; `Role.CLIENT` НЕ добавляется в `permissions.py` (staff byte-parity с frozen admin-web сохраняется)
 - [x] **CISO-02**: Staff-токен получает 401 на любом `/api/v1/client/*`; клиентский токен получает 401 на любом staff-эндпоинте (two-principal isolation тест)
 - [x] **CISO-03**: Каждый client-scoped эндпоинт фильтрует по `client_id` владельца сессии; get-by-id выполняет `assert_owns()` → 404-collapse при чужом ресурсе (anti-oracle)
-- [ ] **CISO-04**: Параметризованный cross-client enumeration (IDOR) тест покрывает все client-owned типы ресурсов и зелёный
+- [x] **CISO-04**: Параметризованный cross-client enumeration (IDOR) тест покрывает все client-owned типы ресурсов и зелёный
 - [x] **CISO-05**: Клиентские cookies (`cc_client_*`, `Path=/api/v1/client`) изолированы от staff (`cc_*`) — нет взаимной перезаписи сессий на одном origin
 
 ### My Membership / Home
@@ -133,15 +133,15 @@ Which phases cover which requirements. Populated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CAUTH-01 | Phase 68 | Complete |
-| CAUTH-02 | Phase 68 | Pending |
+| CAUTH-02 | Phase 68 | Complete |
 | CAUTH-03 | Phase 68 | Complete |
 | CAUTH-04 | Phase 68 | Complete |
 | CAUTH-05 | Phase 68 | Complete |
-| CAUTH-06 | Phase 68 | Pending |
+| CAUTH-06 | Phase 68 | Complete |
 | CISO-01 | Phase 68 | Complete |
 | CISO-02 | Phase 68 | Complete |
 | CISO-03 | Phase 68 | Complete |
-| CISO-04 | Phase 68 | Pending |
+| CISO-04 | Phase 68 | Complete |
 | CISO-05 | Phase 68 | Complete |
 | CHOME-01 | Phase 69 | Pending |
 | CHOME-02 | Phase 69 | Pending |

@@ -42,7 +42,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 **Milestone Goal:** Expose gym members as a second principal via a dedicated client-facing API and wire `apps/client-pwa` to it — client auth, client-scoped reads and writes over existing domains, self-service checkout (ЮKassa), QR self-check-in, and a verified full-stack end-to-end flow. Staff contract and frozen `apps/admin-web` are unchanged.
 
-- [ ] **Phase 68: Client Auth Foundation** - Separate `ClientPrincipal` / `require_client()` / distinct cookies / anti-oracle OTP; unconditional blocker for all domain work
+- [x] **Phase 68: Client Auth Foundation** - Separate `ClientPrincipal` / `require_client()` / distinct cookies / anti-oracle OTP; unconditional blocker for all domain work (completed 2026-05-29)
 - [ ] **Phase 69: Client Read Endpoints + PWA Stack Alignment** - All client-scoped read endpoints (membership, history, catalogs) + PWA bun→pnpm/TS/Vite-6 alignment with verified build; IDOR sweep covers read surface
 - [ ] **Phase 70: Client Bookings + QR Self Check-In** - Self-booking (race-safe via existing partial-UNIQUE), cancellation policy, signed short-lived QR token, and QR-triggered visit creation via existing anti-fraud path
 - [ ] **Phase 71: Client Checkout + Full PWA Screen Wiring** - Client-initiated ЮKassa membership/PT-package purchase (server-side price, webhook-only activation, 54-ФЗ email gate); all PWA screens wired to real backend
@@ -66,7 +66,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] 68-03-PLAN.md — Composition root: ClientPrincipal, register_client_loader, require_client, verify_client_csrf
 - [x] 68-04-PLAN.md — Client OTP + session service: anti-oracle request, verify, 3-branch rotate, logout, email-only PATCH
 - [x] 68-05-PLAN.md — Schemas + /api/v1/client router (6 handlers) + mount + create_app loader wiring
-- [ ] 68-06-PLAN.md — Verification: two-principal isolation, IDOR sweep, anti-oracle byte-parity, lifecycle, CISO-01 guard
+- [x] 68-06-PLAN.md — Verification: two-principal isolation, IDOR sweep, anti-oracle byte-parity, lifecycle, CISO-01 guard
 **UI hint**: yes
 
 ### Phase 69: Client Read Endpoints + PWA Stack Alignment
@@ -136,7 +136,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | 58-61. Trainers Complete | v1.9 | 22/22 | Complete | 2026-05-26 |
 | 62 + 62.1. clubcore Rebrand | v1.10 | 16/16 | Complete | 2026-05-26 |
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
-| 68. Client Auth Foundation | v2.0 | 5/6 | In Progress|  |
+| 68. Client Auth Foundation | v2.0 | 6/6 | Complete   | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 0/TBD | Not started | - |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 0/TBD | Not started | - |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/TBD | Not started | - |
