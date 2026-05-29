@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.11
-milestone_name: API Handoff + Production Hardening
-status: Awaiting next milestone
-stopped_at: Phase 67 COMPLETE (5/5 plans, VERIFICATION passed 5/5 success criteria). v1.11 milestone fully executed (phases 63,64,66,65,67 all complete). Operator evidence real & captured; 2 backlog items (999.1 WR-06, 999.2 online-payment email wiring).
-last_updated: "2026-05-29T12:15:04.465Z"
-last_activity: 2026-05-29 — Milestone v1.11 completed and archived
+milestone: v2.0
+milestone_name: Frontend Integration — Client PWA
+status: planning
+last_updated: "2026-05-29T15:29:53.323Z"
+last_activity: 2026-05-29
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 26
-  completed_plans: 26
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production
 
 ## Current Position
 
-Phase: Milestone v1.11 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-29 — Completed backlog 999.2 (wired 4 online-payment email templates into dispatcher; email channel no longer silently no-ops; 5/5 verified). Both v1.11 backlog items (999.1 + 999.2) now closed.
+Status: Defining requirements
+Last activity: 2026-05-29 — Milestone v2.0 started
 
 ## v1.11 Roadmap Summary
 

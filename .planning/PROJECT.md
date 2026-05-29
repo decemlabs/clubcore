@@ -82,38 +82,45 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Current Milestone: v1.11 API Handoff + Production Hardening
+## Current Milestone: v2.0 Frontend Integration — Client PWA
 
-**Goal:** Close v1.10 carry-over под clean clubcore-именем — tech-debt sweep, OpenAPI curation + contract freeze, handoff artifacts (Postman/Newman + auth runbook + private doc-site), idempotency hardening (CR-01/02/02b), operator-pending runbook execution. Финальный baseline перед v2.0 frontend-интеграцией.
+**Goal:** Поднять клиентское веб-приложение (`apps/client-pwa`) до рабочего — построить **новый client-facing backend** (клиентская auth + client-scoped API над существующими доменами) и подключить к нему экраны PWA, которые ложатся на эти домены. Первый full-stack milestone после серии backend-only; staff-контракт v1.11 не трогаем.
 
 **Target features:**
-- Tech-debt sweep (DEFER-46-04 ruff/format/mypy на чистом дереве + DEFER-36-04-B + DEFER-40-01 v1.5 runbook tooling)
-- OpenAPI contract curation + freeze (explicit `operation_id=` + `tags=[...]` + `info`/`servers`/`securitySchemes` гигиена + pre-freeze drift gate baseline)
-- Handoff artifacts (curated Postman v2.1 + Newman CLI smoke + расширенный `clubcore-auth-runbook.md` + private gitignored OpenAPI doc-site via Redocly/Stoplight)
-- Idempotency hardening (CR-01/02/02b closed; standardized `Idempotency-Key` Redis-cache flow; `components.parameters.IdempotencyKey` OpenAPI reusable parameter)
-- Operator-pending runbook execution (v1.7 VER-03 + CARRY-01/02; v1.8 VER-01; v1.9 D-61-12 trainers; MailHog `--profile dev` evidence)
+- **Client auth** — вход по телефону + OTP (SMS и/или Telegram), отдельная клиентская сессия (JWT, изоляция от staff owner/reception), client `/me`, refresh/logout (переиспользует существующую OTP-инфраструктуру)
+- **Client-scoped RBAC** — новый client-принципал; клиент видит и меняет ТОЛЬКО свои данные (ownership-guards, anti-oracle); staff RBAC (owner/reception) не затрагивается
+- **Client-scoped эндпоинты** над существующими доменами: memberships (мой абонемент + история), bookings (мои брони + бронь к тренеру + отмена), visits (история + QR чек-ин), pt_sessions (история тренировок), payments (история покупок), membership_plans (каталог), trainers (каталог), schedule (доступные слоты)
+- **Client checkout** — клиент сам инициирует онлайн-оплату/продление через ЮKassa (поверх online_payments); email клиента для 54-ФЗ фискального чека
+- **PWA integration** — выравнивание стека (pnpm workspace + TypeScript + `@clubcore/api-client` + общий ESLint/Prettier/import-linter; react-router v6 остаётся) + подключение экранов Home / Profile / Book / Plans / Checkout / QR к реальному backend
+- **OpenAPI handoff** — client-facing пути попадают в `openapi.json` + `schema.d.ts` (byte-stable regen + forward-guards, per-milestone discipline)
 
-**Phases (planned, 63-67):**
-- **Phase 63 — Tech-Debt Sweep**: DEFER-46-04 (ruff/format/mypy на чистом дереве) + DEFER-36-04-B + DEFER-40-01 (v1.5 runbook tooling)
-- **Phase 64 — Contract Freeze (OpenAPI Curation)**: explicit `operation_id=` + `tags=[...]` + `info`/`servers`/`securitySchemes` гигиена + pre-freeze drift gate; курированный spec становится единственным источником для всех handoff артефактов
-- **Phase 65 — Handoff Artifacts**: curated Postman v2.1 + Newman CLI smoke + расширенный `clubcore-auth-runbook.md` + private OpenAPI doc-site (gitignored, локально через Redocly/Stoplight)
-- **Phase 66 — Idempotency Hardening**: audit всех mutating endpoints, стандартизированный `Idempotency-Key` Redis-cache flow, OpenAPI reusable parameter
-- **Phase 67 — Operator-Pending Runbook Execution**: накопившиеся walkthroughs (v1.7 VER-03 + CARRY-01/02, v1.8 VER-01, v1.9 D-61-12); MailHog `--profile dev`; evidence захвачен
+**Phases:** TBD — деривируются из `REQUIREMENTS.md` роадмаппером. Нумерация продолжается с v1.11 (последняя фаза 67) → v2.0 стартует с **Phase 68**.
 
-**Status:** Opened 2026-05-26. Phase numbering continues from v1.10 close (last phase 62.1 → v1.11 starts at Phase 63). `REQUIREMENTS.md` recreated fresh per project convention; 22-requirement snapshot preserved under "Planned for v1.11" in archived `.planning/milestones/v1.10-REQUIREMENTS.md`.
-
-**Progress (2026-05-29):** Phases 63 (Tech-Debt Sweep), 64 (Contract Freeze), 66 (Idempotency Hardening), and 65 (Handoff Artifacts) complete. Phase 65 shipped the handoff package — private root `package.json` (`pnpm docs`/`newman`/`postman:*`), `openapi-to-postmanv2@6.0.1`-generated + Node-augmented Postman v2.1 collection (auth/CSRF wiring + 113 status + 21 body-shape assertions), Newman smoke harness (`tools/newman/`), and `clubcore-auth-runbook.md` (all auth flows + Phase-66 Idempotency-Key semantics). Verification 14/14 automated must-haves; 3 live-stack items (doc-site render, Postman GUI flow, Newman vs docker compose) tracked in `65-HUMAN-UAT.md` for human re-verification before real handoff. **Remaining: Phase 67 (Operator-Pending Runbook Execution).**
+**Status:** Opened 2026-05-29. `REQUIREMENTS.md` recreated fresh per project convention (v1.11 snapshot archived в `.planning/milestones/v1.11-REQUIREMENTS.md`).
 
 **Key constraints:**
-- Backend-only milestone — `apps/admin-web` остаётся frozen mock reference; production admin + client apps разрабатываются дизайн-командой вне репозитория и интегрируются в v2.0
-- Никаких новых бизнес-фич; никаких новых ORM сущностей. Idempotency hardening — pure infrastructure
-- Все артефакты shipping под clubcore-именем; никаких легаси sportzal shim'ов (выдернуты в Phase 62.1 / v1.10 close)
+- **Первый full-stack milestone** — v1.11 заморозил *staff*-контракт; клиентский контракт строится новый и не должен ломать staff-эндпоинты (drift gate + `AssertNonNever` guards остаются зелёными для staff-путей)
+- **Изоляция данных клиента** — каждый client-scoped эндпоинт обязан фильтровать по `client_id` владельца сессии; межклиентский доступ невозможен (anti-oracle, как в существующих bot/login флоу)
+- Деньги — integer kopecks; форматирование на клиенте; РФ/СНГ; платежи только ЮKassa; Europe/Moscow для всех дат
+- `apps/admin-web` остаётся frozen mock-reference (вне скоупа этого milestone)
+- Стек PWA выравнивается прагматично (pnpm + TS + api-client + общий lint/CI), **без миграции роутера** (react-router v6 сохраняется) — дизайн-поставка не переписывается
 - Личный коммерческий проект — публикация в npm/PyPI/публичных registry **запрещена**
 
-**Out of scope (v1.11 → v2.0+):**
-- Per-club configurable gym brand (через config или ENV) → отдельная фаза после v1.11
-- Frontend-интеграция (production admin + client apps дизайн-командой) → v2.0
-- Kubernetes / Terraform / production deploy story → отдельный milestone после v2.0
+**Out of scope (net-new домены НЕ строим — экраны идут на mock-данных / плейсхолдере «в разработке»):**
+- **Chat** (переписка клиент↔админ/тренер) — нет домена сообщений; плюс потребовалась бы staff-сторона (admin-web заморожен)
+- **Referral** (реферальная программа) — нет домена
+- **Trainer reviews/ratings** (рейтинги и отзывы) — trainers только каталог
+- **In-app notification inbox** (client-readable лента) — уведомления остаются push-only (Telegram/email)
+- **Gym-info content** (адрес/часы/удобства/фото/персонал из backend) — остаётся захардкоженным контентом в PWA
+- **admin-web client-domain wiring** → отдельный/будущий milestone
+- Kubernetes / Terraform / production deploy story → отдельный milestone
+
+<details>
+<summary>Previous milestone scope (v1.11 API Handoff + Production Hardening — shipped 2026-05-29)</summary>
+
+**v1.11 API Handoff + Production Hardening — shipped 2026-05-29** (Phases 63-67, 26 plans, 34/34 requirements; tag `v1.11`; execution order 63 → 64 → 66 → 65 → 67). Backend-only handoff + hardening milestone — no new business features, no new ORM entities. **Tech-Debt Sweep** (ruff/format/mypy на чистом дереве + v1.5 runbook tooling) → **Contract Freeze / OpenAPI Curation** (`operation_id`/`tags`/`info`/`servers`/`securitySchemes` гигиена + Redocly как 7-й CI gate + baseline tag `contract-freeze-v1.11.0`) → **Idempotency Hardening** (user-scoped `verify_idempotency`, 86400s TTL, единый `idempotent_execute` orchestrator, `components.parameters.IdempotencyKey`) → **Handoff Artifacts** (curated Postman v2.1 + Newman CLI smoke + `clubcore-auth-runbook.md` + private Redocly doc-site) → **Operator-Pending Runbook Execution** (reports + trainers runbooks live; 19-template owner countersign; Mailpit `--profile dev`; ЮKassa sandbox + RU email `N/A-until-production` per D-67-03). 3 Phase-65 live-stack handoff confirmations acknowledged deferred at close (later closed 2026-05-29). Backlog 999.1 (WR-06 PT-credit restore) + 999.2 (online-payment email wiring) — оба закрыты quick-задачами.
+
+</details>
 
 <details>
 <summary>Previous milestone scope (v1.10 — shipped 2026-05-26)</summary>
@@ -500,7 +507,14 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
+*Last updated: 2026-05-29 — **started milestone v2.0 Frontend Integration — Client PWA**. First full-stack milestone after the backend-only series. Scope: build a NEW client-facing backend (phone+OTP client auth + client-scoped RBAC + client-scoped endpoints over existing domains memberships/bookings/visits/pt_sessions/payments/membership_plans/trainers/schedule + client-initiated ЮKassa checkout) and wire the `apps/client-pwa` (gym-app) screens Home/Profile/Book/Plans/Checkout/QR to it. PWA stack aligned pragmatically (pnpm workspace + TypeScript + `@clubcore/api-client` + shared ESLint/Prettier/import-linter; react-router v6 retained — no TanStack migration). Net-new domains NOT built (Chat, Referral, trainer reviews/ratings, in-app notification inbox, gym-info content) — those screens stay on mock data / "in development" placeholder. admin-web remains a frozen mock-reference (out of scope). v1.11 froze the STAFF contract; the client contract is new and must not break staff paths. Phase numbering continues from v1.11/Phase 67 → v2.0 starts at Phase 68. `REQUIREMENTS.md` recreated fresh; v1.11 snapshot archived to `.planning/milestones/v1.11-REQUIREMENTS.md`.*
+
+<details>
+<summary>Previous footer (v1.11 close, 2026-05-29)</summary>
+
 *Last updated: 2026-05-29 — **v1.11 API Handoff + Production Hardening milestone SHIPPED** (Phases 63-67, 26 plans, 34/34 requirements; tag `v1.11`; execution order 63 → 64 → 66 → 65 → 67). Backend-only handoff + hardening: Tech-Debt Sweep (ruff format ~297 files + ruff safe-fix 136→0 + mypy strict 11→0 on the clean tree; v1.5 `run.sh` hardened) → Contract Freeze / OpenAPI Curation (curated `openapi.json` under clubcore name — info/servers/securitySchemes, 103 operation IDs suffix-stripped, 12-domain tags, 6 shared error envelopes; Redocly lint as 7th CI gate; `contract-freeze-v1.11.0` baseline) → Idempotency Hardening (user-scoped `verify_idempotency` cross-user replay fix; 86400s TTL; single `idempotent_execute` orchestrator; `components.parameters.IdempotencyKey` $ref on all 22 category-A ops; 48 double-submit tests) → Handoff Artifacts (Postman v2.1 + Newman smoke + 493-line `clubcore-auth-runbook.md` + private Redocly doc-site; verified 14/14 automated) → Operator-Pending Runbook Execution (reports + trainers runbooks live; 19-template countersign; Mailpit `--profile dev`; `v1.11-OPERATOR-EVIDENCE.md`; ЮKassa sandbox + RU email `N/A-until-production` per D-67-03). Two code-review BLOCKERs (CR-01 phantom `cc_access` cookie in spec; `create_time_off` on legacy idempotency block) caught + fixed before close. **Acknowledged deferred at close:** 3 Phase-65 live-stack handoff confirmations (doc-site render, Postman GUI, Newman vs seeded stack) for human re-verification before real v2.0 handoff; backlog 999.1 (WR-06) + 999.2 (online-payment email wiring). REQUIREMENTS.md archived to `.planning/milestones/v1.11-REQUIREMENTS.md` and recreated fresh at next `/gsd-new-milestone`. Next candidate: v2.0 Frontend Integration.*
+
+</details>
 
 <details>
 <summary>Previous footer (v1.11 mid-milestone — Phase 65 complete, 2026-05-29)</summary>
