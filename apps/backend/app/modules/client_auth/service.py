@@ -40,7 +40,7 @@ from app.core.security import (
     generate_otp_code,
     generate_refresh_token,
 )
-from app.modules.auth.exceptions import OtpExpired, OtpInvalid, OtpMaxAttempts
+from app.modules.auth.exceptions import OtpInvalid, OtpMaxAttempts
 from app.modules.auth.models import OtpCode
 from app.modules.client_auth.models import ClientRefreshToken
 from app.modules.client_auth.rate_limit import (
@@ -267,84 +267,107 @@ async def verify_client_otp(
 
     Brute-force protection: OtpCode.attempts incremented on mismatch;
     OtpMaxAttempts raised when >= settings.otp_max_attempts (CAUTH-06).
+
+    Anti-oracle (CR-02 / CAUTH-02): ALL rejection paths — unknown phone,
+    no active OTP, expired OTP, wrong code, consumed OTP — raise
+    InvalidAccessToken("invalid_session") → HTTP 401 with an identical body.
+    OtpExpired (HTTP 410) is deliberately NOT used here: a distinct status code
+    would reveal that a recent OTP was issued for the phone (phone enumeration).
+
+    Constant-time floor (WR-02): _constant_time_floor wraps the entire function
+    body via try/finally so the one-query (unknown phone) and two-query (known
+    phone) paths converge to the same wall-clock duration, closing the timing
+    oracle that mirrors the request_client_otp anti-oracle discipline.
     """
-    settings = get_settings()
-    now = datetime.now(tz=UTC)
+    t_start = time.perf_counter()
+    try:
+        settings = get_settings()
+        now = datetime.now(tz=UTC)
 
-    # Look up the alive linked client.
-    client = await session.scalar(
-        select(Client).where(
-            Client.phone == phone,
-            Client.deleted_at.is_(None),
+        # Look up the alive linked client.
+        client = await session.scalar(
+            select(Client).where(
+                Client.phone == phone,
+                Client.deleted_at.is_(None),
+            )
         )
-    )
-    if client is None or client.telegram_user_id is None:
-        raise InvalidAccessToken("invalid_session")
+        if client is None or client.telegram_user_id is None:
+            raise InvalidAccessToken("invalid_session")
 
-    # Look up the active (unconsumed, unexpired) OTP for this client.
-    otp_row = await session.scalar(
-        select(OtpCode).where(
-            OtpCode.client_id == client.id,
-            OtpCode.channel == "telegram",
-            OtpCode.consumed_at.is_(None),
+        # Look up the active (unconsumed) OTP for this client.
+        otp_row = await session.scalar(
+            select(OtpCode).where(
+                OtpCode.client_id == client.id,
+                OtpCode.channel == "telegram",
+                OtpCode.consumed_at.is_(None),
+            )
         )
-    )
-    if otp_row is None:
-        raise InvalidAccessToken("invalid_session")
-    if otp_row.expires_at < now:
-        raise OtpExpired("otp_expired")
+        if otp_row is None:
+            raise InvalidAccessToken("invalid_session")
+        # CR-02: use the same 401 for expired OTP — 410 leaks "phone had a recent OTP".
+        if otp_row.expires_at < now:
+            raise InvalidAccessToken("invalid_session")
 
-    # Inline consume/attempts logic (CAUTH-06 brute-force protection).
-    presented_hash = _sha256_hex(code)
-    if presented_hash != otp_row.code_hash:
-        # Inc + commit BEFORE raise so an attacker dropping the response
-        # cannot rewind the counter.
-        otp_row.attempts += 1
+        # Inline consume/attempts logic (CAUTH-06 brute-force protection).
+        # WR-03: a correct code after OtpMaxAttempts wrong guesses is intentionally
+        # still accepted — this mirrors app/modules/auth/telegram_service.py:consume()
+        # (staff flow) and avoids a lock-out DoS where an attacker burns the attempt
+        # counter on a victim's phone. The OtpMaxAttempts signal is informational:
+        # it tells the UI to prompt a fresh OTP request, but the correct code remains
+        # valid until the OTP row expires or is consumed.
+        presented_hash = _sha256_hex(code)
+        if presented_hash != otp_row.code_hash:
+            # Inc + commit BEFORE raise so an attacker dropping the response
+            # cannot rewind the counter.
+            otp_row.attempts += 1
+            await session.commit()
+            if otp_row.attempts >= settings.otp_max_attempts:
+                raise OtpMaxAttempts("otp_max_attempts")
+            remaining = settings.otp_max_attempts - otp_row.attempts
+            raise OtpInvalid("otp_invalid", fields={"attemptsRemaining": remaining})
+
+        # Success — stamp consumed_at.
+        otp_row.consumed_at = now
+
+        # Mint a new session family.
+        family_id = uuid4()
+        raw_refresh, refresh_hash = generate_refresh_token()
+        access = encode_client_token(client.id, now=now)
+        csrf = generate_csrf_token()
+
+        new_token_row = ClientRefreshToken(
+            client_id=client.id,
+            family_id=family_id,
+            token_hash=refresh_hash,
+            expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
+        )
+        session.add(new_token_row)
+
+        # Pitfall 2: audit.emit BEFORE commit so the audit row commits atomically.
+        await audit.emit(
+            session,
+            "client_otp_consumed",
+            actor_user_id=None,
+            resource_type="otp",
+            client_id=str(client.id),
+            channel="telegram",
+        )
         await session.commit()
-        if otp_row.attempts >= settings.otp_max_attempts:
-            raise OtpMaxAttempts("otp_max_attempts")
-        remaining = settings.otp_max_attempts - otp_row.attempts
-        raise OtpInvalid("otp_invalid", fields={"attemptsRemaining": remaining})
 
-    # Success — stamp consumed_at.
-    otp_row.consumed_at = now
+        # Write Redis session keys in auth:client:* namespace (CISO-05).
+        await _write_client_session_keys(
+            redis,
+            client_id=client.id,
+            family_id=family_id,
+            refresh_hash=refresh_hash,
+            ttl=settings.refresh_token_ttl_seconds,
+            now=now,
+        )
 
-    # Mint a new session family.
-    family_id = uuid4()
-    raw_refresh, refresh_hash = generate_refresh_token()
-    access = encode_client_token(client.id, now=now)
-    csrf = generate_csrf_token()
-
-    new_token_row = ClientRefreshToken(
-        client_id=client.id,
-        family_id=family_id,
-        token_hash=refresh_hash,
-        expires_at=now + timedelta(seconds=settings.refresh_token_ttl_seconds),
-    )
-    session.add(new_token_row)
-
-    # Pitfall 2: audit.emit BEFORE commit so the audit row commits atomically.
-    await audit.emit(
-        session,
-        "client_otp_consumed",
-        actor_user_id=None,
-        resource_type="otp",
-        client_id=str(client.id),
-        channel="telegram",
-    )
-    await session.commit()
-
-    # Write Redis session keys in auth:client:* namespace (CISO-05).
-    await _write_client_session_keys(
-        redis,
-        client_id=client.id,
-        family_id=family_id,
-        refresh_hash=refresh_hash,
-        ttl=settings.refresh_token_ttl_seconds,
-        now=now,
-    )
-
-    return access, raw_refresh, csrf
+        return access, raw_refresh, csrf
+    finally:
+        # Anti-oracle floor MUST run on ALL paths including exceptions (CAUTH-02 / WR-02).
+        await _constant_time_floor(t_start)
 
 
 # ---------------------------------------------------------------------------
