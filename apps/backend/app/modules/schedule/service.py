@@ -402,6 +402,120 @@ async def publish_slot(
     return _slot_response_from_orm(reloaded)
 
 
+async def _restore_pt_credit_for_cancelled_booking(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+    actor: CurrentUser,
+    *,
+    booking_id: UUID,
+    cancel_reason: str,
+) -> None:
+    """Restore one PT-package credit when an owner cancellation voids a booking
+    that already had a consumed session (Phase 999.1 WR-06).
+
+    Consumption-keyed: restores +1 ONLY when a live (not yet cancelled)
+    pt_sessions row exists for this booking_id.  For a confirmed booking with
+    no linked session this is a correct no-op (nothing was deducted).
+
+    Idempotent / race-safe: the restore is gated on flipping the pt_sessions
+    row's cancelled_at from NULL → now().  If a concurrent UoW already flipped
+    it, the RETURNING-based UPDATE returns 0 rows and we return immediately
+    without a second increment (T-999.1-03).
+
+    All SQL is raw sa.text() per D-38-11 (no static import of pt_sessions or
+    pt_packages ORM — modules-independent contract).
+
+    Caller is responsible for the surrounding session.commit() (SVC001).
+    """
+    # Step 1. Acquire row-lock on the live consumed session for this booking.
+    select_stmt = sa.text(
+        """
+        SELECT id, pt_package_id, client_id
+        FROM pt_sessions
+        WHERE booking_id = :bid
+          AND cancelled_at IS NULL
+        FOR UPDATE
+        """,  # noqa: TABLE_REF cross-module SQL per D-38-11
+    )
+    row = (await session.execute(select_stmt, {"bid": booking_id})).first()
+    if row is None:
+        # No live consumed session → nothing was deducted → correct no-op.
+        return
+
+    pt_session_id: UUID = row[0]
+    pt_package_id: UUID = row[1]
+    client_id: UUID = row[2]
+
+    # Step 2. Flip the pt_session to cancelled (idempotent gate).
+    cancel_session_stmt = sa.text(
+        """
+        UPDATE pt_sessions
+        SET cancelled_at = now(),
+            cancel_reason = :reason,
+            updated_at = now()
+        WHERE id = :psid
+          AND cancelled_at IS NULL
+        RETURNING id
+        """,  # noqa: TABLE_REF cross-module SQL per D-38-11
+    )
+    cancelled = (
+        await session.execute(cancel_session_stmt, {"psid": pt_session_id, "reason": cancel_reason})
+    ).first()
+    if cancelled is None:
+        # Concurrent restore already flipped this session — no double-restore.
+        return
+
+    # Step 3a. Read current balance with row-lock (for before/after audit).
+    balance_stmt = sa.text(
+        """
+        SELECT sessions_remaining
+        FROM pt_packages
+        WHERE id = :pid
+        FOR UPDATE
+        """,  # noqa: TABLE_REF cross-module SQL per D-38-11
+    )
+    balance_row = (await session.execute(balance_stmt, {"pid": pt_package_id})).first()
+    if balance_row is None:
+        raise InternalConsistencyError("pt_credit_restore_package_missing")
+    sessions_remaining_before: int = int(balance_row[0])
+
+    # Step 3b. Increment with ceiling predicate (mirrors atomic_increment_pt_package
+    # in pt_sessions/repository.py — re-implemented here as raw sa.text() per D-38-11
+    # to avoid importing the pt_sessions module ORM into schedule).
+    increment_stmt = sa.text(
+        """
+        UPDATE pt_packages
+        SET sessions_remaining = sessions_remaining + 1,
+            updated_at = now()
+        WHERE id = :pid
+          AND sessions_remaining < session_count_snapshot
+        RETURNING sessions_remaining
+        """,  # noqa: TABLE_REF cross-module SQL per D-38-11
+    )
+    inc_row = (await session.execute(increment_stmt, {"pid": pt_package_id})).first()
+    if inc_row is None:
+        # Ceiling breach — sessions_remaining already at session_count_snapshot.
+        # This should be mathematically impossible given a real consumed session
+        # exists, but surfaces as a 500 (same severity as the existing invariant
+        # raises in this file) so an operator notices.
+        raise InternalConsistencyError("pt_credit_restore_ceiling_breach")
+    sessions_remaining_after: int = int(inc_row[0])
+
+    # Step 4. Audit emit (LITERAL strings — INFRA-11 AST gate; UUIDs str()'d per D-38-17).
+    await audit.emit(
+        session,
+        "pt_session_credit_restored",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=actor.id,
+        resource_type="pt_package",  # LITERAL
+        resource_id=pt_package_id,
+        client_id=str(client_id),
+        pt_package_id=str(pt_package_id),
+        booking_id=str(booking_id),
+        cancel_reason=cancel_reason,
+        sessions_remaining_before=sessions_remaining_before,
+        sessions_remaining_after=sessions_remaining_after,
+    )
+
+
 async def cancel_slot(
     session: AsyncSession,
     actor: CurrentUser,
@@ -540,9 +654,18 @@ async def cancel_slot(
             cancelled_by_user_id=str(actor.id),
             cancel_reason="slot_cancelled_by_owner",
         )
+        # 7.5. PT-credit restore (WR-06 Phase 999.1): if a live pt_session exists
+        # for this booking, flip it cancelled + increment sessions_remaining by 1,
+        # atomically with the booking/slot cancel.  No-op if no session was consumed.
+        await _restore_pt_credit_for_cancelled_booking(
+            session,
+            actor,
+            booking_id=cascaded_booking_id,
+            cancel_reason="slot_cancelled_by_owner",
+        )
 
     # 8. Commit (SVC001 gate) — single atomic commit covers slot UPDATE +
-    # bookings UPDATE + both audit emits in one transaction.
+    # bookings UPDATE + both audit emits + optional credit restore in one UoW.
     await session.commit()
 
     # 8.5. Phase 39 NOTIFY-04 cascade — per-cancelled-booking DM (cascade
@@ -990,6 +1113,15 @@ async def create_time_off(
                 booking_id=str(booking_id),
                 slot_id=str(slot.id),
                 cancelled_by_user_id=str(actor.id),
+                cancel_reason=TIME_OFF_CANCEL_REASON,
+            )
+            # 3g. PT-credit restore (WR-06 Phase 999.1): if a live pt_session exists
+            # for this booking, flip it cancelled + increment sessions_remaining by 1,
+            # all inside the same end-of-function UoW (session.commit() at step 7).
+            await _restore_pt_credit_for_cancelled_booking(
+                session,
+                actor,
+                booking_id=booking_id,
                 cancel_reason=TIME_OFF_CANCEL_REASON,
             )
 
