@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production
 Phase: Milestone v1.11 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-05-29 — Milestone v1.11 completed and archived
+Last activity: 2026-05-29 — Completed quick task 260529-ll9 (purged residual sportzal-era technical naming; cookies → cc_*/clubcore_csrf, domain → clubcore.ru; contract regenerated)
 
 ## v1.11 Roadmap Summary
 
@@ -79,7 +79,13 @@ Last activity: 2026-05-29 — Milestone v1.11 completed and archived
 
 ### Blockers/Concerns
 
-None blocking Phase 63. DEFER-36-04-B scope (v1.4 residual format files) to be confirmed from archives during Phase 63 planning.
+None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260529-ll9 | Purge residual sportzal-era technical naming (auth cookies sz_*/sportzal_csrf → cc_*/clubcore_csrf, email domain → clubcore.ru + DNS zone, ContextVar, YooKassa UA, docstrings); regen frozen openapi.json + schema.d.ts; brand "Sportzal" kept per D-62-02 | 2026-05-29 | 406dc8de | Verified | [260529-ll9-purge-sportzal-cookies-domain](./quick/260529-ll9-purge-sportzal-cookies-domain/) |
 
 ## Deferred Items
 
