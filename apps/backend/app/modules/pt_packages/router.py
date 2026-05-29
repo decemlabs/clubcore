@@ -26,7 +26,6 @@ DELETE semantics:
     by flipping ``deleted_at = now(UTC)``.
 """
 
-import base64
 import json
 from typing import Annotated
 from uuid import UUID
@@ -37,13 +36,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
-from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
-    IDEMPOTENCY_REDIS_PREFIX,
-    IDEMPOTENCY_TTL_SECONDS,
-    begin_idempotency,
-    body_sha256,
-    load_idempotency_response,
+    idempotent_execute,
     verify_idempotency,
 )
 from app.core.pagination import PaginatedData
@@ -238,66 +232,21 @@ async def create_pt_package(
         ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.
 
     RBAC-04 ordering: auth → require_permission → verify_csrf →
-    verify_idempotency. Two-phase Redis claim + replay block mirrors
-    ``memberships.router.create_membership``.
+    verify_idempotency. Idempotency claim+replay+store delegated to the
+    shared ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
-    # Body hash for replay-collision detection on identical Idempotency-Key.
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    # Phase 32 PAY-09 / D-33-16 — two-phase Redis claim + replay.
-    # SET NX claims the key with an in-flight placeholder so concurrent
-    # callers carrying the SAME Idempotency-Key cannot both pass the
-    # "no stored entry" gate and double-execute the orchestrator (CR-02
-    # from Phase 33 review — closes the gap where two concurrent /cancel
-    # requests would emit two pt_package_cancelled audit rows). The
-    # losing caller falls into the replay branch below and either gets
-    # the cached envelope (matching body) or 409 idempotency_in_flight
-    # (placeholder still set).
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            # Placeholder (in-flight) or evicted while we lost the race.
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        pt_package = await service.create_pt_package(session, actor, payload)
+        body_bytes = json.dumps(
+            envelope(pt_package).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    # We won the SET NX race — own the in-flight placeholder. Run the sale
-    # orchestrator. Concurrent callers also race on the partial UNIQUE
-    # uq_pt_packages_active_per_client and exactly one wins with 201 — the
-    # other surfaces 409 active_pt_package_already_exists (T-33-02-03).
-    pt_package = await service.create_pt_package(session, actor, payload)
-    response_envelope = envelope(pt_package)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @pt_packages_router.get(
@@ -385,9 +334,8 @@ async def cancel_pt_package(
     receives 403 from the RBAC gate BEFORE any side effect.
 
     RBAC-04 ordering: auth → require_permission → verify_csrf →
-    verify_idempotency → get_db. Two-phase Redis claim + replay pattern
-    mirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay
-    returns the cached envelope WITHOUT a second audit emit.
+    verify_idempotency → get_db. Idempotency claim+replay+store delegated to the
+    shared ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
 
     Error surface (service layer):
       - 404 pt_package_not_found  (missing instance).
@@ -395,56 +343,17 @@ async def cancel_pt_package(
       - 422 (schema layer)        (extra field / empty reason / >200 chars).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    # Two-phase Redis claim + replay — SET NX claims the in-flight placeholder
-    # so two concurrent /cancel requests with the same Idempotency-Key cannot
-    # both pass the "no stored entry" gate and both run the orchestrator (which
-    # would emit two pt_package_cancelled audit rows for the same instance —
-    # CR-02 from Phase 33 review). The losing caller falls into the replay
-    # branch and either gets the cached envelope (matching body) or 409
-    # idempotency_in_flight (placeholder still set).
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        pt_package = await service.cancel_pt_package(session, actor, pt_package_id, payload)
+        body_bytes = json.dumps(
+            envelope(pt_package).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
 
-    # We won the SET NX race — own the in-flight placeholder. Run the cancel
-    # orchestrator.
-    pt_package = await service.cancel_pt_package(session, actor, pt_package_id, payload)
-    response_envelope = envelope(pt_package)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_200_OK,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_200_OK,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @pt_packages_router.post(
@@ -502,58 +411,19 @@ async def refund_pt_package(
     Idempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel
     surfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for
     operator UX consistency, beyond the DB partial UNIQUE which is the
-    load-bearing race defence on its own).
+    load-bearing race defence on its own). Idempotency claim+replay+store
+    delegated to the shared ``idempotent_execute`` orchestrator
+    (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    # Two-phase Redis claim + replay — SET NX claims the in-flight placeholder
-    # so concurrent /refund requests with the same Idempotency-Key cannot both
-    # double-execute the orchestrator (CR-02 from Phase 33 review). DB partial
-    # UNIQUE uq_payments_refund_of_alive remains the load-bearing race defence
-    # for distinct keys hitting the same pt_package; this NX claim covers the
-    # operator-UX case where the same key is retried.
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        pt_package = await service.refund_pt_package(session, actor, pt_package_id, payload)
+        body_bytes = json.dumps(
+            envelope(pt_package).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
 
-    # We won the SET NX race. Run the refund orchestrator. Concurrent callers
-    # carrying DIFFERENT Idempotency-Keys still race on the DB partial UNIQUE
-    # uq_payments_refund_of_alive; exactly one wins with 200 + the others
-    # surface 409 already_refunded via the refunder's discriminator path
-    # (REF-TEST-02).
-    pt_package = await service.refund_pt_package(session, actor, pt_package_id, payload)
-    response_envelope = envelope(pt_package)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_200_OK,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_200_OK,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)

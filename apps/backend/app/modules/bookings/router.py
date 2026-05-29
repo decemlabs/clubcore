@@ -21,7 +21,6 @@ Idempotency (D-38-14 / Pitfall 14):
   NOT at the Redis cache.
 """
 
-import base64
 import json
 from typing import Annotated
 from uuid import UUID
@@ -32,13 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
-from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
-    IDEMPOTENCY_REDIS_PREFIX,
-    IDEMPOTENCY_TTL_SECONDS,
-    begin_idempotency,
-    body_sha256,
-    load_idempotency_response,
+    idempotent_execute,
     verify_idempotency,
 )
 from app.core.pagination import PaginatedData
@@ -116,49 +110,22 @@ async def create_booking(
       - 409 pt_package_exhausted (sessions_remaining <= 0).
       - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).
       - 422 idempotency_key_reuse (same key, different body).
+
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        booking = await service.create_booking(session, actor, payload)
+        body_bytes = json.dumps(
+            envelope(booking).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    booking = await service.create_booking(session, actor, payload)
-    response_envelope = envelope(booking)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 # ---------------------------------------------------------------------------
@@ -211,49 +178,22 @@ async def cancel_booking(
       - 409 invalid_transition (non-confirmed source).
       - 409 cancel_window_expired (reception <24h before slot.start_time).
       - 422 idempotency_key_reuse (same key, different body).
+
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        booking = await service.cancel_booking(session, actor, booking_id, payload)
+        body_bytes = json.dumps(
+            envelope(booking).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
 
-    booking = await service.cancel_booking(session, actor, booking_id, payload)
-    response_envelope = envelope(booking)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_200_OK,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_200_OK,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @bookings_router.get(

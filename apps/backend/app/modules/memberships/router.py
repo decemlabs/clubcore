@@ -64,7 +64,6 @@ Service layer is the single mutation entry point — this router never imports t
 MembershipPlan ORM model (architectural boundary maintained transitively via service.py).
 """
 
-import base64
 import json
 from typing import Annotated
 from uuid import UUID
@@ -75,13 +74,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
-from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
-    IDEMPOTENCY_REDIS_PREFIX,
-    IDEMPOTENCY_TTL_SECONDS,
-    begin_idempotency,
-    body_sha256,
-    load_idempotency_response,
+    idempotent_execute,
     verify_idempotency,
 )
 from app.core.pagination import PaginatedData
@@ -317,60 +311,24 @@ async def create_membership(
       - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.
 
     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+    Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+    orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     # Read raw incoming body for hash comparison on replay. FastAPI already
     # consumed it into `payload`, but `request.body()` is cached by Starlette
     # so this is cheap and deterministic.
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    # Phase 32 PAY-09 — two-phase Redis claim + replay (D-32-18..D-32-20).
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            # placeholder (still in-flight) or evicted while we lost the race
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        membership = await service.create_membership(session, actor, payload)
+        body_bytes = json.dumps(
+            envelope(membership).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    membership = await service.create_membership(session, actor, payload)
-    response_envelope = envelope(membership)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    # Store the replay envelope manually: body_hash is the REQUEST body hash
-    # (used for collision detection on replay), body_b64 is the RESPONSE body
-    # bytes (replayed verbatim on a matching-body retry). The exported
-    # store_idempotency_response helper conflates the two — see Phase 32-01
-    # idempotency.py — so build the dict by hand here to keep the contract
-    # honest (D-32-18..D-32-20).
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @memberships_router.post(
