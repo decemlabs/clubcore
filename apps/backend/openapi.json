@@ -1,5 +1,17 @@
 {
   "components": {
+    "parameters": {
+      "IdempotencyKey": {
+        "description": "Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint.",
+        "in": "header",
+        "name": "Idempotency-Key",
+        "required": true,
+        "schema": {
+          "pattern": "^[A-Za-z0-9_:-]{16,128}$",
+          "type": "string"
+        }
+      }
+    },
     "responses": {
       "401_Unauthorized": {
         "content": {
@@ -5989,8 +6001,13 @@
         ]
       },
       "post": {
-        "description": "Create a confirmed booking (Phase 38 BOOK-02).\n\n`(CREATE, BOOKINGS)` is NOT in `OWNER_ONLY` (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel; audit records actor_user_id for accountability).\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would attempt\ntwo slot UPDATE active→booked + two booking INSERTs — the second\nwould be caught by the partial UNIQUE, but the cost is paid).\n\nError surface (service layer):\n  - 404 slot_not_found.\n  - 409 slot_not_available (slot status != 'active' before INSERT).\n  - 409 slot_already_booked (DB race-loser via partial UNIQUE — BOOK-10).\n  - 409 trainer_mismatch (pt_package.trainer_id != slot.trainer_id).\n  - 409 pt_package_not_active (no active package for client or id mismatch).\n  - 409 pt_package_exhausted (sessions_remaining <= 0).\n  - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).\n  - 422 idempotency_key_reuse (same key, different body).",
+        "description": "Create a confirmed booking (Phase 38 BOOK-02).\n\n`(CREATE, BOOKINGS)` is NOT in `OWNER_ONLY` (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel; audit records actor_user_id for accountability).\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would attempt\ntwo slot UPDATE active→booked + two booking INSERTs — the second\nwould be caught by the partial UNIQUE, but the cost is paid).\n\nError surface (service layer):\n  - 404 slot_not_found.\n  - 409 slot_not_available (slot status != 'active' before INSERT).\n  - 409 slot_already_booked (DB race-loser via partial UNIQUE — BOOK-10).\n  - 409 trainer_mismatch (pt_package.trainer_id != slot.trainer_id).\n  - 409 pt_package_not_active (no active package for client or id mismatch).\n  - 409 pt_package_exhausted (sessions_remaining <= 0).\n  - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).\n  - 422 idempotency_key_reuse (same key, different body).\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "create_booking",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -6061,7 +6078,7 @@
     },
     "/api/v1/bookings/{booking_id}/cancel": {
       "post": {
-        "description": "Cancel a confirmed booking (Phase 38 BOOK-06 / D-38-09 / D-38-16).\n\n`(CANCEL, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel). The 24h cancel-window (BOOK-06, measured against\n`booking.slot.start_time`, NOT `created_at` per D-38-16) is enforced\napplication-layer in `service.cancel_booking` and surfaces as 409\n`cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 — verbatim from\npt_sessions/router.py:200-227): SAME-key concurrent callers cannot\ndouble-execute the orchestrator (which would emit two\nbooking_cancelled audit rows AND attempt two slot restores).\n\nError surface (service layer):\n  - 404 booking_not_found.\n  - 409 invalid_transition (non-confirmed source).\n  - 409 cancel_window_expired (reception <24h before slot.start_time).\n  - 422 idempotency_key_reuse (same key, different body).",
+        "description": "Cancel a confirmed booking (Phase 38 BOOK-06 / D-38-09 / D-38-16).\n\n`(CANCEL, BOOKINGS)` is NOT in OWNER_ONLY (Phase 37 INFRA-27) —\nreception+owner both pass the RBAC gate per D-38-09 (gym-staff trust\nmodel). The 24h cancel-window (BOOK-06, measured against\n`booking.slot.start_time`, NOT `created_at` per D-38-16) is enforced\napplication-layer in `service.cancel_booking` and surfaces as 409\n`cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 — verbatim from\npt_sessions/router.py:200-227): SAME-key concurrent callers cannot\ndouble-execute the orchestrator (which would emit two\nbooking_cancelled audit rows AND attempt two slot restores).\n\nError surface (service layer):\n  - 404 booking_not_found.\n  - 409 invalid_transition (non-confirmed source).\n  - 409 cancel_window_expired (reception <24h before slot.start_time).\n  - 422 idempotency_key_reuse (same key, different body).\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "cancel_booking",
         "parameters": [
           {
@@ -6073,6 +6090,9 @@
               "title": "Booking Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -6850,8 +6870,13 @@
         ]
       },
       "post": {
-        "description": "Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).\n\nPhase 32 PAY-09 idempotency contract (D-32-18..D-32-20):\n  - Header `Idempotency-Key` is required; missing or malformed → 422\n    (idempotency_key_required / idempotency_key_invalid_format).\n  - First call: SET NX claims the key with an in-flight placeholder, runs\n    the service, stores the response envelope under the same key, returns.\n  - Replay with identical key + identical body → 200 with the cached\n    envelope bytes (byte-identical to the original response). Status code\n    is also replayed from the stored envelope.\n  - Replay with identical key + different body → 422 idempotency_key_reuse;\n    no second sale is recorded.\n  - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.",
+        "description": "Sell a membership (MEM-EP-03). CREATE permission + CSRF + Idempotency-Key required.\n\n(CREATE, MEMBERSHIPS) is NOT in OWNER_ONLY — reception receives 201 on success.\nService layer validates plan presence (404 plan_not_found) and active flag\n(409 plan_inactive) and computes start_date/end_date server-side (D-04).\n\nPhase 32 PAY-09 idempotency contract (D-32-18..D-32-20):\n  - Header `Idempotency-Key` is required; missing or malformed → 422\n    (idempotency_key_required / idempotency_key_invalid_format).\n  - First call: SET NX claims the key with an in-flight placeholder, runs\n    the service, stores the response envelope under the same key, returns.\n  - Replay with identical key + identical body → 200 with the cached\n    envelope bytes (byte-identical to the original response). Status code\n    is also replayed from the stored envelope.\n  - Replay with identical key + different body → 422 idempotency_key_reuse;\n    no second sale is recorded.\n  - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.\nIdempotency claim+replay+store delegated to the shared ``idempotent_execute``\norchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "create_membership",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -6922,7 +6947,7 @@
     },
     "/api/v1/memberships/{membership_id}/cancel": {
       "post": {
-        "description": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and\n`frozen → cancelled` are both allowed; `expired` and `cancelled` source\nstates raise 409 `invalid_transition` with payload `{from_status, to_status}`.\n\nPhase 25 D-25-20: also accepts frozen source. When called on a frozen\nmembership, the open freeze period is closed without end_date extension\n(cancellation supersedes freeze) and audit emits `membership_unfrozen`\n(days_added=0) before `membership_cancelled` in the same UoW. Owner-only\nvia existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.",
+        "description": "Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.\n\n(CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on\nthe mutation. Returns 200 with the cancelled MembershipResponse (NOT 204 —\nthe body carries the post-transition row including `cancelled_at`).\n\nState machine (Phase 17 D-12 + Phase 25 D-25-20): `active → cancelled` and\n`frozen → cancelled` are both allowed; `expired` and `cancelled` source\nstates raise 409 `invalid_transition` with payload `{from_status, to_status}`.\n\nPhase 25 D-25-20: also accepts frozen source. When called on a frozen\nmembership, the open freeze period is closed without end_date extension\n(cancellation supersedes freeze) and audit emits `membership_unfrozen`\n(days_added=0) before `membership_cancelled` in the same UoW. Owner-only\nvia existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.\nIdempotency claim+replay+store delegated to the shared ``idempotent_execute``\norchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):\nemits audit on every successful call; in-flight double-cancel race patched.",
         "operationId": "cancel_membership",
         "parameters": [
           {
@@ -6934,6 +6959,9 @@
               "title": "Membership Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -6950,9 +6978,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -6969,7 +6995,7 @@
     },
     "/api/v1/memberships/{membership_id}/freeze": {
       "post": {
-        "description": "Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.\n\nTransitions active -> frozen and opens a freeze period. Returns the\nupdated MembershipResponse including freezeDaysUsed/Remaining and\ncurrentFreezePeriod populated.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not active)\n  - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)\n  - 409 already_frozen (concurrent INSERT race)",
+        "description": "Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.\n\nTransitions active -> frozen and opens a freeze period. Returns the\nupdated MembershipResponse including freezeDaysUsed/Remaining and\ncurrentFreezePeriod populated.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not active)\n  - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)\n  - 409 already_frozen (concurrent INSERT race)\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.\nIdempotency claim+replay+store delegated to the shared ``idempotent_execute``\norchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):\nemits audit on every successful call; no request body (incoming_body = b\"\"),\nkey is user+method+path-scoped so empty-body collision is correctly bounded.",
         "operationId": "freeze_membership",
         "parameters": [
           {
@@ -6981,15 +7007,16 @@
               "title": "Membership Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -7053,7 +7080,7 @@
     },
     "/api/v1/memberships/{membership_id}/renew": {
       "post": {
-        "description": "Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.\n\nCreates a follow-up membership chained via ``previous_membership_id`` to\nthe source. Snapshots from the CURRENT plan (so price increases between\nsale and renewal apply — PROJECT.md). Returns 201 + new\n``MembershipResponse`` including ``previousMembershipId`` field.\n\nDate strategy:\n  - source 'active' / 'frozen' → start_date = source.end_date + 1 day\n  - source 'expired'           → start_date = today (Europe/Moscow)\n\nErrors:\n  - 404 membership_not_found  (source missing)\n  - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)\n  - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)\n  - 409 plan_archived          (source's plan soft-deleted by owner)",
+        "description": "Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.\n\nCreates a follow-up membership chained via ``previous_membership_id`` to\nthe source. Snapshots from the CURRENT plan (so price increases between\nsale and renewal apply — PROJECT.md). Returns 201 + new\n``MembershipResponse`` including ``previousMembershipId`` field.\n\nDate strategy:\n  - source 'active' / 'frozen' → start_date = source.end_date + 1 day\n  - source 'expired'           → start_date = today (Europe/Moscow)\n\nErrors:\n  - 404 membership_not_found  (source missing)\n  - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)\n  - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)\n  - 409 plan_archived          (source's plan soft-deleted by owner)\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.\nIdempotency claim+replay+store delegated to the shared ``idempotent_execute``\norchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):\nvalue-creating (new membership row); no DB uniqueness gate — double-submit\nwithout idempotency would create duplicate chained membership rows.\nNo request body (incoming_body = b\"\"), key scoped by user+method+path+header.",
         "operationId": "renew_membership",
         "parameters": [
           {
@@ -7065,15 +7092,16 @@
               "title": "Membership Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "201": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -7090,7 +7118,7 @@
     },
     "/api/v1/memberships/{membership_id}/unfreeze": {
       "post": {
-        "description": "Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.\n\nCloses the open freeze period, extends end_date by ceil(delta_seconds /\n86400) (minimum 1 day), and transitions frozen -> active.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not frozen)",
+        "description": "Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.\n\nCloses the open freeze period, extends end_date by ceil(delta_seconds /\n86400) (minimum 1 day), and transitions frozen -> active.\n\nErrors:\n  - 404 membership_not_found\n  - 409 invalid_transition (source not frozen)\n\nRBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.\nIdempotency claim+replay+store delegated to the shared ``idempotent_execute``\norchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):\nemits audit on every successful call; no request body (incoming_body = b\"\"),\nkey is user+method+path-scoped so empty-body collision is correctly bounded.",
         "operationId": "unfreeze_membership",
         "parameters": [
           {
@@ -7102,15 +7130,16 @@
               "title": "Membership Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseEnvelope_MembershipResponse_"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -7127,7 +7156,7 @@
     },
     "/api/v1/online-payments/memberships/{membership_id}/refund": {
       "post": {
-        "description": "REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.\n\nRBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →\nverify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-\nsource / FSM) BEFORE calling ЮKassa; emits the\n``online_refund_initiated`` audit row inside the single UoW.\n\nError mapping (raised from the service layer):\n  - 404 membership_not_found / online_payment_not_found / original_payment_not_found\n  - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition\n    / refund_already_in_flight\n  - 422 yookassa_validation_error\n  - 503 yookassa_unavailable\n  - 502 yookassa_permanent_error",
+        "description": "REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.\n\nRBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →\nverify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-\nsource / FSM) BEFORE calling ЮKassa; emits the\n``online_refund_initiated`` audit row inside the single UoW.\n\nError mapping (raised from the service layer):\n  - 404 membership_not_found / online_payment_not_found / original_payment_not_found\n  - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition\n    / refund_already_in_flight\n  - 422 yookassa_validation_error\n  - 503 yookassa_unavailable\n  - 502 yookassa_permanent_error\n\nIDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``\nis intentionally absent. The body-level ``payload.idempotency_key`` is forwarded\nverbatim to ЮKassa ``Idempotence-Key`` (operator-contract idempotency at the\nprovider). The DB partial UNIQUE ``uq_online_refunds_alive_per_online_payment``\n(`(payment_id) WHERE status != 'failed'`) surfaces 409 ``refund_already_in_flight``\non concurrent double-tap — this is the load-bearing race defence. Adding a\nheader-level ``Idempotency-Key`` would be a redundant third layer; the 202 async\nreturn makes verbatim-replay semantics awkward. Decision binding for 66-03/66-04.",
         "operationId": "refund_membership_online",
         "parameters": [
           {
@@ -7174,7 +7203,7 @@
     },
     "/api/v1/online-payments/memberships/{plan_id}/sell": {
       "post": {
-        "description": "PAY-03 — membership redirect flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with\n``confirmation_url`` populated and ``qr_payload`` NULL on success.\nError mapping (service layer): 422 ``client_email_required_for_online_payment``,\n422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,\n502 ``yookassa_permanent_error``.",
+        "description": "PAY-03 — membership redirect flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with\n``confirmation_url`` populated and ``qr_payload`` NULL on success.\nError mapping (service layer): 422 ``client_email_required_for_online_payment``,\n422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,\n502 ``yookassa_permanent_error``.\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "sell_membership_redirect",
         "parameters": [
           {
@@ -7186,6 +7215,9 @@
               "title": "Plan Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -7221,7 +7253,7 @@
     },
     "/api/v1/online-payments/memberships/{plan_id}/sell-qr": {
       "post": {
-        "description": "PAY-05 — membership QR flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with ``qr_payload``\npopulated and ``confirmation_url`` NULL on success. QR replays re-fetch\nupstream so the second click also receives a valid ``qr_payload``\n(D-49-09 + Plan 49-03 BLOCKER #1).",
+        "description": "PAY-05 — membership QR flow.\n\nReturns 201 + ``ResponseEnvelope[SellResponse]`` with ``qr_payload``\npopulated and ``confirmation_url`` NULL on success. QR replays re-fetch\nupstream so the second click also receives a valid ``qr_payload``\n(D-49-09 + Plan 49-03 BLOCKER #1).\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "sell_membership_qr",
         "parameters": [
           {
@@ -7233,6 +7265,9 @@
               "title": "Plan Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -7268,7 +7303,7 @@
     },
     "/api/v1/online-payments/pt-packages/{plan_id}/sell": {
       "post": {
-        "description": "PAY-04 — PT-package redirect flow. Same shape as membership variant.",
+        "description": "PAY-04 — PT-package redirect flow. Same shape as membership variant.\n\nIdempotency delegated to the shared ``idempotent_execute`` orchestrator\n(Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "sell_pt_package_redirect",
         "parameters": [
           {
@@ -7280,6 +7315,9 @@
               "title": "Plan Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -7315,7 +7353,7 @@
     },
     "/api/v1/online-payments/pt-packages/{plan_id}/sell-qr": {
       "post": {
-        "description": "PAY-05 — PT-package QR flow. Same shape as membership QR variant.",
+        "description": "PAY-05 — PT-package QR flow. Same shape as membership QR variant.\n\nIdempotency delegated to the shared ``idempotent_execute`` orchestrator\n(Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "sell_pt_package_qr",
         "parameters": [
           {
@@ -7327,6 +7365,9 @@
               "title": "Plan Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -7362,7 +7403,7 @@
     },
     "/api/v1/online-payments/pt-packages/{pt_package_id}/refund": {
       "post": {
-        "description": "REFUND-01 — POST /api/v1/online-payments/pt-packages/{id}/refund.\n\nMirrors ``refund_membership_online``. No freeze / renewed-source guards\nfor PT-packages (no freeze concept, no renewal chain in v1.x).",
+        "description": "REFUND-01 — POST /api/v1/online-payments/pt-packages/{id}/refund.\n\nMirrors ``refund_membership_online``. No freeze / renewed-source guards\nfor PT-packages (no freeze concept, no renewal chain in v1.x).\n\nIDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``\nis intentionally absent — same rationale as ``refund_membership_online`` above.\nBody-level ``payload.idempotency_key`` forwarded to ЮKassa; DB partial UNIQUE\n``uq_online_refunds_alive_per_online_payment`` is the load-bearing race defence.\nDecision binding for 66-03/66-04.",
         "operationId": "refund_pt_package_online",
         "parameters": [
           {
@@ -8229,8 +8270,13 @@
         ]
       },
       "post": {
-        "description": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Two-phase Redis claim + replay block mirrors\n``memberships.router.create_membership``.",
+        "description": "Sell a PT-package (Phase 33 PT-07).\n\n(CREATE, PT_PACKAGES) is NOT in OWNER_ONLY — reception+owner receive 201.\nService layer:\n  - 404 pt_package_plan_not_found when plan archived/missing (D-33-08).\n  - 422 amount_mismatch when amountKopecks != plan.priceKopecks (D-33-17).\n  - 409 active_pt_package_already_exists (defensive pre-check AND DB\n    partial UNIQUE race gate — D-33-09).\n  - Idempotency-Key required (D-33-16); same Redis namespace\n    ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency. Idempotency claim+replay+store delegated to the\nshared ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "create_pt_package",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -8301,7 +8347,7 @@
     },
     "/api/v1/pt-packages/{pt_package_id}/cancel": {
       "post": {
-        "description": "Cancel a PT-package without refund (PT-08 / D-33-10).\n\n(CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception\nreceives 403 from the RBAC gate BEFORE any side effect.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db. Two-phase Redis claim + replay pattern\nmirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay\nreturns the cached envelope WITHOUT a second audit emit.\n\nError surface (service layer):\n  - 404 pt_package_not_found  (missing instance).\n  - 409 invalid_transition    (cancelled source — FSM terminal).\n  - 422 (schema layer)        (extra field / empty reason / >200 chars).",
+        "description": "Cancel a PT-package without refund (PT-08 / D-33-10).\n\n(CANCEL, PT_PACKAGES) IS in OWNER_ONLY (Phase 30 INFRA-19) — reception\nreceives 403 from the RBAC gate BEFORE any side effect.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db. Idempotency claim+replay+store delegated to the\nshared ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).\n\nError surface (service layer):\n  - 404 pt_package_not_found  (missing instance).\n  - 409 invalid_transition    (cancelled source — FSM terminal).\n  - 422 (schema layer)        (extra field / empty reason / >200 chars).",
         "operationId": "cancel_pt_package",
         "parameters": [
           {
@@ -8313,6 +8359,9 @@
               "title": "Pt Package Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -8348,7 +8397,7 @@
     },
     "/api/v1/pt-packages/{pt_package_id}/refund": {
       "post": {
-        "description": "Refund a PT-package (REF-02 / PT-13 / D-33-11).\n\n(REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (uniform-reception RBAC). RBAC-04 ordering: auth →\nrequire_permission → verify_csrf → verify_idempotency → get_db.\n\nSubject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT\npayments/router.py). Cross-module communication via the\n``get_payment_refunder()`` Protocol slot — service layer NEVER imports\n``app.modules.payments.*`` (modules-independent contract).\n\nError surface:\n  - 404 pt_package_not_found        (missing instance).\n  - 404 original_payment_not_found  (no sale payment row — should not\n                                    occur in v1.4 since PT-packages\n                                    are introduced in Phase 33 with sale\n                                    flow; defence-in-depth for parity\n                                    with memberships).\n  - 409 invalid_transition          (cancelled source — FSM terminal;\n                                    fires BEFORE the refunder so the\n                                    already-cancelled case never reaches\n                                    the DB partial UNIQUE).\n  - 409 already_refunded            (concurrent race on\n                                    uq_payments_refund_of_alive partial\n                                    UNIQUE — REF-TEST-02 exhaustive\n                                    race coverage).\n  - 422 (schema layer)              (extra field / empty reason /\n                                    >200 chars).\n\nIdempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel\nsurfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for\noperator UX consistency, beyond the DB partial UNIQUE which is the\nload-bearing race defence on its own).",
+        "description": "Refund a PT-package (REF-02 / PT-13 / D-33-11).\n\n(REFUND, PT_PACKAGES) is NOT in OWNER_ONLY per B-07 — reception+owner can\nboth refund (uniform-reception RBAC). RBAC-04 ordering: auth →\nrequire_permission → verify_csrf → verify_idempotency → get_db.\n\nSubject-side endpoint per D-33-18 (lives in pt_packages/router.py, NOT\npayments/router.py). Cross-module communication via the\n``get_payment_refunder()`` Protocol slot — service layer NEVER imports\n``app.modules.payments.*`` (modules-independent contract).\n\nError surface:\n  - 404 pt_package_not_found        (missing instance).\n  - 404 original_payment_not_found  (no sale payment row — should not\n                                    occur in v1.4 since PT-packages\n                                    are introduced in Phase 33 with sale\n                                    flow; defence-in-depth for parity\n                                    with memberships).\n  - 409 invalid_transition          (cancelled source — FSM terminal;\n                                    fires BEFORE the refunder so the\n                                    already-cancelled case never reaches\n                                    the DB partial UNIQUE).\n  - 409 already_refunded            (concurrent race on\n                                    uq_payments_refund_of_alive partial\n                                    UNIQUE — REF-TEST-02 exhaustive\n                                    race coverage).\n  - 422 (schema layer)              (extra field / empty reason /\n                                    >200 chars).\n\nIdempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel\nsurfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for\noperator UX consistency, beyond the DB partial UNIQUE which is the\nload-bearing race defence on its own). Idempotency claim+replay+store\ndelegated to the shared ``idempotent_execute`` orchestrator\n(Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "refund_pt_package",
         "parameters": [
           {
@@ -8360,6 +8409,9 @@
               "title": "Pt Package Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -8465,8 +8517,13 @@
     },
     "/api/v1/pt-sessions": {
       "post": {
-        "description": "Record a PT-session (PT-15 / PT-16 / PT-17).\n\n(CREATE, PT_SESSIONS) is NOT in OWNER_ONLY (Phase 30 INFRA-19) —\nreception + owner both receive 201 from the RBAC gate. The 7-day\nbackdating window (B-11) is enforced application-layer in\n``service.record_pt_session`` and surfaces as 422\n``performed_at_out_of_window`` for reception.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo pt_session_recorded audit rows AND decrement\nsessions_remaining twice). The losing caller falls into the replay\nbranch and either gets the cached envelope (matching body) or 409\n``idempotency_in_flight`` (placeholder still set).\n\nError surface (service layer):\n  - 404 pt_package_not_found / trainer_not_found.\n  - 409 pt_package_not_active (pre-decrement guard fires first).\n  - 409 pt_package_exhausted (race-loser at atomic UPDATE).\n  - 422 trainer_inactive / performed_at_in_future /\n    performed_at_out_of_window.\n  - 422 idempotency_key_reuse (same key, different body).",
+        "description": "Record a PT-session (PT-15 / PT-16 / PT-17).\n\n(CREATE, PT_SESSIONS) is NOT in OWNER_ONLY (Phase 30 INFRA-19) —\nreception + owner both receive 201 from the RBAC gate. The 7-day\nbackdating window (B-11) is enforced application-layer in\n``service.record_pt_session`` and surfaces as 422\n``performed_at_out_of_window`` for reception.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo pt_session_recorded audit rows AND decrement\nsessions_remaining twice). The losing caller falls into the replay\nbranch and either gets the cached envelope (matching body) or 409\n``idempotency_in_flight`` (placeholder still set).\n\nError surface (service layer):\n  - 404 pt_package_not_found / trainer_not_found.\n  - 409 pt_package_not_active (pre-decrement guard fires first).\n  - 409 pt_package_exhausted (race-loser at atomic UPDATE).\n  - 422 trainer_inactive / performed_at_in_future /\n    performed_at_out_of_window.\n  - 422 idempotency_key_reuse (same key, different body).\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "record_pt_session",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -8537,7 +8594,7 @@
     },
     "/api/v1/pt-sessions/{pt_session_id}/cancel": {
       "post": {
-        "description": "Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).\n\n`(CANCEL, PT_SESSIONS)` is NOT in `OWNER_ONLY` (Plan 34-01 removed it) —\nreception + owner both pass the RBAC gate. The 24h cancel-window (B-12,\nmeasured from `pt_session.created_at`, NOT `performed_at` per D-34-07)\nis enforced application-layer in `service.cancel_pt_session` and surfaces\nas 403 `cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo `pt_session_cancelled` audit rows AND increment\n`sessions_remaining` twice).\n\nError surface (service layer):\n  - 404 pt_session_not_found.\n  - 409 already_cancelled.\n  - 403 cancel_window_expired (reception >24h since created_at).\n  - 422 idempotency_key_reuse (same key, different body).",
+        "description": "Cancel a recorded PT-session (PT-18 / D-34-07 / D-34-11a).\n\n`(CANCEL, PT_SESSIONS)` is NOT in `OWNER_ONLY` (Plan 34-01 removed it) —\nreception + owner both pass the RBAC gate. The 24h cancel-window (B-12,\nmeasured from `pt_session.created_at`, NOT `performed_at` per D-34-07)\nis enforced application-layer in `service.cancel_pt_session` and surfaces\nas 403 `cancel_window_expired` for reception. Owner is anytime.\n\nRBAC-04 ordering: auth → require_permission → verify_csrf →\nverify_idempotency → get_db.\n\nTwo-phase Redis claim + replay (CR-02 from Phase 33 review): SET NX\nclaims the key with an in-flight placeholder so concurrent callers\ncarrying the SAME Idempotency-Key cannot both pass the \"no stored\nentry\" gate and double-execute the orchestrator (which would emit\ntwo `pt_session_cancelled` audit rows AND increment\n`sessions_remaining` twice).\n\nError surface (service layer):\n  - 404 pt_session_not_found.\n  - 409 already_cancelled.\n  - 403 cancel_window_expired (reception >24h since created_at).\n  - 422 idempotency_key_reuse (same key, different body).\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "cancel_pt_session",
         "parameters": [
           {
@@ -8549,6 +8606,9 @@
               "title": "Pt Session Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -8646,8 +8706,13 @@
         ]
       },
       "post": {
-        "description": "Create a recurring slot template (REC-01 / D-59-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nTwo-phase Redis idempotency (D-38-14 / Pitfall 14).\n\nError surface:\n  - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)",
+        "description": "Create a recurring slot template (REC-01 / D-59-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).\n\nError surface:\n  - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)",
         "operationId": "create_recurring_template",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -8681,7 +8746,7 @@
     },
     "/api/v1/recurring-templates/{template_id}/deactivate": {
       "post": {
-        "description": "Flip is_active=False on a recurring template (REC-01 deactivate).\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nForward-only: does not cancel materialized slots.",
+        "description": "Flip is_active=False on a recurring template (REC-01 deactivate).\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nForward-only: does not cancel materialized slots.\nIdempotency delegated to the shared ``idempotent_execute`` orchestrator\n(Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "deactivate_recurring_template",
         "parameters": [
           {
@@ -8693,6 +8758,9 @@
               "title": "Template Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -9193,6 +9261,9 @@
               "title": "Force",
               "type": "boolean"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -9228,7 +9299,7 @@
     },
     "/api/v1/time-off/{time_off_id}": {
       "delete": {
-        "description": "Delete a trainer time-off block (REC-03 delete / forward-only).\n\n(DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nDoes NOT resurrect cancelled slots — next cron tick re-materializes new ones.",
+        "description": "Delete a trainer time-off block (REC-03 delete / forward-only).\n\n(DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.\nDoes NOT resurrect cancelled slots — next cron tick re-materializes new ones.\nIdempotency delegated to the shared ``idempotent_execute`` orchestrator\n(Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER). Returns 204 with empty body.",
         "operationId": "delete_time_off",
         "parameters": [
           {
@@ -9240,6 +9311,9 @@
               "title": "Time Off Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -9366,8 +9440,13 @@
         ]
       },
       "post": {
-        "description": "Publish a trainer availability slot (Phase 38 SLOT-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY (Phase 37 INFRA-27) — reception\nreceives 403 from the RBAC gate BEFORE any side effect. Two-phase Redis\nclaim + replay (CR-02 from Phase 33 review) closes the same-key race.\n\nError surface (service layer):\n  - 404 trainer_not_found       (no such trainer id)\n  - 409 trainer_inactive        (trainer.is_active=False)\n  - 409 slot_in_past            (start_time <= now() UTC)\n  - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)\n  - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)\n  - 422 idempotency_key_reuse   (same key, different body)",
+        "description": "Publish a trainer availability slot (Phase 38 SLOT-02).\n\n(CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY (Phase 37 INFRA-27) — reception\nreceives 403 from the RBAC gate BEFORE any side effect. Two-phase Redis\nclaim + replay (CR-02 from Phase 33 review) closes the same-key race.\n\nError surface (service layer):\n  - 404 trainer_not_found       (no such trainer id)\n  - 409 trainer_inactive        (trainer.is_active=False)\n  - 409 slot_in_past            (start_time <= now() UTC)\n  - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)\n  - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)\n  - 422 idempotency_key_reuse   (same key, different body)\n\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "publish_slot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9438,7 +9517,7 @@
     },
     "/api/v1/trainer-slots/{slot_id}/cancel": {
       "patch": {
-        "description": "Cancel a trainer slot (SLOT-09 — active-only path in plan 38-01).\n\nFor Phase 38 plan 38-01: only the `active → cancelled` transition is\nsupported. Cancelling a `booked` slot triggers the booked-cascade flow\nwhich lands in plan 38-03 (it must atomically cancel the linked confirmed\nbooking + emit both `slot_cancelled` and `booking_cancelled`). In this\nplan, attempting to cancel a booked slot raises\n`InvalidSlotTransitionError` (409 `invalid_transition`) with an explicit\nforward-link message.\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.",
+        "description": "Cancel a trainer slot (SLOT-09 — active-only path in plan 38-01).\n\nFor Phase 38 plan 38-01: only the `active → cancelled` transition is\nsupported. Cancelling a `booked` slot triggers the booked-cascade flow\nwhich lands in plan 38-03 (it must atomically cancel the linked confirmed\nbooking + emit both `slot_cancelled` and `booking_cancelled`). In this\nplan, attempting to cancel a booked slot raises\n`InvalidSlotTransitionError` (409 `invalid_transition`) with an explicit\nforward-link message.\n\n(CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.\nIdempotency claim+replay+store delegated to the shared\n``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).",
         "operationId": "cancel_slot",
         "parameters": [
           {
@@ -9450,6 +9529,9 @@
               "title": "Slot Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {

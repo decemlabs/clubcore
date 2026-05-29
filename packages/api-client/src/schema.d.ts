@@ -467,6 +467,9 @@ export interface paths {
          *       - 409 pt_package_exhausted (sessions_remaining <= 0).
          *       - 409 pt_package_expired_before_slot (Moscow-TZ validity-window guard).
          *       - 422 idempotency_key_reuse (same key, different body).
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["create_booking"];
         delete?: never;
@@ -532,6 +535,9 @@ export interface paths {
          *       - 409 invalid_transition (non-confirmed source).
          *       - 409 cancel_window_expired (reception <24h before slot.start_time).
          *       - 422 idempotency_key_reuse (same key, different body).
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["cancel_booking"];
         delete?: never;
@@ -732,6 +738,8 @@ export interface paths {
          *       - Concurrent-in-flight (placeholder still set) → 409 idempotency_in_flight.
          *
          *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+         *     Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+         *     orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["create_membership"];
         delete?: never;
@@ -786,6 +794,11 @@ export interface paths {
          *     (cancellation supersedes freeze) and audit emits `membership_unfrozen`
          *     (days_added=0) before `membership_cancelled` in the same UoW. Owner-only
          *     via existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+         *     Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+         *     orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+         *     emits audit on every successful call; in-flight double-cancel race patched.
          */
         post: operations["cancel_membership"];
         delete?: never;
@@ -816,6 +829,12 @@ export interface paths {
          *       - 409 invalid_transition (source not active)
          *       - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)
          *       - 409 already_frozen (concurrent INSERT race)
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+         *     Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+         *     orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+         *     emits audit on every successful call; no request body (incoming_body = b""),
+         *     key is user+method+path-scoped so empty-body collision is correctly bounded.
          */
         post: operations["freeze_membership"];
         delete?: never;
@@ -894,6 +913,13 @@ export interface paths {
          *       - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)
          *       - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)
          *       - 409 plan_archived          (source's plan soft-deleted by owner)
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+         *     Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+         *     orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+         *     value-creating (new membership row); no DB uniqueness gate — double-submit
+         *     without idempotency would create duplicate chained membership rows.
+         *     No request body (incoming_body = b""), key scoped by user+method+path+header.
          */
         post: operations["renew_membership"];
         delete?: never;
@@ -921,6 +947,12 @@ export interface paths {
          *     Errors:
          *       - 404 membership_not_found
          *       - 409 invalid_transition (source not frozen)
+         *
+         *     RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+         *     Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+         *     orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+         *     emits audit on every successful call; no request body (incoming_body = b""),
+         *     key is user+method+path-scoped so empty-body collision is correctly bounded.
          */
         post: operations["unfreeze_membership"];
         delete?: never;
@@ -954,6 +986,15 @@ export interface paths {
          *       - 422 yookassa_validation_error
          *       - 503 yookassa_unavailable
          *       - 502 yookassa_permanent_error
+         *
+         *     IDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``
+         *     is intentionally absent. The body-level ``payload.idempotency_key`` is forwarded
+         *     verbatim to ЮKassa ``Idempotence-Key`` (operator-contract idempotency at the
+         *     provider). The DB partial UNIQUE ``uq_online_refunds_alive_per_online_payment``
+         *     (`(payment_id) WHERE status != 'failed'`) surfaces 409 ``refund_already_in_flight``
+         *     on concurrent double-tap — this is the load-bearing race defence. Adding a
+         *     header-level ``Idempotency-Key`` would be a redundant third layer; the 202 async
+         *     return makes verbatim-replay semantics awkward. Decision binding for 66-03/66-04.
          */
         post: operations["refund_membership_online"];
         delete?: never;
@@ -980,6 +1021,9 @@ export interface paths {
          *     Error mapping (service layer): 422 ``client_email_required_for_online_payment``,
          *     422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,
          *     502 ``yookassa_permanent_error``.
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["sell_membership_redirect"];
         delete?: never;
@@ -1005,6 +1049,9 @@ export interface paths {
          *     populated and ``confirmation_url`` NULL on success. QR replays re-fetch
          *     upstream so the second click also receives a valid ``qr_payload``
          *     (D-49-09 + Plan 49-03 BLOCKER #1).
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["sell_membership_qr"];
         delete?: never;
@@ -1025,6 +1072,9 @@ export interface paths {
         /**
          * Sell a PT-package online (redirect flow); reception+owner; CSRF + Idempotency-Key required
          * @description PAY-04 — PT-package redirect flow. Same shape as membership variant.
+         *
+         *     Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+         *     (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["sell_pt_package_redirect"];
         delete?: never;
@@ -1045,6 +1095,9 @@ export interface paths {
         /**
          * Sell a PT-package online (QR flow); reception+owner; CSRF + Idempotency-Key required
          * @description PAY-05 — PT-package QR flow. Same shape as membership QR variant.
+         *
+         *     Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+         *     (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["sell_pt_package_qr"];
         delete?: never;
@@ -1068,6 +1121,12 @@ export interface paths {
          *
          *     Mirrors ``refund_membership_online``. No freeze / renewed-source guards
          *     for PT-packages (no freeze concept, no renewal chain in v1.x).
+         *
+         *     IDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``
+         *     is intentionally absent — same rationale as ``refund_membership_online`` above.
+         *     Body-level ``payload.idempotency_key`` forwarded to ЮKassa; DB partial UNIQUE
+         *     ``uq_online_refunds_alive_per_online_payment`` is the load-bearing race defence.
+         *     Decision binding for 66-03/66-04.
          */
         post: operations["refund_pt_package_online"];
         delete?: never;
@@ -1384,8 +1443,8 @@ export interface paths {
          *         ``cc:idem:{key}`` and TTL as Phase 32 PAY-09.
          *
          *     RBAC-04 ordering: auth → require_permission → verify_csrf →
-         *     verify_idempotency. Two-phase Redis claim + replay block mirrors
-         *     ``memberships.router.create_membership``.
+         *     verify_idempotency. Idempotency claim+replay+store delegated to the
+         *     shared ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["create_pt_package"];
         delete?: never;
@@ -1433,9 +1492,8 @@ export interface paths {
          *     receives 403 from the RBAC gate BEFORE any side effect.
          *
          *     RBAC-04 ordering: auth → require_permission → verify_csrf →
-         *     verify_idempotency → get_db. Two-phase Redis claim + replay pattern
-         *     mirrors ``create_pt_package`` verbatim so same-Idempotency-Key replay
-         *     returns the cached envelope WITHOUT a second audit emit.
+         *     verify_idempotency → get_db. Idempotency claim+replay+store delegated to the
+         *     shared ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          *
          *     Error surface (service layer):
          *       - 404 pt_package_not_found  (missing instance).
@@ -1492,7 +1550,9 @@ export interface paths {
          *     Idempotency-Key is REQUIRED per D-33-16 — uniform with the sale + cancel
          *     surfaces (all 3 mutating PT-package POSTs accept Idempotency-Key for
          *     operator UX consistency, beyond the DB partial UNIQUE which is the
-         *     load-bearing race defence on its own).
+         *     load-bearing race defence on its own). Idempotency claim+replay+store
+         *     delegated to the shared ``idempotent_execute`` orchestrator
+         *     (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["refund_pt_package"];
         delete?: never;
@@ -1571,6 +1631,9 @@ export interface paths {
          *       - 422 trainer_inactive / performed_at_in_future /
          *         performed_at_out_of_window.
          *       - 422 idempotency_key_reuse (same key, different body).
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["record_pt_session"];
         delete?: never;
@@ -1636,6 +1699,9 @@ export interface paths {
          *       - 409 already_cancelled.
          *       - 403 cancel_window_expired (reception >24h since created_at).
          *       - 422 idempotency_key_reuse (same key, different body).
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["cancel_pt_session"];
         delete?: never;
@@ -1664,7 +1730,8 @@ export interface paths {
          * @description Create a recurring slot template (REC-01 / D-59-02).
          *
          *     (CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
-         *     Two-phase Redis idempotency (D-38-14 / Pitfall 14).
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          *
          *     Error surface:
          *       - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)
@@ -1691,6 +1758,8 @@ export interface paths {
          *
          *     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
          *     Forward-only: does not cancel materialized slots.
+         *     Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+         *     (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["deactivate_recurring_template"];
         delete?: never;
@@ -1946,6 +2015,8 @@ export interface paths {
          *
          *     (DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
          *     Does NOT resurrect cancelled slots — next cron tick re-materializes new ones.
+         *     Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+         *     (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER). Returns 204 with empty body.
          */
         delete: operations["delete_time_off"];
         options?: never;
@@ -1986,6 +2057,9 @@ export interface paths {
          *       - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)
          *       - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)
          *       - 422 idempotency_key_reuse   (same key, different body)
+         *
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["publish_slot"];
         delete?: never;
@@ -2040,6 +2114,8 @@ export interface paths {
          *     forward-link message.
          *
          *     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.
+         *     Idempotency claim+replay+store delegated to the shared
+         *     ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         patch: operations["cancel_slot"];
         trace?: never;
@@ -4865,7 +4941,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+        IdempotencyKey: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -5275,7 +5354,10 @@ export interface operations {
     create_booking: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -5323,7 +5405,10 @@ export interface operations {
     cancel_booking: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 booking_id: string;
             };
@@ -5657,7 +5742,10 @@ export interface operations {
     create_membership: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -5705,7 +5793,10 @@ export interface operations {
     cancel_membership: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 membership_id: string;
             };
@@ -5723,7 +5814,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                    "application/json": unknown;
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -5732,7 +5823,10 @@ export interface operations {
     freeze_membership: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 membership_id: string;
             };
@@ -5746,7 +5840,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                    "application/json": unknown;
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -5782,7 +5876,10 @@ export interface operations {
     renew_membership: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 membership_id: string;
             };
@@ -5796,7 +5893,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                    "application/json": unknown;
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -5805,7 +5902,10 @@ export interface operations {
     unfreeze_membership: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 membership_id: string;
             };
@@ -5819,7 +5919,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResponseEnvelope_MembershipResponse_"];
+                    "application/json": unknown;
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -5855,7 +5955,10 @@ export interface operations {
     sell_membership_redirect: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 plan_id: string;
             };
@@ -5882,7 +5985,10 @@ export interface operations {
     sell_membership_qr: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 plan_id: string;
             };
@@ -5909,7 +6015,10 @@ export interface operations {
     sell_pt_package_redirect: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 plan_id: string;
             };
@@ -5936,7 +6045,10 @@ export interface operations {
     sell_pt_package_qr: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 plan_id: string;
             };
@@ -6368,7 +6480,10 @@ export interface operations {
     create_pt_package: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -6416,7 +6531,10 @@ export interface operations {
     cancel_pt_package: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 pt_package_id: string;
             };
@@ -6443,7 +6561,10 @@ export interface operations {
     refund_pt_package: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 pt_package_id: string;
             };
@@ -6497,7 +6618,10 @@ export interface operations {
     record_pt_session: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -6545,7 +6669,10 @@ export interface operations {
     cancel_pt_session: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 pt_session_id: string;
             };
@@ -6597,7 +6724,10 @@ export interface operations {
     create_recurring_template: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -6622,7 +6752,10 @@ export interface operations {
     deactivate_recurring_template: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 template_id: string;
             };
@@ -6861,7 +6994,10 @@ export interface operations {
             query?: {
                 force?: boolean;
             };
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -6886,7 +7022,10 @@ export interface operations {
     delete_time_off: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 time_off_id: string;
             };
@@ -6935,7 +7074,10 @@ export interface operations {
     publish_slot: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -6983,7 +7125,10 @@ export interface operations {
     cancel_slot: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). The cached response is the response at time of first successful execution; retries replay it verbatim. For current resource state, use the resource's GET endpoint. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 slot_id: string;
             };
