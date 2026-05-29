@@ -117,7 +117,11 @@ Plans:
   5. `clubcore-auth-runbook.md` at `.planning/handoff/clubcore-auth-runbook.md` covers: email/password + Telegram OTP + email OTP + refresh-rotation + CSRF retrieval; `sportzal_csrf` cookie documented as known carry-over with v2.0 cutover plan; Phase 66 `Idempotency-Key` semantics + 24h replay window documented with curl examples
   6. `pnpm docs` (or `make docs`) runs `npx @redocly/cli preview-docs openapi.json` on port 8080; `.docs-site/` output dir is gitignored; doc-site is confirmed private per D-11-DOCS-PRIVATE (no public publish path)
 
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 65-01-PLAN.md — Private repo-root package.json tooling scaffold + private doc-site (HND-06)
+- [ ] 65-02-PLAN.md — Postman collection generation + augmentation: auth/CSRF wiring + assertions (HND-01/02/03)
+- [ ] 65-03-PLAN.md — Newman smoke harness (curated happy-path subset, runtime-credential discipline) (HND-04)
+- [ ] 65-04-PLAN.md — clubcore-auth-runbook.md: all auth flows + Idempotency-Key semantics (HND-05)
 **UI hint**: no
 
 ### Phase 66: Idempotency Hardening
