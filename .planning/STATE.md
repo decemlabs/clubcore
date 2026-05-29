@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production
 Phase: Milestone v1.11 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-05-29 — Completed backlog 999.1 (WR-06 consumption-keyed PT-credit restore on owner cancel; 5/5 verified, 56 schedule integration tests green); contract-freeze-v1.11.1 tag created
+Last activity: 2026-05-29 — Completed backlog 999.2 (wired 4 online-payment email templates into dispatcher; email channel no longer silently no-ops; 5/5 verified). Both v1.11 backlog items (999.1 + 999.2) now closed.
 
 ## v1.11 Roadmap Summary
 
@@ -87,6 +87,7 @@ None.
 |---|-------------|------|--------|--------|-----------|
 | 260529-ll9 | Purge residual sportzal-era technical naming (auth cookies sz_*/sportzal_csrf → cc_*/clubcore_csrf, email domain → clubcore.ru + DNS zone, ContextVar, YooKassa UA, docstrings); regen frozen openapi.json + schema.d.ts; brand "Sportzal" kept per D-62-02 | 2026-05-29 | 406dc8de | Verified | [260529-ll9-purge-sportzal-cookies-domain](./quick/260529-ll9-purge-sportzal-cookies-domain/) |
 | 260529-ny2 | Backlog 999.1 / WR-06 — consumption-keyed PT-session credit restore on owner force-cancel (both cancel_slot + time-off-force cascades); new pt_session_credit_restored audit event; idempotent, no over-credit; NOTE WR-06 removed | 2026-05-29 | e59ec464 | Verified | [260529-ny2-restore-pt-credit-owner-cancel](./quick/260529-ny2-restore-pt-credit-owner-cancel/) |
+| 260529-olc | Backlog 999.2 / RUN-03-F1 — wire 4 online-payment EmailTemplate records (owner-signed-off copy) into the dispatcher `_resolve_template`; email channel no longer silently no-ops; +21 resolve/render tests | 2026-05-29 | 762947fe | Verified | [260529-olc-wire-online-payment-emails](./quick/260529-olc-wire-online-payment-emails/) |
 
 ## Deferred Items
 

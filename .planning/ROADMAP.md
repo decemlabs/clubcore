@@ -81,7 +81,9 @@ Plans:
 
 **Source:** Phase 59 UAT WR-06 pending item; product decision recorded in this conversation 2026-05-26. Promote with `/gsd:review-backlog` when v1.12+ milestone opens.
 
-### Phase 999.2: Wire online-payment EMAIL templates into the dispatcher (BACKLOG)
+### Phase 999.2: Wire online-payment EMAIL templates into the dispatcher (✅ DONE 2026-05-29 — quick task 260529-olc)
+
+**Closure note (2026-05-29):** Added 4 owner-signed-off `EmailTemplate` records (mirroring the already-signed Telegram DM copy) to `online_payments/email_templates.py` + the `online_payments` branch in `dispatcher._resolve_template` (the import-linter ignore was already present at `.importlinter:189`). The email channel for online-payment notifications now resolves + renders instead of silently `KeyError`-no-opping. +21 resolve/render tests; 5/5 verified. No new ignore, no schema change, callsites/AST-gate untouched.
 
 **Goal:** Close the email-wiring gap found in Phase 67 RUN-03 (Finding RUN-03-F1). The 4 Phase-52 `EMAIL_ONLINE_PAYMENT_SUCCEEDED/REFUNDED/CANCELED` + `EMAIL_FISCAL_RECEIPT_FAILED` identifiers have no rendered email copy and are not resolvable by the email dispatcher — so the email channel for online-payment notifications silently no-ops (only the Telegram DM is delivered).
 
