@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import ClientPrincipal, require_client, verify_client_csrf
-from app.core.exceptions import ConflictError, InvalidAccessToken
+from app.core.exceptions import InvalidAccessToken
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.core.security import (
@@ -201,8 +201,5 @@ async def patch_client_me(
     Returns 409 with code 'email_unavailable' on duplicate email (D-06).
     Non-enumerating: no indication of which account holds the address.
     """
-    try:
-        updated = await service.update_client_me(session, client.id, payload.email)
-    except ConflictError:
-        raise
+    updated = await service.update_client_me(session, client.id, payload.email)
     return envelope(ClientMeResponse.model_validate(updated, from_attributes=True))
