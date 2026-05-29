@@ -8,9 +8,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // PWA-07: NEVER cache /api/* — no stale authed data in SW cache (T-69-07)
-      navigateFallbackDenylist: [/^\/api\//],
       workbox: {
+        // PWA-07: NEVER cache /api/* — no stale authed data in SW cache (T-69-07)
+        // navigateFallbackDenylist excludes /api/* from navigate-fallback handling;
+        // empty runtimeCaching ensures no API origin is cached at runtime either.
+        navigateFallbackDenylist: [/^\/api\//],
         // No runtime caching rules for the API origin
         runtimeCaching: [],
       },

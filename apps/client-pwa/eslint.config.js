@@ -7,10 +7,20 @@ import importPlugin from 'eslint-plugin-import'
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'node_modules', 'coverage'],
+    // D-69-06: existing .jsx/.js screens are in the allowJs ramp — do not lint them
+    // until they are migrated to TypeScript in later phases.
+    ignores: [
+      'dist',
+      'node_modules',
+      'coverage',
+      // Pre-existing JSX/JS screens and utilities (D-69-06 allowJs ramp)
+      'src/**/*.jsx',
+      'src/**/*.js',
+    ],
   },
   {
-    files: ['**/*.{ts,tsx,js,jsx}'],
+    // Enforce linting only on new TypeScript code
+    files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
       ...tseslint.configs.recommended,
@@ -26,15 +36,15 @@ export default tseslint.config(
       'import/resolver': { typescript: true, node: true },
     },
     rules: {
-      // Import boundary: new TS files should not bypass the fetcher abstraction layer.
-      'import/no-restricted-paths': ['error', { zones: [] }],
+      // No import boundary zones configured yet — clientFetcher layer enforcement
+      // will be added in Phase 71 once screen wiring begins.
     },
   },
   {
     files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': 'off',
-      'import/no-restricted-paths': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 )
