@@ -13,9 +13,9 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 - [x] **CAUTH-01**: Клиент входит в PWA по номеру телефона + одноразовый код через Telegram OTP (переиспользует существующую OTP-инфраструктуру)
 - [ ] **CAUTH-02**: Запрос OTP для неизвестного / дублирующегося / soft-deleted телефона возвращает ответ, неотличимый от известного (anti-oracle, `_constant_time_floor`)
-- [ ] **CAUTH-03**: Номер телефона нормализуется и валидируется в E.164 при запросе OTP
+- [x] **CAUTH-03**: Номер телефона нормализуется и валидируется в E.164 при запросе OTP
 - [x] **CAUTH-04**: Клиентская сессия (cookie `cc_client_access` + refresh-rotation семейство) персистит между перезапусками браузера; refresh и logout работают
-- [ ] **CAUTH-05**: `GET /api/v1/client/me` возвращает профиль клиента; `PATCH /api/v1/client/me` позволяет добавить/изменить email
+- [x] **CAUTH-05**: `GET /api/v1/client/me` возвращает профиль клиента; `PATCH /api/v1/client/me` позволяет добавить/изменить email
 - [ ] **CAUTH-06**: OTP-запросы ограничены rate-limit'ом (per-IP + per-phone cooldown + дневной cap) и защищены от перебора кода
 
 ### Client RBAC + Data Isolation
@@ -134,9 +134,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | CAUTH-01 | Phase 68 | Complete |
 | CAUTH-02 | Phase 68 | Pending |
-| CAUTH-03 | Phase 68 | Pending |
+| CAUTH-03 | Phase 68 | Complete |
 | CAUTH-04 | Phase 68 | Complete |
-| CAUTH-05 | Phase 68 | Pending |
+| CAUTH-05 | Phase 68 | Complete |
 | CAUTH-06 | Phase 68 | Pending |
 | CISO-01 | Phase 68 | Complete |
 | CISO-02 | Phase 68 | Complete |
