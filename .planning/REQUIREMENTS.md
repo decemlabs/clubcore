@@ -132,13 +132,59 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _(filled by roadmapper)_ | — | Pending |
+| CAUTH-01 | Phase 68 | Pending |
+| CAUTH-02 | Phase 68 | Pending |
+| CAUTH-03 | Phase 68 | Pending |
+| CAUTH-04 | Phase 68 | Pending |
+| CAUTH-05 | Phase 68 | Pending |
+| CAUTH-06 | Phase 68 | Pending |
+| CISO-01 | Phase 68 | Pending |
+| CISO-02 | Phase 68 | Pending |
+| CISO-03 | Phase 68 | Pending |
+| CISO-04 | Phase 68 | Pending |
+| CISO-05 | Phase 68 | Pending |
+| CHOME-01 | Phase 69 | Pending |
+| CHOME-02 | Phase 69 | Pending |
+| CHOME-03 | Phase 69 | Pending |
+| CHIST-01 | Phase 69 | Pending |
+| CHIST-02 | Phase 69 | Pending |
+| CHIST-03 | Phase 69 | Pending |
+| CPLAN-01 | Phase 69 | Pending |
+| CPLAN-02 | Phase 69 | Pending |
+| CPLAN-03 | Phase 69 | Pending |
+| PWA-01 | Phase 69 | Pending |
+| PWA-02 | Phase 69 | Pending |
+| PWA-03 | Phase 69 | Pending |
+| PWA-04 | Phase 69 | Pending |
+| PWA-06 | Phase 69 | Pending |
+| PWA-07 | Phase 69 | Pending |
+| CBOOK-01 | Phase 70 | Pending |
+| CBOOK-02 | Phase 70 | Pending |
+| CBOOK-03 | Phase 70 | Pending |
+| CBOOK-04 | Phase 70 | Pending |
+| CBOOK-05 | Phase 70 | Pending |
+| CCHK-01 | Phase 70 | Pending |
+| CCHK-02 | Phase 70 | Pending |
+| CCHK-03 | Phase 70 | Pending |
+| CPAY-01 | Phase 71 | Pending |
+| CPAY-02 | Phase 71 | Pending |
+| CPAY-03 | Phase 71 | Pending |
+| CPAY-04 | Phase 71 | Pending |
+| CPAY-05 | Phase 71 | Pending |
+| PWA-05 | Phase 71 | Pending |
+| HND-01 | Phase 72 | Pending |
+| HND-02 | Phase 72 | Pending |
+| HND-03 | Phase 72 | Pending |
+| VER-01 | Phase 72 | Pending |
+| VER-02 | Phase 72 | Pending |
+| VER-03 | Phase 72 | Pending |
+| VER-04 | Phase 72 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 41 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 41 ⚠️ (will be resolved by roadmapper)
+- v2.0 requirements: 47 total
+- Mapped to phases: 47
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-29*
-*Last updated: 2026-05-29 after initial definition (v2.0 milestone open)*
+*Last updated: 2026-05-29 — traceability filled by roadmapper (v2.0 roadmap created)*

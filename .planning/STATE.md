@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: planning
-last_updated: "2026-05-29T15:29:53.323Z"
+last_updated: "2026-05-29T00:00:00.000Z"
 last_activity: 2026-05-29
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,103 +17,71 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
+See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Planning next milestone (v1.11 shipped 2026-05-29; backend feature-complete, contract frozen for v2.0)
+**Current focus:** Roadmap created — ready to plan Phase 68 (Client Auth Foundation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 68 of 72 (Client Auth Foundation — not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-29 — Milestone v2.0 started
+Status: Ready to plan
+Last activity: 2026-05-29 — v2.0 roadmap created (5 phases 68-72, 47 requirements mapped)
 
-## v1.11 Roadmap Summary
+Progress: [░░░░░░░░░░] 0%
 
-**Execution order: 63 → 64 → 66 → 65 → 67** (Phase 65 executes after 66 — Postman/Newman/runbook must reflect post-66 spec including `components.parameters.IdempotencyKey`)
+## v2.0 Roadmap Summary
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
-| 63. Tech-Debt Sweep | CI tree green: ruff + mypy exit 0; v1.5 run.sh hardened | DEBT-01..05 |
-| 64. Contract Freeze — OpenAPI Curation | Curated spec under clubcore name; Redocly 7th CI gate | FRZ-01..08 |
-| 66. Idempotency Hardening | User-scoped verify_idempotency; 86400s TTL; IdempotencyKey in spec | IDM-01..07 |
-| 65. Handoff Artifacts | Postman + Newman + auth runbook + private doc-site (post-66 spec) | HND-01..06 |
-| 67. Operator Runbook Execution | 4 walkthroughs executed + evidence; Mailpit --profile dev | RUN-00..07 |
+| 68. Client Auth Foundation | Isolated ClientPrincipal + OTP auth + two-principal isolation | CAUTH-01..06, CISO-01..05 |
+| 69. Client Read Endpoints + PWA Alignment | All client reads IDOR-safe + pnpm/Vite-6/TS PWA build verified | CHOME-01..03, CHIST-01..03, CPLAN-01..03, PWA-01..04, PWA-06..07 |
+| 70. Client Bookings + QR Self Check-In | Self-booking + cancellation + signed QR + anti-replay check-in | CBOOK-01..05, CCHK-01..03 |
+| 71. Client Checkout + Full PWA Wiring | ЮKassa checkout (webhook-only activation) + all PWA screens on real backend | CPAY-01..05, PWA-05 |
+| 72. OpenAPI Handoff + CI + E2E Verification | Client-Portal tag in spec, _v20Checks, PWA CI gates, drift gate green, live runbook gate | HND-01..03, VER-01..04 |
 
-**Coverage:** 34/34 v1.11 requirements mapped (zero orphans, zero duplicates).
+**Coverage:** 47/47 v2.0 requirements mapped (zero orphans, zero duplicates).
 
 ## Performance Metrics
 
-| Metric | v1.10 actual | v1.11 planned |
-|--------|-------------|---------------|
-| Phases | 2 (62 + 62.1) | 5 (63-67) |
-| Plans | 16 | TBD |
-| Requirements | 10/10 | 34 mapped |
-| Phase 63 P01 | 25min | 2 tasks | 297 files |
-| Phase 63 P02 | 40min | 2 tasks | 36 files |
-| Phase 63 P03 | 30min | 3 tasks | 7 files |
-| Phase 63 P04 | ~15min | 2 tasks | 1 files |
-| Phase 64-contract-freeze-openapi-curation P04 | 25 | 3 tasks | 2 files |
-| Phase 64 P05 | 20min | 3 tasks | 4 files |
-| Phase 64-contract-freeze-openapi-curation P06 | 25 | 3 tasks | 4 files |
-| Phase 64 P07 | 5 | 3 tasks | 2 files |
-| Phase 66-idempotency-hardening P02 | 65min | 3 tasks | 8 files |
-| Phase 66-idempotency-hardening P03 | 30min | 2 tasks | 16 files |
-| Phase 66-idempotency-hardening P04 | ~10min | 2 tasks | 3 files |
-| Phase 66-idempotency-hardening P05 | 18min | 3 tasks | 5 files |
+**Velocity:**
+- Total plans completed: 0
+- Average duration: —
+- Total execution time: —
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
-### Key v1.11 Decisions (locked 2026-05-26)
+### Key v2.0 Decisions (pre-locked from research)
 
-- **D-11-OPID**: operation IDs cleaned via `generate_unique_id_function` suffix-strip (not explicit per-route)
-- **D-11-IDM-USER**: `verify_idempotency` binds to `current_user.id` in Redis key — security fix for cross-user replay
-- **D-11-IDM-WEBHOOK**: ЮKassa webhook uses separate `cc:yk:webhook:*` dedup — NOT affected by user-scoping
-- **D-11-CSRF-DEFER**: `sportzal_csrf` cookie name retained in v1.11; rename to `clubcore_csrf` deferred to v2.0
-- **D-11-RUN-AUDIT**: Phase 67 plan 1 = staleness audit of all 4 runbooks before any live walkthrough
-- **D-11-NEWMAN-LOCAL**: Newman is local handoff smoke, NOT a CI gate (7th CI gate = Redocly lint)
-- **D-11-DOCS-PRIVATE**: Redocly doc-site is private/gitignored — no public publish
-- **D-11-MAILPIT-PROFILE**: Mailpit added to docker-compose profiles: ["dev"] only; no SMTP adapter in v1.11
+- **D-20-PRINCIPAL**: Separate `ClientPrincipal` + `require_client()` + `aud:"client"` + distinct `cc_client_*` cookies — `Role.CLIENT` is BANNED in `permissions.py` (breaks staff byte-parity with frozen admin-web)
+- **D-20-COOKIES**: Client cookies: `cc_client_access` + `cc_client_refresh`, `Path=/api/v1/client`; staff cookies unchanged; no mutual overwrite on same origin
+- **D-20-MODULE**: `app/modules/client_portal/` aggregator; raw-SQL reads (D-54-08 precedent); Protocol-slot writes; zero new `ignore_imports`
+- **D-20-OTP**: Telegram-OTP-only for v2.0; SMS (SMS Aero / SMSC.ru / МТС Exolve) deferred to SMS-01 future req
+- **D-20-OPENAPI**: Single `openapi.json` extended additively — `Client-Portal` tag + `client_` operationId prefix; staff paths byte-identical to `contract-freeze-v1.11.0`
+- **D-20-PWA-ROUTER**: react-router v6 is KEPT in `client-pwa` — no TanStack Router migration
+- **D-20-IDOR**: Every client-scoped endpoint MUST carry mandatory `client_id` repo param + `assert_owns()` on get-by-ID → 404-collapse (anti-oracle); IDOR parametrized sweep covers all owned resource types
 
 ### Blockers/Concerns
 
 None.
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Status | Directory |
-|---|-------------|------|--------|--------|-----------|
-| 260529-ll9 | Purge residual sportzal-era technical naming (auth cookies sz_*/sportzal_csrf → cc_*/clubcore_csrf, email domain → clubcore.ru + DNS zone, ContextVar, YooKassa UA, docstrings); regen frozen openapi.json + schema.d.ts; brand "Sportzal" kept per D-62-02 | 2026-05-29 | 406dc8de | Verified | [260529-ll9-purge-sportzal-cookies-domain](./quick/260529-ll9-purge-sportzal-cookies-domain/) |
-| 260529-ny2 | Backlog 999.1 / WR-06 — consumption-keyed PT-session credit restore on owner force-cancel (both cancel_slot + time-off-force cascades); new pt_session_credit_restored audit event; idempotent, no over-credit; NOTE WR-06 removed | 2026-05-29 | e59ec464 | Verified | [260529-ny2-restore-pt-credit-owner-cancel](./quick/260529-ny2-restore-pt-credit-owner-cancel/) |
-| 260529-olc | Backlog 999.2 / RUN-03-F1 — wire 4 online-payment EmailTemplate records (owner-signed-off copy) into the dispatcher `_resolve_template`; email channel no longer silently no-ops; +21 resolve/render tests | 2026-05-29 | 762947fe | Verified | [260529-olc-wire-online-payment-emails](./quick/260529-olc-wire-online-payment-emails/) |
-
 ## Deferred Items
 
-Items acknowledged and deferred at v1.11 milestone close on 2026-05-29:
+Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.0 execution:
 
 | Category | Item | Status |
 |----------|------|--------|
-| ~~uat~~ DONE | Phase 65 — doc-site renders (HND-06) | ✅ Closed 2026-05-29 — live-verified; fixed broken `pnpm docs` (`preview-docs`→`build-docs`, Redocly v2). Evidence: `.planning/handoff/v1.11-phase65-live-verification-evidence.md` |
-| ~~uat~~ DONE | Phase 65 — auth/CSRF auto-wiring (HND-02) | ✅ Closed 2026-05-29 — live-verified via curl + Newman (cc_access/clubcore_csrf cookies, X-CSRF-Token double-submit, POST 201) |
-| ~~uat~~ DONE | Phase 65 — `pnpm newman` exits 0 vs seeded stack (HND-04) | ✅ Closed 2026-05-29 — 14/14 requests exit 0; wrong password → exit 1; fixed 2 collection bugs (login assertion shape, reports missing fromDate/toDate) |
-| ~~v2.0~~ DONE | `sportzal_csrf` → `clubcore_csrf` + `sz_*` → `cc_*` cookie rename (D-11-CSRF-DEFER / NAME-01) | ✅ Closed 2026-05-29 by quick task 260529-ll9 (commit 97e1fc1b) — done early since no live frontend yet |
-| v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 |
-| v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 |
-| production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production (no sandbox creds) |
-| production | RUN-02 RU email deliverability probe | N/A-until-production (no prod domain) |
-| backlog | RUN-05 trainer accrual-population scenario (deviation, D-67-03) | Phase 999.x / future |
-| backlog | WR-06 PT session credit restore on owner force-cancel | Phase 999.1 |
-| backlog | Online-payment EMAIL templates wiring (Finding RUN-03-F1) | Phase 999.2 |
-
-> ✅ 2026-05-29: the 3 Phase-65 live-stack checks were **executed and PASSED** on a live `docker compose up` stack (3 handoff-package bugs found + fixed in the process). Evidence: `.planning/handoff/v1.11-phase65-live-verification-evidence.md`. No longer outstanding.
+| production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production |
+| production | RUN-02 RU email deliverability probe | N/A-until-production |
+| backlog | RUN-05 trainer accrual scenario (D-67-03) | Phase 999.x / future |
+| v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 scope — plan in Phase 72 |
+| v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 — deferred |
 
 ## Session Continuity
 
-Last session: 2026-05-29T11:53:03.765Z
-Stopped at: Phase 67 COMPLETE (5/5 plans, VERIFICATION passed 5/5 success criteria). v1.11 milestone fully executed (phases 63,64,66,65,67 all complete). Operator evidence real & captured; 2 backlog items (999.1 WR-06, 999.2 online-payment email wiring).
-Resume: v1.11 milestone complete + archived + tagged. Run `/gsd-new-milestone` to open the next cycle (v2.0 Frontend Integration candidate) — REQUIREMENTS.md will be recreated fresh.
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+Last session: 2026-05-29
+Stopped at: v2.0 roadmap written (ROADMAP.md + STATE.md + REQUIREMENTS.md traceability). Ready to plan Phase 68.
+Resume: Run `/gsd-plan-phase 68` to begin planning Client Auth Foundation.
