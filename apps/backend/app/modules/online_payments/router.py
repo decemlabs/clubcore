@@ -33,10 +33,8 @@ Permission mapping (D-49-24 — both reception+owner; no new ``OWNER_ONLY``):
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import time
-from collections.abc import Awaitable, Callable
 from typing import Annotated, Final
 from uuid import UUID
 
@@ -51,13 +49,8 @@ from app.core.dependencies import (
     require_permission,
     verify_csrf,
 )
-from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
-    IDEMPOTENCY_REDIS_PREFIX,
-    IDEMPOTENCY_TTL_SECONDS,
-    begin_idempotency,
-    body_sha256,
-    load_idempotency_response,
+    idempotent_execute,
     verify_idempotency,
 )
 from app.core.permissions import Action, Resource
@@ -104,78 +97,6 @@ _RETURN_HTML: Final[str] = (
 _RETURN_FLOOR_SECONDS: Final[float] = 0.060
 
 
-async def _outer_idempotency_replay_or_run(
-    *,
-    request: Request,
-    idempotency_key: str,
-    redis: Redis,
-    runner: Callable[[], Awaitable[SellResponse]],
-) -> Response:
-    """Outer-layer (HTTP) Idempotency-Key replay dance (D-49-16).
-
-    Mirrors ``app.modules.memberships.router.create_membership:301-373`` —
-    the canonical Sportzal two-phase Redis claim + envelope replay used by
-    every POST mutation that accepts an operator-supplied ``Idempotency-Key``
-    header. The inner ЮKassa-side idempotency layer is the deterministic key
-    derived by the service (D-49-08) — independent of this outer layer.
-
-    Step 1: read the incoming body bytes (cached by Starlette) and hash for
-            collision detection on replay.
-    Step 2: ``SET NX`` claims the key with a placeholder; first caller wins.
-    Step 3: if NOT first, replay the cached envelope OR raise
-            ``idempotency_in_flight`` / ``idempotency_key_reuse``.
-    Step 4: invoke ``runner`` (the per-endpoint service call), build the
-            response envelope, and cache it for ``IDEMPOTENCY_TTL_SECONDS``.
-    """
-    incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
-
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            # placeholder still set OR entry evicted while we lost the race
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
-
-    sell_response = await runner()
-
-    response_envelope = envelope(sell_response)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    # Replay envelope: body_hash is the REQUEST body hash (collision detect);
-    # body_b64 is the RESPONSE body bytes (replayed verbatim on matching-body
-    # retry). Same shape as memberships/router.py:355-368.
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
-
-
 # ─── Membership sell endpoints ──────────────────────────────────────────────
 
 
@@ -208,10 +129,14 @@ async def sell_membership_redirect(
     Error mapping (service layer): 422 ``client_email_required_for_online_payment``,
     422 ``yookassa_validation_error``, 503 ``yookassa_unavailable``,
     502 ``yookassa_permanent_error``.
-    """
 
-    async def _runner() -> SellResponse:
-        return await service.sell_membership(
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
+    """
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        sell_response = await service.sell_membership(
             session,
             plan_id=plan_id,
             client_id=payload.client_id,
@@ -219,13 +144,14 @@ async def sell_membership_redirect(
             actor=actor,
             yookassa_settings=yookassa_settings,
         )
+        body_bytes = json.dumps(
+            envelope(sell_response).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    return await _outer_idempotency_replay_or_run(
-        request=request,
-        idempotency_key=idempotency_key,
-        redis=redis,
-        runner=_runner,
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @router.post(
@@ -256,10 +182,14 @@ async def sell_membership_qr(
     populated and ``confirmation_url`` NULL on success. QR replays re-fetch
     upstream so the second click also receives a valid ``qr_payload``
     (D-49-09 + Plan 49-03 BLOCKER #1).
-    """
 
-    async def _runner() -> SellResponse:
-        return await service.sell_membership(
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
+    """
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        sell_response = await service.sell_membership(
             session,
             plan_id=plan_id,
             client_id=payload.client_id,
@@ -267,13 +197,14 @@ async def sell_membership_qr(
             actor=actor,
             yookassa_settings=yookassa_settings,
         )
+        body_bytes = json.dumps(
+            envelope(sell_response).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    return await _outer_idempotency_replay_or_run(
-        request=request,
-        idempotency_key=idempotency_key,
-        redis=redis,
-        runner=_runner,
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 # ─── PT-package sell endpoints ──────────────────────────────────────────────
@@ -301,10 +232,15 @@ async def sell_pt_package_redirect(
     session: Annotated[AsyncSession, Depends(get_db)],
     yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
 ) -> Response:
-    """PAY-04 — PT-package redirect flow. Same shape as membership variant."""
+    """PAY-04 — PT-package redirect flow. Same shape as membership variant.
 
-    async def _runner() -> SellResponse:
-        return await service.sell_pt_package(
+    Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+    (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
+    """
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        sell_response = await service.sell_pt_package(
             session,
             plan_id=plan_id,
             client_id=payload.client_id,
@@ -312,13 +248,14 @@ async def sell_pt_package_redirect(
             actor=actor,
             yookassa_settings=yookassa_settings,
         )
+        body_bytes = json.dumps(
+            envelope(sell_response).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    return await _outer_idempotency_replay_or_run(
-        request=request,
-        idempotency_key=idempotency_key,
-        redis=redis,
-        runner=_runner,
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @router.post(
@@ -343,10 +280,15 @@ async def sell_pt_package_qr(
     session: Annotated[AsyncSession, Depends(get_db)],
     yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
 ) -> Response:
-    """PAY-05 — PT-package QR flow. Same shape as membership QR variant."""
+    """PAY-05 — PT-package QR flow. Same shape as membership QR variant.
 
-    async def _runner() -> SellResponse:
-        return await service.sell_pt_package(
+    Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+    (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
+    """
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        sell_response = await service.sell_pt_package(
             session,
             plan_id=plan_id,
             client_id=payload.client_id,
@@ -354,13 +296,14 @@ async def sell_pt_package_qr(
             actor=actor,
             yookassa_settings=yookassa_settings,
         )
+        body_bytes = json.dumps(
+            envelope(sell_response).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    return await _outer_idempotency_replay_or_run(
-        request=request,
-        idempotency_key=idempotency_key,
-        redis=redis,
-        runner=_runner,
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 # ─── Phase 49 PAY-07 / D-49-17, D-49-18, D-49-26 — Anti-oracle return screen ─

@@ -35,16 +35,15 @@ import hashlib
 import json
 import re
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Annotated, TypedDict
+from typing import Annotated, TypedDict
 
 from fastapi import Depends, Request, Response
 from redis.asyncio import Redis
 
+from app.core.dependencies import CurrentUser as _CurrentUser
+from app.core.dependencies import get_current_user as _get_current_user
 from app.core.exceptions import AppError, ValidationAppError
 from app.core.redis import get_redis
-
-if TYPE_CHECKING:
-    from app.core.dependencies import CurrentUser
 
 IDEMPOTENCY_KEY_PATTERN: str = r"^[A-Za-z0-9_:-]{16,128}$"
 _IDEMPOTENCY_KEY_RE = re.compile(IDEMPOTENCY_KEY_PATTERN)
@@ -70,15 +69,6 @@ def body_sha256(payload: bytes) -> str:
     """Return ``hexdigest()`` of ``sha256(payload)`` (64 chars)."""
     return hashlib.sha256(payload).hexdigest()
 
-
-# ---------------------------------------------------------------------------
-# Import get_current_user at module level (no circular dependency exists —
-# app.core.dependencies does NOT import from app.core.idempotency).
-# The import is deferred below __all__ would normally go, but placed here
-# so Annotated[..., Depends(get_current_user)] is resolved at class-definition
-# time (FastAPI inspects the signature at route-registration time, not lazily).
-# ---------------------------------------------------------------------------
-from app.core.dependencies import CurrentUser as _CurrentUser, get_current_user as _get_current_user  # noqa: E402
 
 
 async def verify_idempotency(

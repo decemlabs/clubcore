@@ -29,7 +29,6 @@ from app.core.idempotency import (
     verify_idempotency,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -258,7 +257,7 @@ async def test_orchestrator_app_error_stores_envelope_and_reraises() -> None:
 
 @pytest.mark.asyncio
 async def test_orchestrator_app_error_replay_returns_stored_error() -> None:
-    """Retry with same key+body after AppError replays the stored error (not idempotency_in_flight)."""
+    """Retry with same key+body after AppError replays the stored error (not in_flight)."""
     redis = _make_fake_redis()
     body_bytes = b'{"x":1}'
 
@@ -278,7 +277,7 @@ async def test_orchestrator_app_error_replay_returns_stored_error() -> None:
 
 @pytest.mark.asyncio
 async def test_orchestrator_app_error_different_body_raises_key_reuse() -> None:
-    """After AppError is stored, retry with same key but DIFFERENT body raises idempotency_key_reuse."""
+    """After AppError is stored, retry with same key but DIFFERENT body raises key_reuse."""
     redis = _make_fake_redis()
     body_bytes = b'{"x":1}'
     different_body = b'{"x":2}'
