@@ -119,9 +119,15 @@ async def test_concurrent_freeze_race_serialised_by_partial_unique_index(
 
     authed = await _build_authed_client(app)
     csrf_token = authed.cookies.get("sportzal_csrf") or ""
-    headers = {"X-CSRF-Token": csrf_token}
 
     async def _post() -> Any:
+        # Phase 66 IDM-07: freeze_membership now requires Idempotency-Key.
+        # Each concurrent request uses a UNIQUE key so all 5 pass the idempotency
+        # guard and race to the DB UNIQUE index — exactly the serialisation we test.
+        headers = {
+            "X-CSRF-Token": csrf_token,
+            "Idempotency-Key": uuid4().hex,
+        }
         return await authed.post(
             f"/api/v1/memberships/{membership_id}/freeze",
             headers=headers,

@@ -11,7 +11,7 @@ Verifies D-25-09:
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -22,7 +22,11 @@ from app.modules.memberships.models import MembershipFreezePeriod
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    # Phase 66 IDM-07: cancel_membership now requires Idempotency-Key.
+    return {
+        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "Idempotency-Key": uuid4().hex,
+    }
 
 
 VALID_CLIENT: dict[str, Any] = {

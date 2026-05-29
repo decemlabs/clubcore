@@ -333,20 +333,22 @@ async def create_membership(
 
 @memberships_router.post(
     "/{membership_id}/cancel",
-    response_model=ResponseEnvelope[MembershipResponse],
     status_code=status.HTTP_200_OK,
     summary="Cancel a membership (owner-only; 409 invalid_transition for non-active source)",
 )
 async def cancel_membership(
     membership_id: UUID,
     payload: MembershipCancelRequest,
+    request: Request,
     actor: Annotated[
         CurrentUser,
         Depends(require_permission(Action.CANCEL, Resource.MEMBERSHIPS)),
     ],
     _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> ResponseEnvelope[MembershipResponse]:
+) -> Response:
     """Cancel a membership (MEM-EP-04). Owner-only — reception → 403 from RBAC gate.
 
     (CANCEL, MEMBERSHIPS) is in OWNER_ONLY (Phase 15 INFRA-08). CSRF required on
@@ -362,14 +364,28 @@ async def cancel_membership(
     (cancellation supersedes freeze) and audit emits `membership_unfrozen`
     (days_added=0) before `membership_cancelled` in the same UoW. Owner-only
     via existing (CANCEL, MEMBERSHIPS) ∈ OWNER_ONLY.
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+    Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+    orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+    emits audit on every successful call; in-flight double-cancel race patched.
     """
-    membership = await service.cancel_membership(session, actor, membership_id, payload)
-    return envelope(membership)
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        membership = await service.cancel_membership(session, actor, membership_id, payload)
+        body_bytes = json.dumps(
+            envelope(membership).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
+
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @memberships_router.post(
     "/{membership_id}/freeze",
-    response_model=ResponseEnvelope[MembershipResponse],
     status_code=status.HTTP_200_OK,
     summary=(
         "Freeze membership (reception+owner; "
@@ -378,13 +394,16 @@ async def cancel_membership(
 )
 async def freeze_membership(
     membership_id: UUID,
+    request: Request,
     actor: Annotated[
         CurrentUser,
         Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
     ],
     _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> ResponseEnvelope[MembershipResponse]:
+) -> Response:
     """Freeze a membership (MEM-FRZ-EP-01). CREATE permission + CSRF required.
 
     Transitions active -> frozen and opens a freeze period. Returns the
@@ -396,26 +415,47 @@ async def freeze_membership(
       - 409 invalid_transition (source not active)
       - 409 freeze_limit_exceeded (cumulative days >= snapshot limit)
       - 409 already_frozen (concurrent INSERT race)
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+    Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+    orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+    emits audit on every successful call; no request body (incoming_body = b""),
+    key is user+method+path-scoped so empty-body collision is correctly bounded.
     """
-    membership = await service.freeze_membership(session, actor, membership_id)
-    return envelope(membership)
+    # freeze_membership has no request body; request.body() returns b"".
+    # The idempotency key is scoped as {user_id}:{method}:{path}:{header-key}
+    # (D-66-USER-SCOPE) so an empty body does not allow cross-user collisions.
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        membership = await service.freeze_membership(session, actor, membership_id)
+        body_bytes = json.dumps(
+            envelope(membership).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
+
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @memberships_router.post(
     "/{membership_id}/unfreeze",
-    response_model=ResponseEnvelope[MembershipResponse],
     status_code=status.HTTP_200_OK,
     summary="Unfreeze membership (reception+owner; 409 invalid_transition)",
 )
 async def unfreeze_membership(
     membership_id: UUID,
+    request: Request,
     actor: Annotated[
         CurrentUser,
         Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
     ],
     _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> ResponseEnvelope[MembershipResponse]:
+) -> Response:
     """Unfreeze a membership (MEM-FRZ-EP-02). CREATE permission + CSRF required.
 
     Closes the open freeze period, extends end_date by ceil(delta_seconds /
@@ -424,14 +464,31 @@ async def unfreeze_membership(
     Errors:
       - 404 membership_not_found
       - 409 invalid_transition (source not frozen)
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+    Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+    orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+    emits audit on every successful call; no request body (incoming_body = b""),
+    key is user+method+path-scoped so empty-body collision is correctly bounded.
     """
-    membership = await service.unfreeze_membership(session, actor, membership_id)
-    return envelope(membership)
+    # unfreeze_membership has no request body; request.body() returns b"".
+    # Key scoped as {user_id}:{method}:{path}:{header-key} (D-66-USER-SCOPE).
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        membership = await service.unfreeze_membership(session, actor, membership_id)
+        body_bytes = json.dumps(
+            envelope(membership).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
+
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @memberships_router.post(
     "/{membership_id}/renew",
-    response_model=ResponseEnvelope[MembershipResponse],
     status_code=status.HTTP_201_CREATED,
     summary=(
         "Renew membership (reception+owner; "
@@ -441,13 +498,16 @@ async def unfreeze_membership(
 )
 async def renew_membership(
     membership_id: UUID,
+    request: Request,
     actor: Annotated[
         CurrentUser,
         Depends(require_permission(Action.CREATE, Resource.MEMBERSHIPS)),
     ],
     _csrf: Annotated[None, Depends(verify_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> ResponseEnvelope[MembershipResponse]:
+) -> Response:
     """Renew a membership (MEM-REN-EP-01). CREATE permission + CSRF required.
 
     Creates a follow-up membership chained via ``previous_membership_id`` to
@@ -464,9 +524,28 @@ async def renew_membership(
       - 404 plan_not_found        (source's plan hard-deleted; defence-in-depth)
       - 409 cannot_renew_cancelled (source is cancelled — operator must sell new)
       - 409 plan_archived          (source's plan soft-deleted by owner)
+
+    RBAC-04 ordering: auth → require_permission → verify_csrf → verify_idempotency.
+    Idempotency claim+replay+store delegated to the shared ``idempotent_execute``
+    orchestrator (Phase 66 IDM-07 / D-66-LIFECYCLE-HELPER). Wired per IDM-07 (66-03):
+    value-creating (new membership row); no DB uniqueness gate — double-submit
+    without idempotency would create duplicate chained membership rows.
+    No request body (incoming_body = b""), key scoped by user+method+path+header.
     """
-    new_membership = await service.renew_membership(session, actor, membership_id)
-    return envelope(new_membership)
+    # renew_membership has no request body; request.body() returns b"".
+    # Key scoped as {user_id}:{method}:{path}:{header-key} (D-66-USER-SCOPE).
+    incoming_body = await request.body()
+
+    async def _runner() -> tuple[int, bytes]:
+        new_membership = await service.renew_membership(session, actor, membership_id)
+        body_bytes = json.dumps(
+            envelope(new_membership).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
+
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @memberships_router.post(

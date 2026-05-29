@@ -32,7 +32,11 @@ from app.modules.memberships.models import Membership
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    # Phase 66 IDM-07: renew_membership now requires Idempotency-Key.
+    return {
+        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "Idempotency-Key": uuid4().hex,
+    }
 
 
 VALID_CLIENT: dict[str, Any] = {
