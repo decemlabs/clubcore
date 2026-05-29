@@ -27,7 +27,7 @@ from app.core import audit
 from app.core.database import get_db
 from app.core.exceptions import CsrfMismatch, ForbiddenError, InvalidAccessToken, InvalidSession
 from app.core.permissions import Action, Resource, Role, can
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, decode_client_token
 
 
 class CurrentUser(Protocol):
@@ -1142,6 +1142,150 @@ def get_membership_activator() -> MembershipActivator:
             "app/main.py:create_app() (HTTP-only single-wire — no ARQ entry path)."
         )
     return _membership_activator
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 68 D-08 / CISO-01/02 — ClientPrincipal composition-root slot.
+#
+# Parallel client auth stack: `require_client()` is the gate every client
+# endpoint depends on. Routing client tokens through `decode_client_token`
+# (not `decode_access_token`) is what makes staff tokens 401 on client
+# endpoints (CISO-02). `Role.CLIENT` is BANNED; `permissions.py` is
+# byte-unchanged (CISO-01). ClientPrincipal has no `role` (D-07).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ClientPrincipal(Protocol):
+    """Structural type for the authenticated gym client (D-08).
+
+    `app.modules.clients.models.Client` satisfies this Protocol.
+    No `role` — clients have no RBAC role (D-07 / CISO-01).
+    `permissions.py` is byte-unchanged; no Role.CLIENT is ever added.
+    """
+
+    id: UUID
+    phone: str
+    email: str | None
+
+
+ClientLoader = Callable[[AsyncSession, UUID], Awaitable[ClientPrincipal | None]]
+"""Async callable: (session, client_id) -> ClientPrincipal | None.
+
+Returns None when no alive client with that id exists (or is soft-deleted)
+so `get_current_client` can surface `InvalidAccessToken('user_not_found')`.
+"""
+
+_client_loader: ClientLoader | None = None
+
+
+def register_client_loader(loader: ClientLoader) -> None:
+    """Composition-root setter — called once by `app.main.create_app` in Phase 68.
+
+    Idempotent: re-registering replaces the slot (useful in tests that want to
+    inject a stub loader). Mirrors `register_user_loader` (D-08).
+    """
+    global _client_loader
+    _client_loader = loader
+
+
+async def get_current_client(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ClientPrincipal:
+    """Resolve the authenticated client from the `cc_client_access` cookie.
+
+    Failure modes (all → 401 InvalidAccessToken with a specific message):
+      - missing cookie → 'missing_access_cookie'
+      - decode failure (delegated to decode_client_token) → 'token_expired',
+        'invalid_token', 'wrong_token_type', or 'wrong_audience'
+      - composition root forgot to register a loader → 'client_loader_not_registered'
+      - UUID parse failure → InvalidSession('invalid_session')
+      - loader returned None (client soft-deleted / unknown id) → 'user_not_found'
+
+    CISO-02: a staff `cc_access` token presented as `cc_client_access` will fail
+    inside `decode_client_token` because the staff token has no `aud` claim
+    (MissingRequiredClaimError → `invalid_token`). Isolation is structural, not
+    just name-based.
+    """
+    token = request.cookies.get("cc_client_access")
+    if token is None:
+        raise InvalidAccessToken("missing_access_cookie")
+
+    # decode_client_token raises InvalidAccessToken on its own failure paths
+    # (token_expired / invalid_token / wrong_token_type / wrong_audience).
+    claims = decode_client_token(token)
+
+    if _client_loader is None:
+        # Defensive: composition root MUST register before the request flow starts.
+        # Fail-closed: T-68-14 — missing loader slot surfaces as 401, not 500.
+        raise InvalidAccessToken("client_loader_not_registered")
+
+    try:
+        uid = UUID(claims.sub)
+    except ValueError as e:
+        raise InvalidSession("invalid_session") from e
+
+    client = await _client_loader(session, uid)
+    if client is None:
+        raise InvalidAccessToken("user_not_found")
+    return client
+
+
+def require_client() -> Callable[..., Awaitable[ClientPrincipal]]:
+    """Return a FastAPI dependency that resolves ClientPrincipal.
+
+    Mirrors `require_authenticated()` but for the client principal (D-08).
+    No RBAC gate — clients have no role (D-07 / CISO-01).
+
+        @router.get("/me", response_model=ResponseEnvelope[ClientMeResponse])
+        async def get_client_me(
+            client: Annotated[ClientPrincipal, Depends(require_client())],
+        ) -> ...: ...
+    """
+
+    async def _checker(
+        client: Annotated[ClientPrincipal, Depends(get_current_client)],
+    ) -> ClientPrincipal:
+        return client
+
+    return _checker
+
+
+async def verify_client_csrf(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Double-submit CSRF check for client endpoints (D-10 / T-68-12).
+
+    Mirrors `verify_csrf` but reads the `clubcore_client_csrf` cookie (NOT
+    `clubcore_csrf`) against the `x-csrf-token` header. Short-circuits on
+    safe methods (GET/HEAD/OPTIONS/TRACE). Uses `secrets.compare_digest`
+    (constant-time) to prevent timing-based oracle (T-68-12 mitigation).
+
+    Raises:
+      CsrfMismatch (403, code='csrf_mismatch') on mismatch or missing values.
+    """
+    if request.method in _SAFE_METHODS:
+        return
+    cookie_val = request.cookies.get("clubcore_client_csrf")
+    header_val = request.headers.get("x-csrf-token")
+    if (
+        cookie_val is None
+        or header_val is None
+        or not secrets.compare_digest(cookie_val, header_val)
+    ):
+        await audit.emit(
+            session,
+            "csrf_mismatch",
+            actor_user_id=None,
+            resource_type="csrf",
+            path=request.url.path,
+            method=request.method,
+            ip=request.client.host if request.client is not None else None,
+            has_cookie=cookie_val is not None,
+            has_header=header_val is not None,
+        )
+        raise CsrfMismatch("csrf_mismatch")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
