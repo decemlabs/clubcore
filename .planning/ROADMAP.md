@@ -138,7 +138,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 66-01-PLAN.md — IDM-01 (endpoint classification audit doc -> `.planning/handoff/v1.11-idempotency-audit.md`; authoritative category-A set)
+- [x] 66-01-PLAN.md — IDM-01 (endpoint classification audit doc -> `.planning/handoff/v1.11-idempotency-audit.md`; authoritative category-A set)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -195,7 +195,7 @@ Plans:
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
-| 66. Idempotency Hardening | v1.11 | 0/5 | Not started | — |
+| 66. Idempotency Hardening | v1.11 | 1/5 | In Progress|  |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
 
