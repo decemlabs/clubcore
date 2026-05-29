@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID as UUIDType  # noqa: N811
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Text, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -109,6 +109,13 @@ class OtpCode(Base, UUIDPkMixin, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
     )
+    # Phase 68 D-03 — nullable FK for client OTP rows.  XOR CHECK (below in
+    # __table_args__) enforces exactly one of (user_id, client_id) non-null.
+    client_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     telegram_chat_id: Mapped[int | None] = mapped_column(
         BigInteger,
         nullable=True,
@@ -153,6 +160,21 @@ class OtpCode(Base, UUIDPkMixin, TimestampMixin):
         Index(
             "uq_otp_codes_user_channel_active",
             "user_id",
+            "channel",
+            unique=True,
+            postgresql_where=text("consumed_at IS NULL"),
+        ),
+        # Phase 68 D-03 — XOR CHECK: exactly one of (user_id, client_id) must
+        # be non-null.  Prevents ownership confusion (T-68-01).
+        CheckConstraint(
+            "(user_id IS NULL) <> (client_id IS NULL)",
+            name="ck_otp_codes_principal_xor",
+        ),
+        # Phase 68 D-03 — mirrors the staff partial-unique for client principal
+        # single-active uniqueness (one active OTP per client + channel).
+        Index(
+            "uq_otp_codes_client_channel_active",
+            "client_id",
             "channel",
             unique=True,
             postgresql_where=text("consumed_at IS NULL"),
