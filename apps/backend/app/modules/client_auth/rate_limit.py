@@ -88,12 +88,17 @@ async def check_client_otp_daily(redis: Redis, phone: str) -> None:
 
 
 async def bump_client_ip_rate(redis: Redis, ip: str | None) -> None:
-    """INCR per-IP counter; set EXPIRE 900s if it was the first hit."""
+    """INCR per-IP counter; EXPIRE 900s anchored to FIRST hit (NX).
+
+    WR-01: nx=True ensures the TTL is set only when the key has no TTL — i.e.
+    the first request in the window. Subsequent bumps skip the EXPIRE, so the
+    window is anchored to the first request rather than rolling to the last.
+    """
     if ip is None:
         return
     pipe = redis.pipeline()
     pipe.incr(_ip_key(ip))
-    pipe.expire(_ip_key(ip), _IP_WINDOW)
+    pipe.expire(_ip_key(ip), _IP_WINDOW, nx=True)  # nx=True: set TTL only if absent
     await pipe.execute()
 
 
@@ -103,8 +108,14 @@ async def record_client_otp_sent(redis: Redis, phone: str) -> None:
 
 
 async def bump_client_otp_daily(redis: Redis, phone: str) -> None:
-    """INCR per-phone daily counter; set EXPIRE 86400s if first hit."""
+    """INCR per-phone daily counter; EXPIRE 86400s anchored to FIRST hit (NX).
+
+    WR-01: nx=True ensures the TTL is set only when the key has no TTL — i.e.
+    the first OTP request in the 24h window. Subsequent bumps skip the EXPIRE,
+    anchoring the window to the first request so it cannot be extended
+    indefinitely by repeated requests.
+    """
     pipe = redis.pipeline()
     pipe.incr(_daily_key(phone))
-    pipe.expire(_daily_key(phone), _DAILY_WINDOW)
+    pipe.expire(_daily_key(phone), _DAILY_WINDOW, nx=True)  # nx=True: set TTL only if absent
     await pipe.execute()
