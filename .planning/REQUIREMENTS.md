@@ -28,9 +28,9 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### My Membership / Home
 
-- [ ] **CHOME-01**: Клиент видит свой активный абонемент (план, дни до окончания, статус заморозки)
-- [ ] **CHOME-02**: Клиент видит свою ближайшую бронь на главном экране
-- [ ] **CHOME-03**: Клиент видит индикатор «скоро истекает» по своему абонементу
+- [x] **CHOME-01**: Клиент видит свой активный абонемент (план, дни до окончания, статус заморозки)
+- [x] **CHOME-02**: Клиент видит свою ближайшую бронь на главном экране
+- [x] **CHOME-03**: Клиент видит индикатор «скоро истекает» по своему абонементу
 
 ### My Bookings + Self-Booking
 
@@ -56,25 +56,25 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### History
 
-- [ ] **CHIST-01**: Клиент видит историю своих визитов
-- [ ] **CHIST-02**: Клиент видит историю своих тренировок (PT-sessions, ownership через `pt_packages.client_id`)
-- [ ] **CHIST-03**: Клиент видит историю своих покупок (payments, включая возвраты)
+- [x] **CHIST-01**: Клиент видит историю своих визитов
+- [x] **CHIST-02**: Клиент видит историю своих тренировок (PT-sessions, ownership через `pt_packages.client_id`)
+- [x] **CHIST-03**: Клиент видит историю своих покупок (payments, включая возвраты)
 
 ### Catalogs (client read)
 
-- [ ] **CPLAN-01**: Клиент видит каталог абонементов (membership plans) для покупки
-- [ ] **CPLAN-02**: Клиент видит каталог PT-пакетов для покупки
-- [ ] **CPLAN-03**: Клиент видит каталог тренеров (имя/специализация из существующего trainers-каталога; рейтинги/отзывы — out of scope, остаются mock)
+- [x] **CPLAN-01**: Клиент видит каталог абонементов (membership plans) для покупки
+- [x] **CPLAN-02**: Клиент видит каталог PT-пакетов для покупки
+- [x] **CPLAN-03**: Клиент видит каталог тренеров (имя/специализация из существующего trainers-каталога; рейтинги/отзывы — out of scope, остаются mock)
 
 ### PWA Stack Alignment + Wiring
 
-- [ ] **PWA-01**: `client-pwa` входит в pnpm workspace (`bun.lock` удалён); единый `pnpm install` + CI
-- [ ] **PWA-02**: `client-pwa` переведён на TypeScript (allowJs ramp, file-by-file); подключён общий ESLint/Prettier/import-linter
-- [ ] **PWA-03**: `client-pwa` переиспользует `@clubcore/api-client` (typed fetcher + `schema.d.ts`) через тонкий `clientFetcher.ts` (свои cookie-имена + refresh-URL); **react-router v6 сохранён** (без миграции на TanStack)
-- [ ] **PWA-04**: Vite 5→6 выровнен; PWA собирается и проходит typecheck + lint + test
+- [x] **PWA-01**: `client-pwa` входит в pnpm workspace (`bun.lock` удалён); единый `pnpm install` + CI
+- [x] **PWA-02**: `client-pwa` переведён на TypeScript (allowJs ramp, file-by-file); подключён общий ESLint/Prettier/import-linter
+- [x] **PWA-03**: `client-pwa` переиспользует `@clubcore/api-client` (typed fetcher + `schema.d.ts`) через тонкий `clientFetcher.ts` (свои cookie-имена + refresh-URL); **react-router v6 сохранён** (без миграции на TanStack)
+- [x] **PWA-04**: Vite 5→6 выровнен; PWA собирается и проходит typecheck + lint + test
 - [ ] **PWA-05**: Экраны Home / Profile / Book / Plans / Checkout / QR работают на реальном backend через клиентский API
-- [ ] **PWA-06**: Net-new экраны (Chat, Referral, отзывы тренеров, лента уведомлений, gym-info) остаются на mock-данных / плейсхолдере «в разработке» — без backend-вызовов
-- [ ] **PWA-07**: PWA installable (manifest + SW shell для install-prompt), но service-worker НИКОГДА не кеширует `/api/*` запросы (нет stale authed data)
+- [x] **PWA-06**: Net-new экраны (Chat, Referral, отзывы тренеров, лента уведомлений, gym-info) остаются на mock-данных / плейсхолдере «в разработке» — без backend-вызовов
+- [x] **PWA-07**: PWA installable (manifest + SW shell для install-prompt), но service-worker НИКОГДА не кеширует `/api/*` запросы (нет stale authed data)
 
 ### OpenAPI Handoff + Contract Preservation
 
@@ -143,21 +143,21 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CISO-03 | Phase 68 | Complete |
 | CISO-04 | Phase 68 | Complete |
 | CISO-05 | Phase 68 | Complete |
-| CHOME-01 | Phase 69 | Pending |
-| CHOME-02 | Phase 69 | Pending |
-| CHOME-03 | Phase 69 | Pending |
-| CHIST-01 | Phase 69 | Pending |
-| CHIST-02 | Phase 69 | Pending |
-| CHIST-03 | Phase 69 | Pending |
-| CPLAN-01 | Phase 69 | Pending |
-| CPLAN-02 | Phase 69 | Pending |
-| CPLAN-03 | Phase 69 | Pending |
-| PWA-01 | Phase 69 | Pending |
-| PWA-02 | Phase 69 | Pending |
-| PWA-03 | Phase 69 | Pending |
-| PWA-04 | Phase 69 | Pending |
-| PWA-06 | Phase 69 | Pending |
-| PWA-07 | Phase 69 | Pending |
+| CHOME-01 | Phase 69 | Complete |
+| CHOME-02 | Phase 69 | Complete |
+| CHOME-03 | Phase 69 | Complete |
+| CHIST-01 | Phase 69 | Complete |
+| CHIST-02 | Phase 69 | Complete |
+| CHIST-03 | Phase 69 | Complete |
+| CPLAN-01 | Phase 69 | Complete |
+| CPLAN-02 | Phase 69 | Complete |
+| CPLAN-03 | Phase 69 | Complete |
+| PWA-01 | Phase 69 | Complete |
+| PWA-02 | Phase 69 | Complete |
+| PWA-03 | Phase 69 | Complete |
+| PWA-04 | Phase 69 | Complete |
+| PWA-06 | Phase 69 | Complete |
+| PWA-07 | Phase 69 | Complete |
 | CBOOK-01 | Phase 70 | Pending |
 | CBOOK-02 | Phase 70 | Pending |
 | CBOOK-03 | Phase 70 | Pending |
