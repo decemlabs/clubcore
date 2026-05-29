@@ -120,7 +120,7 @@ Plans:
 **Plans**: 4 plans
 - [x] 65-01-PLAN.md — Private repo-root package.json tooling scaffold + private doc-site (HND-06)
 - [x] 65-02-PLAN.md — Postman collection generation + augmentation: auth/CSRF wiring + assertions (HND-01/02/03)
-- [ ] 65-03-PLAN.md — Newman smoke harness (curated happy-path subset, runtime-credential discipline) (HND-04)
+- [x] 65-03-PLAN.md — Newman smoke harness (curated happy-path subset, runtime-credential discipline) (HND-04)
 - [ ] 65-04-PLAN.md — clubcore-auth-runbook.md: all auth flows + Idempotency-Key semantics (HND-05)
 **UI hint**: no
 
@@ -200,7 +200,7 @@ Plans:
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
-| 65. Handoff Artifacts | v1.11 | 2/4 | In Progress|  |
+| 65. Handoff Artifacts | v1.11 | 3/4 | In Progress|  |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
 
 ---
