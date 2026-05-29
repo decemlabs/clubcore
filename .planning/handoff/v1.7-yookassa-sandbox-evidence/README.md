@@ -93,7 +93,7 @@ Confirm:
 ### Step 5 — Observe fiscal_receipts row
 
 ```bash
-docker compose exec db psql -U app app -c \
+docker compose exec postgres psql -U app app -c \
   "SELECT id, kind, status, yookassa_receipt_id, succeeded_at \
    FROM fiscal_receipts \
    WHERE online_payment_id = (SELECT id FROM online_payments WHERE yookassa_payment_id = '<captured-id>' LIMIT 1);"
@@ -109,7 +109,7 @@ Expected: one row with `kind='payment'`, `status='sent'` (or `'pending'` if ARQ 
 
 ```bash
 # Find the membership_id activated in Step 4
-docker compose exec db psql -U app app -c \
+docker compose exec postgres psql -U app app -c \
   "SELECT id FROM memberships WHERE client_id = (SELECT id FROM clients WHERE email = 'verify_sale@fixture.local') AND status = 'active' LIMIT 1;"
 
 # Issue the refund
@@ -220,3 +220,11 @@ The AI agent (Phase 53, Plan 53-04) attests:
   53-CONTEXT.md line 102.
 
 *Scaffolding ready. Awaiting operator execution.*
+
+---
+
+## Revision Log
+
+| Date | Author | Change | Reference |
+|------|--------|--------|-----------|
+| 2026-05-29 | RUN-00 staleness audit (Phase 67 Plan 01) | Fixed stale service name in psql commands at Steps 5 and 6: `exec db` → `exec postgres`. The actual docker-compose service is named `postgres`, not `db` — verified against `apps/backend/docker-compose.yml`. | v1.11-OPERATOR-EVIDENCE.md RUN-00 |
