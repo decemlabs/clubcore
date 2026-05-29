@@ -1,354 +1,309 @@
-# Pitfalls Research: v1.11 API Handoff + Production Hardening
+# Pitfalls Research: v2.0 Frontend Integration — Client PWA
 
-**Domain:** FastAPI modular monolith — OpenAPI curation, Postman/Newman handoff, idempotency hardening, tech-debt sweep, operator runbook execution
-**Researched:** 2026-05-26
-**Confidence:** HIGH — based on direct codebase inspection (`app/core/idempotency.py`, `app/integrations/yookassa/`, `apps/backend/openapi.json`, `.github/workflows/ci.yml`, `RETROSPECTIVE.md`)
+**Domain:** Adding a client-facing portal + PWA to a mature, staff-only FastAPI gym CRM (RF/CIS)
+**Researched:** 2026-05-29
+**Confidence:** HIGH — based on direct codebase inspection (auth/service.py, visits/service.py, online_payments/service.py, core/permissions.py, core/security.py, core/dependencies.py, core/idempotency.py, apps/client-pwa/package.json)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall C-01: Auto-generated operation IDs — `_api_v1_` suffix leaks into Postman + schema.d.ts
+### Pitfall P-01: Cross-Client Data Leakage (IDOR) — Missing `client_id` Ownership Filter
 
 **What goes wrong:**
-All 102 of the 103 current operations use FastAPI's auto-generated operation ID format: `login_api_v1_auth_login_post`, `list_audit_log_api_v1_audit_log_get`, etc. When `openapi-to-postmanv2` consumes these, every Postman request name contains the full path slug. More critically, when the frontend codegen regenerates `schema.d.ts`, the TypeScript function name is derived from the operation ID — `listAuditLogApiV1AuditLogGet()` is the generated client function name that every admin-web callsite uses. If Phase 64 adds explicit `operation_id=` to routes, FastAPI replaces the old auto-generated ID, the Postman collection picks up clean names, but `schema.d.ts` is regenerated with different function names, breaking all existing callsite references in `apps/admin-web`.
+A client-scoped endpoint (e.g., `GET /api/client/v1/memberships`) fetches data by ID without verifying that the authenticated client owns that record. A client who knows or guesses another client's membership UUID can retrieve it. This is the single most dangerous class of bug in this milestone because the existing staff endpoints have NO ownership filter — they are designed for staff who see all data. When a new client endpoint reuses a staff repository method, the ownership filter is trivially omitted.
+
+Concrete example: `GET /api/client/v1/bookings/{booking_id}` calls `repository.get(session, booking_id)` — the staff version of this function — without adding `WHERE client_id = :authenticated_client_id`. An attacker iterates UUIDs and reads other clients' bookings, PT session logs, payment history.
 
 **Why it happens:**
-The instinct is to "just add clean operation IDs" during curation. The developer sees the messy auto-generated names, adds `operation_id="list_audit_log"` to the route decorator, runs `export_openapi.py`, and sees a cleaner spec. What they don't immediately notice is that `pnpm --filter @clubcore/api-client codegen` now generates `listAuditLog()` instead of `listAuditLogApiV1AuditLogGet()`, and the drift gate fires because `schema.d.ts` changed. If they commit the new `schema.d.ts`, every callsite in `apps/admin-web` that used the old function name needs updating — but since Phase 64 is a backend-only milestone with `apps/admin-web` frozen, those callsites cannot be updated.
+The existing repository layer (`visits/repository.py`, `memberships/repository.py`, etc.) is built for staff who see all records. The developer adds a thin wrapper for the client endpoint and calls the same repository function. The `client_id` filter is the only thing that makes the query client-scoped, and it is not enforced at the repository or model level — it must be threaded explicitly through every query. One missed filter = one IDOR.
 
 **How to avoid:**
-Two viable strategies:
-1. **Keep all auto-generated operation IDs unchanged** — only add the `_api_v1_` suffix stripping via `generate_unique_id_function` in `FastAPI()` constructor (replaces the path-slug suffix while keeping the function name prefix stable). This changes ALL 102 operation IDs in one commit, which is a known drift event — do it in Phase 64's first plan with a single regen. Verify the schema.d.ts diff is clean (no actual TypeScript function name changes, only the exported string values that are used in the type-level `AssertNonNever` checks). Then run the 14 `_v19Checks` + `_v18Checks` forward guards to confirm nothing broke at the type level.
-2. **Never change existing operation IDs post-codegen** — freeze the current auto-generated IDs as explicit `operation_id=` values on each route (copy the existing ID verbatim), then separately clean up naming in v2.0 when admin-web integration is done. This is the safe path for v1.11.
-
-The safe path for this milestone: use `generate_unique_id_function` to strip the `_api_v1_{method}` suffix once (Phase 64 plan 1), regen both artifacts atomically, verify all downstream guards are green. Do not change the semantic names of operations.
+1. **Dedicated client-scoped repository layer**: Create `app/modules/{domain}/client_repository.py` that wraps every SELECT with an explicit `WHERE client_id = :client_id` clause. Never call staff repository functions from client endpoints.
+2. **`ClientPrincipal` dependency that carries `client_id`**: Analogous to `CurrentUser` for staff, a `ClientPrincipal` Protocol carries the resolved `client_id` and is injected into every client endpoint via `Depends(require_client_auth())`. Every route handler receives `client: ClientPrincipal` — making it impossible to forget the ownership context.
+3. **Parametrized IDOR enumeration test suite**: In the same phase that ships each client endpoint domain, add a test: authenticate as client_A, try to fetch client_B's resource ID, assert 404 (not 403 — anti-oracle collapse, same as existing staff patterns). Run for every `GET /{resource}/{id}` and every `POST /{resource}/{id}/action` in the client API.
 
 **Warning signs:**
-- `git diff packages/api-client/src/schema.d.ts` shows function name changes (not just whitespace or comment changes) after running `export_openapi.py`
-- The drift gate in CI fires on `schema.d.ts`
-- TypeScript `AssertNonNever` guard compilation errors in `apps/admin-web`
+- A client repository function that does not take `client_id: UUID` as a parameter
+- A client endpoint that calls a staff repository function (e.g., `repository.get(session, booking_id)`) without an ownership predicate
+- Any test file that covers the client endpoint but does not have a "cross-client access → 404" test case
 
-**Phase to address:** Phase 64 (Contract Freeze — OpenAPI Curation), plan 1
+**Phase to address:** Phase 68 (Client Auth Foundation) — establish the `ClientPrincipal` dependency and ownership-test pattern before any domain endpoint is wired. Every subsequent domain phase (visits, bookings, memberships, payments) must include the IDOR enumeration test as a mandatory success criterion.
 
 ---
 
-### Pitfall C-02: Idempotency cache survives DB rollback — ghost transaction on retry
+### Pitfall P-02: Phone/OTP Enumeration Oracle — Anti-Oracle Parity Not Mirrored for Client Principal
 
 **What goes wrong:**
-The current `app/core/idempotency.py` flow is: (1) `begin_idempotency` — SET NX placeholder, (2) run handler — DB write, (3) `store_idempotency_response` — replace placeholder with full envelope. If step (2) raises an exception and the DB write rolls back (e.g., a unique constraint violation, a service-layer `AppError`, or an async SQLAlchemy session rollback), step (3) is never called — the Redis key stays as `__in_flight__`. On the client's next retry with the same `Idempotency-Key`, `load_idempotency_response` returns `_PLACEHOLDER`, and the code raises `ConflictError("idempotency_in_flight")`. The client is blocked indefinitely — it cannot retry, cannot get a success, cannot get the real error. The placeholder TTL is 3600s, so the user is locked out for up to 1 hour.
+`POST /api/client/v1/auth/otp/request` (phone OTP for client login) leaks whether a phone number is a registered member. The naive implementation checks `SELECT * FROM clients WHERE phone = :phone`, finds no row, and returns a 404 or a different response body or response timing than the "phone found" path. An attacker sends a list of phone numbers and classifies each as "member" or "non-member" by comparing response time or body.
 
-There is a subtler variant: if the DB write SUCCEEDS but `store_idempotency_response` fails (Redis write error), the next retry sees a missing Redis key, acquires the claim, reruns the handler, and hits a DB unique constraint — which surfaces as a 500 or a misleading 409 instead of the idempotent 200.
+This is the same class of oracle the existing staff auth defends against — `authenticate()` runs `_get_sentinel_hash()` to make the "email not found" path take exactly as long as the "found, wrong password" path, and `request_otp_email()` uses `_constant_time_floor()` to make unknown-email and known-unverified-email branches indistinguishable. The client phone OTP flow must mirror this discipline exactly.
+
+Additional sub-cases:
+- A soft-deleted client (`deleted_at IS NOT NULL`) must be treated identically to "phone not found" — same response shape, same timing.
+- A client with `phone IS NULL` (some clients were added without phone, only email or manually) must also fold into the silent-drop bucket.
+- A client with duplicate phone (partial UNIQUE `(phone) WHERE deleted_at IS NULL` exists in the clients table from v1.1) — the live duplicate should not surface as a 500 error that reveals DB state.
 
 **Why it happens:**
-The `store_idempotency_response` call is placed in the route body after `await service.create_something(...)`. If the service raises, the route never reaches the store call. The Redis placeholder is an in-flight lock, not a committed log.
+Phone OTP is a new flow with no existing pattern to copy for clients. The developer implements the OTP request, successfully sends the SMS, and writes a test for the happy path. The "phone not found" path raises an HTTP 404 with `{"code": "phone_not_found"}` because it seems user-friendly. No one adds the anti-oracle test until security review, if ever.
 
 **How to avoid:**
-Wrap the `store_idempotency_response` call in a `try/finally` pattern or use a middleware-level response hook. The standard pattern is:
-
-```python
-result = await begin_idempotency(redis, key)
-if result is False:
-    ...  # replay or raise in_flight
-try:
-    response_data = await service.do_thing(...)
-    await store_idempotency_response(redis, key, status_code=200, body_bytes=response_bytes)
-except AppError as exc:
-    # On known app errors, store the ERROR response in the envelope too
-    # so retries get the same error, not in_flight
-    error_bytes = serialize_error(exc)
-    await store_idempotency_response(redis, key, status_code=exc.status_code, body_bytes=error_bytes)
-    raise
-```
-
-For unknown exceptions (DB unreachable, 500), the safest recovery is to DELETE the placeholder key so the next retry can attempt fresh. Add `await redis.delete(_redis_key(key))` in the `except Exception` branch. This trades "guaranteed at-most-once" for "retry gets another chance", which is the right tradeoff for non-payment endpoints.
-
-For payment endpoints specifically (sell, refund), the handler must be idempotent at the DB layer too (the existing `UNIQUE (membership_id, ...)` + `ON CONFLICT DO NOTHING` patterns from v1.4/v1.9 provide this).
+1. Copy the `_constant_time_floor()` try/finally wrapper from `auth/service.py:request_otp_email()` verbatim for `request_client_otp_phone()`. Measure the populated-branch median and set the floor at that value.
+2. The "phone not found" branch, "soft-deleted client" branch, and "no-phone client" branch ALL return `200 OK` with `{"data": null}` — identical body and headers to the "OTP sent" branch.
+3. Write an anti-oracle integration test (analogous to plan 42-11): submit an OTP request for a known phone and an unknown phone; assert response bodies are byte-identical; assert wall-clock difference is within 100ms tolerance.
 
 **Warning signs:**
-- Integration test: submit a request that causes a service-layer exception, then retry with the same key — verify the retry gets the original error (not `idempotency_in_flight`)
-- Monitoring: Redis keys matching `cc:idem:*` with value `__in_flight__` that are older than 10 minutes
+- `POST /api/client/v1/auth/otp/request` returns 4xx for any phone input (it must always return 200)
+- No `await asyncio.sleep(remaining_ms / 1000)` or equivalent timing floor in the client OTP handler
+- Response body for "phone not found" contains `code` or `message` that differs from "OTP sent"
 
-**Phase to address:** Phase 66 (Idempotency Hardening) — audit all `begin_idempotency` callsites and add exception-aware cleanup
+**Phase to address:** Phase 68 (Client Auth Foundation) — anti-oracle must be built in from the start, not retrofitted. Gate the phase with the timing-equivalence integration test.
 
 ---
 
-### Pitfall C-03: Idempotency-Key excludes `actor_user_id` — cross-user replay attack
+### Pitfall P-03: Privilege Boundary Collapse — Client Token Accepted by Staff Endpoints or Vice Versa
 
 **What goes wrong:**
-`verify_idempotency` returns `f"{method}:{path}:{header_value}"` — the key includes method, path, and the raw header string, but NOT the authenticated user. If user A sends `POST /api/v1/pt-packages` with `Idempotency-Key: abc123` and it succeeds, and user B (a different operator in the same multi-user admin) sends the same request with the same key `abc123`, user B's request hits the Redis cache and gets back user A's response (user A's PT package ID, user A's client's data). In a single-gym CRM with reception + owner roles, both roles can call the same mutating endpoints. An accidental key collision (human-chosen keys like `retry-1` or timestamp-based keys) causes one user to see another user's transaction result.
+The client principal (phone-OTP login) and the staff principal (email/password or Telegram-OTP login) share the same `cc_access` JWT cookie namespace and potentially the same `decode_access_token()` path. If the client JWT encodes `role: "client"` (a new Role enum value) but `get_current_user()` in `app/core/dependencies.py` is extended naively, two failure modes emerge:
+
+1. **Client token accepted by staff endpoints**: `require_permission(Action.LIST, Resource.CLIENTS)` calls `can(user.role, action, resource)`. If `role = "client"` falls through the `OWNER_ONLY` check (which only checks owner vs. non-owner) and is not explicitly rejected, a client JWT can reach staff endpoints and return data for all clients, not just their own.
+
+2. **Staff token accepted by client endpoints**: A staff `require_client_auth()` dependency that only checks "is authenticated" (not "is a client principal") accepts a staff JWT. A staff member (or a compromised staff account) can use the client endpoints to reach data via the client-scoped repository layer — which may have fewer rate-limit or RBAC guardrails.
 
 **Why it happens:**
-Session context is in the HTTP-only cookie (JWT), not in the `Idempotency-Key` header. The current `verify_idempotency` dependency only has access to `request` — and extracting the actor from the JWT in a `Depends()` that runs before `get_current_user` would create a dependency ordering issue. The simpler (and subtly wrong) approach of binding only to method+path+key was chosen in D-33-16.
+The existing `Role` enum has exactly two values: `OWNER` and `RECEPTION`. The `can()` function short-circuits to `True` for owners. Adding `Role.CLIENT = "client"` to the StrEnum without also modifying `can()`, `require_permission()`, and `get_current_user()` to reject client tokens on staff paths leaves a hole. The route-introspection test (`tests/integration/test_route_introspection.py`) only covers staff routes — it will not catch the new client routes if they are not added to the introspection fixture.
 
 **How to avoid:**
-Bind the idempotency key to the session by adding the actor's user ID (or session token hash) to the Redis namespace. The cleanest approach: add `actor_user_id` as a parameter to `verify_idempotency` via a dependent `Depends(get_current_user)`:
-
-```python
-async def verify_idempotency(
-    request: Request,
-    redis: Annotated[Redis, Depends(get_redis)],
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> str:
-    ...
-    return f"{request.method}:{request.url.path}:{current_user.id}:{key}"
-```
-
-This makes the key `{method}:{path}:{user_id}:{header_value}`, which is unique per user. Existing routes that use `Depends(verify_idempotency)` automatically get the user-scoped key because FastAPI resolves the full dependency graph.
-
-Note: the ЮKassa webhook endpoint (`/_internal/yookassa/webhook`) uses a DIFFERENT idempotency mechanism (direct `redis.set(f"cc:yk:webhook:{event_id}", NX=True, EX=86400)`) and does NOT use `verify_idempotency`. It is not affected by this fix.
+1. **Do NOT add `Role.CLIENT` to the shared `app/core/permissions.py` StrEnum** — this would require the frontend `can.ts` parity test to add a client role, breaking the byte-parity invariant. Instead, use a separate `ClientPrincipal` Protocol that carries `client_id: UUID` without a `Role` field.
+2. Implement two entirely separate dependency trees: `get_current_user()` (staff, reads `cc_access` JWT with `role in {owner, reception}`) and `get_current_client()` (client, reads a different cookie e.g. `cc_client_access` with a `principal: "client"` claim in the JWT body). The token shape difference at the JWT level means the two dependency trees reject each other's tokens at the `decode_access_token()` call.
+3. Add an invariant to the route-introspection test: every route under `/api/client/v1/*` must declare `Depends(require_client_auth())` (analogous to `require_permission`). Every route under `/api/v1/*` must reject client tokens (assert 401 when presented with a client JWT).
+4. Add an integration test: mint a client token, present it to `GET /api/v1/clients`, assert 401.
 
 **Warning signs:**
-- Multiple operator accounts exist (v1.6 shipped multi-user admin with 4 OWNER_ONLY USERS pairs) — cross-user collision risk is real, not hypothetical
-- Any client-side retry logic that uses deterministic keys (timestamps, sequence numbers) rather than UUIDs
+- `role: "client"` added to `app/core/permissions.py`
+- `require_permission()` extended to handle client tokens rather than a separate `require_client_auth()` dependency
+- Route-introspection test coverage does not include `/api/client/v1/*` routes
+- No integration test asserting staff endpoints reject client tokens
 
-**Phase to address:** Phase 66 (Idempotency Hardening) — update `verify_idempotency` signature; verify with a test that submits the same key from two different users and confirms independent responses
+**Phase to address:** Phase 68 (Client Auth Foundation) — the two-principal architecture must be settled in the auth phase before any domain endpoint is added.
 
 ---
 
-### Pitfall C-04: OpenAPI spec title `"Sportzal API"` / version `"1.1.0"` — staleness baked into handoff artifacts
+### Pitfall P-04: OTP Bombing and SMS Cost — No Rate Limit on Phone OTP Request
 
 **What goes wrong:**
-The current `FastAPI()` constructor in `app/main.py` has `title="Sportzal API"` and `version="1.1.0"`. The v1.10 rebrand renamed all code identifiers but left this string. When Phase 65 generates the Postman collection from `openapi.json`, the collection info block reads `"name": "Sportzal API"`. When the Redocly doc-site renders, the header says "Sportzal API 1.1.0". The handoff artifacts carry the old name.
+`POST /api/client/v1/auth/otp/request` triggers an SMS (via the RF/CIS SMS gateway, which is a paid service — roughly 2–5 RUB per SMS). Without a rate limit, an attacker sends 10,000 requests for a single phone number, costing 20,000–50,000 RUB. Even without malice, a client who taps "Resend OTP" rapidly 20 times triggers 20 SMS charges.
 
-The version `"1.1.0"` is frozen from v1.1 (Phase 5) and has not tracked the codebase milestones — it is not semantically meaningful, but it signals neglect to the design team consuming the handoff.
+The existing email OTP has a **60-second row-level cooldown** (`cooldown_row.created_at > now - timedelta(seconds=60)`) and a pending Redis rate limit for IP/email (documented as "wired in a downstream Wave-3 follow-up" in `service.py:request_otp_email()`). Phone SMS OTP has no analogous protection in the existing codebase.
+
+Additional risk: **OTP brute-force**. A 6-digit OTP has 10^6 combinations. The existing `consume()` function in `telegram_service.py` increments `otp_row.attempts` and raises `OtpMaxAttempts` after `settings.otp_max_attempts` misses, committing the counter before raising. This pattern must be mirrored exactly for phone OTP — including the "commit before raise" discipline so the counter cannot be rewound by a client dropping the connection.
 
 **Why it happens:**
-Phase 62 (rebrand) focused on namespaces, Redis keys, npm packages, and env vars. The `FastAPI()` `title=` and `version=` arguments are visible in generated docs but not in any source file that grep for "sportzal" catches, because they are string literals in `app/main.py` inside a Python call expression. The HISTORICAL_NOTE explicitly marks `app/main.py` as active code — so this is a missed item, not intentionally preserved.
+Phone SMS OTP is a new channel not in the existing codebase. The developer copies the Telegram OTP structure (which has no SMS cost pressure) and does not add the per-phone cooldown. The anti-oracle requirement makes the "phone not found" path identical to "OTP sent," so a naive rate-limit that returns 429 only for known phones would itself be an oracle leak.
 
 **How to avoid:**
-Phase 64 (Contract Freeze) — update `FastAPI(title="clubcore API", version="1.11.0", ...)` as the first plan. Also update `info.description` if absent. Add `servers=[{"url": "{BASE_URL}"}]` with an env-substitutable base URL (not hardcoded localhost). After this change, run `export_openapi.py` and regen `schema.d.ts` to produce the single byte-stable event that updates both drift-gate artifacts. Verify the drift gate CI passes.
+1. **Per-phone 60-second row-level cooldown**: Mirror `request_otp_email()`'s cooldown check — if an alive `otp_codes` row for this phone exists with `created_at > now - 60s`, silently drop (return 200 `data: null` without sending SMS).
+2. **Per-IP rate limit on `/api/client/v1/auth/otp/request`**: 5 requests per 15 minutes per IP, checked BEFORE the phone lookup (same pattern as `check_login_rate()` in `auth/rate_limit.py`). The 429 response for IP-rate-limiting is NOT an oracle for phone existence (the limit applies equally regardless of whether the phone is registered).
+3. **Per-phone daily cap**: Additional Redis counter `ratelimit:sms:{phone_e164}` max 10 per day. Reset at Europe/Moscow midnight.
+4. **OTP max attempts with commit-before-raise**: Copy `telegram_service.py:consume()` pattern — `otp_row.attempts += 1; await session.commit(); if otp_row.attempts >= max: raise OtpMaxAttempts`. The commit-before-raise ensures the counter persists even if the client drops the TCP connection mid-response.
+5. **OTP code TTL**: 5–10 minutes (not 24 hours). Short TTL limits the window for brute-force even if max_attempts is generous.
 
 **Warning signs:**
-- `grep "Sportzal API" apps/backend/openapi.json` returns a hit
-- `grep "1.1.0" apps/backend/openapi.json` returns a hit under `"info"`
+- No Redis rate-limit key for phone OTP requests
+- No 60-second row-level cooldown for phone OTP
+- OTP attempts counter incremented and saved AFTER raise (rewindable by connection drop)
+- OTP TTL > 15 minutes in settings
 
-**Phase to address:** Phase 64, plan 1 (before generating any handoff artifacts)
+**Phase to address:** Phase 68 (Client Auth Foundation) — rate limits and attempt caps are security primitives that must ship with the OTP endpoint, not be added later.
 
 ---
 
-### Pitfall C-05: `store_idempotency_response` stores state at time of first response — stale cache on status-transition retry
+### Pitfall P-05: Self-Checkout Integrity — Activating Membership on Redirect Instead of Webhook
 
 **What goes wrong:**
-For ЮKassa payment endpoints, the sell flow creates an `online_payments` row with `status='pending'`, creates the ЮKassa payment, and returns a `SellResponse` with `payment_url`. The response is cached in Redis. Separately, the ЮKassa webhook later transitions the payment to `status='succeeded'` and activates the membership. If the client retries the sell with the same `Idempotency-Key` (e.g., because the original redirect-back URL was lost), they receive the cached `SellResponse` — which still shows `status='pending'` and the original `payment_url`. This is correct behavior for idempotency (return the original response), but it can confuse clients if they expect the retry to show the current DB state.
+A client initiates a ЮKassa payment for a membership from the PWA. ЮKassa redirects back to the `return_url` after the user completes payment. The naive implementation checks the payment status on the redirect-back and activates the membership if the status is `"succeeded"`. This is wrong for two reasons:
 
-This is distinct from a bug — it is the correct semantics of idempotency caching. The pitfall is implementing a "smart retry" that queries the DB to check current status and returns THAT instead of the cached response. This breaks idempotency guarantees and can cause double-charges if the "current status check" has a race condition.
+1. **Race condition**: The redirect-back fires before the ЮKassa webhook in some configurations. The payment status on redirect may still be `"waiting_for_capture"` — the membership is not activated, the client sees an error, they retry, the second redirect hits `"succeeded"`, now the membership IS activated — but the first attempt may have already created a duplicate payment row.
+2. **Client-side manipulation**: The `return_url` receives `paymentId` as a query parameter. If the client endpoint reads `?paymentId=...` and fetches status from ЮKassa, an attacker can forge a `paymentId` for someone else's payment, activating THEIR membership under the attacker's account.
+
+The existing staff checkout flow (online_payments service) explicitly locks activation to the webhook: the return screen shows "Ожидаем подтверждение от платёжной системы" (anti-oracle constant `_RETURN_HTML`), and the webhook handler does the DB activation in an 8-step atomic UoW. The client checkout MUST use the exact same pattern.
 
 **Why it happens:**
-The desire to show clients "up-to-date" status leads developers to add a DB lookup inside the cached response path. This is wrong: if the response was cached, replay it verbatim. If the client wants current status, they should use `GET /api/v1/.../{id}`.
+The PWA screens have a Checkout flow that currently redirects to a success screen. The developer adds a "confirm checkout" step that polls the API after redirect. Polling is fine for showing current status; activation on polling is the mistake.
 
 **How to avoid:**
-In Phase 66's idempotency audit, document explicitly: the cached response is the response at time of first successful execution. Retries get the cached response unchanged. For current status, callers must use the resource's GET endpoint. Add a note to the `components/parameters/IdempotencyKey` description in the curated OpenAPI spec.
+1. **Reuse the existing online_payments webhook handler** — do not create a second webhook endpoint for client-initiated payments. The existing `/_internal/yookassa/webhook` handles `payment.succeeded` for any `online_payment` row regardless of whether it was initiated by staff or client.
+2. **Client-scoped `POST /api/client/v1/checkout` endpoint** creates an `online_payments` row and returns the ЮKassa `confirmation_url`. The client PWA redirects the user to ЮKassa. On return, the PWA shows the "awaiting confirmation" screen (same copy as `_RETURN_HTML`). The membership activates ONLY when the webhook fires.
+3. **Price must be server-side**: The client sends `{plan_id, confirmation_type}`. The server reads the plan price from the DB (same `_read_membership_plan_or_raise()` pattern in `online_payments/service.py`). The client NEVER sends `amount` — it has no authority over price.
+4. **Mandatory email gate**: `_read_client_email_or_raise()` (existing pattern in `online_payments/service.py`) — 422 `client_email_required_for_online_payment` if the client has no email. For client-initiated checkout, the PWA must collect email at checkout time and PATCH the client record before calling checkout. The fiscal receipt requirement (54-ФЗ) is mandatory.
 
 **Warning signs:**
-- Any callsite that calls `load_idempotency_response` and then queries the DB to "update" the response before returning
-- A comment like "return current status instead of cached status on retry"
+- Any client endpoint that reads `?paymentId` from the redirect URL and activates a membership
+- A `POST /api/client/v1/checkout/confirm` endpoint that calls `activate_membership()` directly
+- Client checkout endpoint that accepts `amount` in the request body
+- A second `yookassa/webhook` endpoint for client payments
 
-**Phase to address:** Phase 66 (design doc and test) + Phase 64 (OpenAPI `IdempotencyKey` parameter description)
+**Phase to address:** Phase N (Client Checkout, likely Phase 70+) — the phase plan must explicitly prohibit redirect-based activation and require the existing webhook handler to cover client-initiated payments.
 
 ---
 
-### Pitfall C-06: Tech-debt sweep `ruff check --fix --unsafe-fixes` silently changes semantics
+### Pitfall P-06: Self Check-In Abuse — QR Replay, Cross-Client Check-In, No Membership Guard
 
 **What goes wrong:**
-The standard sweep order (`ruff check --fix`) uses only safe fixes. The `--unsafe-fixes` flag additionally applies rewrites that may change behavior: replacing `type(x) is Y` comparisons, removing arguments that appear unused but satisfy a Protocol, rewriting comprehensions, changing string literal forms. The 158 ruff errors in this codebase include `RUF100` (unused `# noqa`) and `F401` (unused imports) — both auto-fixable safely. But if `--unsafe-fixes` is added to "clean up faster", `RUF059` (unused unpacked variables) and certain `UP*` upgrades can change the meaning of lines that pass mypy clean.
+The QR check-in screen (`apps/client-pwa/src/screens/sheets/QRSheet.jsx`) generates a QR code that the client presents at the gym entrance. The backend `POST /api/client/v1/visits/qr-checkin` processes it. Three attack vectors:
 
-Specifically: the codebase uses Protocol-based cross-module wiring (`register_user_loader`, `register_active_membership_resolver`, etc.). Arguments that appear "unused" in a function body may be required by the Protocol signature. Ruff's `ARG001` (unused function argument) with `--unsafe-fixes` might strip them.
+1. **QR replay**: The QR payload is static (client_id encoded in a QR image). An attacker photographs the QR, uses it hours later to check in again (bypassing the 1/day limit if the gym_date changes at midnight Moscow time).
+2. **Cross-client check-in**: If the QR payload is simply `{client_id: "..."}` with no time-bound signature, someone can forge a QR for another client's ID.
+3. **Checking in without active membership**: The client-initiated check-in endpoint must run the same anti-fraud chain as `_create_visit_with_anti_fraud()` — gym_hours check → active_membership resolver → DB UNIQUE constraint. If the developer creates a simplified "self-checkin" endpoint that skips the active membership check ("clients can see the QR only if they have a membership, so no need to check again"), a client with an expired membership can check in until the QR is revoked.
 
-**Why it happens:**
-The `--unsafe-fixes` flag appears benign when running on a test codebase. On a production codebase with 10 modules, 17 Protocol slots, and ~80 linter errors, the temptation is to use it to make the sweep go faster.
+The existing bot self-checkin (`create_visit_self_checkin()`) calls `_create_visit_with_anti_fraud()` which enforces all three guards. The client QR endpoint must do the same.
 
 **How to avoid:**
-Never use `--unsafe-fixes` in Phase 63. The sweep order is:
-1. `ruff check --fix app tests` (safe fixes only)
-2. `ruff format app tests`
-3. Manual review of remaining errors
-4. `ruff check app tests` — 0 errors or documented `# noqa: RULECODE` suppressions with inline rationale
-
-The 158 errors break down to ~80 auto-fixable safely (RUF100, F401, I001) and ~78 manual. The manual ones mostly fall into `E501` (line length), `RUF002` (Cyrillic in docstrings), and `RUF059` (unused variables) — handle those by either fixing the line or adding a targeted `# noqa` with a comment.
+1. **Time-bound signed QR tokens**: The QR payload is a short-lived signed JWT (`{sub: client_id, exp: now + 60s, iat: now}`) signed with a server-side secret. The backend verifies the signature AND the expiry. Static QR images are useless after 60 seconds. Refresh the QR token in the PWA every 45 seconds via a `GET /api/client/v1/visits/qr-token` endpoint (which requires the `cc_client_access` cookie — only the authenticated client can generate their own token).
+2. **Anti-fraud chain mandatory**: The QR check-in endpoint calls the existing `_create_visit_with_anti_fraud()` helper (or an equivalent that extracts `client_id` from the QR JWT), which enforces gym_hours + active_membership + DB UNIQUE constraint. Never skip any step.
+3. **No `client_id` in plain QR**: The QR payload is the signed JWT, not a raw UUID. An attacker who photographs the QR gets an expired token after 60 seconds.
+4. **DB UNIQUE constraint is the final arbiter**: `UNIQUE (client_id, gym_date)` on the `visits` table (already exists, Alembic 0006) prevents duplicate check-ins regardless of race conditions or client bugs.
 
 **Warning signs:**
-- Running `ruff check --fix --unsafe-fixes` instead of `ruff check --fix`
-- Any ruff fix that touches a function signature (arguments removed)
-- A Protocol slot implementation that mypy suddenly can't match after the sweep
+- QR payload contains a raw `client_id` UUID without a signature
+- QR tokens with TTL > 5 minutes
+- Client check-in endpoint that does not call `_create_visit_with_anti_fraud()` or an equivalent
+- No active membership check before inserting a visit row
+- No test for "expired QR token → 401"
 
-**Phase to address:** Phase 63 (Tech-Debt Sweep) — encode the safe-only sweep order in the phase requirements
+**Phase to address:** Phase N (Client Visits + QR, likely Phase 69+) — the signed-QR architecture must be decided in the phase design, not added later as a patch.
 
 ---
 
-### Pitfall C-07: Sweep PR is a monolithic diff — single regression makes the whole sweep undebuggable
+### Pitfall P-07: Staff OpenAPI Contract Broken by Client Path Addition
 
 **What goes wrong:**
-297 files reformatted + 80 auto-fixes + 11 mypy fixes = one enormous diff PR. If any test fails after this PR, bisecting the failure is nearly impossible because every file changed. Even if CI runs `pytest` in the sweep PR and it passes, a later PR that touches the same files may surface a latent behavior change introduced silently in the sweep.
+The v1.11 milestone froze the staff OpenAPI contract at `apps/backend/openapi.json` with the baseline tag `contract-freeze-v1.11.0`. The v2.0 milestone adds client paths under `/api/client/v1/*`. If these paths are mounted on the same FastAPI app without care, the export script regenerates `openapi.json` with BOTH staff and client paths — changing the document the drift gate guards. Downstream effects:
 
-**Why it happens:**
-The natural impulse after months of accumulated debt is to do it all in one shot. "One big PR, CI green, done." The problem is that 297 reformatted files is not meaningfully reviewable, and the reviewer (or the AI agent) will miss semantic changes hiding in the format noise.
+1. **`schema.d.ts` drift**: `pnpm --filter @clubcore/api-client codegen` regenerates TypeScript types from the new spec, adding client types and potentially renaming existing staff types if client paths reuse the same operation ID prefixes.
+2. **`AssertNonNever` forward-guard count**: The existing `_v19Checks.toHaveLength(N)` assertions in `schema.contract.test.ts` will fail if the spec adds new paths that the test does not account for — or if client paths accidentally shadow existing staff paths and the count changes.
+3. **Redocly lint**: Client paths that lack `summary`, `tags`, or `operationId` will fail the 7th CI gate.
+4. **`operationId` collisions**: If a client endpoint for `GET /api/client/v1/visits` is auto-named `list_visits_api_client_v1_visits_get` and a staff endpoint `GET /api/v1/visits` is auto-named `list_visits_api_v1_visits_get`, the `generate_unique_id_function` suffix-stripping may produce two operations both named `list_visits`, causing a spec validation error.
 
 **How to avoid:**
-Split the sweep into at minimum three separate commits, in this order:
-1. `ruff format app tests` only (pure whitespace, zero semantic change, trivially reviewable by checking that `ruff check` passes unchanged)
-2. `ruff check --fix app tests` (safe auto-fixes: RUF100, F401, I001 — reviewable because the diff is semantic but small)
-3. Manual fixes for mypy errors and remaining ruff violations (reviewable line-by-line)
-
-Each commit can be a separate plan in Phase 63. CI runs on each. If step 1 + 2 CI is green and step 3 breaks a test, the bisect surface is the manual fixes only.
+1. **Separate OpenAPI export for client paths**: Consider mounting client routes on a sub-app (`FastAPI()` instance) that exports its own `client-openapi.json`. The staff contract remains frozen and is not regenerated when client paths change. Only the client-specific artifact tracks client path evolution.
+2. **Alternative**: Keep one app but add client paths to the `AssertNonNever` guards and update the `_v20Checks` count as a new check tuple (analogous to `_v19Checks`, `_v18Checks`). This preserves the single-spec discipline but requires the counter to be updated each time client paths are added.
+3. **Distinct operation ID prefix**: Name all client operations with a `client_` prefix (enforced via `generate_unique_id_function` for the client sub-router). This avoids shadowing staff operation IDs.
+4. **Redocly lint must remain green**: Add all client tags, summaries, and operationIds in the same phase plan that adds the routes. Never add routes without passing Redocly lint.
 
 **Warning signs:**
-- A single plan that says "run all sweep commands and commit"
-- A plan that skips CI verification between ruff format and ruff check --fix
-- Mypy fix changes a SQLAlchemy model attribute type (these can have runtime effects)
+- `git diff apps/backend/openapi.json` shows staff path changes after adding client routes
+- `_v19Checks.toHaveLength(N)` assertion fails after client routes are added
+- Two operation IDs with the same base name (after suffix stripping) in the same OpenAPI document
+- `pnpm --filter @clubcore/api-client codegen` produces a `schema.d.ts` diff that includes changes to existing staff type signatures
 
-**Phase to address:** Phase 63 (Tech-Debt Sweep) — encode the three-commit split in the phase plan
+**Phase to address:** Phase 68 (Client Auth Foundation) — decide the single-spec vs. split-spec architecture before the first client route is added. The choice affects every subsequent phase's CI gate. Implement the contract-preservation test (`_v20Checks` or split-spec) in Phase 68 so later phases can add routes safely.
 
 ---
 
-### Pitfall C-08: Newman exits 0 when test scripts fail — CI smoke gate silently passes
+### Pitfall P-08: CSRF/Cookie Collision Between Staff and Client Sessions
 
 **What goes wrong:**
-Newman runs a Postman collection against a live server. If the collection has test scripts (e.g., `pm.test("status is 200", () => pm.response.to.have.status(200))`), and those tests fail, Newman exits with code 1 by default. But if the `--bail` flag is absent and test scripts fail for non-fatal reasons, Newman may exit 0 after completing all requests. Additionally, if no test scripts are defined in the generated collection (which is the case for collections generated directly from an OpenAPI spec without manual additions), Newman runs all requests and exits 0 as long as no HTTP connection error occurs — even if every endpoint returns 500.
+The existing staff session uses three cookies: `cc_access` (Path=/), `cc_refresh` (Path=/api/v1/auth), `clubcore_csrf` (Path=/, readable). If the client session uses the SAME cookie names, a browser that has both a staff tab and a client tab open on the same origin will have cookie collisions:
+
+1. The client logs in, overwrites `cc_access` with a client JWT. The staff tab's subsequent requests carry the client JWT, get 401 (`invalid_token` or `invalid_role`) from staff endpoints.
+2. The staff logs in, overwrites `cc_access` with a staff JWT. The client tab's subsequent requests carry the staff JWT, get 401 from client endpoints.
+3. `clubcore_csrf` collision: the client session's CSRF token overwrites the staff session's CSRF token, causing CSRF verification failures on staff mutations.
+
+This is not hypothetical — a gym owner who uses both the admin panel and the client PWA on the same browser on the same origin (e.g., both served from `api.gym.ru`) will hit this collision.
 
 **Why it happens:**
-The OpenAPI-generated collection contains no test scripts by default. `openapi-to-postmanv2` produces request definitions but not assertion scripts. The developer runs `newman run collection.json --environment env.json`, sees "X requests, 0 failures", assumes the smoke is clean, and CI is gated on this — but the 0 failures count only connection-level failures, not HTTP status codes.
+The `issue_session_cookies()` function in `app/core/security.py` hardcodes the cookie names. Copying the function for the client auth flow without changing the names causes the collision.
 
 **How to avoid:**
-After generating the Postman collection in Phase 65, add test scripts to the critical endpoints (at minimum: `pm.test("status 2xx", () => pm.response.to.be.success)`). This can be done by editing the collection JSON directly or via a post-generation script. Always include `--bail` in the Newman invocation so the first assertion failure halts execution and the process exits non-zero.
-
-Additionally, use `--reporters cli,junit` with `--reporter-junit-export` so the CI job has a parseable artifact even when Newman exits non-zero.
-
-```bash
-newman run collection.json \
-  --environment env.json \
-  --reporters cli,junit \
-  --reporter-junit-export newman-results.xml \
-  --bail
-```
+1. **Different cookie names for client session**: `cc_client_access` (Path=/api/client), `cc_client_refresh` (Path=/api/client/v1/auth), `clubcore_client_csrf` (Path=/api/client, readable). The different `Path` attribute means the cookies are sent only to their respective API paths, preventing cross-contamination.
+2. **Separate cookie-set/clear functions**: `issue_client_session_cookies()` and `clear_client_session_cookies()` — mirror of `issue_session_cookies()` / `clear_session_cookies()` but with the client names and paths.
+3. **Separate Redis session namespace**: Staff sessions use `auth:session:{user_id}:{family_id}`. Client sessions use `auth:client:{client_id}:{family_id}`. No key collision in Redis.
+4. **Separate refresh endpoint**: `POST /api/client/v1/auth/refresh` reads `cc_client_refresh`, not `cc_refresh`. The staff refresh endpoint (`POST /api/v1/auth/refresh`) reads `cc_refresh`. The narrow `Path` attribute on each cookie ensures they are sent only to their respective endpoints.
 
 **Warning signs:**
-- The generated collection JSON has no `"tests"` blocks in any item's `"event"` array
-- Newman output shows "0 test scripts" or "0 assertions"
-- Newman exits 0 after all requests on a stack where `GET /healthz` returns 200 but `POST /api/v1/auth/login` returns 500
+- Client auth issues `cc_access` cookie (same name as staff)
+- `issue_session_cookies()` is called from a client auth route handler
+- No `Path=/api/client` restriction on client session cookies
+- Redis session key pattern shared between staff and client sessions
 
-**Phase to address:** Phase 65 (Handoff Artifacts) — add minimal test scripts to critical endpoints post-generation
+**Phase to address:** Phase 68 (Client Auth Foundation) — the cookie architecture is the foundation. Wrong cookie names here cascade into every phase that adds client endpoints.
 
 ---
 
-### Pitfall C-09: Newman smoke in CI with no DB — 500s from missing Postgres
+### Pitfall P-09: PWA Service-Worker Caching Authenticated Responses
 
 **What goes wrong:**
-If Phase 65 adds a Newman smoke job to CI (`.github/workflows/ci.yml`), it needs a running Postgres + Redis + migrated DB. The current CI backend job runs ruff/mypy/pytest without Docker Compose — pytest uses `httpx.ASGITransport` with the test database fixture managed by pytest-asyncio. Newman runs against a REAL HTTP server on `localhost:8000`, which requires Docker Compose to be up. If the CI job runs `newman run collection.json` without starting the stack first, every request that touches the DB returns 500 (`asyncpg.exceptions.ConnectionDoesNotExistError`).
+The client PWA is built with Vite. If a Vite PWA plugin (e.g., `vite-plugin-pwa` / Workbox) is added for offline support and is misconfigured, the service worker caches API responses including those carrying membership data, payment history, and visit logs. Two failure modes:
 
-**Why it happens:**
-The developer tests Newman locally with `docker compose up` running, confirming it works. They add the Newman step to the existing `backend:` CI job, not realizing that job has no Docker daemon / no running Postgres.
+1. **Stale authenticated data**: A client logs out. Another client (or the same client on a different account) logs in on the same device. The service worker serves the previous client's membership response from the cache. The new client sees the old client's data.
+2. **Credential-bearing responses cached**: The service worker caches a `200 OK` response to `GET /api/client/v1/me`. The response body contains the client's full name and membership status. A subsequent visit without a valid session token serves the cached response as if authenticated — bypassing the auth dependency entirely at the fetch layer.
+
+The existing admin-web has NO service worker (it is a React SPA without PWA features). This pitfall is entirely new to the client-pwa.
 
 **How to avoid:**
-Newman smoke is NOT a CI gate on every push — it is an operator-local smoke for Phase 67 walkthroughs. Keep it out of `.github/workflows/ci.yml` unless a dedicated CI job with `services: postgres:` + `services: redis:` is added (analogous to the pytest job setup). For v1.11, the Newman smoke runs locally: `docker compose up -d && newman run collection.json --environment env.json --bail`. Phase 67 captures evidence (terminal output, exit code) as the runbook artifact.
+1. **Never cache authenticated API responses in the service worker**: Configure Workbox `NetworkOnly` strategy for all `/api/*` routes. Only static assets (JS/CSS/images) and app-shell HTML are cached.
+2. **Cache-Control headers on all client API responses**: Add `Cache-Control: no-store, no-cache, must-revalidate` to all `/api/client/v1/*` responses. This prevents the browser's HTTP cache AND the service worker cache from storing authenticated responses.
+3. **Service worker must not intercept `/api/client/*`**: In the Workbox config, explicitly exclude the API origin/path from service worker routing. If the API is on the same origin, use `registerRoute` with a negative matcher.
+4. **On logout, clear service worker cache**: In the logout flow, call `caches.delete()` for any named cache that might contain API responses. At minimum, post a message to the service worker to clear all non-static caches.
+
+If the milestone defers full PWA (offline support), skip the service worker entirely in v2.0 — serve the client app without a service worker and add it in v2.1 when the caching strategy has been reviewed.
 
 **Warning signs:**
-- A Phase 65 plan that adds a `newman` step to the existing `backend:` CI job
-- CI log showing `Error: connect ECONNREFUSED 127.0.0.1:8000`
+- `vite-plugin-pwa` added without an explicit `urlPattern` exclusion for `/api/*`
+- No `Cache-Control: no-store` headers on client API endpoints
+- Service worker registered before a caching-strategy document is written
+- No logout test that verifies cached data is cleared on session end
 
-**Phase to address:** Phase 65 (Handoff Artifacts) — scope Newman explicitly as a local operator smoke, not a CI gate
+**Phase to address:** Phase N (PWA Integration) — if PWA service worker is in scope, the caching strategy must be the first thing designed in that phase. If it is out of scope (offline not required in v2.0), explicitly note "no service worker" in the phase plan and defer it.
 
 ---
 
-### Pitfall C-10: Postman collection env file committed with real credentials
+### Pitfall P-10: bun → pnpm Migration Breakage in client-pwa
 
 **What goes wrong:**
-The Postman collection environment file (`apps/backend/newman-env.json`) contains test credentials for smoke runs. If it includes a real owner email/password from the production Yandex Postbox account, or a real ЮKassa API key, those credentials are checked into the repository. `newman-env.json` would be tracked (not gitignored), since it is the intended artifact of Phase 65.
+`apps/client-pwa` currently has a `bun.lock` file and `"name": "gym-app"` in `package.json`. It is NOT yet a pnpm workspace member (no `@clubcore/client-pwa` package name, no entry in root `pnpm-workspace.yaml`). The milestone plan says "выравнивание стека (pnpm + TS + api-client + общий lint/CI)" without migrating the router. Three failure modes during migration:
 
-**Why it happens:**
-The developer copies credentials from `.env.local` into the environment file for a quick smoke test, then commits the file without stripping the secrets. "It's just test credentials" doesn't apply if the same email/password is used for the production ЮKassa sandbox account.
+1. **`bun.lock` + `pnpm-lock.yaml` coexistence**: If `pnpm install` is run in the workspace root without removing `bun.lock` first, pnpm reads its own lockfile. But if any CI step or developer runs `bun install` in `apps/client-pwa`, it regenerates `bun.lock` with different dependency versions, diverging from the pnpm workspace.
+2. **Vite 5.4.8 in client-pwa vs. Vite 6.0.7 in admin-web**: Two Vite versions in the same pnpm workspace. pnpm hoists one version (determined by `pnpm-lock.yaml`). The older `@vitejs/plugin-react@4.3.1` (client-pwa) may be incompatible with the hoisted Vite 6. This breaks the client-pwa dev server without obvious error messages.
+3. **JS → TS adoption**: The PWA is entirely `.jsx` (no TypeScript). The milestone says TS adoption is part of alignment. Adding `tsconfig.json` and renaming files to `.tsx` in the same phase that wires the real backend API creates a noisy, hard-to-bisect diff. If a type error is introduced alongside a runtime bug, the combined diff makes diagnosis difficult.
 
 **How to avoid:**
-The `newman-env.json` file uses ONLY fixture credentials (e.g., `owner@fixture.local` / `ownerpass123`) that match the seeded test database. It contains zero production credentials, zero API keys, zero real email addresses. A second file `apps/backend/newman-env.local.json` (gitignored) holds operator-specific overrides for Phase 67 sandbox walkthrough.
-
-Add `*newman-env.local.json` to `.gitignore` in Phase 65 plan 1.
+1. **Delete `bun.lock` on day one of the migration phase** and add `bun.lock` to `.gitignore`. Run `pnpm install` from the workspace root to generate the canonical `pnpm-lock.yaml` entry. Verify `apps/client-pwa` builds correctly with pnpm before touching any other file.
+2. **Align Vite versions**: Pin `apps/client-pwa` to Vite 6 (update `package.json` devDependency) in the same commit that adds the pnpm workspace entry. Document the reason in the commit message.
+3. **Two-phase JS → TS migration**: Phase 1 (same migration phase) — add `tsconfig.json` + rename files to `.tsx` + fix type errors, commit. Phase 2 (next feature phase) — add the actual API integration. Never mix renaming with logic changes.
+4. **Workspace name**: Rename `"name": "gym-app"` → `"name": "@clubcore/client-pwa"` in `package.json` as part of the migration.
 
 **Warning signs:**
-- `apps/backend/newman-env.json` contains `yookassa_api_key`, real email domains (not `.local` / `.fixture`), or passwords matching what is in `.env`
-- `git diff --exit-code apps/backend/newman-env.json` shows a real SMTP password or API key
+- `bun.lock` still present in `apps/client-pwa` after pnpm workspace migration
+- `pnpm ls` in workspace root shows `apps/client-pwa` with a different Vite version than `apps/admin-web`
+- A phase plan that combines "migrate to pnpm + TS + wire real API" into a single step
 
-**Phase to address:** Phase 65 (Handoff Artifacts) — gitignore local override file before the committed env file is created
+**Phase to address:** Phase 68 (or whichever phase is "PWA Stack Alignment") — migration must be its own isolated phase with a green build verification before domain wiring begins.
 
 ---
 
-### Pitfall C-11: Operator runbook stale — env var renamed, endpoint path changed since authoring
+### Pitfall P-11: react-router v6 CSRF Header Not Sent on Mutations from PWA Fetcher
 
 **What goes wrong:**
-Four accumulated operator-pending runbooks will be executed in Phase 67:
-- `v1.7-yookassa-sandbox-evidence/` (VER-03) — authored at v1.7 close (2026-05-24)
-- `v1.8-reports-runbook.md` (VER-01) — authored at v1.8 close (2026-05-24)
-- `v1.9-trainers-runbook.md` (D-61-12) — authored at v1.9 close (2026-05-26)
-- MailHog `--profile dev` evidence (new in v1.11)
+The existing staff admin-web (TanStack Router + TanStack Query) manages CSRF via a pattern where the `X-CSRF-Token` header is read from the `clubcore_csrf` cookie and sent on every non-GET request. The client PWA uses react-router v6's `useFetcher` and `fetch()` directly. The `clubcore_client_csrf` cookie (readable, not httpOnly) must be extracted and included in every `POST`/`PATCH`/`DELETE` request. Failure to include it causes `CsrfMismatch` (422) on every mutation.
 
-Between authoring and Phase 67 execution, the following things changed:
-- Redis namespace renamed `sz:* → cc:*` (v1.10)
-- `SPORTZAL_EMAIL_FROM` env renamed to `CLUBCORE_EMAIL_FROM` (v1.10, with fallback removed in Phase 62.1)
-- `CLUB_BRAND` constant extracted to `app/core/branding.py` (v1.10)
-
-The runbooks in `.planning/handoff/` are marked immutable (per `HISTORICAL_NOTE.md` for v1.4–v1.9 runbooks). But the executable steps (curl commands, env var names, endpoint URLs) may reference old identifiers.
-
-**Why it happens:**
-Runbooks are written against the codebase state at phase close. By the time Phase 67 executes them, multiple milestones may have changed env var names, Redis key prefixes, Docker service names, or endpoint paths. The runbooks are frozen artifacts, not living documents.
+Edge cases:
+1. **After page refresh**: The `clubcore_client_csrf` cookie may not yet be available in `document.cookie` before the first `fetch()` if the cookie is set on login and the page was refreshed. The CSRF token must be re-read on every request, not cached in a React state variable (which is wiped on refresh).
+2. **After token refresh**: When `cc_client_access` expires and a silent refresh is performed, the new `cc_client_access` comes with the same `clubcore_client_csrf` cookie. If the CSRF token value changes on refresh (the server generates a new CSRF token on each login, not on each access token refresh — check the existing `generate_csrf_token()` call in `issue_tokens()`), the PWA must update its CSRF token reading logic.
+3. **No CSRF on the webhook endpoint**: `/_internal/yookassa/webhook` has no `Depends(verify_csrf)` — this is correct and must NOT be changed. But the client checkout endpoint (`POST /api/client/v1/checkout`) IS a browser-initiated mutation and MUST include CSRF.
 
 **How to avoid:**
-Phase 67 plan 1: before executing any runbook, perform a "staleness audit" — grep each runbook for:
-- `sz:` (Redis namespace, now `cc:`)
-- `SPORTZAL_EMAIL_FROM`
-- `sportzal` (brand references)
-- Any endpoint paths against the current `openapi.json` to confirm they still exist
-
-Create a Phase 67 pre-flight diff document listing each runbook + its stale items + the current-state replacement. Execute each runbook with corrections applied in-situ (annotate the runbook, do not rewrite the immutable original). Capture corrected commands in the Phase 67 evidence file.
+1. Create a `getClientCsrfToken()` utility in the PWA that reads `document.cookie` for `clubcore_client_csrf` on every call (not cached).
+2. Create a `clientFetch(url, options)` wrapper that always includes `X-CSRF-Token: getClientCsrfToken()` for non-GET methods and `credentials: "include"` for all methods.
+3. Add an integration test: make a `POST` without the `X-CSRF-Token` header, assert 422 `csrf_mismatch`. Make the same `POST` with the correct token, assert 2xx.
 
 **Warning signs:**
-- A curl command in a runbook containing an endpoint path — verify this path still exists in the curated OpenAPI
-- Any `SPORTZAL_EMAIL_FROM` env reference in a runbook
-- `docker compose` service names that may have changed
+- PWA fetch calls using bare `fetch()` without the CSRF header on mutations
+- CSRF token stored in React state (wiped on refresh) instead of read from cookie on each request
+- No test for CSRF rejection
 
-**Phase to address:** Phase 67 (Operator-Pending Runbook Execution) — plan 1 is always a staleness audit before first execute
-
----
-
-### Pitfall C-12: VER-03 (ЮKassa sandbox) accidentally hits production account
-
-**What goes wrong:**
-VER-03 requires executing the ЮKassa sandbox walkthrough. The `.env` file controlling the backend has `YOOKASSA_SANDBOX=true` (expected) or `YOOKASSA_SANDBOX=false` (production). If the operator has previously set `YOOKASSA_SANDBOX=false` for a production test and forgotten to revert it, Phase 67's VER-03 sends real money-movement requests to ЮKassa production. The `YOOKASSA_TRUSTED_IPS` bypass (line 89 of `webhook_verifier.py`: `if _settings.sandbox: return`) also means the IP allowlist check is skipped in sandbox mode — this is correct for development but must be verified to be active in the evidence.
-
-**Why it happens:**
-Operator has multiple `.env` files or has a local production `.env.local` that overrides the default. The `verify_yookassa_ip` sandbox bypass is set at module import time (`_settings: Final[YooKassaSettings] = YooKassaSettings()`), so if the wrong env file is active, the bypass state is fixed for the process lifetime.
-
-**How to avoid:**
-Phase 67 VER-03 pre-flight checklist:
-1. `grep YOOKASSA_SANDBOX apps/backend/.env` — must be `true`
-2. `uv run python -c "from app.integrations.yookassa.settings import YooKassaSettings; s=YooKassaSettings(); print(s.sandbox)"` — must print `True`
-3. The ЮKassa sandbox account and production account have DIFFERENT `YOOKASSA_SHOP_ID` values — verify the shop_id in `.env` matches the sandbox dashboard, not the production dashboard
-
-Capture these as "preconditions verified" lines in the Phase 67 evidence file before any ЮKassa API calls are made.
-
-**Warning signs:**
-- VER-03 produces real `payment_id` values starting with `2b0` (ЮKassa production UUIDs look different from sandbox)
-- Real RUB debits appearing on the test card
-
-**Phase to address:** Phase 67 (Operator-Pending Runbook Execution) — add explicit sandbox verification step to VER-03 pre-flight
-
----
-
-### Pitfall C-13: OpenAPI 3.1 `anyOf: [T, {type: null}]` — Postman and older tooling doesn't render nullable fields
-
-**What goes wrong:**
-The current `openapi.json` is OpenAPI 3.1 (FastAPI 0.115+ generates 3.1 by default). In OpenAPI 3.1, nullable fields are expressed as `anyOf: [{"type": "string"}, {"type": "null"}]`. The existing spec has 156 `anyOf`/`oneOf` usages. When `openapi-to-postmanv2 6.0.1` consumes a 3.1 spec, it handles `anyOf/null` correctly. However, some downstream tooling (older Postman GUI versions, swagger-ui, certain code generators) still expects the 3.0 `nullable: true` syntax. The current spec has exactly 1 `nullable` keyword — possibly a leftover from a 3.0 schema fragment.
-
-For v1.11 this is LOW risk — the recommended toolchain (openapi-to-postmanv2 6.0.1, Redocly CLI 2.31.4) handles 3.1. But if the design team consuming the handoff uses an older Postman version or their own code generator, they may see broken nullable fields.
-
-**Why it happens:**
-FastAPI 0.115+ generates 3.1 by default. The `nullable: true` keyword in 3.0 does not exist in 3.1 (it's ignored or causes a validation warning). Any existing `nullable: true` in the spec is a 3.0 holdover that should be cleaned up.
-
-**How to avoid:**
-Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.json` with the recommended `redocly.yaml` config. Redocly flags OpenAPI 3.0 idioms in a 3.1 spec. The single `nullable` occurrence should be removed and replaced with `anyOf: [{type: "string"}, {type: "null"}]` if it appears in a schema. Document in the handoff that the spec is 3.1 and the design team's tooling must support 3.1.
-
-**Warning signs:**
-- `grep "nullable" apps/backend/openapi.json` returns more than 0 hits
-- Redocly lint reports `nullable is not valid in OpenAPI 3.1` warnings
-
-**Phase to address:** Phase 64 (Contract Freeze) — lint pass before generating handoff artifacts
+**Phase to address:** Phase 68 (Client Auth Foundation) — the `clientFetch` utility must be available before any domain mutation is wired in subsequent phases.
 
 ---
 
@@ -356,12 +311,14 @@ Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.j
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |---|---|---|---|
-| Keep `_api_v1_` operation ID suffix instead of curating clean IDs | Zero drift-gate disruption | Downstream Postman collection has ugly request names; design team must parse path slug to find endpoints | Acceptable for v1.11 if admin-web is frozen; fix in v2.0 when frontend integration allows synchronized rename |
-| Skip adding auth scopes to `securitySchemes` in OpenAPI | Faster curation | Downstream codegen generates clients that don't attempt auth; design team must read the runbook | Never — add at least a `cookieAuth` scheme definition even if routes are not individually annotated |
-| Newman smoke with no test assertions (just reachability) | Faster Phase 65 | CI gate passes even when every endpoint returns 500 | Never — always add `pm.response.to.be.success` to each request minimum |
-| Single idempotency TTL of 1h for all endpoints | Simple, already implemented | Payment retries after 1h get a new execution (potential double-charge) | Never for payment endpoints; acceptable for non-financial mutations |
-| Execute all three runbooks in one Phase 67 session | Faster completion | A failure in VER-03 (ЮKassa sandbox) blocks VER-01 (reports) evidence capture | Acceptable if the operator can checkpoint failures; NOT acceptable if VER-03 might leave the DB in an inconsistent state that affects VER-01 |
-| Ruff sweep in one giant commit | One CI pass | Undebuggable if anything breaks; reviewer cannot meaningfully review 297-file diff | Never — split format / safe-fix / manual-fix into separate commits |
+| Call staff repository functions from client endpoints (no `WHERE client_id = :id`) | Faster implementation | IDOR — cross-client data leakage; requires a full endpoint audit and new test suite to remediate | Never |
+| Add `Role.CLIENT` to shared `app/core/permissions.py` | Reuse existing RBAC machinery | Breaks staff byte-parity test with admin-web `can.ts`; requires frontend Role type to be updated; staff RBAC now needs to explicitly reject `CLIENT` role | Never |
+| Static QR code (permanent `client_id` in QR payload) | Simpler QR generation, works offline | QR replay after gym_date changes; cross-client check-in by photographing QR; cannot be invalidated on logout | Never |
+| Activate membership on ЮKassa redirect-back (not webhook) | Faster UX (no polling delay) | Race condition; redirect may fire before `payment.succeeded` webhook; double-activation risk | Never |
+| Serve both staff and client OpenAPI spec in one document without operation ID namespacing | One drift gate, simpler CI | Operation ID collisions; `schema.d.ts` mixes staff and client types; frozen staff contract breaks when client paths are added | Never |
+| Skip JS → TS migration, keep client-pwa in plain JS | Zero migration effort | No TypeScript coverage; `@clubcore/api-client` schema.d.ts types cannot be consumed without TS; import-linter cannot enforce boundaries in JS files | Never — TS adoption is non-negotiable for workspace coherence |
+| Use same cookie names for client and staff sessions | Reuse `issue_session_cookies()` without changes | Cookie collision when both staff and client tabs open on same origin | Never |
+| Cache API responses in service worker without explicit exclusion | Works offline for some screens | Stale authenticated data served after logout; previous client's data shown to new client on shared device | Never for authenticated resources |
 
 ---
 
@@ -369,12 +326,12 @@ Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.j
 
 | Integration | Common Mistake | Correct Approach |
 |---|---|---|
-| ЮKassa webhook idempotency vs. generic `app/core/idempotency.py` | Wiring `Depends(verify_idempotency)` on the ЮKassa webhook endpoint | Webhook endpoint uses `redis.set(f"cc:yk:webhook:{event_id}", NX=True, EX=86400)` directly — a separate dedup mechanism. It does NOT use `verify_idempotency` and never should (the webhook has no `Idempotency-Key` header from ЮKassa) |
-| Postman CSRF header | Bearer token auth in Postman collection | The API uses HTTP-only cookie auth + `X-CSRF-Token` on every mutating endpoint. The Postman collection needs pre-request scripts to: (1) POST `/auth/login`, (2) save the `Set-Cookie` header, (3) extract the CSRF token from the response or a GET endpoint, and send it as `X-CSRF-Token` on subsequent mutations |
-| Redocly lint on OpenAPI 3.1 | Treating all warnings as errors | `tag-description: warn` is the right severity — not every tag needs a description. `operation-operationId: error` IS the right severity — missing operation IDs break Postman collection folder structure |
-| `ruff format` + `ruff check --fix` ordering | Running `ruff check --fix` before `ruff format` | Always format FIRST. `ruff check --fix` may add or remove whitespace in ways that interact with auto-format, producing a diff that is not byte-stable until format runs again. Order: format, then check fix, then manual |
-| `mypy` on SQLAlchemy 2.0 models | `attr-defined` errors on mapped column attributes | SQLAlchemy 2.0 uses `Mapped[T]` annotations which mypy understands correctly. The 4 `attr-defined` errors in `app/modules/auth/models.py` are NOT SQLAlchemy issues — they are missing `__all__` in the models module. Fix by adding `__all__` |
-| Email capture for Phase 67 | Adding MailHog + SMTP adapter path | The existing `SandboxEmailClient` logs full email envelopes to structlog. Use `EMAIL_PROVIDER=sandbox` for Phase 67 email evidence capture — zero new code required. MailHog requires a new SMTP adapter (out of v1.11 scope) |
+| ЮKassa client checkout | Creating a second webhook endpoint for client-initiated payments | Reuse the existing `/_internal/yookassa/webhook` handler — it processes `payment.succeeded` for any `online_payment` row; client-initiated payments write the same `online_payments` table row |
+| ЮKassa 54-ФЗ client email gate | Letting the client provide their email at checkout time without persisting it | The `client_email_required_for_online_payment` gate checks `clients.email` in the DB; the PWA must collect email and PATCH the client record BEFORE calling checkout, not pass it as a checkout parameter |
+| Phone OTP + Telegram OTP coexistence | Assuming `otp_codes` table rows for phone and Telegram channels can share the same partial UNIQUE constraint | The existing partial UNIQUE `uq_otp_codes_user_channel_active` is `(user_id, channel) WHERE consumed_at IS NULL`; for clients there is no `user_id` — the OTP row must be keyed by `client_id`, requiring either a schema change or a separate `client_otp_codes` table |
+| pnpm workspace + client-pwa | Running `npm install` or `bun install` inside `apps/client-pwa` after workspace migration | Always use `pnpm install` from the workspace root; add `.npmrc` `prefer-workspace-packages=true`; CI must run `pnpm install --frozen-lockfile` |
+| `@clubcore/api-client` in client-pwa | Importing staff endpoint types for client screens | Client endpoints have different response shapes (client-scoped, no staff audit fields); generate separate client-facing types or add client paths to `schema.d.ts` explicitly rather than reusing staff types |
+| React 18 (client-pwa) vs. React 19 (admin-web) in pnpm workspace | pnpm hoist resolves to one React version | Use `pnpm.overrides` in root `package.json` to pin React 18 for client-pwa and React 19 for admin-web, or isolate via `public-hoist-pattern` per workspace; do not let pnpm silently pick a version |
 
 ---
 
@@ -382,9 +339,10 @@ Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.j
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |---|---|---|---|
-| Idempotency key TTL 1h for payment endpoints | Operator retries a payment after 1h system downtime, gets a new execution (potential double-charge) | Set `IDEMPOTENCY_TTL_SECONDS = 86400` (24h) to match ЮKassa webhook dedup window | At first system downtime longer than 1h where a payment was in-flight |
-| Storing full response body in Redis for every idempotent request | Large response bodies (e.g., paginated lists with 100 items) inflate Redis memory | Scope idempotency to mutating endpoints only (POST/PUT/PATCH) — never GET; the current `verify_idempotency` is only wired to sale/refund/booking routes, which return small responses (single resource) | Non-issue at single-gym scale; would matter at SaaS scale |
-| Newman smoke against a freshly seeded DB with no data | Endpoints that require existing data (e.g., `GET /api/v1/memberships/{id}`) return 404 instead of 200, causing test assertion failures | Seed the DB with enough fixture data before running Newman (use the existing `scripts/seed_verification_fixtures.py` pattern from v1.3 Phase 29) | On every local Newman run without a proper seed step |
+| QR token endpoint called on every screen render | `GET /api/client/v1/visits/qr-token` hit 60x per minute per active client; Redis/DB load on idle clients | Generate QR token only when QR sheet is open; auto-refresh every 45s only while sheet is visible | At 100+ concurrent clients with QR sheets open |
+| Client membership resolver without index | `SELECT * FROM memberships WHERE client_id = :id AND status = 'active'` does a full table scan if no index | The existing `(client_id, status, end_date DESC)` index on `memberships` already covers this; verify the client query uses it (`EXPLAIN ANALYZE`) | At 1000+ membership rows |
+| Polling ЮKassa payment status from client PWA after checkout | `GET /api/client/v1/payments/{id}/status` polled every 2 seconds × many clients; ЮKassa API rate-limited; each poll is a `GET /v3/payments/{id}` to ЮKassa | Show "awaiting confirmation" screen with one `GET` on page load; no continuous polling; redirect to "confirmed" screen only when the membership endpoint shows an active membership | At 10+ concurrent checkout flows |
+| Loading all client visit history in one request | `GET /api/client/v1/visits?page_size=1000` on a client with 3 years of history | Enforce max `page_size=50` on client visit history; server-side pagination required (per-project convention: `{items, total, page, pageSize}`) | At 500+ visits per client |
 
 ---
 
@@ -392,26 +350,30 @@ Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.j
 
 | Mistake | Risk | Prevention |
 |---|---|---|
-| Cross-user idempotency cache (missing `actor_user_id` in key) | User A's transaction result served to user B on key collision — data leakage + potential wrong resource activation | Bind idempotency key to `{method}:{path}:{user_id}:{header_value}` (see Pitfall C-03) |
-| VER-03 with `YOOKASSA_SANDBOX=false` | Real money movement on production ЮKassa account | Mandatory pre-flight: print `YooKassaSettings().sandbox` before any Phase 67 ЮKassa call |
-| `newman-env.json` with real credentials | Credentials exposed in git history | Only fixture credentials (`@fixture.local`) in committed file; real overrides in gitignored `*.local.json` |
-| Evidence files capturing PII | Operator runbook evidence may contain real client names, emails, payment amounts from sandbox/production | Scrub PII from all evidence files before committing to `.planning/milestones/v1.11-OPERATOR-EVIDENCE.md`; use fixture client names in sandbox |
-| MailHog `--profile dev` accidentally active in production docker-compose | All outgoing email is silently trapped — members never receive membership expiry warnings | MailHog must be behind `profiles: ["dev"]`; the production compose file has no `--profile dev`; verify with `docker compose ps` after production stack start |
+| Missing `client_id` filter on any client endpoint | IDOR — cross-client data leakage | Dedicated client repository layer with `client_id` as mandatory parameter; IDOR enumeration test for every endpoint |
+| Static QR payload (plain `client_id`) | QR replay; cross-client check-in by photo | Time-bound signed JWT in QR payload (60s TTL, server-side secret) |
+| Client token accepted by staff endpoints | Client accesses all-clients data; privilege escalation | Separate JWT `principal: "client"` claim rejected by `get_current_user()`; integration test: client token → staff endpoint → 401 |
+| Membership activated on redirect-back | Double-activation race; manipulation via forged `paymentId` | Activation LOCKED to webhook handler; redirect shows "awaiting confirmation" only |
+| No CSRF on client checkout endpoint | CSRF attack can submit payment on behalf of authenticated client | `Depends(verify_csrf)` on all client mutations; `clubcore_client_csrf` cookie + `X-CSRF-Token` header |
+| SMS OTP with no rate limit | SMS bombing — 20,000+ RUB cost from one IP; OTP brute-force | Per-IP 5/15min limit + per-phone daily cap + 60s row-level cooldown + max attempts with commit-before-raise |
+| Service worker caching authenticated responses | Stale data shown after logout; previous client's data on shared device | `NetworkOnly` strategy for all `/api/*` in Workbox; `Cache-Control: no-store` on all client API responses |
+| Client refresh token in same cookie as staff refresh | Session collision on shared-origin browser | Separate `cc_client_refresh` cookie with `Path=/api/client/v1/auth` |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **OpenAPI curation:** Spec title changed from `"Sportzal API"` to `"clubcore API"` AND version updated AND `servers:[]` populated — verify `grep "Sportzal API" openapi.json` returns 0 hits
-- [ ] **Drift gate:** After Phase 64 curation, BOTH `openapi.json` AND `schema.d.ts` are regenerated and committed as a single atomic event — verify `git diff --exit-code apps/backend/openapi.json packages/api-client/src/schema.d.ts` passes in CI
-- [ ] **Postman collection:** Collection was generated AFTER Phase 64 curation (not before) — verify the collection's `"info"` name matches the curated spec's `info.title`
-- [ ] **Newman smoke:** Collection contains at least one test assertion per request — verify `grep "pm.test" collection.json | wc -l` is greater than 0
-- [ ] **Idempotency hardening:** `verify_idempotency` key includes `actor_user_id` — verify with a test that submits the same header from two users and confirms Redis stores distinct keys
-- [ ] **Idempotency TTL:** `IDEMPOTENCY_TTL_SECONDS` is 86400 (24h) — verify `grep IDEMPOTENCY_TTL app/core/idempotency.py`
-- [ ] **Tech-debt sweep:** `uv run ruff check app tests` exits 0 — verify in CI, not just locally (ruff version must match `uv sync --frozen`)
-- [ ] **Tech-debt sweep:** `uv run mypy app` exits 0 — verify `mypy` runs against the clean tree, not a stale mypy cache (delete `.mypy_cache` before final check)
-- [ ] **Runbook staleness:** Each operator runbook checked for `sz:`, `SPORTZAL`, `1.1.0` version references before execution — verify pre-flight diff document exists in Phase 67 plan 1
-- [ ] **VER-03 sandbox gate:** `YOOKASSA_SANDBOX=true` verified in env before ANY ЮKassa API call in Phase 67 — verify by printing `YooKassaSettings().sandbox` in the evidence
+- [ ] **IDOR guard**: Every client endpoint has a test asserting that client_A cannot access client_B's resource — not just "authenticated → 200"
+- [ ] **Anti-oracle phone OTP**: `POST /api/client/v1/auth/otp/request` with unknown phone returns 200 with `{"data": null}` — not 404 or different body — AND wall-clock is within 100ms of the known-phone path
+- [ ] **Privilege boundary**: A client JWT presented to `GET /api/v1/clients` returns 401 — not 200 or 403; a staff JWT presented to `GET /api/client/v1/me` returns 401
+- [ ] **Staff contract preserved**: `git diff apps/backend/openapi.json` shows ONLY additions of `/api/client/v1/*` paths — no changes to existing staff paths, schemas, or operationIds
+- [ ] **Cookie isolation**: `cc_access` cookie is NOT set on client login — only `cc_client_access`, `cc_client_refresh`, `clubcore_client_csrf` are set; verified with `document.cookie` inspection in browser
+- [ ] **Webhook-only activation**: No `activate_membership()` or equivalent call in any code path triggered by the ЮKassa redirect URL; only the webhook handler activates
+- [ ] **QR TTL**: QR token endpoint returns a JWT with `exp = now + 60s`; presenting an expired QR to the check-in endpoint returns 401
+- [ ] **Active membership check on QR check-in**: A client with expired membership gets 409 `no_active_membership` from the QR check-in endpoint — not 200 or 201
+- [ ] **SMS rate limit active**: `redis-cli KEYS "ratelimit:sms:*"` shows a key after the 5th OTP request from the same IP; the 6th request returns 429 at the IP level
+- [ ] **Service worker excludes API**: If a service worker is registered, `fetch /api/client/v1/me` with no auth cookie returns 401 from the network, NOT a cached 200 from the service worker
+- [ ] **bun.lock removed**: `find apps/client-pwa -name "bun.lock" | wc -l` returns 0 after pnpm migration
 
 ---
 
@@ -419,13 +381,13 @@ Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.j
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---|---|---|
-| Operation IDs changed, schema.d.ts broke admin-web | HIGH | Revert operation ID changes to original auto-generated values via `git revert`; re-approach using `generate_unique_id_function` suffix stripping instead of explicit `operation_id=` |
-| In-flight placeholder stuck in Redis after handler exception | LOW | `redis-cli DEL "cc:idem:{method}:{path}:{user_id}:{key}"` for the affected key; client can retry immediately |
-| VER-03 sandbox hit production by accident | HIGH | Contact ЮKassa support to reverse the test payment; document in evidence file; never close VER-03 evidence as PASS |
-| Postman collection generated before OpenAPI was curated | LOW | Regenerate the collection post-curation: `openapi2postmanv2 -s apps/backend/openapi.json -o ...`; recommit |
-| Tech-debt sweep broke a test | MEDIUM | `git bisect` across the three-commit sweep sequence; identify which specific fix caused the regression; fix the root cause rather than reverting the sweep |
-| Runbook evidence contains PII | MEDIUM | Amend the evidence commit, replacing PII with `[REDACTED]`; if on a feature branch before PR merge, amend is safe |
-| Drift gate fires after curation | LOW | The spec and schema.d.ts must always be regenerated as a pair; run `uv run python -m scripts.export_openapi && pnpm --filter @clubcore/api-client codegen` then commit both files in one commit |
+| IDOR discovered post-launch (missing client_id filter) | HIGH — data breach disclosure, audit | Immediately take the affected endpoint offline; add ownership filter; run full IDOR enumeration test suite; determine blast radius from audit_log; notify affected clients per RF legal requirements |
+| Phone enumeration oracle discovered | MEDIUM | Add `_constant_time_floor()` and uniform 200 response; re-run anti-oracle test suite; no DB change required |
+| Client token accepted by staff endpoint | HIGH — privilege escalation | Deploy fix immediately (reject `principal: "client"` in `get_current_user()`); rotate all client JWTs by flushing `cc_client_access` TTL in Redis; audit access logs |
+| Membership activated on redirect (not webhook) | MEDIUM — potential double-activation | Remove redirect-based activation; add DB UNIQUE constraint guard on activation (`UNIQUE (client_id, plan_id, activated_at::date)`); retroactively check for duplicate activations |
+| bun.lock / pnpm conflict causing wrong dependency versions | LOW | `rm apps/client-pwa/bun.lock`; `pnpm install --frozen-lockfile` from workspace root; rebuild |
+| Staff OpenAPI contract broken by client path addition | MEDIUM | `git revert` the offending commit; redesign using split-spec or operation ID namespacing before re-adding client paths |
+| Service worker cached authenticated data post-logout | MEDIUM | Push a service worker update that clears all non-static caches on install; add `Cache-Control: no-store` to all API responses |
 
 ---
 
@@ -433,38 +395,38 @@ Phase 64 (Contract Freeze) — run `npx @redocly/cli lint apps/backend/openapi.j
 
 | Pitfall | Prevention Phase | Verification |
 |---|---|---|
-| C-01: Operation ID rename breaks schema.d.ts | Phase 64 plan 1 | Drift gate CI passes; `_v19Checks` + `_v18Checks` TypeScript guards compile clean |
-| C-02: In-flight placeholder stuck after rollback | Phase 66 | Integration test: submit a request that raises a service error, retry with same key — verify error response (not `idempotency_in_flight`) |
-| C-03: Cross-user idempotency replay | Phase 66 | New test: two users, same key, verify independent Redis entries |
-| C-04: `title="Sportzal API"` stale | Phase 64 plan 1 | `grep "Sportzal API" openapi.json` returns 0 |
-| C-05: Stale cache on status-transition retry | Phase 66 design doc + Phase 64 | Code review: no DB lookup inside cached response path; OpenAPI IdempotencyKey description documents semantics |
-| C-06: Unsafe ruff fixes change semantics | Phase 63 requirements | Sweep requirements explicitly forbid `--unsafe-fixes`; mypy passes after sweep |
-| C-07: Monolithic sweep PR | Phase 63 plans | Three commits: format / safe-fix / manual; each has a CI green checkpoint |
-| C-08: Newman exits 0 with no assertions | Phase 65 | `grep "pm.test" collection.json | wc -l` > 0; Newman run exits 1 on a deliberately broken request |
-| C-09: Newman in CI without DB | Phase 65 plan 1 | Newman is NOT added to `.github/workflows/ci.yml`; documented as local-only in Phase 67 |
-| C-10: Credentials in newman-env.json | Phase 65 plan 1 | `grep -E "@(?!fixture\.local)" apps/backend/newman-env.json` returns 0 |
-| C-11: Stale runbook env var names | Phase 67 plan 1 | Pre-flight diff document exists before first runbook execution |
-| C-12: VER-03 hits production | Phase 67 (VER-03 pre-flight) | `YooKassaSettings().sandbox == True` printed in evidence before ЮKassa calls |
-| C-13: OpenAPI 3.1 nullable in 3.0 style | Phase 64 lint pass | `@redocly/cli lint openapi.json` exits 0; `grep "nullable" openapi.json` returns 0 |
+| P-01: IDOR cross-client data leakage | Phase 68 (establish `ClientPrincipal` + client repository pattern) + every domain phase | IDOR enumeration test (client_A → client_B resource → 404) in each domain phase |
+| P-02: Phone OTP enumeration oracle | Phase 68 (Client Auth Foundation) | Anti-oracle timing integration test — unknown phone vs. known phone within 100ms |
+| P-03: Client token on staff endpoints | Phase 68 (Client Auth Foundation) | Integration test: client JWT → `/api/v1/clients` → 401; staff JWT → `/api/client/v1/me` → 401 |
+| P-04: OTP bombing / SMS cost | Phase 68 (Client Auth Foundation) | Per-IP rate limit test; per-phone daily cap test; OTP max-attempts commit-before-raise test |
+| P-05: Membership activated on redirect | Phase N (Client Checkout) | Test: present valid ЮKassa redirect URL to checkout return endpoint — assert membership NOT activated; only webhook triggers activation |
+| P-06: QR replay / cross-client check-in | Phase N (Client Visits + QR) | Expired QR → 401; client_A QR → check-in as client_B → 401; no-membership QR check-in → 409 |
+| P-07: Staff OpenAPI contract broken | Phase 68 (design decision) + every domain phase | `git diff apps/backend/openapi.json` shows only additions; `_v20Checks` counter or split-spec gate green |
+| P-08: Cookie name collision | Phase 68 (Client Auth Foundation) | `document.cookie` in browser shows `cc_client_access`, NOT `cc_access` overwritten after client login |
+| P-09: Service worker caches auth responses | Phase N (PWA Integration) | Logout test: subsequent fetch with no cookie returns 401 from network, not 200 from cache |
+| P-10: bun → pnpm migration breakage | Phase N (PWA Stack Alignment, first sub-task) | `bun.lock` absent; `pnpm install --frozen-lockfile` passes; client-pwa builds with pnpm |
+| P-11: CSRF header missing in PWA | Phase 68 (Client Auth Foundation) — `clientFetch` utility | CSRF rejection test: POST without `X-CSRF-Token` → 422; with token → 2xx |
 
 ---
 
 ## Sources
 
 - Direct codebase inspection:
-  - `apps/backend/app/core/idempotency.py` — existing implementation; in-flight placeholder + 1h TTL confirmed
-  - `apps/backend/app/integrations/yookassa/webhook_verifier.py` — separate dedup mechanism; does not use `verify_idempotency`
-  - `apps/backend/app/integrations/yookassa/client.py` — `IDEMPOTENCE_KEY_HEADER` spelling quirk (one `t`) documented at D-48-12
-  - `apps/backend/app/main.py` — `title="Sportzal API"`, `version="1.1.0"` confirmed stale
-  - `apps/backend/openapi.json` — 3.1 spec; 102/103 operations have auto-generated `_api_v1_` suffix IDs; 0 servers; 0 securitySchemes; 1 `nullable` keyword
-  - `.github/workflows/ci.yml` — no Newman job; drift gate guards both `openapi.json` and `schema.d.ts`
-  - `.planning/handoff/v1.6-postman.json` — prior collection uses Postman v2.1 schema; no test scripts in existing file
-- `.planning/RETROSPECTIVE.md` — v1.3 REG-29-01/03/04 inline regression fix pattern; v1.5 Phase 40 runbook staleness (4 hotfixes needed on first execution); v1.6 Phase 46 VER-09 fixture-path failure; v1.10 RETROSPECTIVE confirming stale `one_liner` extraction patterns
-- `.planning/PROJECT.md` — v1.11 scope; `DEFER-46-04` breakdown; operator-pending carry-over list; `cc:yk:webhook:` Redis key shape for ЮKassa dedup
-- `.planning/HISTORICAL_NOTE.md` — immutability boundary for v1.4–v1.9 runbooks
-- IETF `draft-ietf-httpapi-idempotency-key-header-07` — cache window guidance; key format recommendations
+  - `apps/backend/app/modules/auth/service.py` — `_constant_time_floor()`, `_get_sentinel_hash()`, OTP cooldown, commit-before-raise patterns
+  - `apps/backend/app/modules/auth/telegram_service.py` — `consume()` OTP max_attempts with commit-before-raise; `get_status()` never-raises anti-oracle
+  - `apps/backend/app/modules/auth/rate_limit.py` — per-email 5/15min fixed-window rate limit; rate-before-lookup discipline
+  - `apps/backend/app/modules/visits/service.py` — `_create_visit_with_anti_fraud()` order-locked chain (gym_hours → active_membership → DB UNIQUE); `create_visit_self_checkin()` precedent for client-initiated check-in
+  - `apps/backend/app/modules/online_payments/service.py` — `_read_client_email_or_raise()` FIS-05 gate; `_derive_idempotency_key()` deterministic key; server-side price read
+  - `apps/backend/app/modules/online_payments/router.py` — `_RETURN_HTML` anti-oracle redirect-return constant; `_RETURN_FLOOR_SECONDS` timing floor
+  - `apps/backend/app/core/permissions.py` — `Role` StrEnum (OWNER/RECEPTION only); `can()` function; byte-parity constraint with admin-web `can.ts`
+  - `apps/backend/app/core/security.py` — cookie names (`cc_access`, `cc_refresh`, `clubcore_csrf`); `issue_session_cookies()` / `clear_session_cookies()`
+  - `apps/backend/app/core/dependencies.py` — `CurrentUser` Protocol; `require_permission()` dependency chain; `get_current_user()` reads `cc_access` cookie
+  - `apps/client-pwa/package.json` — `bun.lock` present; React 18.3.1; react-router-dom 6.26.2; plain JS (no TS); Vite 5.4.8; no pnpm workspace membership
+  - `apps/admin-web` — React 19; Vite 6; TanStack Router; pnpm workspace; TypeScript strict
+  - `.planning/PROJECT.md` — v2.0 scope; client-PWA isolation constraints; anti-oracle; frozen staff contract
+  - `.github/workflows/ci.yml` — drift gate on `openapi.json` + `schema.d.ts`; Redocly lint as 7th gate; no Newman in CI
 
 ---
 
-*Pitfalls research for: v1.11 API Handoff + Production Hardening (Phases 63–67)*
-*Researched: 2026-05-26*
+*Pitfalls research for: v2.0 Frontend Integration — Client PWA*
+*Researched: 2026-05-29*

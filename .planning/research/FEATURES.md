@@ -1,307 +1,491 @@
-# Feature Research
+# Feature Landscape: v2.0 Client PWA — Client-Facing API
 
-**Domain:** API Handoff + Production Hardening for single-gym CRM backend (v1.11)
-**Researched:** 2026-05-26
-**Confidence:** HIGH — domain is well-defined infrastructure work (no new business features); patterns sourced from current codebase inspection + Stripe/Redocly/OpenAPI canonical references
-
----
-
-## Context: What v1.11 Is and Is Not
-
-v1.11 is a zero-new-business-feature milestone. Every "feature" below is infrastructure plumbing,
-documentation quality, or operator verification. The frontend integration team (v2.0) is the
-downstream consumer of every artifact produced here.
-
-**Current state entering v1.11 (confirmed by codebase inspection):**
-- 81 OpenAPI paths, 104 route operations across 18 tags
-- 57 mutating endpoints (POST/PATCH/DELETE); 0 have `Idempotency-Key` documented in the OpenAPI spec
-- `app/core/idempotency.py` exists: `verify_idempotency` Depends, `begin_idempotency`, `store_idempotency_response`, `idempotent_response`. TTL currently 3600s (1h), Redis prefix `cc:idem:`.
-- 8 route files use `verify_idempotency`: `pt_sessions`, `schedule`, `pt_packages`, `bookings`, `online_payments` — covering financial + scheduling mutations. Auth, clients, memberships sell/cancel, trainers, users, visits, payroll do NOT.
-- `app/main.py` FastAPI title = `"Sportzal API"`, version = `"1.1.0"`, no `servers`, no `securitySchemes`, no `info.contact/license/description` — default auto-gen spec.
-- Auto-generated `operationId` values follow FastAPI's `{function_name}{path_slug}{method}` pattern (e.g. `login_api_v1_auth_login_post`) — verbose, unstable, consumer-unfriendly.
-- Existing handoff artifacts: `v1.4-auth-runbook.md`, `v1.6-postman.json` (Sportzal-branded, pre-rebrand), `v1.8-reports-runbook.md`, `v1.9-trainers-runbook.md` (operator-pending).
-- `v1.10-OPERATOR-EVIDENCE.md` is the canonical append-only evidence file; v1.11 RUN-01..06 append there.
-- Ruff: 79 check errors + 205 format files pending. mypy: attr-defined warnings pending. (DEFER-46-04).
+**Domain:** Gym member self-service PWA + client-scoped REST API over existing gym CRM
+**Researched:** 2026-05-29
+**Confidence:** HIGH — based on direct codebase inspection of existing backend domains,
+PWA mock data shapes, screen implementations, and established backend patterns
 
 ---
 
-## Feature Landscape: v1.11 Capabilities
+## Context
 
-Capabilities are organized by phase. Each entry carries complexity (S/M/L) and
-Table Stakes / Differentiator / Anti-Feature designation.
+This is a subsequent milestone. The backend (v1.11) exposes ONLY staff (owner/reception) endpoints.
+Gym members ("clients") are records managed BY staff. v2.0 adds:
+- A new client-facing authentication principal (phone + OTP, isolated from staff JWT)
+- Client-scoped REST endpoints over existing domains (memberships, bookings, visits, pt_sessions,
+  payments, plans, trainers, schedule)
+- PWA screen wiring (Home, Book, Profile, Plans, Checkout, QR) to the real backend
+
+**Client data-scoping invariant:** Every client-scoped endpoint filters by `client_id` from the
+authenticated session. Cross-client data access is impossible — this is an ownership guard,
+not RBAC. Violations are anti-oracle (identical response regardless of reason).
+
+**Out-of-scope screens stay on mock data:** Chat, Referral, Trainer reviews/ratings,
+Notification inbox, Gym-info-from-backend. These are NOT researched as features below.
 
 ---
 
-### Phase 63 — Tech-Debt Sweep
+## 1. Client Identity and Onboarding
 
-#### Table Stakes (must close before contract-freeze artifacts)
+**Backing domain:** `app/modules/auth/` (OTP infrastructure), `app/modules/clients/` (client records)
+
+### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| `ruff check` exit 0 (DEFER-46-04) | CI gate was parked for 3 milestones; a spec with linting errors cannot credibly claim production-ready | S | 79 known errors; mostly stylistic. `uv run ruff check` baseline. |
-| `ruff format` applied (DEFER-46-04) | Byte-stable `openapi.json` regen requires deterministic code formatting | S | 205 files. Activate as CI gate AFTER applying. |
-| `mypy --strict` clean (DEFER-46-04) | Strict-typed codebase with attr-defined warnings is inconsistent branding to handoff consumers reading the README | S | Only attr-defined class; not new `ignore` lines. |
-| v1.5 `run.sh` runbook hardened (DEFER-40-01) | DEFER-40-01 has been carried 3 milestones; Phase 67 operator walkthrough requires a working v1.5 verification script | M | 4 documented bugs in the script: RBAC actor, X-CSRF-Token header, table name. Fix + end-to-end clean. |
-| DEFER-36-04-B residual closed | Same formatting wave as DEFER-46-04; 123 files from v1.4 era | S | Rolled into the ruff format pass. |
+| Phone + OTP login | Industry standard for RF/CIS gym apps (no email-only). Members expect SMS or Telegram. Staff auth already has Telegram OTP infra (`otp_codes` table). | Medium | New `POST /api/v1/client/auth/otp/request` + `POST /api/v1/client/auth/otp/verify`. Reuse existing `otp_codes` table schema. Phone normalization: E.164 `+7XXXXXXXXXX` strip spaces/dashes/parens. |
+| Client record matching by phone | The `clients` table has `phone` + partial-unique `WHERE deleted_at IS NULL`. Matching is the join between the OTP caller and an existing client record. | Medium | Match `clients.phone` to normalized phone from OTP request. If match found: issue client-scoped JWT. If no match: uniform 200 anti-oracle response (see below). |
+| Anti-oracle for unknown phone | Standard RF/CIS security baseline. Server must NOT reveal whether a given phone number belongs to a registered client. | Medium | `POST /api/v1/client/auth/otp/request` returns identical 200 `{"message": "Если номер зарегистрирован, OTP отправлен"}` for both known and unknown phones. `_constant_time_floor` discipline (already used in staff auth service). No `client_not_found` error code. |
+| Client `/me` endpoint | Every client-authenticated flow needs to know their own profile — name, phone, email, client_id. The PWA ProfileScreen displays `userName`, phone, email. | Low | `GET /api/v1/client/me` returns: `{id, first_name, last_name, phone, email, created_at}`. Staff fields (telegram_user_id, notes, deleted_at) are NOT returned to the client. |
+| Client JWT isolation from staff JWT | Staff access tokens (`sz_access` cookie) must not grant access to client endpoints, and vice versa. | Medium | Client session uses a separate JWT claim discriminator (e.g. `"principal": "client"` in payload) and a separate `cc:client:session:` Redis namespace. Staff `require_permission` guards reject client tokens. |
+| Refresh + logout | Session lifecycle. PWA settings has a "Выйти из аккаунта" button. | Low | `POST /api/v1/client/auth/refresh` + `POST /api/v1/client/auth/logout`. Reuse refresh-rotation family pattern from staff auth. |
 
-#### Differentiators (do-if-trivial in Phase 63)
+### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Add `ruff format` + `ruff check` as blocking CI gate | Future milestones cannot re-accumulate debt | S | One-liner addition to CI workflow after the sweep. Worth doing. |
+| Telegram OTP channel | Telegram already primary notification channel; clients with bound telegram can receive OTP there without SMS costs. `clients.telegram_user_id` already stored. | Medium | Optional channel field on request: `{"phone": "+79161234567", "channel": "telegram"}`. Fall back to SMS if no telegram_user_id. Requires sending OTP via Telegram bot (existing bot infra). |
+| OTP rate-limiting (anti-spam) | Prevents phone enumeration via OTP flood. Already in staff auth via `cc:otp:rate:`. | Low | Reuse existing pattern — per-phone 60s resend cooldown via `otp_codes` row, per-IP rate limit. |
 
-#### Anti-Features
+### Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Suppress mypy warnings with `# type: ignore` | Fastest path to green | Creates debt at exactly the moment a handoff consumer inherits the codebase | Fix the underlying attr-defined issue properly |
-| Run ruff with `--select` subset to avoid fixing everything | Faster | Leaves the CI bar lower than claimed | Apply full `ruff check` as configured in `pyproject.toml` |
+| Feature | Why Avoid | What to Do Instead |
+|---------|-----------|-------------------|
+| Client self-registration (creating a new client record) | Clients at a physical gym are enrolled by reception; self-registration bypasses the real-world onboarding flow and would create unvalidated client records. | Staff creates client record; client logs in after being enrolled. Unknown phone → anti-oracle. |
+| Email/password login for clients | Adds a credential management burden for both client and staff. RF gym members expect phone-based auth. | Phone + OTP only in v2.0. |
+| Returning `client_not_found` error | Reveals phone-number roster to potential adversaries. | Uniform 200 anti-oracle response always. |
+
+**Client identity read shape (GET /api/v1/client/me response):**
+```
+{
+  id: uuid,
+  first_name: string,
+  last_name: string | null,
+  phone: string,          // normalized E.164
+  email: string | null,   // required for checkout; may be null
+  created_at: iso_datetime
+}
+```
 
 ---
 
-### Phase 64 — Contract Freeze (OpenAPI Curation)
+## 2. "My Membership" — Home View
 
-#### Table Stakes
+**Backing domain:** `app/modules/memberships/` (Membership + MembershipPlan + MembershipFreezePeriod)
+
+### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Explicit `operation_id=` on all 104 business operations | Auto-gen IDs like `login_api_v1_auth_login_post` are verbose and break on refactor; consumers generate SDK clients from operationId | M | Naming convention: `verb_resource` snake_case (e.g. `auth_login`, `clients_list`, `memberships_sell`). FastAPI `@router.post(..., operation_id="auth_login")`. |
-| `title` updated to `"clubcore API"` | Spec was authored under `"Sportzal API"` title — all handoff docs generated from it will carry the wrong name | S | `FastAPI(title="clubcore API", version="1.11.0", ...)` |
-| `version` bumped to `"1.11.0"` | Downstream consumers (Postman, SDK generators) key on version for changelog tracking | S | Must match package.json `@clubcore/api-client` version bump. |
-| `info.description` populated | Tells consumers what the API is, auth model, and base URL; currently absent | S | 3-4 sentences: gym CRM, JWT cookie auth + CSRF, RU/CIS region. |
-| `servers` array populated | Without servers the spec defaults to relative URL `/`; Postman env variables cannot auto-populate from spec | S | At minimum: `http://localhost:8000` (dev). Placeholder `https://api.{your-domain}.ru` for staging/prod. |
-| `securitySchemes` defined | Currently absent; spec consumers cannot understand the auth model. Cookie-based JWT + CSRF is non-standard enough to require documentation. | M | OAS3 `apiKey` type for the `sz_access` cookie + separate `apiKey` for `X-CSRF-Token` header. Or `http: {scheme: bearer}` for access + `apiKey` for CSRF. Route-level `security:` annotations on all non-anonymous endpoints. |
-| Explicit `tags=[...]` with `app.openapi_tags` ordering | Tags exist (`v1/router.py` assigns them) but tag order in the spec is arbitrary; Redocly/Stoplight render tags in declaration order | S | Add `openapi_tags=[{"name": "auth"}, {"name": "clients"}, ...]` to `FastAPI(...)`. 18 existing tags; consider merging `pt-package-plans` + `pt-packages` under `pt-packages` or keeping granular — decide and freeze. |
-| `components.responses` shared error envelopes | Currently every 422/401/403/404/409 response is inlined per-operation. Deduplication makes the spec 20-30% smaller and enables consumers to write shared error-handling middleware. | M | Define at minimum: `Error401`, `Error403`, `Error404`, `Error409`, `Error422UnprocessableEntity`. Reference via `$ref: '#/components/responses/Error401'`. |
-| Pre-freeze drift gate baseline | CI must fail if `openapi.json` is out of sync with the codebase after the freeze | S | `python -c "from app.main import create_app; ..."` export script already exists; `git diff --exit-code openapi.json` as CI step. Already partially in place — tighten the gate to treat any diff as a breaking error. |
-| `@clubcore/api-client` version bump to `1.11.0` | Frontend consumers pin to a version; bumping signals the freeze | S | `package.json` version field + `CHANGELOG.md` baseline entry. |
+| Active membership card | The HomeScreen subscription card is the primary UI element — plan name, days remaining, end_date, progress bar, status (active/frozen/expiring/expired). Mock: `getSubInfo(tweaks.subState)`. | Low | `GET /api/v1/client/memberships/active` returns the resolver result: single active or frozen membership for this client. Status: `active`, `frozen`, `expired`, `cancelled`. |
+| Days remaining calculation | Client sees "14 дней до 15 мая" not raw timestamps. Calculation is `end_date - today (Europe/Moscow)`. | Low | Backend returns `end_date` (date, not datetime). PWA computes days_remaining client-side using date-fns + Europe/Moscow. Alternatively backend can return `days_remaining` as a derived field. |
+| Freeze status display | HomeScreen has warn tone for expiring, danger for expired, shows frozen state. MembershipFreezePeriod already tracked. | Low | Active membership response includes `freeze_status: {is_frozen: bool, frozen_since: date | null, freeze_days_remaining: int | null}`. Derived from open freeze period WHERE `ended_at IS NULL`. |
+| Expiring-soon banner | HomeScreen shows "Продлить со скидкой 15%" when `sub.tone === 'warn'`. Backend already sends push notifications at 7d/3d/1d. | Low | PWA shows warn banner if `days_remaining <= 7`. Client-side threshold, no separate endpoint. |
+| No active membership state | HomeScreen empty state: "Записей пока нет / Запишись на первую тренировку". | Low | `GET /api/v1/client/memberships/active` returns 404 or `{data: null}`. PWA handles empty state. |
 
-#### Differentiators (do-if-trivial)
+### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| `info.contact` (email + support URL) | Tells handoff consumers who to contact when the spec seems wrong | S | `contact: {"name": "clubcore backend", "email": "andre.shipunov@icloud.com"}` |
-| `components.parameters.PageParam`, `PageSizeParam`, `SortParam` | Recurring pagination params documented once; reduces copy-paste in spec | S | Only worth doing if 5+ endpoints share the same `page`/`page_size` query params — audit first. |
-| `x-clubcore-rbac` extension on owner-only operations | Machine-readable RBAC hints; useful for future codegen | S | `x-clubcore-rbac: {roles: ["owner"]}` on all OWNER_ONLY paths. Very low effort. |
-| `deprecated: true` markers on any legacy alias paths | Documents intentional deprecation for consumers | S | Check if any `/api/v1/auth/sessions/revoke` vs `/api/v1/auth/sessions/{family_id}/revoke` legacy patterns exist. |
+| Membership history | ProfileScreen has no membership history tab in mock, but it is implied by the "С нами 2 года" display. | Medium | `GET /api/v1/client/memberships?status=expired` returns paginated list of past memberships via `previous_membership_id` chain. Low priority for v2.0. |
+| Freeze days remaining in card | Clients want to know how many freeze days they can still use. `freeze_days_limit_snapshot` is on Membership, open period is in MembershipFreezePeriod. | Low | Include in active membership response: `freeze_days_limit: int, freeze_days_used: int`. Computed from sum of closed freeze periods. |
 
-#### Anti-Features
+### Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Publishing the spec to a public URL (GitHub Pages, Redocly Cloud, public npm) | Easier sharing | This is a private commercial CRM — the API surface reveals business logic, RBAC structure, and endpoint URLs of a commercial system. Publishing = security and business risk. | Private gitignored doc-site (Phase 65) + share via encrypted channel with the design team |
-| Restructuring route prefixes during curation | Makes spec "cleaner" | Any URL change is a **breaking change** after freeze; the frontend team builds against the frozen URLs | Freeze URLs as-is; document known "ugly" URLs in the spec description |
-| Merging `_internal` routes into the business spec | Webhooks are documented for completeness | `_internal` routes (email webhook, ЮKassa webhook) are server-to-server; including them in the handoff spec confuses frontend developers and leaks infrastructure details | Tag `_internal` routes with `x-internal: true`; exclude from Postman collection (already precedent from v1.6 Postman) |
+| Feature | Why Avoid | What to Do Instead |
+|---------|-----------|-------------------|
+| Client-initiated freeze/unfreeze | The PWA ProfileScreen has a "Заморозить" button, but the freeze FSM requires staff authorization (reception or owner). Allowing client self-freeze changes the business model. | Show freeze status; redirect to "позвони на ресепшен". Keep freeze as staff-only action in v2.0. |
+| Membership cancel via PWA | No cancel button in any screen mock. | Cancel stays staff-only. |
+
+**Active membership read shape (GET /api/v1/client/memberships/active):**
+```
+{
+  id: uuid,
+  plan_id: uuid,
+  plan_name: string,        // plan_name_snapshot
+  status: "active" | "frozen" | "expired" | "cancelled",
+  start_date: date,
+  end_date: date,           // inclusive
+  price_kopecks: int,       // price_kopecks_snapshot
+  duration_days: int,       // duration_days_snapshot
+  freeze_days_limit: int,   // freeze_days_limit_snapshot
+  freeze_days_used: int,    // computed from closed freeze periods
+  is_frozen: bool,
+  frozen_since: date | null
+}
+```
 
 ---
 
-### Phase 65 — Handoff Artifacts
+## 3. Bookings — Self-Booking + View + Cancel
 
-#### Table Stakes
+**Backing domain:** `app/modules/bookings/`, `app/modules/schedule/`, `app/modules/pt_packages/`
+
+### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Curated Postman v2.1 collection (full surface) | Frontend integration team needs a runnable collection to validate their HTTP client setup | L | Cover all 18 tag domains (not just auth). Folder per tag. Auth happy-path at the top as a setup folder (login → capture cookie + CSRF into env variables via `pm.test` + `pm.environment.set`). ENV templates: `clubcore-local.postman_environment.json` (`baseUrl=http://localhost:8000`). |
-| Pre-request auth script pattern | Without it, every request in the collection would require manual cookie pasting | M | Collection-level pre-request: if `{{accessToken}}` is absent, execute `POST /api/v1/auth/login`, then extract `Set-Cookie: sz_access` → `pm.environment.set("accessToken", ...)` and extract `sportzal_csrf` cookie → `pm.environment.set("csrfToken", ...)`. Mutating requests send `X-CSRF-Token: {{csrfToken}}`. |
-| Test scripts (status code + schema shape per request) | v1.6 Postman had 74 items with no test assertions; fails silently | M | Each request gets at minimum `pm.test("Status 200", () => pm.response.to.have.status(200))` + `pm.test("has data key", () => pm.expect(pm.response.json()).to.have.property("data"))`. |
-| Newman CLI smoke integration | CI-runnable (exit non-zero on fail); the single script the design team can run to verify the backend is alive | M | `npx newman run clubcore-collection.json -e clubcore-local.json --reporters cli,junit --reporter-junit-export newman-results.xml`. Cover at minimum: auth login → CSRF capture → clients list → memberships list → visits list → health. ~10 requests. |
-| `clubcore-auth-runbook.md` (expanded, clubcore-branded) | `v1.4-auth-runbook.md` was written under the Sportzal name + does not cover Telegram OTP, refresh rotation, multi-user invite, password-reset, or CSRF flow | M | Supersede `v1.4-auth-runbook.md`. Add: (a) CSRF header extraction one-liner `CSRF=$(awk '/sportzal_csrf/ {print $7}' cookies.txt)`; (b) JWT decode via `python3 -c "import base64, json, sys; [print(json.loads(base64.b64decode(p+'==').decode())) for p in sys.argv[1].split('.')[0:2]]"`; (c) Telegram OTP flow (start → status poll → verify); (d) refresh rotation manual test; (e) invite + accept flow; (f) password-reset flow. |
-| Private OpenAPI doc-site via Redocly CLI | Design team needs browseable, searchable API docs — not raw JSON | M | `npx @redocly/cli preview-docs apps/backend/openapi.json` (port 8080). Add `make docs` target. Add `docs/` output to `.gitignore`. Do NOT publish to any public URL. |
+| Available trainer slots (calendar) | BookScreen Step 1+2: date picker + trainer list with available slots. Mock uses `CALENDAR` (21-day window) + `BUSY_SLOTS` per trainer. | Medium | `GET /api/v1/client/schedule/available-slots?date=YYYY-MM-DD&trainer_id=<optional>` returns trainer availability slots WHERE `status='available'` AND no confirmed booking AND slot date >= today. Paginated by date, grouped by trainer. |
+| Trainer catalog for booking | BookScreen Step 2: trainer list with name, spec, price, experience. Shown only when selecting a slot. | Low | `GET /api/v1/client/trainers` returns active trainers with name, specialization, price_per_session_kopecks, experience_years. Staff-side trainers module, client-scoped view. |
+| Slot time display grouped by period | BookScreen Step 3: slots grouped into morning/day/evening. Mock: `TIME_SLOTS` + `BUSY_SLOTS`. | Low | Response includes `start_time`, `end_time` per slot. PWA groups client-side. Backend only needs to return available (not busy) slots. |
+| Book a slot using PT package credit | BookScreen confirm step: "К оплате: 2 200 ₽ · спишется с привязанной карты". The existing booking model requires a `pt_package_id` — every booking deducts one session. | High | `POST /api/v1/client/bookings` body: `{slot_id, pt_package_id}`. Service: (1) validate client owns pt_package, (2) package has sessions_remaining > 0, (3) slot is available, (4) insert booking with partial-UNIQUE race guard on `(slot_id) WHERE status='confirmed'`. Returns `BookingResponse` with slot details. |
+| My upcoming bookings | HomeScreen "Ближайшая запись" card: trainer name, date/time, focus. ProfileScreen has bookings list. Mock: `UPCOMING_BOOKING`. | Low | `GET /api/v1/client/bookings?status=confirmed&upcoming=true` returns paginated bookings for this client_id with slot join (trainer name, start_time, end_time). |
+| Cancel my booking within policy | HomeScreen swipe-to-cancel on upcoming card. BookingManageSheet. Policy: "Отменить бесплатно не позднее чем за 6 часов". | Medium | `POST /api/v1/client/bookings/{booking_id}/cancel` — validates: (1) booking belongs to this client (ownership guard), (2) status == 'confirmed', (3) policy window check (slot start - now > 6h → full cancel; else partial credit deduction). Returns updated booking. |
+| Booking history (past bookings) | ProfileScreen trainings/visits tabs. | Low | `GET /api/v1/client/bookings?status=completed,cancelled,no_show` with date range filter. |
 
-#### Differentiators (do-if-trivial)
+### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| `Makefile` target `make docs` (wraps Redocly preview) | One command for new team members | S | `docs: npx @redocly/cli preview-docs apps/backend/openapi.json --port 8080` |
-| `Makefile` target `make smoke` (wraps Newman) | One command for integration validation | S | `smoke: npx newman run ...` |
-| Postman folder for idempotency testing (duplicate-request pairs) | Shows consumers how Idempotency-Key works in practice | S | Two-request folder: original sale + identical replay → same 200 body. |
-| Code samples in spec `x-codeSamples` | Redocly renders curl/Python/TypeScript samples in the doc-site | M | Moderate effort but high DX value; worth doing for the 5 most-used endpoints (login, clients list, memberships sell, visits check-in, reports). |
+| Trainer search/filter in client API | BookScreen has search bar + FilterChips (All / Top / До 2200₽). | Low | `GET /api/v1/client/trainers?search=&min_rating=4.9&max_price=220000` — query params, server-side filter over trainers table. |
+| Slot availability dot on calendar days | BookScreen calendar: `hasSlot` per day. | Low | `GET /api/v1/client/schedule/available-days?from=YYYY-MM-DD&to=YYYY-MM-DD` returns array of dates with at least one available slot. Used to render dots on calendar. |
+| "In development" placeholder for trainer ratings | TRAINERS mock has `rating: 4.9, reviews: 128` but Trainers domain is catalog-only — no ratings/reviews backend. | None | Return `rating: null, review_count: null` in trainer response. PWA hides rating widget when null. Anti-feature: do NOT fabricate ratings or add a ratings domain in v2.0. |
 
-#### Anti-Features
+### Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Publishing doc-site to Redocly Cloud / GitHub Pages / any public URL | Easy sharing | Private commercial CRM — leaks business logic, RBAC, URL surface | Private serve via `redocly preview-docs`; share the `openapi.json` file directly over encrypted channel |
-| Full collection covering all 104 operations with detailed bodies | Comprehensive coverage | Unsustainable; the collection becomes a maintenance burden larger than the code itself | Smoke 10-15 key operations; document the rest via the OpenAPI spec |
-| PDF export of the doc-site | Printable docs | PDFs go stale immediately as the spec evolves; they cannot stay in sync | Direct consumers to the live local preview or the JSON spec |
-| Newman as a blocking CI gate at this stage | Seems like a natural extension | Newman requires a running backend + real secrets (DB, Redis, ЮKassa sandbox) — cannot run in CI without a full docker-compose stack; adds complexity without a clear payoff at the v1.11 stage | Run Newman locally via `make smoke`; add to CI only when a staging environment exists |
+| Feature | Why Avoid | What to Do Instead |
+|---------|-----------|-------------------|
+| Client booking without a PT package | BookScreen implies PT package ownership is required. Existing booking model requires `pt_package_id NOT NULL`. Allowing "pay at the door" bookings requires a new payment path. | Require an active PT package. If none: surface "Нет доступных занятий — купи пакет" prompt leading to Checkout. |
+| Client-initiated no_show marking | No-show transitions are staff/cron-only (`mark_no_show_bookings` ARQ cron at 23:10). | Keep cron-managed. |
+| Cancellation credit as money refund | Cancellation outside policy window = no refund (or 50% deduction as shown in mock). | Return policy display string to client; refunds are staff-initiated in billing domain. |
+
+**Booking write shape (POST /api/v1/client/bookings request body):**
+```
+{
+  slot_id: uuid,
+  pt_package_id: uuid
+}
+```
+
+**Booking read shape (response item):**
+```
+{
+  id: uuid,
+  status: "confirmed" | "cancelled" | "no_show" | "completed",
+  slot: {
+    id: uuid,
+    start_time: iso_datetime,
+    end_time: iso_datetime,
+    trainer: { id: uuid, name: string, specialization: string }
+  },
+  pt_package_id: uuid,
+  cancelled_at: iso_datetime | null,
+  cancel_reason: string | null,
+  created_at: iso_datetime
+}
+```
 
 ---
 
-### Phase 66 — Idempotency Hardening
+## 4. Self Check-In via QR
 
-#### Table Stakes
+**Backing domain:** `app/modules/visits/` (Visit model, UNIQUE(client_id, gym_date))
+
+### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Full audit of 57 mutating endpoints — per-endpoint classification | Before standardizing, you need to know which endpoints are in which category | S | Three categories: (A) already uses `verify_idempotency` + `idempotent_response`, (B) needs idempotency but doesn't have it, (C) idempotency is not applicable (auth flows, reads, webhook receivers). |
-| TTL extension from 3600s → 86400s (24h) | Current TTL of 1h is too short; Stripe's documented standard is 24h; ЮKassa also uses 24h per their API docs. Clients retry over longer windows (network timeouts, app restarts). | S | Single constant change in `app/core/idempotency.py:IDEMPOTENCY_TTL_SECONDS`. No Redis key migration needed (keys expire naturally). |
-| `components.parameters.IdempotencyKey` in OpenAPI spec | Currently 0 endpoints document the header in the spec despite 8 route files requiring it. Downstream consumers cannot know the header is required from the spec alone. | M | Add to `components.parameters`: `IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9_:-]{1,128}$"}}`. Add `$ref` on all endpoints that call `verify_idempotency`. |
-| Integration tests for double-submit on financial endpoints | CR-02 carry-over from Phase 33 review; memberships sell, PT-package sell, online-payment sell are the highest-risk double-submit paths | M | Tests: first POST succeeds (201) → same key + same body → 200 replay with identical body. Different body → 422 `idempotency_key_reuse`. In-flight placeholder → 409 `idempotency_in_flight`. At minimum: `POST /memberships` (cash sell), `POST /pt-packages`, `POST /online-payments/memberships/{plan_id}/sell`. |
-| Document idempotency semantics in `clubcore-auth-runbook.md` (CR-02b) | Consumers need to understand: which endpoints require the header, what format the key must be, what errors they get on reuse | S | Add dedicated "Idempotency-Key" section to the runbook. Cover: required format, TTL, replay semantics, `idempotency_key_reuse` vs `idempotency_in_flight` error codes. |
-| Classify `POST /memberships/sell` (cash) for idempotency coverage | Currently missing — financial endpoint with no idempotency | M | Verify `memberships/router.py` `sell_membership` handler. If missing `verify_idempotency`, add it in this phase. |
+| QR code generation for client | QRSheet shows a QR code. The existing Telegram bot check-in already proves the concept (`/checkin` command). Client needs a web-equivalent. | Medium | `GET /api/v1/client/visits/qr-token` returns a short-lived signed token (HMAC-SHA256 or JWT, 60-120s TTL) encoding `{client_id, issued_at}`. PWA renders this as a QR code client-side (e.g. `qrcode.js`). Token is NOT a static value — it rotates to prevent screenshot replay. |
+| QR token verification and check-in | The backend (or a turnstile reader) POSTs the scanned token to record the visit. Existing Telegram checkin uses `channel='telegram_bot'`. | Medium | `POST /api/v1/client/visits/self-checkin` body: `{token: "<signed_token>"}`. Service: (1) verify token signature + expiry, (2) extract client_id from token, (3) call existing visit creation logic with `channel='client_qr'` (new channel literal), (4) DB-level UNIQUE(client_id, gym_date) enforces 1/day. Returns visit row or 409 if already checked in today. |
+| 1-per-day enforcement | Visit model has `gym_date STORED GENERATED` column + `UNIQUE(client_id, gym_date)`. Already race-safe. | Low | Reuse existing DB constraint. Service catches `uq_visits_client_id_gym_date` IntegrityError — returns 409 `already_checked_in_today`. |
+| Cannot check in for another client | QR token must be client-scoped and tamper-proof. A screenshot of another client's QR must not work. | Medium | Token payload includes `client_id`. HMAC-SHA256 with server secret makes payload unforgeable. Token TTL 60-120s prevents screenshot replay. `POST .../self-checkin` verifies signature before any DB lookup. |
+| Active membership required | Cannot check in without an active membership (existing visit service validates this via `ActiveMembershipResolver`). | Low | Same guard already exists for staff check-in. Client gets 422 `no_active_membership` if they try to check in expired. |
+| Success UX (QRSuccess screen) | QRSheet has `QRSuccess` state: "Вход зафиксирован · Хорошей тренировки". Shows "14-й визит". | Low | `POST .../self-checkin` response includes `{visit_id, checked_in_at, visit_count_today_month}` to populate the success screen. |
 
-#### Differentiators (do-if-trivial)
+### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Idempotency on `POST /payroll/accruals` | Payroll accrual is financial; double-submit creates a double-payment | S | Low risk to add; mirrors existing pattern. |
-| Idempotency on `POST /visits` (check-in) | Prevents double check-in on network retry | S | Already has DB-level uniqueness via `UNIQUE(client_id, gym_date)` — returns 409 on true duplicate, but the `verify_idempotency` layer provides a cleaner 200-replay instead of 409. Optional. |
-| `Idempotency-Replayed: true` response header on replayed responses | Lets consumers distinguish a real 200 from a cached replay | S | Single header add in `idempotent_response` helper. Low effort, good DX. |
+| QR auto-refresh before expiry | PWA refreshes the QR token silently before it expires (e.g. at 45s mark of a 60s TTL), so the client doesn't have to tap anything. | Low | Client-side timer polls `GET .../qr-token` before expiry. No server change required. |
+| "Screen brightness to max" prompt | QRSheet shows "Яркость на максимум" hint. | None | Client-side only. No backend dependency. |
 
-#### Anti-Features
+### Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Idempotency on all 57 mutating endpoints (blanket) | "Safer" | Auth flows (login, logout, OTP, refresh), soft-delete, status transitions are not idempotent in the traditional sense — applying the header requirement universally adds friction and breaks anti-oracle flows where the server intentionally does NOT reveal whether a prior attempt succeeded | Classify endpoints into A/B/C; only add to category-B financial + scheduling mutations |
-| Changing the idempotency key format requirement to UUID-only | "Cleaner" | The current regex `[A-Za-z0-9_:-]{1,128}` is already documented in `IDEMPOTENCY_KEY_PATTERN`; the ЮKassa integration generates deterministic sha256 keys. Narrowing to UUID-only breaks existing callsites. | Keep the current regex; document the recommended format (UUIDv4) without enforcing it |
-| Database persistence for idempotency keys | Redis eviction could theoretically replay a request | Adds a write to every mutating endpoint; defeats the purpose of a lightweight idempotency layer; Redis TTL 24h covers all real-world retry windows | Keep Redis-only with 24h TTL |
+| Feature | Why Avoid | What to Do Instead |
+|---------|-----------|-------------------|
+| Static QR code (permanent client ID in URL) | Easy to implement but allows screenshot sharing — one client can check in another client. | Short-lived HMAC-signed token with client_id bound inside. |
+| QR code that encodes the full client UUID | UUID alone has no tamper protection. | Signed token wrapping the UUID + issued_at. |
+| Multi-visit per day via QR | Business rule: 1 visit per gym_date. Already DB-enforced. | Return 409 `already_checked_in_today` with a friendly message. |
+| New `visits.channel` values requiring migration | Adding `'client_qr'` requires an Alembic migration to widen the CHECK constraint on `channel`. | Plan the Alembic migration as part of the visit check-in phase. The Check constraint currently has `IN ('reception', 'telegram_bot')` — needs to add `'client_qr'`. |
+
+**QR token endpoint shape:**
+```
+GET /api/v1/client/visits/qr-token
+Response: {
+  token: string,        // HMAC-signed JWT, 120s TTL
+  expires_at: iso_datetime,
+  client_id: uuid       // for display: "Клиент #4821"
+}
+
+POST /api/v1/client/visits/self-checkin
+Body: { token: string }
+Response: {
+  visit_id: uuid,
+  checked_in_at: iso_datetime,
+  gym_date: date,       // Europe/Moscow date
+  visit_number: int     // ordinal for "14-й визит" display
+}
+```
 
 ---
 
-### Phase 67 — Operator-Pending Runbook Execution
+## 5. Self-Service Checkout
 
-#### Table Stakes
+**Backing domain:** `app/modules/online_payments/`, `app/modules/memberships/`, `app/modules/pt_packages/`
+
+### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| RUN-01: ЮKassa sandbox walkthrough (v1.7 VER-03) | VER-03 was explicitly deferred at v1.7 close as operator-credential-gated; cannot ship a billing product without a live payment confirmation | M | Requires ЮKassa sandbox credentials in `.env`. Script `apps/backend/scripts/` (sandbox-evidence scaffolding already exists per v1.7 PROJECT.md). Evidence appended to `v1.10-OPERATOR-EVIDENCE.md` (append-only per D-62.1-B2). |
-| RUN-02: RU email-deliverability probe (v1.7 CARRY-01 / DEFER-46-01) | SPF/DKIM/DMARC send-to-Gmail/Yandex `Authentication-Results` headers must be captured; fiscal receipts go to real clients | M | Requires live `CLUBCORE_EMAIL_FROM` domain provisioned. If not yet provisioned, mark `N/A-until-production` with trigger condition (same pattern as RUN-08-dns-dkim-DEFERRED). |
-| RUN-03: Owner countersign on 19 locked email templates (v1.7 CARRY-02 / DEFER-46-02) | `LOCKED_EMAIL_TEMPLATES` frozenset contains 19 strings; owner must attest these are correct before production send | S | Read the template IDs from the source file + owner signature in `v1.6-template-countersign.md` (already exists, may need updating from 15 → 19 templates). Evidence: appended to operator file. |
-| RUN-04: Reports runbook walkthrough (v1.8 VER-01) | `v1.8-reports-runbook.md` was authored but never executed (operator-pending per D-12). Revenue golden-path + audit-log filter + CSV download. | M | `docker compose up` → 5 scenarios. Evidence appended to `v1.10-OPERATOR-EVIDENCE.md`. |
-| RUN-05: Trainers runbook walkthrough (v1.9 D-61-12) | `v1.9-trainers-runbook.md` (513 lines, 5 scenarios) was authored but never executed (operator-pending per D-61-12). | M | `docker compose up` → payroll golden-path + recurring schedule + time-off + trainer-usage report + reception-403. Evidence appended. |
-| RUN-06: MailHog `--profile dev` integration (DEFER-46-05) | Email integration tests currently require real SMTP; MailHog provides a local SMTP trap for dev/CI | M | Add MailHog service to `docker-compose.yml` under `--profile dev`. `SMTP_HOST=mailhog` when profile is active. Evidence: `docker compose --profile dev up` screenshot or curl to MailHog API. |
+| Membership plan purchase via ЮKassa | PlansSheet → CheckoutSheet. Client selects a plan and pays online. Existing `online_payments` module handles redirect-based ЮKassa flows. | High | `POST /api/v1/client/checkout/membership` body: `{plan_id, confirmation_type: 'redirect'}`. Orchestrates existing `online_payments` service. Returns `{payment_id, confirmation_url, status: 'pending'}`. PWA redirects client to ЮKassa. |
+| Membership renewal | HomeScreen "Продлить" button. PlansSheet → CheckoutSheet. Same flow as purchase but targets the existing membership's renewal chain (`previous_membership_id`). | High | Same endpoint or `POST /api/v1/client/checkout/membership/renew` with `{plan_id}`. Service resolves current active membership + creates renewal via existing `renew_membership` logic, triggered on `payment.succeeded` webhook. |
+| PT package purchase | BookScreen checkout: "Тренировка с Аней · 2 200 ₽". PT package plans catalog + buy flow. | High | `POST /api/v1/client/checkout/pt-package` body: `{pt_package_plan_id, confirmation_type: 'redirect'}`. Orchestrates existing `online_payments` pt_package path. |
+| Client email required for 54-ФЗ fiscal receipt | `online_payments` service already enforces `client_email_required_for_online_payment` 422 if `clients.email IS NULL`. The fiscal receipt path (ЮKassa "Чеки от ЮKassa") requires an email. | Medium | Checkout endpoint checks `client.email`. If null: return 422 `email_required` with `{field: "email", message: "Введи email для чека"}`. PWA surfaces an inline email input field before proceeding. Client can update their email at checkout time — `PATCH /api/v1/client/me` updates `clients.email`. |
+| Client email self-update | Client must be able to add/update their email at checkout to satisfy the fiscal receipt requirement. ProfileScreen has "Личные данные" entry. | Low | `PATCH /api/v1/client/me` body: `{email: string}`. Validates email format. Updates `clients.email`. |
+| ЮKassa redirect flow | After creating payment, client is redirected to ЮKassa hosted page. Backend activation happens on `payment.succeeded` webhook (existing flow). PWA shows "ожидаем подтверждение" on redirect-back. | Low | Existing webhook handler already processes this. Client-facing redirect-back URL can be `{pwa_base}/checkout/pending?payment_id={id}`. PWA polls `GET /api/v1/client/checkout/{payment_id}/status` until `status == 'succeeded'`. |
+| Payment status polling | Client needs to know when membership is activated after ЮKassa redirect. | Low | `GET /api/v1/client/checkout/{payment_id}/status` returns `{payment_id, status: 'pending' | 'succeeded' | 'canceled', membership_id: uuid | null}`. Anti-oracle: returns same response whether payment_id belongs to this client or not (ownership-guarded 404 on mismatch). |
 
-#### Differentiators (do-if-trivial)
+### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Consolidated operator evidence index at top of `v1.10-OPERATOR-EVIDENCE.md` | Makes the file navigable as it grows | S | Update the `## Index` section after all RUN-01..06 sections are appended. |
-| One-line pass/fail verdict per scenario (not just transcript) | Makes evidence file scannable | S | Each RUN-XX section: `VERDICT: PASS/PARTIAL/FAIL` header line before the command transcript. |
+| QR confirmation type | CheckoutSheet mock shows card/Apple Pay options. ЮKassa QR (`confirmation_type='qr'`) is already supported in existing `online_payments`. | Low | Accept `confirmation_type: 'qr'` in checkout request body. Return `qr_code_url` in addition to `confirmation_url`. |
+| Promo code field | CheckoutSheet has a promo code input. No promo code domain exists in the backend. | Medium | Anti-feature: do NOT add a promo code domain in v2.0. Show the promo code UI but wire to a placeholder 422 `promo_codes_not_supported` response. Or simply remove the field from the wired checkout. |
 
-#### Anti-Features
+### Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Screenshots as the primary evidence format | "More convincing" | Screenshots cannot be git-diffed, searched, or verified automatically; they also contain secrets (env values, email addresses) if not redacted | Captured curl transcripts as code blocks in the markdown file (existing project convention from RUN-08-local-db-smoke) |
-| Faking evidence (fabricating command output) | "Faster" | This is explicitly prohibited by project convention (D-62.1-B1: "No fabricated evidence is present in this file") and undermines the entire purpose of operator verification | Execute the runbook and capture real output; if credential-gated, mark as N/A with trigger condition |
-| Scattering evidence across per-phase files | "Organized by phase" | Creates N evidence files vs one append-only file; the project convention (D-62.1-B2) is explicit: append to `v1.10-OPERATOR-EVIDENCE.md` | All v1.11 RUN-01..06 evidence appends to the single `v1.10-OPERATOR-EVIDENCE.md` |
+| Feature | Why Avoid | What to Do Instead |
+|---------|-----------|-------------------|
+| Cash payment from client PWA | Physical cash is handled by reception. No self-service cash path makes sense. | Online only (ЮKassa). |
+| Client-initiated refunds | CheckoutSheet error state shows "Деньги не списали" for slot-busy scenario. But actual refunds (`online_refunds`) are staff-initiated. | Keep refunds as staff-only. Surface "обратитесь на ресепшен" for refund requests. |
+| Storing card data in clubcore | CheckoutSheet shows "Visa •••• 4821 · Срок до 09/28" as a saved card. ЮKassa handles card storage on their side; clubcore never stores card data. | PWA saves the last-4 display from a ЮKassa payment response field for display only — no actual card storage. |
+| Promo code backend domain | No promo code table exists. Adding one is net-new business domain, out of scope. | Placeholder UI only, or remove from wired checkout. |
+
+**Checkout write shape (POST /api/v1/client/checkout/membership):**
+```
+Request: {
+  plan_id: uuid,
+  confirmation_type: "redirect" | "qr"
+}
+Response: {
+  payment_id: uuid,             // internal OnlinePayment.id
+  yookassa_payment_id: string,
+  status: "pending",
+  confirmation_url: string | null,  // redirect URL
+  qr_code_url: string | null        // ЮKassa QR
+}
+```
+
+**Email dependency note:** `clients.email` is nullable. Checkout MUST check it. The 54-ФЗ path in
+the existing `online_payments` service already enforces this via `FIS-05 email gate` returning
+422 `client_email_required_for_online_payment`. The client API should surface this as a pre-check
+with a field-level error so PWA can show an inline email input before the payment is attempted.
+
+---
+
+## 6. History Views
+
+**Backing domain:** `app/modules/visits/`, `app/modules/pt_sessions/`, `app/modules/payments/` + `app/modules/online_payments/`
+
+### Table Stakes
+
+#### 6a. Visit History (ProfileScreen "Визиты" tab)
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| List of past visits | Mock: `VISIT_HISTORY` with date, time, duration, kind ("Самостоятельно" vs "С Аней Соколовой"). | Low | `GET /api/v1/client/visits?page=1&page_size=20` — client-scoped, ordered `checked_in_at DESC`. Returns: `{items: [{id, checked_in_at, gym_date, channel, has_pt_session: bool}], total, page, page_size}`. |
+| Month summary counter | ProfileScreen shows "14 посещений" for this month. | Low | Include `month_count` in response or separate `GET /api/v1/client/visits/summary` endpoint. |
+| Visit "kind" display | Mock distinguishes self-visit vs training visit. | Low | `has_pt_session: bool` in visit item. If true, PWA fetches trainer name from pt_sessions. Or backend joins and returns `trainer_name: string | null`. |
+
+**Visit history read shape:**
+```
+items: [{
+  id: uuid,
+  checked_in_at: iso_datetime,
+  gym_date: date,              // Europe/Moscow date
+  channel: "reception" | "telegram_bot" | "client_qr",
+  trainer_name: string | null  // null if no pt_session for this visit
+}]
+```
+
+#### 6b. Training History (ProfileScreen "Тренировки" tab)
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| List of recorded PT sessions | Mock: `TRAINING_HISTORY` with trainer, focus, notes. The `pt_sessions` table has `trainer_id`, `booking_id`, `notes`, `performed_at`. | Low | `GET /api/v1/client/pt-sessions?page=1&page_size=20` — client-scoped via `pt_packages.client_id` → `pt_sessions.pt_package_id`. Returns `{items: [{id, performed_at, trainer_name, focus_area, notes}], total, page, page_size}`. |
+| Trainer info per session | Mock shows trainer initials + colors. | Low | JOIN `trainers` on `trainer_id` in response. Return `trainer_name`, `trainer_specialization`. |
+| Session notes display | Mock: "Хорошо потянули становую, добавили вес". `pt_sessions.notes` is already stored. | Low | Include `notes` field (max 500 chars per CHECK constraint). |
+
+**Training history data-scoping note:** `pt_sessions` has `pt_package_id` FK. `pt_packages` has
+`client_id`. Client access is validated via `pt_packages.client_id = session_client_id`. NO direct
+`client_id` on `pt_sessions` — query joins through `pt_packages`.
+
+**Training history read shape:**
+```
+items: [{
+  id: uuid,
+  performed_at: iso_datetime,
+  trainer_name: string,
+  trainer_specialization: string,
+  focus_area: string | null,   // maps to pt_sessions focus/notes header
+  notes: string | null,
+  pt_package_id: uuid
+}]
+```
+
+#### 6c. Purchase History (ProfileScreen "Покупки" tab)
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Unified payment list | Mock: `PURCHASE_HISTORY` with kinds (sub/training/shop) and amounts. Includes refunds. The `payments` table is the append-only ledger: `payment_method`, `subject_kind`, `amount_kopecks` (positive = charge, negative = refund). | Medium | `GET /api/v1/client/payments?page=1&page_size=20` — client-scoped. Query `payments` WHERE `client_id = session_client_id`. No shop purchases in real backend (shop is out of scope). Returns: `{items: [{id, paid_at, subject_kind, description, amount_kopecks, payment_method}], total, page, page_size}`. |
+| Refund entries | Mock has `status: 'refund', amount: -1100`. Payments ledger stores refunds as negative `amount_kopecks` rows with `subject_kind` annotated. | Low | Include negative-amount rows. PWA detects `amount_kopecks < 0` as refund display. |
+| Monthly grouping + total spend | Mock shows month headers + "Потрачено всего" summary with sub/trainer/shop breakdown. | Low | Client-side aggregation from the paginated list, or backend `GET /api/v1/client/payments/summary` returning monthly totals by subject_kind. |
+
+**Purchase history data-scoping note:** `payments.client_id` is a direct FK. Client access is
+straightforward ownership guard on `client_id`. Note: `shop` kind exists in mock but has no backend
+domain. Response should not return shop-kind rows since none exist — or filter them client-side.
+
+**Money convention:** All amounts in integer kopecks. PWA formats with `formatMoney(kopecks)` →
+`ru-RU RUB` string with NBSPs. Server NEVER returns formatted strings, only integer kopecks.
+
+**Purchase history read shape:**
+```
+items: [{
+  id: uuid,
+  paid_at: iso_datetime,
+  subject_kind: "membership" | "pt_package" | "pt_session",
+  payment_method: "cash" | "online",
+  amount_kopecks: int,   // negative = refund
+  description: string,   // e.g. "Месячный абонемент · 30 дней"
+  yookassa_payment_id: string | null  // for receipt link
+}]
+```
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Receipt / fiscal receipt link | CheckoutDone shows "Посмотреть чек". `fiscal_receipts` table exists. | Medium | Include `receipt_url: string | null` in payment history item if `fiscal_receipts` row exists and `status = 'succeeded'`. Low priority for v2.0. |
+| Date range filter on history | Useful for longer history views. | Low | `?from=YYYY-MM-DD&to=YYYY-MM-DD` query params on all history endpoints. |
+
+### Anti-Features
+
+| Feature | Why Avoid | What to Do Instead |
+|---------|-----------|-------------------|
+| Shop purchase history | Shop items (`kind: 'shop'` in mock) have no backend domain. | Filter out shop rows. Return only membership + pt_package + pt_session payment rows. |
+| Exposing other clients' payment data | Ownership guard must be applied at query level, not application level. | WHERE clause: `payments.client_id = :session_client_id` — never fetch all then filter in Python. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Phase 63 (Tech-Debt Sweep)
-    └──unblocks──> Phase 64 (Contract Freeze)
-                       └──unblocks──> Phase 65 (Handoff Artifacts)
-                       └──unblocks──> Phase 66 (Idempotency Hardening)
-                                          └──enhances──> Phase 65 (Postman idempotency folder)
-                       └──unblocks──> Phase 67 (Operator Runbook — needs stable backend)
+Client auth (phone OTP → client JWT)
+  └──required by──> all other client-scoped endpoints
 
-Phase 65 OpenAPI doc-site
-    └──requires──> Phase 64 curated spec (doc-site sourced from openapi.json)
+GET /api/v1/client/me
+  └──required by──> Checkout (email check before payment)
+  └──required by──> QR token (client_id binding)
 
-Phase 65 Postman collection
-    └──requires──> Phase 64 explicit operation_ids + tags (folder organization)
+Active membership
+  └──required by──> QR self-checkin (no membership → 422)
+  └──required by──> HomeScreen membership card
 
-Phase 66 `components.parameters.IdempotencyKey`
-    └──requires──> Phase 64 `components` hygiene pass
+PT package ownership
+  └──required by──> self-booking (pt_package_id on booking)
+  └──required by──> training history (pt_sessions via pt_packages)
 
-Phase 67 Trainers runbook (RUN-05)
-    └──requires──> DEFER-40-01 fix from Phase 63 (run.sh hardening)
+Checkout (ЮKassa redirect)
+  └──required by──> membership purchase/renewal flow
+  └──required by──> PT package purchase flow
+  └──depends on──> clients.email NOT NULL (54-ФЗ gate)
+  └──depends on──> existing webhook handler (no change needed)
 
-Phase 67 RUN-01 (ЮKassa sandbox)
-    └──requires──> Phase 65 auth runbook (documents CSRF + cookie flow needed for sandbox test)
+PATCH /api/v1/client/me (email update)
+  └──required by──> checkout email gate unblock
+
+Alembic migration: visits.channel widened
+  └──required by──> QR self-checkin (new 'client_qr' channel)
 ```
 
-### Dependency Notes
+---
 
-- **Phase 63 must finish before Phase 64:** The drift gate only makes sense on a clean, formatted tree. Running `ruff format` after freezing would change the spec.
-- **Phase 64 must finish before Phase 65:** All handoff artifacts (Postman, doc-site, runbook) are sourced from the curated OpenAPI spec. Doing them before curation locks in the uncurated operationIds.
-- **Phase 66 can run parallel with Phase 65** after Phase 64 completes. The idempotency OpenAPI parameter is added to the same spec being documented in Phase 65.
-- **Phase 67 can run any time after Phase 63** cleans the runbook tooling, but is logically last since it validates everything.
+## MVP Recommendation
+
+Priority order for v2.0:
+
+**Phase 1 — Client auth foundation (blocker for everything):**
+- Phone OTP request + verify (with anti-oracle)
+- Client JWT (isolated from staff session)
+- GET /api/v1/client/me
+
+**Phase 2 — Home screen data (highest user-visible impact):**
+- GET /api/v1/client/memberships/active
+- GET /api/v1/client/trainers (for booking)
+- GET /api/v1/client/schedule/available-slots
+- GET /api/v1/client/bookings (upcoming + past)
+
+**Phase 3 — QR self check-in:**
+- GET /api/v1/client/visits/qr-token
+- POST /api/v1/client/visits/self-checkin
+- Alembic migration: visits.channel += 'client_qr'
+
+**Phase 4 — Checkout (ЮKassa):**
+- PATCH /api/v1/client/me (email update)
+- POST /api/v1/client/checkout/membership
+- POST /api/v1/client/checkout/pt-package
+- GET /api/v1/client/checkout/{payment_id}/status
+
+**Phase 5 — History + booking write:**
+- POST /api/v1/client/bookings (self-booking)
+- POST /api/v1/client/bookings/{id}/cancel
+- GET /api/v1/client/visits (history)
+- GET /api/v1/client/pt-sessions (training history)
+- GET /api/v1/client/payments (purchase history)
+
+**Defer from v2.0 MVP:**
+- Membership history (list of past memberships)
+- Receipt/fiscal receipt link in history
+- Date range filters on history
+- Telegram OTP channel (SMS first, Telegram as follow-on)
+- Promo code field (placeholder UI only)
 
 ---
 
-## MVP Definition (What Phase Completion Means)
+## Out-of-Scope Screens (mock-data only, NOT researched as features)
 
-### Phase 63 closes when:
-- [ ] `uv run ruff check` exits 0 (0 errors, no suppressions added)
-- [ ] `uv run ruff format --check` exits 0
-- [ ] `uv run mypy --strict` exits 0 with 0 warnings
-- [ ] `v1.5-verification-evidence/run.sh` executes end-to-end against `docker compose up` with exit 0
+These screens remain on mock data in v2.0. The PWA should show an "in development" placeholder:
 
-### Phase 64 closes when:
-- [ ] All 104 operations have explicit `operation_id=` (no auto-generated `*_api_v1_*` names)
-- [ ] `info.title = "clubcore API"`, `info.version = "1.11.0"`, `info.description` populated
-- [ ] `servers` array includes `http://localhost:8000`
-- [ ] `securitySchemes` defines cookie auth + CSRF header scheme
-- [ ] `components.responses` defines at minimum 4 shared error envelopes (401/403/404/422)
-- [ ] `app.openapi_tags` defines tag order
-- [ ] `git diff --exit-code openapi.json` passes in CI
-
-### Phase 65 closes when:
-- [ ] Postman v2.1 collection file exists at `.planning/handoff/clubcore-v1.11.postman_collection.json` with auth pre-request script + test assertions
-- [ ] `clubcore-local.postman_environment.json` exists
-- [ ] Newman smoke (`make smoke`) runs 10+ requests with exit 0 against local stack
-- [ ] `clubcore-auth-runbook.md` replaces `v1.4-auth-runbook.md` with all 6 expanded scenarios documented
-- [ ] `make docs` (Redocly preview) starts without errors; `docs/` in `.gitignore`
-
-### Phase 66 closes when:
-- [ ] Per-endpoint idempotency classification table exists (A/B/C)
-- [ ] `IDEMPOTENCY_TTL_SECONDS = 86400` (24h)
-- [ ] `components.parameters.IdempotencyKey` defined in spec; `$ref` on all category-A/B endpoints
-- [ ] Double-submit integration tests pass for 3 financial endpoints
-- [ ] Idempotency section in `clubcore-auth-runbook.md`
-
-### Phase 67 closes when:
-- [ ] All 6 RUN items have evidence appended to `v1.10-OPERATOR-EVIDENCE.md`
-- [ ] Any credential-gated items (RUN-02 email delivery if domain not provisioned) have explicit `N/A-until-production` rows with documented trigger conditions
-- [ ] No `OPERATOR-PENDING` markers remain in the repo without a corresponding evidence section or explicit deferral
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | Consumer Value | Implementation Cost | Priority |
-|---------|----------------|---------------------|----------|
-| Explicit operation_ids (FRZ-04) | HIGH — SDK generators break on auto-gen names | MEDIUM | P1 |
-| CSRF + cookie securitySchemes (FRZ-05) | HIGH — undocumented auth model blocks integration | MEDIUM | P1 |
-| Postman pre-request auth script (HND-01) | HIGH — collection is unusable without it | MEDIUM | P1 |
-| Idempotency TTL 24h (IDM-02) | HIGH — 1h TTL causes spurious replay failures | LOW | P1 |
-| Tech-debt sweep ruff/mypy (DEBT-01..03) | HIGH — prerequisite for stable spec generation | LOW | P1 |
-| `components.parameters.IdempotencyKey` (IDM-04) | MEDIUM — spec consumers need this documented | MEDIUM | P1 |
-| Newman smoke (HND-02) | MEDIUM — validation tool for integration team | MEDIUM | P1 |
-| Private Redocly doc-site (HND-04) | MEDIUM — browseable alternative to raw JSON | LOW | P2 |
-| ЮKassa sandbox RUN-01 | MEDIUM — billing validation | MEDIUM | P2 |
-| RU email deliverability RUN-02 | MEDIUM — production readiness | MEDIUM — depends on domain | P2 |
-| Double-submit integration tests (IDM-03) | MEDIUM — regression protection | MEDIUM | P2 |
-| `info.contact`, `x-clubcore-rbac` extensions | LOW — nice-to-have for consumers | LOW | P3 |
-| Code samples `x-codeSamples` | LOW — Redocly DX enhancement | MEDIUM | P3 |
-| `Idempotency-Replayed` response header | LOW — consumer DX | LOW | P3 |
-
-**Priority key:**
-- P1: Must have for milestone to close
-- P2: Should have; implement before milestone verification
-- P3: Nice to have; do only if time permits
+| Screen | Reason Out of Scope |
+|--------|---------------------|
+| Chat (messaging) | No backend domain; requires staff-side admin-web changes (frozen) |
+| Referral | No referral domain exists |
+| Trainer reviews/ratings | Trainers domain is catalog-only; ratings would be a new domain |
+| Notification inbox | Notifications are push-only (Telegram/email); no client-readable inbox exists |
+| Gym info from backend | Gym details are static content; no backend domain for hours/address/photos |
 
 ---
 
 ## Sources
 
-- Current codebase inspection: `apps/backend/openapi.json` (81 paths, 104 ops, 0 shared components, auto-gen operationIds confirmed)
-- `apps/backend/app/core/idempotency.py` — `IDEMPOTENCY_TTL_SECONDS = 3600`; `verify_idempotency` Depends pattern
-- `apps/backend/app/main.py` — `FastAPI(title="Sportzal API", version="1.1.0")` — no servers/securitySchemes
-- `.planning/milestones/v1.10-REQUIREMENTS.md` — IDM-01..04, DEBT-01..05, RUN-01..06, HND-01..04, FRZ-01..05 requirement snapshot
-- `.planning/milestones/v1.10-OPERATOR-EVIDENCE.md` — append-only convention per D-62.1-B2
-- `.planning/handoff/v1.9-trainers-runbook.md` — existing CSRF extraction pattern `awk '/sportzal_csrf/'`
-- [Stripe: Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) — POST-only scope, 24h TTL, placeholder-in-flight pattern
-- [Stripe API: Idempotent requests](https://docs.stripe.com/api/idempotent_requests) — scope to POST, key format, TTL
-- [FastAPI: Metadata and Docs URLs](https://fastapi.tiangolo.com/tutorial/metadata/) — `openapi_tags`, `info.contact`, `info.license`
-- [Redocly CLI commands](https://redocly.com/docs/cli/commands) — `preview-docs`, `bundle` commands
-- [Redocly CLI preview-docs](https://redocly.com/docs/cli/v1/commands/preview-docs) — `npx @redocly/cli preview-docs`, default port 8080
+- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — v2.0 milestone scope, in/out-of-scope decisions
+- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/data/*.js` — mock data shapes for all PWA screens
+- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/HomeScreen.jsx` — subscription card, upcoming booking, QR button, notifications feed
+- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/BookScreen.jsx` — 3-step booking flow, cancellation policy display
+- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/ProfileScreen.jsx` — profile card, visits/trainings/purchases tabs, settings
+- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/sheets/QRSheet.jsx` — QR display, scan animation, success state
+- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/sheets/CheckoutSheet.jsx` — payment flow, card picker, promo code, error states
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/memberships/models.py` — Membership, MembershipPlan, MembershipFreezePeriod ORM
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/visits/models.py` — Visit ORM, gym_date STORED, channel constraint
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/bookings/models.py` — Booking ORM, partial UNIQUE, FSM statuses
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/online_payments/models.py` — OnlinePayment ORM, confirmation_type, fiscal gate
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/clients/models.py` — Client.phone, Client.email nullable, Client.telegram_user_id
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/pt_packages/models.py` — PtPackage sessions_remaining, client_id
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/pt_sessions/models.py` — PtSession, booking_id, notes (max 500)
+- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/auth/` — OTP infrastructure, anti-oracle patterns, `_constant_time_floor`
+- CLAUDE.md conventions: money in kopecks, dates in Europe/Moscow, anti-oracle discipline, pagination `{items, total, page, pageSize}`
 
 ---
-*Feature research for: v1.11 API Handoff + Production Hardening (clubcore gym CRM)*
-*Researched: 2026-05-26*
+
+*Feature research for: v2.0 Frontend Integration — Client PWA (clubcore gym CRM)*
+*Researched: 2026-05-29*
