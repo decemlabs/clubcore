@@ -136,7 +136,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | 58-61. Trainers Complete | v1.9 | 22/22 | Complete | 2026-05-26 |
 | 62 + 62.1. clubcore Rebrand | v1.10 | 16/16 | Complete | 2026-05-26 |
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
-| 68. Client Auth Foundation | v2.0 | 6/6 | Complete   | 2026-05-29 |
+| 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 0/TBD | Not started | - |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 0/TBD | Not started | - |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/TBD | Not started | - |
