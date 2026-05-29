@@ -255,3 +255,15 @@ Plans:
 - [ ] TBD — remove `NOTE WR-06` block at `schedule/service.py:937` once behavior is fixed
 
 **Source:** Phase 59 UAT WR-06 pending item; product decision recorded in this conversation 2026-05-26. Promote with `/gsd:review-backlog` when v1.11 milestone opens.
+
+### Phase 999.2: Wire online-payment EMAIL templates into the dispatcher (BACKLOG)
+
+**Goal:** Close the email-wiring gap found in Phase 67 RUN-03 (Finding RUN-03-F1). The 4 Phase-52 `EMAIL_ONLINE_PAYMENT_SUCCEEDED/REFUNDED/CANCELED` + `EMAIL_FISCAL_RECEIPT_FAILED` identifiers have no rendered email copy and are not resolvable by the email dispatcher — so the email channel for online-payment notifications silently no-ops (only the Telegram DM is delivered).
+
+**Problem:** `app/modules/online_payments/email_templates.py` contains only `Final[str]` identifier constants (no `TEMPLATES` dict). `app/integrations/email/dispatcher.py:_resolve_template` (lines 82-91) walks auth/users/memberships/bookings/payments registries but NOT `online_payments`. `_dispatch_email` (`online_payments/tasks.py:256-291`) therefore raises `KeyError`, which is swallowed by the best-effort `try/except … continue` at `tasks.py:477`.
+
+**Requirements:** TBD (~3 reqs: author 4 locked Russian `EmailTemplate` records mirroring the DM copy in `online_payments/notifications.py`; add the `online_payments` registry branch to `_resolve_template` + the `.importlinter` ignore; integration test proving the email channel actually sends for all 4 kinds — no silent KeyError).
+
+**Plans:** 0 plans
+
+**Source:** Phase 67 RUN-03 owner countersign — Finding RUN-03-F1 (`.planning/handoff/v1.11-19-template-countersign.md` + `.planning/milestones/v1.11-OPERATOR-EVIDENCE.md`). Logged, not fixed (Phase 67 is execution-only). Promote with `/gsd:review-backlog`.
