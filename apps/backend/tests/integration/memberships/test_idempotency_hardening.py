@@ -702,9 +702,7 @@ async def test_app_error_retry_replays_error_not_in_flight(
     plan = await make_plan()
     client_row = await make_client()
     # Seed an already-cancelled membership (invalid source for cancel)
-    membership = await make_membership(
-        client_id=client_row.id, plan=plan, status="cancelled"
-    )
+    membership = await make_membership(client_id=client_row.id, plan=plan, status="cancelled")
 
     key = uuid4().hex
     headers = _headers(authed_client_owner, key=key)

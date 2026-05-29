@@ -45,9 +45,7 @@ def _headers(client: AsyncClient, *, key: str) -> dict[str, str]:
 async def _audit_count_for_payment(session: AsyncSession, online_payment_id: UUID) -> int:
     """Count AuditLog rows where resource_id == online_payment_id."""
     result = await session.execute(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.resource_id == online_payment_id)
+        select(func.count()).select_from(AuditLog).where(AuditLog.resource_id == online_payment_id)
     )
     return int(result.scalar_one())
 
