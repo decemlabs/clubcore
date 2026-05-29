@@ -5122,13 +5122,13 @@
     },
     "securitySchemes": {
       "cookieAuth": {
-        "description": "Access-token httpOnly cookie. Refresh-token cookie (sz_refresh) is server-internal flow — sent by the browser automatically; not modelled as a separate security scheme.",
+        "description": "Access-token httpOnly cookie. Refresh-token cookie (cc_refresh) is server-internal flow — sent by the browser automatically; not modelled as a separate security scheme.",
         "in": "cookie",
-        "name": "sz_access",
+        "name": "cc_access",
         "type": "apiKey"
       },
       "csrfHeader": {
-        "description": "Double-submit CSRF header. Companion cookie named `sportzal_csrf` — v1.x carry-over per D-11-CSRF-DEFER; rename to `clubcore_csrf` deferred to v2.0 with coordinated admin-web cutover (see auth runbook).",
+        "description": "Double-submit CSRF header. Companion readable cookie named `clubcore_csrf` (non-httpOnly so the frontend can read it for the X-CSRF-Token header).",
         "in": "header",
         "name": "X-CSRF-Token",
         "type": "apiKey"
@@ -5136,7 +5136,7 @@
     }
   },
   "info": {
-    "description": "v1.11.0 contract-freeze baseline for the clubcore backend (Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1). This spec is curated for handoff — it is the authoritative single source of truth consumed by `packages/api-client` codegen and by the Phase 65 auth runbook at `.planning/handoff/clubcore-auth-runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 plans (64-02..64-07) curate operation IDs, tags, security schemes, shared error responses, and Redocly lint.\n\nCarry-over: the `sportzal_csrf` cookie name is retained in v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is scheduled for v2.0 with a coordinated admin-web cutover (documented further in the securitySchemes block landed by Phase 64-04).",
+    "description": "v1.11.0 contract-freeze baseline for the clubcore backend (Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1). This spec is curated for handoff — it is the authoritative single source of truth consumed by `packages/api-client` codegen and by the Phase 65 auth runbook at `.planning/handoff/clubcore-auth-runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 plans (64-02..64-07) curate operation IDs, tags, security schemes, shared error responses, and Redocly lint.\n\nCookie names updated from sportzal-era identifiers to clubcore equivalents (cc_access, cc_refresh, clubcore_csrf) per NAME-01 / quick task 260529-ll9, closing D-11-CSRF-DEFER. This intentionally shifts the contract-freeze-v1.11.0 baseline (acceptable pre-integration).",
     "title": "clubcore API",
     "version": "1.11.0"
   },
@@ -5663,7 +5663,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `sz_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
+        "description": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `cc_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
         "operationId": "refresh",
         "responses": {
           "200": {
@@ -5686,7 +5686,7 @@
     },
     "/api/v1/auth/sessions": {
       "get": {
-        "description": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(sz_refresh)\ntoken_hash lookup (D-23-3).",
+        "description": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(cc_refresh)\ntoken_hash lookup (D-23-3).",
         "operationId": "list_sessions",
         "parameters": [
           {
@@ -5736,7 +5736,7 @@
     },
     "/api/v1/auth/sessions/{family_id}/revoke": {
       "post": {
-        "description": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's sz_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
+        "description": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's cc_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
         "operationId": "revoke_session_family",
         "parameters": [
           {

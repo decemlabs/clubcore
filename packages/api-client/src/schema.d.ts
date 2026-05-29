@@ -289,7 +289,7 @@ export interface paths {
          * Refresh
          * @description Rotate the refresh token; reissue all three cookies (AUTH-05/06).
          *
-         *     Reads `sz_refresh` cookie directly (NOT via the auth dep — an expired
+         *     Reads `cc_refresh` cookie directly (NOT via the auth dep — an expired
          *     access token must NOT block a refresh call). The body is empty on
          *     success: the new tokens travel in cookies. CSRF dep is exempt (Phase 6
          *     CSRF-02 / D-09 list).
@@ -313,7 +313,7 @@ export interface paths {
          * @description Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).
          *
          *     GET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user
-         *     manages their own sessions. is_current resolved server-side via sha256(sz_refresh)
+         *     manages their own sessions. is_current resolved server-side via sha256(cc_refresh)
          *     token_hash lookup (D-23-3).
          */
         get: operations["list_sessions"];
@@ -340,7 +340,7 @@ export interface paths {
          *
          *     - 404-collapse on unknown family OR family belonging to another user (D-23-6).
          *     - Idempotent: already-revoked family returns 200 (D-23-7).
-         *     - Self-revoke: if the revoked family matches THIS request's sz_refresh family,
+         *     - Self-revoke: if the revoked family matches THIS request's cc_refresh family,
          *       clear the cookie matrix identical to /logout (D-23-8).
          *     - Audit: session_revoked with resource_type='auth_session' (D-23-10).
          */
