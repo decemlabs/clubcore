@@ -46,7 +46,7 @@ def _csrf(client: AsyncClient) -> dict[str, str]:
     to keep the test file self-readable. ``or ""`` coerces the ``str | None``
     that ``httpx.Cookies.get`` returns to satisfy mypy strict.
     """
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 async def test_cannot_deactivate_self_returns_409(

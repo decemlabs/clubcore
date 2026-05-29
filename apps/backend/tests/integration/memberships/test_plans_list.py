@@ -13,8 +13,8 @@ from httpx import AsyncClient
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    """Return X-CSRF-Token header echoing the sportzal_csrf cookie value."""
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "")}
+    """Return X-CSRF-Token header echoing the clubcore_csrf cookie value."""
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf", "")}
 
 
 VALID_PLAN: dict[str, Any] = {

@@ -41,7 +41,7 @@ PERFORMED_AT = datetime(2026, 4, 15, 10, 0, 0, tzinfo=UTC)
 
 def _csrf(client: AsyncClient) -> dict[str, str]:
     """Return the X-CSRF-Token header from the client's cookie jar."""
-    token: str = client.cookies.get("sportzal_csrf") or ""
+    token: str = client.cookies.get("clubcore_csrf") or ""
     return {"X-CSRF-Token": token}
 
 

@@ -64,7 +64,7 @@ async def test_post_trainer_slots_reception_403(
             "endTime": "2026-06-01T10:00:00+03:00",
         },
         headers={
-            "X-CSRF-Token": authed_client_reception.cookies.get("sportzal_csrf") or "",
+            "X-CSRF-Token": authed_client_reception.cookies.get("clubcore_csrf") or "",
             "Idempotency-Key": "test-key-reception-publish",
         },
     )
@@ -84,7 +84,7 @@ async def test_post_trainer_slots_owner_missing_idempotency_key_422(
             "endTime": "2026-06-01T10:00:00+03:00",
         },
         headers={
-            "X-CSRF-Token": authed_client_owner.cookies.get("sportzal_csrf") or "",
+            "X-CSRF-Token": authed_client_owner.cookies.get("clubcore_csrf") or "",
         },
     )
     # verify_idempotency raises ValidationAppError("idempotency_key_required")
@@ -111,7 +111,7 @@ async def test_slot_create_request_extra_field_422(
             "createdByUserId": str(uuid4()),
         },
         headers={
-            "X-CSRF-Token": authed_client_owner.cookies.get("sportzal_csrf") or "",
+            "X-CSRF-Token": authed_client_owner.cookies.get("clubcore_csrf") or "",
             "Idempotency-Key": "test-key-extra-field",
         },
     )

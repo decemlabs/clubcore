@@ -188,7 +188,7 @@ def generate_deep_link_token() -> str:
 
 
 def generate_csrf_token() -> str:
-    """Return 64-char hex (32 bytes) for the sportzal_csrf cookie (CSRF-01, D-26).
+    """Return 64-char hex (32 bytes) for the clubcore_csrf cookie (CSRF-01, D-26).
 
     Phase 5/7 regenerate on each successful login/refresh/OTP-verify so old values
     invalidate. Phase 6 verify_csrf dependency reads X-CSRF-Token header and compares.
@@ -209,7 +209,7 @@ def issue_session_cookies(
     csrf_token: str,
     secure: bool,
 ) -> None:
-    """Set sz_access + sz_refresh + sportzal_csrf cookies with the locked attributes.
+    """Set cc_access + cc_refresh + clubcore_csrf cookies with the locked attributes.
 
     Single function, not three setters — drift across emission sites (Phase 5 login vs
     refresh vs Phase 7 OTP-verify) is the real risk being mitigated (D-25).
@@ -219,9 +219,9 @@ def issue_session_cookies(
     """
     settings = get_settings()
 
-    # sz_access — covers all API paths
+    # cc_access — covers all API paths
     response.set_cookie(
-        key="sz_access",
+        key="cc_access",
         value=access_token,
         max_age=settings.access_token_ttl_seconds,
         path="/",
@@ -230,9 +230,9 @@ def issue_session_cookies(
         samesite="lax",
     )
 
-    # sz_refresh — narrow path; only sent to /api/v1/auth/* (smaller exposure)
+    # cc_refresh — narrow path; only sent to /api/v1/auth/* (smaller exposure)
     response.set_cookie(
-        key="sz_refresh",
+        key="cc_refresh",
         value=refresh_token,
         max_age=settings.refresh_token_ttl_seconds,
         path="/api/v1/auth",
@@ -241,10 +241,10 @@ def issue_session_cookies(
         samesite="lax",
     )
 
-    # sportzal_csrf — non-httpOnly so frontend reads it for X-CSRF-Token header
+    # clubcore_csrf — non-httpOnly so frontend reads it for X-CSRF-Token header
     # (double-submit pattern). Verifier dependency lands in Phase 6 (CSRF-02).
     response.set_cookie(
-        key="sportzal_csrf",
+        key="clubcore_csrf",
         value=csrf_token,
         max_age=settings.refresh_token_ttl_seconds,
         path="/",
@@ -255,7 +255,7 @@ def issue_session_cookies(
 
 
 def clear_session_cookies(response: Response, *, secure: bool) -> None:
-    """Clear sz_access + sz_refresh + sportzal_csrf, mirroring issue_session_cookies (D-17).
+    """Clear cc_access + cc_refresh + clubcore_csrf, mirroring issue_session_cookies (D-17).
 
     Browsers only delete a cookie when the deletion request matches the original
     Path / SameSite / Secure / HttpOnly tuple. Mismatched attributes produce a
@@ -266,25 +266,25 @@ def clear_session_cookies(response: Response, *, secure: bool) -> None:
     `secure` MUST be passed from `settings.cookie_secure` for symmetry with the
     issuer (prod startup asserts `cookie_secure is True` per D-25).
     """
-    # sz_access — Path=/ (matches issuer)
+    # cc_access — Path=/ (matches issuer)
     response.delete_cookie(
-        key="sz_access",
+        key="cc_access",
         path="/",
         httponly=True,
         secure=secure,
         samesite="lax",
     )
-    # sz_refresh — Path=/api/v1/auth (matches issuer; browsers will not delete on Path=/)
+    # cc_refresh — Path=/api/v1/auth (matches issuer; browsers will not delete on Path=/)
     response.delete_cookie(
-        key="sz_refresh",
+        key="cc_refresh",
         path="/api/v1/auth",
         httponly=True,
         secure=secure,
         samesite="lax",
     )
-    # sportzal_csrf — Path=/, NOT httpOnly (matches issuer)
+    # clubcore_csrf — Path=/, NOT httpOnly (matches issuer)
     response.delete_cookie(
-        key="sportzal_csrf",
+        key="clubcore_csrf",
         path="/",
         httponly=False,
         secure=secure,

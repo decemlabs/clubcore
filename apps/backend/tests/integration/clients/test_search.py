@@ -30,8 +30,8 @@ from httpx import AsyncClient
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    """Echo the sportzal_csrf cookie value as X-CSRF-Token (D-09)."""
-    token = client.cookies.get("sportzal_csrf") or ""
+    """Echo the clubcore_csrf cookie value as X-CSRF-Token (D-09)."""
+    token = client.cookies.get("clubcore_csrf") or ""
     return {"X-CSRF-Token": token}
 
 

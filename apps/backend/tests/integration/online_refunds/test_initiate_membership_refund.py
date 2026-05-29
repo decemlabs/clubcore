@@ -34,7 +34,7 @@ def _refund_headers(client: AsyncClient) -> dict[str, str]:
     idempotency_key lives in the request body per D-48-11. So only X-CSRF-Token
     is required.
     """
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 # ─── Happy path ─────────────────────────────────────────────────────────────

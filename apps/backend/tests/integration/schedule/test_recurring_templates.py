@@ -53,7 +53,7 @@ async def test_owner_create_recurring_template_returns_201(
     make_trainer,
 ) -> None:
     trainer = await make_trainer()
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
     r = await authed_client_owner.post(
         "/api/v1/recurring-templates",
         json=_template_body(trainer),
@@ -80,7 +80,7 @@ async def test_duplicate_recurring_template_returns_409(
     make_trainer,
 ) -> None:
     trainer = await make_trainer()
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
 
     r1 = await authed_client_owner.post(
         "/api/v1/recurring-templates",
@@ -115,7 +115,7 @@ async def test_owner_list_recurring_templates_paginated(
     make_trainer,
 ) -> None:
     trainer = await make_trainer()
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
 
     await authed_client_owner.post(
         "/api/v1/recurring-templates",
@@ -166,7 +166,7 @@ async def test_reception_create_recurring_template_forbidden(
     make_trainer,
 ) -> None:
     trainer = await make_trainer()
-    csrf = authed_client_reception.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_reception.cookies.get("clubcore_csrf") or ""
     r = await authed_client_reception.post(
         "/api/v1/recurring-templates",
         json=_template_body(trainer, dow=3),
@@ -189,7 +189,7 @@ async def test_owner_deactivate_recurring_template(
     make_trainer,
 ) -> None:
     trainer = await make_trainer()
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
 
     create_r = await authed_client_owner.post(
         "/api/v1/recurring-templates",
@@ -239,7 +239,7 @@ async def test_reception_deactivate_recurring_template_forbidden(
     await db_session.commit()
     await db_session.refresh(tmpl)
 
-    csrf = authed_client_reception.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_reception.cookies.get("clubcore_csrf") or ""
     r = await authed_client_reception.post(
         f"/api/v1/recurring-templates/{tmpl.id}/deactivate",
         headers={
@@ -262,7 +262,7 @@ async def test_audit_events_emitted_on_create_and_deactivate(
     make_trainer,
 ) -> None:
     trainer = await make_trainer()
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
 
     create_r = await authed_client_owner.post(
         "/api/v1/recurring-templates",

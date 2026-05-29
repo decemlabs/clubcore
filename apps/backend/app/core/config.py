@@ -22,7 +22,7 @@ class EmailProviderSettings(BaseModel):
     aws_access_key_id: SecretStr | None = None
     aws_secret_access_key: SecretStr | None = None
     endpoint_url: str = "https://postbox.cloud.yandex.net"
-    from_address: str = "noreply@mail.sportzal.ru"
+    from_address: str = "noreply@mail.clubcore.ru"
     from_domain: str = ""
     webhook_secret: SecretStr = SecretStr("")
     sandbox_mode: bool = False

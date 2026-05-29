@@ -138,7 +138,7 @@ async def _client_app_overrides(
 
 
 def _csrf(client: AsyncClient) -> dict[str, str]:
-    token: str = client.cookies.get("sportzal_csrf") or ""
+    token: str = client.cookies.get("clubcore_csrf") or ""
     return {"X-CSRF-Token": token}
 
 

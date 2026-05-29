@@ -257,7 +257,7 @@ def sell_headers(client: AsyncClient) -> dict[str, str]:
     ``_login``; Idempotency-Key is fresh per call (D-49-16 outer layer).
     """
     return {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "X-CSRF-Token": client.cookies.get("clubcore_csrf") or "",
         "Idempotency-Key": uuid4().hex,
     }
 

@@ -151,7 +151,7 @@ async def test_concurrent_record_pt_session_decrement_at_db_layer(
     await app.state.redis.flushdb()
 
     authed = await _build_authed_client(app)
-    csrf_token = authed.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed.cookies.get("clubcore_csrf") or ""
 
     performed_at = (datetime.now(tz=UTC) - timedelta(minutes=10)).isoformat()
 

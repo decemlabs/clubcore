@@ -124,5 +124,5 @@ def test_footer_present_in_all_bodies() -> None:
         else:
             html = tpl.html.render(trainer_name="X", slot_start_msk="y")
             text = tpl.text.render(trainer_name="X", slot_start_msk="y")
-        assert "Sportzal · noreply@mail.sportzal.ru" in html
-        assert "Sportzal · noreply@mail.sportzal.ru" in text
+        assert "Sportzal · noreply@mail.clubcore.ru" in html
+        assert "Sportzal · noreply@mail.clubcore.ru" in text

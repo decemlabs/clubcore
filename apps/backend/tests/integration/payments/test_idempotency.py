@@ -40,7 +40,7 @@ VALID_CLIENT: dict[str, Any] = {
 
 
 def _csrf_header(client: AsyncClient) -> str:
-    return client.cookies.get("sportzal_csrf") or ""
+    return client.cookies.get("clubcore_csrf") or ""
 
 
 async def _seed_plan_and_client(

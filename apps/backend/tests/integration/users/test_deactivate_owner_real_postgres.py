@@ -31,7 +31,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def _csrf(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 async def test_deactivate_owner_against_real_postgres(

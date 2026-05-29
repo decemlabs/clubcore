@@ -24,7 +24,7 @@ from app.modules.auth.models import User
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "")}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf", "")}
 
 
 VALID_CLIENT: dict[str, Any] = {

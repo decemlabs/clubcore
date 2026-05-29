@@ -37,14 +37,14 @@ _PAYMENT_ROW_HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 def _headers(client: AsyncClient) -> dict[str, str]:
     return {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "X-CSRF-Token": client.cookies.get("clubcore_csrf") or "",
         "Idempotency-Key": uuid4().hex,
     }
 
 
 def _refund_headers(client: AsyncClient) -> dict[str, str]:
     """Refund POST does NOT require Idempotency-Key (D-32-20)."""
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 async def _seed_sold_membership(

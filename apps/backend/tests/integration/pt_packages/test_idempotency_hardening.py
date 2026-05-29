@@ -30,7 +30,7 @@ from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 
 
 def _csrf_header(client: AsyncClient) -> str:
-    return client.cookies.get("sportzal_csrf") or ""
+    return client.cookies.get("clubcore_csrf") or ""
 
 
 def _headers(client: AsyncClient, *, key: str) -> dict[str, str]:

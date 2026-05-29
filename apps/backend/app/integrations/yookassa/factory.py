@@ -83,7 +83,7 @@ async def build_yookassa_client(*, settings: YooKassaSettings) -> YooKassaClient
         # AsyncClient construction time. We keep the Latinised "YooKassa"
         # form for the wire header; the docstring / log messages still use
         # the original "ЮKassa" spelling.
-        headers={"User-Agent": "Sportzal/1.7 YooKassa-Adapter"},
+        headers={"User-Agent": "clubcore/1.11 YooKassa-Adapter"},
     )
     # D-48-13: boot probe via GET /v3/me. D-48-15: single attempt, no retry.
     #

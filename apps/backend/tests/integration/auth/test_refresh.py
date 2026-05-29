@@ -53,13 +53,13 @@ async def seeded_owner(db_session: AsyncSession, redis_clean: Redis) -> User:
 
 
 async def _login(client: AsyncClient) -> str:
-    """Log in and return the raw sz_refresh cookie value."""
+    """Log in and return the raw cc_refresh cookie value."""
     r = await client.post(
         "/api/v1/auth/login",
         json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
     )
     assert r.status_code == 200, r.text
-    return client.cookies["sz_refresh"]
+    return client.cookies["cc_refresh"]
 
 
 def _sha256_hex(value: str) -> str:
@@ -76,7 +76,7 @@ async def test_refresh_happy_rotates_token(
 
     r = await async_client.post("/api/v1/auth/refresh")
     assert r.status_code == 200, r.text
-    new_refresh = async_client.cookies["sz_refresh"]
+    new_refresh = async_client.cookies["cc_refresh"]
     assert new_refresh != old_refresh
 
     # Verify the old row got replaced_by_id + replaced_at populated.
@@ -94,30 +94,30 @@ async def test_refresh_race_window_returns_same_pair(
     async_client: AsyncClient,
     seeded_owner: User,
 ) -> None:
-    """Replay the SAME old sz_refresh cookie twice within 5s → same new pair (D-13)."""
+    """Replay the SAME old cc_refresh cookie twice within 5s → same new pair (D-13)."""
     await _login(async_client)
-    old_refresh = async_client.cookies["sz_refresh"]
+    old_refresh = async_client.cookies["cc_refresh"]
 
     # First refresh — rotates and caches the new pair at auth:rotate:{old_hash}.
     r1 = await async_client.post("/api/v1/auth/refresh")
     assert r1.status_code == 200, r1.text
-    new_refresh_1 = async_client.cookies["sz_refresh"]
+    new_refresh_1 = async_client.cookies["cc_refresh"]
     assert new_refresh_1 != old_refresh
 
-    # Replay the OLD sz_refresh by overriding only this request's cookie jar.
-    # We replace the NEW sz_refresh in the client jar with the OLD value so the
+    # Replay the OLD cc_refresh by overriding only this request's cookie jar.
+    # We replace the NEW cc_refresh in the client jar with the OLD value so the
     # outgoing request carries old_refresh (httpx merges request `cookies=` with
     # the jar; managing the jar directly avoids ambiguous duplicates).
-    async_client.cookies.delete("sz_refresh")
-    async_client.cookies.set("sz_refresh", old_refresh, path="/api/v1/auth")
+    async_client.cookies.delete("cc_refresh")
+    async_client.cookies.set("cc_refresh", old_refresh, path="/api/v1/auth")
 
     # Second refresh — should hit branch B (replaced-within-window) and return
     # the same new pair from cache. We read the new value off the response (jar
     # contents may end up with multi-domain duplicates after the round-trip,
-    # which makes `async_client.cookies['sz_refresh']` ambiguous).
+    # which makes `async_client.cookies['cc_refresh']` ambiguous).
     r2 = await async_client.post("/api/v1/auth/refresh")
     assert r2.status_code == 200, r2.text
-    new_refresh_2 = r2.cookies["sz_refresh"]
+    new_refresh_2 = r2.cookies["cc_refresh"]
     assert new_refresh_2 == new_refresh_1, "Same cached new pair must be returned"
 
 
@@ -129,7 +129,7 @@ async def test_refresh_reuse_revokes_family(
 ) -> None:
     """Replay after cache expiry → family revoked + family_reuse_detected (D-13 branch C)."""
     await _login(async_client)
-    old_refresh = async_client.cookies["sz_refresh"]
+    old_refresh = async_client.cookies["cc_refresh"]
     old_hash = _sha256_hex(old_refresh)
 
     # First refresh — rotation chain established.
@@ -140,8 +140,8 @@ async def test_refresh_reuse_revokes_family(
     await redis_clean.delete(f"auth:rotate:{old_hash}")
 
     # Restore the old refresh cookie and try to use it again.
-    async_client.cookies.delete("sz_refresh")
-    async_client.cookies.set("sz_refresh", old_refresh, path="/api/v1/auth")
+    async_client.cookies.delete("cc_refresh")
+    async_client.cookies.set("cc_refresh", old_refresh, path="/api/v1/auth")
 
     with capture_logs() as captured:
         r2 = await async_client.post("/api/v1/auth/refresh")
@@ -182,7 +182,7 @@ async def test_refresh_reuse_writes_family_reuse_detected_audit_row(
     """AUDIT-02: refresh-token reuse outside the race window writes
     family_reuse_detected audit row (D-04 row 5)."""
     await _login(async_client)
-    old_refresh = async_client.cookies["sz_refresh"]
+    old_refresh = async_client.cookies["cc_refresh"]
     old_hash = _sha256_hex(old_refresh)
 
     r1 = await async_client.post("/api/v1/auth/refresh")
@@ -191,8 +191,8 @@ async def test_refresh_reuse_writes_family_reuse_detected_audit_row(
     # Drop the race-window cache so branch B falls through to branch C.
     await redis_clean.delete(f"auth:rotate:{old_hash}")
 
-    async_client.cookies.delete("sz_refresh")
-    async_client.cookies.set("sz_refresh", old_refresh, path="/api/v1/auth")
+    async_client.cookies.delete("cc_refresh")
+    async_client.cookies.set("cc_refresh", old_refresh, path="/api/v1/auth")
 
     r2 = await async_client.post("/api/v1/auth/refresh")
     assert r2.status_code == 401, r2.text

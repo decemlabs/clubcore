@@ -533,7 +533,7 @@ async def emit(
             string wins over the ContextVar (batch/retro-emit path).
             Persists to the ``audit_log.actor_email_snapshot`` column.
             Example: ``await audit.emit(..., actor_user_id=uid,
-            actor_email_snapshot="batch-system@sportzal.local")``.
+            actor_email_snapshot="batch-system@clubcore.local")``.
         **payload: Arbitrary JSONB-serialisable kwargs. Per-event shape per D-08.
             NOTE D-41-09: ``actor_email_snapshot`` is a COLUMN on audit_log,
             never a payload field — the 11 v1.6 Pydantic schemas use

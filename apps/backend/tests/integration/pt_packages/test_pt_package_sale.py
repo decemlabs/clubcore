@@ -32,7 +32,7 @@ from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 
 
 def _csrf_headers(client: AsyncClient, *, idempotency_key: str | None = None) -> dict[str, str]:
-    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "") or ""}
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("clubcore_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -330,7 +330,7 @@ async def test_create_pt_package_sale_unauthenticated_401(
     make_pt_package_plan: Callable[..., Awaitable[PtPackagePlan]],
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
-    """Unauthenticated POST → 401 (no sz_access cookie)."""
+    """Unauthenticated POST → 401 (no cc_access cookie)."""
     from httpx import ASGITransport
 
     plan = await make_pt_package_plan(name="unauthed")

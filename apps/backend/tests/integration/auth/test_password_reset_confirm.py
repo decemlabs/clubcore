@@ -184,8 +184,8 @@ async def test_confirm_happy_path_atomic_consume_password_rotate_sessions_revoke
         json={"email": user.email, "password": _OLD_PASSWORD},
     )
     assert login_pre.status_code == 200, login_pre.text
-    pre_refresh = async_client.cookies.get("sz_refresh")
-    assert pre_refresh is not None, "login should have set sz_refresh cookie"
+    pre_refresh = async_client.cookies.get("cc_refresh")
+    assert pre_refresh is not None, "login should have set cc_refresh cookie"
 
     # Snapshot the original hash so we can assert rotation.
     original_hash = await db_session.scalar(select(User.password_hash).where(User.id == user.id))
@@ -219,7 +219,7 @@ async def test_confirm_happy_path_atomic_consume_password_rotate_sessions_revoke
     assert r_refresh.json()["code"] in {"invalid_session", "invalid_token"}
 
     # 6. New login with the new password succeeds — Argon2 rehash sane.
-    # Clear cookies first so the stale sz_refresh doesn't taint the login.
+    # Clear cookies first so the stale cc_refresh doesn't taint the login.
     async_client.cookies.clear()
     login_post = await async_client.post(
         "/api/v1/auth/login",

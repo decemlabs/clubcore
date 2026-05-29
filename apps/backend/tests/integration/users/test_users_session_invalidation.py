@@ -41,7 +41,7 @@ But this plan exercises the REAL end-to-end production flow: owner calls
 runs ``repository.deactivate_user`` (flips is_active=false) AND THEN calls
 ``get_user_session_invalidator()`` which runs ``auth.service.revoke_all_sessions``
 to ``UPDATE refresh_tokens SET revoked_at=now() WHERE user_id=:id``. So when
-the deactivated user's client next presents its sz_refresh cookie, the row IS
+the deactivated user's client next presents its cc_refresh cookie, the row IS
 found by hash lookup, but ``row.revoked_at IS NOT NULL`` — which fails the
 Branch A predicate (``revoked_at is None and replaced_by_id is None``), AND
 fails the Branch B "replaced-within-window" predicate, so falls through to
@@ -114,7 +114,7 @@ async def test_deactivate_revokes_families_and_blocks_refresh(
     # its fixture, which seeded the user's first refresh-token family. We do
     # NOT POST a pre-deactivation ``/auth/refresh`` sanity check —
     # rotating the cookie inside the test leaves the httpx jar with both the
-    # old (replaced) and the new (rotated) ``sz_refresh`` values on the same
+    # old (replaced) and the new (rotated) ``cc_refresh`` values on the same
     # path (see ``tests/integration/auth/test_refresh.py`` lines 110-112 for
     # the same caveat). The single login already gives the user >=1 refresh
     # family, which is sufficient for the ``sessions_revoked_count >= 1``

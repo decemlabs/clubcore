@@ -198,7 +198,7 @@ async def test_soft_delete_reinvite_race(
                     json={"email": owner_email, "password": _RACE_OWNER_PASSWORD},
                 )
                 assert login.status_code == 200, f"owner login failed: {login.text}"
-                csrf_headers = {"X-CSRF-Token": owner_client.cookies.get("sportzal_csrf") or ""}
+                csrf_headers = {"X-CSRF-Token": owner_client.cookies.get("clubcore_csrf") or ""}
 
                 # ── Race: DELETE old user || POST new user with same email ──
                 async def _delete_old() -> tuple[int, str]:

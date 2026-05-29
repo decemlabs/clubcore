@@ -134,7 +134,7 @@ async def test_post_bookings_owner_missing_idempotency_key_422(
 ) -> None:
     """Owner POST without Idempotency-Key → 422 (validation_error /
     idempotency_key_required)."""
-    csrf_token = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed_client_owner.cookies.get("clubcore_csrf") or ""
     r = await authed_client_owner.post(
         "/api/v1/bookings",
         json={
@@ -155,7 +155,7 @@ async def test_post_bookings_owner_extra_field_422(
     authed_client_owner: AsyncClient,
 ) -> None:
     """Owner POST with extra field → 422 (extra='forbid' rejection at schema)."""
-    csrf_token = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed_client_owner.cookies.get("clubcore_csrf") or ""
     r = await authed_client_owner.post(
         "/api/v1/bookings",
         json={

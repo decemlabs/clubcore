@@ -30,7 +30,7 @@ class ForbiddenError(AppError):
 class CsrfMismatch(AppError):  # noqa: N818
     """Double-submit CSRF check failure (Phase 6 D-08, D-21).
 
-    Raised by `app.core.dependencies.verify_csrf` when the `sportzal_csrf`
+    Raised by `app.core.dependencies.verify_csrf` when the `clubcore_csrf`
     cookie and `X-CSRF-Token` header are missing or do not match under
     constant-time compare. Distinct from `ForbiddenError` so the frontend
     fetcher can branch: `csrf_mismatch` → refresh CSRF cookie + retry once;
@@ -99,7 +99,7 @@ class InvalidPassword(AppError):  # noqa: N818
 
 
 class InvalidSession(AppError):  # noqa: N818
-    """UUID parse failure on sz_access sub claim (Phase 23 D-23-11/D-23-12).
+    """UUID parse failure on cc_access sub claim (Phase 23 D-23-11/D-23-12).
 
     Wrap site: app.core.dependencies.get_current_user (UUID(claims.sub)).
     Distinct from InvalidAccessToken so FE branches:

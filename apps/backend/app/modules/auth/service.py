@@ -774,7 +774,7 @@ async def list_user_sessions(
     """
     now = datetime.now(tz=UTC)
 
-    # Resolve is_current: sha256(sz_refresh) → token_hash → family_id (D-23-3).
+    # Resolve is_current: sha256(cc_refresh) → token_hash → family_id (D-23-3).
     current_family_id: UUID | None = None
     if presented_refresh_token is not None:
         presented_hash = _sha256_hex(presented_refresh_token)

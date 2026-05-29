@@ -81,17 +81,17 @@ class TestEmailFromResolution:
     """Phase 62 D-62-03 — env-driven email FROM resolver.
 
     Resolution: CLUBCORE_EMAIL_FROM env override, else hardcoded brand default
-    ``"noreply@mail.sportzal.ru"`` (preserved per D-62-02 / D-10-BRAND-DISTINCTION:
+    ``"noreply@mail.clubcore.ru"`` (preserved per D-62-02 / D-10-BRAND-DISTINCTION:
     brand-mail literal is operator DNS work, NOT part of the source rename).
     """
 
     def test_neither_env_set_preserves_hardcoded_default(self) -> None:
         """When no env is set, EmailProviderSettings.from_address keeps
-        its hardcoded default ``"noreply@mail.sportzal.ru"``.
+        its hardcoded default ``"noreply@mail.clubcore.ru"``.
         """
         s = _build_settings()
         assert s.clubcore_email_from is None
-        assert s.email.from_address == "noreply@mail.sportzal.ru"
+        assert s.email.from_address == "noreply@mail.clubcore.ru"
 
     def test_clubcore_email_from_overrides_from_address(self) -> None:
         """When CLUBCORE_EMAIL_FROM is set, it overrides from_address."""

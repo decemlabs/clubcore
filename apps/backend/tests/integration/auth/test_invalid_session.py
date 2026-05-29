@@ -1,11 +1,11 @@
-"""Integration tests for HYG-02 — tampered sz_access cookie with non-UUID sub.
+"""Integration tests for HYG-02 — tampered cc_access cookie with non-UUID sub.
 
 Covers:
   - A hand-signed access JWT with sub='not-a-uuid' returns 401 invalid_session (NOT 500).
   - The error code is 'invalid_session' (NOT 'invalid_token'), distinguishing the
     cookie-tampered path from the token-expired path (D-23-11).
   - Wrap site is ONLY at app.core.dependencies.get_current_user:UUID(claims.sub) (D-23-12).
-  - sz_refresh is NOT UUID-parsed — the sha256 lookup path is unchanged.
+  - cc_refresh is NOT UUID-parsed — the sha256 lookup path is unchanged.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ async def test_tampered_access_jwt_with_non_uuid_sub_returns_401_invalid_session
     async_client: AsyncClient,
     app: FastAPI,
 ) -> None:
-    """HYG-02: sz_access with sub='not-a-uuid' → 401 invalid_session (NOT 500).
+    """HYG-02: cc_access with sub='not-a-uuid' → 401 invalid_session (NOT 500).
 
     Constructs a cryptographically valid JWT (signed with the live secret_key) whose
     sub claim is not a valid UUID. Pre-Phase-23, UUID(claims.sub) raised ValueError
@@ -48,8 +48,8 @@ async def test_tampered_access_jwt_with_non_uuid_sub_returns_401_invalid_session
         algorithm="HS256",
     )
 
-    # Set the tampered token as the sz_access cookie.
-    async_client.cookies.set("sz_access", tampered_token)
+    # Set the tampered token as the cc_access cookie.
+    async_client.cookies.set("cc_access", tampered_token)
 
     # Hit any Depends(get_current_user) route — /me is the simplest.
     response = await async_client.get("/api/v1/auth/me")
@@ -99,7 +99,7 @@ async def test_valid_jwt_with_unknown_user_id_still_returns_401(
         settings.secret_key.get_secret_value(),
         algorithm="HS256",
     )
-    async_client.cookies.set("sz_access", token)
+    async_client.cookies.set("cc_access", token)
 
     response = await async_client.get("/api/v1/auth/me")
 

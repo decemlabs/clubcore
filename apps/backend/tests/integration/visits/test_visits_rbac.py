@@ -16,7 +16,7 @@ from httpx import AsyncClient
 
 
 def _csrf(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 # ── Unauthenticated 401 canaries (RBAC-04 ordering) ───────────────────────────

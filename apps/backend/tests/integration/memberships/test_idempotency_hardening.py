@@ -52,7 +52,7 @@ SECOND_OWNER_PASSWORD = "hunter22hunter22"  # noqa: S105 -- test password litera
 
 
 def _csrf_header(client: AsyncClient) -> str:
-    return client.cookies.get("sportzal_csrf") or ""
+    return client.cookies.get("clubcore_csrf") or ""
 
 
 def _headers(client: AsyncClient, *, key: str) -> dict[str, str]:

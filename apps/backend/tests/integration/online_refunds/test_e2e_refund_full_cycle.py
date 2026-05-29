@@ -405,7 +405,7 @@ async def test_e2e_refund_full_cycle_membership(
         "/api/v1/auth/login",
         json={"email": f"e2e-mbr-owner-{nonce}@example.com", "password": "hunter22hunter22"},
     )
-    csrf = e2e_client.cookies.get("sportzal_csrf") or ""
+    csrf = e2e_client.cookies.get("clubcore_csrf") or ""
 
     # Step 1: POST /refund.
     idem_key = str(uuid4())
@@ -564,7 +564,7 @@ async def test_e2e_refund_full_cycle_idempotent_replay_returns_same_refund_id(
         "/api/v1/auth/login",
         json={"email": f"e2e-idem-owner-{nonce}@example.com", "password": "hunter22hunter22"},
     )
-    csrf = e2e_client.cookies.get("sportzal_csrf") or ""
+    csrf = e2e_client.cookies.get("clubcore_csrf") or ""
     idem_key = str(uuid4())
 
     # First POST.
@@ -628,7 +628,7 @@ async def test_e2e_refund_full_cycle_webhook_replay_returns_200_silently(
         "/api/v1/auth/login",
         json={"email": f"e2e-wh-replay-owner-{nonce}@example.com", "password": "hunter22hunter22"},
     )
-    csrf = e2e_client.cookies.get("sportzal_csrf") or ""
+    csrf = e2e_client.cookies.get("clubcore_csrf") or ""
 
     resp = await e2e_client.post(
         f"/api/v1/online-payments/memberships/{membership.id}/refund",
@@ -701,7 +701,7 @@ async def test_e2e_refund_full_cycle_pt_package(
         "/api/v1/auth/login",
         json={"email": f"e2e-pt-owner-{nonce}@example.com", "password": "hunter22hunter22"},
     )
-    csrf = e2e_client.cookies.get("sportzal_csrf") or ""
+    csrf = e2e_client.cookies.get("clubcore_csrf") or ""
 
     # Step 1: POST /pt-packages/{id}/refund.
     idem_key = str(uuid4())

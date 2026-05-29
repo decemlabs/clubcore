@@ -171,7 +171,7 @@ class ActiveSessionItem(ResponseData):
     last_used_at: datetime  # → lastUsedAt
     user_agent: str | None  # → userAgent (None for pre-Phase-23 sessions, CD-01 trade-off)
     channel: str  # 'email_password' | 'telegram' | future; default 'email_password'
-    is_current: bool  # → isCurrent (True if this family matches the current sz_refresh)
+    is_current: bool  # → isCurrent (True if this family matches the current cc_refresh)
 
 
 # Type alias — ResponseEnvelope[PaginatedData[ActiveSessionItem]] on the wire.

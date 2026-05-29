@@ -84,7 +84,7 @@ async def test_logout_revokes_family_and_clears_cookies(
     with capture_logs() as captured:
         r = await async_client.post(
             "/api/v1/auth/logout",
-            headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+            headers={"X-CSRF-Token": async_client.cookies["clubcore_csrf"]},
         )
 
     assert r.status_code == 200, r.text
@@ -122,16 +122,16 @@ async def test_logout_revokes_family_and_clears_cookies(
         if "expires=" in h.lower() or "max-age=0" in h.lower()
     ]
     # All three cookies must be cleared
-    assert any(h.startswith("sz_access=") for h in deletion_headers)
-    assert any(h.startswith("sz_refresh=") for h in deletion_headers)
-    assert any(h.startswith("sportzal_csrf=") for h in deletion_headers)
+    assert any(h.startswith("cc_access=") for h in deletion_headers)
+    assert any(h.startswith("cc_refresh=") for h in deletion_headers)
+    assert any(h.startswith("clubcore_csrf=") for h in deletion_headers)
 
 
 async def test_logout_unauthenticated_returns_401(
     async_client: AsyncClient,
     redis_clean: Redis,
 ) -> None:
-    """No sz_access cookie → 401, NOT a free cookie clearing for unauthenticated callers."""
+    """No cc_access cookie → 401, NOT a free cookie clearing for unauthenticated callers."""
     r = await async_client.post("/api/v1/auth/logout")
     assert r.status_code == 401
 
@@ -164,7 +164,7 @@ async def test_logout_all_revokes_all_families(
     with capture_logs() as captured:
         r = await async_client.post(
             "/api/v1/auth/logout-all",
-            headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+            headers={"X-CSRF-Token": async_client.cookies["clubcore_csrf"]},
         )
 
     assert r.status_code == 200, r.text
@@ -185,7 +185,7 @@ async def test_logout_all_revokes_all_families(
     assert await redis_clean.exists(f"auth:user_sessions:{seeded_owner.id}") == 0
 
     # The unused first_cookies serve as documentation of the second-device scenario.
-    assert "sz_refresh" in first_cookies  # belt-and-braces sanity
+    assert "cc_refresh" in first_cookies  # belt-and-braces sanity
 
 
 async def test_logout_authenticated_without_csrf_header_returns_403(
@@ -200,7 +200,7 @@ async def test_logout_authenticated_without_csrf_header_returns_403(
     without the CSRF header gets 403 csrf_mismatch (NOT 401).
     """
     await _login(async_client)
-    # Login minted sportzal_csrf into the jar; deliberately omit the header.
+    # Login minted clubcore_csrf into the jar; deliberately omit the header.
     r = await async_client.post("/api/v1/auth/logout")
     assert r.status_code == 403, r.text
     body = r.json()
@@ -212,7 +212,7 @@ async def test_logout_authenticated_with_wrong_csrf_header_returns_403(
     seeded_owner: User,
     redis_clean: Redis,
 ) -> None:
-    """Mismatched X-CSRF-Token vs sportzal_csrf cookie → 403 csrf_mismatch."""
+    """Mismatched X-CSRF-Token vs clubcore_csrf cookie → 403 csrf_mismatch."""
     await _login(async_client)
     r = await async_client.post(
         "/api/v1/auth/logout",
@@ -247,7 +247,7 @@ async def test_logout_writes_session_revoked_audit_row(
     await _login(async_client)
     r = await async_client.post(
         "/api/v1/auth/logout",
-        headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+        headers={"X-CSRF-Token": async_client.cookies["clubcore_csrf"]},
     )
     assert r.status_code == 200, r.text
 

@@ -24,7 +24,7 @@ from app.modules.auth.email_templates import TEMPLATES
 # Deterministic test inputs — pinned so future edits to copy can be detected
 # via fragment assertions below. The token is a fixed placeholder, never a
 # secret, never a real URL-fragment value.
-_FIXED_RESET_URL = "https://app.sportzal.ru/auth/password-reset#token=FIXED_TOKEN_FOR_TEST"
+_FIXED_RESET_URL = "https://app.clubcore.ru/auth/password-reset#token=FIXED_TOKEN_FOR_TEST"
 _FIXED_EXPIRES_AT_HUMAN = "19 мая 2026 г. 21:30 (МСК)"  # noqa: RUF001
 
 
@@ -44,7 +44,7 @@ def test_password_reset_email_html_renders_deterministic_snapshot() -> None:
         ``<a href="{{ reset_url }}">{{ reset_url }}</a>`` from
         ``app/modules/auth/email_templates.py``).
       - ``expires_at_human`` appears (locked variable from D-44-25).
-      - Helpdesk footer present (``noreply@mail.sportzal.ru``).
+      - Helpdesk footer present (``noreply@mail.clubcore.ru``).
     """
     tpl = TEMPLATES["PASSWORD_RESET_EMAIL"]
     rendered = tpl.html.render(
@@ -81,7 +81,7 @@ def test_password_reset_email_html_renders_deterministic_snapshot() -> None:
     assert "Перейдите по ссылке" in rendered
     assert "Ссылка действительна до" in rendered
     assert "проигнорируйте это письмо" in rendered
-    assert "Sportzal · noreply@mail.sportzal.ru" in rendered
+    assert "Sportzal · noreply@mail.clubcore.ru" in rendered
 
 
 def test_password_reset_email_text_renders_deterministic_snapshot() -> None:
@@ -119,7 +119,7 @@ def test_password_reset_email_text_renders_deterministic_snapshot() -> None:
     assert "Перейдите по ссылке" in rendered
     assert "Ссылка действительна до" in rendered
     assert "проигнорируйте это письмо" in rendered
-    assert "Sportzal · noreply@mail.sportzal.ru" in rendered
+    assert "Sportzal · noreply@mail.clubcore.ru" in rendered
 
     # Text side must NOT contain HTML tags — defensive check that we
     # rendered from the .text Template, not the .html one.

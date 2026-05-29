@@ -108,7 +108,7 @@ async def _build_authed_client(app: FastAPI, *, email: str, password: str) -> As
 
     Mirrors BOOK-TEST-01's ``_build_authed_client`` — issues a POST
     /api/v1/auth/login that populates the cookie jar with
-    ``sz_access`` / ``sz_refresh`` / ``sportzal_csrf``. The caller is
+    ``cc_access`` / ``cc_refresh`` / ``clubcore_csrf``. The caller is
     responsible for closing the client.
     """
     transport = ASGITransport(app=app)
@@ -197,7 +197,7 @@ async def test_deactivate_refresh_race(
         )
 
         try:
-            owner_csrf = owner_client.cookies.get("sportzal_csrf") or ""
+            owner_csrf = owner_client.cookies.get("clubcore_csrf") or ""
 
             async def _deactivate() -> int:
                 r = await owner_client.patch(

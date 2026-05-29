@@ -23,7 +23,7 @@ from app.modules.memberships.models import Membership, MembershipPlan
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 VALID_CLIENT: dict[str, Any] = {

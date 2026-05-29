@@ -190,23 +190,21 @@ OPENAPI_TAGS: list[dict[str, str]] = [
 
 # Phase 64 FRZ-05 / D-64-SEC-SCHEMES — OpenAPI security scheme definitions.
 # Two schemes declared:
-#   cookieAuth — the sz_access httpOnly cookie that carries the JWT access
-#                token.  The sz_refresh cookie drives the /auth/refresh server-
+#   cookieAuth — the cc_access httpOnly cookie that carries the JWT access
+#                token.  The cc_refresh cookie drives the /auth/refresh server-
 #                internal rotation loop; it is documented in the description but
 #                NOT modelled as a separate scheme (it is never sent by the
 #                client as an auth credential, only by the browser automatically).
 #   csrfHeader — the X-CSRF-Token double-submit header.  The companion readable
-#                cookie is named `sportzal_csrf` — a v1.x carry-over retained
-#                per D-11-CSRF-DEFER; rename to `clubcore_csrf` is deferred to
-#                v2.0 with a coordinated admin-web cutover (see auth runbook at
-#                .planning/handoff/clubcore-auth-runbook.md and D-11-CSRF-DEFER).
+#                cookie is named `clubcore_csrf` (renamed per NAME-01 /
+#                D-11-CSRF-DEFER closure in quick task 260529-ll9).
 SECURITY_SCHEMES: dict[str, dict[str, str]] = {
     "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "sz_access",
+        "name": "cc_access",
         "description": (
-            "Access-token httpOnly cookie. Refresh-token cookie (sz_refresh) is "
+            "Access-token httpOnly cookie. Refresh-token cookie (cc_refresh) is "
             "server-internal flow — sent by the browser automatically; not modelled "
             "as a separate security scheme."
         ),
@@ -216,9 +214,8 @@ SECURITY_SCHEMES: dict[str, dict[str, str]] = {
         "in": "header",
         "name": "X-CSRF-Token",
         "description": (
-            "Double-submit CSRF header. Companion cookie named `sportzal_csrf` — "
-            "v1.x carry-over per D-11-CSRF-DEFER; rename to `clubcore_csrf` "
-            "deferred to v2.0 with coordinated admin-web cutover (see auth runbook)."
+            "Double-submit CSRF header. Companion readable cookie named `clubcore_csrf` "
+            "(non-httpOnly so the frontend can read it for the X-CSRF-Token header)."
         ),
     },
 }
@@ -232,7 +229,7 @@ PUBLIC_ENDPOINT_OPERATION_IDS: frozenset[str] = frozenset(
     {
         "health",  # GET /healthz — liveness probe (no auth required)
         "login",  # POST /api/v1/auth/login — initial credential exchange
-        "refresh",  # POST /api/v1/auth/refresh — token rotation (sz_refresh cookie)
+        "refresh",  # POST /api/v1/auth/refresh — token rotation (cc_refresh cookie)
         "telegram_start",  # POST /api/v1/auth/telegram/start — mint deep-link token
         "telegram_status",  # GET /api/v1/auth/telegram/status — poll bot DM delivery
         "telegram_verify",  # POST /api/v1/auth/telegram/verify — consume OTP + issue cookies
@@ -425,11 +422,11 @@ def create_app() -> FastAPI:
             "runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 "
             "plans (64-02..64-07) curate operation IDs, tags, security "
             "schemes, shared error responses, and Redocly lint.\n\n"
-            "Carry-over: the `sportzal_csrf` cookie name is retained in "
-            "v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is "
-            "scheduled for v2.0 with a coordinated admin-web cutover "
-            "(documented further in the securitySchemes block landed by "
-            "Phase 64-04)."
+            "Cookie names updated from sportzal-era identifiers to clubcore "
+            "equivalents (cc_access, cc_refresh, clubcore_csrf) per NAME-01 / "
+            "quick task 260529-ll9, closing D-11-CSRF-DEFER. "
+            "This intentionally shifts the contract-freeze-v1.11.0 baseline "
+            "(acceptable pre-integration)."
         ),
         servers=[{"url": "http://localhost:8000", "description": "Local dev"}],
         openapi_tags=OPENAPI_TAGS,

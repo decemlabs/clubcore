@@ -3,7 +3,7 @@
 Covers (Phase 23 D-23-1..D-23-10):
   - Paginated envelope shape {items, total, page, pageSize} (D-23-1).
   - Sort: is_current=True first, then last_used_at DESC (D-23-2).
-  - is_current resolved by sha256(sz_refresh) token_hash lookup (D-23-3).
+  - is_current resolved by sha256(cc_refresh) token_hash lookup (D-23-3).
   - Item fields: {familyId, createdAt, lastUsedAt, userAgent, channel, isCurrent} (D-23-4).
   - POST revoke: 404-collapse on unknown/cross-user family (D-23-6).
   - POST revoke: idempotent 200 on already-revoked family (D-23-7).
@@ -86,7 +86,7 @@ async def _get_sessions(client: AsyncClient, **params: object) -> dict:  # type:
 
 
 async def _revoke(client: AsyncClient, family_id: str, *, csrf: str | None = None) -> dict | None:
-    csrf_val = csrf if csrf is not None else client.cookies.get("sportzal_csrf", "")
+    csrf_val = csrf if csrf is not None else client.cookies.get("clubcore_csrf", "")
     r = await client.post(
         f"/api/v1/auth/sessions/{family_id}/revoke",
         headers={"X-CSRF-Token": csrf_val} if csrf_val else {},
@@ -132,7 +132,7 @@ async def test_get_sessions_sort_is_current_first_then_last_used_desc(
     """HYG-03 D-23-2 + D-23-3: sort is_current first, then lastUsedAt DESC.
 
     Seeds 2 sessions: one login with a fresh client (no cookies) then a second login.
-    The second login's sz_refresh is the 'current' token. The is_current item should
+    The second login's cc_refresh is the 'current' token. The is_current item should
     appear first in the list.
     """
     # First login (clear jar first to get a fresh family).
@@ -158,18 +158,18 @@ async def test_get_sessions_sort_is_current_first_then_last_used_desc(
         )
 
     # Documentation: first_cookies was from the initial login (no longer current).
-    assert "sz_refresh" in first_cookies
+    assert "cc_refresh" in first_cookies
 
 
-async def test_get_sessions_without_sz_refresh_marks_all_not_current(
+async def test_get_sessions_without_cc_refresh_marks_all_not_current(
     async_client: AsyncClient,
     db_session: AsyncSession,
     seeded_owner: User,
 ) -> None:
-    """HYG-03 D-23-3: absent sz_refresh cookie → all items isCurrent=False."""
+    """HYG-03 D-23-3: absent cc_refresh cookie → all items isCurrent=False."""
     await _login(async_client, SESSIONS_OWNER_EMAIL, SESSIONS_OWNER_PASSWORD)
-    # Clear only sz_refresh (but keep sz_access for auth).
-    async_client.cookies.delete("sz_refresh")
+    # Clear only cc_refresh (but keep cc_access for auth).
+    async_client.cookies.delete("cc_refresh")
 
     body = await _get_sessions(async_client)
     items = body["data"]["items"]
@@ -177,7 +177,7 @@ async def test_get_sessions_without_sz_refresh_marks_all_not_current(
     assert len(items) >= 1
     for item in items:
         assert item["isCurrent"] is False, (
-            f"Without sz_refresh, all items must be isCurrent=False; got: {item}"
+            f"Without cc_refresh, all items must be isCurrent=False; got: {item}"
         )
 
 
@@ -275,7 +275,7 @@ async def test_revoke_idempotent_on_second_call(
     """
     # First login.
     await _login(async_client, SESSIONS_OWNER_EMAIL, SESSIONS_OWNER_PASSWORD)
-    first_csrf = async_client.cookies.get("sportzal_csrf", "")
+    first_csrf = async_client.cookies.get("clubcore_csrf", "")
     first_cookies = dict(async_client.cookies)
 
     # Second login (different device).
@@ -331,9 +331,9 @@ async def test_self_revoke_clears_cookie_matrix(
     seeded_owner: User,
     redis_clean: Redis,
 ) -> None:
-    """HYG-03 D-23-8: self-revoke (current family) clears sz_access + sz_refresh + sportzal_csrf.
+    """HYG-03 D-23-8: self-revoke (current family) clears cc_access + cc_refresh + clubcore_csrf.
 
-    Revoking the family that issued THIS request's sz_refresh is equivalent to /logout —
+    Revoking the family that issued THIS request's cc_refresh is equivalent to /logout —
     the response must carry Set-Cookie deletion headers for all three cookies.
     """
     await _login(async_client, SESSIONS_OWNER_EMAIL, SESSIONS_OWNER_PASSWORD)
@@ -352,14 +352,14 @@ async def test_self_revoke_clears_cookie_matrix(
         for h in r.headers.get_list("set-cookie")
         if "expires=" in h.lower() or "max-age=0" in h.lower()
     ]
-    assert any(h.startswith("sz_access=") for h in deletion_headers), (
-        f"sz_access cookie not cleared on self-revoke. Set-Cookie headers: {deletion_headers}"
+    assert any(h.startswith("cc_access=") for h in deletion_headers), (
+        f"cc_access cookie not cleared on self-revoke. Set-Cookie headers: {deletion_headers}"
     )
-    assert any(h.startswith("sz_refresh=") for h in deletion_headers), (
-        f"sz_refresh cookie not cleared on self-revoke. Set-Cookie headers: {deletion_headers}"
+    assert any(h.startswith("cc_refresh=") for h in deletion_headers), (
+        f"cc_refresh cookie not cleared on self-revoke. Set-Cookie headers: {deletion_headers}"
     )
-    assert any(h.startswith("sportzal_csrf=") for h in deletion_headers), (
-        f"sportzal_csrf cookie not cleared on self-revoke. Set-Cookie headers: {deletion_headers}"
+    assert any(h.startswith("clubcore_csrf=") for h in deletion_headers), (
+        f"clubcore_csrf cookie not cleared on self-revoke. Set-Cookie headers: {deletion_headers}"
     )
 
     # Audit row must be written with resource_type='auth_session'.
@@ -409,7 +409,7 @@ async def test_cross_revoke_does_not_clear_cookie_matrix(
     ]
     # The current session's cookies should NOT appear in deletion headers.
     current_cookies_cleared = any(
-        h.startswith("sz_access=") or h.startswith("sz_refresh=") for h in deletion_headers
+        h.startswith("cc_access=") or h.startswith("cc_refresh=") for h in deletion_headers
     )
     assert not current_cookies_cleared, (
         f"Cookies were cleared on cross-revoke (should only happen on self-revoke). "
@@ -482,7 +482,7 @@ async def test_revoke_csrf_required(
 async def test_revoke_unauthenticated_returns_401(
     async_client: AsyncClient,
 ) -> None:
-    """RBAC-04 ordering: no sz_access cookie → 401 fires before CSRF check."""
+    """RBAC-04 ordering: no cc_access cookie → 401 fires before CSRF check."""
     random_family_id = str(uuid.uuid4())
     r = await async_client.post(
         f"/api/v1/auth/sessions/{random_family_id}/revoke",
@@ -518,7 +518,7 @@ async def test_logout_all_unchanged(
 
     r = await async_client.post(
         "/api/v1/auth/logout-all",
-        headers={"X-CSRF-Token": async_client.cookies["sportzal_csrf"]},
+        headers={"X-CSRF-Token": async_client.cookies["clubcore_csrf"]},
     )
     assert r.status_code == 200, r.text
 
@@ -539,6 +539,6 @@ async def test_logout_all_unchanged(
         for h in r.headers.get_list("set-cookie")
         if "expires=" in h.lower() or "max-age=0" in h.lower()
     ]
-    assert any(h.startswith("sz_access=") for h in deletion_headers)
-    assert any(h.startswith("sz_refresh=") for h in deletion_headers)
-    assert any(h.startswith("sportzal_csrf=") for h in deletion_headers)
+    assert any(h.startswith("cc_access=") for h in deletion_headers)
+    assert any(h.startswith("cc_refresh=") for h in deletion_headers)
+    assert any(h.startswith("clubcore_csrf=") for h in deletion_headers)

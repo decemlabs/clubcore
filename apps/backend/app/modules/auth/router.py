@@ -2,7 +2,7 @@
 
 Endpoints declare ResponseEnvelope[X] as their response_model per Phase 4 D-14
 — no envelope-wrapping middleware. `/login` and `/refresh` are CSRF-exempt at
-the server level (Phase 6 D-09: identity is in the body / sz_refresh cookie).
+the server level (Phase 6 D-09: identity is in the body / cc_refresh cookie).
 
 Phase 6 wiring (D-02, D-09):
   - `/me`, `/logout`, `/logout-all` declare the `require_authenticated()`
@@ -103,13 +103,13 @@ async def refresh(
 ) -> ResponseEnvelope[None]:
     """Rotate the refresh token; reissue all three cookies (AUTH-05/06).
 
-    Reads `sz_refresh` cookie directly (NOT via the auth dep — an expired
+    Reads `cc_refresh` cookie directly (NOT via the auth dep — an expired
     access token must NOT block a refresh call). The body is empty on
     success: the new tokens travel in cookies. CSRF dep is exempt (Phase 6
     CSRF-02 / D-09 list).
     """
     settings = get_settings()
-    presented = request.cookies.get("sz_refresh")
+    presented = request.cookies.get("cc_refresh")
     if presented is None:
         raise InvalidAccessToken("missing_refresh_cookie")
 
@@ -143,7 +143,7 @@ async def logout(
     clear still runs so the browser ends in a clean state.
     """
     settings = get_settings()
-    presented = request.cookies.get("sz_refresh")
+    presented = request.cookies.get("cc_refresh")
     if presented is not None:
         await revoke_session(session, redis, presented)
     clear_session_cookies(response, secure=settings.cookie_secure)
@@ -165,10 +165,10 @@ async def list_sessions(
     """Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).
 
     GET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user
-    manages their own sessions. is_current resolved server-side via sha256(sz_refresh)
+    manages their own sessions. is_current resolved server-side via sha256(cc_refresh)
     token_hash lookup (D-23-3).
     """
-    presented = request.cookies.get("sz_refresh")
+    presented = request.cookies.get("cc_refresh")
     data = await list_user_sessions(
         session,
         redis,
@@ -199,7 +199,7 @@ async def revoke_session_family(
 
     - 404-collapse on unknown family OR family belonging to another user (D-23-6).
     - Idempotent: already-revoked family returns 200 (D-23-7).
-    - Self-revoke: if the revoked family matches THIS request's sz_refresh family,
+    - Self-revoke: if the revoked family matches THIS request's cc_refresh family,
       clear the cookie matrix identical to /logout (D-23-8).
     - Audit: session_revoked with resource_type='auth_session' (D-23-10).
     """
@@ -213,8 +213,8 @@ async def revoke_session_family(
         raise NotFoundError("not_found")
 
     # Self-revoke detection (D-23-8): if the revoked family_id matches the family bound
-    # to THIS request's sz_refresh, clear the cookie matrix (same as /logout).
-    presented = request.cookies.get("sz_refresh")
+    # to THIS request's cc_refresh, clear the cookie matrix (same as /logout).
+    presented = request.cookies.get("cc_refresh")
     if presented is not None and result == "revoked":
         presented_hash = hashlib.sha256(presented.encode("utf-8")).hexdigest()
         current_row = await session.scalar(

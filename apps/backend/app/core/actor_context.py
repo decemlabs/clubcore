@@ -37,7 +37,7 @@ class ActorIdentity(TypedDict):
 
 
 actor_context_var: ContextVar[ActorIdentity | None] = ContextVar(
-    "sportzal_actor_context",
+    "clubcore_actor_context",
     default=None,
 )
 """ContextVar holding the resolved acting user's (id, email) for the

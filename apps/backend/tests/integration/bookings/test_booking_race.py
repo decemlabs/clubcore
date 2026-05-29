@@ -216,7 +216,7 @@ async def test_concurrent_create_booking_partial_unique_at_db_layer(
     await app.state.redis.flushdb()
 
     authed = await _build_authed_client(app)
-    csrf_token = authed.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed.cookies.get("clubcore_csrf") or ""
 
     async def _post(idx: int) -> Any:
         # 2 DISTINCT Idempotency-Keys so the race surfaces at the DB layer.

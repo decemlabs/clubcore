@@ -140,7 +140,7 @@ def _csrf_headers(client: AsyncClient) -> dict[str, str]:
     Re-exported here so consumer test modules can ``from .conftest import
     _csrf_headers`` instead of redefining the one-liner per file.
     """
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +635,7 @@ async def refresh_client_unknown_token(
     """Bare AsyncClient with a syntactically valid but never-issued refresh cookie.
 
     No ``_login`` is performed. A 48-byte URL-safe token is set on
-    ``sz_refresh`` and a 64-hex CSRF token on ``sportzal_csrf`` so the
+    ``cc_refresh`` and a 64-hex CSRF token on ``clubcore_csrf`` so the
     request reaches the refresh handler the same way the active /
     deactivated / soft-deleted clients do — the difference is the
     refresh-token lookup returns no row.
@@ -643,8 +643,8 @@ async def refresh_client_unknown_token(
     _ = redis_clean
     transport = ASGITransport(app=_client_app_overrides)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        client.cookies.set("sz_refresh", secrets.token_urlsafe(48))
-        client.cookies.set("sportzal_csrf", secrets.token_hex(32))
+        client.cookies.set("cc_refresh", secrets.token_urlsafe(48))
+        client.cookies.set("clubcore_csrf", secrets.token_hex(32))
         yield client
 
 

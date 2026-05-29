@@ -768,7 +768,7 @@ async def get_current_user(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> CurrentUser:
-    """Resolve the authenticated user from the `sz_access` cookie.
+    """Resolve the authenticated user from the `cc_access` cookie.
 
     Failure modes (all → 401 InvalidAccessToken with a specific message):
       - missing cookie → 'missing_access_cookie'
@@ -776,7 +776,7 @@ async def get_current_user(
       - composition root forgot to register a loader → 'user_loader_not_registered'
       - loader returned None (user deleted / unknown id) → 'user_not_found'
     """
-    token = request.cookies.get("sz_access")
+    token = request.cookies.get("cc_access")
     if token is None:
         raise InvalidAccessToken("missing_access_cookie")
 
@@ -896,7 +896,7 @@ async def verify_csrf(
     Validation:
       1. If method is in {GET, HEAD, OPTIONS, TRACE}, return None (read-only —
          no CSRF check; T-06-07 accept).
-      2. Otherwise, read `sportzal_csrf` cookie + `X-CSRF-Token` header.
+      2. Otherwise, read `clubcore_csrf` cookie + `X-CSRF-Token` header.
       3. If either is missing OR they don't match (`secrets.compare_digest`,
          constant-time per T-06-05 mitigation), emit `event=csrf_mismatch` and
          raise `CsrfMismatch`.
@@ -911,7 +911,7 @@ async def verify_csrf(
     """
     if request.method in _SAFE_METHODS:
         return
-    cookie_val = request.cookies.get("sportzal_csrf")
+    cookie_val = request.cookies.get("clubcore_csrf")
     header_val = request.headers.get("x-csrf-token")
     if (
         cookie_val is None

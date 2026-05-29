@@ -80,14 +80,14 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<p>Ваш код для входа: <strong>{{ otp_code }}</strong></p>"
             "<p>Срок действия: 10 минут. Если вы не запрашивали код — "
             "проигнорируйте это письмо.</p>"
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             f"Код входа в {CLUB_BRAND}\n\n"
             "Ваш код для входа: {{ otp_code }}\n\n"
             "Срок действия: 10 минут. Если вы не запрашивали код — "
             "проигнорируйте это письмо.\n\n"
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"
         ),
     ),
     "PASSWORD_RESET_EMAIL": EmailTemplate(  # noqa: RUF001
@@ -99,7 +99,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<p>Ссылка действительна до {{ expires_at_human }}. "
             "Если вы не запрашивали восстановление пароля — "
             "проигнорируйте это письмо.</p>"
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             f"Восстановление пароля {CLUB_BRAND}\n\n"
@@ -108,7 +108,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "Ссылка действительна до {{ expires_at_human }}. "
             "Если вы не запрашивали восстановление пароля — "
             "проигнорируйте это письмо.\n\n"
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"
         ),
     ),
 }

@@ -30,7 +30,7 @@ def _csrf_headers(client: AsyncClient) -> dict[str, str]:
     # always include. uuid4().hex is per-call unique so replay collision is
     # avoided across the test suite.
     return {
-        "X-CSRF-Token": client.cookies.get("sportzal_csrf") or "",
+        "X-CSRF-Token": client.cookies.get("clubcore_csrf") or "",
         "Idempotency-Key": uuid4().hex,
     }
 

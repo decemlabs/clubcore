@@ -63,23 +63,23 @@ async def test_login_happy_returns_envelope_and_three_cookies(
 
     set_cookies = response.headers.get_list("set-cookie")
     joined = "\n".join(set_cookies)
-    assert "sz_access=" in joined
-    assert "sz_refresh=" in joined
-    assert "sportzal_csrf=" in joined
+    assert "cc_access=" in joined
+    assert "cc_refresh=" in joined
+    assert "clubcore_csrf=" in joined
 
-    # sz_access — Path=/, HttpOnly, SameSite=Lax
-    sz_access = next(c for c in set_cookies if c.startswith("sz_access="))
-    assert "Path=/" in sz_access
-    assert "HttpOnly" in sz_access
-    assert "samesite=lax" in sz_access.lower()
+    # cc_access — Path=/, HttpOnly, SameSite=Lax
+    cc_access = next(c for c in set_cookies if c.startswith("cc_access="))
+    assert "Path=/" in cc_access
+    assert "HttpOnly" in cc_access
+    assert "samesite=lax" in cc_access.lower()
 
-    # sz_refresh — Path=/api/v1/auth, HttpOnly
-    sz_refresh = next(c for c in set_cookies if c.startswith("sz_refresh="))
-    assert "Path=/api/v1/auth" in sz_refresh
-    assert "HttpOnly" in sz_refresh
+    # cc_refresh — Path=/api/v1/auth, HttpOnly
+    cc_refresh = next(c for c in set_cookies if c.startswith("cc_refresh="))
+    assert "Path=/api/v1/auth" in cc_refresh
+    assert "HttpOnly" in cc_refresh
 
-    # sportzal_csrf — Path=/, NOT HttpOnly (frontend reads it for X-CSRF-Token)
-    sz_csrf = next(c for c in set_cookies if c.startswith("sportzal_csrf="))
+    # clubcore_csrf — Path=/, NOT HttpOnly (frontend reads it for X-CSRF-Token)
+    sz_csrf = next(c for c in set_cookies if c.startswith("clubcore_csrf="))
     assert "Path=/" in sz_csrf
     assert "HttpOnly" not in sz_csrf
 
@@ -134,7 +134,7 @@ async def test_login_429_after_5_failures(
 async def test_me_unauthenticated_returns_401(
     async_client: AsyncClient,
 ) -> None:
-    """GET /me without sz_access cookie → 401 (AUTH-LO-04)."""
+    """GET /me without cc_access cookie → 401 (AUTH-LO-04)."""
     response = await async_client.get("/api/v1/auth/me")
     assert response.status_code == 401
 
@@ -150,7 +150,7 @@ async def test_me_authenticated_returns_user(
     )
     assert login.status_code == 200
 
-    # AsyncClient preserves cookies; /me uses sz_access automatically
+    # AsyncClient preserves cookies; /me uses cc_access automatically
     me = await async_client.get("/api/v1/auth/me")
     assert me.status_code == 200, me.text
     body = me.json()

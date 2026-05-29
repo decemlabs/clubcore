@@ -29,7 +29,7 @@ from app.modules.pt_packages.models import PtPackagePlan
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "")}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf", "")}
 
 
 VALID_PLAN: dict[str, Any] = {

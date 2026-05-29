@@ -34,7 +34,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 async def test_create_happy_returns_201_and_emits_user_invited(

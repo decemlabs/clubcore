@@ -3,8 +3,8 @@
 Phase 7 AUTH-TG-02 + AUTH-TG-04 + AUTH-TG-06 -- end-to-end flow:
 
   /start -> direct telegram_service.bind_and_issue + commit_otp (simulating bot
-  under same SAVEPOINT, D-15) -> /verify with raw_code -> 200 + sz_access /
-  sz_refresh / sportzal_csrf cookies + structlog otp_consumed AND
+  under same SAVEPOINT, D-15) -> /verify with raw_code -> 200 + cc_access /
+  cc_refresh / clubcore_csrf cookies + structlog otp_consumed AND
   login_success(channel='telegram').
 
 Per CONTEXT D-15/D-16: handler tests run direct service calls; no live ptb
@@ -98,9 +98,9 @@ async def test_telegram_verify_happy_path(
     # 4. Three cookies present (AUTH-TG-04 -- same shape as /login).
     set_cookies = verify.headers.get_list("set-cookie")
     joined = "\n".join(set_cookies)
-    assert "sz_access=" in joined
-    assert "sz_refresh=" in joined
-    assert "sportzal_csrf=" in joined
+    assert "cc_access=" in joined
+    assert "cc_refresh=" in joined
+    assert "clubcore_csrf=" in joined
 
     # 5. Response body shape mirrors /login.
     body = verify.json()

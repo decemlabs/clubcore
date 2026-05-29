@@ -139,7 +139,7 @@ async def test_concurrent_refund_loses_at_db_layer(
     await app.state.redis.flushdb()
 
     authed = await _build_authed_client(app)
-    csrf_token = authed.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed.cookies.get("clubcore_csrf") or ""
     headers = {"X-CSRF-Token": csrf_token}
 
     async def _post(idx: int) -> Any:

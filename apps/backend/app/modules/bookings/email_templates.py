@@ -65,12 +65,12 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
         html=_ENV.from_string(
             "<h1>Запись подтверждена</h1>"
             "<p>Тренировка с {{ trainer_name }}&nbsp;{{ slot_start_msk }}.</p>"  # noqa: RUF001
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Запись подтверждена\n\n"
             "Тренировка с {{ trainer_name }} {{ slot_start_msk }}.\n\n"  # noqa: RUF001
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"
         ),
     ),
     "EMAIL_BOOKING_CANCELLED_BY_CLIENT": EmailTemplate(
@@ -79,13 +79,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Запись отменена</h1>"
             "<p>Тренировка с {{ trainer_name }}&nbsp;{{ slot_start_msk }} "  # noqa: RUF001
             "отменена по вашей просьбе.</p>"
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Запись отменена\n\n"
             "Тренировка с {{ trainer_name }} {{ slot_start_msk }} "  # noqa: RUF001
             "отменена по вашей просьбе.\n\n"
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"
         ),
     ),
     "EMAIL_BOOKING_CANCELLED_BY_OWNER": EmailTemplate(
@@ -94,13 +94,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Запись отменена</h1>"
             "<p>К сожалению, тренировка с {{ trainer_name }}&nbsp;"  # noqa: RUF001
             "{{ slot_start_msk }} отменена администратором.</p>"
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Запись отменена\n\n"
             "К сожалению, тренировка с {{ trainer_name }} {{ slot_start_msk }} "  # noqa: RUF001
             "отменена администратором.\n\n"
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"
         ),
     ),
     "EMAIL_BOOKING_REMINDER_24H": EmailTemplate(
@@ -109,13 +109,13 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<h1>Напоминание о тренировке</h1>"  # noqa: RUF001
             "<p>Завтра, {{ slot_date }}, тренировка с "  # noqa: RUF001
             "{{ trainer_name }}&nbsp;{{ slot_start_msk }}.</p>"
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"
         ),
         text=_ENV_TEXT.from_string(
             "Напоминание о тренировке\n\n"  # noqa: RUF001
             "Завтра, {{ slot_date }}, тренировка с "  # noqa: RUF001
             "{{ trainer_name }} {{ slot_start_msk }}.\n\n"  # noqa: RUF001
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"
         ),
     ),
 }

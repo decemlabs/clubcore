@@ -51,12 +51,12 @@ def test_get_current_actor_default_is_none() -> None:
 def test_set_and_reset_roundtrip() -> None:
     uid = uuid4()
     assert get_current_actor() is None
-    token = set_actor({"user_id": uid, "email": "owner@sportzal.local"})
+    token = set_actor({"user_id": uid, "email": "owner@clubcore.local"})
     try:
         ident = get_current_actor()
         assert ident is not None
         assert ident["user_id"] == uid
-        assert ident["email"] == "owner@sportzal.local"
+        assert ident["email"] == "owner@clubcore.local"
     finally:
         reset_actor(token)
     assert get_current_actor() is None
@@ -66,7 +66,7 @@ async def test_audit_emit_reads_contextvar_when_kwarg_omitted() -> None:
     uid = uuid4()
     rid = uuid4()
     session = _CapturingSession()
-    token = set_actor({"user_id": uid, "email": "operator@sportzal.local"})
+    token = set_actor({"user_id": uid, "email": "operator@clubcore.local"})
     try:
         # 'login_success' / 'session' — a locked pair with free-form payload
         # (pre-v1.4, no Pydantic schema validation), so we can pass minimal kwargs.
@@ -83,14 +83,14 @@ async def test_audit_emit_reads_contextvar_when_kwarg_omitted() -> None:
     assert len(session.added) == 1
     row = session.added[0]
     assert row.actor_user_id == uid
-    assert row.actor_email_snapshot == "operator@sportzal.local"
+    assert row.actor_email_snapshot == "operator@clubcore.local"
 
 
 async def test_audit_emit_explicit_override_wins_over_contextvar() -> None:
     uid = uuid4()
     rid = uuid4()
     session = _CapturingSession()
-    token = set_actor({"user_id": uid, "email": "from-contextvar@sportzal.local"})
+    token = set_actor({"user_id": uid, "email": "from-contextvar@clubcore.local"})
     try:
         await audit.emit(
             session,  # type: ignore[arg-type]
@@ -98,13 +98,13 @@ async def test_audit_emit_explicit_override_wins_over_contextvar() -> None:
             actor_user_id=uid,
             resource_type="session",
             resource_id=rid,
-            actor_email_snapshot="explicit-batch@sportzal.local",
+            actor_email_snapshot="explicit-batch@clubcore.local",
         )
     finally:
         reset_actor(token)
 
     row = session.added[0]
-    assert row.actor_email_snapshot == "explicit-batch@sportzal.local"
+    assert row.actor_email_snapshot == "explicit-batch@clubcore.local"
 
 
 async def test_audit_emit_system_event_writes_null_snapshot() -> None:
@@ -112,7 +112,7 @@ async def test_audit_emit_system_event_writes_null_snapshot() -> None:
     # contextvar happens to be populated. This is the cron / anti-oracle
     # unknown-email branch behaviour.
     session = _CapturingSession()
-    token = set_actor({"user_id": uuid4(), "email": "leaked@sportzal.local"})
+    token = set_actor({"user_id": uuid4(), "email": "leaked@clubcore.local"})
     try:
         # 'login_failed' / 'login_attempt' is a locked pair commonly emitted
         # with actor_user_id=None (the email is unknown / wrong).
@@ -141,7 +141,7 @@ async def test_audit_emit_user_id_mismatch_leaves_snapshot_none() -> None:
     assert contextvar_user != explicit_user
     rid = uuid4()
     session = _CapturingSession()
-    token = set_actor({"user_id": contextvar_user, "email": "userA@sportzal.local"})
+    token = set_actor({"user_id": contextvar_user, "email": "userA@clubcore.local"})
     try:
         await audit.emit(
             session,  # type: ignore[arg-type]
@@ -166,7 +166,7 @@ async def test_worker_on_job_start_sets_actor_baseline_none() -> None:
     from app.workers import WorkerSettings
 
     # Pre-populate the contextvar to confirm on_job_start REPLACES it with None.
-    outer_token = set_actor({"user_id": uuid4(), "email": "outer@sportzal.local"})
+    outer_token = set_actor({"user_id": uuid4(), "email": "outer@clubcore.local"})
     try:
         ctx: dict[str, Any] = {
             "job_id": "test-job-1",
@@ -180,10 +180,10 @@ async def test_worker_on_job_start_sets_actor_baseline_none() -> None:
 
         # Simulate a job body that attributes itself.
         uid = uuid4()
-        set_actor({"user_id": uid, "email": "job-actor@sportzal.local"})
+        set_actor({"user_id": uid, "email": "job-actor@clubcore.local"})
         assert get_current_actor() == {
             "user_id": uid,
-            "email": "job-actor@sportzal.local",
+            "email": "job-actor@clubcore.local",
         }
 
         await WorkerSettings.on_job_end(ctx)
@@ -191,6 +191,6 @@ async def test_worker_on_job_start_sets_actor_baseline_none() -> None:
         # contextvar had immediately before on_job_start's set(None)).
         outer = get_current_actor()
         assert outer is not None
-        assert outer["email"] == "outer@sportzal.local"
+        assert outer["email"] == "outer@clubcore.local"
     finally:
         reset_actor(outer_token)

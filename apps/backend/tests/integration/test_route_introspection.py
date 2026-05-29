@@ -28,7 +28,7 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
     {
         "/healthz",  # Phase 2 D-14 — Kubernetes liveness probe
         "/api/v1/auth/login",  # identity in body
-        "/api/v1/auth/refresh",  # identity in sz_refresh cookie; access cookie may be expired
+        "/api/v1/auth/refresh",  # identity in cc_refresh cookie; access cookie may be expired
         "/api/v1/auth/telegram/start",  # Phase 7 — pre-auth deep-link handshake
         "/api/v1/auth/telegram/status",  # Phase 7 — pre-auth poll
         "/api/v1/auth/telegram/verify",  # Phase 7 — body carries token + code

@@ -118,7 +118,7 @@ async def test_concurrent_freeze_race_serialised_by_partial_unique_index(
     await app.state.redis.flushdb()
 
     authed = await _build_authed_client(app)
-    csrf_token = authed.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed.cookies.get("clubcore_csrf") or ""
 
     async def _post() -> Any:
         # Phase 66 IDM-07: freeze_membership now requires Idempotency-Key.

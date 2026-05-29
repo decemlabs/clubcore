@@ -189,28 +189,28 @@ def test_issue_session_cookies_sets_three_cookies_with_locked_attributes() -> No
     headers = r.headers.getlist("set-cookie")
     assert len(headers) == 3, headers
 
-    sz_access = next(h for h in headers if h.startswith("sz_access="))
-    sz_refresh = next(h for h in headers if h.startswith("sz_refresh="))
-    csrf = next(h for h in headers if h.startswith("sportzal_csrf="))
+    cc_access = next(h for h in headers if h.startswith("cc_access="))
+    cc_refresh = next(h for h in headers if h.startswith("cc_refresh="))
+    csrf = next(h for h in headers if h.startswith("clubcore_csrf="))
 
-    # sz_access: Path=/, Max-Age=900, HttpOnly, SameSite=lax
-    assert "Path=/" in sz_access and "Path=/api" not in sz_access
-    assert "HttpOnly" in sz_access
-    assert "samesite=lax" in sz_access.lower()
-    assert "Max-Age=900" in sz_access
+    # cc_access: Path=/, Max-Age=900, HttpOnly, SameSite=lax
+    assert "Path=/" in cc_access and "Path=/api" not in cc_access
+    assert "HttpOnly" in cc_access
+    assert "samesite=lax" in cc_access.lower()
+    assert "Max-Age=900" in cc_access
 
-    # sz_refresh: Path=/api/v1/auth, Max-Age=2592000, HttpOnly, SameSite=lax
-    assert "Path=/api/v1/auth" in sz_refresh
-    assert "HttpOnly" in sz_refresh
-    assert "Max-Age=2592000" in sz_refresh
+    # cc_refresh: Path=/api/v1/auth, Max-Age=2592000, HttpOnly, SameSite=lax
+    assert "Path=/api/v1/auth" in cc_refresh
+    assert "HttpOnly" in cc_refresh
+    assert "Max-Age=2592000" in cc_refresh
 
-    # sportzal_csrf: Path=/, NOT HttpOnly, SameSite=lax
+    # clubcore_csrf: Path=/, NOT HttpOnly, SameSite=lax
     assert "Path=/" in csrf
     assert "HttpOnly" not in csrf  # MUST be readable by frontend JS
 
     # secure=False → none of the three carry "Secure"
-    assert "Secure" not in sz_access
-    assert "Secure" not in sz_refresh
+    assert "Secure" not in cc_access
+    assert "Secure" not in cc_refresh
     assert "Secure" not in csrf
 
 

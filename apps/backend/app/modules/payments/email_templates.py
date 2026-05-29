@@ -93,7 +93,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<p>Дата: {{ paid_at }}</p>"  # noqa: RUF001
             "<p>{{ plan_snapshot }}</p>"
             "<p>Принял: {{ actor_display_name }}</p>"  # noqa: RUF001
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"  # noqa: RUF001
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"  # noqa: RUF001
         ),
         text=_ENV_TEXT.from_string(
             "Чек: оплата\n\n"  # noqa: RUF001
@@ -101,7 +101,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "Дата: {{ paid_at }}\n"  # noqa: RUF001
             "{{ plan_snapshot }}\n\n"
             "Принял: {{ actor_display_name }}\n\n"  # noqa: RUF001
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"  # noqa: RUF001
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"  # noqa: RUF001
         ),
     ),
     "EMAIL_PAYMENT_RECEIPT_REFUND": EmailTemplate(  # noqa: RUF001
@@ -112,7 +112,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "<p>Дата: {{ paid_at }}</p>"  # noqa: RUF001
             "<p>{{ plan_snapshot }}</p>"
             "<p>Оформил: {{ actor_display_name }}</p>"  # noqa: RUF001
-            f"<p>{CLUB_BRAND} · noreply@mail.sportzal.ru</p>"  # noqa: RUF001
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"  # noqa: RUF001
         ),
         text=_ENV_TEXT.from_string(
             "Чек: возврат\n\n"  # noqa: RUF001
@@ -120,7 +120,7 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "Дата: {{ paid_at }}\n"  # noqa: RUF001
             "{{ plan_snapshot }}\n\n"
             "Оформил: {{ actor_display_name }}\n\n"  # noqa: RUF001
-            f"{CLUB_BRAND} · noreply@mail.sportzal.ru"  # noqa: RUF001
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"  # noqa: RUF001
         ),
     ),
 }

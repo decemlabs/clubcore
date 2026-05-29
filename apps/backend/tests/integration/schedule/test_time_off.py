@@ -417,7 +417,7 @@ async def test_reception_create_time_off_forbidden(
     """Reception 403 on POST /time-off regardless of ?force flag (T-59-09)."""
     trainer = await make_trainer()
     now = datetime.now(UTC)
-    csrf = authed_client_reception.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_reception.cookies.get("clubcore_csrf") or ""
 
     body = {
         "trainerId": str(trainer.id),
@@ -467,7 +467,7 @@ async def test_reception_delete_time_off_forbidden(
     await db_session.commit()
     await db_session.refresh(time_off)
 
-    csrf = authed_client_reception.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_reception.cookies.get("clubcore_csrf") or ""
     r = await authed_client_reception.delete(
         f"/api/v1/time-off/{time_off.id}",
         headers={
@@ -496,7 +496,7 @@ async def test_delete_time_off_emits_cancelled_and_does_not_resurrect_slots(
     slot = await make_slot(trainer=trainer, hours_ahead=20)
     captured_slot_id = slot.id
 
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
 
     # Create time-off via HTTP (cancels the overlapping active slot).
     create_r = await authed_client_owner.post(
@@ -615,7 +615,7 @@ async def test_http_create_time_off_without_force_returns_409_with_conflict_deta
     await db_session.refresh(slot, attribute_names=["status"])
     assert slot.status == "booked"
 
-    csrf = authed_client_owner.cookies.get("sportzal_csrf") or ""
+    csrf = authed_client_owner.cookies.get("clubcore_csrf") or ""
     r = await authed_client_owner.post(
         "/api/v1/time-off",
         json={

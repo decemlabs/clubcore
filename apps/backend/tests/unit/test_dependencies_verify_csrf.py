@@ -25,7 +25,7 @@ def _req(
     path: str = "/api/v1/auth/logout",
     host: str | None = "127.0.0.1",
 ) -> Any:
-    cookies = {"sportzal_csrf": cookie} if cookie is not None else {}
+    cookies = {"clubcore_csrf": cookie} if cookie is not None else {}
     headers = {"x-csrf-token": header} if header is not None else {}
     client = SimpleNamespace(host=host) if host is not None else None
     return SimpleNamespace(

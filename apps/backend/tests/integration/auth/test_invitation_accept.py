@@ -49,9 +49,9 @@ discipline), so ``payload["accepted_user_id"] == str(user_id)``.
 
 Cookie name reference (D-44-21 / D-12 / D-26 — verified against
 ``app/core/security.py:issue_session_cookies``):
-  - ``sz_access``      — Path=/, HttpOnly, Secure-on-prod
-  - ``sz_refresh``     — Path=/api/v1/auth, HttpOnly, Secure-on-prod
-  - ``sportzal_csrf``  — Path=/, NOT HttpOnly (read by JS for X-CSRF-Token)
+  - ``cc_access``      — Path=/, HttpOnly, Secure-on-prod
+  - ``cc_refresh``     — Path=/api/v1/auth, HttpOnly, Secure-on-prod
+  - ``clubcore_csrf``  — Path=/, NOT HttpOnly (read by JS for X-CSRF-Token)
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ class _RecordingEmailDispatcher:
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf") or ""}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
 def _extract_raw_token(invitation_url: str) -> str:
@@ -263,7 +263,7 @@ async def test_accept_happy_path_atomic_consume_password_set_email_verified_cook
       - status flips 'pending_invitation' → 'active'.
       - email_verified flips false → true.
       - password_reset_tokens.consumed_at is non-NULL (atomic-consume).
-      - Set-Cookie headers carry sz_access + sz_refresh + sportzal_csrf.
+      - Set-Cookie headers carry cc_access + cc_refresh + clubcore_csrf.
       - Response body wraps LoginResponse(user=UserPublic(...)).
       - Exactly one ``user_invitation_accepted`` audit row with
         accepted_user_id = user_id, invitation_token_id = token row id.
@@ -313,9 +313,9 @@ async def test_accept_happy_path_atomic_consume_password_set_email_verified_cook
     # httpx parses Set-Cookie into the cookies jar; assert on jar membership
     # rather than the raw header (httpx exposes only the last set-cookie
     # value via response.headers["set-cookie"] when servers send multiple).
-    assert "sz_access" in r.cookies, f"sz_access missing; got {dict(r.cookies)}"
-    assert "sz_refresh" in r.cookies, f"sz_refresh missing; got {dict(r.cookies)}"
-    assert "sportzal_csrf" in r.cookies, f"sportzal_csrf missing; got {dict(r.cookies)}"
+    assert "cc_access" in r.cookies, f"cc_access missing; got {dict(r.cookies)}"
+    assert "cc_refresh" in r.cookies, f"cc_refresh missing; got {dict(r.cookies)}"
+    assert "clubcore_csrf" in r.cookies, f"clubcore_csrf missing; got {dict(r.cookies)}"
 
     # DB-side flips — fetch the user row fresh.
     user_row = await db_session.scalar(select(User).where(User.id == user_id))

@@ -122,7 +122,7 @@ async def test_concurrent_check_in_one_wins(
     await app.state.redis.flushdb()
 
     authed = await _build_authed_client(app)
-    csrf_token = authed.cookies.get("sportzal_csrf") or ""
+    csrf_token = authed.cookies.get("clubcore_csrf") or ""
     headers = {"X-CSRF-Token": csrf_token}
     payload = {"clientId": str(client_obj.id)}
 

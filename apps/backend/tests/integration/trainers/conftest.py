@@ -2,7 +2,7 @@
 
 Provides authed httpx clients for owner + reception roles backed by REAL
 seeded users authenticated via the production /api/v1/auth/login flow.
-The cookie jar carries `sz_access`, `sz_refresh`, `sportzal_csrf` after
+The cookie jar carries `cc_access`, `cc_refresh`, `clubcore_csrf` after
 login, so subsequent calls go through the full RBAC chain.
 
 Mirrors the clients integration conftest pattern verbatim.
@@ -37,7 +37,7 @@ VALID_TRAINER: dict[str, Any] = {
 
 
 def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    return {"X-CSRF-Token": client.cookies.get("sportzal_csrf", "")}
+    return {"X-CSRF-Token": client.cookies.get("clubcore_csrf", "")}
 
 
 async def _create(

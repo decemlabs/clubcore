@@ -105,7 +105,7 @@ def _make_email_client_with_fake_send(send_outcome: Any) -> EmailClient:
     return EmailClient(
         session=session,
         endpoint_url="https://postbox.cloud.yandex.net",
-        from_address="noreply@mail.sportzal.ru",
+        from_address="noreply@mail.clubcore.ru",
     )
 
 
