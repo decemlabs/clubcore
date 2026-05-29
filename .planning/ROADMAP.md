@@ -133,7 +133,34 @@ Plans:
   4. Integration tests for double-submit on at minimum 3 financial endpoints (memberships sell, PT-package sell, online-payment create) pass: replay returns cached response body+status without re-emitting audit events (IDM-03)
   5. `components.parameters.IdempotencyKey` reusable parameter exists in `openapi.json`; every category-A endpoint references it via `$ref`; ЮKassa webhook endpoint has a code comment annotating the separate `cc:yk:webhook:*` dedup path (IDM-04 + IDM-07); `openapi.json` + `schema.d.ts` regen byte-stable, drift gate green
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 66-01-PLAN.md — IDM-01 (endpoint classification audit doc -> `.planning/handoff/v1.11-idempotency-audit.md`; authoritative category-A set)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 66-02-PLAN.md — IDM-02 + IDM-05 + IDM-06 (core idempotency.py: TTL 86400, pattern {16,128}, user-scoped key, exception-aware shared orchestrator; refactor 11 existing wired callsites onto it)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 66-03-PLAN.md — IDM-07 (wire verify_idempotency + orchestrator into membership freeze/unfreeze/renew/cancel + refunds per audit; ЮKassa webhook exclusion comment)
+
+**Wave 4** *(blocked on Wave 1 + Wave 3)*
+
+- [ ] 66-04-PLAN.md — IDM-04 (components.parameters.IdempotencyKey + $ref injection via _customize_openapi post-processor + CATEGORY_A_OPERATION_IDS frozenset; byte-stable regen + drift gate)
+
+**Wave 5** *(blocked on Wave 2 + Wave 3)*
+
+- [ ] 66-05-PLAN.md — IDM-03 + IDM-06 (double-submit integration tests across memberships/online_payments/pt_packages/pt_sessions/bookings: byte-identical replay, no-re-emit-audit, cross-user separation, AppError-replay, rollback-retry)
+
+**Cross-cutting constraints:**
+
+- Every plan leaves the full backend CI tree green at HEAD (ruff + ruff format + mypy strict + import-linter + openapi drift + Redocly lint).
+- IDM-02 <-> IDM-04 lockstep: the {16,128} pattern is sourced from the single imported `IDEMPOTENCY_KEY_PATTERN` constant (validation + spec parameter cannot diverge).
+- `apps/admin-web` frozen; only mechanical `packages/api-client/src/schema.d.ts` codegen drift (66-04) is permitted.
 
 ### Phase 67: Operator-Pending Runbook Execution
 
@@ -168,7 +195,7 @@ Plans:
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
-| 66. Idempotency Hardening | v1.11 | 0/TBD | Not started | — |
+| 66. Idempotency Hardening | v1.11 | 0/5 | Not started | — |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
 
