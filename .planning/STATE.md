@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: API Handoff + Production Hardening
-status: ready_to_plan
-stopped_at: Phase 64 complete (7/7, verified 8/8) — next is Phase 66 (Idempotency) per execution order; 999.1 is backlog
-last_updated: 2026-05-28T21:34:09.274Z
-last_activity: 2026-05-28
+status: planning
+stopped_at: Phase 66 context gathered
+last_updated: "2026-05-29T06:52:39.538Z"
+last_activity: 2026-05-28 — Phase 64 complete (8/8 verified); next is Phase 66 per non-monotonic execution order
 progress:
   total_phases: 6
   completed_phases: 2
@@ -90,6 +90,6 @@ None blocking Phase 63. DEFER-36-04-B scope (v1.4 residual format files) to be c
 
 ## Session Continuity
 
-Last session: 2026-05-28T20:39:07.532Z
-Stopped at: Phase 64 Wave 1 complete (64-01 landed); Wave 2 ready
+Last session: 2026-05-29T06:52:39.533Z
+Stopped at: Phase 66 context gathered
 Resume: Run `/gsd-plan-phase 64` to begin Phase 64 (Contract Freeze — OpenAPI Curation)
