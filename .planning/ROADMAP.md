@@ -34,7 +34,7 @@ Note: Phase numbers are sequential (63-67) but execution order is non-monotonic.
 - [x] **Phase 64: Contract Freeze — OpenAPI Curation** — Curated OpenAPI spec under clubcore name: correct `info.*`, `servers`, `securitySchemes`, explicit operation IDs, tags for 10 domains, shared `components.responses`; Redocly lint added as 7th CI gate; baseline tag committed (FRZ-01..08) (completed 2026-05-28)
 - [x] **Phase 66: Idempotency Hardening** *(executes before Phase 65)* — `verify_idempotency` user-scoped (security fix); 86400s TTL; all category-A endpoints covered; `components.parameters.IdempotencyKey` in spec; double-submit integration tests pass (IDM-01..07) (completed 2026-05-29)
 - [x] **Phase 65: Handoff Artifacts** *(executes after Phase 66)* — Postman v2.1 collection + Newman smoke harness + `clubcore-auth-runbook.md` + private Redocly doc-site delivered as a complete handoff package from the post-Phase-66 frozen spec (HND-01..06) (completed 2026-05-29)
-- [ ] **Phase 67: Operator-Pending Runbook Execution** — All 4 accumulated operator-pending walkthroughs executed with captured evidence; Mailpit `--profile dev` service in docker-compose; evidence file populated (RUN-00..07)
+- [x] **Phase 67: Operator-Pending Runbook Execution** — All 4 accumulated operator-pending walkthroughs executed with captured evidence; Mailpit `--profile dev` service in docker-compose; evidence file populated (RUN-00..07) (completed 2026-05-29)
 
 ## Phase Details
 
@@ -200,7 +200,7 @@ Plans:
 
 **Wave 5** *(blocked on Waves 1 + 4)*
 
-- [ ] 67-05-PLAN.md — RUN-04 reports runbook + RUN-05 trainers runbook (5 scenarios) live walkthroughs
+- [x] 67-05-PLAN.md — RUN-04 reports runbook + RUN-05 trainers runbook (5 scenarios) live walkthroughs
 
 **Cross-cutting constraints:**
 
@@ -228,7 +228,7 @@ Plans:
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
 | 65. Handoff Artifacts | v1.11 | 4/4 | Complete    | 2026-05-29 |
-| 67. Operator-Pending Runbook Execution | v1.11 | 4/5 | In Progress|  |
+| 67. Operator-Pending Runbook Execution | v1.11 | 5/5 | Complete   | 2026-05-29 |
 
 ---
 
