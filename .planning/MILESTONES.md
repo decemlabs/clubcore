@@ -1,5 +1,30 @@
 # Milestones
 
+## v1.11 API Handoff + Production Hardening (Shipped: 2026-05-29)
+
+**Phases completed:** 5 phases (63, 64, 66, 65, 67 — execution order non-monotonic), 26 plans, 32 tasks. **Requirements: 34/34 v1.11 requirements satisfied** (RUN-01/02 closed `N/A-until-production`; RUN-05 trainer-accrual scenario deferred per D-67-03 — all per no-fabricated-evidence discipline).
+
+**Delivered:** Backend-only handoff + hardening milestone making the v1.0–v1.10 surface credible for the v2.0 frontend-integration team — a clean-linted tree, a curated OpenAPI contract frozen under the clubcore name, a complete Postman/Newman/runbook/doc-site handoff package, hardened cross-user-safe `Idempotency-Key` semantics, and execution of all four accumulated operator-pending walkthroughs with real captured evidence. No new business features, no new ORM entities.
+
+**Code:** 429 files changed, +46,477 / −6,788 across the milestone diff.
+**Timeline:** 2026-05-26 → 2026-05-29 (~3 days; 147 commits, 58 code/chore).
+**Git range:** `0d4607c9 → af1b7bf0`.
+**Operator evidence:** `.planning/milestones/v1.11-OPERATOR-EVIDENCE.md` (append-only; RUN-00 staleness audit + RUN-03 19-template countersign + RUN-04 reports + RUN-05 trainers + RUN-06 Mailpit captured live; RUN-01/02 `N/A-until-production` with documented triggers).
+
+**Key accomplishments:**
+
+- **Phase 63 — Tech-Debt Sweep (DEBT-01..05).** Three-commit split on the clean clubcore tree: `ruff format` across ~297 files (`ruff format --check` exits 0), `ruff check --fix` safe-only 136→0 with zero new `# noqa`/`# type: ignore`, and `mypy --strict app` 11→0 (auth/models.py `__all__` fix + scoped test-suite mypy override). The v1.5 verification runbook (`run.sh`) hardened with 6 backported DEFER-40-01 hotfixes so it runs end-to-end against `docker compose up` without operator patching. All 6 backend CI gates green.
+- **Phase 64 — Contract Freeze / OpenAPI Curation (FRZ-01..08).** Curated `openapi.json` under the clubcore name: corrected `info`/`servers`, 103 operation IDs suffix-stripped via `generate_unique_id_function` (D-11-OPID), explicit 12-domain `tags=[...]` ordering across 23 routers, two `securitySchemes` (`cookieAuth`=`sz_access` + `csrfHeader`=`X-CSRF-Token`; `sportzal_csrf` carry-over per D-11-CSRF-DEFER), 6 shared `components.responses` error envelopes via `$ref` post-processor, Redocly lint added as the 7th parallel CI gate, and the annotated baseline tag `contract-freeze-v1.11.0`. Code review caught + fixed a BLOCKER (CR-01: spec advertised a non-existent `cc_access` cookie) before freeze.
+- **Phase 66 — Idempotency Hardening (IDM-01..07).** `verify_idempotency` bound to `Depends(get_current_user)` → user-scoped Redis key `cc:idem:{user_id}:{method}:{path}:{key}` (closes the cross-user replay attack); TTL 3600→86400s + key pattern `{16,128}`; a single exception-aware `idempotent_execute` orchestrator replaced ~13 duplicated inline claim/replay/store blocks (closing the 24h in-flight-placeholder lockout); 4 membership transitions wired to category-A; `components.parameters.IdempotencyKey` injected as `$ref` into all 22 category-A operations (byte-lockstep with the runtime constant); 48 real-Postgres+real-Redis double-submit / cross-user / exception-lifecycle integration tests. Code review caught + fixed a BLOCKER (CR-01: `create_time_off` left on the legacy inline block).
+- **Phase 65 — Handoff Artifacts (HND-01..06).** Private root `package.json` (`pnpm docs`=Redocly preview-docs on :8080 with no publish path; `pnpm newman`=`--folder smoke` with runtime `--env-var password`), an `openapi-to-postmanv2`-generated Postman v2.1 collection (11 domain folders, `Internal` removed) augmented with login `sportzal_csrf`→`csrfToken` extraction + collection-level `X-CSRF-Token` injection + 113 status + 21 body-shape assertions, placeholder-only env files (no committed creds), a 14-request curated smoke folder, and the 493-line bilingual `clubcore-auth-runbook.md` (all auth flows + Phase-66 Idempotency-Key semantics). Automated verification 14/14; 3 live-stack checks auto-approved under `--auto` and deferred for human re-verification before real handoff (see Known Deferred Items).
+- **Phase 67 — Operator-Pending Runbook Execution (RUN-00..07).** RUN-00 staleness audit as a hard gate (db→postgres fix applied) before any live walkthrough; reports runbook (5/5 scenarios, revenue golden 2500₽, Cyrillic CSV round-trip) and trainers runbook (report + CSV BOM + RBAC split) executed live against `docker compose up`; 19-template owner countersign (15 signed, 4 identifier-only → Finding RUN-03-F1 logged as backlog 999.2); Mailpit `axllent/mailpit` added under `profiles: ["dev"]` (the only code change) and verified in both modes; ЮKassa sandbox + RU email-deliverability recorded `N/A-until-production` with trigger conditions (no fabricated evidence, D-67-03). All evidence appended to the single `v1.11-OPERATOR-EVIDENCE.md`.
+
+**Known deferred items at close: 3** (Phase-65 live-stack handoff confirmations — `pnpm docs` doc-site render, Postman GUI auth flow, `pnpm newman` vs seeded stack — all auto-approved under `--auto`; automated truths VERIFIED 14/14; tracked in `65-HUMAN-UAT.md` for human re-verification before the real v2.0 frontend handoff). See STATE.md → Deferred Items for the full list (incl. v2.0 carry-overs and backlog 999.1 / 999.2).
+
+**Next:** v2.0 frontend integration (production admin + client apps designed off-repo, integrated against the frozen v1.11 contract) — or another backend milestone. Backlog: Phase 999.1 (WR-06 PT-session credit restore) + Phase 999.2 (online-payment email-template wiring). `REQUIREMENTS.md` recreated fresh per project convention at next `/gsd-new-milestone`.
+
+---
+
 ## v1.10 clubcore Rebrand (Shipped: 2026-05-26)
 
 **Phases completed:** 2 phases (62 + 62.1 closure), 16 plans (7 + 9). **Requirements: 10/10 REB-* satisfied.**

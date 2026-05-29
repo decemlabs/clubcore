@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: API Handoff + Production Hardening
-status: milestone_complete
+status: Awaiting next milestone
 stopped_at: Phase 67 COMPLETE (5/5 plans, VERIFICATION passed 5/5 success criteria). v1.11 milestone fully executed (phases 63,64,66,65,67 all complete). Operator evidence real & captured; 2 backlog items (999.1 WR-06, 999.2 online-payment email wiring).
-last_updated: "2026-05-29T11:53:03.770Z"
-last_activity: 2026-05-29 -- Phase 67 execution started
+last_updated: "2026-05-29T12:15:04.465Z"
+last_activity: 2026-05-29 — Milestone v1.11 completed and archived
 progress:
-  total_phases: 7
+  total_phases: 5
   completed_phases: 5
   total_plans: 26
   completed_plans: 26
-  percent: 71
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production Hardening opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 67 — operator-pending-runbook-execution
+**Current focus:** Planning next milestone (v1.11 shipped 2026-05-29; backend feature-complete, contract frozen for v2.0)
 
 ## Current Position
 
-Phase: 67 (operator-pending-runbook-execution) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 67
-Last activity: 2026-05-29 -- Phase 67 execution started
-
-Progress: [██████████] 100%
+Phase: Milestone v1.11 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-29 — Milestone v1.11 completed and archived
 
 ## v1.11 Roadmap Summary
 
@@ -85,15 +83,30 @@ None blocking Phase 63. DEFER-36-04-B scope (v1.4 residual format files) to be c
 
 ## Deferred Items
 
-| Category | Item | Target |
+Items acknowledged and deferred at v1.11 milestone close on 2026-05-29:
+
+| Category | Item | Status |
 |----------|------|--------|
-| v2.0 | `sportzal_csrf` → `clubcore_csrf` rename (D-11-CSRF-DEFER) | v2.0 |
-| v2.0 | Newman as blocking CI gate | v2.0 |
+| uat | Phase 65 — `pnpm docs` doc-site live browser render on :8080 (HND-06) | partial / human_needed — auto-approved under `--auto`; automated truths 14/14 VERIFIED |
+| uat | Phase 65 — Postman GUI auth flow auto-wires `X-CSRF-Token` (HND-02) | partial / human_needed — auto-approved under `--auto`; collection scripts VERIFIED in committed JSON |
+| uat | Phase 65 — `pnpm newman run` exits 0 vs `docker compose up` seeded stack (HND-04) | partial / human_needed — auto-approved under `--auto`; harness + assertions VERIFIED |
+| v2.0 | `sportzal_csrf` → `clubcore_csrf` rename (D-11-CSRF-DEFER / NAME-01) | v2.0 |
+| v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 |
 | v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 |
+| production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production (no sandbox creds) |
+| production | RUN-02 RU email deliverability probe | N/A-until-production (no prod domain) |
+| backlog | RUN-05 trainer accrual-population scenario (deviation, D-67-03) | Phase 999.x / future |
 | backlog | WR-06 PT session credit restore on owner force-cancel | Phase 999.1 |
+| backlog | Online-payment EMAIL templates wiring (Finding RUN-03-F1) | Phase 999.2 |
+
+> The 3 Phase-65 live-confirmation items are handoff-quality checks, not core functionality, and are recorded as documented tech debt to be re-verified by a human before the real v2.0 frontend handoff (see `65-HUMAN-UAT.md` / `65-VERIFICATION.md`).
 
 ## Session Continuity
 
 Last session: 2026-05-29T11:53:03.765Z
 Stopped at: Phase 67 COMPLETE (5/5 plans, VERIFICATION passed 5/5 success criteria). v1.11 milestone fully executed (phases 63,64,66,65,67 all complete). Operator evidence real & captured; 2 backlog items (999.1 WR-06, 999.2 online-payment email wiring).
-Resume: Run `/gsd-plan-phase 64` to begin Phase 64 (Contract Freeze — OpenAPI Curation)
+Resume: v1.11 milestone complete + archived + tagged. Run `/gsd-new-milestone` to open the next cycle (v2.0 Frontend Integration candidate) — REQUIREMENTS.md will be recreated fresh.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

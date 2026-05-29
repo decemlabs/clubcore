@@ -407,6 +407,55 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 
 ---
 
+## Milestone: v1.11 — API Handoff + Production Hardening
+
+**Shipped:** 2026-05-29
+**Phases:** 5 (63, 64, 66, 65, 67 — non-monotonic execution order) | **Plans:** 26
+**Timeline:** 2026-05-26 → 2026-05-29 (~3 days, 147 commits / 58 code+chore)
+**Requirements:** 34/34 (DEBT:5 + FRZ:8 + IDM:7 + HND:6 + RUN:8) — RUN-01/02 `N/A-until-production`, RUN-05 accrual scenario deferred per D-67-03
+**Code shipped:** 429 files changed, +46,477 / −6,788 (includes tooling, generated artifacts, and `.planning/` execution docs)
+
+### What Was Built
+- **Tech-Debt Sweep (Phase 63)** — three separable commits on the clean clubcore tree: `ruff format` ~297 files, `ruff check --fix` safe-only 136→0, `mypy --strict app` 11→0; v1.5 `run.sh` hardened with 6 backported DEFER-40-01 hotfixes; all 6 backend CI gates green.
+- **Contract Freeze / OpenAPI Curation (Phase 64)** — curated `openapi.json` under the clubcore name (info/servers/securitySchemes), 103 operation IDs suffix-stripped via `generate_unique_id_function`, explicit 12-domain tags across 23 routers, 6 shared `components.responses` error envelopes via `$ref`, Redocly lint added as the 7th CI gate, `contract-freeze-v1.11.0` baseline tag.
+- **Idempotency Hardening (Phase 66)** — user-scoped `verify_idempotency` (cross-user replay fix), TTL→86400s, a single exception-aware `idempotent_execute` orchestrator replacing ~13 inline blocks, `components.parameters.IdempotencyKey` `$ref` on all 22 category-A ops, 48 real-Postgres+real-Redis double-submit tests.
+- **Handoff Artifacts (Phase 65)** — Postman v2.1 collection (11 domain folders, auth/CSRF wiring, 113+21 assertions), Newman smoke harness, 493-line bilingual `clubcore-auth-runbook.md`, private Redocly doc-site; placeholder-only env files (no committed creds).
+- **Operator-Pending Runbook Execution (Phase 67)** — RUN-00 staleness audit hard-gate; reports + trainers runbooks executed live; 19-template owner countersign; Mailpit `--profile dev`; append-only `v1.11-OPERATOR-EVIDENCE.md`; credential-gated probes recorded `N/A-until-production`.
+
+### What Worked
+- **Non-monotonic execution order (63 → 64 → 66 → 65 → 67) locked at milestone open** — running Idempotency Hardening (66) *before* Handoff Artifacts (65) meant the Postman collection, Newman smoke, and auth runbook were all generated from the final frozen spec including `components.parameters.IdempotencyKey`. Generating handoff artifacts first would have shipped a stale contract to the design team.
+- **Tech-Debt Sweep first (Phase 63) as the foundation** — doing ruff/format/mypy on a clean tree *before* the contract freeze meant the byte-stable regen and drift gate were trustworthy. A dirty tree would have made every downstream "is this diff intentional?" ambiguous.
+- **Three-commit sweep discipline (format / safe-fix / manual)** — keeping `ruff format`, `ruff check --fix`, and the manual mypy fixes in separate atomic commits kept each diff reviewable; no `--unsafe-fixes` avoided semantic rewrites.
+- **Code review caught two real BLOCKERs before close** — CR-01 in Phase 64 (spec advertised a non-existent `cc_access` cookie — a planning-era assumption that survived into CONTEXT.md) and CR-01 in Phase 66 (`create_time_off` was the one route still on the legacy inline idempotency block, able to wedge the placeholder for 24h). Both would have shipped in the frozen contract / hardening guarantee.
+- **No-fabricated-evidence discipline (D-67-03)** — RUN-01/02 recorded `N/A-until-production` with documented trigger conditions rather than faked transcripts; RUN-05's trainer-accrual scenario was an honest deviation. The operator evidence file is credible because it admits what wasn't run.
+- **Single orchestrator refactor (`idempotent_execute`)** — collapsing ~13 duplicated claim/replay/store blocks into one exception-aware function both fixed the 24h lockout bug and made every category-A endpoint provably consistent.
+
+### What Was Inefficient
+- **Auto-extracted `one_liner` from SUMMARY.md was garbage again** — same failure as v1.10: `gsd-sdk milestone.complete` populated the MILESTONES.md entry with `"One-liner:"` placeholder strings, deviation-rule text, and code-review header fragments because several Phase 64/65/67 SUMMARY.md files didn't put the actual one-liner under a parseable `one_liner:` field (formats varied: `## One-liner`, `**One-liner:**`, missing). Required full manual rewrite of the entry. **This is now a two-milestone pattern — the executor agent's SUMMARY template should enforce a single machine-parseable `one_liner:` frontmatter field.**
+- **Milestone CLI counted 6 phases, not 5** — it swept in the `999.1-*` backlog phase directory under `.planning/phases/`. Backlog (999.x) dirs should live outside the active phases glob or be excluded by the counter.
+- **REQUIREMENTS.md traceability table was stale at close** — all 8 RUN-* rows still read "Pending" even though Phase 67 was complete and the evidence file was fully populated, because Phase 67's executor updated the evidence file but not the milestone REQUIREMENTS traceability. Had to reconcile RUN-00..07 to their real outcomes during close. Fix: the verifier/executor should sync the traceability table when a phase closes, not defer it to milestone close.
+- **3 live-stack handoff confirmations auto-approved under `--auto`** — doc-site render, Postman GUI auth, Newman vs seeded stack were marked `human_needed` but auto-approved in autonomous mode. They're genuinely un-runnable headless, so this is acceptable, but it means the milestone ships with handoff-quality debt that a human must clear before the real v2.0 handoff.
+
+### Patterns Established
+- **Order phases by artifact-dependency, not by number** — when later artifacts derive from an earlier phase's output (handoff package ← frozen+hardened spec), execute in dependency order and document the non-monotonic sequence at milestone open. Numbering is for identity; execution order is for correctness.
+- **Sweep tech-debt before freezing a contract** — a byte-stable regen + drift gate is only trustworthy on a clean tree. Tech-debt sweep is a prerequisite for any "freeze the artifact" milestone.
+- **`N/A-until-production` evidence rows with trigger conditions** (continued from v1.10 RUN-08) — credential-gated operator steps close structurally with an explicit deferral marker + the condition that would let them run, never with fabricated output.
+- **Single exception-aware orchestrator for cross-cutting infra** — when N callsites duplicate a claim/run/store pattern, collapsing them into one function both removes drift and is the natural place to fix lifecycle bugs (the 24h placeholder lockout).
+- **Acknowledge-and-defer at close for un-runnable verifications** — handoff-quality live checks that can't run headless are recorded in STATE.md Deferred Items + the MILESTONES entry's "Known deferred items at close" line, not silently dropped.
+
+### Key Lessons
+- **The SUMMARY `one_liner` parsing failure is now load-bearing tech debt in the GSD tooling itself** — two milestones running have produced garbage auto-entries. Either the template enforces the field or close-milestone should stop trusting the auto-extraction and always curate.
+- **Stale traceability tables hide "done" work.** RUN-00..07 reading "Pending" at close while the evidence file was complete nearly under-reported the milestone. Phase close must update the milestone-level traceability, not just the phase-local evidence.
+- **Code review pays for itself on freeze/hardening milestones specifically.** The two BLOCKERs (phantom cookie in the frozen spec; one route bypassing the hardened idempotency path) are exactly the class of bug that a contract-freeze milestone exists to prevent — and they were invisible to the green CI gates.
+- **Backlog phase dirs pollute milestone counters.** Keep 999.x out of the active `.planning/phases/` glob or teach the tooling to skip them.
+
+### Cost Observations
+- Model mix: Opus-weighted on orchestration + discuss/plan + the two code-review BLOCKER triages + this close; Sonnet on executor/verifier waves. Roughly 30% opus / 65% sonnet / 5% haiku, consistent with v1.9/v1.10.
+- Sessions: ~3 days wall-clock, 147 commits across 5 phases / 26 plans — larger than v1.10 (rename) but lighter-touch per-commit (mostly tooling + generated artifacts + tests, not new business logic).
+- Notable: the 48 idempotency integration tests (Phase 66) and the byte-stable spec regens (Phases 64/66) dominated the verification cost; the handoff artifacts (Phase 65) were cheap to generate but carry the 3 deferred live-stack checks.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -424,6 +473,7 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 | v1.8 Reports + Audit Log read API | 4 | 10 | Read-only module discipline (D-54-07/08: no `models.py`, raw-SQL `text()` cross-module reads, zero writes against business tables, SVC001 N/A); UTF-8 BOM + RFC-4180 excel CSV for Cyrillic-safe export (D-11); keyset pagination `ORDER BY created_at DESC, id DESC` with composite btree index for stable concurrent reads; DST golden-test as correctness anchor shared between automated test + operator runbook; smallest-milestone-ever (10 plans / 4 phases) by consuming existing tables instead of building |
 | v1.9 Trainers Complete | 4 | 22 | Versioned comp-config with snapshot-at-accrual rate (generalization of v1.2 price snapshot to any rate-bearing config); `INSERT ... ON CONFLICT DO NOTHING RETURNING` for DB-arbitrated races (D-58-06) reused in payroll accrual + recurring-slot materialization cron; `cron_function_names ⊆ function_names` invariant test preventing v1.3/v1.5-class registration-drift failures; signed-SUM netted aggregates in reports (positive accrual + negative clawback in one table → no subqueries); locked-decision-correction discipline (D-PAYROLL-ROUNDING ratified mid-Phase 58 when CONTEXT D-58-04 conflict surfaced) — all 8 business domains ✅ |
 | v1.10 clubcore Rebrand | 2 (62 + closure 62.1) | 16 (7 + 9) | Single-phase milestone narrowed per D-10-SPLIT; project rename `sportzal → clubcore` across pnpm packages, localStorage (Zustand `version: 1 → 2` copy-on-read+delete), Redis namespace (operator FLUSHDB), Postgres DB (operator pg_dump/restore), `CLUBCORE_EMAIL_FROM → SPORTZAL_EMAIL_FROM (legacy)` fallback chain, `CLUB_BRAND` constant extraction (placeholder value retained per D-62-02); forward-only `.planning/` rewrite + `HISTORICAL_NOTE.md` audit-trail boundary (D-62-09 / D-10-HISTORY-IMMUTABLE) — historical `phases/47-61/*` + `audits/*` intentionally immutable. Closure Phase 62.1 inserted post-audit per D-62.1-SCOPE: 4 back-compat shims stripped (REB-09) + operator evidence captured against dedicated `_smoke` DB with DNS/DKIM `N/A-until-production` marker (REB-10) — v1.11 opens against fully-clean tree |
+| v1.11 API Handoff + Production Hardening | 5 (63, 64, 66, 65, 67) | 26 | First **artifact-dependency-ordered** milestone — non-monotonic execution (63 → 64 → 66 → 65 → 67) so handoff artifacts derive from the post-hardening frozen spec; tech-debt sweep as a freeze prerequisite (3-commit format/safe-fix/manual split); OpenAPI curation via `generate_unique_id_function` suffix-strip + shared `$ref` error envelopes + Redocly as 7th CI gate + `contract-freeze-v1.11.0` baseline; user-scoped idempotency security fix + single `idempotent_execute` orchestrator collapsing ~13 inline blocks; `N/A-until-production` evidence-row pattern (continued from v1.10 RUN-08); acknowledge-and-defer at close for 3 un-runnable live-stack handoff checks. Two code-review BLOCKERs (phantom `cc_access` cookie in frozen spec; one route bypassing hardened idempotency) caught pre-close. Backend feature-complete; contract frozen for v2.0 |
 
 ### Cumulative Quality
 
@@ -439,6 +489,7 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 | v1.7 | ~37.7K LOC backend (new `online_payments/`, `online_refunds/`, `fiscal_receipts/`, `integrations/yookassa/`; Alembic at 0039) | unchanged (frozen mock reference) | 48/51 delivered (CARRY-01/02 + VER-03 operator-deferred) | 1992 passed / 0 failed after test-debt sweep; +16 Phase 53 tests (14 real-Postgres race + 2 circuit-breaker parity); 0/5 inline regressions; DEFER-46-03 + DEFER-36-04-A both CLOSED |
 | v1.8 | ~37.7K LOC backend (new read-only `app/modules/reports/`; Alembic at 0040, +3 audit-log indexes) | unchanged (frozen mock reference) | 30/30 (VER-01 live runbook operator-pending per D-12) | 2181-ish backend + 68 reports tests + 8 `_v18Checks` AssertNonNever forward-guards + `toHaveLength(8)` runtime + DST golden test |
 | v1.9 | new `app/modules/payroll/` + extended `app/modules/schedule/` (recurring + time-off) + new `reports/trainers` endpoint; Alembic at 0042 (0041 payroll + 0042 recurring/time-off) | unchanged (frozen mock reference) | 15/15 (D-61-12 live runbook operator-pending) | 2181 backend passed, 6 skipped + 121 reception-403 + 4 RBAC parity + 3 route-introspection + 14 `_v19Checks` forward-guards + `toHaveLength(14)` runtime; lint-imports 3 kept / 0 broken; drift gates clean |
+| v1.11 | no new business modules / no new ORM entities (Alembic stays at 0042); tree made lint-clean (ruff/format/mypy strict all exit 0); `openapi.json` curated + frozen as `contract-freeze-v1.11.0`; new repo-root private `package.json` + `tools/newman/` + `.planning/handoff/` Postman/runbook/doc-site tooling | unchanged (frozen mock reference) | 34/34 (RUN-01/02 `N/A-until-production`; RUN-05 accrual scenario deferred per D-67-03) | backend suite green incl. 48 new idempotency double-submit/cross-user/exception-lifecycle tests; 7th CI gate (Redocly lint) added; byte-stable spec + `schema.d.ts` regen with drift gate clean; Phase 65 verified 14/14 automated (3 live-stack checks deferred) |
 
 ### Top Lessons (Verified Across Milestones)
 
