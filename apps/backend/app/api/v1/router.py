@@ -94,6 +94,14 @@ v1.include_router(audit_log_router, prefix="/audit-log")
 # Mounted before /_internal so client paths live under /api/v1/client (D-10).
 v1.include_router(client_auth_router, prefix="/client")
 
+# Phase 69 CHOME-01..03, CHIST-01..03, CPLAN-01..03 — client read endpoints.
+# Mounted at /api/v1/client alongside the Phase-68 client_auth_router (same prefix).
+# Tags declared on client_portal_router itself (D-64-TAG-ORDER).
+# FastAPI merges both routers correctly — disjoint sub-paths (D-20-MODULE).
+from app.modules.client_portal.router import router as client_portal_router  # noqa: E402
+
+v1.include_router(client_portal_router, prefix="/client")
+
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
 # /api/v1/_internal/* with their own auth model (HMAC signature in
