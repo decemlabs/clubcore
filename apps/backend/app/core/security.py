@@ -290,3 +290,192 @@ def clear_session_cookies(response: Response, *, secure: bool) -> None:
         secure=secure,
         samesite="lax",
     )
+
+
+# =========================================================================
+# Client JWT (D-07, D-08, CISO-01/CISO-05)
+# =========================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class ClientAccessTokenClaims:
+    """Decoded client access-token claims (D-07).
+
+    No `role` field — clients are not staff. `aud="client"` is the
+    isolation discriminator. `require_client()` asserts aud; staff
+    `decode_access_token` never validates aud (D-07 byte-parity).
+    """
+
+    sub: str  # str(client_uuid)
+    aud: str  # always "client"
+    typ: str  # always "access"
+    iat: int  # UTC epoch seconds
+    exp: int  # UTC epoch seconds
+
+
+def encode_client_token(
+    client_id: UUID,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Mint a short-lived client access JWT (HS256, settings.access_token_ttl_seconds).
+
+    Mirrors `encode_access_token` but emits `aud="client"` and no `role` (D-07).
+    `now` is injectable for unit tests; production callers pass nothing.
+    """
+    settings = get_settings()
+    issued = now or datetime.now(tz=UTC)
+    expires = issued + timedelta(seconds=settings.access_token_ttl_seconds)
+    payload = {
+        "sub": str(client_id),
+        "aud": "client",
+        "typ": "access",
+        "iat": int(issued.timestamp()),
+        "exp": int(expires.timestamp()),
+    }
+    return jwt.encode(
+        payload,
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+
+def decode_client_token(token: str) -> ClientAccessTokenClaims:
+    """Decode + validate a client access JWT.
+
+    Mirrors `decode_access_token` but asserts `aud=="client"` (D-08) and
+    never coerces a `role` claim. A staff token (no `aud`) will fail here
+    because `require=["aud"]` makes PyJWT raise MissingRequiredClaimError
+    → `InvalidAccessToken("invalid_token")`. A client token passed to
+    `decode_access_token` will fail there because it lacks `role`.
+
+    Raises InvalidAccessToken (401) on:
+      - expired signature → message "token_expired"
+      - any other PyJWT failure (bad sig, malformed, missing claim) → "invalid_token"
+      - wrong `typ` claim → "wrong_token_type"
+      - wrong `aud` claim (not "client") → "wrong_audience"
+    """
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token,
+            settings.secret_key.get_secret_value(),
+            algorithms=["HS256"],
+            leeway=settings.jwt_clock_leeway_seconds,
+            # verify_aud=False: we require "aud" claim to be present via `require` but
+            # validate its value manually below to emit the specific "wrong_audience" code
+            # (PyJWT's InvalidAudienceError would surface as generic "invalid_token").
+            options={"require": ["sub", "aud", "typ", "iat", "exp"], "verify_aud": False},
+        )
+    except jwt.ExpiredSignatureError as exc:
+        raise InvalidAccessToken("token_expired") from exc
+    except jwt.InvalidTokenError as exc:
+        # Parent class — covers DecodeError, MissingRequiredClaimError (incl. missing aud),
+        # InvalidSignatureError, InvalidAlgorithmError, etc.
+        raise InvalidAccessToken("invalid_token") from exc
+
+    if payload.get("typ") != "access":
+        raise InvalidAccessToken("wrong_token_type")
+    if payload.get("aud") != "client":
+        raise InvalidAccessToken("wrong_audience")
+
+    return ClientAccessTokenClaims(
+        sub=payload["sub"],
+        aud=payload["aud"],
+        typ=payload["typ"],
+        iat=payload["iat"],
+        exp=payload["exp"],
+    )
+
+
+# =========================================================================
+# Client cookie matrix (D-10, CISO-05)
+# =========================================================================
+
+
+def issue_client_session_cookies(
+    response: Response,
+    *,
+    access_token: str,
+    refresh_token: str,
+    csrf_token: str,
+    secure: bool,
+) -> None:
+    """Set cc_client_access + cc_client_refresh + clubcore_client_csrf cookies.
+
+    Mirrors `issue_session_cookies` for the client principal (D-10). Key differences:
+    - Cookie names use `cc_client_*` / `clubcore_client_csrf` to prevent collision
+      with staff `cc_*` cookies on the same origin (CISO-05).
+    - `cc_client_refresh` is Path-scoped to `/api/v1/client` (never sent on staff
+      `/api/v1/auth` paths — T-68-07 mitigation).
+    - `clubcore_client_csrf` is httponly=False so the PWA can read it for the
+      double-submit pattern (mirrors staff `clubcore_csrf` treatment).
+    """
+    settings = get_settings()
+
+    # cc_client_access — covers all API paths
+    response.set_cookie(
+        key="cc_client_access",
+        value=access_token,
+        max_age=settings.access_token_ttl_seconds,
+        path="/",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+
+    # cc_client_refresh — narrow path; only sent to /api/v1/client/* (D-10)
+    response.set_cookie(
+        key="cc_client_refresh",
+        value=refresh_token,
+        max_age=settings.refresh_token_ttl_seconds,
+        path="/api/v1/client",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+
+    # clubcore_client_csrf — non-httpOnly so PWA reads it for X-CSRF-Token header
+    # (double-submit pattern; mirrors staff clubcore_csrf, T-68-09 accepted risk).
+    response.set_cookie(
+        key="clubcore_client_csrf",
+        value=csrf_token,
+        max_age=settings.refresh_token_ttl_seconds,
+        path="/",
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+    )
+
+
+def clear_client_session_cookies(response: Response, *, secure: bool) -> None:
+    """Clear cc_client_access + cc_client_refresh + clubcore_client_csrf.
+
+    Mirrors `clear_session_cookies` attribute discipline: Path / HttpOnly /
+    SameSite / Secure MUST match `issue_client_session_cookies` exactly or
+    the browser silently ignores the deletion (T-68-08 mitigation, D-10).
+    """
+    # cc_client_access — Path=/ (matches issuer)
+    response.delete_cookie(
+        key="cc_client_access",
+        path="/",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    # cc_client_refresh — Path=/api/v1/client (matches issuer)
+    response.delete_cookie(
+        key="cc_client_refresh",
+        path="/api/v1/client",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    # clubcore_client_csrf — Path=/, NOT httpOnly (matches issuer)
+    response.delete_cookie(
+        key="clubcore_client_csrf",
+        path="/",
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+    )
