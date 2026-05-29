@@ -243,6 +243,27 @@ async def soft_delete_client(
     await session.commit()
 
 
+async def load_client_by_id(
+    session: AsyncSession,
+    client_id: UUID,
+) -> Client | None:
+    """Load alive Client by UUID — composition-root loader for require_client() (D-08).
+
+    Registered via `register_client_loader(load_client_by_id)` in `app.main.create_app()`.
+    Returns None when no alive Client matches; `get_current_client` raises
+    `InvalidAccessToken('user_not_found')` on None — fail-closed (T-68-14 / CISO-02).
+
+    Soft-deleted clients return None so a revoked member cannot authenticate (T-68-13).
+    """
+    result: Client | None = await session.scalar(
+        select(Client).where(
+            Client.id == client_id,
+            Client.deleted_at.is_(None),
+        )
+    )
+    return result
+
+
 async def resolve_client_by_telegram_user_id(
     session: AsyncSession,
     tg_user_id: int,
