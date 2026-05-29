@@ -26,7 +26,6 @@ Idempotency:
   `pt_sessions/router.py:116-157` (CR-02 from Phase 33 review).
 """
 
-import base64
 import json
 from typing import Annotated
 from uuid import UUID
@@ -37,14 +36,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_permission, verify_csrf
-from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.idempotency import (
-    IDEMPOTENCY_REDIS_PREFIX,
-    IDEMPOTENCY_TTL_SECONDS,
-    begin_idempotency,
-    body_sha256,
     idempotent_execute,
-    load_idempotency_response,
     verify_idempotency,
 )
 from app.core.pagination import PaginatedData
@@ -373,91 +366,47 @@ async def create_time_off(
       - 409 time_off_booked_conflict  (booked slots overlap and force=False)
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        # Phase 66 CR-01: migrated onto the shared idempotent_execute orchestrator
+        # so TrainerNotFoundError (404) and InternalConsistencyError (500) no
+        # longer wedge the __in_flight__ placeholder for the full 24h TTL (the
+        # legacy inline block caught only TimeOffBookedConflictError — Pitfall-14
+        # / IDM-06). The enriched 409 carries a TimeOffConflictDetail `data` field
+        # beyond the standard {code,message,fields} envelope, so it is returned
+        # here as a stored 409 envelope (replayed verbatim on retry) rather than
+        # raised; all other exceptions propagate to idempotent_execute's IDM-06
+        # AppError-store / unknown-delete cleanup branches.
+        try:
+            time_off = await service.create_time_off(session, actor, payload, force=force)
+        except service.TimeOffBookedConflictError as exc:
+            from typing import cast as _cast
 
-    try:
-        time_off = await service.create_time_off(session, actor, payload, force=force)
-    except service.TimeOffBookedConflictError as exc:
-        # Map typed conflict to 409 with TimeOffConflictDetail body.
-        # exc.fields is dict[str, object] | None per AppError signature.
-        # Service serialises UUIDs into "conflicting_slot_ids" / "conflicting_booking_ids".
-        from typing import cast as _cast
+            exc_fields: dict[str, object] = exc.fields or {}
+            raw_slot_ids = _cast(list[str], exc_fields.get("conflicting_slot_ids") or [])
+            raw_booking_ids = _cast(list[str], exc_fields.get("conflicting_booking_ids") or [])
+            conflict_detail = TimeOffConflictDetail(
+                conflicting_slot_ids=[UUID(s) for s in raw_slot_ids],
+                conflicting_booking_ids=[UUID(s) for s in raw_booking_ids],
+            )
+            conflict_body = {
+                "code": exc.code,
+                "message": exc.message,
+                "fields": exc.fields,
+                "data": conflict_detail.model_dump(mode="json", by_alias=True),
+            }
+            return 409, json.dumps(conflict_body, separators=(",", ":"), ensure_ascii=False).encode(
+                "utf-8"
+            )
 
-        exc_fields: dict[str, object] = exc.fields or {}
-        raw_slot_ids = _cast(list[str], exc_fields.get("conflicting_slot_ids") or [])
-        raw_booking_ids = _cast(list[str], exc_fields.get("conflicting_booking_ids") or [])
-        conflict_detail = TimeOffConflictDetail(
-            conflicting_slot_ids=[UUID(s) for s in raw_slot_ids],
-            conflicting_booking_ids=[UUID(s) for s in raw_booking_ids],
-        )
-        conflict_body = {
-            "code": exc.code,
-            "message": exc.message,
-            "fields": exc.fields,
-            "data": conflict_detail.model_dump(mode="json", by_alias=True),
-        }
-        body_bytes = json.dumps(conflict_body, separators=(",", ":"), ensure_ascii=False).encode(
-            "utf-8"
-        )
-        # Persist a replayable 409 envelope so a client retry of the same
-        # Idempotency-Key replays the 409 instead of hitting the __in_flight__
-        # sentinel and receiving a spurious 409 idempotency_in_flight (D-38-14 /
-        # Pitfall-14 — the in-flight placeholder is never replaced otherwise,
-        # wedging the key for the full TTL even though no mutation occurred).
-        envelope_json = json.dumps(
-            {
-                "status_code": 409,
-                "body_hash": incoming_hash,
-                "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-            },
+        body_bytes = json.dumps(
+            envelope(time_off).model_dump(mode="json", by_alias=True),
             separators=(",", ":"),
             ensure_ascii=False,
-        )
-        await redis.set(
-            f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-            envelope_json,
-            ex=IDEMPOTENCY_TTL_SECONDS,
-        )
-        return Response(content=body_bytes, status_code=409, media_type="application/json")
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    response_envelope = envelope(time_off)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @time_off_router.delete(
