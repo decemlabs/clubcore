@@ -96,7 +96,7 @@ Items acknowledged and deferred at v1.11 milestone close on 2026-05-29:
 | uat | Phase 65 — `pnpm docs` doc-site live browser render on :8080 (HND-06) | partial / human_needed — auto-approved under `--auto`; automated truths 14/14 VERIFIED |
 | uat | Phase 65 — Postman GUI auth flow auto-wires `X-CSRF-Token` (HND-02) | partial / human_needed — auto-approved under `--auto`; collection scripts VERIFIED in committed JSON |
 | uat | Phase 65 — `pnpm newman run` exits 0 vs `docker compose up` seeded stack (HND-04) | partial / human_needed — auto-approved under `--auto`; harness + assertions VERIFIED |
-| v2.0 | `sportzal_csrf` → `clubcore_csrf` rename (D-11-CSRF-DEFER / NAME-01) | v2.0 |
+| ~~v2.0~~ DONE | `sportzal_csrf` → `clubcore_csrf` + `sz_*` → `cc_*` cookie rename (D-11-CSRF-DEFER / NAME-01) | ✅ Closed 2026-05-29 by quick task 260529-ll9 (commit 97e1fc1b) — done early since no live frontend yet |
 | v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 |
 | v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 |
 | production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production (no sandbox creds) |
