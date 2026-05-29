@@ -390,6 +390,15 @@ async def refund_membership_online(
       - 422 yookassa_validation_error
       - 503 yookassa_unavailable
       - 502 yookassa_permanent_error
+
+    IDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``
+    is intentionally absent. The body-level ``payload.idempotency_key`` is forwarded
+    verbatim to ЮKassa ``Idempotence-Key`` (operator-contract idempotency at the
+    provider). The DB partial UNIQUE ``uq_online_refunds_alive_per_online_payment``
+    (`(payment_id) WHERE status != 'failed'`) surfaces 409 ``refund_already_in_flight``
+    on concurrent double-tap — this is the load-bearing race defence. Adding a
+    header-level ``Idempotency-Key`` would be a redundant third layer; the 202 async
+    return makes verbatim-replay semantics awkward. Decision binding for 66-03/66-04.
     """
     provider = get_yookassa_client_provider()
     yookassa_client: YooKassaClient = await provider()
@@ -428,6 +437,12 @@ async def refund_pt_package_online(
 
     Mirrors ``refund_membership_online``. No freeze / renewed-source guards
     for PT-packages (no freeze concept, no renewal chain in v1.x).
+
+    IDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``
+    is intentionally absent — same rationale as ``refund_membership_online`` above.
+    Body-level ``payload.idempotency_key`` forwarded to ЮKassa; DB partial UNIQUE
+    ``uq_online_refunds_alive_per_online_payment`` is the load-bearing race defence.
+    Decision binding for 66-03/66-04.
     """
     provider = get_yookassa_client_provider()
     yookassa_client: YooKassaClient = await provider()

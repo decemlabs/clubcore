@@ -75,6 +75,15 @@ async def yookassa_webhook(
     IP allowlist runs at route-level Depends (BEFORE body parse). Redis dedup
     ``SET NX EX 86400`` short-circuits duplicate deliveries. On unique delivery,
     dispatches to per-event handler which owns the atomic UoW.
+
+    IDM-07 / D-66-WEBHOOK-EXCLUDE / D-11-IDM-WEBHOOK:
+    This endpoint is NOT wired to ``verify_idempotency``. It uses a separate Redis
+    dedup path on ``WEBHOOK_DEDUP_KEY_PREFIX`` (``cc:yookassa:webhook:``) with 86400s
+    TTL — independent of the operator-facing ``cc:idem:`` namespace. There is no
+    ``current_user`` to scope to (IP-authenticated transport callback from ЮKassa;
+    the route-level ``Depends(verify_yookassa_ip)`` is the authentication gate).
+    Adding user-scoped ``verify_idempotency`` here would break the handler (no
+    ``current_user``) and is architecturally incorrect — D-11-IDM-WEBHOOK.
     """
     yookassa_client: YooKassaClient = await yookassa_client_provider()
 
