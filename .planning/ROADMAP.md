@@ -33,7 +33,7 @@ Note: Phase numbers are sequential (63-67) but execution order is non-monotonic.
 - [x] **Phase 63: Tech-Debt Sweep** — CI tree cleaned: ruff format + ruff safe-fix + mypy strict all exit 0; v1.5 run.sh hardened; all 6 backend CI gates green on swept tree (DEBT-01..05) (completed 2026-05-26)
 - [x] **Phase 64: Contract Freeze — OpenAPI Curation** — Curated OpenAPI spec under clubcore name: correct `info.*`, `servers`, `securitySchemes`, explicit operation IDs, tags for 10 domains, shared `components.responses`; Redocly lint added as 7th CI gate; baseline tag committed (FRZ-01..08) (completed 2026-05-28)
 - [x] **Phase 66: Idempotency Hardening** *(executes before Phase 65)* — `verify_idempotency` user-scoped (security fix); 86400s TTL; all category-A endpoints covered; `components.parameters.IdempotencyKey` in spec; double-submit integration tests pass (IDM-01..07) (completed 2026-05-29)
-- [ ] **Phase 65: Handoff Artifacts** *(executes after Phase 66)* — Postman v2.1 collection + Newman smoke harness + `clubcore-auth-runbook.md` + private Redocly doc-site delivered as a complete handoff package from the post-Phase-66 frozen spec (HND-01..06)
+- [x] **Phase 65: Handoff Artifacts** *(executes after Phase 66)* — Postman v2.1 collection + Newman smoke harness + `clubcore-auth-runbook.md` + private Redocly doc-site delivered as a complete handoff package from the post-Phase-66 frozen spec (HND-01..06) (completed 2026-05-29)
 - [ ] **Phase 67: Operator-Pending Runbook Execution** — All 4 accumulated operator-pending walkthroughs executed with captured evidence; Mailpit `--profile dev` service in docker-compose; evidence file populated (RUN-00..07)
 
 ## Phase Details
@@ -121,7 +121,7 @@ Plans:
 - [x] 65-01-PLAN.md — Private repo-root package.json tooling scaffold + private doc-site (HND-06)
 - [x] 65-02-PLAN.md — Postman collection generation + augmentation: auth/CSRF wiring + assertions (HND-01/02/03)
 - [x] 65-03-PLAN.md — Newman smoke harness (curated happy-path subset, runtime-credential discipline) (HND-04)
-- [ ] 65-04-PLAN.md — clubcore-auth-runbook.md: all auth flows + Idempotency-Key semantics (HND-05)
+- [x] 65-04-PLAN.md — clubcore-auth-runbook.md: all auth flows + Idempotency-Key semantics (HND-05)
 **UI hint**: no
 
 ### Phase 66: Idempotency Hardening
@@ -200,7 +200,7 @@ Plans:
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
-| 65. Handoff Artifacts | v1.11 | 3/4 | In Progress|  |
+| 65. Handoff Artifacts | v1.11 | 4/4 | Complete   | 2026-05-29 |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
 
 ---
