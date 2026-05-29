@@ -43,7 +43,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Milestone Goal:** Expose gym members as a second principal via a dedicated client-facing API and wire `apps/client-pwa` to it — client auth, client-scoped reads and writes over existing domains, self-service checkout (ЮKassa), QR self-check-in, and a verified full-stack end-to-end flow. Staff contract and frozen `apps/admin-web` are unchanged.
 
 - [x] **Phase 68: Client Auth Foundation** - Separate `ClientPrincipal` / `require_client()` / distinct cookies / anti-oracle OTP; unconditional blocker for all domain work (completed 2026-05-29)
-- [ ] **Phase 69: Client Read Endpoints + PWA Stack Alignment** - All client-scoped read endpoints (membership, history, catalogs) + PWA bun→pnpm/TS/Vite-6 alignment with verified build; IDOR sweep covers read surface
+- [x] **Phase 69: Client Read Endpoints + PWA Stack Alignment** - All client-scoped read endpoints (membership, history, catalogs) + PWA bun→pnpm/TS/Vite-6 alignment with verified build; IDOR sweep covers read surface (completed 2026-05-29)
 - [ ] **Phase 70: Client Bookings + QR Self Check-In** - Self-booking (race-safe via existing partial-UNIQUE), cancellation policy, signed short-lived QR token, and QR-triggered visit creation via existing anti-fraud path
 - [ ] **Phase 71: Client Checkout + Full PWA Screen Wiring** - Client-initiated ЮKassa membership/PT-package purchase (server-side price, webhook-only activation, 54-ФЗ email gate); all PWA screens wired to real backend
 - [ ] **Phase 72: OpenAPI Handoff + CI + E2E Verification** - `Client-Portal` tag in spec, `_v20Checks` guards, client-pwa CI gates, drift gate confirms staff contract byte-identical; live E2E runbook gate
@@ -82,7 +82,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Plans**: 3 plans (2 waves)
 - [x] 69-01-PLAN.md — client_portal read module: raw-SQL repository, client-safe schemas, service (home fan-out), router + mount (CHOME/CHIST/CPLAN)
 - [x] 69-02-PLAN.md — PWA stack alignment: pnpm workspace + Vite 6 + TS allowJs ramp + ESLint/Vitest + vite-plugin-pwa (/api never cached) + clientFetcher.ts + smoke test (PWA-01..04,06,07)
-- [ ] 69-03-PLAN.md — verification: parametrized IDOR sweep (both orderings, all owned reads) + behavioral tests (temporal fields, empty-state 200/null, pagination, catalog projection)
+- [x] 69-03-PLAN.md — verification: parametrized IDOR sweep (both orderings, all owned reads) + behavioral tests (temporal fields, empty-state 200/null, pagination, catalog projection)
 **UI hint**: yes
 
 ### Phase 70: Client Bookings + QR Self Check-In
@@ -140,7 +140,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | 62 + 62.1. clubcore Rebrand | v1.10 | 16/16 | Complete | 2026-05-26 |
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
-| 69. Client Read Endpoints + PWA Alignment | v2.0 | 2/3 | In Progress|  |
+| 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete   | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 0/TBD | Not started | - |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/TBD | Not started | - |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
