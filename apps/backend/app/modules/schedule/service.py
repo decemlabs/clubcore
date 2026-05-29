@@ -1046,15 +1046,6 @@ async def create_time_off(
 
         for slot in booked_slots:
             # 3a. Raw UPDATE bookings (D-38-11 — cross-module, no static import).
-            # NOTE WR-06 (Phase 59 review): PT-package session credit is NOT
-            # restored on owner-initiated cancellation. The same omission exists
-            # in cancel_slot's booked-cascade (service.py:~471-504), making this
-            # a pre-existing system-wide pattern, not a Phase-59 regression.
-            # A client whose confirmed booking is force-cancelled silently loses
-            # one prepaid PT session. Restoring sessions on owner-driven cancellation
-            # requires a product decision (cross-module raw sa.text() UPDATE on
-            # pt_packages, same pattern as D-38-11). Pending that decision this
-            # behaviour is intentional and documented here.
             cascade_stmt = sa.text(
                 """
                 UPDATE bookings

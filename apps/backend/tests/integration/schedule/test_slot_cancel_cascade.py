@@ -554,3 +554,340 @@ async def test_http_cancel_inconsistent_slot_returns_500_json(
     assert r.status_code == 500, r.text
     body = r.json()
     assert body["code"] == "slot_booking_inconsistency"
+
+
+# ---------------------------------------------------------------------------
+# WR-06 regression tests: PT-credit restore on cancel_slot booked-cascade.
+# ---------------------------------------------------------------------------
+
+
+async def _insert_consumed_pt_session_for_cancel(
+    db_session: AsyncSession,
+    *,
+    booking_id: Any,
+    pkg: Any,
+    trainer_id: Any,
+    client_id: Any,
+    actor: User,
+) -> None:
+    """Directly insert a pt_sessions row + decrement sessions_remaining to simulate
+    a consumed session for the given booking.  Mirrors the production path
+    (record_pt_session) without going through the full service stack.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.modules.pt_sessions.models import PtSession
+
+    # We need trainer full_name for the snapshot — fetch it.
+    trainer_name = await db_session.scalar(
+        text("SELECT full_name FROM trainers WHERE id = :tid"),
+        {"tid": trainer_id},
+    )
+    ps = PtSession(
+        pt_package_id=pkg.id,
+        trainer_id=trainer_id,
+        client_id=client_id,
+        performed_at=datetime.now(UTC) - timedelta(minutes=30),
+        performed_by_user_id=actor.id,
+        trainer_name_snapshot=trainer_name or "Trainer",
+        booking_id=booking_id,
+    )
+    db_session.add(ps)
+    await db_session.execute(
+        text(
+            "UPDATE pt_packages SET sessions_remaining = sessions_remaining - 1,"
+            " updated_at = now() WHERE id = :pid"
+        ),
+        {"pid": pkg.id},
+    )
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_cancel_booked_slot_restores_pt_credit_when_session_consumed(
+    db_session: AsyncSession,
+    seeded_owner: User,
+    monkeypatch: pytest.MonkeyPatch,
+    make_trainer,
+    make_client,
+    make_pt_package_plan,
+    make_pt_package,
+    make_slot,
+) -> None:
+    """WR-06: cancel_slot on a booking whose pt_session was consumed restores
+    sessions_remaining by 1 and emits a pt_session_credit_restored audit row."""
+    from sqlalchemy import select
+
+    from app.core.audit_models import AuditLog
+
+    trainer = await make_trainer()
+    client = await make_client()
+    plan = await make_pt_package_plan()
+    pkg = await make_pt_package(client_id=client.id, plan=plan)
+    slot = await make_slot(trainer_id=trainer.id)
+
+    booking_response = await bookings_service.create_booking(
+        db_session,
+        seeded_owner,
+        BookingCreateRequest(
+            slot_id=slot.id,
+            client_id=client.id,
+            pt_package_id=pkg.id,
+        ),
+    )
+    await db_session.refresh(slot, attribute_names=["status"])
+    assert slot.status == "booked"
+
+    # Simulate a consumed session: insert a pt_sessions row + decrement balance.
+    await _insert_consumed_pt_session_for_cancel(
+        db_session,
+        booking_id=booking_response.id,
+        pkg=pkg,
+        trainer_id=trainer.id,
+        client_id=client.id,
+        actor=seeded_owner,
+    )
+
+    sessions_before = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_before == plan.session_count - 1
+
+    # Stub DM dispatch (async stub required — service awaits it).
+    import importlib
+
+    async def _noop_dm(*a: Any, **kw: Any) -> None:
+        pass
+
+    bookings_svc_mod = importlib.import_module("app.modules.bookings.service")
+    monkeypatch.setattr(
+        bookings_svc_mod,
+        "_dispatch_booking_lifecycle_notification",
+        _noop_dm,
+    )
+
+    await schedule_service.cancel_slot(
+        db_session,
+        seeded_owner,
+        slot.id,
+        SlotCancelRequest(cancel_reason="trainer sick — WR-06 test"),
+    )
+
+    # sessions_remaining restored to session_count.
+    sessions_after = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_after == plan.session_count, (
+        f"sessions_remaining should be restored to {plan.session_count}; got {sessions_after}"
+    )
+
+    # Exactly one pt_session_credit_restored audit row with the 6 locked payload keys.
+    restore_audits = (
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "pt_session_credit_restored",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(restore_audits) == 1, (
+        f"Expected exactly 1 pt_session_credit_restored audit row; got {len(restore_audits)}"
+    )
+    p = restore_audits[0].payload
+    assert p["pt_package_id"] == str(pkg.id)
+    assert p["client_id"] == str(client.id)
+    assert p["booking_id"] == str(booking_response.id)
+    assert p["cancel_reason"] == "slot_cancelled_by_owner"
+    assert p["sessions_remaining_before"] == plan.session_count - 1
+    assert p["sessions_remaining_after"] == plan.session_count
+
+    # The pt_session row is cancelled.
+    ps_cancelled_at = await db_session.scalar(
+        text("SELECT cancelled_at FROM pt_sessions WHERE booking_id = :bid"),
+        {"bid": booking_response.id},
+    )
+    assert ps_cancelled_at is not None, "pt_session must be marked cancelled after restore"
+
+
+@pytest.mark.asyncio
+async def test_cancel_booked_slot_no_op_when_no_pt_session_consumed(
+    db_session: AsyncSession,
+    seeded_owner: User,
+    monkeypatch: pytest.MonkeyPatch,
+    make_trainer,
+    make_client,
+    make_pt_package_plan,
+    make_pt_package,
+    make_slot,
+) -> None:
+    """WR-06 no-op: cancel_slot on a booking with NO consumed pt_session leaves
+    sessions_remaining unchanged and emits NO pt_session_credit_restored row."""
+    trainer = await make_trainer()
+    client = await make_client()
+    plan = await make_pt_package_plan()
+    pkg = await make_pt_package(client_id=client.id, plan=plan)
+    slot = await make_slot(trainer_id=trainer.id)
+
+    await bookings_service.create_booking(
+        db_session,
+        seeded_owner,
+        BookingCreateRequest(
+            slot_id=slot.id,
+            client_id=client.id,
+            pt_package_id=pkg.id,
+        ),
+    )
+    await db_session.refresh(slot, attribute_names=["status"])
+    assert slot.status == "booked"
+
+    sessions_before = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_before == plan.session_count
+
+    import importlib
+
+    async def _noop_dm(*a: Any, **kw: Any) -> None:
+        pass
+
+    bookings_svc_mod = importlib.import_module("app.modules.bookings.service")
+    monkeypatch.setattr(
+        bookings_svc_mod,
+        "_dispatch_booking_lifecycle_notification",
+        _noop_dm,
+    )
+
+    await schedule_service.cancel_slot(
+        db_session,
+        seeded_owner,
+        slot.id,
+        SlotCancelRequest(cancel_reason="no-session test"),
+    )
+
+    sessions_after = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_after == plan.session_count, (
+        f"sessions_remaining must be unchanged when no session consumed; got {sessions_after}"
+    )
+
+    restore_count = await db_session.scalar(
+        text(
+            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
+        ),
+    )
+    assert restore_count == 0, (
+        f"Expected 0 pt_session_credit_restored rows for no-session booking; got {restore_count}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_slot_no_double_restore_on_retry(
+    db_session: AsyncSession,
+    seeded_owner: User,
+    monkeypatch: pytest.MonkeyPatch,
+    make_trainer,
+    make_client,
+    make_pt_package_plan,
+    make_pt_package,
+    make_slot,
+) -> None:
+    """WR-06 idempotency: calling the restore helper a second time on the same booking
+    (after the first cancel already flipped the pt_session) is a no-op — sessions_remaining
+    does not increment a second time and the audit row count stays at 1."""
+    from app.modules.schedule.service import _restore_pt_credit_for_cancelled_booking
+
+    trainer = await make_trainer()
+    client = await make_client()
+    plan = await make_pt_package_plan()
+    pkg = await make_pt_package(client_id=client.id, plan=plan)
+    slot = await make_slot(trainer_id=trainer.id)
+
+    booking_response = await bookings_service.create_booking(
+        db_session,
+        seeded_owner,
+        BookingCreateRequest(
+            slot_id=slot.id,
+            client_id=client.id,
+            pt_package_id=pkg.id,
+        ),
+    )
+    # Refresh slot so cancel_slot sees status='booked' (identity-map cache invalidation).
+    await db_session.refresh(slot, attribute_names=["status"])
+    assert slot.status == "booked"
+
+    await _insert_consumed_pt_session_for_cancel(
+        db_session,
+        booking_id=booking_response.id,
+        pkg=pkg,
+        trainer_id=trainer.id,
+        client_id=client.id,
+        actor=seeded_owner,
+    )
+
+    import importlib
+
+    async def _noop_dm(*a: Any, **kw: Any) -> None:
+        pass
+
+    bookings_svc_mod = importlib.import_module("app.modules.bookings.service")
+    monkeypatch.setattr(
+        bookings_svc_mod,
+        "_dispatch_booking_lifecycle_notification",
+        _noop_dm,
+    )
+
+    # First cancel — should restore.
+    await schedule_service.cancel_slot(
+        db_session,
+        seeded_owner,
+        slot.id,
+        SlotCancelRequest(cancel_reason="first cancel — WR-06 idempotency"),
+    )
+
+    sessions_after_first = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_after_first == plan.session_count
+
+    audit_count_after_first = await db_session.scalar(
+        text(
+            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
+        ),
+    )
+    assert audit_count_after_first == 1
+
+    # Second helper call on the same booking_id — pt_session is already cancelled,
+    # so the helper should no-op (returns immediately, no increment, no new audit row).
+    await _restore_pt_credit_for_cancelled_booking(
+        db_session,
+        seeded_owner,
+        booking_id=booking_response.id,
+        cancel_reason="retry — should be no-op",
+    )
+    await db_session.commit()
+
+    sessions_after_retry = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_after_retry == plan.session_count, (
+        "sessions_remaining must NOT increment again on retry"
+    )
+
+    audit_count_after_retry = await db_session.scalar(
+        text(
+            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
+        ),
+    )
+    assert audit_count_after_retry == 1, (
+        "pt_session_credit_restored audit count must stay at 1 after retry"
+    )

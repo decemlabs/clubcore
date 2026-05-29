@@ -644,3 +644,229 @@ async def test_http_create_time_off_without_force_returns_409_with_conflict_deta
         {"bid": booking_resp.id},
     )
     assert booking_status == "confirmed", "Booking MUST remain confirmed after 409-without-force"
+
+
+# ---------------------------------------------------------------------------
+# WR-06 regression tests: PT-credit restore on force-cascade.
+# ---------------------------------------------------------------------------
+
+
+async def _insert_consumed_pt_session(
+    db_session: AsyncSession,
+    *,
+    booking_id: Any,
+    pkg: Any,
+    trainer: Any,
+    client: Any,
+    actor: Any,
+) -> None:
+    """Directly insert a pt_sessions row + decrement sessions_remaining to simulate
+    a consumed session (mirrors production path: record_pt_session atomically
+    decrements + inserts in the same UoW, then completes the booking).
+    This helper is intentionally low-level so we can set up an unusual state
+    (consumed session against a *confirmed* booking) that the helper gate
+    `_restore_pt_credit_for_cancelled_booking` needs to detect.
+    """
+    from app.modules.pt_sessions.models import PtSession
+
+    now = datetime.now(UTC)
+    ps = PtSession(
+        pt_package_id=pkg.id,
+        trainer_id=trainer.id,
+        client_id=client.id,
+        performed_at=now - timedelta(minutes=30),
+        performed_by_user_id=actor.id,
+        trainer_name_snapshot=trainer.full_name,
+        booking_id=booking_id,
+    )
+    db_session.add(ps)
+    # Also decrement sessions_remaining to match the production state.
+    await db_session.execute(
+        text(
+            "UPDATE pt_packages SET sessions_remaining = sessions_remaining - 1,"
+            " updated_at = now() WHERE id = :pid"
+        ),
+        {"pid": pkg.id},
+    )
+    await db_session.commit()
+    await db_session.refresh(ps)
+
+
+@pytest.mark.asyncio
+async def test_force_cascade_restores_pt_credit_when_session_consumed(
+    db_session: AsyncSession,
+    seeded_owner: User,
+    monkeypatch: pytest.MonkeyPatch,
+    make_trainer,
+    make_client,
+    make_pt_package_plan,
+    make_pt_package,
+    make_slot,
+) -> None:
+    """WR-06: force-cancel on a booking whose pt_session was consumed restores
+    sessions_remaining by 1 and emits a pt_session_credit_restored audit row."""
+    trainer = await make_trainer()
+    client = await make_client()
+    plan = await make_pt_package_plan()
+    pkg = await make_pt_package(client_id=client.id, plan=plan)
+    slot = await make_slot(trainer=trainer, hours_ahead=15)
+
+    booking_resp = await bookings_service.create_booking(
+        db_session,
+        seeded_owner,
+        BookingCreateRequest(
+            slot_id=slot.id,
+            client_id=client.id,
+            pt_package_id=pkg.id,
+        ),
+    )
+    await db_session.refresh(slot, attribute_names=["status"])
+    assert slot.status == "booked"
+
+    # Simulate a consumed session: insert a pt_sessions row referencing this booking
+    # and decrement sessions_remaining so before = session_count - 1.
+    await _insert_consumed_pt_session(
+        db_session,
+        booking_id=booking_resp.id,
+        pkg=pkg,
+        trainer=trainer,
+        client=client,
+        actor=seeded_owner,
+    )
+
+    # Capture sessions_remaining BEFORE force-cancel.
+    sessions_before = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_before == plan.session_count - 1
+
+    # Stub DM dispatch to avoid Telegram bot calls (async stub required — service awaits it).
+    import importlib
+
+    async def _noop_dm(*a: Any, **kw: Any) -> None:
+        pass
+
+    bookings_svc_mod = importlib.import_module("app.modules.bookings.service")
+    monkeypatch.setattr(
+        bookings_svc_mod,
+        "_dispatch_booking_lifecycle_notification",
+        _noop_dm,
+    )
+
+    data = _time_off_covering(trainer, [slot])
+    await schedule_service.create_time_off(db_session, seeded_owner, data, force=True)
+
+    # sessions_remaining must be back to session_count (restored by 1).
+    sessions_after = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_after == plan.session_count, (
+        f"sessions_remaining should be restored to {plan.session_count}; got {sessions_after}"
+    )
+
+    # Exactly one pt_session_credit_restored audit row with the 6 locked keys.
+    restore_audits = (
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "pt_session_credit_restored",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(restore_audits) == 1, (
+        f"Expected exactly 1 pt_session_credit_restored audit row; got {len(restore_audits)}"
+    )
+    p = restore_audits[0].payload
+    assert p["pt_package_id"] == str(pkg.id)
+    assert p["client_id"] == str(client.id)
+    assert p["booking_id"] == str(booking_resp.id)
+    assert p["cancel_reason"] == "trainer_time_off"
+    assert p["sessions_remaining_before"] == plan.session_count - 1
+    assert p["sessions_remaining_after"] == plan.session_count
+
+    # The pt_session row is now cancelled.
+    ps_cancelled_at = await db_session.scalar(
+        text(
+            "SELECT cancelled_at FROM pt_sessions WHERE booking_id = :bid"
+        ),
+        {"bid": booking_resp.id},
+    )
+    assert ps_cancelled_at is not None, "pt_session must be marked cancelled after restore"
+
+
+@pytest.mark.asyncio
+async def test_force_cascade_no_op_when_no_pt_session_consumed(
+    db_session: AsyncSession,
+    seeded_owner: User,
+    monkeypatch: pytest.MonkeyPatch,
+    make_trainer,
+    make_client,
+    make_pt_package_plan,
+    make_pt_package,
+    make_slot,
+) -> None:
+    """WR-06 no-op: force-cancel on a booking with NO consumed pt_session leaves
+    sessions_remaining unchanged and emits NO pt_session_credit_restored row."""
+    trainer = await make_trainer()
+    client = await make_client()
+    plan = await make_pt_package_plan()
+    pkg = await make_pt_package(client_id=client.id, plan=plan)
+    slot = await make_slot(trainer=trainer, hours_ahead=16)
+
+    await bookings_service.create_booking(
+        db_session,
+        seeded_owner,
+        BookingCreateRequest(
+            slot_id=slot.id,
+            client_id=client.id,
+            pt_package_id=pkg.id,
+        ),
+    )
+    await db_session.refresh(slot, attribute_names=["status"])
+    assert slot.status == "booked"
+
+    # sessions_remaining is untouched (no session consumed).
+    sessions_before = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_before == plan.session_count
+
+    import importlib
+
+    async def _noop_dm(*a: Any, **kw: Any) -> None:
+        pass
+
+    bookings_svc_mod = importlib.import_module("app.modules.bookings.service")
+    monkeypatch.setattr(
+        bookings_svc_mod,
+        "_dispatch_booking_lifecycle_notification",
+        _noop_dm,
+    )
+
+    data = _time_off_covering(trainer, [slot])
+    await schedule_service.create_time_off(db_session, seeded_owner, data, force=True)
+
+    # sessions_remaining must be unchanged (no over-credit).
+    sessions_after = await db_session.scalar(
+        text("SELECT sessions_remaining FROM pt_packages WHERE id = :pid"),
+        {"pid": pkg.id},
+    )
+    assert sessions_after == plan.session_count, (
+        f"sessions_remaining must be unchanged when no session was consumed; got {sessions_after}"
+    )
+
+    # Zero pt_session_credit_restored audit rows.
+    restore_count = await db_session.scalar(
+        text(
+            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
+        ),
+    )
+    assert restore_count == 0, (
+        f"Expected 0 pt_session_credit_restored rows for no-session booking; got {restore_count}"
+    )
