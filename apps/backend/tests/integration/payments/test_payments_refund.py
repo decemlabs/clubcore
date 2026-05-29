@@ -137,9 +137,10 @@ async def test_refund_must_unfreeze_first_409(
         phone_suffix="0002",
     )
     # Freeze first
+    # Phase 66 IDM-07: freeze_membership now requires Idempotency-Key.
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{membership_id}/freeze",
-        headers=_refund_headers(authed_client_reception),
+        headers={**_refund_headers(authed_client_reception), "Idempotency-Key": uuid4().hex},
     )
     assert r.status_code == 200, r.text
 
@@ -177,9 +178,10 @@ async def test_refund_cannot_refund_renewed_source_409(
         phone_suffix="0003",
     )
     # Renew it (creates descendant with previous_membership_id=source.id)
+    # Phase 66 IDM-07: renew_membership now requires Idempotency-Key.
     r = await authed_client_reception.post(
         f"/api/v1/memberships/{source_id}/renew",
-        headers=_refund_headers(authed_client_reception),
+        headers={**_refund_headers(authed_client_reception), "Idempotency-Key": uuid4().hex},
     )
     assert r.status_code == 201, r.text
 
@@ -209,10 +211,11 @@ async def test_refund_invalid_transition_409_when_already_cancelled(
         phone_suffix="0004",
     )
     # Cancel via admin path (owner-only)
+    # Phase 66 IDM-07: cancel_membership now requires Idempotency-Key.
     r = await authed_client_owner.post(
         f"/api/v1/memberships/{membership_id}/cancel",
         json={"reason": "test admin cancel"},
-        headers=_refund_headers(authed_client_owner),
+        headers={**_refund_headers(authed_client_owner), "Idempotency-Key": uuid4().hex},
     )
     assert r.status_code == 200, r.text
 
