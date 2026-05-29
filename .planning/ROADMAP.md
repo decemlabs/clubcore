@@ -192,7 +192,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 1)*
 
-- [ ] 67-03-PLAN.md — RUN-01 ЮKassa sandbox sale+refund walkthrough (YOOKASSA_SANDBOX=true first line; N/A-until-production fallback)
+- [x] 67-03-PLAN.md — RUN-01 ЮKassa sandbox sale+refund walkthrough (YOOKASSA_SANDBOX=true first line; N/A-until-production fallback)
 
 **Wave 4** *(blocked on Waves 1 + 3)*
 
@@ -228,7 +228,7 @@ Plans:
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
 | 65. Handoff Artifacts | v1.11 | 4/4 | Complete    | 2026-05-29 |
-| 67. Operator-Pending Runbook Execution | v1.11 | 1/5 | In Progress|  |
+| 67. Operator-Pending Runbook Execution | v1.11 | 2/5 | In Progress|  |
 
 ---
 
