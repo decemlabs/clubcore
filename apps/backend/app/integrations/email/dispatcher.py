@@ -76,6 +76,9 @@ def _resolve_template(template_id: str) -> Any:
     from app.modules.auth.email_templates import TEMPLATES as AUTH_TEMPLATES
     from app.modules.bookings.email_templates import TEMPLATES as BOOKINGS_TEMPLATES
     from app.modules.memberships.email_templates import TEMPLATES as MEMBERSHIPS_TEMPLATES
+    from app.modules.online_payments.email_templates import (
+        TEMPLATES as ONLINE_PAYMENTS_TEMPLATES,
+    )
     from app.modules.payments.email_templates import TEMPLATES as PAYMENTS_TEMPLATES
     from app.modules.users.email_templates import TEMPLATES as USERS_TEMPLATES
 
@@ -89,9 +92,12 @@ def _resolve_template(template_id: str) -> Any:
         return BOOKINGS_TEMPLATES[template_id]
     if template_id in PAYMENTS_TEMPLATES:
         return PAYMENTS_TEMPLATES[template_id]
+    if template_id in ONLINE_PAYMENTS_TEMPLATES:
+        return ONLINE_PAYMENTS_TEMPLATES[template_id]
     raise KeyError(
         f"template_id {template_id!r} not in any per-module registry "
-        f"(Phase 42 auth + Phase 43 users + Phase 45 memberships/bookings/payments); "
+        f"(Phase 42 auth + Phase 43 users + Phase 45 memberships/bookings/payments + "
+        f"Phase 52 online_payments); "
         f"add the per-module import + if-block here when a new domain registers "
         f"additional template files."
     )

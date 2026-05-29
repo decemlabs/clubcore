@@ -54,6 +54,12 @@ external = ["SVC"]
 # re-review. The currently-shipped Russian copy uses unambiguous Cyrillic only,
 # so the noqa directives are "unused" today and would otherwise trip RUF100.
 "app/modules/payments/email_templates.py" = ["RUF100"]
+# 260529-olc RUN-03-F1: the 4 locked Russian online-payment email templates
+# carry disciplinary `# noqa: RUF001` tripwires on every Cyrillic line (mirrors
+# payments/email_templates.py precedent — any future edit introducing an
+# ambiguous Cyrillic letter is flagged for re-review). Currently-shipped copy
+# uses unambiguous Cyrillic only, so the noqa directives are "unused" today.
+"app/modules/online_payments/email_templates.py" = ["RUF100"]
 # Phase 45 NOTIFY-12 (plan 45-02): same disciplinary `# noqa: RUF001` tripwire
 # on the Cyrillic defensive fallback "Сотрудник" in format_actor_display (and
 # the parametrize cases that exercise it). Today's literals are unambiguous
