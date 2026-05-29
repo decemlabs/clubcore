@@ -51,12 +51,12 @@ Runs BEFORE Phase 65 because Phase 65 artifacts derive from the post-Phase-66 sp
 
 Generated from the **post-Phase-66 frozen spec**. v1.6 Postman collection is unusable for v1.11 (Sportzal-branded, zero `pm.test()` assertions, no auth scripts) → this is a **rewrite**, not an update. Newman is local-only; not added as a CI gate per **D-11-NEWMAN-LOCAL** 2026-05-26 (Postman/Newman serve external integration partners; not a developer-facing gate).
 
-- [ ] **HND-01**: Curated Postman v2.1 collection generated via `openapi-to-postmanv2@6.0.1` from the frozen `openapi.json`; lives at `.planning/handoff/v1.11-clubcore.postman_collection.json`; `folderStrategy=Tags` so endpoints group under the 10 business-domain folders from FRZ-03; environment file `.planning/handoff/v1.11-clubcore.postman_environment.json` ships placeholder values for `{{baseUrl}}` / `{{accessToken}}` / `{{csrfToken}}` (no real credentials committed).
-- [ ] **HND-02**: Postman pre-request scripts wire cookie auth + CSRF header — login request extracts `Set-Cookie` values (`sz_access`, `sz_refresh`, `sportzal_csrf` — the real cookie names set by `apps/backend/app/core/security.py`; the `sz_*`→`cc_*` rename is deferred to v2.0 per D-11-CSRF-DEFER) and stores them as collection variables; subsequent requests automatically send `X-CSRF-Token` header from the stored value; CSRF retrieval flow documented inline in the collection description.
-- [ ] **HND-03**: Postman test assertions added — every request has at least a status-code assertion (`pm.response.to.have.status(...)`); auth happy-path scenario + 1 representative request per business module domain additionally asserts schema-shape via `pm.test()` against the response body; collection is not a hollow shell.
-- [ ] **HND-04**: Newman CLI smoke harness at `tools/newman/` — `pnpm newman run` script runs the curated collection against `docker compose up`; uses `--bail` so any failure exits non-zero; documented in `clubcore-auth-runbook.md` as "local handoff smoke" (not a CI gate per D-11-NEWMAN-LOCAL).
-- [ ] **HND-05**: `clubcore-auth-runbook.md` authored at `.planning/handoff/clubcore-auth-runbook.md` — extends v1.4 auth runbook precedent under clubcore name; covers email/password + Telegram OTP + email OTP + refresh-rotation + CSRF retrieval; sample curl commands paired with Postman-collection request IDs; documents `sportzal_csrf` cookie name as a known sportzal-era carry-over with the v2.0 cutover plan; includes the Phase 66 `Idempotency-Key` semantics + 24h replay window.
-- [ ] **HND-06**: Private OpenAPI doc-site wired via `@redocly/cli@2.31.4` — `pnpm docs` (or `make docs`) target runs `npx @redocly/cli preview-docs openapi.json` on port 8080 for local browsing; static-build output dir `.docs-site/` added to `.gitignore`; documented as **private artifact, never published to a public domain** per **D-11-DOCS-PRIVATE** 2026-05-26 (CLAUDE.md constraint); no PDF export, no published search index.
+- [x] **HND-01**: Curated Postman v2.1 collection generated via `openapi-to-postmanv2@6.0.1` from the frozen `openapi.json`; lives at `.planning/handoff/v1.11-clubcore.postman_collection.json`; `folderStrategy=Tags` so endpoints group under the 10 business-domain folders from FRZ-03; environment file `.planning/handoff/v1.11-clubcore.postman_environment.json` ships placeholder values for `{{baseUrl}}` / `{{accessToken}}` / `{{csrfToken}}` (no real credentials committed).
+- [x] **HND-02**: Postman pre-request scripts wire cookie auth + CSRF header — login request extracts `Set-Cookie` values (`sz_access`, `sz_refresh`, `sportzal_csrf` — the real cookie names set by `apps/backend/app/core/security.py`; the `sz_*`→`cc_*` rename is deferred to v2.0 per D-11-CSRF-DEFER) and stores them as collection variables; subsequent requests automatically send `X-CSRF-Token` header from the stored value; CSRF retrieval flow documented inline in the collection description.
+- [x] **HND-03**: Postman test assertions added — every request has at least a status-code assertion (`pm.response.to.have.status(...)`); auth happy-path scenario + 1 representative request per business module domain additionally asserts schema-shape via `pm.test()` against the response body; collection is not a hollow shell.
+- [x] **HND-04**: Newman CLI smoke harness at `tools/newman/` — `pnpm newman run` script runs the curated collection against `docker compose up`; uses `--bail` so any failure exits non-zero; documented in `clubcore-auth-runbook.md` as "local handoff smoke" (not a CI gate per D-11-NEWMAN-LOCAL).
+- [x] **HND-05**: `clubcore-auth-runbook.md` authored at `.planning/handoff/clubcore-auth-runbook.md` — extends v1.4 auth runbook precedent under clubcore name; covers email/password + Telegram OTP + email OTP + refresh-rotation + CSRF retrieval; sample curl commands paired with Postman-collection request IDs; documents `sportzal_csrf` cookie name as a known sportzal-era carry-over with the v2.0 cutover plan; includes the Phase 66 `Idempotency-Key` semantics + 24h replay window.
+- [x] **HND-06**: Private OpenAPI doc-site wired via `@redocly/cli@2.31.4` — `pnpm docs` (or `make docs`) target runs `npx @redocly/cli preview-docs openapi.json` on port 8080 for local browsing; static-build output dir `.docs-site/` added to `.gitignore`; documented as **private artifact, never published to a public domain** per **D-11-DOCS-PRIVATE** 2026-05-26 (CLAUDE.md constraint); no PDF export, no published search index.
 
 ### Operator-Pending Runbook Execution (Phase 67 — RUN-*)
 
@@ -149,12 +149,12 @@ Populated by gsd-roadmapper during Phase 10 of `/gsd:new-milestone`.
 | IDM-05 | Phase 66 | Complete |
 | IDM-06 | Phase 66 | Complete |
 | IDM-07 | Phase 66 | Complete |
-| HND-01 | Phase 65 | Pending |
-| HND-02 | Phase 65 | Pending |
-| HND-03 | Phase 65 | Pending |
-| HND-04 | Phase 65 | Pending |
-| HND-05 | Phase 65 | Pending |
-| HND-06 | Phase 65 | Pending |
+| HND-01 | Phase 65 | Complete |
+| HND-02 | Phase 65 | Complete |
+| HND-03 | Phase 65 | Complete |
+| HND-04 | Phase 65 | Complete |
+| HND-05 | Phase 65 | Complete |
+| HND-06 | Phase 65 | Complete |
 | RUN-00 | Phase 67 | Pending |
 | RUN-01 | Phase 67 | Pending |
 | RUN-02 | Phase 67 | Pending |
