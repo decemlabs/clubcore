@@ -179,7 +179,34 @@ Plans:
   4. v1.7 CARRY-01 (RU email deliverability) and CARRY-02 (19-template owner countersign) resolved — either PASS with evidence or `N/A-until-production` row with documented trigger condition (matches v1.10 RUN-08-dns-dkim-DEFERRED precedent)
   5. Mailpit service added to `apps/backend/docker-compose.yml` under `profiles: ["dev"]` (ports 1025/8025); `docker compose --profile dev up` starts mailpit alongside other services; documented in runbook as dev-only SMTP trap with note that current SES-V2 path is not intercepted
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 67-01-PLAN.md — RUN-00 staleness audit (HARD GATE) + RUN-07 evidence-file scaffold (v1.11-OPERATOR-EVIDENCE.md)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 67-02-PLAN.md — RUN-06 Mailpit `profiles: ["dev"]` service (the only code change) + both-modes evidence
+
+**Wave 3** *(blocked on Wave 1)*
+
+- [ ] 67-03-PLAN.md — RUN-01 ЮKassa sandbox sale+refund walkthrough (YOOKASSA_SANDBOX=true first line; N/A-until-production fallback)
+
+**Wave 4** *(blocked on Waves 1 + 3)*
+
+- [ ] 67-04-PLAN.md — RUN-02 RU email (N/A-until-production) + RUN-03 19-template owner countersign register
+
+**Wave 5** *(blocked on Waves 1 + 4)*
+
+- [ ] 67-05-PLAN.md — RUN-04 reports runbook + RUN-05 trainers runbook (5 scenarios) live walkthroughs
+
+**Cross-cutting constraints:**
+
+- RUN-00 is a hard gate: all walkthrough plans depend on Plan 01.
+- All evidence appends to the single append-only `v1.11-OPERATOR-EVIDENCE.md`; plans serialized (waves 1-5) so no two plans edit it concurrently.
+- No fabricated evidence (D-67-03): absent capability → `N/A-until-production` row with trigger condition.
 
 ## Progress
 
@@ -201,7 +228,7 @@ Plans:
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
 | 65. Handoff Artifacts | v1.11 | 4/4 | Complete    | 2026-05-29 |
-| 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
+| 67. Operator-Pending Runbook Execution | v1.11 | 0/5 | Planned | — |
 
 ---
 
