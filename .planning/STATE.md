@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-26 — v1.11 API Handoff + Production
 Phase: Milestone v1.11 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-05-29 — Completed quick task 260529-ll9 (purged residual sportzal-era technical naming; cookies → cc_*/clubcore_csrf, domain → clubcore.ru; contract regenerated)
+Last activity: 2026-05-29 — Closed 3 Phase-65 live-stack handoff checks (doc-site/auth-CSRF/Newman) on a live stack; fixed 3 handoff-package bugs (broken pnpm docs, login assertion shape, reports missing date params)
 
 ## v1.11 Roadmap Summary
 
@@ -93,9 +93,9 @@ Items acknowledged and deferred at v1.11 milestone close on 2026-05-29:
 
 | Category | Item | Status |
 |----------|------|--------|
-| uat | Phase 65 — `pnpm docs` doc-site live browser render on :8080 (HND-06) | partial / human_needed — auto-approved under `--auto`; automated truths 14/14 VERIFIED |
-| uat | Phase 65 — Postman GUI auth flow auto-wires `X-CSRF-Token` (HND-02) | partial / human_needed — auto-approved under `--auto`; collection scripts VERIFIED in committed JSON |
-| uat | Phase 65 — `pnpm newman run` exits 0 vs `docker compose up` seeded stack (HND-04) | partial / human_needed — auto-approved under `--auto`; harness + assertions VERIFIED |
+| ~~uat~~ DONE | Phase 65 — doc-site renders (HND-06) | ✅ Closed 2026-05-29 — live-verified; fixed broken `pnpm docs` (`preview-docs`→`build-docs`, Redocly v2). Evidence: `.planning/handoff/v1.11-phase65-live-verification-evidence.md` |
+| ~~uat~~ DONE | Phase 65 — auth/CSRF auto-wiring (HND-02) | ✅ Closed 2026-05-29 — live-verified via curl + Newman (cc_access/clubcore_csrf cookies, X-CSRF-Token double-submit, POST 201) |
+| ~~uat~~ DONE | Phase 65 — `pnpm newman` exits 0 vs seeded stack (HND-04) | ✅ Closed 2026-05-29 — 14/14 requests exit 0; wrong password → exit 1; fixed 2 collection bugs (login assertion shape, reports missing fromDate/toDate) |
 | ~~v2.0~~ DONE | `sportzal_csrf` → `clubcore_csrf` + `sz_*` → `cc_*` cookie rename (D-11-CSRF-DEFER / NAME-01) | ✅ Closed 2026-05-29 by quick task 260529-ll9 (commit 97e1fc1b) — done early since no live frontend yet |
 | v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 |
 | v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 |
@@ -105,7 +105,7 @@ Items acknowledged and deferred at v1.11 milestone close on 2026-05-29:
 | backlog | WR-06 PT session credit restore on owner force-cancel | Phase 999.1 |
 | backlog | Online-payment EMAIL templates wiring (Finding RUN-03-F1) | Phase 999.2 |
 
-> The 3 Phase-65 live-confirmation items are handoff-quality checks, not core functionality, and are recorded as documented tech debt to be re-verified by a human before the real v2.0 frontend handoff (see `65-HUMAN-UAT.md` / `65-VERIFICATION.md`).
+> ✅ 2026-05-29: the 3 Phase-65 live-stack checks were **executed and PASSED** on a live `docker compose up` stack (3 handoff-package bugs found + fixed in the process). Evidence: `.planning/handoff/v1.11-phase65-live-verification-evidence.md`. No longer outstanding.
 
 ## Session Continuity
 
