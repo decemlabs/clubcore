@@ -81,7 +81,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -140,7 +140,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -181,12 +181,12 @@
                   "  pm.expect(json).to.have.property(\"email\");",
                   "  pm.expect(json).to.have.property(\"role\");",
                   "});",
-                  "// Extract sportzal_csrf cookie into csrfToken collection variable.",
-                  "// The sz_access and sz_refresh cookies are httpOnly — Postman's cookie jar",
-                  "// carries them automatically; we only need to capture sportzal_csrf for the",
+                  "// Extract clubcore_csrf cookie into csrfToken collection variable.",
+                  "// The cc_access and cc_refresh cookies are httpOnly — Postman's cookie jar",
+                  "// carries them automatically; we only need to capture clubcore_csrf for the",
                   "// CSRF double-submit pattern (D-11-CSRF-DEFER). accessToken is derived from",
-                  "// the sz_access cookie in the jar (no manual extraction needed).",
-                  "const csrfCookie = pm.cookies.get(\"sportzal_csrf\");",
+                  "// the cc_access cookie in the jar (no manual extraction needed).",
+                  "const csrfCookie = pm.cookies.get(\"clubcore_csrf\");",
                   "if (csrfCookie) {",
                   "  pm.collectionVariables.set(\"csrfToken\", csrfCookie);",
                   "  pm.collectionVariables.set(\"accessToken\", csrfCookie); // marker: session active",
@@ -259,7 +259,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -354,7 +354,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -449,7 +449,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -567,7 +567,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -627,7 +627,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -750,7 +750,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -810,7 +810,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -933,7 +933,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -993,7 +993,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1043,7 +1043,7 @@
           "request": {
             "name": "Refresh",
             "description": {
-              "content": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `sz_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
+              "content": "Rotate the refresh token; reissue all three cookies (AUTH-05/06).\n\nReads `cc_refresh` cookie directly (NOT via the auth dep — an expired\naccess token must NOT block a refresh call). The body is empty on\nsuccess: the new tokens travel in cookies. CSRF dep is exempt (Phase 6\nCSRF-02 / D-09 list).",
               "type": "text/plain"
             },
             "url": {
@@ -1097,7 +1097,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1138,7 +1138,7 @@
           "request": {
             "name": "List the current user's active session families",
             "description": {
-              "content": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(sz_refresh)\ntoken_hash lookup (D-23-3).",
+              "content": "Return the authenticated user's active session families (HYG-03, D-23-1..D-23-4).\n\nGET is CSRF-exempt (Phase 6 D-09). No RBAC check — every authenticated user\nmanages their own sessions. is_current resolved server-side via sha256(cc_refresh)\ntoken_hash lookup (D-23-3).",
               "type": "text/plain"
             },
             "url": {
@@ -1230,7 +1230,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1295,7 +1295,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1336,7 +1336,7 @@
           "request": {
             "name": "Revoke a single session family (idempotent)",
             "description": {
-              "content": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's sz_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
+              "content": "Revoke a single session family (CSRF-gated, HYG-03, D-23-5..D-23-10).\n\n- 404-collapse on unknown family OR family belonging to another user (D-23-6).\n- Idempotent: already-revoked family returns 200 (D-23-7).\n- Self-revoke: if the revoked family matches THIS request's cc_refresh family,\n  clear the cookie matrix identical to /logout (D-23-8).\n- Audit: session_revoked with resource_type='auth_session' (D-23-10).",
               "type": "text/plain"
             },
             "url": {
@@ -1416,7 +1416,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1475,7 +1475,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1572,7 +1572,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1689,7 +1689,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1746,7 +1746,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1860,7 +1860,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -1920,7 +1920,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2102,7 +2102,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2184,7 +2184,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2319,7 +2319,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2387,7 +2387,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2510,7 +2510,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2570,7 +2570,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2713,7 +2713,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2779,7 +2779,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2901,7 +2901,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -2952,7 +2952,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3067,7 +3067,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3119,7 +3119,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3234,7 +3234,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3286,7 +3286,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3549,7 +3549,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3676,7 +3676,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3791,7 +3791,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3849,7 +3849,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -3971,7 +3971,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4022,7 +4022,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4139,7 +4139,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4196,7 +4196,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4335,7 +4335,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4405,7 +4405,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4587,7 +4587,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4669,7 +4669,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4784,7 +4784,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4842,7 +4842,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -4964,7 +4964,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5015,7 +5015,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5132,7 +5132,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5189,7 +5189,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5328,7 +5328,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5398,7 +5398,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5628,7 +5628,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5737,7 +5737,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5865,7 +5865,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -5932,7 +5932,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6058,7 +6058,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6115,7 +6115,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6269,7 +6269,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6349,7 +6349,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6495,7 +6495,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6562,7 +6562,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6698,7 +6698,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6769,7 +6769,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6915,7 +6915,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -6982,7 +6982,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7119,7 +7119,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7186,7 +7186,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7377,7 +7377,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7468,7 +7468,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7583,7 +7583,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7641,7 +7641,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7745,7 +7745,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7862,7 +7862,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -7919,7 +7919,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8079,7 +8079,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8152,7 +8152,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8285,7 +8285,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8352,7 +8352,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8498,7 +8498,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8565,7 +8565,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8714,7 +8714,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8787,7 +8787,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -8935,7 +8935,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9012,7 +9012,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9152,7 +9152,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9212,7 +9212,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9415,7 +9415,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9515,7 +9515,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9643,7 +9643,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9710,7 +9710,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9836,7 +9836,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -9893,7 +9893,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10047,7 +10047,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10127,7 +10127,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10363,7 +10363,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10472,7 +10472,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10605,7 +10605,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10672,7 +10672,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10798,7 +10798,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -10855,7 +10855,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11014,7 +11014,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11094,7 +11094,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11314,7 +11314,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11418,7 +11418,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11573,7 +11573,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11646,7 +11646,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11761,7 +11761,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11819,7 +11819,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11941,7 +11941,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -11992,7 +11992,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12109,7 +12109,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12166,7 +12166,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12305,7 +12305,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12375,7 +12375,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12528,7 +12528,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12600,7 +12600,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12765,7 +12765,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -12846,7 +12846,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13011,7 +13011,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13092,7 +13092,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13257,7 +13257,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13338,7 +13338,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13503,7 +13503,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13584,7 +13584,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13731,7 +13731,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -13803,7 +13803,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14033,7 +14033,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14142,7 +14142,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14304,7 +14304,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14381,7 +14381,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14538,7 +14538,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14615,7 +14615,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14766,7 +14766,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14840,7 +14840,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -14952,7 +14952,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15011,7 +15011,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15141,7 +15141,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15200,7 +15200,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15351,7 +15351,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15425,7 +15425,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15544,7 +15544,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15602,7 +15602,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15738,7 +15738,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15809,7 +15809,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -15985,7 +15985,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16067,7 +16067,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16177,7 +16177,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16235,7 +16235,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16357,7 +16357,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16408,7 +16408,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16525,7 +16525,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16582,7 +16582,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16716,7 +16716,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16786,7 +16786,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -16980,7 +16980,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17071,7 +17071,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17199,7 +17199,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17266,7 +17266,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17392,7 +17392,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17449,7 +17449,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17603,7 +17603,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17683,7 +17683,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17846,7 +17846,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -17926,7 +17926,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18110,7 +18110,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18196,7 +18196,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18324,7 +18324,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18391,7 +18391,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18517,7 +18517,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18574,7 +18574,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18728,7 +18728,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18808,7 +18808,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -18974,7 +18974,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19048,7 +19048,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19199,7 +19199,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19267,7 +19267,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19418,7 +19418,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19492,7 +19492,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19639,7 +19639,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19707,7 +19707,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19840,7 +19840,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19905,7 +19905,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -19970,7 +19970,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20099,7 +20099,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20158,7 +20158,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20291,7 +20291,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20356,7 +20356,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20485,7 +20485,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20544,7 +20544,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20789,7 +20789,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -20907,7 +20907,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -21147,7 +21147,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -21259,7 +21259,7 @@
                       "content": "Added as a part of security scheme: apikey",
                       "type": "text/plain"
                     },
-                    "key": "sz_access",
+                    "key": "cc_access",
                     "value": "<API Key>"
                   }
                 ],
@@ -21302,7 +21302,7 @@
       "item": [
         {
           "name": "smoke: Login ({{ownerEmail}})",
-          "description": "D-65-SMOKE-SCOPE step 1: authenticate with fixture credentials from Newman smoke env. Captures sportzal_csrf into csrfToken collection variable for subsequent CSRF-protected requests.",
+          "description": "D-65-SMOKE-SCOPE step 1: authenticate with fixture credentials from Newman smoke env. Captures clubcore_csrf into csrfToken collection variable for subsequent CSRF-protected requests.",
           "request": {
             "method": "POST",
             "url": {
@@ -21353,9 +21353,9 @@
                   "  pm.expect(json).to.have.property(\"email\");",
                   "  pm.expect(json).to.have.property(\"role\");",
                   "});",
-                  "// Extract sportzal_csrf cookie into csrfToken collection variable.",
-                  "// The sz_access and sz_refresh cookies are httpOnly — cookie jar carries them.",
-                  "const csrfCookie = pm.cookies.get(\"sportzal_csrf\");",
+                  "// Extract clubcore_csrf cookie into csrfToken collection variable.",
+                  "// The cc_access and cc_refresh cookies are httpOnly — cookie jar carries them.",
+                  "const csrfCookie = pm.cookies.get(\"clubcore_csrf\");",
                   "if (csrfCookie) {",
                   "  pm.collectionVariables.set(\"csrfToken\", csrfCookie);",
                   "  pm.collectionVariables.set(\"accessToken\", csrfCookie);",
@@ -21910,7 +21910,7 @@
     "apikey": [
       {
         "type": "any",
-        "value": "sz_access",
+        "value": "cc_access",
         "key": "key"
       },
       {
@@ -21932,7 +21932,7 @@
         "type": "text/javascript",
         "exec": [
           "// D-65-AUGMENT: Auto-inject X-CSRF-Token on every non-GET request.",
-          "// The sportzal_csrf double-submit cookie (D-11-CSRF-DEFER) is captured into",
+          "// The clubcore_csrf double-submit cookie (D-11-CSRF-DEFER) is captured into",
           "// the csrfToken collection variable by the Login request test script.",
           "if (pm.request.method !== 'GET') {",
           "  const csrf = pm.collectionVariables.get('csrfToken');",
@@ -21966,7 +21966,7 @@
     "name": "clubcore API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {
-      "content": "v1.11.0 contract-freeze baseline for the clubcore backend (Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1). This spec is curated for handoff — it is the authoritative single source of truth consumed by `packages/api-client` codegen and by the Phase 65 auth runbook at `.planning/handoff/clubcore-auth-runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 plans (64-02..64-07) curate operation IDs, tags, security schemes, shared error responses, and Redocly lint.\n\nCarry-over: the `sportzal_csrf` cookie name is retained in v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is scheduled for v2.0 with a coordinated admin-web cutover (documented further in the securitySchemes block landed by Phase 64-04).",
+      "content": "v1.11.0 contract-freeze baseline for the clubcore backend (Phase 64 FRZ-01 + FRZ-04 / D-64-PLANS plan 1). This spec is curated for handoff — it is the authoritative single source of truth consumed by `packages/api-client` codegen and by the Phase 65 auth runbook at `.planning/handoff/clubcore-auth-runbook.md`. NOT auto-generated boilerplate; downstream Phase 64 plans (64-02..64-07) curate operation IDs, tags, security schemes, shared error responses, and Redocly lint.\n\nCarry-over: the `clubcore_csrf` cookie name is retained in v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is scheduled for v2.0 with a coordinated admin-web cutover (documented further in the securitySchemes block landed by Phase 64-04).",
       "type": "text/plain"
     }
   }

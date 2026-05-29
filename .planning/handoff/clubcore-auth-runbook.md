@@ -14,10 +14,10 @@
 `POST /api/v1/auth/login` принимает `{"email", "password"}`, проверяет Argon2id-хэш
 через `apps/backend/app/modules/auth/router.py` и при успехе ставит три cookie:
 
-- `sz_access` (httpOnly, `Path=/`) — короткоживущий access JWT (15 мин по умолчанию).
-- `sz_refresh` (httpOnly, `Path=/api/v1/auth`) — узкоскопный refresh token; `Path=/api/v1/auth`
+- `cc_access` (httpOnly, `Path=/`) — короткоживущий access JWT (15 мин по умолчанию).
+- `cc_refresh` (httpOnly, `Path=/api/v1/auth`) — узкоскопный refresh token; `Path=/api/v1/auth`
   минимизирует exposure (браузер отправляет его только на auth-маршруты).
-- `sportzal_csrf` (**НЕ** httpOnly, `Path=/`) — JS-readable double-submit CSRF cookie; см. § 3.
+- `clubcore_csrf` (**НЕ** httpOnly, `Path=/`) — JS-readable double-submit CSRF cookie; см. § 3.
 
 Обе роли (`owner`, `reception`) используют один и тот же endpoint. RBAC прописан
 per-route через `OWNER_ONLY` frozenset (`apps/backend/app/core/rbac.py`).
@@ -31,9 +31,9 @@ curl -i -s -X POST http://localhost:8000/api/v1/auth/login \
   -c cookies.txt \
   -d '{"email":"verify_owner@local.dev","password":"<owner-password>"}'
 # → HTTP/1.1 200 OK
-# → Set-Cookie: sz_access=...; HttpOnly; Path=/; SameSite=Lax
-# → Set-Cookie: sz_refresh=...; HttpOnly; Path=/api/v1/auth; SameSite=Strict
-# → Set-Cookie: sportzal_csrf=...; Path=/; SameSite=Lax
+# → Set-Cookie: cc_access=...; HttpOnly; Path=/; SameSite=Lax
+# → Set-Cookie: cc_refresh=...; HttpOnly; Path=/api/v1/auth; SameSite=Strict
+# → Set-Cookie: clubcore_csrf=...; Path=/; SameSite=Lax
 # → {"data":{"user":{"id":"...","email":"verify_owner@local.dev","role":"owner",...}}}
 
 # Вход reception (тот же endpoint, другая роль)
@@ -47,14 +47,14 @@ Cookie jar `cookies.txt` далее используется для всех п�
 
 > **Postman:** соответствует запросу **"Login"** в папке `Auth`
 > (`POST /api/v1/auth/login`). Pre-request script коллекции автоматически
-> извлекает `sportzal_csrf` → `{{csrfToken}}` и `sz_access` → `{{accessToken}}`
+> извлекает `clubcore_csrf` → `{{csrfToken}}` и `cc_access` → `{{accessToken}}`
 > из ответных заголовков.
 
 ---
 
 ## 2. Refresh rotation family
 
-`POST /api/v1/auth/refresh` читает `sz_refresh` cookie напрямую (без авторизационной
+`POST /api/v1/auth/refresh` читает `cc_refresh` cookie напрямую (без авторизационной
 dependency — истёкший access cookie не должен блокировать refresh). Семантика —
 **rotation family**: старый refresh инвалидируется, новый выдаётся в ответе.
 
@@ -67,9 +67,9 @@ discipline); иначе гонка вызовет `session_expired` на все�
 curl -i -s -X POST http://localhost:8000/api/v1/auth/refresh \
   -b cookies.txt -c cookies.txt
 # → HTTP/1.1 200 OK
-# → Set-Cookie: sz_access=...  (новый access token)
-# → Set-Cookie: sz_refresh=... (новый refresh token; старый инвалидирован)
-# → Set-Cookie: sportzal_csrf=... (обновлён)
+# → Set-Cookie: cc_access=...  (новый access token)
+# → Set-Cookie: cc_refresh=... (новый refresh token; старый инвалидирован)
+# → Set-Cookie: clubcore_csrf=... (обновлён)
 # → {"data":null}
 ```
 
@@ -84,16 +84,16 @@ curl -i -s -X POST http://localhost:8000/api/v1/auth/refresh \
 ## 3. CSRF on mutating requests
 
 Каждый mutating HTTP verb (POST / PATCH / PUT / DELETE) **обязан** содержать header
-`X-CSRF-Token: <значение cookie sportzal_csrf>`. Backend проверяет совпадение через
+`X-CSRF-Token: <значение cookie clubcore_csrf>`. Backend проверяет совпадение через
 `verify_csrf` dependency; несовпадение → `403 csrf_mismatch`. GET / HEAD / OPTIONS
 освобождены от CSRF (соответствует server-side `_SAFE_METHODS` short-circuit).
 
-Fetcher из `packages/api-client` автоматически читает `sportzal_csrf` и проставляет
+Fetcher из `packages/api-client` автоматически читает `clubcore_csrf` и проставляет
 `X-CSRF-Token` на всех mutating методах — см. `packages/api-client/README.md` § "CSRF".
 
 ```bash
 # Извлечь CSRF-значение из cookie jar (awk-way из verify-скриптов проекта)
-CSRF=$(awk '$6=="sportzal_csrf"{print $7}' cookies.txt)
+CSRF=$(awk '$6=="clubcore_csrf"{print $7}' cookies.txt)
 
 # Пример mutating запроса с CSRF + Idempotency-Key
 curl -i -s -X POST http://localhost:8000/api/v1/memberships \
@@ -104,7 +104,7 @@ curl -i -s -X POST http://localhost:8000/api/v1/memberships \
   -d '{"clientId":"<uuid>","planId":"<uuid>","amountKopecks":300000}'
 ```
 
-`sportzal_csrf` — v1.x carry-over name; переименование в `clubcore_csrf` отложено
+`clubcore_csrf` — v1.x carry-over name; переименование в `clubcore_csrf` отложено
 до v2.0 (D-11-CSRF-DEFER). Подробнее: § 8.
 
 > **Postman:** pre-request script коллекции на уровне всей коллекции автоматически
@@ -199,14 +199,14 @@ Endpoint классифицирован **B** (не требует `Idempotency-
 на уже-пустой set сессий является no-op).
 
 ```bash
-CSRF=$(awk '$6=="sportzal_csrf"{print $7}' cookies.txt)
+CSRF=$(awk '$6=="clubcore_csrf"{print $7}' cookies.txt)
 curl -i -s -X POST http://localhost:8000/api/v1/auth/logout-all \
   -H "X-CSRF-Token: $CSRF" \
   -b cookies.txt -c cookies.txt
 # → 200 {"data":null}
-# → Set-Cookie: sz_access=; Max-Age=0   (cookie cleared)
-# → Set-Cookie: sz_refresh=; Max-Age=0
-# → Set-Cookie: sportzal_csrf=; Max-Age=0
+# → Set-Cookie: cc_access=; Max-Age=0   (cookie cleared)
+# → Set-Cookie: cc_refresh=; Max-Age=0
+# → Set-Cookie: clubcore_csrf=; Max-Age=0
 ```
 
 > **Postman:** соответствует запросу **"Logout All"** в папке `Auth`
@@ -345,7 +345,7 @@ OpenAPI schema (`include_in_schema=False`).
 
 ```bash
 # Подготовка
-CSRF=$(awk '$6=="sportzal_csrf"{print $7}' cookies.txt)
+CSRF=$(awk '$6=="clubcore_csrf"{print $7}' cookies.txt)
 IDEM="$(uuidgen)"  # e.g. "f47ac10b-58cc-4372-a567-0e02b2c3d479"
 
 # Первый вызов — создаёт membership (или возвращает 404 AppError на placeholder UUID)
@@ -393,7 +393,7 @@ SEED_VERIFY_OWNER_PASSWORD=<password> pnpm newman run \
 
 | # | Request | Назначение |
 |---|---------|------------|
-| 1 | `POST /api/v1/auth/login` (smoke: Login) | Auth: аутентификация с fixture credentials; захват `sportzal_csrf` → `csrfToken` |
+| 1 | `POST /api/v1/auth/login` (smoke: Login) | Auth: аутентификация с fixture credentials; захват `clubcore_csrf` → `csrfToken` |
 | 2 | `GET /api/v1/auth/me` (smoke: Auth/Me) | Auth: подтверждение активной сессии |
 | 3a | `GET /api/v1/users` (smoke: Users list) | Users: safe list |
 | 3b | `GET /api/v1/clients` (smoke: Clients list) | Clients: safe list |
@@ -414,11 +414,11 @@ SEED_VERIFY_OWNER_PASSWORD=<password> pnpm newman run \
 
 ---
 
-## 8. sportzal_csrf carry-over + v2.0 cutover plan
+## 8. clubcore_csrf carry-over + v2.0 cutover plan
 
 ### 8.1 Текущее состояние (v1.11)
 
-Cookie `sportzal_csrf` — имя из v1.x (до переименования проекта), сохранённое
+Cookie `clubcore_csrf` — имя из v1.x (до переименования проекта), сохранённое
 в v1.11 per **D-11-CSRF-DEFER**. Переименование в `clubcore_csrf` отложено до v2.0
 с координированным cutover admin-web команды.
 
@@ -426,7 +426,7 @@ Cookie `sportzal_csrf` — имя из v1.x (до переименования �
 
 - `apps/backend/app/main.py` **строка ~199** (SECURITY_SCHEMES):
   ```
-  # cookie is named `sportzal_csrf` — a v1.x carry-over retained
+  # cookie is named `clubcore_csrf` — a v1.x carry-over retained
   # per D-11-CSRF-DEFER; rename to `clubcore_csrf` is deferred to
   # v2.0 with a coordinated admin-web cutover (see auth runbook at
   # .planning/handoff/clubcore-auth-runbook.md and D-11-CSRF-DEFER).
@@ -434,24 +434,24 @@ Cookie `sportzal_csrf` — имя из v1.x (до переименования �
 
 - `apps/backend/app/main.py` **строка ~428** (openapi info description):
   ```
-  # Carry-over: the `sportzal_csrf` cookie name is retained in
+  # Carry-over: the `clubcore_csrf` cookie name is retained in
   # v1.11 per D-11-CSRF-DEFER; rename to `clubcore_csrf` is
   # scheduled for v2.0 with a coordinated admin-web cutover
   ```
 
 ### 8.2 Что читать frontend-команде
 
-В v1.11 **всегда** читайте cookie с именем `sportzal_csrf`:
+В v1.11 **всегда** читайте cookie с именем `clubcore_csrf`:
 
 ```javascript
 // Правильно в v1.11
 const csrf = document.cookie
   .split('; ')
-  .find(c => c.startsWith('sportzal_csrf='))
+  .find(c => c.startsWith('clubcore_csrf='))
   ?.split('=')[1] ?? ''
 
 // Или через Postman/api-client fetcher:
-// pm.cookies.get('sportzal_csrf')
+// pm.cookies.get('clubcore_csrf')
 ```
 
 **Не** используйте `clubcore_csrf` — этого cookie ещё не существует в v1.11.
@@ -464,7 +464,7 @@ const csrf = document.cookie
 2. Frontend **читает то имя, которое приходит** — для совместимости рекомендуется
    fallback:
    ```javascript
-   const csrf = cookies.get('clubcore_csrf') || cookies.get('sportzal_csrf') || ''
+   const csrf = cookies.get('clubcore_csrf') || cookies.get('clubcore_csrf') || ''
    ```
 3. После полного rollout v2.0 и подтверждения, что ни один v1.x клиент не активен,
    fallback удаляется.
@@ -486,7 +486,7 @@ const csrf = document.cookie
   (D-11-DOCS-PRIVATE).
 - **Newman smoke:** `pnpm newman run --folder smoke` (local handoff smoke, not a CI
   gate; D-11-NEWMAN-LOCAL).
-- **v2.0:** sportzal_csrf → clubcore_csrf rename + Newman как blocking CI gate.
+- **v2.0:** clubcore_csrf → clubcore_csrf rename + Newman как blocking CI gate.
 
 ## Operator
 

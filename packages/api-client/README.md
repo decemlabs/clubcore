@@ -60,9 +60,9 @@ pnpm --filter @sportzal/api-client codegen
 
 Внешние потребители контракта (дизайн-команда v2.0):
 
-- **Login**: `POST /api/v1/auth/login` принимает `{email, password}`, проверяет Argon2id; ставит cookies `sportzal_session` + `sportzal_csrf` и возвращает access JWT в body.
+- **Login**: `POST /api/v1/auth/login` принимает `{email, password}`, проверяет Argon2id; ставит cookies `cc_access` + `clubcore_csrf` и возвращает access JWT в body.
 - **Token rotation**: `POST /api/v1/auth/refresh` — refresh-rotation family; см. § "Single-flight refresh" ниже для runtime contract.
-- **Mutating requests**: добавляй header `X-CSRF-Token` из cookie `sportzal_csrf`; см. § "CSRF" ниже.
+- **Mutating requests**: добавляй header `X-CSRF-Token` из cookie `clubcore_csrf`; см. § "CSRF" ниже.
 - **Telegram OTP path** (client-app): `POST /api/v1/auth/telegram/start` → `GET /api/v1/auth/telegram/status` → `POST /api/v1/auth/telegram/verify`.
 
 Sample curl examples и полный Postman collection будут опубликованы в v1.5 API Handoff milestone.
@@ -75,7 +75,7 @@ Fetcher НЕ редиректит и НЕ знает про `/login` — он pu
 
 ## CSRF
 
-На mutating методы (POST / PATCH / PUT / DELETE) fetcher читает cookie `sportzal_csrf` (выставляется backend'ом на `/auth/login` и `/auth/refresh`) и отправляет header `X-CSRF-Token`. На GET / HEAD / OPTIONS header не добавляется — соответствует server-side `_SAFE_METHODS` short-circuit (Phase 6 D-04).
+На mutating методы (POST / PATCH / PUT / DELETE) fetcher читает cookie `clubcore_csrf` (выставляется backend'ом на `/auth/login` и `/auth/refresh`) и отправляет header `X-CSRF-Token`. На GET / HEAD / OPTIONS header не добавляется — соответствует server-side `_SAFE_METHODS` short-circuit (Phase 6 D-04).
 
 ## Phase 9 deviation note
 

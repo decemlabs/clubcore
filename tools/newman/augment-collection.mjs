@@ -8,7 +8,7 @@
  *   1. Remove the "Internal" folder (webhook + healthz) — D-46-08 / T-65-06
  *   2. Set collection-level variables: baseUrl, accessToken, csrfToken (placeholders)
  *   3. Inject collection-root prerequest event: X-CSRF-Token on every non-GET request
- *   4. Inject Login request test event: extract sportzal_csrf → csrfToken collection var
+ *   4. Inject Login request test event: extract clubcore_csrf → csrfToken collection var
  *   5. Inject pm.response.to.have.status(...) on every request item
  *   6. Inject per-domain body-shape pm.test() on auth happy-path + 1 representative GET per domain
  *   7. Emit curated smoke folder (D-65-SMOKE-SCOPE, HND-04):
@@ -17,15 +17,15 @@
  * Cookie name note (load-bearing):
  *   CONTEXT.md/REQUIREMENTS.md incorrectly documented `cc_access`/`cc_refresh`.
  *   The real names (confirmed in apps/backend/app/core/security.py lines 223-254) are:
- *     sz_access      — httpOnly access token
- *     sz_refresh     — httpOnly refresh token
- *     sportzal_csrf  — non-httpOnly CSRF cookie (D-11-CSRF-DEFER carry-over; rename to
+ *     cc_access      — httpOnly access token
+ *     cc_refresh     — httpOnly refresh token
+ *     clubcore_csrf  — non-httpOnly CSRF cookie (D-11-CSRF-DEFER carry-over; rename to
  *                      clubcore_csrf deferred to v2.0)
  *
  * Smoke folder (D-65-SMOKE-SCOPE):
  *   Curated happy-path subset for `pnpm newman run --folder smoke`:
  *     1. Login (POST /api/v1/auth/login) — uses {{ownerEmail}} / {{password}} env vars;
- *        captures sportzal_csrf into csrfToken collection variable.
+ *        captures clubcore_csrf into csrfToken collection variable.
  *     2. GET /api/v1/auth/me — confirms session active.
  *     3. One safe GET per business domain (Users, Clients, Memberships, Visits, Schedule,
  *        Bookings, Trainers, Payments, Reports, Audit-log).
@@ -122,12 +122,12 @@ function bodyShapeLines(shapeType) {
       '  pm.expect(json).to.have.property("email");',
       '  pm.expect(json).to.have.property("role");',
       '});',
-      '// Extract sportzal_csrf cookie into csrfToken collection variable.',
-      '// The sz_access and sz_refresh cookies are httpOnly — Postman\'s cookie jar',
-      '// carries them automatically; we only need to capture sportzal_csrf for the',
+      '// Extract clubcore_csrf cookie into csrfToken collection variable.',
+      '// The cc_access and cc_refresh cookies are httpOnly — Postman\'s cookie jar',
+      '// carries them automatically; we only need to capture clubcore_csrf for the',
       '// CSRF double-submit pattern (D-11-CSRF-DEFER). accessToken is derived from',
-      '// the sz_access cookie in the jar (no manual extraction needed).',
-      'const csrfCookie = pm.cookies.get("sportzal_csrf");',
+      '// the cc_access cookie in the jar (no manual extraction needed).',
+      'const csrfCookie = pm.cookies.get("clubcore_csrf");',
       'if (csrfCookie) {',
       '  pm.collectionVariables.set("csrfToken", csrfCookie);',
       '  pm.collectionVariables.set("accessToken", csrfCookie); // marker: session active',
@@ -271,7 +271,7 @@ collection.variable = [
   if (!joined.includes('X-CSRF-Token')) {
     preReq.script.exec = [
       '// D-65-AUGMENT: Auto-inject X-CSRF-Token on every non-GET request.',
-      '// The sportzal_csrf double-submit cookie (D-11-CSRF-DEFER) is captured into',
+      '// The clubcore_csrf double-submit cookie (D-11-CSRF-DEFER) is captured into',
       '// the csrfToken collection variable by the Login request test script.',
       "if (pm.request.method !== 'GET') {",
       "  const csrf = pm.collectionVariables.get('csrfToken');",
@@ -312,7 +312,7 @@ walkRequests(collection.item, (item) => {
 
   // Rebuild exec only if needed (byte-stable: only rebuild if assertions not yet present)
   const hasStatusAssert = joinedTest.includes('pm.response.to.have.status')
-  const hasCsrfExtract = joinedTest.includes('sportzal_csrf')
+  const hasCsrfExtract = joinedTest.includes('clubcore_csrf')
   const hasBodyShape = joinedTest.includes('pm.test(')
 
   if (!hasStatusAssert || (isLoginRequest && !hasCsrfExtract) || (wantsBodyShape && !hasBodyShape)) {
@@ -321,7 +321,7 @@ walkRequests(collection.item, (item) => {
     // Status assertion (always present)
     lines.push(`pm.response.to.have.status(${status});`)
 
-    // Login-specific: sportzal_csrf extraction
+    // Login-specific: clubcore_csrf extraction
     if (isLoginRequest && !hasCsrfExtract) {
       const loginShapeLines = bodyShapeLines('login')
       lines.push(...loginShapeLines)
@@ -395,7 +395,7 @@ walkRequests(collection.item, (item) => {
   // 1. Login (uses {{ownerEmail}} / {{password}} env vars from Newman smoke env)
   const smokeLogin = {
     name: 'smoke: Login ({{ownerEmail}})',
-    description: 'D-65-SMOKE-SCOPE step 1: authenticate with fixture credentials from Newman smoke env. Captures sportzal_csrf into csrfToken collection variable for subsequent CSRF-protected requests.',
+    description: 'D-65-SMOKE-SCOPE step 1: authenticate with fixture credentials from Newman smoke env. Captures clubcore_csrf into csrfToken collection variable for subsequent CSRF-protected requests.',
     request: {
       method: 'POST',
       url: {
@@ -428,9 +428,9 @@ walkRequests(collection.item, (item) => {
             '  pm.expect(json).to.have.property("email");',
             '  pm.expect(json).to.have.property("role");',
             '});',
-            '// Extract sportzal_csrf cookie into csrfToken collection variable.',
-            '// The sz_access and sz_refresh cookies are httpOnly — cookie jar carries them.',
-            'const csrfCookie = pm.cookies.get("sportzal_csrf");',
+            '// Extract clubcore_csrf cookie into csrfToken collection variable.',
+            '// The cc_access and cc_refresh cookies are httpOnly — cookie jar carries them.',
+            'const csrfCookie = pm.cookies.get("clubcore_csrf");',
             'if (csrfCookie) {',
             '  pm.collectionVariables.set("csrfToken", csrfCookie);',
             '  pm.collectionVariables.set("accessToken", csrfCookie);',

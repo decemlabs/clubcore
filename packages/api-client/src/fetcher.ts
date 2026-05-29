@@ -8,7 +8,7 @@
  *    per failed call. Refresh failure → throw ApiError('session_expired').
  *  - D-A2: framework-agnostic. NO router/window/redirect logic here.
  *  - D-A3: 401 from /auth/* paths is pass-through (no refresh attempt).
- *  - D-11: X-CSRF-Token only on mutating methods; cookie name `sportzal_csrf`
+ *  - D-11: X-CSRF-Token only on mutating methods; cookie name `clubcore_csrf`
  *    matches server constant in app/core/dependencies.py.
  *  - D-12: ApiError shape mirrors backend AppError JSON envelope.
  */
@@ -39,10 +39,10 @@ function isMutating(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
 }
 
-// D-11: cookie name `sportzal_csrf` MUST be byte-equal to server constant
+// D-11: cookie name `clubcore_csrf` MUST be byte-equal to server constant
 // in apps/backend/app/core/dependencies.py:194.
 function readCsrfCookie(): string | undefined {
-  const prefix = 'sportzal_csrf='
+  const prefix = 'clubcore_csrf='
   const cookies = document.cookie.split(';')
   for (const raw of cookies) {
     const c = raw.trim()
