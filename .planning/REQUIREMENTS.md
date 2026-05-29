@@ -21,8 +21,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 ### Client RBAC + Data Isolation
 
 - [x] **CISO-01**: Отдельный `ClientPrincipal` / `require_client()` с JWT-claim `aud:"client"`; `Role.CLIENT` НЕ добавляется в `permissions.py` (staff byte-parity с frozen admin-web сохраняется)
-- [ ] **CISO-02**: Staff-токен получает 401 на любом `/api/v1/client/*`; клиентский токен получает 401 на любом staff-эндпоинте (two-principal isolation тест)
-- [ ] **CISO-03**: Каждый client-scoped эндпоинт фильтрует по `client_id` владельца сессии; get-by-id выполняет `assert_owns()` → 404-collapse при чужом ресурсе (anti-oracle)
+- [x] **CISO-02**: Staff-токен получает 401 на любом `/api/v1/client/*`; клиентский токен получает 401 на любом staff-эндпоинте (two-principal isolation тест)
+- [x] **CISO-03**: Каждый client-scoped эндпоинт фильтрует по `client_id` владельца сессии; get-by-id выполняет `assert_owns()` → 404-collapse при чужом ресурсе (anti-oracle)
 - [ ] **CISO-04**: Параметризованный cross-client enumeration (IDOR) тест покрывает все client-owned типы ресурсов и зелёный
 - [x] **CISO-05**: Клиентские cookies (`cc_client_*`, `Path=/api/v1/client`) изолированы от staff (`cc_*`) — нет взаимной перезаписи сессий на одном origin
 
@@ -139,8 +139,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CAUTH-05 | Phase 68 | Pending |
 | CAUTH-06 | Phase 68 | Pending |
 | CISO-01 | Phase 68 | Complete |
-| CISO-02 | Phase 68 | Pending |
-| CISO-03 | Phase 68 | Pending |
+| CISO-02 | Phase 68 | Complete |
+| CISO-03 | Phase 68 | Complete |
 | CISO-04 | Phase 68 | Pending |
 | CISO-05 | Phase 68 | Complete |
 | CHOME-01 | Phase 69 | Pending |

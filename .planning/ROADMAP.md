@@ -63,7 +63,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Plans**: 6 plans (4 waves)
 - [x] 68-01-PLAN.md — DB foundation: OtpCode.client_id + XOR CHECK + client_refresh_tokens table (Alembic 0043/0044)
 - [x] 68-02-PLAN.md — Client JWT + cookie primitives in security.py (decode_client_token aud=client, cc_client_* cookies)
-- [ ] 68-03-PLAN.md — Composition root: ClientPrincipal, register_client_loader, require_client, verify_client_csrf
+- [x] 68-03-PLAN.md — Composition root: ClientPrincipal, register_client_loader, require_client, verify_client_csrf
 - [ ] 68-04-PLAN.md — Client OTP + session service: anti-oracle request, verify, 3-branch rotate, logout, email-only PATCH
 - [ ] 68-05-PLAN.md — Schemas + /api/v1/client router (6 handlers) + mount + create_app loader wiring
 - [ ] 68-06-PLAN.md — Verification: two-principal isolation, IDOR sweep, anti-oracle byte-parity, lifecycle, CISO-01 guard
@@ -136,7 +136,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | 58-61. Trainers Complete | v1.9 | 22/22 | Complete | 2026-05-26 |
 | 62 + 62.1. clubcore Rebrand | v1.10 | 16/16 | Complete | 2026-05-26 |
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
-| 68. Client Auth Foundation | v2.0 | 2/6 | In Progress|  |
+| 68. Client Auth Foundation | v2.0 | 3/6 | In Progress|  |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 0/TBD | Not started | - |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 0/TBD | Not started | - |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/TBD | Not started | - |
