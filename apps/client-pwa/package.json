@@ -1,0 +1,22 @@
+{
+  "name": "gym-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Gym client PWA — production-ready Vite + React rebuild of the original single-file prototype.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "echo \"(lint not configured)\" "
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.1",
+    "vite": "5.4.8"
+  }
+}

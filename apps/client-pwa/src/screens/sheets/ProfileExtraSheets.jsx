@@ -1,0 +1,517 @@
+import React from 'react';
+import { Avatar } from '@/components/Avatar.jsx';
+import { Icon } from '@/components/Icon.jsx';
+import { StatusBar } from '@/components/StatusBar.jsx';
+
+// ─── Generic sheet header ──────────────────────────────────────
+export function SubSheetHeader({ title, onClose, action }) {
+  return (
+    <div style={{
+      position: 'relative',
+      padding: '50px 12px 8px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: 8,
+    }}>
+      <button onClick={onClose} aria-label="Закрыть" style={{
+        width: 36, height: 36, borderRadius: 999, border: 0,
+        background: 'var(--surface)', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flex: '0 0 auto',
+      }}>
+        <Icon name="chevronLeft" size={22} color="var(--text)" strokeWidth={2.2} />
+      </button>
+      <span className="t-h3" style={{
+        fontSize: 15,
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-50%, calc(-50% + 21px))',
+        pointerEvents: 'none',
+        whiteSpace: 'nowrap',
+      }}>{title}</span>
+      <div style={{
+        minWidth: 36, display: 'flex', justifyContent: 'flex-end',
+        alignItems: 'center', flex: '0 0 auto',
+      }}>{action}</div>
+    </div>
+  );
+}
+
+// ─── Personal data ────────────────────────────────────────────
+export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
+  const [name, setName] = React.useState(userName || 'Саша');
+  const [phone, setPhone] = React.useState('+7 916 555-12-34');
+  const [email, setEmail] = React.useState('sasha@example.com');
+  const [dob, setDob] = React.useState('14.03.1996');
+  const [gender, setGender] = React.useState('f');
+  const [saved, setSaved] = React.useState(false);
+  const initialPhone = React.useRef('+7 916 555-12-34');
+  const initialEmail = React.useRef('sasha@example.com');
+
+  const onSave = () => {
+    // Phone/email changes require SMS / email verification
+    if (phone !== initialPhone.current) {
+      window.__openSmsVerify?.('phone', phone);
+      return;
+    }
+    if (email !== initialEmail.current) {
+      window.__openSmsVerify?.('email', email);
+      return;
+    }
+    if (setTweak) setTweak('userName', name);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1400);
+  };
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 220, background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      animation: 'sheet-up 0.32s cubic-bezier(0.32, 0.72, 0.2, 1)',
+    }}>
+      <StatusBar />
+      <SubSheetHeader title="Личные данные" onClose={onClose} action={
+        <button onClick={onSave} style={{
+          border: 0, background: 'transparent',
+          color: saved ? 'var(--accent-deep)' : 'var(--text)',
+          fontSize: 13, fontWeight: 600, padding: '6px 10px',
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>{saved ? 'Сохранено' : 'Сохранить'}</button>
+      } />
+
+      <div className="scroller" style={{ paddingTop: 0 }}>
+        {/* Avatar */}
+        <div style={{
+          padding: '8px 16px 20px', display: 'flex', flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <div style={{ position: 'relative' }}>
+            <Avatar initials={name.slice(0, 1).toUpperCase()} bg="var(--avatar-bg)" color="var(--avatar-fg)" size={88} />
+            <button style={{
+              position: 'absolute', right: -4, bottom: -4,
+              width: 32, height: 32, borderRadius: 999, border: '2px solid var(--bg)',
+              background: 'var(--accent)', color: '#06120c', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0,
+            }}>
+              <Icon name="plus" size={16} color="currentColor" strokeWidth={2.4} />
+            </button>
+          </div>
+          <div className="t-small" style={{ marginTop: 12, color: 'var(--text-3)' }}>
+            Тапни +, чтобы загрузить фото
+          </div>
+        </div>
+
+        {/* Form */}
+        <div style={{ padding: '0 16px 12px' }}>
+          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Основное</div>
+          <div className="card" style={{ padding: 0 }}>
+            <FormRow label="Имя" value={name} onChange={setName} />
+            <Divider3 />
+            <FormRow label="Телефон" value={phone} onChange={setPhone} type="tel" />
+            <Divider3 />
+            <FormRow label="Email" value={email} onChange={setEmail} type="email" />
+          </div>
+        </div>
+
+        <div style={{ padding: '0 16px 12px' }}>
+          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>О себе</div>
+          <div className="card" style={{ padding: 0 }}>
+            <FormRow label="Дата рождения" value={dob} onChange={setDob} />
+            <Divider3 />
+            <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="t-h3" style={{ fontSize: 14, flex: 1 }}>Пол</div>
+              <div className="seg" style={{ padding: 2 }}>
+                <button className={`seg-item ${gender === 'f' ? 'active' : ''}`}
+                        onClick={() => setGender('f')}>Жен</button>
+                <button className={`seg-item ${gender === 'm' ? 'active' : ''}`}
+                        onClick={() => setGender('m')}>Муж</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '0 16px 12px' }}>
+          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Здоровье</div>
+          <div className="card" style={{ padding: 0 }}>
+            <FormRow label="Рост" value="168 см" onChange={() => {}} />
+            <Divider3 />
+            <FormRow label="Вес" value="58 кг" onChange={() => {}} />
+            <Divider3 />
+            <FormRow label="Цель" value="Поддержание формы" onChange={() => {}} />
+          </div>
+        </div>
+
+        <div style={{ padding: '20px 16px 30px' }}>
+          <button onClick={() => window.__openDeleteAccount?.()} style={{
+            width: '100%', height: 50, borderRadius: 999, border: '0.5px solid var(--border-strong)',
+            background: 'transparent', color: 'var(--danger)',
+            fontSize: 15, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+          }}>
+            Удалить аккаунт
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export function FormRow({ label, value, onChange, type = 'text', placeholder }) {
+  return (
+    <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="t-small" style={{ width: 110, color: 'var(--text-2)' }}>{label}</div>
+      <input
+        type={type} value={value} placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          flex: 1, border: 0, outline: 0, background: 'transparent',
+          fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
+          color: 'var(--text)', textAlign: 'right',
+        }}
+      />
+    </div>
+  );
+}
+
+export function Divider3() {
+  return <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 14 }} />;
+}
+
+// ─── Card management ──────────────────────────────────────────
+export const CardSheet = ({ onClose }) => {
+  const [unbindConfirm, setUnbindConfirm] = React.useState(false);
+  const [unbound, setUnbound] = React.useState(false);
+  const openPaymentMethods = () => {
+    onClose();
+    setTimeout(() => window.__openPaymentMethods?.(), 280);
+  };
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 220, background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      animation: 'sheet-up 0.32s cubic-bezier(0.32, 0.72, 0.2, 1)',
+    }}>
+      <StatusBar />
+      <SubSheetHeader title="Привязанная карта" onClose={onClose} />
+
+      <div className="scroller" style={{ paddingTop: 0 }}>
+        {/* Card visual */}
+        <div style={{ padding: '8px 16px 18px' }}>
+          <div style={{
+            position: 'relative', aspectRatio: '1.6 / 1',
+            borderRadius: 20,
+            background: 'linear-gradient(135deg, #1c1917 0%, #2c2826 100%)',
+            color: '#fafaf9', padding: 22, overflow: 'hidden',
+            boxShadow: '0 12px 30px rgba(28,25,23,0.25)',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{
+              position: 'absolute', right: -40, top: -60,
+              width: 200, height: 200, borderRadius: '50%',
+              background: 'rgba(45, 212, 164, 0.18)', filter: 'blur(6px)',
+              pointerEvents: 'none',
+            }} />
+            <div className="t-mini" style={{ color: 'rgba(250,250,249,0.7)', position: 'relative' }}>
+              Карта для оплаты
+            </div>
+            <div style={{ flex: 1 }} />
+            <div className="t-h2" style={{
+              color: '#fafaf9', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              letterSpacing: 2, fontSize: 20, marginBottom: 12, position: 'relative',
+            }}>
+              •••• •••• •••• 4821
+            </div>
+            <div className="row-between" style={{ position: 'relative' }}>
+              <div>
+                <div className="t-mini" style={{ color: 'rgba(250,250,249,0.6)', fontSize: 9 }}>ВЛАДЕЛЕЦ</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>ALEXANDRA Z.</div>
+              </div>
+              <div>
+                <div className="t-mini" style={{ color: 'rgba(250,250,249,0.6)', fontSize: 9 }}>ДО</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2,
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  09 / 28
+                </div>
+              </div>
+              <div style={{
+                width: 36, height: 22, borderRadius: 4,
+                background: 'linear-gradient(135deg, #f59e0b, #dc2626)',
+              }} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '0 16px 12px' }}>
+          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Автоплатежи</div>
+          <div className="card" style={{ padding: 0 }}>
+            <ToggleRow label="Авто-продление абонемента" sub="Спишется за 3 дня до конца"
+                        defaultOn />
+            <Divider3 />
+            <ToggleRow label="Авто-оплата тренировок" sub="Сразу после записи" defaultOn />
+          </div>
+        </div>
+
+        <div style={{ padding: '0 16px 12px' }}>
+          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Действия</div>
+          <div className="card" style={{ padding: 0 }}>
+            <MiniActionRow icon="plus" label="Добавить новую карту" onClick={openPaymentMethods} />
+            <Divider3 />
+            <MiniActionRow icon="card" label="Изменить срок действия" onClick={openPaymentMethods} />
+            <Divider3 />
+            <MiniActionRow
+              icon="alert"
+              label={unbound ? 'Карта отвязана' : 'Отвязать карту'}
+              danger={!unbound}
+              onClick={() => { if (!unbound) setUnbindConfirm(true); }}
+            />
+          </div>
+        </div>
+
+        {unbindConfirm && !unbound && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 30,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            animation: 'ctx-fade 0.2s ease-out',
+          }} onClick={() => setUnbindConfirm(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={{
+              width: 'calc(100% - 24px)', margin: '0 12px 12px',
+              background: 'var(--surface)', borderRadius: 20, padding: 20,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              animation: 'sheet-up 0.28s cubic-bezier(0.32, 0.72, 0.2, 1)',
+            }}>
+              <div className="t-h2" style={{ fontSize: 18 }}>Отвязать карту?</div>
+              <div className="t-small" style={{ marginTop: 6, color: 'var(--text-2)' }}>
+                Автоплатежи отключатся. Записи и продление абонемента нужно будет оплачивать вручную.
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button onClick={() => setUnbindConfirm(false)} className="press" style={{
+                  flex: 1, height: 46, borderRadius: 999, border: '0.5px solid var(--border-strong)',
+                  background: 'transparent', color: 'var(--text)',
+                  fontFamily: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                }}>Отмена</button>
+                <button onClick={() => { setUnbindConfirm(false); setUnbound(true); }} className="press" style={{
+                  flex: 1, height: 46, borderRadius: 999, border: 0,
+                  background: 'var(--danger)', color: '#fff',
+                  fontFamily: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                }}>Отвязать</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ padding: '14px 22px 30px' }}>
+          <div className="t-small" style={{
+            textAlign: 'center', color: 'var(--text-3)', lineHeight: 1.5,
+          }}>
+            Данные карты хранятся на стороне платёжного провайдера.
+            Мы видим только последние 4 цифры.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function ToggleRow({ label, sub, defaultOn }) {
+  const [on, setOn] = React.useState(!!defaultOn);
+  return (
+    <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ flex: 1 }}>
+        <div className="t-h3" style={{ fontSize: 14 }}>{label}</div>
+        {sub && <div className="t-small" style={{ marginTop: 2 }}>{sub}</div>}
+      </div>
+      <button onClick={() => setOn(!on)} style={{
+        width: 44, height: 26, borderRadius: 999, border: 0, padding: 0,
+        background: on ? 'var(--accent)' : 'var(--border-strong)',
+        cursor: 'pointer', position: 'relative', transition: 'background 0.15s',
+        flexShrink: 0,
+      }}>
+        <span style={{
+          position: 'absolute', top: 2, left: on ? 20 : 2,
+          width: 22, height: 22, borderRadius: 999, background: '#fff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.25)', transition: 'left 0.18s ease',
+        }} />
+      </button>
+    </div>
+  );
+}
+
+function MiniActionRow({ icon, label, danger, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="press"
+      style={{
+        appearance: 'none', border: 0, background: 'transparent', width: '100%',
+        padding: '14px 14px', display: 'flex', alignItems: 'center', gap: 12,
+        cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+        color: 'inherit',
+      }}
+    >
+      <div style={{
+        width: 32, height: 32, borderRadius: 8,
+        background: danger ? 'var(--danger-soft)' : 'var(--surface-2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <Icon name={icon} size={16} color={danger ? 'var(--danger)' : 'var(--text-2)'} strokeWidth={2} />
+      </div>
+      <div className="t-h3" style={{
+        flex: 1, fontSize: 14, color: danger ? 'var(--danger)' : 'var(--text)',
+      }}>{label}</div>
+      <Icon name="chevronRight" size={16} color="var(--text-3)" />
+    </button>
+  );
+}
+
+// ─── FAQ / Help ───────────────────────────────────────────────
+const FAQ_ITEMS = [
+  { q: 'Что входит в абонемент?', a: 'Зал, кардио-зона, групповые занятия по расписанию, сауна (для полугодового и годового тарифов). Тренер оплачивается отдельно.' },
+  { q: 'Можно ли заморозить абонемент?', a: 'Да. Месячный — без заморозки, полугодовой — до 14 дней, годовой — до 30 дней. Активировать заморозку можно в чате с админом или на ресепшене.' },
+  { q: 'Как отменить запись к тренеру?', a: 'За 4+ часа до начала — бесплатно через экран «Управление записью». За 1–4 часа — вернётся 50%. Позже — оплата сохраняется тренеру.' },
+  { q: 'QR-код не работает на турникете', a: 'Проверь, что абонемент активен (на главном экране) и яркость экрана достаточная. Если не помогает — подойди к админу с приложением.' },
+  { q: 'Как пригласить друга?', a: 'Профиль → «Приведи друга». Поделись кодом — друг получит скидку 1 000 ₽ на первый абонемент, а ты — 1 000 ₽ на следующее продление.' },
+  { q: 'Можно ли вернуть деньги за абонемент?', a: 'Да, по российскому законодательству. Пиши в чат — рассчитаем сумму за вычетом фактически использованных дней.' },
+  { q: 'Где парковка?', a: 'Подземный паркинг с торца здания, въезд со двора. Для членов клуба — первые 2 часа бесплатно, потом 200 ₽/ч.' },
+  { q: 'Дресс-код', a: 'Спортивная одежда и сменная обувь обязательны. Обувь с чёрной подошвой не пускаем — оставляет полосы на полу. Полотенце на тренажёр — must.' },
+];
+
+export const FAQSheet = ({ onClose, onOpenChat }) => {
+  const [open, setOpen] = React.useState(-1);
+  const [query, setQuery] = React.useState('');
+
+  const filtered = FAQ_ITEMS.filter(item =>
+    !query ||
+    item.q.toLowerCase().includes(query.toLowerCase()) ||
+    item.a.toLowerCase().includes(query.toLowerCase())
+  );
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 220, background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      animation: 'sheet-up 0.32s cubic-bezier(0.32, 0.72, 0.2, 1)',
+    }}>
+      <StatusBar />
+      <SubSheetHeader title="Помощь" onClose={onClose} />
+
+      <div className="scroller" style={{ paddingTop: 0 }}>
+        {/* Search */}
+        <div style={{ padding: '4px 16px 14px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'var(--surface)', borderRadius: 'var(--r-pill)',
+            border: '0.5px solid var(--border)',
+            padding: '0 14px', height: 44,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="7" stroke="var(--text-3)" strokeWidth="1.8" fill="none" />
+              <path d="M16 16l4 4" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Поиск по вопросам"
+              style={{
+                flex: 1, border: 0, outline: 0, background: 'transparent',
+                color: 'var(--text)', fontFamily: 'inherit', fontSize: 15,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Quick contacts */}
+        <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <ContactTile icon="chat" big="Написать" sub="в админ-чат" onClick={onOpenChat} />
+          <ContactTile icon="phone" big="Позвонить" sub="ресепшен" onClick={() => { window.location.href = 'tel:+74951234567'; }} />
+        </div>
+
+        {/* FAQ list */}
+        <div style={{ padding: '0 16px 16px' }}>
+          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>
+            Частые вопросы
+          </div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 28, textAlign: 'center' }}>
+                <div className="t-h3" style={{ fontSize: 15 }}>Ничего не нашлось</div>
+                <div className="t-small" style={{ marginTop: 6 }}>Попробуй другие слова или напиши в чат.</div>
+              </div>
+            ) : filtered.map((item, i) => (
+              <React.Fragment key={item.q}>
+                {i > 0 && <Divider3 />}
+                <FaqRow
+                  q={item.q} a={item.a}
+                  open={open === i}
+                  onToggle={() => setOpen(open === i ? -1 : i)}
+                />
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: '4px 22px 30px' }}>
+          <div className="t-small" style={{
+            textAlign: 'center', color: 'var(--text-3)', lineHeight: 1.5,
+          }}>
+            Не нашли ответ?<br />
+            Пиши в чат — ответим в течение 10 минут с 8:00 до 22:00.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function ContactTile({ icon, big, sub, onClick }) {
+  return (
+    <button onClick={onClick} className="press" style={{
+      border: 0, background: 'var(--surface)',
+      borderRadius: 'var(--r-lg)', padding: 14,
+      display: 'flex', flexDirection: 'column', gap: 8,
+      cursor: 'pointer', textAlign: 'left', color: 'var(--text)',
+      border: '0.5px solid var(--border)',
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 8,
+        background: 'var(--accent-soft)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon name={icon} size={18} color="var(--accent-deep)" />
+      </div>
+      <div>
+        <div className="t-h3" style={{ fontSize: 15 }}>{big}</div>
+        <div className="t-small">{sub}</div>
+      </div>
+    </button>
+  );
+}
+
+function FaqRow({ q, a, open, onToggle }) {
+  return (
+    <div>
+      <button onClick={onToggle} style={{
+        width: '100%', padding: '14px 14px', background: 'transparent', border: 0,
+        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+        fontFamily: 'inherit', textAlign: 'left', color: 'var(--text)',
+      }}>
+        <div className="t-h3" style={{ flex: 1, fontSize: 14 }}>{q}</div>
+        <div style={{
+          transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform 0.2s',
+          flexShrink: 0,
+        }}>
+          <Icon name="chevronRight" size={16} color="var(--text-3)" />
+        </div>
+      </button>
+      {open && (
+        <div className="fade-up" style={{
+          padding: '0 14px 14px 14px',
+        }}>
+          <div className="t-body" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
+            {a}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

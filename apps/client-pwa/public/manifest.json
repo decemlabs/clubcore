@@ -1,0 +1,37 @@
+{
+  "name": "Мой зал",
+  "short_name": "Мой зал",
+  "description": "Прототип PWA для фитнес-клуба: QR-пропуск, запись, чат, абонемент",
+  "id": "/my-gym",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f5f4",
+  "theme_color": "#2dd4a4",
+  "lang": "ru",
+  "dir": "ltr",
+  "categories": ["fitness", "lifestyle", "health"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "QR-пропуск",
+      "short_name": "QR",
+      "description": "Открыть QR для входа в зал",
+      "url": "/home?action=qr",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Записаться",
+      "short_name": "Запись",
+      "description": "Записаться на тренировку",
+      "url": "/book",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

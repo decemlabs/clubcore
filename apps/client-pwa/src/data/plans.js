@@ -1,0 +1,63 @@
+export const PLANS = [
+  {
+    id: 'monthly',
+    name: 'Месячный',
+    tagline: 'Без обязательств',
+    priceMonth: 4900,
+    priceTotal: 4900,
+    period: '30 дней',
+    badge: null,
+    features: {
+      access: 'Зал · 8:00–22:00',
+      freeze: 'Без заморозки',
+      guest: null,
+      sauna: null,
+      group: '2 группы / нед',
+      pt_discount: null,
+    },
+  },
+  {
+    id: 'half',
+    name: 'Полугодовой',
+    tagline: 'Самый популярный',
+    priceMonth: 4100,
+    priceTotal: 24600,
+    period: '180 дней',
+    badge: 'Хит',
+    popular: true,
+    features: {
+      access: 'Зал · круглосуточно',
+      freeze: '14 дней заморозки',
+      guest: '1 гостевой визит / мес',
+      sauna: 'Сауна включена',
+      group: 'Группы — без лимита',
+      pt_discount: '−10% на тренера',
+    },
+  },
+  {
+    id: 'annual',
+    name: 'Годовой',
+    tagline: 'Лучшая цена',
+    priceMonth: 3500,
+    priceTotal: 42000,
+    period: '365 дней',
+    badge: '−29%',
+    features: {
+      access: 'Зал · круглосуточно',
+      freeze: '30 дней заморозки',
+      guest: '2 гостевых визита / мес',
+      sauna: 'Сауна + бассейн',
+      group: 'Группы — без лимита',
+      pt_discount: '−15% на тренера',
+    },
+  },
+];
+
+export const PLAN_FEATURES = [
+  { key: 'access',      label: 'Доступ' },
+  { key: 'freeze',      label: 'Заморозка' },
+  { key: 'guest',       label: 'Гостевой визит' },
+  { key: 'sauna',       label: 'Сауна / бассейн' },
+  { key: 'group',       label: 'Групповые' },
+  { key: 'pt_discount', label: 'Скидка на тренера' },
+];
