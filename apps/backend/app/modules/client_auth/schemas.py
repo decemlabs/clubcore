@@ -15,19 +15,23 @@ from uuid import UUID
 from pydantic import Field
 
 from app.core.schemas import BackendSchemaBase
-from app.modules.clients.schemas import PHONE_REGEX
+
+# E.164 phone regex (CAUTH-03). Mirrors PHONE_REGEX in clients/schemas.py
+# but declared locally to avoid a cross-module import (importlinter contract:
+# modules cannot import each other). Must be kept in sync if ever tightened.
+_PHONE_REGEX: str = r"^\+[1-9]\d{1,14}$"
 
 
 class ClientOtpRequestBody(BackendSchemaBase):
     """POST /client/otp/request — phone-first OTP trigger (D-01, CAUTH-03)."""
 
-    phone: str = Field(pattern=PHONE_REGEX)
+    phone: str = Field(pattern=_PHONE_REGEX)
 
 
 class ClientOtpVerifyBody(BackendSchemaBase):
     """POST /client/otp/verify — consume OTP + issue session cookies (CAUTH-01)."""
 
-    phone: str = Field(pattern=PHONE_REGEX)
+    phone: str = Field(pattern=_PHONE_REGEX)
     code: str
 
 

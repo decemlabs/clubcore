@@ -62,6 +62,7 @@ from app.core.dependencies import (
     register_booking_completer,
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
+    register_client_loader,  # Phase 68 D-08 — client principal composition-root slot.
     register_email_dispatcher,
     register_fiscal_receipt_dispatcher,  # Phase 47 D-47-01 — double-wire.
     register_membership_activator,  # Phase 47 D-47-01 — HTTP-only single-wire.
@@ -139,6 +140,13 @@ OPENAPI_TAGS: list[dict[str, str]] = [
         "name": "Users",
         "description": (
             "Operator admin — owner and reception account management (D-64-TAG-USERS)."
+        ),
+    },
+    {
+        "name": "Client",
+        "description": (
+            "Client-portal — authenticated gym member self-service: OTP auth, "
+            "session management, profile (Phase 68 CAUTH-01..06 / CISO-01..05)."
         ),
     },
     {
@@ -237,6 +245,8 @@ PUBLIC_ENDPOINT_OPERATION_IDS: frozenset[str] = frozenset(
         "password_reset_request_endpoint",  # POST /api/v1/auth/password-reset/request — anonymous
         "password_reset_confirm_endpoint",  # POST /api/v1/auth/password-reset/confirm — anonymous
         "email_webhook",  # POST /api/v1/_internal/email/webhook — HMAC-signed transport callback
+        "client_otp_request",  # POST /api/v1/client/otp/request — pre-auth (Phase 68)
+        "client_otp_verify",  # POST /api/v1/client/otp/verify — pre-auth (Phase 68)
     }
 )
 
@@ -450,6 +460,30 @@ def create_app() -> FastAPI:
     # is therefore safe; the export script never enters lifespan and tests
     # use the slot to swap in fakes deterministically.
     register_user_loader(load_user_by_id)
+
+    # Phase 68 D-08: client principal composition-root slot.
+    # load_client_by_id lives in app.modules.clients.service (existing loader added in
+    # Plan 68-03). Local import mirrors the Phase 19 clients_service carve-out pattern.
+    # WR-05 idempotent: tests can inject a stub loader via create_app().
+    from app.modules.clients.service import load_client_by_id
+
+    register_client_loader(load_client_by_id)
+
+    # Phase 68 D-01: client OTP sender slot.
+    # Builds a bare Bot (outbound DM only — no long-polling) and registers a closure
+    # that sends the Russian OTP message to the client's Telegram chat.
+    # The placeholder token sentinel means `bot.send_message` will fail at runtime
+    # on unconfigured envs; the service silently guards with `if _client_otp_sender`.
+    # Mirrors how the existing bot worker uses build_bot (app/integrations/telegram/bot.py L85).
+    from app.integrations.telegram.bot import build_bot
+    from app.modules.client_auth.service import register_client_otp_sender
+
+    _otp_bot = build_bot(token=settings.telegram_bot_token.get_secret_value())
+
+    async def _send_client_otp_dm(chat_id: int, code: str) -> None:
+        await _otp_bot.send_message(chat_id=chat_id, text=f"Ваш код: {code}")
+
+    register_client_otp_sender(_send_client_otp_dm)
 
     # Phase 17 MEM-05: second composition-root carve-out (after register_user_loader,
     # Phase 5 D-15). Same architectural exception — app.main is NOT in the

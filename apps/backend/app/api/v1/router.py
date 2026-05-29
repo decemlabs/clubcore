@@ -11,6 +11,7 @@ from app.api.v1._internal.email.router import router as email_webhook_router
 from app.api.v1._internal.yookassa.router import router as yookassa_webhook_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bookings.router import bookings_router, client_scoped_bookings_router
+from app.modules.client_auth.router import router as client_auth_router
 from app.modules.clients.router import router as clients_router
 from app.modules.memberships.router import (
     memberships_router,
@@ -88,6 +89,10 @@ v1.include_router(users_router, prefix="/users")
 v1.include_router(visits_router, prefix="/visits")
 v1.include_router(reports_router, prefix="/reports")
 v1.include_router(audit_log_router, prefix="/audit-log")
+
+# Phase 68 CAUTH-01..06 / CISO-01..05 — client auth + profile self-service.
+# Mounted before /_internal so client paths live under /api/v1/client (D-10).
+v1.include_router(client_auth_router, prefix="/client")
 
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
