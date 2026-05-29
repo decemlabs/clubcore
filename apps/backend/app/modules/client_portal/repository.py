@@ -64,7 +64,7 @@ async def fetch_client_membership(
                 "(end_date - (now() AT TIME ZONE 'Europe/Moscow')::date) AS days_until_end "
                 "FROM memberships "
                 "WHERE client_id = :client_id AND status = 'active' "
-                "ORDER BY start_date ASC, created_at DESC LIMIT 1"
+                "ORDER BY start_date DESC, created_at DESC LIMIT 1"
             ),
             {"client_id": str(client_id)},
         )

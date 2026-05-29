@@ -36,7 +36,7 @@ function isClientAuthExempt(path: string): boolean {
 
 // D-11 equivalent: mirror server _SAFE_METHODS = {GET, HEAD, OPTIONS, TRACE}.
 function isMutating(method: string): boolean {
-  return method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
+  return method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && method !== 'TRACE'
 }
 
 /**
