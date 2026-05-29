@@ -26,6 +26,7 @@ import app.modules.auth.models
 import app.modules.auth.password_reset_token_model  # Phase 41 INFRA-38 / 0025 — D-41-04
 import app.integrations.email.models  # Phase 42 D-42-33 / 0026 -- EMAIL-01 (email_send_log)
 import app.modules.bookings.models  # Phase 38 BOOK-01 / 0017
+import app.modules.client_auth.models  # Phase 68 CAUTH / 0043+0044
 import app.modules.clients.models
 import app.modules.fiscal_receipts.models  # Phase 50 FISCAL-01 / 0035
 import app.modules.memberships.models

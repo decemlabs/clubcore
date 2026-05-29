@@ -109,8 +109,8 @@ class OtpCode(Base, UUIDPkMixin, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
     )
-    # Phase 68 D-03 — nullable FK for client OTP rows.  XOR CHECK (below in
-    # __table_args__) enforces exactly one of (user_id, client_id) non-null.
+    # Phase 68 D-03 — nullable FK for client OTP rows.  AT-MOST-ONE CHECK (below
+    # in __table_args__) prevents a row belonging to BOTH principals simultaneously.
     client_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("clients.id", ondelete="CASCADE"),
@@ -164,11 +164,14 @@ class OtpCode(Base, UUIDPkMixin, TimestampMixin):
             unique=True,
             postgresql_where=text("consumed_at IS NULL"),
         ),
-        # Phase 68 D-03 — XOR CHECK: exactly one of (user_id, client_id) must
-        # be non-null.  Prevents ownership confusion (T-68-01).
+        # Phase 68 D-03 (corrected) — AT-MOST-ONE CHECK: a row may not belong to
+        # BOTH principals simultaneously.  (null, null) is permitted for the
+        # staff Telegram pre-bind state where user_id is not yet resolved.
+        # The original "exactly-one (XOR)" wording in D-03 was over-constraining;
+        # this correction preserves ownership isolation while allowing pre-bind rows.
         CheckConstraint(
-            "(user_id IS NULL) <> (client_id IS NULL)",
-            name="ck_otp_codes_principal_xor",
+            "NOT (user_id IS NOT NULL AND client_id IS NOT NULL)",
+            name="principal_excl",
         ),
         # Phase 68 D-03 — mirrors the staff partial-unique for client principal
         # single-active uniqueness (one active OTP per client + channel).

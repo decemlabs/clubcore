@@ -56,6 +56,15 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         # (D-19 — diff-to-the-set is the deliberate-decision marker, mirror
         # of the Phase 49 ``/api/v1/online-payments/return`` precedent above).
         "/api/v1/_internal/yookassa/webhook",
+        # Phase 68 CAUTH — client auth-bootstrap endpoints (D-04 / D-19).
+        # No principal yet at these stages: identity is established by the OTP
+        # flow (request → verify) and the refresh cookie carries identity for
+        # /session/refresh.  The diff-to-this-set IS the audit trail (D-19).
+        # NOTE: /session/logout and /me (GET + PATCH) are NOT excluded here —
+        # they carry require_client() and must remain gated (T-68-24 / T-68-25).
+        "/api/v1/client/otp/request",
+        "/api/v1/client/otp/verify",
+        "/api/v1/client/session/refresh",
         # FastAPI built-ins:
         "/openapi.json",
         "/docs",
@@ -85,10 +94,13 @@ EXCLUDED_PREFIXES: tuple[str, ...] = (
 # module-local factory mirroring require_permission shape. Reception is admitted
 # on /by-client and /by-membership scoped routes; the closure name remains _checker
 # so the qualname is `require_payments_view_for_subject.<locals>._checker`.
+# Phase 68 D-08 — require_client() is the client principal gate; the closure
+# qualname is `require_client.<locals>._checker`.
 _GATE_PREFIXES: tuple[str, ...] = (
     "require_permission.",
     "require_authenticated.",
     "require_payments_view_for_subject.",
+    "require_client.",
 )
 
 
@@ -161,6 +173,13 @@ def test_excluded_paths_set_is_locked() -> None:
     assert "/api/v1/auth/me" not in EXCLUDED_PATHS
     assert "/api/v1/auth/logout" not in EXCLUDED_PATHS
     assert "/api/v1/auth/logout-all" not in EXCLUDED_PATHS
+    # Phase 68 CAUTH — client bootstrap endpoints ARE excluded (pre-auth by design).
+    assert "/api/v1/client/otp/request" in EXCLUDED_PATHS
+    assert "/api/v1/client/otp/verify" in EXCLUDED_PATHS
+    assert "/api/v1/client/session/refresh" in EXCLUDED_PATHS
+    # /session/logout and /me (GET + PATCH) are NOT excluded — they carry require_client().
+    assert "/api/v1/client/session/logout" not in EXCLUDED_PATHS
+    assert "/api/v1/client/me" not in EXCLUDED_PATHS
 
 
 def test_gate_prefixes_match_factory_names() -> None:
@@ -170,18 +189,21 @@ def test_gate_prefixes_match_factory_names() -> None:
     immediately with a clear message rather than silently letting all routes
     appear to lack a gate.
     """
-    from app.core.dependencies import require_authenticated, require_permission
+    from app.core.dependencies import require_authenticated, require_client, require_permission
     from app.core.permissions import Action, Resource
     from app.modules.payments.permissions import require_payments_view_for_subject
 
     ra = require_authenticated()
     rp = require_permission(Action.DELETE, Resource.CLIENTS)
     rpv = require_payments_view_for_subject()
+    rc = require_client()
     assert ra.__qualname__.startswith("require_authenticated."), ra.__qualname__
     assert rp.__qualname__.startswith("require_permission."), rp.__qualname__
     assert rpv.__qualname__.startswith("require_payments_view_for_subject."), rpv.__qualname__
+    assert rc.__qualname__.startswith("require_client."), rc.__qualname__
     assert _GATE_PREFIXES == (
         "require_permission.",
         "require_authenticated.",
         "require_payments_view_for_subject.",
+        "require_client.",
     )
