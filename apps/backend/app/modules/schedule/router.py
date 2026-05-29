@@ -43,6 +43,7 @@ from app.core.idempotency import (
     IDEMPOTENCY_TTL_SECONDS,
     begin_idempotency,
     body_sha256,
+    idempotent_execute,
     load_idempotency_response,
     verify_idempotency,
 )
@@ -103,49 +104,22 @@ async def publish_slot(
       - 409 slot_overlap            (overlap with non-cancelled slot, same trainer)
       - 409 slot_too_close          (gap < SLOT_BUFFER_MINUTES, discriminated)
       - 422 idempotency_key_reuse   (same key, different body)
+
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        slot = await service.publish_slot(session, actor, payload)
+        body_bytes = json.dumps(
+            envelope(slot).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    slot = await service.publish_slot(session, actor, payload)
-    response_envelope = envelope(slot)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @schedule_router.get(
@@ -224,49 +198,21 @@ async def cancel_slot(
     forward-link message.
 
     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception receives 403.
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        slot = await service.cancel_slot(session, actor, slot_id, payload)
+        body_bytes = json.dumps(
+            envelope(slot).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
 
-    slot = await service.cancel_slot(session, actor, slot_id, payload)
-    response_envelope = envelope(slot)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_200_OK,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_200_OK,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 # ===========================================================================
@@ -299,53 +245,24 @@ async def create_recurring_template(
     """Create a recurring slot template (REC-01 / D-59-02).
 
     (CREATE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
-    Two-phase Redis idempotency (D-38-14 / Pitfall 14).
+    Idempotency claim+replay+store delegated to the shared
+    ``idempotent_execute`` orchestrator (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
 
     Error surface:
       - 409 recurring_template_duplicate  (UNIQUE trainer+dow+start+valid_from)
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        tmpl = await service.create_recurring_template(session, actor, payload)
+        body_bytes = json.dumps(
+            envelope(tmpl).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_201_CREATED, body_bytes
 
-    tmpl = await service.create_recurring_template(session, actor, payload)
-    response_envelope = envelope(tmpl)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_201_CREATED,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_201_CREATED,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @recurring_templates_router.post(
@@ -373,49 +290,21 @@ async def deactivate_recurring_template(
 
     (CANCEL, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
     Forward-only: does not cancel materialized slots.
+    Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+    (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(
-            content=base64.b64decode(stored["body_b64"]),
-            status_code=stored["status_code"],
-            media_type="application/json",
-        )
+    async def _runner() -> tuple[int, bytes]:
+        tmpl = await service.deactivate_recurring_template(session, actor, template_id)
+        body_bytes = json.dumps(
+            envelope(tmpl).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
 
-    tmpl = await service.deactivate_recurring_template(session, actor, template_id)
-    response_envelope = envelope(tmpl)
-    body_bytes = json.dumps(
-        response_envelope.model_dump(mode="json", by_alias=True),
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_200_OK,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(body_bytes).decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(
-        content=body_bytes,
-        status_code=status.HTTP_200_OK,
-        media_type="application/json",
-    )
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @recurring_templates_router.get(
@@ -595,35 +484,16 @@ async def delete_time_off(
 
     (DELETE, SCHEDULE_SLOTS) IS in OWNER_ONLY — reception 403.
     Does NOT resurrect cancelled slots — next cron tick re-materializes new ones.
+    Idempotency delegated to the shared ``idempotent_execute`` orchestrator
+    (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER). Returns 204 with empty body.
     """
     incoming_body = await request.body()
-    incoming_hash = body_sha256(incoming_body)
 
-    is_first = await begin_idempotency(redis, idempotency_key)
-    if not is_first:
-        stored = await load_idempotency_response(redis, idempotency_key)
-        if stored is None or isinstance(stored, str):
-            raise ConflictError("idempotency_in_flight")
-        if stored["body_hash"] != incoming_hash:
-            raise ValidationAppError("idempotency_key_reuse")
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    async def _runner() -> tuple[int, bytes]:
+        await service.delete_time_off(session, actor, time_off_id)
+        return status.HTTP_204_NO_CONTENT, b""
 
-    await service.delete_time_off(session, actor, time_off_id)
-    envelope_json = json.dumps(
-        {
-            "status_code": status.HTTP_204_NO_CONTENT,
-            "body_hash": incoming_hash,
-            "body_b64": base64.b64encode(b"").decode("ascii"),
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    await redis.set(
-        f"{IDEMPOTENCY_REDIS_PREFIX}{idempotency_key}",
-        envelope_json,
-        ex=IDEMPOTENCY_TTL_SECONDS,
-    )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @time_off_router.get(
