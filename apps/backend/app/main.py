@@ -76,6 +76,7 @@ from app.core.dependencies import (
     register_yookassa_client_provider,  # Phase 47 D-47-01 — double-wire.
 )
 from app.core.exceptions import register_exception_handlers
+from app.core.idempotency import IDEMPOTENCY_KEY_PATTERN
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
 from app.core.openapi_responses import OPENAPI_ERROR_RESPONSES
@@ -239,6 +240,41 @@ PUBLIC_ENDPOINT_OPERATION_IDS: frozenset[str] = frozenset(
         "password_reset_request_endpoint",  # POST /api/v1/auth/password-reset/request — anonymous
         "password_reset_confirm_endpoint",  # POST /api/v1/auth/password-reset/confirm — anonymous
         "email_webhook",  # POST /api/v1/_internal/email/webhook — HMAC-signed transport callback
+    }
+)
+
+
+# Phase 66 IDM-04 / D-66-OPENAPI-PARAM — category-A operationIds that require the
+# Idempotency-Key header.  Frozenset literal so additions are visible in diff
+# (mirrors OWNER_ONLY discipline at app/core/permissions.py:63 and
+# LOCKED_AUDIT_EVENTS at app/core/audit.py:263, and PUBLIC_ENDPOINT_OPERATION_IDS
+# above).  This set is sourced verbatim from the v1.11 idempotency audit
+# (.planning/handoff/v1.11-idempotency-audit.md) and must equal the set of
+# operationIds carrying Depends(verify_idempotency) after 66-03 IDM-07 wiring.
+CATEGORY_A_OPERATION_IDS: frozenset[str] = frozenset(
+    {
+        "cancel_booking",  # POST /api/v1/bookings/{booking_id}/cancel — already wired
+        "cancel_membership",  # POST /api/v1/memberships/{id}/cancel — IDM-07 wired
+        "cancel_pt_package",  # POST /api/v1/pt-packages/{id}/cancel — already wired
+        "cancel_pt_session",  # POST /api/v1/pt-sessions/{id}/cancel — already wired
+        "cancel_slot",  # PATCH /api/v1/trainer-slots/{id}/cancel — already wired
+        "create_booking",  # POST /api/v1/bookings — already wired
+        "create_membership",  # POST /api/v1/memberships — already wired
+        "create_pt_package",  # POST /api/v1/pt-packages — already wired
+        "create_recurring_template",  # POST /api/v1/recurring-templates — already wired
+        "create_time_off",  # POST /api/v1/time-off — already wired
+        "deactivate_recurring_template",  # POST /api/v1/recurring-templates/{id}/deactivate
+        "delete_time_off",  # DELETE /api/v1/time-off/{id} — already wired
+        "freeze_membership",  # POST /api/v1/memberships/{id}/freeze — IDM-07 wired
+        "publish_slot",  # POST /api/v1/trainer-slots — already wired
+        "record_pt_session",  # POST /api/v1/pt-sessions — already wired
+        "refund_pt_package",  # POST /api/v1/pt-packages/{id}/refund — already wired (A)
+        "renew_membership",  # POST /api/v1/memberships/{id}/renew — IDM-07 wired
+        "sell_membership_qr",  # POST /api/v1/online-payments/memberships/{id}/sell-qr
+        "sell_membership_redirect",  # POST /api/v1/online-payments/memberships/{id}/sell
+        "sell_pt_package_qr",  # POST /api/v1/online-payments/pt-packages/{id}/sell-qr
+        "sell_pt_package_redirect",  # POST /api/v1/online-payments/pt-packages/{id}/sell
+        "unfreeze_membership",  # POST /api/v1/memberships/{id}/unfreeze — IDM-07 wired
     }
 )
 
@@ -621,8 +657,31 @@ def create_app() -> FastAPI:
         # Phase 64 FRZ-06 / D-64-RESPONSES-APPLY — inject shared error response objects
         # into components.responses so operations can reference them via $ref.
         schema["components"].setdefault("responses", {}).update(OPENAPI_ERROR_RESPONSES)
-        # Per-operation walk: (a) opt out public endpoints from global security,
-        # (b) replace inline 401/403/404/409/422/429 response values with $ref.
+        # Phase 66 IDM-04 / D-66-OPENAPI-PARAM — inject the reusable IdempotencyKey
+        # header parameter component.  The schema.pattern is sourced from the imported
+        # IDEMPOTENCY_KEY_PATTERN constant (IDM-02 lockstep: runtime validation and spec
+        # description always agree — divergence is impossible by construction).
+        # PITFALLS C-05 replay-semantics note is included in the description so
+        # integrators understand the retry contract.
+        schema["components"].setdefault("parameters", {})["IdempotencyKey"] = {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": True,
+            "description": (
+                "Client-supplied idempotency token (16-128 chars, [A-Za-z0-9_:-]). "
+                "The cached response is the response at time of first successful execution; "
+                "retries replay it verbatim. "
+                "For current resource state, use the resource's GET endpoint."
+            ),
+            "schema": {"type": "string", "pattern": IDEMPOTENCY_KEY_PATTERN},
+        }
+        # The $ref sentinel used in the per-op walk below (declared once to avoid
+        # repeating the string literal and to make the idempotency guard readable).
+        idem_ref: dict[str, str] = {"$ref": "#/components/parameters/IdempotencyKey"}
+        # Per-operation walk:
+        # (a) opt out public endpoints from global security,
+        # (b) replace inline 401/403/404/409/422/429 response values with $ref,
+        # (c) inject IdempotencyKey $ref into every category-A operation's parameters.
         # Mutation is order-independent (dict key lookup, no iteration-order dependency)
         # and idempotent (replacing an existing $ref with the same $ref is a no-op).
         for path_item in schema["paths"].values():
@@ -636,6 +695,10 @@ def create_app() -> FastAPI:
                             op_responses[status] = {
                                 "$ref": f"#/components/responses/{component_name}"
                             }
+                    if op.get("operationId") in CATEGORY_A_OPERATION_IDS:
+                        params: list[object] = op.setdefault("parameters", [])
+                        if idem_ref not in params:
+                            params.append(idem_ref)
         app.openapi_schema = schema
         return schema
 
