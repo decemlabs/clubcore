@@ -146,7 +146,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 66-03-PLAN.md — IDM-07 (wire verify_idempotency + orchestrator into membership freeze/unfreeze/renew/cancel + refunds per audit; ЮKassa webhook exclusion comment)
+- [x] 66-03-PLAN.md — IDM-07 (wire verify_idempotency + orchestrator into membership freeze/unfreeze/renew/cancel + refunds per audit; ЮKassa webhook exclusion comment)
 
 **Wave 4** *(blocked on Wave 1 + Wave 3)*
 
@@ -195,7 +195,7 @@ Plans:
 | 62.1. Finalize sportzal → clubcore rename | v1.10 | 9/9 | Complete | 2026-05-26 |
 | 63. Tech-Debt Sweep | v1.11 | 5/5 | Complete    | 2026-05-26 |
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
-| 66. Idempotency Hardening | v1.11 | 2/5 | In Progress|  |
+| 66. Idempotency Hardening | v1.11 | 3/5 | In Progress|  |
 | 65. Handoff Artifacts | v1.11 | 0/TBD | Not started | — |
 | 67. Operator-Pending Runbook Execution | v1.11 | 0/TBD | Not started | — |
 

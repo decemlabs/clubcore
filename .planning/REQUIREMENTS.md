@@ -45,7 +45,7 @@ Runs BEFORE Phase 65 because Phase 65 artifacts derive from the post-Phase-66 sp
 - [ ] **IDM-04**: CR-02b closed — `components.parameters.IdempotencyKey` reusable parameter added to `openapi.json`; every category-A endpoint references it via `$ref`; semantics documented in `clubcore-auth-runbook.md` (Phase 65 dependency).
 - [x] **IDM-05**: `verify_idempotency` user-scope security fix (PITFALLS Pitfall #7) — dependency binds `Depends(get_current_user)`; Redis key includes `user.id` (`cc:idem:{user_id}:{method}:{path}:{key}`); closes cross-user replay attack under multi-user admin (v1.6); existing 3 callsites (`POST /pt-packages`, `POST /pt-sessions`, `POST /bookings`) remain green; ЮKassa webhook explicitly NOT affected (it uses separate `cc:yk:webhook:*` dedup path) per **D-11-IDM-WEBHOOK** 2026-05-26.
 - [x] **IDM-06**: In-flight placeholder cleanup on exception (PITFALLS Pitfall #8) — `verify_idempotency` exception-aware: deletes `__in_flight__` placeholder on unknown exceptions (so retries don't see stuck `idempotency_in_flight` for 24h), stores error envelope on `AppError` (so retries replay the error consistently); integration test covers DB-rollback path.
-- [ ] **IDM-07**: All category-A endpoints have `Depends(verify_idempotency)` wired (currently 3 routes; expected ~7 more in `memberships` freeze/unfreeze/renew + `online_payments` create/refund + any remaining gaps from IDM-01); ЮKassa webhook explicitly excluded with code comment annotating the separate dedup path.
+- [x] **IDM-07**: All category-A endpoints have `Depends(verify_idempotency)` wired (currently 3 routes; expected ~7 more in `memberships` freeze/unfreeze/renew + `online_payments` create/refund + any remaining gaps from IDM-01); ЮKassa webhook explicitly excluded with code comment annotating the separate dedup path.
 
 ### Handoff Artifacts (Phase 65 — HND-*)
 
@@ -148,7 +148,7 @@ Populated by gsd-roadmapper during Phase 10 of `/gsd:new-milestone`.
 | IDM-04 | Phase 66 | Pending |
 | IDM-05 | Phase 66 | Complete |
 | IDM-06 | Phase 66 | Complete |
-| IDM-07 | Phase 66 | Pending |
+| IDM-07 | Phase 66 | Complete |
 | HND-01 | Phase 65 | Pending |
 | HND-02 | Phase 65 | Pending |
 | HND-03 | Phase 65 | Pending |
