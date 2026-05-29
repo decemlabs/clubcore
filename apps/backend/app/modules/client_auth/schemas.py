@@ -12,7 +12,7 @@ Decisions implemented:
 from datetime import date
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import EmailStr, Field
 
 from app.core.schemas import BackendSchemaBase
 
@@ -60,4 +60,4 @@ class ClientMePatchRequest(BackendSchemaBase):
     this endpoint; broader self-edit is deferred to a future phase.
     """
 
-    email: str | None = None
+    email: EmailStr | None = None
