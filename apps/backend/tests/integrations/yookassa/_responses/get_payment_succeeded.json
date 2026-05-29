@@ -12,5 +12,5 @@
   "paid": true,
   "refundable": true,
   "receipt_registration": "succeeded",
-  "metadata": {"sportzal_payment_id": "f1234567-89ab-4cde-8000-111111111111"}
+  "metadata": {"clubcore_payment_id": "f1234567-89ab-4cde-8000-111111111111"}
 }

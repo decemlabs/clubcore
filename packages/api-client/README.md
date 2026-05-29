@@ -1,6 +1,6 @@
-# @sportzal/api-client
+# @clubcore/api-client
 
-Типизированный transport для backend'а Sportzal. Публичная поверхность (D-10):
+Типизированный transport для backend'а clubcore. Публичная поверхность (D-10):
 
 - `request<P, M>(method, path, init?)` — единственная функция для запросов.
 - `ApiError` — класс ошибки, зеркалит backend `AppError` envelope (`code` / `message` / `fields?`).
@@ -9,7 +9,7 @@
 ## Usage
 
 ```typescript
-import { request, ApiError, type paths } from '@sportzal/api-client'
+import { request, ApiError, type paths } from '@clubcore/api-client'
 
 try {
   const me = await request('GET', '/api/v1/auth/me')
@@ -35,7 +35,7 @@ Convenience-обёртки (`get` / `post` / ...) **не** добавлены у
 `src/schema.d.ts` генерируется из `apps/backend/openapi.json`:
 
 ```bash
-pnpm --filter @sportzal/api-client codegen
+pnpm --filter @clubcore/api-client codegen
 ```
 
 Локально перед `pnpm dev` в `apps/admin-web` это выполняется автоматически через `predev` hook (см. `apps/admin-web/package.json`). Не редактируй `src/schema.d.ts` руками — CI откатит изменения через `git diff --exit-code` (Phase 9 API-07).

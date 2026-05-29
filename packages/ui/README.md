@@ -1,4 +1,4 @@
-# @sportzal/ui
+# @clubcore/ui
 
 Phase 1 placeholder — no code yet. Real implementation lands in a later phase.
 
