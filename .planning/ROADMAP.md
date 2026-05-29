@@ -188,7 +188,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 67-02-PLAN.md — RUN-06 Mailpit `profiles: ["dev"]` service (the only code change) + both-modes evidence
+- [x] 67-02-PLAN.md — RUN-06 Mailpit `profiles: ["dev"]` service (the only code change) + both-modes evidence
 
 **Wave 3** *(blocked on Wave 1)*
 
@@ -228,7 +228,7 @@ Plans:
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
 | 65. Handoff Artifacts | v1.11 | 4/4 | Complete    | 2026-05-29 |
-| 67. Operator-Pending Runbook Execution | v1.11 | 2/5 | In Progress|  |
+| 67. Operator-Pending Runbook Execution | v1.11 | 3/5 | In Progress|  |
 
 ---
 
