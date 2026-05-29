@@ -41,7 +41,7 @@ Runs BEFORE Phase 65 because Phase 65 artifacts derive from the post-Phase-66 sp
 
 - [x] **IDM-01**: Endpoint classification audit complete — every mutating endpoint (POST/PATCH/PUT/DELETE) in `apps/backend/app/api/v1/` classified as A (requires `Idempotency-Key` enforcement), B (exempt: read-only / webhook with separate dedup / idempotent-by-design), or C (currently inconsistent — to be moved to A); audit table committed to `.planning/handoff/v1.11-idempotency-audit.md`.
 - [x] **IDM-02**: CR-01 closed — `Idempotency-Key` semantics standardized: 16-128 chars, UUIDv4 conventional, Redis TTL standardized to **86400s (24h)** (was 3600s — matches ЮKassa webhook dedup window + Stripe convention), cached-response replay returns identical body+status+headers, request-body hash mismatch on same key → 422 (no silent 200).
-- [ ] **IDM-03**: CR-02 closed — integration tests for double-submit on the high-priority category-A endpoints in `memberships`, `online_payments`, `pt_packages`, `pt_sessions`, `bookings` (real Postgres, real Redis, ASGITransport); replay returns cached response without re-emitting audit events.
+- [x] **IDM-03**: CR-02 closed — integration tests for double-submit on the high-priority category-A endpoints in `memberships`, `online_payments`, `pt_packages`, `pt_sessions`, `bookings` (real Postgres, real Redis, ASGITransport); replay returns cached response without re-emitting audit events.
 - [x] **IDM-04**: CR-02b closed — `components.parameters.IdempotencyKey` reusable parameter added to `openapi.json`; every category-A endpoint references it via `$ref`; semantics documented in `clubcore-auth-runbook.md` (Phase 65 dependency).
 - [x] **IDM-05**: `verify_idempotency` user-scope security fix (PITFALLS Pitfall #7) — dependency binds `Depends(get_current_user)`; Redis key includes `user.id` (`cc:idem:{user_id}:{method}:{path}:{key}`); closes cross-user replay attack under multi-user admin (v1.6); existing 3 callsites (`POST /pt-packages`, `POST /pt-sessions`, `POST /bookings`) remain green; ЮKassa webhook explicitly NOT affected (it uses separate `cc:yk:webhook:*` dedup path) per **D-11-IDM-WEBHOOK** 2026-05-26.
 - [x] **IDM-06**: In-flight placeholder cleanup on exception (PITFALLS Pitfall #8) — `verify_idempotency` exception-aware: deletes `__in_flight__` placeholder on unknown exceptions (so retries don't see stuck `idempotency_in_flight` for 24h), stores error envelope on `AppError` (so retries replay the error consistently); integration test covers DB-rollback path.
@@ -144,7 +144,7 @@ Populated by gsd-roadmapper during Phase 10 of `/gsd:new-milestone`.
 | FRZ-08 | Phase 64 | Complete |
 | IDM-01 | Phase 66 | Complete |
 | IDM-02 | Phase 66 | Complete |
-| IDM-03 | Phase 66 | Pending |
+| IDM-03 | Phase 66 | Complete |
 | IDM-04 | Phase 66 | Complete |
 | IDM-05 | Phase 66 | Complete |
 | IDM-06 | Phase 66 | Complete |
