@@ -79,5 +79,13 @@ services:
     ports:
       - "6379:6379"
 
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: ["dev"]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
 volumes:
   postgres-data:
