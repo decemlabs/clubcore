@@ -5,7 +5,7 @@
   "type": "module",
   "description": "clubcore monorepo root — handoff tooling entry point (Phase 65).",
   "scripts": {
-    "docs": "redocly preview-docs apps/backend/openapi.json --port 8080",
+    "docs": "redocly build-docs apps/backend/openapi.json -o .docs-site/index.html",
     "postman:gen": "openapi2postmanv2 -s apps/backend/openapi.json -o tools/newman/base-collection.json -O folderStrategy=Tags,requestNameSource=summary",
     "postman:augment": "node tools/newman/augment-collection.mjs",
     "newman": "newman run .planning/handoff/v1.11-clubcore.postman_collection.json -e tools/newman/clubcore-smoke.postman_environment.json --folder smoke --env-var \"password=$SEED_VERIFY_OWNER_PASSWORD\" --bail"

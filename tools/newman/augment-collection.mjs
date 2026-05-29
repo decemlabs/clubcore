@@ -73,7 +73,7 @@ function expectedStatus(item) {
 // Map: url path suffix → assertion type
 // 'list'  → pagination envelope { items (array), total (number) }
 // 'data'  → { data } wrapper
-// 'login' → auth envelope { email, role } (login response)
+// 'login' → auth envelope { data: { user: { id, role, fullName } } } (cookie-based; no token/email in body)
 // 'me'    → { data } wrapper (single-resource auth/me)
 
 const BODY_SHAPE_MAP = {
@@ -119,8 +119,10 @@ function bodyShapeLines(shapeType) {
     return [
       'pm.test("login response has expected fields", function () {',
       '  const json = pm.response.json();',
-      '  pm.expect(json).to.have.property("email");',
-      '  pm.expect(json).to.have.property("role");',
+      '  pm.expect(json).to.have.property("data");',
+      '  pm.expect(json.data).to.have.property("user");',
+      '  pm.expect(json.data.user).to.have.property("id");',
+      '  pm.expect(json.data.user).to.have.property("role");',
       '});',
       '// Extract clubcore_csrf cookie into csrfToken collection variable.',
       '// The cc_access and cc_refresh cookies are httpOnly — Postman\'s cookie jar',
@@ -365,16 +367,23 @@ walkRequests(collection.item, (item) => {
   collection.item = collection.item.filter((f) => (f.name || '').toLowerCase() !== 'smoke')
 
   // Helper: build a minimal Postman v2.1 GET request item
-  function makeGetItem(name, path) {
+  function makeGetItem(name, fullPath) {
+    const [pathOnly, qs] = fullPath.split('?')
+    const query = qs
+      ? qs.split('&').map((kv) => {
+          const [key, value] = kv.split('=')
+          return { key, value }
+        })
+      : []
     return {
       name,
       request: {
         method: 'GET',
         url: {
-          raw: '{{baseUrl}}' + path,
+          raw: '{{baseUrl}}' + fullPath,
           host: ['{{baseUrl}}'],
-          path: path.replace(/^\//, '').split('/'),
-          query: [],
+          path: pathOnly.replace(/^\//, '').split('/'),
+          query,
           variable: [],
         },
         header: [{ key: 'Accept', value: 'application/json' }],
@@ -425,8 +434,10 @@ walkRequests(collection.item, (item) => {
             'pm.response.to.have.status(200);',
             'pm.test("login response has expected fields", function () {',
             '  const json = pm.response.json();',
-            '  pm.expect(json).to.have.property("email");',
-            '  pm.expect(json).to.have.property("role");',
+            '  pm.expect(json).to.have.property("data");',
+            '  pm.expect(json.data).to.have.property("user");',
+            '  pm.expect(json.data.user).to.have.property("id");',
+            '  pm.expect(json.data.user).to.have.property("role");',
             '});',
             '// Extract clubcore_csrf cookie into csrfToken collection variable.',
             '// The cc_access and cc_refresh cookies are httpOnly — cookie jar carries them.',
@@ -454,7 +465,10 @@ walkRequests(collection.item, (item) => {
     makeGetItem('smoke: Bookings list', '/api/v1/bookings'),
     makeGetItem('smoke: Trainers list', '/api/v1/trainers'),
     makeGetItem('smoke: Payments list', '/api/v1/payments'),
-    makeGetItem('smoke: Reports/clients', '/api/v1/reports/clients'),
+    makeGetItem(
+      'smoke: Reports/clients',
+      '/api/v1/reports/clients?fromDate=2026-01-01&toDate=2026-12-31',
+    ),
     makeGetItem('smoke: Audit-log list', '/api/v1/audit-log'),
   ]
 

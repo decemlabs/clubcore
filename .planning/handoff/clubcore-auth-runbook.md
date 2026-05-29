@@ -34,7 +34,7 @@ curl -i -s -X POST http://localhost:8000/api/v1/auth/login \
 # → Set-Cookie: cc_access=...; HttpOnly; Path=/; SameSite=Lax
 # → Set-Cookie: cc_refresh=...; HttpOnly; Path=/api/v1/auth; SameSite=Strict
 # → Set-Cookie: clubcore_csrf=...; Path=/; SameSite=Lax
-# → {"data":{"user":{"id":"...","email":"verify_owner@local.dev","role":"owner",...}}}
+# → {"data":{"user":{"id":"...","role":"owner","fullName":"..."}}}   # cookie-based: no token/email in body
 
 # Вход reception (тот же endpoint, другая роль)
 curl -i -s -X POST http://localhost:8000/api/v1/auth/login \
@@ -481,12 +481,14 @@ const csrf = document.cookie
 - **Full contract:** `apps/backend/openapi.json` (source-of-truth) +
   `packages/api-client/src/schema.d.ts` (TypeScript types, генерируются через
   `pnpm --filter @clubcore/api-client codegen`).
-- **API doc-site (local-only):** `pnpm docs` запускает `redocly preview-docs
-  apps/backend/openapi.json --port 8080` — приватный артефакт, не публикуется
-  (D-11-DOCS-PRIVATE).
+- **API doc-site (local-only):** `pnpm docs` запускает `redocly build-docs
+  apps/backend/openapi.json -o .docs-site/index.html` — приватный статический
+  HTML-артефакт (`.docs-site/` в .gitignore), открывается в браузере, не
+  публикуется (D-11-DOCS-PRIVATE). (`preview-docs` удалён в Redocly v2 —
+  используем `build-docs`.)
 - **Newman smoke:** `pnpm newman run --folder smoke` (local handoff smoke, not a CI
   gate; D-11-NEWMAN-LOCAL).
-- **v2.0:** clubcore_csrf → clubcore_csrf rename + Newman как blocking CI gate.
+- **v2.0:** Newman как blocking CI gate (D-11-NEWMAN-LOCAL). _(Cookie-rename `sz_*`/`sportzal_csrf` → `cc_*`/`clubcore_csrf` выполнен 2026-05-29 в quick task 260529-ll9 — больше не v2.0-долг.)_
 
 ## Operator
 
