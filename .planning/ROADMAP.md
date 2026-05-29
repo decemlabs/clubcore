@@ -64,7 +64,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] 68-01-PLAN.md — DB foundation: OtpCode.client_id + XOR CHECK + client_refresh_tokens table (Alembic 0043/0044)
 - [x] 68-02-PLAN.md — Client JWT + cookie primitives in security.py (decode_client_token aud=client, cc_client_* cookies)
 - [x] 68-03-PLAN.md — Composition root: ClientPrincipal, register_client_loader, require_client, verify_client_csrf
-- [ ] 68-04-PLAN.md — Client OTP + session service: anti-oracle request, verify, 3-branch rotate, logout, email-only PATCH
+- [x] 68-04-PLAN.md — Client OTP + session service: anti-oracle request, verify, 3-branch rotate, logout, email-only PATCH
 - [ ] 68-05-PLAN.md — Schemas + /api/v1/client router (6 handlers) + mount + create_app loader wiring
 - [ ] 68-06-PLAN.md — Verification: two-principal isolation, IDOR sweep, anti-oracle byte-parity, lifecycle, CISO-01 guard
 **UI hint**: yes

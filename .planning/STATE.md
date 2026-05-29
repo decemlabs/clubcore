@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
-stopped_at: Phase 68 Plan 3 complete — ready for Plan 4
-last_updated: "2026-05-29T17:09:14Z"
+stopped_at: Phase 68 Plan 4 complete — ready for Plan 5
+last_updated: "2026-05-29T20:35:00Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
-  percent: 50
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 ## Current Position
 
 Phase: 68 (client-auth-foundation) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-05-29
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 67%
 
 ## v2.0 Roadmap Summary
 
@@ -57,6 +57,7 @@ Progress: [█████░░░░░] 50%
 | Phase 68-client-auth-foundation P68-01 | 10min | 3 tasks | 5 files |
 | Phase 68-client-auth-foundation P68-02 | 4m | 2 tasks | 1 files |
 | Phase 68-client-auth-foundation P68-03 | 4m | 2 tasks | 2 files |
+| Phase 68-client-auth-foundation P68-04 | 15m | 3 tasks | 3 files |
 
 *Updated after each plan completion*
 
@@ -71,6 +72,8 @@ Progress: [█████░░░░░] 50%
 - **D-20-OPENAPI**: Single `openapi.json` extended additively — `Client-Portal` tag + `client_` operationId prefix; staff paths byte-identical to `contract-freeze-v1.11.0`
 - **D-20-PWA-ROUTER**: react-router v6 is KEPT in `client-pwa` — no TanStack Router migration
 - **D-20-IDOR**: Every client-scoped endpoint MUST carry mandatory `client_id` repo param + `assert_owns()` on get-by-ID → 404-collapse (anti-oracle); IDOR parametrized sweep covers all owned resource types
+
+- **D-68-04-SENDER**: `register_client_otp_sender` composition-root slot — bot sender None until plan 05 wires it; service silently skips DM in test mode
 
 ### Blockers/Concerns
 
@@ -89,6 +92,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 | v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 — deferred |
 ## Session Continuity
 
-Last session: 2026-05-29T17:09:14Z
-Stopped at: Phase 68 Plan 3 complete — ready for Plan 4
-Resume: Execute 68-04-PLAN.md next.
+Last session: 2026-05-29T20:35:00Z
+Stopped at: Phase 68 Plan 4 complete — ready for Plan 5
+Resume: Execute 68-05-PLAN.md next.
