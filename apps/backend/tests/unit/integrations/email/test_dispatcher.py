@@ -9,6 +9,14 @@ Covers:
   - ``_get_arq_pool`` defensive raise until ``register_arq_pool`` runs
   - ``audit_correlation_id=None`` at the Protocol surface still produces a UUID
     on the envelope (uuid4() fallback per the dispatcher's docstring)
+
+260529-olc RUN-03-F1 additions:
+  - ``_resolve_template`` resolves all 4 online-payment template_ids (no KeyError)
+  - Each template's locked subject matches the owner-signed-off literal
+  - Each template renders with the exact dispatcher-supplied vars; body contains
+    locked phrasing substrings; var values appear; no leftover ``{{``
+  - End-to-end ``enqueue_email_dispatch`` happy-path for SUCCEEDED confirms the
+    rendered envelope carries the locked subject + interpolated body fragment
 """
 
 from __future__ import annotations
@@ -148,3 +156,154 @@ async def test_enqueue_email_dispatch_raises_when_pool_unregistered() -> None:
             audit_correlation_id=None,
             otp_code="123456",
         )
+
+
+# --------------------------------------------------------------------- 260529-olc RUN-03-F1
+# _resolve_template + render tests for all 4 online-payment template_ids.
+
+
+@pytest.mark.parametrize(
+    ("template_id", "expected_subject"),
+    [
+        ("EMAIL_ONLINE_PAYMENT_SUCCEEDED", "Оплата получена"),  # noqa: RUF001
+        ("EMAIL_ONLINE_PAYMENT_REFUNDED", "Возврат обработан"),  # noqa: RUF001
+        ("EMAIL_ONLINE_PAYMENT_CANCELED", "Платёж отменён — требуется проверка"),  # noqa: RUF001
+        (
+            "EMAIL_FISCAL_RECEIPT_FAILED",
+            "Ошибка фискального чека — требуется проверка",  # noqa: RUF001
+        ),
+    ],
+)
+def test_online_payment_templates_resolve_with_locked_subjects(
+    template_id: str,
+    expected_subject: str,
+) -> None:
+    """All 4 online-payment template_ids resolve via _resolve_template (no KeyError).
+
+    Asserts the locked subject literal and confirms html/text have a .render method.
+    """
+    tpl = _resolve_template(template_id)
+    assert tpl.subject == expected_subject
+    assert hasattr(tpl.html, "render")
+    assert hasattr(tpl.text, "render")
+
+
+def test_online_payment_succeeded_renders_with_dispatcher_vars() -> None:
+    """EMAIL_ONLINE_PAYMENT_SUCCEEDED renders with first_name + amount_rub vars."""
+    tpl = _resolve_template("EMAIL_ONLINE_PAYMENT_SUCCEEDED")
+    rendered_html: str = tpl.html.render(first_name="Анна", amount_rub="1 500 ₽")  # noqa: RUF001
+    rendered_text: str = tpl.text.render(first_name="Анна", amount_rub="1 500 ₽")  # noqa: RUF001
+    # Locked phrasing must be present.
+    assert "успешно получена" in rendered_html  # noqa: RUF001
+    assert "успешно получена" in rendered_text  # noqa: RUF001
+    # Supplied var values must appear in output.
+    assert "Анна" in rendered_html  # noqa: RUF001
+    assert "Анна" in rendered_text  # noqa: RUF001
+    assert "1 500 ₽" in rendered_html
+    assert "1 500 ₽" in rendered_text
+    # No leftover template markers.
+    assert "{{" not in rendered_html
+    assert "{{" not in rendered_text
+
+
+def test_online_payment_refunded_renders_with_dispatcher_vars() -> None:
+    """EMAIL_ONLINE_PAYMENT_REFUNDED renders with first_name + amount_rub vars."""
+    tpl = _resolve_template("EMAIL_ONLINE_PAYMENT_REFUNDED")
+    rendered_html: str = tpl.html.render(first_name="Иван", amount_rub="2 000 ₽")  # noqa: RUF001
+    rendered_text: str = tpl.text.render(first_name="Иван", amount_rub="2 000 ₽")  # noqa: RUF001
+    # Locked phrasing must be present.
+    assert "Возврат на сумму" in rendered_html  # noqa: RUF001
+    assert "Возврат на сумму" in rendered_text  # noqa: RUF001
+    # Supplied var values must appear in output.
+    assert "Иван" in rendered_html  # noqa: RUF001
+    assert "Иван" in rendered_text  # noqa: RUF001
+    assert "2 000 ₽" in rendered_html
+    assert "2 000 ₽" in rendered_text
+    # No leftover template markers.
+    assert "{{" not in rendered_html
+    assert "{{" not in rendered_text
+
+
+def test_online_payment_canceled_renders_with_dispatcher_vars() -> None:
+    """EMAIL_ONLINE_PAYMENT_CANCELED renders with payment_id + yookassa_payment_id vars."""
+    tpl = _resolve_template("EMAIL_ONLINE_PAYMENT_CANCELED")
+    rendered_html: str = tpl.html.render(
+        payment_id="pay-abc-123",
+        yookassa_payment_id="yk-xyz-789",
+    )
+    rendered_text: str = tpl.text.render(
+        payment_id="pay-abc-123",
+        yookassa_payment_id="yk-xyz-789",
+    )
+    # Locked phrasing must be present.
+    assert "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА]" in rendered_html  # noqa: RUF001
+    assert "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА]" in rendered_text  # noqa: RUF001
+    assert "yookassa_payment_id:" in rendered_html
+    assert "yookassa_payment_id:" in rendered_text
+    # Supplied var values must appear in output.
+    assert "pay-abc-123" in rendered_html
+    assert "pay-abc-123" in rendered_text
+    assert "yk-xyz-789" in rendered_html
+    assert "yk-xyz-789" in rendered_text
+    # No leftover template markers.
+    assert "{{" not in rendered_html
+    assert "{{" not in rendered_text
+
+
+def test_fiscal_receipt_failed_renders_with_dispatcher_vars() -> None:
+    """EMAIL_FISCAL_RECEIPT_FAILED renders with payment_id + failure_reason vars."""
+    tpl = _resolve_template("EMAIL_FISCAL_RECEIPT_FAILED")
+    rendered_html: str = tpl.html.render(
+        payment_id="pay-def-456",
+        failure_reason="timeout from ЮKassa",  # noqa: RUF001
+    )
+    rendered_text: str = tpl.text.render(
+        payment_id="pay-def-456",
+        failure_reason="timeout from ЮKassa",  # noqa: RUF001
+    )
+    # Locked phrasing must be present.
+    assert "Ошибка формирования фискального чека" in rendered_html  # noqa: RUF001
+    assert "Ошибка формирования фискального чека" in rendered_text  # noqa: RUF001
+    assert "причина:" in rendered_html  # noqa: RUF001
+    assert "причина:" in rendered_text  # noqa: RUF001
+    # Supplied var values must appear in output.
+    assert "pay-def-456" in rendered_html
+    assert "pay-def-456" in rendered_text
+    assert "timeout from" in rendered_html
+    assert "timeout from" in rendered_text
+    # No leftover template markers.
+    assert "{{" not in rendered_html
+    assert "{{" not in rendered_text
+
+
+@pytest.mark.asyncio
+async def test_enqueue_email_dispatch_online_payment_succeeded_end_to_end() -> None:
+    """End-to-end: enqueue_email_dispatch for EMAIL_ONLINE_PAYMENT_SUCCEEDED renders
+    and enqueues an envelope with the locked subject and interpolated body fragment.
+    """
+    pool = _FakeArqPool()
+    register_arq_pool(pool)  # type: ignore[arg-type]
+    correlation = uuid4()
+
+    await enqueue_email_dispatch(
+        template_id="EMAIL_ONLINE_PAYMENT_SUCCEEDED",
+        to="client@example.com",
+        audit_correlation_id=correlation,
+        first_name="Мария",  # noqa: RUF001
+        amount_rub="3 000 ₽",
+    )
+
+    assert len(pool.calls) == 1
+    args, kwargs = pool.calls[0]
+    assert args == ("dispatch_email",)
+    assert kwargs["_max_tries"] == 2
+    assert kwargs["_expires"] == 20
+    env = kwargs["envelope_kwargs"]
+    assert env["to"] == "client@example.com"
+    assert env["template_id"] == "EMAIL_ONLINE_PAYMENT_SUCCEEDED"
+    assert env["subject"] == "Оплата получена"  # noqa: RUF001
+    assert "Мария" in env["html"]  # noqa: RUF001
+    assert "3 000 ₽" in env["html"]
+    assert "успешно получена" in env["html"]  # noqa: RUF001
+    assert "{{" not in env["html"]
+    assert env["audit_correlation_id"] == str(correlation)

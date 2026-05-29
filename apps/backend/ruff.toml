@@ -60,6 +60,10 @@ external = ["SVC"]
 # ambiguous Cyrillic letter is flagged for re-review). Currently-shipped copy
 # uses unambiguous Cyrillic only, so the noqa directives are "unused" today.
 "app/modules/online_payments/email_templates.py" = ["RUF100"]
+# 260529-olc RUN-03-F1: the render-assertion tests carry disciplinary
+# `# noqa: RUF001` tripwires on locked Russian phrasing literals mirroring the
+# template-module precedent (test_actor_display_format.py, line 62 above).
+"tests/unit/integrations/email/test_dispatcher.py" = ["RUF100"]
 # Phase 45 NOTIFY-12 (plan 45-02): same disciplinary `# noqa: RUF001` tripwire
 # on the Cyrillic defensive fallback "Сотрудник" in format_actor_display (and
 # the parametrize cases that exercise it). Today's literals are unambiguous
