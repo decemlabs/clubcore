@@ -336,6 +336,28 @@ class PtSessionCancelledPayload(BaseModel):
     package_reactivated: bool
 
 
+class PtSessionCreditRestoredPayload(BaseModel):
+    """Payload schema for ("pt_session_credit_restored", "pt_package") — Phase 999.1 WR-06.
+
+    Emitted when an owner-initiated cancellation voids a PT booking that had
+    already consumed a prepaid session.  The corresponding `pt_sessions` row
+    is marked cancelled in the same UoW and `pt_packages.sessions_remaining`
+    is incremented by 1.
+
+    resource_type is ``"pt_package"`` because the row being mutated is the
+    pt_package balance, mirroring the existing ``pt_package_*`` event family.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: UUID
+    pt_package_id: UUID
+    booking_id: UUID
+    cancel_reason: str
+    sessions_remaining_before: int
+    sessions_remaining_after: int
+
+
 # ---------------------------------------------------------------------------
 # v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-25 / C-06)
 # Schedule slot lifecycle payloads:
@@ -1239,6 +1261,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # PT-sessions (Phase 34 PT-21)
     ("pt_session_recorded", "pt_session"): PtSessionRecordedPayload,
     ("pt_session_cancelled", "pt_session"): PtSessionCancelledPayload,
+    # PT-session credit restore (Phase 999.1 WR-06)
+    ("pt_session_credit_restored", "pt_package"): PtSessionCreditRestoredPayload,
     # v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-25)
     ("slot_published", "schedule_slot"): SlotPublishedPayload,
     ("slot_cancelled", "schedule_slot"): SlotCancelledPayload,

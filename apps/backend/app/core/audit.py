@@ -348,6 +348,8 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # PT-sessions (Phase 34 PT-21):
         ("pt_session_recorded", "pt_session"),
         ("pt_session_cancelled", "pt_session"),
+        # PT-session credit restore on owner-cancel (Phase 999.1 WR-06):
+        ("pt_session_credit_restored", "pt_package"),
         # v1.5 (Phase 37 lock — emitted in Phase 38 per INFRA-24 / C-06)
         # Schedule slot lifecycle (Phase 38 SLOT-01 / SLOT-07 / SLOT-09):
         ("slot_published", "schedule_slot"),
