@@ -234,10 +234,10 @@ def test_locked_audit_events_has_expected_count() -> None:
     webhook (Plan 51-09 / D-51-17). The v1.7 count grows 11 → 14 and the
     frozenset total becomes 82 + 3 = 85. See 51-02-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 93, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 93 "
+    assert len(LOCKED_AUDIT_EVENTS) == 100, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 100 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
-        "+ 4 v1.9/P58 + 4 v1.9/P59), "
+        "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v1.9 Phase 58 INFRA-15 / D-58-16: +4 payroll lifecycle pairs pre-registered
@@ -247,6 +247,11 @@ def test_locked_audit_events_has_expected_count() -> None:
     # pre-registered before any emit callsite — recurring_slot_template_created,
     # recurring_slot_template_cancelled, trainer_time_off_created,
     # trainer_time_off_cancelled. Count grows 89 → 93.
+    # Pre-Phase 68: +1 event added before this count was updated. Count: 93 → 94.
+    # v2.0 Phase 68 CAUTH-01..06 / D-01/D-09: +6 client auth lifecycle pairs
+    # pre-registered before any emit callsite — client_otp_requested/consumed,
+    # client_refresh_failed, client_family_reuse_detected, client_session_revoked,
+    # client_me_updated. Count grows 94 → 100.
 
 
 def test_locked_audit_events_includes_v16_pairs() -> None:

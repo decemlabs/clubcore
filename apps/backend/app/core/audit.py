@@ -431,6 +431,15 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("recurring_slot_template_cancelled", "schedule_slot"),
         ("trainer_time_off_created", "trainer"),
         ("trainer_time_off_cancelled", "trainer"),
+        # v2.0 (Phase 68 lock — CAUTH-01..06 / D-01/D-09; client auth stack)
+        # Client OTP + session lifecycle events for the isolated client principal.
+        # Pre-registered per INFRA-15 discipline — extend BEFORE any callsite.
+        ("client_otp_requested", "otp"),
+        ("client_otp_consumed", "otp"),
+        ("client_refresh_failed", "session"),
+        ("client_family_reuse_detected", "session"),
+        ("client_session_revoked", "session"),
+        ("client_me_updated", "client"),
     }
 )
 
