@@ -1,0 +1,22 @@
+{
+  "name": "clubcore-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "clubcore monorepo root — handoff tooling entry point (Phase 65).",
+  "scripts": {
+    "docs": "redocly preview-docs apps/backend/openapi.json --port 8080",
+    "postman:gen": "openapi2postmanv2 -s apps/backend/openapi.json -o tools/newman/base-collection.json -O folderStrategy=Tags,requestNameSource=summary",
+    "postman:augment": "node tools/newman/augment-collection.mjs",
+    "newman": "newman run .planning/handoff/v1.11-clubcore.postman_collection.json -e tools/newman/clubcore-smoke.postman_environment.json --bail"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.31.4",
+    "newman": "6.2.2",
+    "openapi-to-postmanv2": "6.0.1"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
