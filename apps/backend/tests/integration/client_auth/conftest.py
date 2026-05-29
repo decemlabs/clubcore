@@ -134,13 +134,19 @@ async def unlinked_client(db_session: AsyncSession, seeded_staff: User) -> Clien
 
 @pytest_asyncio.fixture
 async def soft_deleted_client(db_session: AsyncSession, seeded_staff: User) -> Client:
-    """Soft-deleted Client — D-02 silent no-op (deleted_at IS NOT NULL)."""
+    """Soft-deleted Client with Telegram link — deleted_at IS NOT NULL gate tested (IN-02).
+
+    telegram_user_id is set to a real value so the only distinguishing factor is
+    deleted_at. This ensures the deleted_at.is_(None) filter in the service is
+    exercised directly: if the filter were accidentally removed, this fixture would
+    no longer be blocked by the unlinked-phone guard and the test would catch it.
+    """
     suffix = uuid4().hex[:6]
     client = Client(
         first_name="Deleted",
         last_name=f"Client{suffix}",
         phone=_SOFT_DELETED_PHONE,
-        telegram_user_id=None,
+        telegram_user_id=987_654_321,  # IN-02: was None — now isolates the deleted_at filter
         created_by_user_id=seeded_staff.id,
         deleted_at=datetime.now(tz=UTC),
     )

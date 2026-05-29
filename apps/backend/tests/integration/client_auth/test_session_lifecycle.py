@@ -38,6 +38,7 @@ from app.modules.client_auth.rate_limit import (
     _DAILY_WINDOW,
 )
 from app.modules.clients.models import Client
+from tests.integration.client_auth.conftest import UNKNOWN_PHONE
 
 pytestmark = pytest.mark.asyncio
 
@@ -318,4 +319,78 @@ async def test_otp_brute_force_blocked(
     )
     assert further_wrong.json().get("code") == "otp_max_attempts", (
         f"Expected code='otp_max_attempts' beyond max attempts: {further_wrong.json()}"
+    )
+
+    # IN-01: after OtpMaxAttempts, a correct code is still accepted (intentional design —
+    # see WR-03 comment in service.py). This assertion documents the expected behavior:
+    # the OTP is NOT locked by max-attempt exhaustion; correct code still grants a session.
+    # This prevents silent regression regardless of which direction the behavior goes.
+    correct_resp = await async_client.post(
+        "/api/v1/client/otp/verify",
+        json={"phone": linked_client.phone, "code": raw_code},
+    )
+    assert correct_resp.status_code == 200, (
+        "IN-01: correct code after OtpMaxAttempts should still succeed "
+        f"(intentional design per WR-03): {correct_resp.text}"
+    )
+
+
+async def test_verify_otp_oracle_parity(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    linked_client: Client,
+    redis_clean: Redis,
+) -> None:
+    """CR-02: verify endpoint returns byte-identical 401 for unknown phone AND expired OTP.
+
+    Closing the 410-vs-401 enumeration oracle: an attacker probing /otp/verify
+    must NOT be able to distinguish "this phone has no active OTP" from "this phone
+    had a recently-expired OTP". Both must produce the same status code and body.
+
+    Test steps:
+      1. Verify with an unknown phone (no Client row) → assert 401 + code.
+      2. Request an OTP for linked_client, then expire it via direct DB manipulation.
+      3. Verify with the linked_client's phone → assert same 401 + same body bytes.
+    """
+    _ = redis_clean
+
+    # Step 1: unknown phone → 401 invalid_session
+    unknown_resp = await async_client.post(
+        "/api/v1/client/otp/verify",
+        json={"phone": UNKNOWN_PHONE, "code": "123456"},
+    )
+    assert unknown_resp.status_code == 401, (
+        f"Expected 401 for unknown phone, got {unknown_resp.status_code}: {unknown_resp.text}"
+    )
+
+    # Step 2: request an OTP for the linked client, then expire it in the DB
+    await _request_otp_and_get_raw_code(async_client, db_session, linked_client)
+
+    otp_row = await db_session.scalar(
+        select(OtpCode).where(
+            OtpCode.client_id == linked_client.id,
+            OtpCode.consumed_at.is_(None),
+        )
+    )
+    assert otp_row is not None, "OTP row not found after request"
+    # Force expiry: set expires_at to a moment in the past
+    otp_row.expires_at = datetime.now(tz=UTC) - timedelta(seconds=10)
+    await db_session.commit()
+
+    # Step 3: verify with expired OTP → must match unknown-phone 401 exactly (CR-02)
+    expired_resp = await async_client.post(
+        "/api/v1/client/otp/verify",
+        json={"phone": linked_client.phone, "code": "123456"},
+    )
+    assert expired_resp.status_code == 401, (
+        f"CR-02: expired OTP must return 401 (not 410), "
+        f"got {expired_resp.status_code}: {expired_resp.text}"
+    )
+
+    # Body must be byte-identical — same JSON payload, same code field
+    assert unknown_resp.content == expired_resp.content, (
+        "CR-02: unknown-phone and expired-OTP responses must be byte-identical "
+        f"(oracle closed).\n"
+        f"  unknown phone body : {unknown_resp.text}\n"
+        f"  expired OTP body   : {expired_resp.text}"
     )
