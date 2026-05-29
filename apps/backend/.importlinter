@@ -39,6 +39,13 @@ modules =
     # goes via the PayrollClawbackRecorder Protocol slot in app.core.dependencies
     # (D-58-20), so the pt_packages → payroll import remains forbidden as
     # intended (mirror Phase 32 D-32-14 PaymentRefunder pattern).
+    app.modules.client_auth
+    # Phase 68 CAUTH-01..06 / CISO-01..05 — client auth module registered here.
+    # Cross-module reads (auth.exceptions, auth.models for OtpCode, clients.models
+    # for Client lookup) are declared below in ignore_imports. The isolation boundary
+    # is enforced: client_auth must never import staff-only modules (billing,
+    # memberships, etc.). The auth/clients cross-module edges are the minimum
+    # required for shared OTP infrastructure and phone-based client lookup (D-03).
     app.modules.reports
     # Phase 54 INFRA-41 / D-54-09 — reports module registered preemptively
     # (INFRA-15 discipline, mirrors Phases 47/51). Read-only aggregator reads
@@ -155,6 +162,15 @@ ignore_imports =
     app.modules.online_refunds.settle -> app.modules.pt_packages.models
     app.modules.online_refunds.settle -> app.modules.pt_packages.repository
     app.modules.online_refunds.cron -> app.modules.payments.repository
+    # Phase 68 CAUTH-01..06 — client OTP service reuses shared OTP infrastructure
+    # (OtpCode model + failure exceptions) and looks up clients by phone.
+    # Narrow scope: only service.py consumes the cross-module primitives.
+    # auth.exceptions: OtpExpired / OtpInvalid / OtpMaxAttempts (CAUTH-06 brute-force).
+    # auth.models: OtpCode (D-03 shared OTP table with client_id FK column).
+    # clients.models: Client (phone-first lookup + telegram_user_id DM target).
+    app.modules.client_auth.service -> app.modules.auth.exceptions
+    app.modules.client_auth.service -> app.modules.auth.models
+    app.modules.client_auth.service -> app.modules.clients.models
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear
