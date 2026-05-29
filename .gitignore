@@ -23,3 +23,6 @@ pnpm-debug.log*
 yarn-debug.log*
 npm-debug.log*
 .planning/milestones/v1.3-verification-evidence/
+
+# Redocly static doc-site build output (D-11-DOCS-PRIVATE — private artifact, never published)
+.docs-site/
