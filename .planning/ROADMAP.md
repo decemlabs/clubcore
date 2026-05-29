@@ -196,7 +196,7 @@ Plans:
 
 **Wave 4** *(blocked on Waves 1 + 3)*
 
-- [ ] 67-04-PLAN.md — RUN-02 RU email (N/A-until-production) + RUN-03 19-template owner countersign register
+- [x] 67-04-PLAN.md — RUN-02 RU email (N/A-until-production) + RUN-03 19-template owner countersign register
 
 **Wave 5** *(blocked on Waves 1 + 4)*
 
@@ -228,7 +228,7 @@ Plans:
 | 64. Contract Freeze — OpenAPI Curation | v1.11 | 7/7 | Complete    | 2026-05-28 |
 | 66. Idempotency Hardening | v1.11 | 5/5 | Complete    | 2026-05-29 |
 | 65. Handoff Artifacts | v1.11 | 4/4 | Complete    | 2026-05-29 |
-| 67. Operator-Pending Runbook Execution | v1.11 | 3/5 | In Progress|  |
+| 67. Operator-Pending Runbook Execution | v1.11 | 4/5 | In Progress|  |
 
 ---
 
