@@ -60,6 +60,8 @@ from app.core.dependencies import (
     register_active_membership_resolver,
     register_active_pt_package_resolver,
     register_booking_completer,
+    register_booking_for_client_canceller,  # Phase 70 D-70-05 — HTTP-only single-wire.
+    register_booking_for_client_creator,  # Phase 70 D-70-01 — HTTP-only single-wire.
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
     register_client_loader,  # Phase 68 D-08 — client principal composition-root slot.
@@ -569,6 +571,13 @@ def create_app() -> FastAPI:
     register_slot_by_id_resolver(schedule_service.resolve_slot_by_id)
     register_booking_slot_restorer(schedule_service.restore_slot_to_active)
     register_booking_completer(bookings_service.complete_booking)
+
+    # Phase 70 D-70-01 / D-70-05 / D-20-MODULE — client booking write + cancel
+    # Protocol slots. HTTP-only single-wire (no ARQ or bot entry path; client
+    # portal does not run in the worker). Zero new ignore_imports — client_portal
+    # reaches these writes ONLY through core.dependencies accessors.
+    register_booking_for_client_creator(bookings_service.create_booking_for_client)
+    register_booking_for_client_canceller(bookings_service.cancel_booking_for_client)
 
     # Phase 42 D-42-26 / EMAIL-04 — REG-29-03 double-wire of the EmailDispatcher
     # slot. The IDENTICAL symbol reference ``enqueue_email_dispatch`` is also

@@ -1451,3 +1451,124 @@ def get_payroll_clawback_recorder() -> PayrollClawbackRecorder:
             "app/main.py:create_app() (HTTP-only single-wire — no ARQ entry path)."
         )
     return _payroll_clawback_recorder
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 70 D-70-01 / D-20-MODULE — BookingForClientCreator slot.
+#
+# Allows client_portal to invoke bookings.service.create_booking_for_client
+# WITHOUT importing bookings directly (D-20-MODULE: zero new ignore_imports).
+# Value-returning callable; mirrors ActivePtPackageResolver shape (line ~163).
+# Defensive-raise accessor — a missing wiring in the client booking path is
+# a hard misconfiguration (mirrors get_payment_recorder at line ~398).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+BookingForClientCreator = Callable[..., Awaitable[Any]]
+"""Async callable: (session, *, client_id, slot_id, pt_package_id) -> BookingResponse.
+
+Return type is ``Any`` at this scope because ``BookingResponse`` lives in
+``app.modules.bookings.schemas`` — importing it here would violate the
+``core-not-depend-on-modules`` import-linter contract. Type safety is
+enforced at the service callsite (bookings/service.py) and at the accessor
+callsites in client_portal which type-narrows via its own import of
+``BookingResponse``.
+"""
+
+_booking_for_client_creator: BookingForClientCreator | None = None
+
+
+def register_booking_for_client_creator(creator: BookingForClientCreator) -> None:
+    """Composition-root setter — called by ``app.main.create_app()`` (Phase 70 D-70-01).
+
+    HTTP-only single-wire (client booking endpoint has no ARQ or bot entry
+    path). Idempotent: re-registering replaces the slot (mirrors WR-05
+    reasoning; useful for tests that inject a stub).
+    """
+    global _booking_for_client_creator
+    _booking_for_client_creator = creator
+
+
+async def create_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    slot_id: UUID,
+    pt_package_id: UUID,
+) -> Any:
+    """Consumer entry point — used by ``app.modules.client_portal`` (Phase 70).
+
+    Defensive-raise when the slot is not registered (booking write MUST be
+    wired; mirrors ``get_payment_recorder`` at line ~398 — a missing wiring
+    is a hard misconfiguration, not a recoverable state).
+
+    Return type is ``Any``; callers (client_portal) import ``BookingResponse``
+    from ``app.modules.bookings.schemas`` and cast/type-narrow the result.
+    Zero new ``ignore_imports`` — ``client_portal`` never imports
+    ``app.modules.bookings`` directly.
+    """
+    if _booking_for_client_creator is None:
+        raise RuntimeError(
+            "BookingForClientCreator slot not registered — register via "
+            "app.core.dependencies.register_booking_for_client_creator() in "
+            "app/main.py:create_app() (HTTP-only single-wire; see Phase 70 D-20-MODULE)."
+        )
+    return await _booking_for_client_creator(
+        session, client_id=client_id, slot_id=slot_id, pt_package_id=pt_package_id
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 70 D-70-05 / D-20-MODULE — BookingForClientCanceller slot.
+#
+# Allows client_portal to invoke bookings.service.cancel_booking_for_client
+# WITHOUT importing bookings directly (D-20-MODULE: zero new ignore_imports).
+# Value-returning callable; mirrors BookingForClientCreator shape above.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+BookingForClientCanceller = Callable[..., Awaitable[Any]]
+"""Async callable: (session, *, client_id, booking_id, cancel_reason) -> BookingResponse.
+
+Return type is ``Any`` at this scope (same rationale as BookingForClientCreator).
+"""
+
+_booking_for_client_canceller: BookingForClientCanceller | None = None
+
+
+def register_booking_for_client_canceller(canceller: BookingForClientCanceller) -> None:
+    """Composition-root setter — called by ``app.main.create_app()`` (Phase 70 D-70-05).
+
+    HTTP-only single-wire. Idempotent: re-registering replaces the slot
+    (mirrors WR-05 reasoning).
+    """
+    global _booking_for_client_canceller
+    _booking_for_client_canceller = canceller
+
+
+async def cancel_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    booking_id: UUID,
+    cancel_reason: str = "",
+) -> Any:
+    """Consumer entry point — used by ``app.modules.client_portal`` (Phase 70 D-70-05).
+
+    Defensive-raise when the slot is not registered (cancel write MUST be
+    wired; mirrors get_payment_recorder at line ~398).
+
+    Return type is ``Any``; callers (client_portal) import ``BookingResponse``
+    from ``app.modules.bookings.schemas`` and cast/type-narrow the result.
+    Zero new ``ignore_imports`` — ``client_portal`` never imports
+    ``app.modules.bookings`` directly.
+    """
+    if _booking_for_client_canceller is None:
+        raise RuntimeError(
+            "BookingForClientCanceller slot not registered — register via "
+            "app.core.dependencies.register_booking_for_client_canceller() in "
+            "app/main.py:create_app() (HTTP-only single-wire; see Phase 70 D-20-MODULE)."
+        )
+    return await _booking_for_client_canceller(
+        session, client_id=client_id, booking_id=booking_id, cancel_reason=cancel_reason
+    )
