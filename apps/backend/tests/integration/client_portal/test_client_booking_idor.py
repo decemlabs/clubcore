@@ -6,7 +6,7 @@ Tests:
   1. Client A attempts to cancel client B's booking → 404 booking_not_found
      (anti-oracle — never 403 or existence leak; T-70-09 mitigation).
   2. Client B's booking remains confirmed after client A's failed cancel attempt.
-  3. Own-cancel within the cancel window → 422 cancel_window_expired.
+  3. Own-cancel within the cancel window → 409 cancel_window_expired.
   4. Successful own-cancel (outside window) restores slot to 'active'.
 """
 
@@ -306,7 +306,7 @@ async def test_client_cancel_within_window_returns_cancel_window_expired(
     db_session: AsyncSession,
     app: FastAPI,
 ) -> None:
-    """CBOOK-05: cancelling within CANCEL_WINDOW_HOURS_CLIENT → 422 cancel_window_expired."""
+    """CBOOK-05: cancelling within CANCEL_WINDOW_HOURS_CLIENT → 409 cancel_window_expired."""
     await app.state.redis.flushdb()
     staff = await _seed_staff(db_session)
     trainer = await _seed_trainer(db_session)
@@ -328,15 +328,15 @@ async def test_client_cancel_within_window_returns_cancel_window_expired(
         csrf_token=csrf_token,
     )
 
-    # Try to cancel — within the cancel window → 422 cancel_window_expired
+    # Try to cancel — within the cancel window → 409 cancel_window_expired
     r = await http_client.post(
         f"/api/v1/client/booking/{booking_id}/cancel",
         headers={"X-CSRF-Token": csrf_token},
     )
     # cancel_window_expired is a ConflictError (409) in the bookings domain
     # (CancelWindowExpiredError inherits ConflictError, status_code=409)
-    assert r.status_code in (409, 422), (
-        f"Expected 409 or 422 for cancel_window_expired, got {r.status_code}: {r.text}"
+    assert r.status_code == 409, (
+        f"Expected 409 for cancel_window_expired, got {r.status_code}: {r.text}"
     )
     assert r.json()["code"] == "cancel_window_expired", (
         f"Expected 'cancel_window_expired', got: {r.json().get('code')}"

@@ -392,7 +392,7 @@ async def client_create_booking(
     summary=(
         "Cancel the authenticated client's own confirmed booking (CBOOK-05; "
         "404 booking_not_found on non-owned booking — IDOR anti-oracle; "
-        "422 cancel_window_expired if outside client cancel window)"
+        "409 cancel_window_expired if outside client cancel window)"
     ),
 )
 async def client_cancel_booking(

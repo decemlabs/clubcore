@@ -304,7 +304,7 @@ async def cancel_client_booking(
 
     Propagates domain errors without catching:
       - BookingNotFoundError → router/handler returns 404 booking_not_found (IDOR anti-oracle)
-      - CancelWindowExpiredError → _app_error_handler → 422 cancel_window_expired
+      - CancelWindowExpiredError → _app_error_handler → 409 cancel_window_expired
     """
     result = await cancel_booking_for_client(
         session,
