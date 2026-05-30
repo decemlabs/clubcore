@@ -133,3 +133,9 @@
 - Wiring net-new screens to real backends — future phases.
 - `Client-Portal` tag freeze, `_v20Checks` guards, client-pwa CI gates, live E2E runbook — Phase 72.
 - React 19 bump — deferred (D-69-07).
+
+---
+
+## Update — 2026-05-30 (`--auto` re-discuss)
+
+Re-ran `/gsd:discuss-phase 71 --auto` after Phase 70 landed. No new gray areas surfaced; all decisions (D-71-01..09) carried forward unchanged. Sole material change: the Phase 70 dependency warning in CONTEXT.md `<domain>` was stale ("Not started") and is now marked satisfied — Phase 70 completed (`97d57ce6 docs(phase-70): complete phase execution`), so plan `71-06-PLAN.md`'s Book/QR wiring dependency is cleared. `todo.match-phase 71` returned 0 matches. Auto-advancing to plan-phase.

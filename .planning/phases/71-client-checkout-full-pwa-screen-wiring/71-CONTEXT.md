@@ -1,6 +1,7 @@
 # Phase 71: Client Checkout + Full PWA Screen Wiring - Context
 
 **Gathered:** 2026-05-30
+**Updated:** 2026-05-30 (--auto re-discuss: Phase 70 dependency now satisfied; decisions unchanged)
 **Status:** Ready for planning
 
 <domain>
@@ -20,7 +21,7 @@ Two bundled deliverables on top of the Phase 68–70 client foundation:
 - `Client-Portal` OpenAPI tag freeze, `_v20Checks` guards, CI gates, live E2E → **Phase 72**.
 - Phase-70 booking/QR endpoints themselves (this phase *consumes* them for the Book/QR screen wiring).
 
-**⚠ Dependency:** Phase 70 (Client Bookings + QR Self Check-In) is **Not started** in ROADMAP.md and Phase 71 depends on it. Book/QR screen wiring needs Phase 70's endpoints to exist. Decisions captured here are stable, but Phase 70 must land before this phase executes its Book/QR wiring.
+**✓ Dependency satisfied:** Phase 70 (Client Bookings + QR Self Check-In) is **complete** (`97d57ce6 docs(phase-70): complete phase execution`). The Phase-70 booking/QR endpoints that `71-06-PLAN.md` consumes for Book/QR screen wiring now exist — no longer a blocker. Plan 71-06's "DEPENDS ON PHASE 70" gate is cleared.
 
 </domain>
 
