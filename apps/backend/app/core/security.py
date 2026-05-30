@@ -389,6 +389,101 @@ def decode_client_token(token: str) -> ClientAccessTokenClaims:
 
 
 # =========================================================================
+# QR self-check-in token (D-70-07 / D-70-08)
+# =========================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class QrTokenClaims:
+    """Decoded QR check-in token claims (D-70-07).
+
+    `aud="qr"` and `typ="qr_checkin"` are the isolation discriminators —
+    structurally non-interchangeable with the client access token (`aud="client"`,
+    `typ="access"`) and with staff tokens. A leaked QR token fails `require_client()`
+    (wrong aud/typ); an access token is rejected at `decode_qr_token` (wrong typ).
+    """
+
+    sub: str  # str(client_uuid) — the ONLY client source for check-in (D-70-10)
+    aud: str  # always "qr"
+    typ: str  # always "qr_checkin"
+    iat: int  # UTC epoch seconds
+    exp: int  # UTC epoch seconds
+
+
+def encode_qr_token(
+    client_id: UUID,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Mint a short-lived QR self-check-in JWT (HS256, settings.qr_token_ttl_seconds ≈ 60s).
+
+    Mirrors `encode_client_token` but emits `aud="qr"` and `typ="qr_checkin"` (D-70-08),
+    making the token structurally distinct from access/refresh tokens.
+    `now` is injectable for unit tests; production callers pass nothing.
+    """
+    settings = get_settings()
+    issued = now or datetime.now(tz=UTC)
+    expires = issued + timedelta(seconds=settings.qr_token_ttl_seconds)
+    payload = {
+        "sub": str(client_id),
+        "aud": "qr",
+        "typ": "qr_checkin",
+        "iat": int(issued.timestamp()),
+        "exp": int(expires.timestamp()),
+    }
+    return jwt.encode(
+        payload,
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+
+def decode_qr_token(token: str) -> QrTokenClaims:
+    """Decode + validate a QR check-in JWT.
+
+    Mirrors `decode_client_token` but asserts `aud=="qr"` and `typ=="qr_checkin"`
+    (D-70-08). A client access token passed here will fail with "wrong_token_type"
+    (typ=="access"). A QR token passed to `decode_client_token` will fail there
+    with "wrong_token_type" (typ!="access").
+
+    Raises InvalidAccessToken (401) on:
+      - expired signature → message "token_expired"
+      - any other PyJWT failure (bad sig, malformed, missing claim) → "invalid_token"
+      - wrong `typ` claim (not "qr_checkin") → "wrong_token_type"
+      - wrong `aud` claim (not "qr") → "wrong_audience"
+    """
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token,
+            settings.secret_key.get_secret_value(),
+            algorithms=["HS256"],
+            leeway=settings.jwt_clock_leeway_seconds,
+            # verify_aud=False: we require "aud" claim to be present via `require` but
+            # validate its value manually below to emit the specific "wrong_audience" code
+            # (mirrors decode_client_token discipline — D-70-08).
+            options={"require": ["sub", "aud", "typ", "iat", "exp"], "verify_aud": False},
+        )
+    except jwt.ExpiredSignatureError as exc:
+        raise InvalidAccessToken("token_expired") from exc
+    except jwt.InvalidTokenError as exc:
+        raise InvalidAccessToken("invalid_token") from exc
+
+    if payload.get("typ") != "qr_checkin":
+        raise InvalidAccessToken("wrong_token_type")
+    if payload.get("aud") != "qr":
+        raise InvalidAccessToken("wrong_audience")
+
+    return QrTokenClaims(
+        sub=payload["sub"],
+        aud=payload["aud"],
+        typ=payload["typ"],
+        iat=payload["iat"],
+        exp=payload["exp"],
+    )
+
+
+# =========================================================================
 # Client cookie matrix (D-10, CISO-05)
 # =========================================================================
 
