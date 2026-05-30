@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
-status: verifying
-stopped_at: Phase 70 context gathered
-last_updated: "2026-05-30T14:25:09.724Z"
+status: ready_to_plan
+stopped_at: Phase 70 complete (4/4) — ready to discuss Phase 71
+last_updated: 2026-05-30T14:53:29.169Z
 last_activity: 2026-05-30
 progress:
   total_phases: 7
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 70 — client-bookings-qr-self-check-in
+**Current focus:** Phase 71 — client checkout full pwa screen wiring
 
 ## Current Position
 
-Phase: 70 (client-bookings-qr-self-check-in) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 71
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-30
 
 Progress: [███████░░░] 68%
@@ -48,7 +48,7 @@ Progress: [███████░░░] 68%
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 16
 - Average duration: ~6m
 - Total execution time: ~18m
 
