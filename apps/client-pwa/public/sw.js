@@ -1,7 +1,7 @@
 // sw.js — Service Worker for "Мой зал" PWA
 // Cache-first for static assets, network-first for navigations, offline fallback.
 
-const VERSION = 'gym-v2';
+const VERSION = 'gym-v3';
 const SHELL = [
   '/',
   '/index.html',
@@ -32,6 +32,15 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // PWA-07 / T-69-07: /api/* is strictly network-only — never read from nor written
+  // to Cache Storage (authed per-client payloads must not persist). Keyed off
+  // url.pathname, not origin: the dev proxy makes /api same-origin, which is exactly
+  // why the origin-based res.ok cache rule below failed to exclude it.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   // HTML navigations — network first, fall back to cached shell, then offline page.
   if (req.mode === 'navigate' || req.headers.get('accept')?.includes('text/html')) {
