@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 70 context gathered
-last_updated: "2026-05-30T13:13:46.552Z"
-last_activity: 2026-05-30 -- Phase 70 planning complete
+last_updated: "2026-05-30T13:25:22.932Z"
+last_activity: 2026-05-30
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 19
-  completed_plans: 9
+  completed_plans: 10
   percent: 29
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** Phase 70 — client-bookings-qr-self-check-in
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
+Phase: 70 (client-bookings-qr-self-check-in) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-05-30 -- Phase 70 planning complete
+Last activity: 2026-05-30
 
-Progress: [██████████] 100%
+Progress: [█████░░░░░] 53%
 
 ## v2.0 Roadmap Summary
 
@@ -62,6 +62,7 @@ Progress: [██████████] 100%
 *Updated after each plan completion*
 | Phase 68-client-auth-foundation P68-05 | 4m | 2 tasks | 4 files |
 | Phase 68-client-auth-foundation PP68-06 | 45m | 3 tasks | 10 files |
+| Phase 70-client-bookings-qr-self-check-in P01 | 15min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-30T12:52:05.568Z
+Last session: 2026-05-30T13:25:22.928Z
 Stopped at: Phase 70 context gathered
 Resume: Execute 68-05-PLAN.md next.
