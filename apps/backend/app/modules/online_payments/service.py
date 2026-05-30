@@ -264,6 +264,16 @@ async def _sell_subject_core(
             online_payment_id=existing.id,
         )
 
+    # CR-01 (fix): a canceled row carries the same idempotency_key as this
+    # retry. The replay short-circuit above intentionally skips canceled rows
+    # (a same-day retry after cancel MUST create a fresh payment), but the
+    # canceled row still occupies uq_online_payments_idempotency_key. Derive a
+    # unique key for the fresh INSERT so neither the PK (now a uuid4 override)
+    # nor the idempotency_key UNIQUE constraint fires. The partial double-tap
+    # index already excludes canceled rows, so the retry is permitted.
+    if existing is not None:
+        idem_key = f"{idempotency_key}:retry-{uuid4().hex}"
+
     # 1. FIS-05 email gate — checked AFTER replay (WR-01: replay is side-effect-free;
     #    a cleared email must not block returning an existing confirmation_url).
     customer_email = await _read_client_email_or_raise(session, client_id)

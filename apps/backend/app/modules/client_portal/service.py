@@ -492,16 +492,20 @@ async def client_checkout_membership(
     slot (D-20-MODULE). actor_user_id=None (D-71-02: client-initiated).
     No session.commit() — caller-owns-txn (D-32-10 / D-49-19).
 
-    CR-01/CR-02 (Phase 71 fix): generates op_id deterministically so the
-    ЮKassa return_url carries payment_id before the INSERT. On the replay path
-    the core returns the existing row's confirmation_url unchanged (op_id is
-    ignored for replays per _sell_subject_core semantics). The replay return_url
-    already carries the original payment_id from the first create call.
+    CR-01/CR-02 (Phase 71 fix): generates a FRESH op_id (uuid4) so the ЮKassa
+    return_url carries payment_id before the INSERT. On the replay path the core
+    returns the existing row's confirmation_url unchanged (op_id is ignored for
+    replays per _sell_subject_core semantics). The replay return_url already
+    carries the original payment_id from the first create call. For the same-day
+    cancel-then-retry path the core regenerates a unique idempotency_key for the
+    fresh INSERT so neither the PK nor the idempotency_key UNIQUE constraint fires.
     """
     idem_key = _derive_membership_idempotency_key(plan_id=plan_id, client_id=client.id)
-    # CR-01: generate deterministic op_id for the redirect return_url.
-    # Derive from idem_key so same-day retries generate the same UUID (stable).
-    op_id = UUID(bytes=bytes.fromhex(idem_key)[:16]) if len(idem_key) >= 32 else uuid4()
+    # CR-01 (fix): generate a FRESH op_id (uuid4) for the redirect return_url,
+    # mirroring the PT path. Deriving the PK from the per-day idem_key collided
+    # on the same-day cancel-then-retry path (the replay short-circuit skips
+    # canceled rows, so a retry re-INSERTs the same PK → IntegrityError/500).
+    op_id = uuid4()
     return_url = f"{yookassa_settings.client_return_url}?payment_id={op_id}"
     result = await invoke_client_checkout_core(
         session,
