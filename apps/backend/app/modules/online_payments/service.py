@@ -167,27 +167,54 @@ async def _read_pt_package_plan_or_raise(session: AsyncSession, plan_id: UUID) -
     return int(row["price_kopecks"]), str(row["name"])
 
 
-async def _sell_subject(
+async def _sell_subject_core(
     session: AsyncSession,
     *,
     subject_kind: Literal["membership", "pt_package"],
     plan_id: UUID,
     client_id: UUID,
-    price_kopecks: int,
-    description: str,
+    idempotency_key: str,
+    actor_user_id: UUID | None,
     confirmation_type: Literal["redirect", "qr"],
-    actor: CurrentUser,
     yookassa_settings: YooKassaSettings,
 ) -> SellResponse:
-    """Shared sell flow body. See module docstring for the 7-step protocol."""
+    """Actor-agnostic sell flow (Phase 71 D-71-01).
 
+    Extracted from the former ``_sell_subject`` body to support BOTH the
+    existing staff callers AND the new client_portal checkout write-slot
+    (Phase 71 Plan 71-01).  Actor identity is parameterised:
+
+    - Staff callers: ``actor_user_id=actor.id`` (non-None UUID).
+    - Client-initiated callers: ``actor_user_id=None`` (D-71-02 — the
+      ``created_by_user_id`` column on ``online_payments`` is nullable;
+      audit.emit() already supports ``actor_user_id=None`` as the D-41-10
+      system-emit path).
+
+    NO ``price_kopecks`` / ``description`` / ``amount`` parameter exists
+    here (CPAY-03 price authority, D-71-01): price + name are read
+    server-side from ``plan_id`` via ``_read_membership_plan_or_raise`` /
+    ``_read_pt_package_plan_or_raise``.  Callers NEVER supply an amount.
+
+    The idempotency key is supplied by the caller:
+    - Membership staff/client: caller derives the server-side per-day key.
+    - PT-package client path: caller passes the Idempotency-Key header value
+      (PWA generates a UUID per checkout intent, D-71-04).
+
+    Uses ``session.flush()`` — caller owns the transaction (D-32-10/D-49-19).
+    See module docstring for the 7-step protocol.
+    """
     # 1. FIS-05 email gate.
     customer_email = await _read_client_email_or_raise(session, client_id)
 
-    # 3. Deterministic key (step 2 = plan lookup, done by caller).
-    idem_key = _derive_idempotency_key(
-        subject_kind=subject_kind, plan_id=plan_id, client_id=client_id
-    )
+    # 2. Server-side price + description read (CPAY-03 — inside the core,
+    #    never from caller).
+    if subject_kind == "membership":
+        price_kopecks, description = await _read_membership_plan_or_raise(session, plan_id)
+    else:
+        price_kopecks, description = await _read_pt_package_plan_or_raise(session, plan_id)
+
+    # 3. Idempotency key is supplied by the caller (see docstring).
+    idem_key = idempotency_key
 
     # 4. Replay check (D-49-09 + BLOCKER #1 QR re-fetch refinement).
     existing = await repository.get_online_payment_by_idempotency_key(session, idem_key)
@@ -261,13 +288,13 @@ async def _sell_subject(
             status=STATUS_PENDING,
             confirmation_url=result.confirmation_url,
             confirmation_type=confirmation_type,
-            created_by_user_id=actor.id,
+            created_by_user_id=actor_user_id,  # None for client-initiated (D-71-02)
             audit_correlation_id=correlation_id,
         )
         # surface FK + CHECK + UNIQUE conflicts BEFORE audit emit (D-49-19)
         await session.flush()
 
-        # Audit ROOT
+        # Audit ROOT — actor_user_id=None accepted by audit.emit() (D-41-10)
         initiated_payload = OnlinePaymentInitiatedPayload(
             audit_correlation_id=None,
             online_payment_id=row.id,
@@ -279,13 +306,13 @@ async def _sell_subject(
         await audit.emit(
             session,
             "online_payment_initiated",
-            actor_user_id=actor.id,
+            actor_user_id=actor_user_id,
             resource_type="online_payment",
             resource_id=row.id,
             **initiated_payload.model_dump(mode="json"),
         )
 
-        # Audit CHILD
+        # Audit CHILD — same actor_user_id
         created_payload = YookassaPaymentCreatedPayload(
             audit_correlation_id=correlation_id,
             online_payment_id=row.id,
@@ -296,7 +323,7 @@ async def _sell_subject(
         await audit.emit(
             session,
             "yookassa_payment_created",
-            actor_user_id=actor.id,
+            actor_user_id=actor_user_id,
             resource_type="online_payment",
             resource_id=row.id,
             **created_payload.model_dump(mode="json"),
@@ -339,17 +366,23 @@ async def sell_membership(
     actor: CurrentUser,
     yookassa_settings: YooKassaSettings,
 ) -> SellResponse:
-    """Sell a membership online (Phase 49 PAY-03/05)."""
-    price_kopecks, name = await _read_membership_plan_or_raise(session, plan_id)
-    return await _sell_subject(
+    """Sell a membership online (Phase 49 PAY-03/05).
+
+    Thin wrapper: derives the server-side per-day idempotency key (D-71-04)
+    and delegates to ``_sell_subject_core`` with ``actor_user_id=actor.id``.
+    Staff-facing public signature is byte-identical to contract-freeze-v1.11.0.
+    """
+    idem_key = _derive_idempotency_key(
+        subject_kind="membership", plan_id=plan_id, client_id=client_id
+    )
+    return await _sell_subject_core(
         session,
         subject_kind="membership",
         plan_id=plan_id,
         client_id=client_id,
-        price_kopecks=price_kopecks,
-        description=name,
+        idempotency_key=idem_key,
+        actor_user_id=actor.id,
         confirmation_type=confirmation_type,
-        actor=actor,
         yookassa_settings=yookassa_settings,
     )
 
@@ -363,17 +396,23 @@ async def sell_pt_package(
     actor: CurrentUser,
     yookassa_settings: YooKassaSettings,
 ) -> SellResponse:
-    """Sell a PT-package online (Phase 49 PAY-04/05)."""
-    price_kopecks, name = await _read_pt_package_plan_or_raise(session, plan_id)
-    return await _sell_subject(
+    """Sell a PT-package online (Phase 49 PAY-04/05).
+
+    Thin wrapper: derives the server-side per-day idempotency key (D-71-04)
+    and delegates to ``_sell_subject_core`` with ``actor_user_id=actor.id``.
+    Staff-facing public signature is byte-identical to contract-freeze-v1.11.0.
+    """
+    idem_key = _derive_idempotency_key(
+        subject_kind="pt_package", plan_id=plan_id, client_id=client_id
+    )
+    return await _sell_subject_core(
         session,
         subject_kind="pt_package",
         plan_id=plan_id,
         client_id=client_id,
-        price_kopecks=price_kopecks,
-        description=name,
+        idempotency_key=idem_key,
+        actor_user_id=actor.id,
         confirmation_type=confirmation_type,
-        actor=actor,
         yookassa_settings=yookassa_settings,
     )
 
