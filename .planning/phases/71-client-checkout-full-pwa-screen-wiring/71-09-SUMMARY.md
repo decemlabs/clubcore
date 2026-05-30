@@ -96,3 +96,7 @@ a minimal client catalog so the fix is verifiable end-to-end without a manual SQ
 None introduced. Demo-only surfaces that remain (gym status pill, notifications feed,
 hardcoded card `•••• 4821`, `userName` fallback) are pre-existing and explicitly
 out-of-scope for this plan (notifications/identity deferred to later 71 plans).
+
+## Self-Check: PASSED
+
+All created files exist on disk; all 7 task/doc commits present in git history.
