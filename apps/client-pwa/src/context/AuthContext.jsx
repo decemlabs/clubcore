@@ -10,7 +10,7 @@
  *
  * JSX file — in the allowJs ramp; no TS lint. Keep plain JS/JSX.
  */
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { clientRequest } from '@/lib/clientFetcher'
 import { subscribeSessionExpired } from '@/lib/authBus'
@@ -56,11 +56,18 @@ export function AuthProvider({ children }) {
   // Allow AuthContext to override status (expiry signal + login/logout actions)
   const [override, setOverride] = useState(null) // null = use probeStatus
 
+  // WR-07: timestamp (ms) at which override was set to 'anon' by the expiry bus.
+  // The reconciliation effect only trusts a probe success that completed AFTER
+  // this moment (dataUpdatedAt > anonSetAt), so a stale cached identity from
+  // BEFORE the expiry can never clear the 'anon' override.
+  const anonSetAtRef = useRef(0)
+
   const status = override !== null ? override : probeStatus
 
   // Subscribe to session-expiry bus — flip to anon and clear cached client data
   useEffect(() => {
     const unsub = subscribeSessionExpired(() => {
+      anonSetAtRef.current = Date.now()
       setOverride('anon')
       // Invalidate all client-portal cached data so protected screens don't show stale data
       void qc.invalidateQueries({ queryKey: clientPortalKeys.all })
@@ -68,16 +75,26 @@ export function AuthProvider({ children }) {
     return unsub
   }, [qc])
 
-  // After probe settles, clear override if it was from a previous expiry
-  // so future re-logins can re-probe correctly
+  // WR-07: reconcile a stale 'anon' override against a freshly-succeeded probe.
+  // The expiry bus sets override='anon' AND invalidates the me-probe, which then
+  // refetches. If that refetch newly SUCCEEDS with a real identity (the session
+  // was actually still valid), the stale 'anon' override must be cleared so the
+  // successful probe can drive status back to 'authed' — otherwise the override
+  // would shadow it forever. We require dataUpdatedAt to be strictly newer than
+  // the moment the override was set (so a stale pre-expiry cached identity cannot
+  // clear it) and only touch an 'anon' override (never the 'authed' override that
+  // login() sets as its intended terminal state).
+  const dataUpdatedAt = probe.dataUpdatedAt
   useEffect(() => {
-    if (probe.isSuccess || probe.isError) {
-      // Only clear override when the probe result agrees with it
-      // (avoids clearing an 'anon' override set by the expiry bus if probe hasn't re-run yet)
-      if (probe.isSuccess && override === null) return
-      if (probe.isError && override === null) return
+    if (
+      override === 'anon' &&
+      probe.isSuccess &&
+      probe.data != null &&
+      dataUpdatedAt > anonSetAtRef.current
+    ) {
+      setOverride(null)
     }
-  }, [probe.isSuccess, probe.isError, override])
+  }, [probe.isSuccess, probe.data, dataUpdatedAt, override])
 
   /**
    * Called by LoginScreen AFTER a successful OTP verify.
