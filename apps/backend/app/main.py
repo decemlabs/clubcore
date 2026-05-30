@@ -48,6 +48,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import structlog
 from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
@@ -484,7 +485,20 @@ def create_app() -> FastAPI:
 
     _otp_bot = build_bot(token=settings.telegram_bot_token.get_secret_value())
 
+    _otp_log = structlog.get_logger("app.main.client_otp")
+
     async def _send_client_otp_dm(chat_id: int, code: str) -> None:
+        # Dev-only convenience: surface the OTP in the backend log so local UAT can
+        # sign in without a real Telegram chat (e.g. the fake-linked seed client from
+        # `scripts.seed_dev_client`). Gated on ENVIRONMENT=dev — never logs the code
+        # in staging/prod, where the real bot DM is the only delivery path.
+        if settings.environment == "dev":
+            _otp_log.warning("client_otp_dev_code", chat_id=chat_id, code=code)
+            try:
+                await _otp_bot.send_message(chat_id=chat_id, text=f"Ваш код: {code}")
+            except Exception:  # fake/unreachable chat_id in dev is expected
+                _otp_log.debug("client_otp_dev_send_skipped", chat_id=chat_id)
+            return
         await _otp_bot.send_message(chat_id=chat_id, text=f"Ваш код: {code}")
 
     register_client_otp_sender(_send_client_otp_dm)
