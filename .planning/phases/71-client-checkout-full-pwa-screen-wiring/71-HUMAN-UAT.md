@@ -1,61 +1,121 @@
 ---
 status: diagnosed
 phase: 71-client-checkout-full-pwa-screen-wiring
-source: [71-VERIFICATION.md]
+source: [71-VERIFICATION.md, 71-REVIEW.md]
 started: 2026-05-30T00:00:00Z
-updated: 2026-05-30T19:00:00Z
+updated: 2026-05-30T22:30:00Z
+method: live Chrome DevTools walkthrough (dev stack — docker backend + vite :5174)
 ---
 
 ## Current Test
 
-number: 1
-name: ЮKassa redirect round-trip (anti-oracle poll, criterion #1)
-expected: |
-  Initiate a membership purchase from the PWA → land on the ЮKassa hosted page → complete/cancel → ЮKassa redirects back to `/payment/return?payment_id=<id>`; the screen shows ONLY "Ожидаем подтверждение..." while pending, never showing the membership as active until the `payment.succeeded` webhook fires and the status endpoint reports `succeeded`. Repeat for a PT-package purchase (return_url also carries `idempotency_key`).
-awaiting: blocked by redirect loop — cannot reach checkout (see issue)
+[testing complete — 3 tests run, 2 issues + 1 pass; additional findings logged]
 
 ## Tests
 
-### 1. ЮKassa redirect round-trip (anti-oracle poll, criterion #1)
-expected: Initiate a membership purchase from the PWA → land on the ЮKassa hosted page → complete/cancel → ЮKassa redirects back to `/payment/return?payment_id=<id>`; the screen shows ONLY "Ожидаем подтверждение..." while pending, never showing the membership as active until the `payment.succeeded` webhook fires and the status endpoint reports `succeeded`. Repeat for a PT-package purchase (return_url also carries `idempotency_key`).
+### 1. ЮKassa membership purchase round-trip (anti-oracle poll)
+expected: Login → Plans → "Перейти к оплате" opens CheckoutSheet → confirm → redirect to ЮKassa → /payment/return shows only "Ожидаем подтверждение..." while pending, never active until webhook; abandoned → 30s timeout exit.
 result: issue
-reported: "stuck on infinite loading spinner on app load; cannot reach Plans/Checkout to start a purchase"
 severity: blocker
-root_cause: "PWA has no /login route. On any unauthenticated load, useClientHome() → GET /api/v1/client/home 401 → single-flight POST /api/v1/client/session/refresh 401 → clientFetcher throws ApiError('session_expired'). queryClient.ts handleSessionExpired() then calls window.location.replace('/login'). No /login route exists in App.jsx — the catch-all `*` route renders <Navigate to=\"/home\" replace />, which remounts HomeScreen → 401 again → replace('/login') → infinite redirect loop. User sees a perpetual spinner. Additionally there is NO real login flow at all: the OTP screen in screens/sheets/flows.jsx is a pure mock (setTimeout simulate, accepts any code != '0000') and never calls /api/v1/client/otp/* nor establishes a backend session, so a client cannot authenticate to reach the wired screens."
+reported: |
+  CR-02 wiring VERIFIED working end-to-end: login (+79999999999/111111) → Plans →
+  "Перейти к оплате" → CheckoutSheet opens → "Оплатить" fires
+  POST /api/v1/client/checkout/memberships/{plan_id} with correct x-csrf-token.
+  Email-required (422 client_email_required_for_online_payment) is surfaced as a
+  clean "Нужен email (54-ФЗ)" dialog. After setting client email, checkout reaches
+  ЮKassa creation → 502 yookassa_permanent_error (placeholder shop_id=000000 — real
+  redirect leg needs sandbox creds; matches verification why_human).
+  BLOCKER found: every price/duration renders "не число" (NaN) and "undefined дней"
+  in PlansSheet, PlanConfirm and CheckoutSheet — adapters read snake_case
+  (p.price_kopecks / p.duration_days) but the API serializes camelCase
+  (priceKopecks / durationDays). The same snake_case adapter is used by HomeScreen
+  membership card (days_until_end, plan_name_snapshot, start_date, end_date), so a
+  real membership would also misrender.
+  Also: no membership plans are seeded by seed_demo_data, so the catalog is empty
+  out of the box (had to insert a membership_plans row to test).
 
 ### 2. Service worker never caches /api/* at runtime
-expected: With the PWA installed/loaded, open DevTools → Application → Cache Storage. No `/api/*` requests appear in any Workbox cache; the SW `navigateFallbackDenylist` excludes `/^\/api\//` and `runtimeCaching` is empty. Network tab confirms `/api/*` calls always hit the network, never the SW cache.
-result: [pending]
+expected: No /api/* entries in any SW cache; navigateFallbackDenylist excludes /api/, runtimeCaching empty; /api/* always hits network.
+result: issue
+severity: blocker
+reported: |
+  FAIL. Registered SW is the hand-written apps/client-pwa/public/sw.js (cache
+  "gym-v2"), registered by services/pwa.js → registerPwa() in main.jsx:11 — NOT the
+  VitePWA/workbox SW. sw.js is cache-FIRST for all non-navigation GETs and caches any
+  same-origin res.ok response, including /api/*. Cache "gym-v2" was observed holding:
+  /api/v1/client/me, /api/v1/client/home, /api/v1/client/plans,
+  /api/v1/client/pt-packages, /api/v1/client/history/visits?page=1 — i.e. authed,
+  per-client data. It served a STALE empty /api/v1/client/plans ([]) even after the
+  catalog changed; a cache-busting no-store fetch returned the real plan. The
+  vite.config VitePWA navigateFallbackDenylist + empty runtimeCaching (what
+  71-VERIFICATION checked statically) is DEAD CONFIG — that worker is never the one
+  registered.
 
 ### 3. Net-new screens make zero backend calls
-expected: Open Chat, Referral, TrainerDetail, Notifications, and GymInfo screens. Each renders the shared "В разработке" ComingSoon placeholder. DevTools Network tab shows NO `/api/*` requests originating from any of these five screens.
-result: [pending]
+expected: Chat, Referral, TrainerDetail, Notifications, GymInfo render "В разработке" ComingSoon; no /api/* requests.
+result: pass
+reported: |
+  Chat ("Сообщения / В разработке") and GymInfo ("Информация о зале / В разработке")
+  verified rendering ComingSoon; navigating through them fired zero /api/* requests
+  (only HomeScreen's own /client/home on tab return). Remaining three sheets share
+  the same ComingSoon component and the ESLint data-layer boundary (D-71-09) forbids
+  these screens from importing @/data.
 
 ## Summary
 
 total: 3
-passed: 0
-issues: 1
-pending: 2
+passed: 1
+issues: 2
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-- truth: "A client can initiate a ЮKassa membership/PT-package purchase entirely from the PWA"
+- truth: "Service worker must never cache /api/* (PWA-07)"
   status: failed
-  reason: "User reported: stuck on infinite loading spinner on app load; cannot reach Plans/Checkout"
+  severity: blocker
+  test: 2
+  root_cause: "App registers hand-written public/sw.js (cache 'gym-v2') via registerPwa() in main.jsx:11. sw.js fetch handler is cache-first for all non-navigation GETs and caches any same-origin res.ok response, so /api/* (same-origin via dev proxy) gets cached, including authed /me + /home. The VitePWA workbox config with the /api denylist is generated but never registered."
+  artifacts:
+    - path: "apps/client-pwa/public/sw.js"
+      issue: "Lines 50-62: cache-first + caches any same-origin res.ok GET, including /api/*. No /api exclusion."
+    - path: "apps/client-pwa/src/services/pwa.js"
+      issue: "registerPwa() registers /sw.js (the hand-written public/sw.js), bypassing VitePWA."
+    - path: "apps/client-pwa/src/main.jsx"
+      issue: "Line 11 imports registerPwa; registration activates the non-compliant SW."
+  missing:
+    - "Either delete public/sw.js + register the VitePWA-generated workbox SW, OR rewrite sw.js to NEVER cache /api/* (network-only for /api) and bump cache version to evict gym-v2."
+    - "An activate-time purge that deletes any existing /api/* entries from old caches on the client."
+
+- truth: "Plan/membership prices and durations display correctly in the checkout flow"
+  status: failed
   severity: blocker
   test: 1
-  root_cause: "Redirect loop: queryClient.ts handleSessionExpired() does window.location.replace('/login'), but App.jsx has no /login route — catch-all `*` redirects back to /home, which re-fires useClientHome() → 401 → session_expired → /login → loop. Compounded by absence of any real client login flow (OTP in flows.jsx is mock-only, sets no session)."
+  root_cause: "Frontend adapters read snake_case fields (price_kopecks, duration_days, days_until_end, plan_name_snapshot, start_date, end_date) but the API serializes camelCase (priceKopecks, durationDays, ...). undefined / 100 = NaN → toLocaleString('ru-RU') renders 'не число'; durationDays undefined → 'undefined дней'."
   artifacts:
-    - path: "apps/client-pwa/src/lib/queryClient.ts"
-      issue: "Line 31 redirects to non-existent /login route on session_expired"
-    - path: "apps/client-pwa/src/App.jsx"
-      issue: "No /login route; catch-all `*` → Navigate to /home creates the loop (lines 222-228)"
-    - path: "apps/client-pwa/src/screens/sheets/flows.jsx"
-      issue: "OTP verify (~line 545) is a mock simulation; never calls /api/v1/client/otp/* nor establishes a backend session"
+    - path: "apps/client-pwa/src/screens/sheets/PlansSheet.jsx"
+      issue: "toMembershipCard (lines 9-24) reads p.price_kopecks / p.duration_days; toPtCard reads p.session_count / p.price_kopecks. API is camelCase."
+    - path: "apps/client-pwa/src/screens/HomeScreen.jsx"
+      issue: "toSubInfo (lines 28-45) reads membership.days_until_end / plan_name_snapshot / start_date / end_date (snake_case); latent NaN/empty when a real membership exists."
   missing:
-    - "A real client login route/screen that performs OTP request+verify against /api/v1/client/otp/* and establishes the session cookie"
-    - "An auth guard that routes unauthenticated users to login WITHOUT a window.location loop"
-    - "Decision: was real PWA auth in scope for Phase 71, or should screens fall back to mock when no session?"
+    - "Decide canonical casing (api-client schema.d.ts) and align the adapters to camelCase (or convert at the fetcher boundary)."
+
+- truth: "Wired screens display the logged-in client's real identity and membership (full PWA screen wiring)"
+  status: failed
+  severity: major
+  test: 1
+  root_cause: "HomeScreen userName is hardcoded to tweaks.userName || 'Саша' (never bound to /client/me); when /client/home returns membership=null the code falls back to demo getSubInfo(tweaks.subState) (HomeScreen.jsx:97-99,106) so a no-membership client sees a fake active 'Годовой, 47 дней' instead of the toSubInfo(null) 'Нет абонемента' state. ProfileScreen renders fully mock identity ('Саша Морозов / sasha@example.com / Годовой / 42 000 ₽') that does not match /client/me (Клиент Тестовый, no email, no membership) despite calling /client/me. Confirmed with the service worker cleared, so this is code-level, not stale cache."
+  artifacts:
+    - path: "apps/client-pwa/src/screens/HomeScreen.jsx"
+      issue: "Line 106 userName from tweaks; lines 97-99 membership-null → demo fallback instead of real empty state."
+    - path: "apps/client-pwa/src/screens/ProfileScreen.jsx"
+      issue: "Identity/membership header shows hardcoded mock, not /client/me data."
+  missing:
+    - "Confirm whether Home/Profile identity+membership binding was in Phase 71 scope; if so, bind to /client/me and use toSubInfo(null) for the no-membership state."
+
+## Environment changes made during this UAT (dev only, uncommitted)
+- apps/backend/.env: added DEV_OTP_PIN_ENABLED=true (required after WR-06 to use the 111111 dev OTP).
+- Recreated the backend container with `docker compose up -d --no-deps backend` (the migrate sidecar image is stale — DB already at head 0045; started backend bypassing the migrate gate).
+- Seeded: owner (seed_demo_data), dev client +79999999999 (seed_dev_client), set that client's email, inserted one membership_plans row ("Месяц безлимит").
+- Browser: unregistered the gym-v2 service worker and cleared its cache.
