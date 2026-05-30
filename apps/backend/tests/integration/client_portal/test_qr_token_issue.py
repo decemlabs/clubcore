@@ -314,8 +314,10 @@ async def test_check_in_schema_has_no_client_id_field(
     )
     # Should be 401 from decode_qr_token (invalid token), NOT from require_client
     assert r.status_code == 401, r.text
-    code = r.json().get("code", "")
-    # Must be a token decode error, not a missing-cookie / auth error
-    assert code in ("invalid_token", "token_expired", "wrong_token_type", "wrong_audience"), (
-        f"Expected a token decode error, got: {code}"
+    body = r.json()
+    # HTTP response code = "invalid_token" (InvalidAccessToken class default).
+    # The specific error kind is in body["message"]: invalid_token, token_expired, etc.
+    assert body.get("code") == "invalid_token", (
+        f"Expected 'invalid_token' (require_client would return 'missing_access_cookie'), "
+        f"got: {body.get('code')}"
     )
