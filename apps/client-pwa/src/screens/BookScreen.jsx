@@ -13,23 +13,55 @@ import { addHour, monthName } from '@/utils/format.js';
 
 // ─── Helpers for slot data ─────────────────────────────────────────────────
 
+// WR-04: all day/today/period bucketing must use Europe/Moscow, not the
+// browser-local timezone (CLAUDE.md TZ convention). Extract the Moscow-local
+// calendar parts of an instant via Intl parts.
+const MSK_PARTS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Moscow',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+function mskParts(startTime) {
+  const parts = MSK_PARTS.formatToParts(new Date(startTime));
+  const get = (type) => parts.find((p) => p.type === type)?.value ?? '';
+  // 'en-CA' renders hour 24 as '24' at midnight; normalise to '00'.
+  const rawHour = get('hour');
+  const hour = rawHour === '24' ? '00' : rawHour;
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: Number(hour),
+    minute: get('minute'),
+  };
+}
+
 function parseSlotDate(startTime) {
   const d = new Date(startTime);
+  const p = mskParts(startTime);
+  const key = `${p.year}-${p.month}-${p.day}`; // "YYYY-MM-DD" in Europe/Moscow
+  const todayKey = (() => {
+    const t = mskParts(Date.now());
+    return `${t.year}-${t.month}-${t.day}`;
+  })();
   return {
-    key: d.toISOString().slice(0, 10), // "YYYY-MM-DD"
-    dow: d.toLocaleDateString('ru-RU', { weekday: 'short' }),
-    num: d.getDate(),
-    month: d.getMonth(),
-    isToday: new Date().toISOString().slice(0, 10) === d.toISOString().slice(0, 10),
+    key,
+    dow: d.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'Europe/Moscow' }),
+    num: Number(p.day),
+    month: Number(p.month) - 1, // 0-indexed to match prior Date.getMonth() contract
+    isToday: key === todayKey,
     hasSlot: true,
   };
 }
 
 function parseSlotTime(startTime) {
-  const d = new Date(startTime);
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
+  const p = mskParts(startTime);
+  return `${String(p.hour).padStart(2, '0')}:${p.minute}`;
 }
 
 function getInitials(name) {
@@ -40,8 +72,11 @@ function getInitials(name) {
 // Pick a consistent avatar bg per trainerId
 const BG_COLORS = ['#d1fae5', '#dbeafe', '#fce7f3', '#ede9fe', '#fef3c7', '#fee2e2'];
 function trainerBg(trainerId) {
+  // WR-05: guard against null/undefined trainerId (shape drift / partial row)
+  // so a missing id can't crash the whole BookScreen render via .length.
+  const s = String(trainerId ?? '');
   let h = 0;
-  for (let i = 0; i < trainerId.length; i++) h = (h * 31 + trainerId.charCodeAt(i)) | 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return BG_COLORS[Math.abs(h) % BG_COLORS.length];
 }
 
@@ -381,7 +416,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
               ];
               return periods.map(p => {
                 const periodsSlots = slotsForTrainer.filter(s => {
-                  const h = new Date(s.startTime).getHours();
+                  const h = mskParts(s.startTime).hour; // WR-04: bucket by Europe/Moscow hour
                   return h >= p.range[0] && h < p.range[1];
                 });
                 if (!periodsSlots.length) return null;
