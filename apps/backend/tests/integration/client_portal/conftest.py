@@ -41,6 +41,21 @@ from app.modules.schedule.models import TrainerAvailabilitySlot
 from app.modules.trainers.models import Trainer
 from app.modules.visits.models import Visit
 
+# Re-export webhook fixtures needed by test_checkout.py (duplicate-webhook test).
+# pytest conftest discovery is directory-tree-only; explicit re-import + noqa: F401 is the
+# documented clubcore-internal pattern (mirrors online_payments/conftest.py lines 44-53).
+from tests.integration.webhook_yookassa.conftest import (  # noqa: F401
+    seeded_online_payment_pending,
+    webhook_client,
+    webhook_db_session,
+    webhook_engine,
+    webhook_payment_canceled_body,
+    webhook_payment_succeeded_body,
+)
+from tests.integrations.yookassa.conftest import (  # noqa: F401
+    yookassa_get_payment_succeeded,
+)
+
 pytestmark = pytest.mark.asyncio
 
 # ---------------------------------------------------------------------------
