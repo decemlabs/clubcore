@@ -402,6 +402,12 @@ export function LoginScreen() {
           font-variant-numeric: tabular-nums; letter-spacing: 0.2px; outline: none;
         }
         .lg-phone-input::placeholder { color: var(--text-3); font-weight: 400; }
+        /* The focus ring is drawn by .lg-phone-row / the box border — suppress the
+           global input:focus-visible accent ring so it does not double up. */
+        .lg-phone-input:focus,
+        .lg-phone-input:focus-visible,
+        .lg-otp input:focus,
+        .lg-otp input:focus-visible { outline: none; box-shadow: none; }
 
         .lg-field-hint {
           margin-top: 10px; font-size: 12.5px; line-height: 1.4;
