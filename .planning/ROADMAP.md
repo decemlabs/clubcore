@@ -138,7 +138,7 @@ Plans:
   4. The PWA Home, Profile, Book, Plans, Checkout, and QR screens fetch data from the real client backend; the mock data layer is replaced for these six screens
   5. Net-new screens (Chat, Referral, trainer reviews, notification inbox, gym-info) display a "coming soon" placeholder — no backend calls are made from them; the service worker never caches `/api/*` requests
 
-**Plans**: 7 plans (5 waves) — plan 07 added 2026-05-30 as gap closure for the UAT redirect-loop blocker (no real client login + window.location redirect to a non-existent /login route)
+**Plans**: 10 plans — plans 08-10 added 2026-05-30 as gap closure for the live-UAT blockers (SW caches /api/*; snake_case/camelCase adapter mismatch; mock identity on Home/Profile)
 
 - [x] 71-01-PLAN.md — extract _sell_subject_core actor-agnostic helper + checkout Protocol slot + main.py wiring (CPAY-01..05)
 - [x] 71-02-PLAN.md — client_portal checkout endpoints (membership/PT POST + status GET) via Protocol slot; split idempotency; IDOR/anti-oracle status (CPAY-01..05)
@@ -147,6 +147,9 @@ Plans:
 - [x] 71-05-PLAN.md — wire Home/Profile/Plans/Checkout + payment return route (anti-oracle); net-new screens → ComingSoon (PWA-05, CPAY-01..03)
 - [x] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
 - [x] 71-07-PLAN.md — GAP: real client OTP login (/api/v1/client/otp/*) + AuthContext (/client/me probe) + /login route & RequireAuth guard; replace window.location redirect loop with router-based session-expiry signal (PWA-05)
+- [ ] 71-08-PLAN.md — GAP: harden public/sw.js to network-only /api/* + activate-time purge + bump cache gym-v3 (PWA-05 / PWA-07 / T-69-07)
+- [ ] 71-09-PLAN.md — GAP: align wired-screen adapters to camelCase API contract (price/duration/membership/booking/history) + seed dev catalog (PWA-05, CPAY-01/02)
+- [ ] 71-10-PLAN.md — GAP: bind Home/Profile identity to /client/me + real empty-membership state, drop mock identity (PWA-05, ROADMAP SC4)
 
 **UI hint**: yes
 
