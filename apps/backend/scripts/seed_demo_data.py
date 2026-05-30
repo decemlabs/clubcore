@@ -13,6 +13,11 @@ be set; otherwise the script exits 1 with a clear message.
 
 The created owner has full_name='Owner' (D-01: single column). Operators can
 update it via a future admin endpoint or `psql` once the owner has logged in.
+
+Plan 71-09 (Gap 4): also seeds a minimal client catalog — one membership plan
+and one PT-package plan — so /client/plans and /client/pt-packages are non-empty
+out of the box for local UAT. Both inserts are idempotent (ON CONFLICT DO NOTHING
+on the partial-UNIQUE lower(name) WHERE deleted_at IS NULL indexes).
 """
 
 from __future__ import annotations
@@ -23,12 +28,61 @@ import sys
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import get_settings
 from app.core.permissions import Role
 from app.core.security import hash_password
 from app.modules.auth.models import User
+from app.modules.memberships.models import MembershipPlan
+from app.modules.pt_packages.models import PtPackagePlan
+
+
+async def _seed_catalog(session: AsyncSession) -> None:
+    """Idempotently seed a minimal client catalog (Plan 71-09 Gap 4).
+
+    One active membership plan + one PT-package plan so the client catalog is
+    non-empty for local UAT. Idempotency mirrors the owner seed: ON CONFLICT
+    DO NOTHING on the partial-UNIQUE lower(name) WHERE deleted_at IS NULL
+    indexes (uq_membership_plans_name_alive / uq_pt_package_plans_name_alive).
+    Column names verified against the ORM models imported above.
+    """
+    plan_stmt = (
+        pg_insert(MembershipPlan)
+        .values(
+            name="Месяц безлимит",
+            duration_days=30,
+            price_kopecks=500_000,
+            freeze_days_limit=14,
+            active=True,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[func.lower(MembershipPlan.name)],
+            index_where=MembershipPlan.deleted_at.is_(None),
+        )
+    )
+    await session.execute(plan_stmt)
+
+    pt_stmt = (
+        pg_insert(PtPackagePlan)
+        .values(
+            name="5 тренировок",
+            session_count=5,
+            price_kopecks=1_500_000,
+            validity_days=90,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[func.lower(PtPackagePlan.name)],
+            index_where=PtPackagePlan.deleted_at.is_(None),
+        )
+    )
+    await session.execute(pt_stmt)
+    await session.commit()
+    print("Seeded client catalog: 1 membership plan + 1 PT-package (idempotent).")
 
 
 async def _run() -> int:
@@ -84,6 +138,9 @@ async def _run() -> int:
                     print(f"Bound telegram_username={tg_lower} to {email_lower}.")
                 elif user is not None:
                     print(f"telegram_username for {email_lower} already set to {tg_lower} (no-op).")
+
+            # Plan 71-09 (Gap 4) — non-empty client catalog for local UAT.
+            await _seed_catalog(session)
     finally:
         await engine.dispose()
     return 0
