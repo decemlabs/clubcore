@@ -15,21 +15,21 @@ import { useAuth } from '@/context/AuthContext.jsx';
 
 // ─── In-file adapter: API membership shape → subInfo render shape ─────────
 // Mirrors the adapter in HomeScreen.jsx
-function toSubInfo(membership) {
+export function toSubInfo(membership) {
   if (!membership) {
     return { daysLeft: 0, total: 0, until: '—', label: 'Нет абонемента', tone: 'danger' };
   }
-  const daysLeft = Math.max(0, membership.days_until_end ?? 0);
-  const tone = membership.expiring_soon
+  const daysLeft = Math.max(0, membership.daysUntilEnd ?? 0);
+  const tone = membership.expiringSoon
     ? (daysLeft === 0 ? 'danger' : 'warn')
     : 'ok';
   return {
     daysLeft,
-    // WR-03: derive the real plan duration from start_date/end_date instead of
+    // WR-03: derive the real plan duration from startDate/endDate instead of
     // a hardcoded 90 so the progress bar reflects the actual membership length.
-    total: subTotalDays(membership.start_date, membership.end_date),
-    until: membership.end_date ?? '—',
-    label: membership.plan_name_snapshot ?? 'Абонемент',
+    total: subTotalDays(membership.startDate, membership.endDate),
+    until: membership.endDate ?? '—',
+    label: membership.planNameSnapshot ?? 'Абонемент',
     tone,
   };
 }
@@ -313,13 +313,13 @@ function VisitsList({ isEmpty, onOpenAll }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="t-h3" style={{ fontSize: 15 }}>
-                  {v.gym_date
-                    ? new Date(v.gym_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+                  {v.gymDate
+                    ? new Date(v.gymDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
                     : '—'}
                 </div>
                 <div className="t-small" style={{ marginTop: 1 }}>
-                  вход в {v.checked_in_at
-                    ? new Date(v.checked_in_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+                  вход в {v.checkedInAt
+                    ? new Date(v.checkedInAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
                     : '—'}
                 </div>
               </div>
@@ -403,14 +403,14 @@ function TrainingsList({ isEmpty, onOpenAll }) {
             <Avatar initials="Т" bg="var(--surface-2)" color="var(--text-2)" size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row-between">
-                <div className="t-h3" style={{ fontSize: 15 }}>{t.trainer_name_snapshot ?? 'Тренер'}</div>
+                <div className="t-h3" style={{ fontSize: 15 }}>{t.trainerNameSnapshot ?? 'Тренер'}</div>
                 <div className="t-small" style={{ color: 'var(--text-3)' }}>
-                  {t.performed_at
-                    ? new Date(t.performed_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'Europe/Moscow' })
+                  {t.performedAt
+                    ? new Date(t.performedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'Europe/Moscow' })
                     : '—'}
                 </div>
               </div>
-              {t.cancelled_at && (
+              {t.cancelledAt && (
                 <div className="t-small" style={{ marginTop: 2, color: 'var(--danger)' }}>Отменена</div>
               )}
             </div>
@@ -593,8 +593,8 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
 
   // total in kopecks (sum of positive amounts only)
   const totalKopecks = items
-    .filter(p => p.amount_kopecks > 0)
-    .reduce((s, p) => s + p.amount_kopecks, 0);
+    .filter(p => p.amountKopecks > 0)
+    .reduce((s, p) => s + p.amountKopecks, 0);
 
   const total = totalKopecks / 100;
 
@@ -644,20 +644,20 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
 }
 
 // ─── Single payment row — adapts API ClientPaymentItem shape ──────────────
-// API: { id, subject_kind, amount_kopecks (signed), method, received_at }
+// API: { id, subjectKind, amountKopecks (signed), method, receivedAt }
 function PurchaseRow({ p }) {
-  const isRefund = p.amount_kopecks < 0;
-  const amountRub = Math.abs(p.amount_kopecks) / 100;
-  const iconName = p.subject_kind === 'membership' ? 'card'
-    : p.subject_kind === 'pt_package' ? 'user'
+  const isRefund = p.amountKopecks < 0;
+  const amountRub = Math.abs(p.amountKopecks) / 100;
+  const iconName = p.subjectKind === 'membership' ? 'card'
+    : p.subjectKind === 'pt_package' ? 'user'
     : isRefund ? 'tag'
     : 'card';
-  const title = p.subject_kind === 'membership' ? 'Абонемент'
-    : p.subject_kind === 'pt_package' ? 'Персональные тренировки'
+  const title = p.subjectKind === 'membership' ? 'Абонемент'
+    : p.subjectKind === 'pt_package' ? 'Персональные тренировки'
     : isRefund ? 'Возврат'
     : 'Оплата';
-  const dateStr = p.received_at
-    ? new Date(p.received_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+  const dateStr = p.receivedAt
+    ? new Date(p.receivedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
     : '—';
   const methodLabel = p.method === 'online' ? 'онлайн' : p.method === 'cash' ? 'наличные' : p.method ?? '';
 

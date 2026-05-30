@@ -5,15 +5,15 @@ import { StatusBar } from '@/components/StatusBar.jsx';
 import { useClientPlans, useClientPtPackages } from '@/data';
 
 // ─── In-file adapters: API plan shapes → card render shapes ──────────────
-// API: ClientCatalogPlanResponse { id, name, price_kopecks, duration_days }
-function toMembershipCard(p) {
-  const priceRub = p.price_kopecks / 100;
-  const durationMonths = Math.round(p.duration_days / 30);
+// API: ClientCatalogPlanResponse { id, name, priceKopecks, durationDays }
+export function toMembershipCard(p) {
+  const priceRub = p.priceKopecks / 100;
+  const durationMonths = Math.round(p.durationDays / 30);
   const pricePerMonth = durationMonths > 0 ? Math.round(priceRub / durationMonths) : priceRub;
   return {
     id: String(p.id),
     name: p.name,
-    tagline: `${p.duration_days} дней`,
+    tagline: `${p.durationDays} дней`,
     priceMonth: pricePerMonth,
     priceTotal: priceRub,
     period: durationMonths === 1 ? '1 мес' : durationMonths < 12 ? `${durationMonths} мес` : '12 мес',
@@ -23,18 +23,18 @@ function toMembershipCard(p) {
   };
 }
 
-// API: ClientCatalogPtPackageResponse { id, name, session_count, price_kopecks }
-function toPtCard(p) {
-  const priceRub = p.price_kopecks / 100;
-  const pricePerSession = p.session_count > 0 ? Math.round(priceRub / p.session_count) : priceRub;
+// API: ClientCatalogPtPackageResponse { id, name, sessionCount, priceKopecks }
+export function toPtCard(p) {
+  const priceRub = p.priceKopecks / 100;
+  const pricePerSession = p.sessionCount > 0 ? Math.round(priceRub / p.sessionCount) : priceRub;
   return {
     id: String(p.id),
     name: p.name,
-    tagline: `${p.session_count} занятий`,
+    tagline: `${p.sessionCount} занятий`,
     priceMonth: pricePerSession,
     priceTotal: priceRub,
-    period: `${p.session_count} тренировок`,
-    popular: p.session_count === 10,
+    period: `${p.sessionCount} тренировок`,
+    popular: p.sessionCount === 10,
     badge: null,
     kind: 'pt',
   };

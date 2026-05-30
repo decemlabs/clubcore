@@ -12,8 +12,8 @@ import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 import { getSubInfo } from '@/utils/subInfo.js';
 
 // ─── In-file adapter: API membership shape → existing subInfo render shape ───
-// API: ClientMembershipResponse { id, plan_name_snapshot, start_date, end_date,
-//       status, days_until_end, expiring_soon } | null
+// API: ClientMembershipResponse { id, planNameSnapshot, startDate, endDate,
+//       status, daysUntilEnd, expiringSoon } | null
 // WR-03: whole-day span between two ISO date-only strings (YYYY-MM-DD).
 // Parses as UTC midnight to avoid the DST risk of new Date(dateOnlyString)
 // (CLAUDE.md domain convention). Returns 0 if either bound is missing/invalid.
@@ -25,21 +25,21 @@ function subTotalDays(startDate, endDate) {
   return Math.max(0, Math.round((end - start) / 86_400_000));
 }
 
-function toSubInfo(membership) {
+export function toSubInfo(membership) {
   if (!membership) {
     return { daysLeft: 0, total: 0, until: '—', label: 'Нет абонемента', tone: 'danger' };
   }
-  const daysLeft = Math.max(0, membership.days_until_end ?? 0);
-  const tone = membership.expiring_soon
+  const daysLeft = Math.max(0, membership.daysUntilEnd ?? 0);
+  const tone = membership.expiringSoon
     ? (daysLeft === 0 ? 'danger' : 'warn')
     : 'ok';
   return {
     daysLeft,
-    // WR-03: derive the real plan duration from start_date/end_date instead of
+    // WR-03: derive the real plan duration from startDate/endDate instead of
     // a hardcoded 90 so the progress bar reflects the actual membership length.
-    total: subTotalDays(membership.start_date, membership.end_date),
-    until: membership.end_date ?? '—',
-    label: membership.plan_name_snapshot ?? 'Абонемент',
+    total: subTotalDays(membership.startDate, membership.endDate),
+    until: membership.endDate ?? '—',
+    label: membership.planNameSnapshot ?? 'Абонемент',
     tone,
   };
 }
@@ -130,8 +130,8 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   const fillTone = sub.tone === 'ok' ? '' : sub.tone === 'warn' ? 'warn' : 'danger';
   const pct = sub.total > 0 ? Math.max(2, Math.min(100, (sub.daysLeft / sub.total) * 100)) : 0;
 
-  // Real next_booking from API (or null)
-  const nextBooking = homeData?.next_booking ?? null;
+  // Real nextBooking from API (or null)
+  const nextBooking = homeData?.nextBooking ?? null;
 
   return (
     <div className="page" style={{ background: 'var(--bg)' }}>
@@ -437,11 +437,11 @@ export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
     </>
   );
 
-  // Format next_booking for display
-  const bookingTime = nextBooking?.start_time
-    ? new Date(nextBooking.start_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+  // Format nextBooking for display
+  const bookingTime = nextBooking?.startTime
+    ? new Date(nextBooking.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
     : null;
-  const bookingTrainer = nextBooking?.trainer_name ?? null;
+  const bookingTrainer = nextBooking?.trainerName ?? null;
 
   if (isEmpty || !nextBooking) {
     return (
@@ -540,17 +540,17 @@ export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
 }
 
 // ─── Upcoming booking card — receives real booking from API ─────────────────
-// booking: ClientNextBookingResponse | null { id, trainer_name, start_time, status }
+// booking: ClientNextBookingResponse | null { id, trainerName, startTime, status }
 export function UpcomingCard({ booking, onClick, compact, onCancel }) {
   const ms = useCountdown(4 * 3600 * 1000 + 12 * 60 * 1000);
   const cd = formatCountdown(ms);
 
-  const trainerName = booking?.trainer_name ?? 'Тренер';
-  const startTime = booking?.start_time
-    ? new Date(booking.start_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+  const trainerName = booking?.trainerName ?? 'Тренер';
+  const startTime = booking?.startTime
+    ? new Date(booking.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
     : '—';
-  const startDate = booking?.start_time
-    ? new Date(booking.start_time).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', timeZone: 'Europe/Moscow' })
+  const startDate = booking?.startTime
+    ? new Date(booking.startTime).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', timeZone: 'Europe/Moscow' })
     : '—';
 
   const cardInner = (
