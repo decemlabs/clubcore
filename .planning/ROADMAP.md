@@ -113,7 +113,7 @@ Plans:
 **Wave 1**
 
 - [x] 70-01-PLAN.md — QR token helpers (encode/decode + ~60s TTL) + CANCEL_WINDOW_HOURS_CLIENT + visits.channel 'client_qr' Alembic migration
-- [ ] 70-02-PLAN.md — Extract actor-agnostic booking + cancel core; expose via composition-root Protocol slots (staff byte-identical)
+- [x] 70-02-PLAN.md — Extract actor-agnostic booking + cancel core; expose via composition-root Protocol slots (staff byte-identical)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -182,7 +182,7 @@ Plans:
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
-| 70. Client Bookings + QR Self Check-In | v2.0 | 1/4 | In Progress|  |
+| 70. Client Bookings + QR Self Check-In | v2.0 | 2/4 | In Progress|  |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/6 | Not started | - |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 

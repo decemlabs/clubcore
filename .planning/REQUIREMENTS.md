@@ -36,9 +36,9 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 - [ ] **CBOOK-01**: Клиент видит свои предстоящие и прошедшие брони
 - [ ] **CBOOK-02**: Клиент видит доступные слоты тренеров для записи
-- [ ] **CBOOK-03**: Клиент бронирует слот к тренеру, используя свой активный PT-пакет (idempotency-keyed, race-safe через существующий partial-UNIQUE)
-- [ ] **CBOOK-04**: Клиент без активного PT-пакета не может записаться; ответ направляет в Plans/Checkout (`Booking.pt_package_id` NOT NULL)
-- [ ] **CBOOK-05**: Клиент отменяет свою бронь в рамках политики окна отмены (через существующий booking FSM)
+- [x] **CBOOK-03**: Клиент бронирует слот к тренеру, используя свой активный PT-пакет (idempotency-keyed, race-safe через существующий partial-UNIQUE)
+- [x] **CBOOK-04**: Клиент без активного PT-пакета не может записаться; ответ направляет в Plans/Checkout (`Booking.pt_package_id` NOT NULL)
+- [x] **CBOOK-05**: Клиент отменяет свою бронь в рамках политики окна отмены (через существующий booking FSM)
 
 ### QR Self Check-In
 
@@ -160,9 +160,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PWA-07 | Phase 69 | Complete |
 | CBOOK-01 | Phase 70 | Pending |
 | CBOOK-02 | Phase 70 | Pending |
-| CBOOK-03 | Phase 70 | Pending |
-| CBOOK-04 | Phase 70 | Pending |
-| CBOOK-05 | Phase 70 | Pending |
+| CBOOK-03 | Phase 70 | Complete |
+| CBOOK-04 | Phase 70 | Complete |
+| CBOOK-05 | Phase 70 | Complete |
 | CCHK-01 | Phase 70 | Complete |
 | CCHK-02 | Phase 70 | Pending |
 | CCHK-03 | Phase 70 | Pending |
