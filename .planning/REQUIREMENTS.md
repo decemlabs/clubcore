@@ -48,11 +48,11 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Client Checkout (ЮKassa)
 
-- [ ] **CPAY-01**: Клиент инициирует покупку или продление абонемента через ЮKassa
-- [ ] **CPAY-02**: Клиент покупает PT-пакет через ЮKassa
-- [ ] **CPAY-03**: Цена читается на сервере (клиенту не доверяем); активация ТОЛЬКО по существующему webhook `payment.succeeded`; redirect-back показывает только anti-oracle «ожидаем подтверждение»
-- [ ] **CPAY-04**: Email клиента обязателен для онлайн-оплаты (54-ФЗ фискальный чек) — 422 `client_email_required_for_online_payment` при отсутствии
-- [ ] **CPAY-05**: Клиентский checkout идемпотентен (no double-charge при повторной отправке)
+- [x] **CPAY-01**: Клиент инициирует покупку или продление абонемента через ЮKassa
+- [x] **CPAY-02**: Клиент покупает PT-пакет через ЮKassa
+- [x] **CPAY-03**: Цена читается на сервере (клиенту не доверяем); активация ТОЛЬКО по существующему webhook `payment.succeeded`; redirect-back показывает только anti-oracle «ожидаем подтверждение»
+- [x] **CPAY-04**: Email клиента обязателен для онлайн-оплаты (54-ФЗ фискальный чек) — 422 `client_email_required_for_online_payment` при отсутствии
+- [x] **CPAY-05**: Клиентский checkout идемпотентен (no double-charge при повторной отправке)
 
 ### History
 
@@ -166,11 +166,11 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CCHK-01 | Phase 70 | Complete |
 | CCHK-02 | Phase 70 | Complete |
 | CCHK-03 | Phase 70 | Complete |
-| CPAY-01 | Phase 71 | Pending |
-| CPAY-02 | Phase 71 | Pending |
-| CPAY-03 | Phase 71 | Pending |
-| CPAY-04 | Phase 71 | Pending |
-| CPAY-05 | Phase 71 | Pending |
+| CPAY-01 | Phase 71 | Complete |
+| CPAY-02 | Phase 71 | Complete |
+| CPAY-03 | Phase 71 | Complete |
+| CPAY-04 | Phase 71 | Complete |
+| CPAY-05 | Phase 71 | Complete |
 | PWA-05 | Phase 71 | Pending |
 | HND-01 | Phase 72 | Pending |
 | HND-02 | Phase 72 | Pending |
