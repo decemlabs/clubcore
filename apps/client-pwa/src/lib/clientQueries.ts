@@ -27,6 +27,8 @@ export const clientPortalKeys = {
   plans: () => [...clientPortalKeys.all, 'plans'] as const,
   ptPackages: () => [...clientPortalKeys.all, 'pt-packages'] as const,
   bookings: () => [...clientPortalKeys.all, 'bookings'] as const,
+  availableSlots: (filter?: string) => [...clientPortalKeys.all, 'available-slots', filter ?? ''] as const,
+  qrToken: () => [...clientPortalKeys.all, 'qr-token'] as const,
   visitHistory: (page: number) => [...clientPortalKeys.all, 'visits', page] as const,
   ptHistory: (page: number) => [...clientPortalKeys.all, 'pt-sessions', page] as const,
   paymentHistory: (page: number) => [...clientPortalKeys.all, 'payments', page] as const,
@@ -42,6 +44,34 @@ interface PaginatedResult<T> {
   total: number
   page: number
   pageSize: number
+}
+
+interface BookingItem {
+  id: string
+  startTime: string
+  status: string
+  trainerName: string
+}
+
+interface BookingResponse {
+  id: string
+  slotId: string
+  startTime: string
+  status: string
+  trainerName: string
+}
+
+interface AvailableSlotItem {
+  slotId: string
+  trainerId: string
+  trainerName: string
+  startTime: string
+  endTime: string
+}
+
+interface QrTokenData {
+  token: string
+  expiresIn: number
 }
 
 interface HomeData {
@@ -143,6 +173,114 @@ export function useClientPaymentHistory(page = 1) {
       return (res as { data: PaginatedResult<unknown> }).data
     },
     staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Booking hooks (Phase-70 endpoints — BookScreen)
+// ---------------------------------------------------------------------------
+
+/** GET /api/v1/client/bookings — upcoming client bookings list (CBOOK-01) */
+export function useClientBookings(page = 1) {
+  return useQuery({
+    queryKey: clientPortalKeys.bookings(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/bookings', {
+        query: { page },
+      })
+      return (res as { data: PaginatedResult<BookingItem> }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/** GET /api/v1/client/slots — available trainer slots, filtered by active PT-package trainer pin (CBOOK-02) */
+export function useClientAvailableSlots(page = 1) {
+  return useQuery({
+    queryKey: clientPortalKeys.availableSlots(String(page)),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/slots', {
+        query: { page },
+      })
+      return (res as { data: PaginatedResult<AvailableSlotItem> }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/**
+ * POST /api/v1/client/booking — create a confirmed booking (CBOOK-03/04).
+ * Requires a per-intent Idempotency-Key header (D-70-02 / T-71-27).
+ * onSettled invalidates bookings cache.
+ * On 422 no_active_pt_package the caller should route to Plans/Checkout (CBOOK-04).
+ */
+export function useCreateBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      slotId,
+      ptPackageId,
+      idempotencyKey,
+    }: {
+      slotId: string
+      ptPackageId: string
+      idempotencyKey: string
+    }) => {
+      const res = await clientRequest('post', '/api/v1/client/booking', {
+        body: { slot_id: slotId, pt_package_id: ptPackageId },
+        headers: { 'Idempotency-Key': idempotencyKey },
+      })
+      return (res as { data: BookingResponse }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.bookings() })
+    },
+  })
+}
+
+/**
+ * POST /api/v1/client/booking/{booking_id}/cancel — cancel own booking (CBOOK-05).
+ * IDOR 404-collapse on non-owned booking (T-71-28).
+ * onSettled invalidates bookings cache.
+ */
+export function useCancelBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ bookingId }: { bookingId: string }) => {
+      const res = await clientRequest(
+        'post',
+        '/api/v1/client/booking/{booking_id}/cancel',
+        { params: { booking_id: bookingId } },
+      )
+      return (res as { data: BookingResponse }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.bookings() })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// QR token hook (Phase-70 CCHK-01 — QRSheet)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/client/qr-token — short-lived (~60s) signed QR self check-in token.
+ *
+ * staleTime: 0 — token is short-lived; always fetched fresh.
+ * refetchInterval: refresh at 50s (before the ~60s TTL) so the displayed QR stays valid.
+ * T-71-26 mitigation: token is server-signed JWT; anti-replay enforced server-side.
+ */
+export function useClientQrToken(enabled = true) {
+  return useQuery({
+    queryKey: clientPortalKeys.qrToken(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/qr-token')
+      return (res as { data: QrTokenData }).data
+    },
+    enabled,
+    staleTime: 0,
+    refetchInterval: 50_000, // refresh before ~60s TTL (T-71-26)
   })
 }
 
