@@ -63,6 +63,21 @@ class ClientEmailRequiredForOnlinePaymentError(ValidationAppError):
     status_code = 422
 
 
+class NoActivePtPackageError(ValidationAppError):
+    """Raised by client_portal.service when a client has no active PT-package.
+
+    Phase 70 CBOOK-04 / D-70-03. HTTP 422 so the PWA routes the user to
+    Plans/Checkout rather than showing a generic conflict error. Distinct
+    from PtPackageNotActiveError (409 ConflictError from bookings domain) —
+    that error is internal to the staff booking path and uses a different
+    status code. client_portal.service maps it to this 422 error so
+    client_portal never imports app.modules.bookings (D-20-MODULE).
+    """
+
+    code = "no_active_pt_package"
+    status_code = 422
+
+
 class ServiceUnavailableAppError(AppError):
     """503 — upstream integration transient failure (Phase 49 D-49-10)."""
 

@@ -83,40 +83,41 @@ async def fetch_available_slots(
         "offset": offset,
     }
 
+    # Use CAST(:trainer_id AS UUID) to avoid `:name::type` cast syntax which
+    # asyncpg/SQLAlchemy text() parser misinterprets as a double-colon escape.
+    trainer_filter = (
+        "AND s.trainer_id = CAST(:trainer_id AS UUID) "
+        if trainer_id is not None
+        else ""
+    )
+    count_bind: dict[str, object] = {
+        "trainer_id": str(trainer_id) if trainer_id is not None else None
+    }
+
+    # trainer_filter is a fixed string literal (CAST(:trainer_id AS UUID) or ""),
+    # not user input — S608 N/A: owned_sql is a fixed string literal constructed
+    # from two constant branches; no user-supplied SQL fragments.
+    _base_filter = (
+        "WHERE s.status = 'active' "
+        "  AND s.start_time > now() "
+        f"  {trainer_filter}"
+        "  AND t.is_active = true "
+        "  AND t.deleted_at IS NULL"
+    )
+    _join = "FROM trainer_availability_slots s JOIN trainers t ON s.trainer_id = t.id "
+    count_sql = "SELECT COUNT(*) AS cnt " + _join + _base_filter
     count_row = (
-        await session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt "
-                "FROM trainer_availability_slots s "
-                "JOIN trainers t ON s.trainer_id = t.id "
-                "WHERE s.status = 'active' "
-                "  AND s.start_time > now() "
-                "  AND (:trainer_id IS NULL OR s.trainer_id = :trainer_id::uuid) "
-                "  AND t.is_active = true "
-                "  AND t.deleted_at IS NULL"
-            ),
-            {"trainer_id": str(trainer_id) if trainer_id is not None else None},
-        )
+        await session.execute(text(count_sql), count_bind)
     ).mappings().one()
     total = int(count_row["cnt"])
 
+    list_sql = (
+        "SELECT s.id AS slot_id, s.trainer_id, t.full_name AS trainer_name, "
+        "  s.start_time, s.end_time " + _join + _base_filter
+        + " ORDER BY s.start_time ASC LIMIT :limit OFFSET :offset"
+    )
     rows = (
-        await session.execute(
-            text(
-                "SELECT s.id AS slot_id, s.trainer_id, t.full_name AS trainer_name, "
-                "  s.start_time, s.end_time "
-                "FROM trainer_availability_slots s "
-                "JOIN trainers t ON s.trainer_id = t.id "
-                "WHERE s.status = 'active' "
-                "  AND s.start_time > now() "
-                "  AND (:trainer_id IS NULL OR s.trainer_id = :trainer_id::uuid) "
-                "  AND t.is_active = true "
-                "  AND t.deleted_at IS NULL "
-                "ORDER BY s.start_time ASC "
-                "LIMIT :limit OFFSET :offset"
-            ),
-            bind,
-        )
+        await session.execute(text(list_sql), bind)
     ).mappings().all()
 
     return [dict(r) for r in rows], total

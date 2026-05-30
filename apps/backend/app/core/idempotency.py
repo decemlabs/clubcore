@@ -40,7 +40,9 @@ from typing import Annotated, TypedDict
 from fastapi import Depends, Request, Response
 from redis.asyncio import Redis
 
+from app.core.dependencies import ClientPrincipal as _ClientPrincipal
 from app.core.dependencies import CurrentUser as _CurrentUser
+from app.core.dependencies import get_current_client as _get_current_client
 from app.core.dependencies import get_current_user as _get_current_user
 from app.core.exceptions import AppError, ValidationAppError
 from app.core.redis import get_redis
@@ -105,6 +107,33 @@ async def verify_idempotency(
     # User-scope + route-bind: user_id FIRST per D-66-USER-SCOPE, then
     # method:path to prevent cross-endpoint replay (D-32-19 / D-33-16 / CR-01).
     return f"{current_user.id}:{request.method}:{request.url.path}:{key}"
+
+
+async def verify_client_idempotency(
+    request: Request,
+    redis: Annotated[Redis, Depends(get_redis)],
+    current_client: Annotated[_ClientPrincipal, Depends(_get_current_client)],
+) -> str:
+    """Client-scoped idempotency for client_portal write endpoints (Phase 70 D-70-02).
+
+    Mirrors ``verify_idempotency`` but scopes the Redis key to the authenticated
+    ClientPrincipal (``client.id``) rather than the staff ``CurrentUser``.
+    Client booking endpoints cannot use ``verify_idempotency`` because that
+    dependency injects ``get_current_user`` (staff cookie), which would 401 on
+    every client request.
+
+    Key shape: ``{client_id}:{method}:{path}:{header_value}`` — same structure
+    as ``verify_idempotency`` (D-66-USER-SCOPE / IDM-05) but uses the client UUID.
+    Namespace: same ``cc:idem:`` prefix — client UUIDs and user UUIDs occupy the
+    same UUID4 space; the distinct principal class prevents cross-namespace replay
+    at the caller level (the endpoints use disjoint dependencies).
+    """
+    key = request.headers.get("idempotency-key")
+    if key is None or key == "":
+        raise ValidationAppError("idempotency_key_required")
+    if not _IDEMPOTENCY_KEY_RE.match(key):
+        raise ValidationAppError("idempotency_key_invalid_format")
+    return f"{current_client.id}:{request.method}:{request.url.path}:{key}"
 
 
 async def begin_idempotency(redis: Redis, key: str) -> bool:
