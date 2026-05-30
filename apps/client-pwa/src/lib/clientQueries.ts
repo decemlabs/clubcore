@@ -22,6 +22,7 @@ export { ApiError }
 // ---------------------------------------------------------------------------
 export const clientPortalKeys = {
   all: ['client-portal'] as const,
+  me: () => [...clientPortalKeys.all, 'me'] as const,
   home: () => [...clientPortalKeys.all, 'home'] as const,
   membership: () => [...clientPortalKeys.all, 'membership'] as const,
   plans: () => [...clientPortalKeys.all, 'plans'] as const,
@@ -103,6 +104,57 @@ export function useClientHome() {
       return (res as { data: HomeData }).data
     },
     staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Auth probe + OTP hooks (Plan 71-07 — login flow)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/client/me — auth probe.
+ *
+ * Used by AuthContext to bootstrap auth status on mount.
+ * retry: false so a 401 probe fails fast to anon (no retry storm).
+ * /client/me is CLIENT_AUTH_EXEMPT — a 401 here does NOT trigger
+ * single-flight refresh; clientFetcher throws ApiError('<code>') from the body.
+ * Treat ANY thrown error as anon.
+ */
+export function useClientMe(enabled = true) {
+  return useQuery({
+    queryKey: clientPortalKeys.me(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/me')
+      return (res as { data: unknown }).data
+    },
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+/**
+ * POST /api/v1/client/otp/request — request OTP code via Telegram.
+ * Anti-oracle: always 202, byte-identical for known/unknown/unlinked phones (T-68-22).
+ */
+export function useOtpRequest() {
+  return useMutation({
+    mutationFn: async ({ phone }: { phone: string }) => {
+      await clientRequest('post', '/api/v1/client/otp/request', { body: { phone } })
+    },
+  })
+}
+
+/**
+ * POST /api/v1/client/otp/verify — verify OTP code, sets cc_client_* cookies on success.
+ * /client/otp/verify is CLIENT_AUTH_EXEMPT — a 401/422 here is a wrong-code error,
+ * never a session_expired refresh trigger.
+ */
+export function useOtpVerify() {
+  return useMutation({
+    mutationFn: async ({ phone, code }: { phone: string; code: string }) => {
+      await clientRequest('post', '/api/v1/client/otp/verify', { body: { phone, code } })
+    },
   })
 }
 

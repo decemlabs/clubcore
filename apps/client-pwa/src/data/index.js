@@ -19,6 +19,10 @@
 // ─── React Query hooks (swap seam — D-71-07) ──────────────────────────────
 export {
   ApiError,
+  // Plan 07: auth probe + OTP login hooks
+  useClientMe,
+  useOtpRequest,
+  useOtpVerify,
   useClientHome,
   useClientPlans,
   useClientPtPackages,
