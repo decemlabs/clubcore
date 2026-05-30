@@ -258,6 +258,16 @@ export default function App() {
                   <PlansSheet
                     onClose={() => ui.setPlansOpen(false)}
                     currentPlanId={t.subState === 'active' ? 'annual' : 'monthly'}
+                    onPick={(plan) => {
+                      ui.setPlansOpen(false)
+                      ui.setCheckoutCtx({
+                        kind: plan.kind,
+                        planId: plan.id,
+                        title: plan.name,
+                        subtitle: plan.period,
+                        amount: plan.priceTotal,
+                      })
+                    }}
                   />
                 </SheetGate>
                 <SheetGate open={ui.manageOpen} variant="detail">
