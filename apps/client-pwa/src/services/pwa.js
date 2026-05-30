@@ -9,6 +9,8 @@ export function registerPwa() {
   if (typeof window === 'undefined') return;
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => {
+      // PWA-07 / T-69-07: /sw.js is network-only for /api/* (see public/sw.js).
+      // Do NOT swap to the VitePWA-generated worker without porting the /api guard.
       navigator.serviceWorker.register('/sw.js')
         .then((reg) => console.info('[PWA] SW registered:', reg.scope))
         .catch((err) => console.warn('[PWA] SW failed:', err.message));
