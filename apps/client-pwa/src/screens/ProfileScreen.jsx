@@ -11,6 +11,7 @@ import {
   useClientPaymentHistory,
 } from '@/data';
 import { getSubInfo } from '@/utils/subInfo.js';
+import { useAuth } from '@/context/AuthContext.jsx';
 
 // ─── In-file adapter: API membership shape → subInfo render shape ─────────
 // Mirrors the adapter in HomeScreen.jsx
@@ -420,6 +421,7 @@ function TrainingsList({ isEmpty, onOpenAll }) {
 }
 
 function SettingsList({ tweaks, setTweak, onOpenPlans, onOpenReferral, onOpenGymInfo, onOpenPersonalData, onOpenCard, onOpenFAQ }) {
+  const { logout } = useAuth();
   const [notif, setNotif] = React.useState({ promo: true, schedule: true, trainer: true, sound: false });
   return (
     <div style={{ padding: '8px 16px' }}>
@@ -469,10 +471,14 @@ function SettingsList({ tweaks, setTweak, onOpenPlans, onOpenReferral, onOpenGym
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <button className="btn" style={{
-          width: '100%', height: 50, background: 'transparent',
-          color: 'var(--danger)', border: '0.5px solid var(--border-strong)',
-        }}>
+        <button
+          className="btn"
+          onClick={() => { void logout() }}
+          style={{
+            width: '100%', height: 50, background: 'transparent',
+            color: 'var(--danger)', border: '0.5px solid var(--border-strong)',
+          }}
+        >
           <Icon name="logout" size={18} color="var(--danger)" strokeWidth={2} />
           Выйти из аккаунта
         </button>
