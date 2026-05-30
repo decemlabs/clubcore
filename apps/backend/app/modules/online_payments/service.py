@@ -177,6 +177,8 @@ async def _sell_subject_core(
     actor_user_id: UUID | None,
     confirmation_type: Literal["redirect", "qr"],
     yookassa_settings: YooKassaSettings,
+    online_payment_id_override: UUID | None = None,
+    return_url_override: str | None = None,
 ) -> SellResponse:
     """Actor-agnostic sell flow (Phase 71 D-71-01).
 
@@ -200,23 +202,32 @@ async def _sell_subject_core(
     - PT-package client path: caller passes the Idempotency-Key header value
       (PWA generates a UUID per checkout intent, D-71-04).
 
+    CR-01/CR-02 (Phase 71 fix): ``online_payment_id_override`` and
+    ``return_url_override`` are NEW optional params for the CLIENT path only.
+    When both are provided AND a fresh row is being inserted (not a replay):
+    - ``online_payment_id_override`` is used as the OnlinePayment PK so the
+      PWA can build the poll URL BEFORE the ЮKassa call (payment_id is known
+      deterministically client-side).
+    - ``return_url_override`` is passed to ``create_payment`` so ЮKassa bakes
+      the correct PWA return URL (with payment_id query param) into the
+      redirect. Staff callers pass neither → behaviour is byte-identical.
+
+    On the replay branch, both overrides are IGNORED (the replay returns the
+    original row's persisted confirmation_url, which already carries the correct
+    return_url from the original create call).
+
+    WR-01 (Phase 71 fix): replay check is performed BEFORE the email gate so
+    a same-day replay POST for a client whose email was later cleared returns
+    the existing confirmation_url instead of a spurious 422 (CPAY-05).
+
     Uses ``session.flush()`` — caller owns the transaction (D-32-10/D-49-19).
     See module docstring for the 7-step protocol.
     """
-    # 1. FIS-05 email gate.
-    customer_email = await _read_client_email_or_raise(session, client_id)
-
-    # 2. Server-side price + description read (CPAY-03 — inside the core,
-    #    never from caller).
-    if subject_kind == "membership":
-        price_kopecks, description = await _read_membership_plan_or_raise(session, plan_id)
-    else:
-        price_kopecks, description = await _read_pt_package_plan_or_raise(session, plan_id)
-
     # 3. Idempotency key is supplied by the caller (see docstring).
     idem_key = idempotency_key
 
-    # 4. Replay check (D-49-09 + BLOCKER #1 QR re-fetch refinement).
+    # 4. Replay check FIRST (WR-01: moved before email gate so a cleared email
+    #    does not block replay of an already-created redirect row — CPAY-05).
     existing = await repository.get_online_payment_by_idempotency_key(session, idem_key)
     if existing is not None and existing.status != "canceled":
         provider = get_yookassa_client_provider()
@@ -239,6 +250,8 @@ async def _sell_subject_core(
                 online_payment_id=existing.id,
             )
         # Redirect replay — confirmation_url persisted on the row at create time.
+        # CR-01/CR-02 overrides are IGNORED on the replay path (existing row's
+        # confirmation_url already carries the correct payment_id return URL).
         _log.info(
             "online_payment_sell_replay",
             online_payment_id=str(existing.id),
@@ -250,6 +263,17 @@ async def _sell_subject_core(
             qr_payload=None,
             online_payment_id=existing.id,
         )
+
+    # 1. FIS-05 email gate — checked AFTER replay (WR-01: replay is side-effect-free;
+    #    a cleared email must not block returning an existing confirmation_url).
+    customer_email = await _read_client_email_or_raise(session, client_id)
+
+    # 2. Server-side price + description read (CPAY-03 — inside the core,
+    #    never from caller).
+    if subject_kind == "membership":
+        price_kopecks, description = await _read_membership_plan_or_raise(session, plan_id)
+    else:
+        price_kopecks, description = await _read_pt_package_plan_or_raise(session, plan_id)
 
     # 5. Build receipt + 6. call ЮKassa.
     receipt_items = [
@@ -270,6 +294,7 @@ async def _sell_subject_core(
         customer_email=customer_email,
         idempotency_key=idem_key,
         confirmation_type=confirmation_type,
+        return_url=return_url_override,  # CR-01/CR-02: None for staff (uses settings default)
     )
 
     # 7. Switch on classification.
@@ -290,6 +315,7 @@ async def _sell_subject_core(
             confirmation_type=confirmation_type,
             created_by_user_id=actor_user_id,  # None for client-initiated (D-71-02)
             audit_correlation_id=correlation_id,
+            id_override=online_payment_id_override,  # CR-01/CR-02: None for staff path
         )
         # surface FK + CHECK + UNIQUE conflicts BEFORE audit emit (D-49-19)
         await session.flush()

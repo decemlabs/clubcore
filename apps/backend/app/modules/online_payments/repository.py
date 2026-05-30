@@ -16,6 +16,7 @@ open session when calling it.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, select
@@ -39,9 +40,17 @@ async def insert_online_payment(
     confirmation_type: str,
     created_by_user_id: UUID | None,
     audit_correlation_id: UUID,
+    id_override: UUID | None = None,
 ) -> OnlinePayment:
-    """Insert OnlinePayment row; caller owns flush + commit (D-49-07)."""
-    row = OnlinePayment(
+    """Insert OnlinePayment row; caller owns flush + commit (D-49-07).
+
+    ``id_override`` (CR-01/CR-02 Phase 71 fix): when provided, uses the
+    supplied UUID as the row PK instead of the DB-generated gen_random_uuid().
+    Used by the client checkout path so the PWA can embed the payment_id in the
+    ЮKassa return_url BEFORE the INSERT — both the row id and the return_url
+    carry the same UUID. Staff callers never pass this parameter.
+    """
+    kwargs: dict[str, Any] = dict(
         client_id=client_id,
         membership_plan_id=membership_plan_id,
         pt_package_plan_id=pt_package_plan_id,
@@ -54,6 +63,9 @@ async def insert_online_payment(
         created_by_user_id=created_by_user_id,
         audit_correlation_id=audit_correlation_id,
     )
+    if id_override is not None:
+        kwargs["id"] = id_override
+    row = OnlinePayment(**kwargs)
     session.add(row)
     return row
 

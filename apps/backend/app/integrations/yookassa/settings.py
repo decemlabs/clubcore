@@ -47,6 +47,12 @@ class YooKassaSettings(BaseSettings):
     shop_id: int
     secret_key: SecretStr
     return_url: HttpUrl
+    # CR-01/CR-02: per-payment return_url for the PWA client path (Phase 71 fix).
+    # Staff path uses return_url (admin-web); client path builds a payment-id-bearing
+    # URL using client_return_url as the base so PaymentReturnScreen can poll.
+    # Defaults to a placeholder so fresh-clone boots without extra config; set to the
+    # real PWA /payment/return origin in staging/prod (e.g. https://pwa.example.com/payment/return).
+    client_return_url: HttpUrl = HttpUrl("https://example.com/payment/return")
     tax_system_code: int
     default_vat_code: int
     sandbox: bool = False

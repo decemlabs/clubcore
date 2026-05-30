@@ -144,6 +144,7 @@ class YooKassaClient:
         customer_email: str,
         idempotency_key: UUID | str,
         confirmation_type: Literal["redirect", "qr"] = "redirect",
+        return_url: str | None = None,
         metadata: dict[str, str] | None = None,
     ) -> YooKassaPaymentResult:
         """POST /v3/payments — caller-owned idempotency_key (D-48-11 + D-49-08).
@@ -167,11 +168,14 @@ class YooKassaClient:
         result_idempotency_key: UUID | None = (
             idempotency_key if isinstance(idempotency_key, UUID) else None
         )
+        # CR-01/CR-02: caller can supply a per-payment return_url (client path bakes
+        # payment_id into the URL so PWA can poll status). Staff callers pass nothing
+        # → falls back to the shared settings.return_url (byte-identical behaviour).
         confirmation_body: dict[str, Any]
         if confirmation_type == "redirect":
             confirmation_body = {
                 "type": "redirect",
-                "return_url": str(self._settings.return_url),
+                "return_url": return_url if return_url is not None else str(self._settings.return_url),
             }
         else:  # "qr"
             confirmation_body = {"type": "qr"}
