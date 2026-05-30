@@ -1,6 +1,7 @@
 import React from 'react';
 import { Avatar } from '@/components/Avatar.jsx';
 import { EmptyState } from '@/components/EmptyState.jsx';
+import { LoadError } from '@/components/LoadError.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
@@ -109,15 +110,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   }
 
   if (isError) {
-    return (
-      <div className="page" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-        <Icon name="alert" size={32} color="var(--danger)" strokeWidth={2} />
-        <div className="t-h3" style={{ textAlign: 'center' }}>Не удалось загрузить данные</div>
-        <button onClick={() => void refetch()} className="btn btn-accent" style={{ height: 44, padding: '0 24px' }}>
-          Повторить
-        </button>
-      </div>
-    );
+    return <LoadError onRetry={() => refetch()} />;
   }
 
   const subTone = sub.tone === 'ok' ? 'chip-accent' : sub.tone === 'warn' ? 'chip-warn' : 'chip-danger';

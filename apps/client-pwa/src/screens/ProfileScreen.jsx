@@ -1,6 +1,7 @@
 import React from 'react';
 import { Avatar } from '@/components/Avatar.jsx';
 import { EmptyState } from '@/components/EmptyState.jsx';
+import { LoadError } from '@/components/LoadError.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import {
@@ -258,12 +259,7 @@ function VisitsList({ isEmpty, onOpenAll }) {
 
   if (isError) {
     return (
-      <div style={{ padding: '8px 16px' }}>
-        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
-          <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 12 }}>Не удалось загрузить визиты</div>
-          <button onClick={() => void refetch()} className="btn" style={{ height: 38, padding: '0 20px' }}>Повторить</button>
-        </div>
-      </div>
+      <LoadError variant="inline" title="Не удалось загрузить визиты" onRetry={() => refetch()} />
     );
   }
 
@@ -361,12 +357,7 @@ function TrainingsList({ isEmpty, onOpenAll }) {
 
   if (isError) {
     return (
-      <div style={{ padding: '8px 16px' }}>
-        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
-          <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 12 }}>Не удалось загрузить тренировки</div>
-          <button onClick={() => void refetch()} className="btn" style={{ height: 38, padding: '0 20px' }}>Повторить</button>
-        </div>
-      </div>
+      <LoadError variant="inline" title="Не удалось загрузить тренировки" onRetry={() => refetch()} />
     );
   }
 
@@ -559,12 +550,7 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
 
   if (isError) {
     return (
-      <div style={{ padding: '8px 16px' }}>
-        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
-          <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 12 }}>Не удалось загрузить покупки</div>
-          <button onClick={() => void refetch()} className="btn" style={{ height: 38, padding: '0 20px' }}>Повторить</button>
-        </div>
-      </div>
+      <LoadError variant="inline" title="Не удалось загрузить покупки" onRetry={() => refetch()} />
     );
   }
 

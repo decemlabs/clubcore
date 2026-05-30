@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/Avatar.jsx';
 import { FilterChips } from '@/components/FilterChips.jsx';
 import { Icon } from '@/components/Icon.jsx';
+import { LoadError } from '@/components/LoadError.jsx';
 import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { SearchBar } from '@/components/SearchBar.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
@@ -58,7 +59,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
   const scrollerRef = React.useRef(null);
   const timeStepRef = React.useRef(null);
 
-  const { data: slotsData, isLoading: slotsLoading, isError: slotsError } = useClientAvailableSlots();
+  const { data: slotsData, isLoading: slotsLoading, isError: slotsError, refetch: refetchSlots } = useClientAvailableSlots();
   const createBookingMutation = useCreateBooking();
   const cancelBookingMutation = useCancelBooking();
 
@@ -227,7 +228,17 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
     );
   }
 
-  if (slotsError || allSlots.length === 0) {
+  if (slotsError) {
+    return (
+      <LoadError
+        title="Не удалось загрузить расписание"
+        subtitle="Проверьте подключение к интернету и попробуйте ещё раз."
+        onRetry={() => refetchSlots()}
+      />
+    );
+  }
+
+  if (allSlots.length === 0) {
     return (
       <div className="page">
         <StatusBar />
@@ -235,9 +246,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
           <div style={{ padding: '40px 20px', textAlign: 'center' }}>
             <div className="t-h3" style={{ marginBottom: 8 }}>Нет доступных слотов</div>
             <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 16 }}>
-              {slotsError
-                ? 'Не удалось загрузить расписание. Проверь подключение.'
-                : 'Доступных слотов для записи нет. Зайди позже.'}
+              Доступных слотов для записи нет. Зайди позже.
             </div>
             {onOpenPlans && (
               <button
