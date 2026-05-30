@@ -223,11 +223,15 @@ export function useCreateBooking() {
       idempotencyKey,
     }: {
       slotId: string
-      ptPackageId: string
+      ptPackageId?: string | null
       idempotencyKey: string
     }) => {
+      // CR-03: pt_package_id is now optional; server resolves the active package
+      // when omitted. Only include it in the body if a valid UUID was supplied.
+      const body: Record<string, string> = { slot_id: slotId }
+      if (ptPackageId) body.pt_package_id = ptPackageId
       const res = await clientRequest('post', '/api/v1/client/booking', {
-        body: { slot_id: slotId, pt_package_id: ptPackageId },
+        body,
         headers: { 'Idempotency-Key': idempotencyKey },
       })
       return (res as { data: BookingResponse }).data

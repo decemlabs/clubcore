@@ -63,26 +63,26 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
 
     setStage('paying');
     try {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       let result;
 
       if (ctx.kind === 'sub') {
-        // CPAY-01: membership checkout — server-derived idempotency key (D-71-04)
-        const returnUrl = `${origin}/payment/return?payment_id=`;
+        // CPAY-01: membership checkout — server-derived idempotency key (D-71-04).
+        // CR-01 fix: the server now bakes payment_id into the ЮKassa return_url.
+        // Just redirect to the confirmation_url; PaymentReturnScreen will receive
+        // payment_id from the query param the server embedded server-side.
         result = await checkoutMembership.mutateAsync({ planId: ctx.planId });
-        // Navigate to ЮKassa confirmation URL (return_url already encoded in server response)
         window.location.href = result.confirmationUrl;
       } else {
-        // CPAY-02: PT-package checkout — client-supplied idempotency key (D-71-04)
-        // PT return_url includes &idempotency_key= so the key survives the redirect round-trip.
+        // CPAY-02: PT-package checkout — client-supplied idempotency key (D-71-04).
+        // CR-02 fix: the server now bakes payment_id + idempotency_key into the
+        // ЮKassa return_url. Do NOT concatenate query params onto the ЮKassa URL
+        // (ЮKassa ignores them; they do not survive to the app return page).
         const idemKey = idempotencyKey.current;
         result = await checkoutPtPackage.mutateAsync({
           planId: ctx.planId,
           idempotencyKey: idemKey,
         });
-        // Redirect to ЮKassa. PaymentReturnScreen reads idempotency_key from useSearchParams()
-        // for retry if needed (D-71-04 sole persistence channel).
-        window.location.href = result.confirmationUrl + `&idempotency_key=${encodeURIComponent(idemKey)}`;
+        window.location.href = result.confirmationUrl;
       }
       // After setting window.location.href the component unmounts; no state update needed.
     } catch (err) {

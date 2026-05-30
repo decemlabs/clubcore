@@ -156,16 +156,13 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2);
     try {
-      // We need ptPackageId from the client's active PT package.
-      // The server gets it via the authenticated session — pass slotId only;
-      // pt_package_id is resolved server-side via require_client + active PT package.
-      // Per CBOOK-03 schema: ClientCreateBookingRequest has slot_id + pt_package_id.
-      // Use empty string as pt_package_id — server will resolve from active package.
-      // NOTE: The actual pt_package_id will be resolved server-side; the client sends
-      // the slot_id and the server reads the active package from the session.
+      // CR-03 fix: pt_package_id is now optional — the server resolves the active
+      // PT-package server-side via get_active_pt_package(client_id). When no active
+      // package exists, the server returns 422 no_active_pt_package which routes here
+      // to onOpenPlans() (CBOOK-04). Do NOT send an empty string (causes 422 UUID parse
+      // error before the service runs); omit the field and let the server resolve it.
       await createBookingMutation.mutateAsync({
         slotId: selectedSlot,
-        ptPackageId: '',
         idempotencyKey,
       });
       setStep('done');
