@@ -65,6 +65,16 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         "/api/v1/client/otp/request",
         "/api/v1/client/otp/verify",
         "/api/v1/client/session/refresh",
+        # Phase 70 D-70-11 — CCHK token-as-credential QR self check-in. This
+        # route is deliberately NOT behind require_client(): the caller is a
+        # gym scanner/turnstile, not the client's logged-in session. The signed
+        # ~60s QR token IS the credential — decode_qr_token (asserts
+        # typ='qr_checkin' + aud='qr') runs inside the handler and client_id is
+        # derived strictly from the verified `sub` claim, so an
+        # introspection-based gate check cannot see it. Anti-replay (exp +
+        # daily-UNIQUE) and per-IP rate limiting are the controls. The
+        # diff-to-this-set IS the audit trail (D-19).
+        "/api/v1/client/check-in",
         # FastAPI built-ins:
         "/openapi.json",
         "/docs",
@@ -180,6 +190,12 @@ def test_excluded_paths_set_is_locked() -> None:
     # /session/logout and /me (GET + PATCH) are NOT excluded — they carry require_client().
     assert "/api/v1/client/session/logout" not in EXCLUDED_PATHS
     assert "/api/v1/client/me" not in EXCLUDED_PATHS
+    # Phase 70 D-70-11 — /check-in IS excluded (token-as-credential QR scan, not
+    # require_client()-gated). /qr-token, /booking, /slots are NOT excluded —
+    # they carry require_client().
+    assert "/api/v1/client/check-in" in EXCLUDED_PATHS
+    assert "/api/v1/client/qr-token" not in EXCLUDED_PATHS
+    assert "/api/v1/client/booking" not in EXCLUDED_PATHS
 
 
 def test_gate_prefixes_match_factory_names() -> None:

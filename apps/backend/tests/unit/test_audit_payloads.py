@@ -294,8 +294,21 @@ def test_booking_created_payload_accepts_owner_role() -> None:
     assert p.actor_role == "owner"
 
 
+def test_booking_created_payload_accepts_client_role() -> None:
+    """Phase 70 D-70-01/07 — the Literal accepts 'client' for client self-bookings."""
+    p = BookingCreatedPayload(
+        booking_id=uuid4(),
+        slot_id=uuid4(),
+        client_id=uuid4(),
+        pt_package_id=uuid4(),
+        created_by_user_id=None,  # self-service: created_by_user_id is NULL (D-40-05)
+        actor_role="client",
+    )
+    assert p.actor_role == "client"
+
+
 def test_booking_created_payload_rejects_unknown_role() -> None:
-    """Literal["reception", "owner", "telegram_bot"] rejects all other values."""
+    """Literal["reception", "owner", "telegram_bot", "client"] rejects all other values."""
     with pytest.raises(ValidationError):
         BookingCreatedPayload(  # type: ignore[arg-type]
             booking_id=uuid4(),
@@ -303,7 +316,7 @@ def test_booking_created_payload_rejects_unknown_role() -> None:
             client_id=uuid4(),
             pt_package_id=uuid4(),
             created_by_user_id=uuid4(),
-            actor_role="client",  # type: ignore[arg-type]
+            actor_role="trainer",  # type: ignore[arg-type]
         )
 
 
