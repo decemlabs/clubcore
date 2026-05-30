@@ -85,16 +85,19 @@ async def _enforce_qr_token_rate_limit(redis: Redis, ip: str) -> None:
     """Per-IP fixed-window rate limit for GET /client/qr-token (T-70-18).
 
     20 req/min per IP. Legitimate clients refresh once every ~50s; threshold
-    is well above normal use. INCR+EXPIRE pattern mirrors reset_rate_limit.py.
+    is well above normal use. Atomic INCR-first pattern: INCR returns the new
+    value atomically; EXPIRE with nx=True only sets the TTL on the first
+    increment so the window is anchored to the first request, not reset on
+    each one. This eliminates the TOCTOU race in the old GET-then-INCR pattern.
     """
     key = _qr_token_rate_key(ip)
-    raw = await redis.get(key)
-    if raw is not None and int(raw) >= _QR_TOKEN_IP_LIMIT:
-        raise RateLimited("rate_limited")
     pipe = redis.pipeline()
     pipe.incr(key)
-    pipe.expire(key, _QR_TOKEN_IP_WINDOW)
-    await pipe.execute()
+    pipe.expire(key, _QR_TOKEN_IP_WINDOW, nx=True)
+    results = await pipe.execute()
+    count = results[0]
+    if count > _QR_TOKEN_IP_LIMIT:
+        raise RateLimited("rate_limited")
 
 
 async def _enforce_check_in_rate_limit(redis: Redis, ip: str) -> None:
@@ -102,16 +105,19 @@ async def _enforce_check_in_rate_limit(redis: Redis, ip: str) -> None:
 
     60 req/min per IP. Accommodates multi-scanner gym reception desks while
     bounding brute-force QR token flood attacks on the unauthenticated endpoint.
-    INCR+EXPIRE pattern mirrors reset_rate_limit.py.
+    Atomic INCR-first pattern: INCR returns the new value atomically; EXPIRE
+    with nx=True only sets the TTL on the first increment so the window is
+    anchored to the first request, not reset on each one. This eliminates the
+    TOCTOU race in the old GET-then-INCR pattern.
     """
     key = _check_in_rate_key(ip)
-    raw = await redis.get(key)
-    if raw is not None and int(raw) >= _CHECK_IN_IP_LIMIT:
-        raise RateLimited("rate_limited")
     pipe = redis.pipeline()
     pipe.incr(key)
-    pipe.expire(key, _CHECK_IN_IP_WINDOW)
-    await pipe.execute()
+    pipe.expire(key, _CHECK_IN_IP_WINDOW, nx=True)
+    results = await pipe.execute()
+    count = results[0]
+    if count > _CHECK_IN_IP_LIMIT:
+        raise RateLimited("rate_limited")
 
 router = APIRouter(tags=["Client-Portal"])
 
