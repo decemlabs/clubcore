@@ -174,6 +174,45 @@ Build/lint/typecheck: all pass ✓
 
 None beyond the 3 auto-fixed build dependency breaks (retained mock constants).
 
+## Code Review Fixes
+
+Post-review fixes applied to this plan's code (from 71-REVIEW.md, committed 2026-05-30):
+
+**CR-01 (BLOCKER) — Membership checkout return_url never carried payment_id**
+- Root cause: `CheckoutSheet.jsx` assigned `returnUrl` but never used it; ЮKassa `return_url` was the shared static staff URL, so `PaymentReturnScreen` never received `payment_id`.
+- Fix: Added `YOOKASSA_CLIENT_RETURN_URL` to `YooKassaSettings`; added optional `return_url` param to `YooKassaClient.create_payment`; `_sell_subject_core` accepts `online_payment_id_override` + `return_url_override`; `client_checkout_membership` builds `return_url = client_return_url?payment_id={op_id}` and passes both overrides to the core. `CheckoutSheet.jsx` now just redirects to `result.confirmationUrl` (server bakes the correct URL).
+- Commits: `0417fddb`, `7516f9a1`, `89b62486`
+
+**CR-02 (BLOCKER) — PT-package return URL appended `idempotency_key` to ЮKassa confirmation URL**
+- Root cause: `window.location.href = result.confirmationUrl + '&idempotency_key=...'` concatenated onto the ЮKassa checkout URL; ЮKassa ignores unknown query params; param never survived to `PaymentReturnScreen`.
+- Fix: `client_checkout_pt_package` generates `op_id = uuid4()`, builds `return_url = client_return_url?payment_id={op_id}&idempotency_key={encoded}`, passes both to `_sell_subject_core`. `CheckoutSheet.jsx` PT branch simplified to `window.location.href = result.confirmationUrl`.
+- Commits: `0417fddb`, `7516f9a1`, `89b62486`
+
+**CR-03 (BLOCKER) — BookScreen sent `pt_package_id: ''` causing always-422**
+- Root cause: `ClientCreateBookingRequest.pt_package_id` was required UUID; empty string failed Pydantic UUID parse before service ran; `no_active_pt_package` branch unreachable.
+- Fix: `ClientCreateBookingRequest.pt_package_id` made optional (`UUID | None = None`); `create_booking_for_client_request` resolves the active package via `get_active_pt_package` when `pt_package_id is None` — raises `NoActivePtPackageError` directly if no package (CBOOK-04 reachable). `BookScreen.jsx` omits `ptPackageId` from `mutateAsync`. `clientQueries.ts` `useCreateBooking` updated to accept optional `ptPackageId`. `openapi.json` + `schema.d.ts` regenerated.
+- Commits: `263c0f57`, `89b62486`, `0b429b4a`
+
+**WR-01 (WARNING) — Email gate ran before replay check**
+- Root cause: `_sell_subject_core` enforced 54-ФЗ email gate (step 1) before replay check (step 4); a same-day replay after email cleared returned 422 instead of the existing confirmation_url.
+- Fix: Moved replay check to run BEFORE the email gate in `_sell_subject_core` (replay is side-effect-free and must not be blocked by current client state — CPAY-05).
+- Commit: `0417fddb`
+
+**WR-02 (WARNING) — `str(r.confirmation_url)` emitted literal "None"**
+- Root cause: `client_checkout_membership`/`client_checkout_pt_package` called `str(r.confirmation_url)` without a None check; a QR-replay scenario returns `confirmation_url=None`.
+- Fix: Added `if r.confirmation_url is None: raise BadGatewayAppError("checkout_confirmation_url_missing")` guard in both functions before constructing `ClientCheckoutResponse`.
+- Commit: `7516f9a1`
+
+**Regression tests added** (4 new integration tests in `test_checkout.py`):
+- `test_membership_checkout_return_url_contains_payment_id` — CR-01
+- `test_pt_checkout_return_url_contains_payment_id_and_idempotency_key` — CR-02
+- `test_membership_replay_returns_original_confirmation_url` — WR-01
+- `test_checkout_confirmation_url_none_raises_bad_gateway` — WR-02
+- Commit: `8dc4e333`
+
+**Full backend suite after fixes:** 2361 passed, 8 skipped (4 new tests added)
+**client-pwa build + lint:** both pass
+
 ## User Setup Required
 
 None — no external service configuration required for this plan.
