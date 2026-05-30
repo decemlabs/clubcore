@@ -68,6 +68,7 @@ from app.integrations.telegram.bot import build_bot
 from app.modules.bookings import repository
 from app.modules.bookings.constants import (
     BOOKING_STATUS_TRANSITIONS,
+    CANCEL_WINDOW_HOURS_CLIENT,
     CANCEL_WINDOW_HOURS_RECEPTION,
 )
 from app.modules.bookings.models import Booking, BookingNotification
@@ -1253,6 +1254,145 @@ async def create_booking_via_bot(
     reloaded = await repository.get_booking_by_id(session, booking.id)
     if reloaded is None:
         raise RuntimeError("create_booking_via_bot: just-inserted booking disappeared on reload")
+    return _booking_response_from_orm(reloaded)
+
+
+# ---------------------------------------------------------------------------
+# Public mutating orchestrator — create_booking_for_client (Phase 70 D-70-01).
+# ---------------------------------------------------------------------------
+
+
+async def create_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    slot_id: UUID,
+    pt_package_id: UUID,
+) -> BookingResponse:
+    """Client self-service booking entry — Phase 70 D-70-01.
+
+    Mirrors ``create_booking_via_bot``'s 10-step UoW exactly except:
+      - Takes no ``CurrentUser`` (no authenticated staff user on the client path).
+      - Inserts the booking with ``created_by_user_id=None`` (D-40-05 /
+        Alembic 0021 made the column NULLABLE).
+      - Emits ``booking_created`` with ``actor_user_id=None`` (raw None —
+        ``audit.emit`` signature is ``UUID | None``), ``actor_role="client"``
+        (Literal — INFRA-11 AST gate / D-70-07), and payload
+        ``created_by_user_id=None`` (D-40-05 anti-fabrication — do NOT
+        invent a fake staff user).
+      - Returns ``BookingResponse`` with ``trainer_full_name`` +
+        ``slot_start_time`` populated (Phase 40 BLOCKER-2 JOIN projection)
+        so Plan 70-03 client endpoints can return full response without a
+        secondary lookup.
+
+    Raises the same 7 domain error classes as ``create_booking``
+    (``SlotNotFoundError``, ``SlotNotAvailableError``,
+    ``SlotAlreadyBookedError``, ``TrainerMismatchError``,
+    ``PtPackageNotActiveError``, ``PtPackageExhaustedError``,
+    ``PtPackageExpiredBeforeSlotError``). Plan 70-03 maps every raised
+    error class to the appropriate HTTP response code.
+
+    SVC001 caller-owns-txn: this function commits its own UoW.
+    """
+    now_utc = datetime.now(UTC)
+
+    # Step 1 — slot resolve + status guard (mirror create_booking_via_bot).
+    slot = await resolve_slot_by_id(session, slot_id)
+    if slot is None:
+        raise SlotNotFoundError("slot_not_found")
+    if slot.status != "active":
+        raise SlotNotAvailableError("slot_not_available")
+    if slot.start_time <= now_utc:
+        raise SlotNotAvailableError("slot_not_available")
+
+    # Step 2 — active pt_package resolve + id-match + exhausted guard.
+    pt_package = await get_active_pt_package(session, client_id)
+    if pt_package is None:
+        raise PtPackageNotActiveError("pt_package_not_active")
+    if pt_package.id != pt_package_id:
+        # Defensive — client cannot book against an unrelated package id
+        # (server is the arbiter of which package owns the booking; mirrors
+        # create_booking_via_bot id-spoofing protection).
+        raise PtPackageNotActiveError("pt_package_not_active")
+    if pt_package.sessions_remaining <= 0:
+        raise PtPackageExhaustedError("pt_package_exhausted")
+
+    # Step 3 — Trainer-mismatch guard (PKG-02 / C-08).
+    pkg_trainer_id = getattr(pt_package, "trainer_id", None)
+    if pkg_trainer_id is not None and pkg_trainer_id != slot.trainer_id:
+        raise TrainerMismatchError("trainer_mismatch")
+
+    # Step 4 — Moscow-TZ validity-window guard (D-38-12 / Pitfall 18).
+    if (
+        pt_package.end_date is not None
+        and pt_package.end_date < slot.start_time.astimezone(MOSCOW_TZ).date()
+    ):
+        raise PtPackageExpiredBeforeSlotError("pt_package_expired_before_slot")
+
+    # Step 5 — Cross-module raw UPDATE flipping slot active→booked.
+    slot_flipped = await repository.update_slot_status_predicate_gated(
+        session,
+        slot_id,
+        from_status="active",
+        to_status="booked",
+    )
+    if not slot_flipped:
+        # Force a fresh read bypassing identity-map cache (mirror create_booking).
+        await session.refresh(slot, attribute_names=["status"])
+        if slot.status == "booked":
+            raise SlotAlreadyBookedError("slot_already_booked")
+        raise SlotNotAvailableError("slot_not_available")
+
+    # Step 6 — INSERT booking row with created_by_user_id=None (D-40-05 /
+    # D-70-07 anti-fabrication: no fake staff user for the client path).
+    booking = await repository.insert_booking(
+        session,
+        slot_id=slot_id,
+        client_id=client_id,
+        pt_package_id=pt_package_id,
+        created_by_user_id=None,
+    )
+
+    # Step 7 — Flush + uq_bookings_slot_confirmed race translation.
+    # Criterion #1 (D-70-06 / CBOOK-03): the partial UNIQUE is the
+    # load-bearing race guard. BOOK-10 race-loser path: translate
+    # IntegrityError → SlotAlreadyBookedError (409 slot_already_booked).
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_slot_confirmed_conflict(exc):
+            raise SlotAlreadyBookedError("slot_already_booked") from exc
+        raise
+
+    # Step 8 — Emit booking_created (LITERAL strings for INFRA-11 AST gate).
+    # D-70-07: actor_role="client" literal; actor_user_id=None; payload
+    # created_by_user_id=None (D-40-05 — do NOT fabricate a staff user;
+    # audit.emit signature is UUID | None so None is legal here).
+    await audit.emit(
+        session,
+        "booking_created",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=None,  # RAW None (audit.emit signature is UUID | None)
+        resource_type="booking",  # LITERAL — INFRA-11 AST gate
+        resource_id=booking.id,
+        booking_id=str(booking.id),
+        slot_id=str(booking.slot_id),
+        client_id=str(booking.client_id),
+        pt_package_id=str(booking.pt_package_id),
+        created_by_user_id=None,  # payload-level; nullable per D-40-05 / D-70-07
+        actor_role="client",  # LITERAL — INFRA-11 AST gate / D-70-07
+    )
+
+    # Step 9 — Commit (SVC001 gate).
+    await session.commit()
+
+    # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2) so
+    # the returned BookingResponse carries trainer_full_name + slot_start_time.
+    reloaded = await repository.get_booking_by_id(session, booking.id)
+    if reloaded is None:
+        raise RuntimeError(
+            "create_booking_for_client: just-inserted booking disappeared on reload"
+        )
     return _booking_response_from_orm(reloaded)
 
 

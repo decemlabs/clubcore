@@ -445,7 +445,9 @@ class BookingCreatedPayload(BaseModel):
     # the Phase 38 reception-path emit shape (which historically did not
     # carry actor_role); a Phase 40 callsite must pass actor_role explicitly
     # when emitting on behalf of the owner or the bot.
-    actor_role: Literal["reception", "owner", "telegram_bot"] = "reception"
+    # Phase 70 D-70-07 additive extension: 'client' for the self-service
+    # booking path (create_booking_for_client; no fake staff user).
+    actor_role: Literal["reception", "owner", "telegram_bot", "client"] = "reception"
 
 
 class BookingCancelledPayload(BaseModel):
