@@ -30,7 +30,7 @@ from app.core.dependencies import (
     create_visit_client_qr,
     get_active_pt_package,
 )
-from app.core.exceptions import ConflictError, NoActivePtPackageError
+from app.core.exceptions import ConflictError, InvalidSession, NoActivePtPackageError
 from app.core.pagination import PageQuery, PaginatedData
 from app.core.security import decode_qr_token, encode_qr_token
 from app.modules.client_portal import repository
@@ -368,7 +368,10 @@ async def check_in_via_qr(
     bubbles to _app_error_handler → 409 (criterion #5 same-day replay guard).
     """
     claims = decode_qr_token(token)
-    client_id = UUID(claims.sub)  # sole authoritative source (D-70-10)
+    try:
+        client_id = UUID(claims.sub)  # sole authoritative source (D-70-10)
+    except ValueError as exc:
+        raise InvalidSession("invalid_session") from exc
     result = await create_visit_client_qr(session, client_id)
     r = cast(Any, result)
     return ClientCheckInResponse(
