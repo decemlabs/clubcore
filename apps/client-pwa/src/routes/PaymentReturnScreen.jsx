@@ -16,14 +16,27 @@ import { useClientPaymentStatus } from '@/data';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 
+// WR-02: after this many ms still pending, surface a manual exit so an
+// abandoned-payment user is never stranded on the spinner indefinitely.
+const PENDING_TIMEOUT_MS = 30_000;
+
 export function PaymentReturnScreen() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const paymentId = params.get('payment_id');
   // D-71-04: idempotency_key carried in return_url for PT packages (retry safety).
   // Stored here so retry flows can read it back from useSearchParams().
   const _idempotencyKey = params.get('idempotency_key');
 
   const { data, isLoading } = useClientPaymentStatus(paymentId, !!paymentId);
+
+  // WR-02: track when the pending poll has run long enough to offer an exit.
+  const [pollTimedOut, setPollTimedOut] = React.useState(false);
+  React.useEffect(() => {
+    if (!paymentId) return undefined;
+    const timer = setTimeout(() => setPollTimedOut(true), PENDING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [paymentId]);
 
   // On succeeded: navigate Home to show now-active membership/PT package.
   // This is the ONLY condition under which we leave this screen upward (criterion #1).
@@ -87,6 +100,27 @@ export function PaymentReturnScreen() {
       {!paymentId && (
         <div className="t-small" style={{ color: 'var(--text-3)', marginTop: 8 }}>
           Неверная ссылка возврата — payment_id не найден.
+        </div>
+      )}
+
+      {/* WR-02: after a timeout (or no payment_id) offer a manual exit so the
+          user is never stranded on the spinner. Stays anti-oracle compliant —
+          reveals no activation state, just lets the user leave. */}
+      {(pollTimedOut || !paymentId) && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          {pollTimedOut && paymentId && (
+            <div className="t-small" style={{ color: 'var(--text-3)', maxWidth: 280 }}>
+              Подтверждение занимает дольше обычного. Если платёж прошёл, статус
+              обновится автоматически.
+            </div>
+          )}
+          <button
+            onClick={() => navigate('/', { replace: true })}
+            className="btn"
+            style={{ height: 48, padding: '0 28px' }}
+          >
+            На главную
+          </button>
         </div>
       )}
     </div>
