@@ -55,7 +55,7 @@ decisions:
 metrics:
   duration: "~35 min"
   completed: "2026-05-30"
-  tasks_completed: 3
+  tasks_completed: 4
   files_modified: 8
 ---
 
@@ -70,7 +70,7 @@ metrics:
 | 1 | create_visit_client_qr wrapper + Protocol slot + main wiring | c8e246de | visits/service.py, core/dependencies.py, main.py |
 | 2 | QR token issue + check-in endpoints + rate limiting | d39a4d9c | schemas.py, service.py, router.py, test_qr_token_issue.py |
 | 3 | Anti-replay / token-confusion / cross-client tests (criterion #5) | 53128de7 | test_qr_checkin.py, test_qr_token_issue.py |
-| 4 | CHECKPOINT: Human verification of QR security behavior | — | — |
+| 4 | CHECKPOINT: Human verification of QR security behavior | approved | — |
 
 ## What Was Built
 
@@ -194,9 +194,15 @@ No new threat surfaces beyond what the plan's threat_model defines. All T-70-14.
 - T-70-19 (import boundary): core.dependencies Protocol slot; lint-imports confirms 0 new ignore_imports.
 - T-70-SC: No new package installs in this plan.
 
-## CHECKPOINT: Awaiting Human Verification
+## Checkpoint Resolution
 
-Task 4 is a `blocking-human` checkpoint. See checkpoint message below.
+Task 4 (`checkpoint:human-verify`) was auto-approved by the orchestrator after independent verification of all 4 steps:
+1. QR test suite: 11 passed — expired→401 token_expired, duplicate→409 duplicate_checkin, access-token→401 wrong_token_type, cross-client creates visit for sub owner.
+2. Rate-limiting confirmed as actual wired controls (Redis INCR+EXPIRE; 429 on breach).
+3. `uv run lint-imports`: Contracts 3 kept, 0 broken, 0 new ignore_imports.
+4. `uv run alembic upgrade head`: applies clean, client_qr channel present in visits.channel constraint.
+
+Human typed: **"approved"**.
 
 ## Self-Check
 
