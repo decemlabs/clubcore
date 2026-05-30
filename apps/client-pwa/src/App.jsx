@@ -111,6 +111,7 @@ function BookRoute() {
       onOpenTrainer={(tr) => ui.setTrainerDetail(tr)}
       onCheckout={(ctx) => ui.setCheckoutCtx(ctx)}
       onConfirmFlow={ui.setBookConfirmOpen}
+      onOpenPlans={() => ui.setPlansOpen(true)}
     />
   );
 }

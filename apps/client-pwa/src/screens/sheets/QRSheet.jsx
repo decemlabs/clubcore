@@ -1,10 +1,15 @@
 import React from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Icon } from '@/components/Icon.jsx';
-import { QRPattern } from '@/components/QRPattern.jsx';
+import { useClientQrToken } from '@/data';
 
 export const QRSheet = ({ onClose, userName }) => {
   // 'idle' = QR shown, 'scanning' = animation, 'success' = entered
   const [phase, setPhase] = React.useState('idle');
+
+  // Fetch the real short-lived signed QR token (Phase-70 CCHK-01).
+  // staleTime:0 + refetchInterval:50s ensures the token stays fresh before ~60s TTL (T-71-26).
+  const { data: qrData, isLoading: qrLoading, isError: qrError } = useClientQrToken(true);
 
   React.useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -74,8 +79,29 @@ export const QRSheet = ({ onClose, userName }) => {
           padding: 24, background: '#fff', borderRadius: 'var(--r-xl)',
           boxShadow: '0 30px 80px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2)',
           position: 'relative', overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          minWidth: 260 + 48, minHeight: 260 + 48,
         }}>
-          <QRPattern size={260} color="#0a0a0a" />
+          {qrLoading ? (
+            <div style={{ width: 260, height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="t-small" style={{ color: '#666' }}>Загрузка…</div>
+            </div>
+          ) : qrError || !qrData ? (
+            <div style={{ width: 260, height: 260, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Icon name="qr" size={40} color="#bbb" strokeWidth={1.4} />
+              <div className="t-small" style={{ color: '#999', textAlign: 'center', maxWidth: 160 }}>
+                Не удалось загрузить QR. Проверь подключение.
+              </div>
+            </div>
+          ) : (
+            <QRCodeSVG
+              value={qrData.token}
+              size={260}
+              bgColor="#ffffff"
+              fgColor="#0a0a0a"
+              level="M"
+            />
+          )}
           {phase === 'scanning' && (
             <>
               <div className="qr-scan-line" />
@@ -86,7 +112,7 @@ export const QRSheet = ({ onClose, userName }) => {
         <div style={{ marginTop: 28, textAlign: 'center' }}>
           <div className="t-h1" style={{ fontSize: 28 }}>{userName || 'Саша'}</div>
           <div className="t-small" style={{ marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-            Клиент №&thinsp;4821 · до 7 мая
+            Пропуск в зал
           </div>
         </div>
       </div>
@@ -205,9 +231,9 @@ export function QRSuccess({ onClose, userName }) {
             <Icon name="qr" size={22} color="var(--text)" strokeWidth={1.6} />
           </div>
           <div style={{ flex: 1, textAlign: 'left' }}>
-            <div className="t-mini" style={{ color: 'var(--text-3)' }}>Сегодня · 9:41</div>
+            <div className="t-mini" style={{ color: 'var(--text-3)' }}>Сегодня</div>
             <div className="t-h3" style={{ marginTop: 2, fontSize: 15 }}>
-              Турникет А · 14-й визит
+              Вход через QR
             </div>
           </div>
         </div>
@@ -265,4 +291,3 @@ export function QRSuccess({ onClose, userName }) {
     </div>
   );
 }
-

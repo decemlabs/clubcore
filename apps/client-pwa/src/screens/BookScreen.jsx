@@ -1,85 +1,260 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/Avatar.jsx';
 import { FilterChips } from '@/components/FilterChips.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { SearchBar } from '@/components/SearchBar.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { BUSY_SLOTS, CALENDAR, TIME_SLOTS, TRAINERS } from '@/data';
+import { ApiError } from '@/data';
+import { useClientAvailableSlots, useCreateBooking, useCancelBooking } from '@/data';
 import { addHour, monthName } from '@/utils/format.js';
 
-export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onConfirmFlow }) => {
+// ─── Helpers for slot data ─────────────────────────────────────────────────
+
+function parseSlotDate(startTime) {
+  const d = new Date(startTime);
+  return {
+    key: d.toISOString().slice(0, 10), // "YYYY-MM-DD"
+    dow: d.toLocaleDateString('ru-RU', { weekday: 'short' }),
+    num: d.getDate(),
+    month: d.getMonth(),
+    isToday: new Date().toISOString().slice(0, 10) === d.toISOString().slice(0, 10),
+    hasSlot: true,
+  };
+}
+
+function parseSlotTime(startTime) {
+  const d = new Date(startTime);
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+
+// Pick a consistent avatar bg per trainerId
+const BG_COLORS = ['#d1fae5', '#dbeafe', '#fce7f3', '#ede9fe', '#fef3c7', '#fee2e2'];
+function trainerBg(trainerId) {
+  let h = 0;
+  for (let i = 0; i < trainerId.length; i++) h = (h * 31 + trainerId.charCodeAt(i)) | 0;
+  return BG_COLORS[Math.abs(h) % BG_COLORS.length];
+}
+
+export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onConfirmFlow, onOpenPlans }) => {
+  const navigate = useNavigate();
   const [step, setStep] = React.useState('pick'); // 'pick' | 'confirm' | 'done'
+  const [selectedDay, setSelectedDay] = React.useState(null);
+  const [selectedTrainer, setSelectedTrainer] = React.useState(null);
+  const [selectedSlot, setSelectedSlot] = React.useState(null); // slotId string
+  const [selectedSlotMeta, setSelectedSlotMeta] = React.useState(null); // { startTime, trainerName, trainerId }
+  const [trainerQuery, setTrainerQuery] = React.useState('');
+  const [trainerFilter, setTrainerFilter] = React.useState('all');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState(null);
+  const scrollerRef = React.useRef(null);
+  const timeStepRef = React.useRef(null);
+
+  const { data: slotsData, isLoading: slotsLoading, isError: slotsError } = useClientAvailableSlots();
+  const createBookingMutation = useCreateBooking();
+  const cancelBookingMutation = useCancelBooking();
+
+  // Notify parent about confirm flow state
   React.useEffect(() => {
     onConfirmFlow && onConfirmFlow(step === 'confirm' || step === 'done');
     return () => { onConfirmFlow && onConfirmFlow(false); };
   }, [step]);
-  const [selectedDay, setSelectedDay] = React.useState(CALENDAR[1].key);
-  const [selectedTrainer, setSelectedTrainer] = React.useState(null);
-  const [selectedSlot, setSelectedSlot] = React.useState(null);
-  const scrollerRef = React.useRef(null);
-  const timeStepRef = React.useRef(null);
 
   // Smoothly scroll to the time-slot section after a trainer is picked
   React.useEffect(() => {
     if (!selectedTrainer) return;
-    // Wait a frame for the Step 3 block to mount
     const id = requestAnimationFrame(() => {
       const scroller = scrollerRef.current;
       const target = timeStepRef.current;
       if (!scroller || !target) return;
-      const targetTop = target.offsetTop - 60; // leave breathing room
+      const targetTop = target.offsetTop - 60;
       scroller.scrollTo({ top: targetTop, behavior: 'smooth' });
     });
     return () => cancelAnimationFrame(id);
   }, [selectedTrainer]);
 
-  const day = CALENDAR.find(d => d.key === selectedDay);
-  const trainer = TRAINERS.find(t => t.id === selectedTrainer);
+  // Reset slot when trainer/day changes
+  React.useEffect(() => { setSelectedSlot(null); setSelectedSlotMeta(null); }, [selectedTrainer, selectedDay]);
 
-  // Trainer search + spec filter
-  const [trainerQuery, setTrainerQuery] = React.useState('');
-  const [trainerFilter, setTrainerFilter] = React.useState('all');
-  const filteredTrainers = TRAINERS.filter(t => {
+  const allSlots = slotsData?.items ?? [];
+
+  // Derive unique calendar days from real slot data
+  const calendarDays = React.useMemo(() => {
+    const seen = new Set();
+    const days = [];
+    for (const s of allSlots) {
+      const info = parseSlotDate(s.startTime);
+      if (!seen.has(info.key)) {
+        seen.add(info.key);
+        days.push(info);
+      }
+    }
+    return days.sort((a, b) => a.key.localeCompare(b.key));
+  }, [allSlots]);
+
+  // Auto-select first available day
+  React.useEffect(() => {
+    if (calendarDays.length > 0 && !selectedDay) {
+      setSelectedDay(calendarDays[0].key);
+    }
+  }, [calendarDays, selectedDay]);
+
+  const day = calendarDays.find(d => d.key === selectedDay);
+
+  // Derive unique trainers from real slot data for selected day
+  const trainersForDay = React.useMemo(() => {
+    if (!selectedDay) return [];
+    const seen = new Set();
+    const trainers = [];
+    for (const s of allSlots) {
+      if (parseSlotDate(s.startTime).key !== selectedDay) continue;
+      if (!seen.has(s.trainerId)) {
+        seen.add(s.trainerId);
+        trainers.push({
+          id: s.trainerId,
+          name: s.trainerName,
+          initials: getInitials(s.trainerName),
+          bg: trainerBg(s.trainerId),
+          color: '#065f46',
+        });
+      }
+    }
+    return trainers;
+  }, [allSlots, selectedDay]);
+
+  // Filter trainers by search query
+  const filteredTrainers = trainersForDay.filter(t => {
+    if (!trainerQuery.trim()) return true;
     const q = trainerQuery.toLowerCase().trim();
-    const matchQ = !q || t.name.toLowerCase().includes(q) || t.spec.toLowerCase().includes(q);
-    let matchF = true;
-    if (trainerFilter === 'top')   matchF = t.rating >= 4.9;
-    if (trainerFilter === 'cheap') matchF = t.price <= 2200;
-    return matchQ && matchF;
+    return t.name.toLowerCase().includes(q);
   });
 
-  // Reset slot when trainer changes
-  React.useEffect(() => { setSelectedSlot(null); }, [selectedTrainer, selectedDay]);
+  // Slots for selected trainer + day
+  const slotsForTrainer = React.useMemo(() => {
+    if (!selectedTrainer || !selectedDay) return [];
+    return allSlots.filter(s =>
+      s.trainerId === selectedTrainer &&
+      parseSlotDate(s.startTime).key === selectedDay,
+    );
+  }, [allSlots, selectedTrainer, selectedDay]);
+
+  const trainer = trainersForDay.find(t => t.id === selectedTrainer);
+
+  const handleConfirm = async () => {
+    if (!selectedSlot || !selectedSlotMeta) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    const idempotencyKey = typeof crypto !== 'undefined'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+    try {
+      // We need ptPackageId from the client's active PT package.
+      // The server gets it via the authenticated session — pass slotId only;
+      // pt_package_id is resolved server-side via require_client + active PT package.
+      // Per CBOOK-03 schema: ClientCreateBookingRequest has slot_id + pt_package_id.
+      // Use empty string as pt_package_id — server will resolve from active package.
+      // NOTE: The actual pt_package_id will be resolved server-side; the client sends
+      // the slot_id and the server reads the active package from the session.
+      await createBookingMutation.mutateAsync({
+        slotId: selectedSlot,
+        ptPackageId: '',
+        idempotencyKey,
+      });
+      setStep('done');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === 'no_active_pt_package') {
+          // CBOOK-04: route to Plans/Checkout (T-71-29)
+          if (onOpenPlans) {
+            onOpenPlans();
+          } else {
+            navigate('/home');
+          }
+          return;
+        }
+        setSubmitError(err.code === 'slot_already_booked'
+          ? 'Это место уже занято. Выбери другое время.'
+          : 'Не удалось создать запись. Попробуй ещё раз.');
+      } else {
+        setSubmitError('Произошла ошибка. Проверь подключение.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (step === 'done') {
     return <BookingConfirmed
-      day={day} trainer={trainer} slot={selectedSlot}
+      day={day}
+      trainerName={selectedSlotMeta?.trainerName}
+      slot={selectedSlotMeta ? parseSlotTime(selectedSlotMeta.startTime) : ''}
       onDone={() => onTab('home')}
-      onBookAnother={() => { setStep('pick'); setSelectedTrainer(null); setSelectedSlot(null); }}
+      onBookAnother={() => {
+        setStep('pick');
+        setSelectedTrainer(null);
+        setSelectedSlot(null);
+        setSelectedSlotMeta(null);
+      }}
       onManage={onOpenManage}
     />;
   }
 
   if (step === 'confirm') {
     return <BookingReview
-      day={day} trainer={trainer} slot={selectedSlot}
+      day={day}
+      trainerName={selectedSlotMeta?.trainerName}
+      slot={selectedSlotMeta ? parseSlotTime(selectedSlotMeta.startTime) : ''}
       onBack={() => setStep('pick')}
-      onConfirm={() => {
-        if (onCheckout) {
-          onCheckout({
-            kind: 'training',
-            title: `Тренировка с ${trainer.name.split(' ')[0]}`,
-            subtitle: `${day.dow}, ${day.num} · ${selectedSlot} · 1 час`,
-            amount: trainer.price,
-          });
-          // Optimistic — move to done after the checkout sheet appears
-          setTimeout(() => setStep('done'), 1700);
-        } else {
-          setStep('done');
-        }
-      }}
+      isSubmitting={isSubmitting}
+      submitError={submitError}
+      onConfirm={handleConfirm}
     />;
+  }
+
+  if (slotsLoading) {
+    return (
+      <div className="page">
+        <StatusBar />
+        <div className="scroller" style={{ paddingTop: 54, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="t-small" style={{ color: 'var(--text-3)', padding: 40 }}>Загрузка расписания…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (slotsError || allSlots.length === 0) {
+    return (
+      <div className="page">
+        <StatusBar />
+        <div className="scroller" style={{ paddingTop: 54 }}>
+          <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+            <div className="t-h3" style={{ marginBottom: 8 }}>Нет доступных слотов</div>
+            <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 16 }}>
+              {slotsError
+                ? 'Не удалось загрузить расписание. Проверь подключение.'
+                : 'Доступных слотов для записи нет. Зайди позже.'}
+            </div>
+            {onOpenPlans && (
+              <button
+                onClick={onOpenPlans}
+                className="btn btn-accent"
+                style={{ height: 44, padding: '0 24px' }}
+              >
+                Купить абонемент
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -98,18 +273,16 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
             Когда удобно
           </div>
         </div>
-        <div style={{ overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4, scrollbarWidth: 'none' }}
-             onScroll={e => e.preventDefault}>
+        <div style={{ overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4, scrollbarWidth: 'none' }}>
           <div style={{
-            display: 'grid', gridTemplateColumns: `repeat(${CALENDAR.length}, 60px)`,
+            display: 'grid', gridTemplateColumns: `repeat(${calendarDays.length}, 60px)`,
             gap: 8, padding: '4px 20px 8px',
           }}>
-            {CALENDAR.map(d => (
+            {calendarDays.map(d => (
               <button
                 key={d.key}
-                onClick={() => d.hasSlot && setSelectedDay(d.key)}
-                disabled={!d.hasSlot}
-                className={`cal-day ${selectedDay === d.key ? 'selected' : ''} ${d.hasSlot ? 'has-slot' : 'disabled'}`}
+                onClick={() => setSelectedDay(d.key)}
+                className={`cal-day ${selectedDay === d.key ? 'selected' : ''} has-slot`}
               >
                 <span className="dow">{d.isToday ? 'Сег' : d.dow}</span>
                 <span className="num">{d.num}</span>
@@ -125,43 +298,20 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
             Свободные тренеры
           </div>
         </div>
-        {/* Search + filter */}
         <div style={{ padding: '4px 16px 6px' }}>
           <SearchBar value={trainerQuery} onChange={setTrainerQuery}
-                     placeholder="Имя или специализация" />
+                     placeholder="Имя тренера" />
         </div>
         <div style={{ padding: '4px 16px 8px' }}>
           <FilterChips value={trainerFilter} onChange={setTrainerFilter} options={[
-            { id: 'all',   label: 'Все',          count: TRAINERS.length },
-            { id: 'top',   label: '★ Топ',        count: TRAINERS.filter(t => t.rating >= 4.9).length },
-            { id: 'cheap', label: 'До 2200 ₽',    count: TRAINERS.filter(t => t.price <= 2200).length },
+            { id: 'all', label: 'Все', count: trainersForDay.length },
           ]} />
         </div>
         <div className="stack-2" style={{ padding: '4px 16px 4px' }}>
           {filteredTrainers.length === 0 ? (
             <div className="card" style={{ padding: '28px 20px', textAlign: 'center' }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: 999, margin: '0 auto 12px',
-                background: 'var(--surface-2)', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="22" height="22" viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="7" stroke="var(--text-3)" strokeWidth="1.8" fill="none" />
-                  <path d="M16 16l4 4" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div className="t-h3" style={{ fontSize: 15 }}>Никто не подошёл</div>
-              <div className="t-small" style={{ marginTop: 4 }}>
-                Попробуй другой запрос или сними фильтр.
-              </div>
-              <button onClick={() => { setTrainerQuery(''); setTrainerFilter('all'); }}
-                      className="press"
-                      style={{
-                        marginTop: 14, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-                        border: '0.5px solid var(--border-strong)', background: 'transparent',
-                        color: 'var(--text)', borderRadius: 999, cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}>Сбросить</button>
+              <div className="t-h3" style={{ fontSize: 15 }}>Нет тренеров</div>
+              <div className="t-small" style={{ marginTop: 4 }}>Выбери другой день</div>
             </div>
           ) : filteredTrainers.map(t => {
             const isSel = selectedTrainer === t.id;
@@ -181,37 +331,22 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
                 <div style={{ padding: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
                   <Avatar initials={t.initials} bg={t.bg} color={t.color} size={48} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="row-between">
-                      <div className="t-h3">{t.name}</div>
-                      <div className="row" style={{ gap: 3 }}>
-                        <Icon name="starFill" size={14} color="#f59e0b" />
-                        <span className="t-small" style={{ color: 'var(--text)', fontWeight: 600 }}>{t.rating}</span>
-                      </div>
-                    </div>
-                    <div className="t-small" style={{ marginTop: 2 }}>{t.spec}</div>
-                    <div className="row-between" style={{ marginTop: 8, gap: 8 }}>
-                      <div className="row" style={{ gap: 8 }}>
-                        <span className="chip" style={{ height: 22, fontSize: 11.5, padding: '0 9px' }}>{t.exp}</span>
-                        <span className="t-small" style={{ color: 'var(--text-2)', fontWeight: 600 }}>
-                          {t.price.toLocaleString('ru-RU')} ₽
-                        </span>
-                      </div>
-                      {onOpenTrainer && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onOpenTrainer(t); }}
-                          style={{
-                            appearance: 'none', border: '0.5px solid var(--border-strong)',
-                            background: 'transparent', cursor: 'pointer',
-                            height: 26, padding: '0 10px', borderRadius: 999,
-                            fontSize: 12, fontWeight: 600, color: 'var(--text-2)',
-                            fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: 4,
-                          }}
-                        >
-                          Подробнее
-                        </button>
-                      )}
-                    </div>
+                    <div className="t-h3">{t.name}</div>
+                    {onOpenTrainer && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onOpenTrainer(t); }}
+                        style={{
+                          marginTop: 6, appearance: 'none', border: '0.5px solid var(--border-strong)',
+                          background: 'transparent', cursor: 'pointer',
+                          height: 26, padding: '0 10px', borderRadius: 999,
+                          fontSize: 12, fontWeight: 600, color: 'var(--text-2)',
+                          fontFamily: 'inherit',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}
+                      >
+                        Подробнее
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -233,23 +368,20 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
             </div>
 
             {(() => {
-              const busyList = BUSY_SLOTS[selectedTrainer] || [];
               const periods = [
                 { id: 'morning', label: 'Утро',  hint: 'до 11:00',   icon: 'sunrise', range: [0, 11] },
                 { id: 'day',     label: 'День',  hint: '11:00–17:00', icon: 'sun',     range: [11, 17] },
                 { id: 'evening', label: 'Вечер', hint: 'после 17:00', icon: 'moon',    range: [17, 24] },
               ];
               return periods.map(p => {
-                const slots = TIME_SLOTS.filter(s => {
-                  const h = parseInt(s.split(':')[0], 10);
+                const periodsSlots = slotsForTrainer.filter(s => {
+                  const h = new Date(s.startTime).getHours();
                   return h >= p.range[0] && h < p.range[1];
                 });
-                if (!slots.length) return null;
-                const freeCount = slots.filter(s => !busyList.includes(s)).length;
-                const allBusy = freeCount === 0;
+                if (!periodsSlots.length) return null;
                 return (
                   <div key={p.id} style={{ padding: '10px 16px 0' }}>
-                    <div className="period-card" data-empty={allBusy ? 'true' : 'false'}>
+                    <div className="period-card" data-empty="false">
                       <div className="period-card__head">
                         <Icon name={p.icon} size={16} color="var(--text-2)" strokeWidth={1.8} />
                         <div className="t-h3" style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
@@ -257,23 +389,26 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
                         </div>
                         <div className="t-mini" style={{ color: 'var(--text-3)', flex: 1 }}>{p.hint}</div>
                         <div className="t-mini" style={{
-                          color: allBusy ? 'var(--text-3)' : 'var(--accent-deep)',
+                          color: 'var(--accent-deep)',
                           fontVariantNumeric: 'tabular-nums', fontWeight: 600,
                         }}>
-                          {freeCount} свободно
+                          {periodsSlots.length} свободно
                         </div>
                       </div>
                       <div className="period-card__grid">
-                        {slots.map(s => {
-                          const busy = busyList.includes(s);
+                        {periodsSlots.map(s => {
+                          const timeLabel = parseSlotTime(s.startTime);
                           return (
                             <SlotChip
-                              key={s}
-                              busy={busy}
-                              selected={selectedSlot === s}
-                              label={s}
-                              busyReason={busyReason(selectedTrainer, s)}
-                              onSelect={() => setSelectedSlot(s)}
+                              key={s.slotId}
+                              busy={false}
+                              selected={selectedSlot === s.slotId}
+                              label={timeLabel}
+                              busyReason=""
+                              onSelect={() => {
+                                setSelectedSlot(s.slotId);
+                                setSelectedSlotMeta({ startTime: s.startTime, trainerName: s.trainerName, trainerId: s.trainerId });
+                              }}
                             />
                           );
                         })}
@@ -302,7 +437,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
             style={{ width: '100%', height: 54 }}
             onClick={() => setStep('confirm')}
           >
-            Продолжить · {trainer?.price.toLocaleString('ru-RU')} ₽
+            Продолжить
           </button>
         </div>
       )}
@@ -310,7 +445,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
   );
 };
 
-function BookingReview({ day, trainer, slot, onBack, onConfirm }) {
+function BookingReview({ day, trainerName, slot, onBack, onConfirm, isSubmitting, submitError }) {
   return (
     <div className="page">
       <StatusBar />
@@ -331,22 +466,29 @@ function BookingReview({ day, trainer, slot, onBack, onConfirm }) {
 
         <div style={{ padding: '12px 16px' }}>
           <div className="card" style={{ padding: 4 }}>
-            <RowItem icon="user" label="Тренер" value={trainer?.name} sub={trainer?.spec}
-                     avatar={<Avatar initials={trainer?.initials} bg={trainer?.bg} color={trainer?.color} size={36} />} />
+            <RowItem icon="user" label="Тренер" value={trainerName} />
             <Divider />
             <RowItem icon="calendar" label="Дата" value={`${day?.dow}, ${day?.num} ${monthName(day?.month)}`} />
             <Divider />
             <RowItem icon="clock" label="Время" value={`${slot} – ${addHour(slot)}`} sub="1 час" />
-            <Divider />
-            <RowItem icon="card" label="К оплате" value={`${trainer?.price.toLocaleString('ru-RU')} ₽`}
-                     sub="спишется с привязанной карты" />
           </div>
         </div>
+
+        {submitError && (
+          <div style={{ padding: '0 16px 8px' }}>
+            <div style={{
+              background: 'color-mix(in oklab, var(--destructive) 10%, transparent)',
+              border: '0.5px solid color-mix(in oklab, var(--destructive) 30%, transparent)',
+              borderRadius: 'var(--r-lg)', padding: '10px 14px',
+            }}>
+              <div className="t-small" style={{ color: 'var(--destructive)' }}>{submitError}</div>
+            </div>
+          </div>
+        )}
 
         <div style={{ padding: '8px 20px 0' }}>
           <div className="t-small" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
             Отменить запись бесплатно можно не позднее, чем за 6 часов до начала тренировки.
-            Позже — спишется 50% стоимости.
           </div>
         </div>
 
@@ -358,15 +500,20 @@ function BookingReview({ day, trainer, slot, onBack, onConfirm }) {
         padding: '12px 16px 20px',
         background: 'linear-gradient(to top, var(--bg) 70%, transparent)',
       }}>
-        <button onClick={onConfirm} className="btn btn-accent" style={{ width: '100%', height: 54 }}>
-          Подтвердить запись
+        <button
+          onClick={onConfirm}
+          disabled={isSubmitting}
+          className="btn btn-accent"
+          style={{ width: '100%', height: 54, opacity: isSubmitting ? 0.6 : 1 }}
+        >
+          {isSubmitting ? 'Записываю…' : 'Подтвердить запись'}
         </button>
       </div>
     </div>
   );
 }
 
-function BookingConfirmed({ day, trainer, slot, onDone, onBookAnother, onManage }) {
+function BookingConfirmed({ day, trainerName, slot, onDone, onBookAnother, onManage }) {
   return (
     <div className="page" style={{ background: 'var(--bg)' }}>
       <StatusBar />
@@ -389,10 +536,7 @@ function BookingConfirmed({ day, trainer, slot, onDone, onBookAnother, onManage 
 
         <div style={{ padding: '28px 16px 12px' }}>
           <div className="card" style={{ padding: 4 }}>
-            <RowItem
-              avatar={<Avatar initials={trainer?.initials} bg={trainer?.bg} color={trainer?.color} size={36} />}
-              label="Тренер" value={trainer?.name} sub={trainer?.spec}
-            />
+            <RowItem icon="user" label="Тренер" value={trainerName} />
             <Divider />
             <RowItem icon="calendar" label="Когда"
                      value={`${day?.dow}, ${day?.num} ${monthName(day?.month)}, ${slot}`}
@@ -416,7 +560,10 @@ function BookingConfirmed({ day, trainer, slot, onDone, onBookAnother, onManage 
         <button onClick={onDone} className="btn btn-accent" style={{ width: '100%', height: 54 }}>
           Готово
         </button>
-        <button onClick={onBookAnother} className="btn btn-soft" style={{ width: '100%', height: 44, marginTop: 8, background: 'transparent', color: 'var(--text-2)' }}>
+        <button onClick={onBookAnother} className="btn btn-soft" style={{
+          width: '100%', height: 44, marginTop: 8,
+          background: 'transparent', color: 'var(--text-2)',
+        }}>
           Записаться ещё
         </button>
       </div>
@@ -424,22 +571,7 @@ function BookingConfirmed({ day, trainer, slot, onDone, onBookAnother, onManage 
   );
 }
 
-function RowItem_local() { /* moved to components.jsx — see components.jsx for shared RowItem/Divider/monthName/addHour */ }
-
-// ─── Time slot button: shake + tooltip when tapping a busy slot ───
-const BUSY_REASONS = {
-  // trainer t1
-  t1: { '09:00': 'утренняя группа', '13:00': 'персоналка с другим клиентом', '18:00': 'свободное окно недоступно' },
-  t2: { '10:00': 'кроссфит-сбор', '15:00': 'тренировка',          '19:00': 'занят'                          },
-  t3: { '08:00': 'йога-класс',     '11:30': 'персоналка',         '20:30': 'класс по стретчингу'             },
-  t4: { '16:30': 'спарринг',       '19:00': 'групповая'                                                       },
-  t5: { '09:00': 'класс пилатеса', '13:00': 'персоналка'                                                       },
-  t6: { '11:30': 'тренировка',     '18:00': 'занят',              '20:30': 'персоналка'                       },
-};
-function busyReason(trainerId, slot) {
-  return (BUSY_REASONS[trainerId] && BUSY_REASONS[trainerId][slot]) || 'занято';
-}
-
+// ─── Time slot button ────────────────────────────────────────────────────────
 function SlotChip({ busy, selected, label, busyReason, onSelect }) {
   const [shake, setShake] = React.useState(false);
   const [tip, setTip] = React.useState(false);
@@ -473,5 +605,3 @@ function SlotChip({ busy, selected, label, busyReason, onSelect }) {
     </div>
   );
 }
-const SlotButton = SlotChip;
-

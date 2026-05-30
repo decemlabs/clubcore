@@ -18,6 +18,7 @@
 
 // ─── React Query hooks (swap seam — D-71-07) ──────────────────────────────
 export {
+  ApiError,
   useClientHome,
   useClientPlans,
   useClientPtPackages,
@@ -42,5 +43,5 @@ export { UPCOMING_BOOKING } from './booking.js'
 export { VISIT_HISTORY, TRAINING_HISTORY } from './history.js'
 // Retained for TweaksRoot.jsx dev panel (trainer-detail tweak button)
 export { TRAINERS } from './trainers.js'
-// Retained temporarily — removed by Task 2 when BookScreen is wired to real hooks
+// Retained for BookingManageSheet.jsx (reschedule UI — Plan 06 scope boundary)
 export { CALENDAR, TIME_SLOTS, BUSY_SLOTS } from './calendar.js'
