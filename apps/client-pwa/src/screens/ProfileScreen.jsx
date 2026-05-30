@@ -6,11 +6,11 @@ import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import {
   useClientHome,
+  useClientMe,
   useClientVisitHistory,
   useClientPtHistory,
   useClientPaymentHistory,
 } from '@/data';
-import { getSubInfo } from '@/utils/subInfo.js';
 import { useAuth } from '@/context/AuthContext.jsx';
 
 // ─── In-file adapter: API membership shape → subInfo render shape ─────────
@@ -49,14 +49,18 @@ export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, o
   const [tab, setTab] = React.useState('visits');
 
   const { data: homeData } = useClientHome();
+  const { data: me } = useClientMe();
 
-  // Use real API sub data when available; fall back to tweaks for demo mode.
-  const sub = homeData?.membership
-    ? toSubInfo(homeData.membership)
-    : getSubInfo(tweaks.subState);
+  // Real membership from /client/home; null → genuine "Нет абонемента" empty state.
+  const sub = toSubInfo(homeData?.membership ?? null);
 
   const isEmpty = tweaks.dataMode === 'empty';
-  const userName = tweaks.userName || 'Саша';
+  // Real /client/me identity (graceful blanks when absent); tweaks.userName is a
+  // dev-panel override only, never a hardcoded human name default.
+  const fullName = `${me?.firstName ?? ''} ${me?.lastName ?? ''}`.trim();
+  const displayName = me?.firstName || tweaks.userName || '';
+  const phone = me?.phone ?? '—';
+  const email = me?.email ?? '—';
   const subTone = sub.tone === 'ok' ? 'chip-accent' : sub.tone === 'warn' ? 'chip-warn' : 'chip-danger';
 
   return (
@@ -71,11 +75,11 @@ export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, o
         <div style={{ padding: '0 16px 16px' }}>
           <div className="card" style={{ padding: 18 }}>
             <div className="row" style={{ gap: 14 }}>
-              <Avatar initials={userName.slice(0, 1).toUpperCase()} bg="var(--avatar-bg)" color="var(--avatar-fg)" size={64} />
+              <Avatar initials={displayName.slice(0, 1).toUpperCase()} bg="var(--avatar-bg)" color="var(--avatar-fg)" size={64} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="t-h1" style={{ fontSize: 22 }}>{userName} Морозов</div>
-                <div className="t-small" style={{ marginTop: 2 }}>+7 (916) 482-09-14</div>
-                <div className="t-small">sasha@example.com</div>
+                <div className="t-h1" style={{ fontSize: 22 }}>{fullName || displayName || '—'}</div>
+                <div className="t-small" style={{ marginTop: 2 }}>{phone}</div>
+                <div className="t-small">{email}</div>
               </div>
             </div>
 
@@ -117,9 +121,9 @@ export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, o
               <div className="row-between" style={{ marginTop: 10, alignItems: 'center', gap: 8 }}>
                 <div className="t-small" style={{ color: 'var(--text-3)' }}>
                   {sub.tone === 'ok'
-                    ? <>Автопродление <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{sub.until} · 42 000 ₽</span></>
+                    ? <>Автопродление <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{sub.until}</span></>
                     : sub.tone === 'warn'
-                    ? <>Спишем <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{sub.until} · 4 900 ₽</span></>
+                    ? <>Спишем <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{sub.until}</span></>
                     : <>Карта •••• 4821</>}
                 </div>
               </div>

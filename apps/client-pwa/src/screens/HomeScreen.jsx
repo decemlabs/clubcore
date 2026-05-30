@@ -7,9 +7,8 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
-import { useClientHome } from '@/data';
+import { useClientHome, useClientMe } from '@/data';
 import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
-import { getSubInfo } from '@/utils/subInfo.js';
 
 // ─── In-file adapter: API membership shape → existing subInfo render shape ───
 // API: ClientMembershipResponse { id, planNameSnapshot, startDate, endDate,
@@ -92,14 +91,16 @@ export function GymStatusPill({ onClick }) {
 
 export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpenReferral, onOpenGymInfo, onOpenNotifications, onTab, setTweak }) => {
   const { data: homeData, isLoading, isError, refetch } = useClientHome();
+  const { data: me } = useClientMe();
 
-  // Use real API sub data when available; fall back to tweaks for demo mode.
-  const sub = homeData?.membership
-    ? toSubInfo(homeData.membership)
-    : getSubInfo(tweaks.subState);
+  // Real membership from /client/home; null → genuine "Нет абонемента" empty state
+  // (toSubInfo(null)), never the demo getSubInfo fallback.
+  const sub = toSubInfo(homeData?.membership ?? null);
 
   const variant = tweaks.homeVariant || 'classic';
-  const userName = tweaks.userName || 'Саша';
+  // Bind the greeting to the real /client/me principal; tweaks.userName is kept
+  // only as a dev-panel override, never a hardcoded human name default.
+  const userName = me?.firstName || tweaks.userName || '';
   const isEmpty = tweaks.dataMode === 'empty';
   const trainerCancelled = tweaks.gymEvent === 'trainer-cancelled';
   // Notifications count: not in API — use 0 when loaded, show no badge.
