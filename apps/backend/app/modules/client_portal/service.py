@@ -1,4 +1,4 @@
-"""Client-portal service — read + write orchestrator (Phase 69/70 CHOME/CHIST/CPLAN/CBOOK).
+"""Client-portal service — read + write orchestrator (Phase 69/70/71).
 
 Thin service layer: wires repository functions to response schemas.
 No try/except — AppError subclasses bubble to the central _app_error_handler.
@@ -9,6 +9,11 @@ Phase 70 (write delegates — CBOOK-02..05):
   - Write delegates call through composition-root Protocol slots in
     app.core.dependencies (D-20-MODULE); NO direct app.modules.bookings import.
   - SVC001 commit-gate: slot implementations (bookings/service.py) own commit.
+Phase 71 (checkout write + status read — CPAY-01..05):
+  - Checkout delegates into the extracted online_payments core via the
+    composition-root Protocol slot invoke_client_checkout_core (D-20-MODULE).
+  - NO direct app.modules.online_payments import; zero new ignore_imports.
+  - No session.commit() — caller-owns-txn (D-32-10 / D-49-19).
 
 D-69-03: Own-scope empty states return None / empty list (200/null), NOT NotFoundError.
 D-69-01: get_client_home reuses get_client_membership + next-booking — no duplicated logic.
@@ -18,6 +23,8 @@ D-20-MODULE: client_portal writes via Protocol slots only; zero new ignore_impor
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Any, cast
 from uuid import UUID
 
@@ -25,14 +32,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import (
+    ClientPrincipal,
     cancel_booking_for_client,
     create_booking_for_client,
     create_visit_client_qr,
     get_active_pt_package,
+    invoke_client_checkout_core,
 )
-from app.core.exceptions import ConflictError, InvalidSession, NoActivePtPackageError
+from app.core.exceptions import (
+    ConflictError,
+    InvalidSession,
+    NoActivePtPackageError,
+    NotFoundError,
+)
 from app.core.pagination import PageQuery, PaginatedData
 from app.core.security import decode_qr_token, encode_qr_token
+from app.integrations.yookassa.settings import YooKassaSettings
 from app.modules.client_portal import repository
 from app.modules.client_portal.schemas import (
     ClientAvailableSlotItem,
@@ -41,10 +56,12 @@ from app.modules.client_portal.schemas import (
     ClientCatalogPtPackageResponse,
     ClientCatalogTrainerResponse,
     ClientCheckInResponse,
+    ClientCheckoutResponse,
     ClientHomeResponse,
     ClientMembershipResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
+    ClientPaymentStatusResponse,
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientVisitItem,
@@ -424,4 +441,109 @@ async def list_available_slots(
         total=total,
         page=page,
         page_size=page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 71 CPAY-01..05 — client checkout write-slot + status read
+# ---------------------------------------------------------------------------
+
+
+def _derive_membership_idempotency_key(*, plan_id: UUID, client_id: UUID) -> str:
+    """Server-derived per-day deterministic idempotency key for membership checkout (D-71-04).
+
+    Mirrors _derive_idempotency_key in app.modules.online_payments.service:
+      raw = 'sell-membership:{plan_id}:{client_id}:{today_iso}'
+      key = sha256(raw).hexdigest()
+
+    UTC today_iso — wire-protocol key must be stable across DST. Europe/Moscow
+    user-facing date convention does NOT apply here (same rationale as the staff path).
+    """
+    today_iso = datetime.now(tz=UTC).date().isoformat()
+    raw = f"sell-membership:{plan_id}:{client_id}:{today_iso}"
+    return sha256(raw.encode("utf-8")).hexdigest()
+
+
+async def client_checkout_membership(
+    session: AsyncSession,
+    *,
+    plan_id: UUID,
+    client: ClientPrincipal,
+    yookassa_settings: YooKassaSettings,
+) -> ClientCheckoutResponse:
+    """Client-initiated membership checkout via ЮKassa redirect (CPAY-01).
+
+    Derives the server-side per-day idempotency key (D-71-04) then delegates
+    into the extracted online_payments core via the composition-root Protocol
+    slot (D-20-MODULE). actor_user_id=None (D-71-02: client-initiated).
+    No session.commit() — caller-owns-txn (D-32-10 / D-49-19).
+    """
+    idem_key = _derive_membership_idempotency_key(plan_id=plan_id, client_id=client.id)
+    result = await invoke_client_checkout_core(
+        session,
+        subject_kind="membership",
+        plan_id=plan_id,
+        client_id=client.id,
+        idempotency_key=idem_key,
+        actor_user_id=None,
+        confirmation_type="redirect",
+        yookassa_settings=yookassa_settings,
+    )
+    r = cast(Any, result)
+    return ClientCheckoutResponse(
+        online_payment_id=r.online_payment_id,
+        confirmation_url=str(r.confirmation_url),
+    )
+
+
+async def client_checkout_pt_package(
+    session: AsyncSession,
+    *,
+    plan_id: UUID,
+    client: ClientPrincipal,
+    idempotency_key: str,
+    yookassa_settings: YooKassaSettings,
+) -> ClientCheckoutResponse:
+    """Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02).
+
+    Passes the client-supplied Idempotency-Key header straight through to the
+    core (D-71-04: PT allows same-day repurchase; PWA generates UUID per intent).
+    actor_user_id=None (D-71-02: client-initiated).
+    No session.commit() — caller-owns-txn (D-32-10 / D-49-19).
+    """
+    result = await invoke_client_checkout_core(
+        session,
+        subject_kind="pt_package",
+        plan_id=plan_id,
+        client_id=client.id,
+        idempotency_key=idempotency_key,
+        actor_user_id=None,
+        confirmation_type="redirect",
+        yookassa_settings=yookassa_settings,
+    )
+    r = cast(Any, result)
+    return ClientCheckoutResponse(
+        online_payment_id=r.online_payment_id,
+        confirmation_url=str(r.confirmation_url),
+    )
+
+
+async def get_client_payment_status(
+    session: AsyncSession,
+    payment_id: UUID,
+    client_id: UUID,
+) -> ClientPaymentStatusResponse:
+    """Coarse payment status for the authenticated client (CPAY-03).
+
+    Anti-oracle: returns only 'pending' | 'succeeded' | 'canceled'.
+    D-20-IDOR: fetch_client_payment_status has mandatory :client_id filter;
+    None result → NotFoundError 404-collapse (anti-oracle, non-owned row).
+    No session.commit() — read path.
+    """
+    row = await repository.fetch_client_payment_status(session, payment_id, client_id)
+    if row is None:
+        raise NotFoundError("payment_not_found")  # D-20-IDOR: 404-collapse
+    return ClientPaymentStatusResponse(
+        id=cast(Any, row)["id"],
+        status=str(cast(Any, row)["status"]),
     )

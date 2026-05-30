@@ -33,7 +33,7 @@ import json
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,7 @@ from app.core.idempotency import idempotent_execute, verify_client_idempotency
 from app.core.pagination import PageQuery, PaginatedData
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
+from app.integrations.yookassa.settings import YooKassaSettings, get_yookassa_settings
 from app.modules.client_portal import service
 from app.modules.client_portal.schemas import (
     ClientAvailableSlotItem,
@@ -53,11 +54,14 @@ from app.modules.client_portal.schemas import (
     ClientCatalogTrainerResponse,
     ClientCheckInRequest,
     ClientCheckInResponse,
+    ClientCheckoutRequest,
+    ClientCheckoutResponse,
     ClientCreateBookingRequest,
     ClientHomeResponse,
     ClientMembershipResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
+    ClientPaymentStatusResponse,
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientVisitItem,
@@ -538,4 +542,112 @@ async def client_check_in(
     ip = request.client.host if request.client is not None else "unknown"
     await _enforce_check_in_rate_limit(redis, ip)
     result = await service.check_in_via_qr(session, token=payload.token)
+    return envelope(result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 71 CPAY-01..05 — client checkout + payment status
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/checkout/memberships/{plan_id}",
+    response_model=ResponseEnvelope[ClientCheckoutResponse],
+    status_code=status.HTTP_201_CREATED,
+    operation_id="client_checkout_membership",
+    summary=(
+        "Client-initiated membership checkout via ЮKassa redirect (CPAY-01); "
+        "server-derived per-day idempotency key (D-71-04); "
+        "422 client_email_required_for_online_payment if email missing (CPAY-04)"
+    ),
+)
+async def client_checkout_membership(
+    plan_id: UUID,
+    payload: ClientCheckoutRequest,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
+) -> ResponseEnvelope[ClientCheckoutResponse]:
+    """CPAY-01. Client-initiated membership checkout (Phase 71).
+
+    RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+    Server-derived membership idempotency key (D-71-04): same-day repeat returns
+    the same confirmation_url (replay check in the core, CPAY-05).
+    actor_user_id=None (D-71-02: client-initiated; online_payments.created_by_user_id nullable).
+    422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).
+    No try/except — AppError bubbles to _app_error_handler.
+    No CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).
+    """
+    result = await service.client_checkout_membership(
+        session, plan_id=plan_id, client=client, yookassa_settings=yookassa_settings
+    )
+    return envelope(result)
+
+
+@router.post(
+    "/checkout/pt-packages/{plan_id}",
+    response_model=ResponseEnvelope[ClientCheckoutResponse],
+    status_code=status.HTTP_201_CREATED,
+    operation_id="client_checkout_pt_package",
+    summary=(
+        "Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02); "
+        "client-supplied Idempotency-Key header (D-71-04); "
+        "422 client_email_required_for_online_payment if email missing (CPAY-04)"
+    ),
+)
+async def client_checkout_pt_package(
+    plan_id: UUID,
+    payload: ClientCheckoutRequest,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    yookassa_settings: Annotated[YooKassaSettings, Depends(get_yookassa_settings)],
+) -> ResponseEnvelope[ClientCheckoutResponse]:
+    """CPAY-02. Client-initiated PT-package checkout (Phase 71).
+
+    RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+    Client-supplied Idempotency-Key header (D-71-04): PT allows same-day repurchase;
+    PWA generates UUID per checkout intent, reuses on retry.
+    actor_user_id=None (D-71-02: client-initiated).
+    422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).
+    No try/except — AppError bubbles to _app_error_handler.
+    No CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).
+    """
+    result = await service.client_checkout_pt_package(
+        session,
+        plan_id=plan_id,
+        client=client,
+        idempotency_key=idempotency_key,
+        yookassa_settings=yookassa_settings,
+    )
+    return envelope(result)
+
+
+@router.get(
+    "/payments/{payment_id}/status",
+    response_model=ResponseEnvelope[ClientPaymentStatusResponse],
+    operation_id="client_get_payment_status",
+    summary=(
+        "Coarse payment status for the authenticated client (CPAY-03 anti-oracle); "
+        "returns only pending|succeeded|canceled; "
+        "404 payment_not_found on non-owned payment (D-20-IDOR 404-collapse)"
+    ),
+)
+async def client_get_payment_status(
+    payment_id: UUID,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientPaymentStatusResponse]:
+    """CPAY-03. Coarse payment status (Phase 71).
+
+    Anti-oracle: returns only 'pending' | 'succeeded' | 'canceled' — never exposes
+    membership activation details or plan internals (T-71-05).
+    D-20-IDOR: mandatory client_id filter in repository layer; None → NotFoundError → 404.
+    A non-owned payment_id is indistinguishable from a non-existent one (404-collapse).
+    No CSRF dep — GET is safe (T-71-09: CSRF only on state-changing POST).
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_client_payment_status(session, payment_id, client.id)
     return envelope(result)
