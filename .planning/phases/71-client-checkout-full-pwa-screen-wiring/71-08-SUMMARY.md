@@ -59,3 +59,11 @@ None — plan executed exactly as written.
 
 - `27fd4f72` fix(71-08): make /api/* network-only in sw.js + bump cache to gym-v3
 - `4f1780f0` docs(71-08): add PWA-07 regression-guard comment in pwa.js
+
+## Self-Check: PASSED
+
+All modified/created files present and all commits verified in git log:
+- apps/client-pwa/public/sw.js
+- apps/client-pwa/src/services/pwa.js
+- .planning/phases/71-client-checkout-full-pwa-screen-wiring/71-08-SUMMARY.md
+- Commits: 27fd4f72, 4f1780f0, 4dc32f27
