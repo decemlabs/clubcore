@@ -31,11 +31,8 @@ from app.modules.bookings import service
 from app.modules.bookings.constants import CANCEL_WINDOW_HOURS_CLIENT
 from app.modules.bookings.models import Booking
 from app.modules.bookings.schemas import (
-    BookingCancelRequest,
-    BookingCreateRequest,
     BookingStatus,
 )
-from app.modules.pt_packages.models import PtPackage
 
 
 async def _seed_confirmed_booking_for_client(

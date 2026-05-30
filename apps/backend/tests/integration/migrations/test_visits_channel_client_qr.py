@@ -63,7 +63,7 @@ async def direct_engine_session() -> AsyncIterator[AsyncSession]:
     try:
         async with engine.connect() as probe:
             await probe.execute(text("select 1"))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         await engine.dispose()
         pytest.skip(
             f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})"
@@ -89,7 +89,8 @@ _INSERT_USER = """
 """
 
 _INSERT_CLIENT = """
-    INSERT INTO clients (id, last_name, first_name, phone, created_by_user_id, created_at, updated_at)
+    INSERT INTO clients
+        (id, last_name, first_name, phone, created_by_user_id, created_at, updated_at)
     VALUES (:cid, 'QR', 'Test', :phone, :uid, now(), now())
 """
 
