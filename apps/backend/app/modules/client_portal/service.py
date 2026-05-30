@@ -23,13 +23,16 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.dependencies import (
     cancel_booking_for_client,
     create_booking_for_client,
+    create_visit_client_qr,
     get_active_pt_package,
 )
 from app.core.exceptions import ConflictError, NoActivePtPackageError
 from app.core.pagination import PageQuery, PaginatedData
+from app.core.security import decode_qr_token, encode_qr_token
 from app.modules.client_portal import repository
 from app.modules.client_portal.schemas import (
     ClientAvailableSlotItem,
@@ -37,11 +40,13 @@ from app.modules.client_portal.schemas import (
     ClientCatalogPlanResponse,
     ClientCatalogPtPackageResponse,
     ClientCatalogTrainerResponse,
+    ClientCheckInResponse,
     ClientHomeResponse,
     ClientMembershipResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPtSessionItem,
+    ClientQrTokenResponse,
     ClientVisitItem,
 )
 
@@ -314,6 +319,63 @@ async def cancel_client_booking(
         status=str(r.status),
         start_time=r.slot_start_time,
         trainer_name=str(r.trainer_full_name),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 70 CCHK-01..03 — QR token issuance + check-in delegate
+# ---------------------------------------------------------------------------
+
+
+def issue_qr_token(client_id: UUID) -> ClientQrTokenResponse:
+    """Mint a short-lived QR self check-in JWT for the authenticated client (CCHK-01).
+
+    Called from GET /client/qr-token (require_client gated — D-70-09).
+    No membership pre-check (CCHK-01 / D-70-09) — the anti-fraud chain in
+    _create_visit_with_anti_fraud handles the active-membership gate at scan time.
+
+    Pure function (no DB access) — encode_qr_token uses only the settings secret
+    and the client UUID. expires_in mirrors settings.qr_token_ttl_seconds (~60s).
+    """
+    settings = get_settings()
+    token = encode_qr_token(client_id)
+    return ClientQrTokenResponse(
+        token=token,
+        expires_in=settings.qr_token_ttl_seconds,
+    )
+
+
+async def check_in_via_qr(
+    session: AsyncSession,
+    *,
+    token: str,
+) -> ClientCheckInResponse:
+    """Validate the QR token and create a visit via the Protocol-slot accessor (CCHK-02).
+
+    Called from POST /client/check-in (token-as-credential endpoint — no require_client).
+    decode_qr_token asserts aud='qr' and typ='qr_checkin'; an access/refresh token
+    presented here is rejected (401 wrong_token_type / wrong_audience).
+    An expired token is rejected (401 token_expired). InvalidAccessToken bubbles
+    to _app_error_handler → 401.
+
+    client_id derives ONLY from the verified sub claim (D-70-10) — cross-client
+    check-in is structurally impossible (T-70-17): there is no body/path/query
+    client_id parameter on the check-in endpoint.
+
+    Calls create_visit_client_qr (composition-root Protocol slot) — never imports
+    app.modules.visits directly (D-20-MODULE / zero new ignore_imports).
+    DuplicateCheckinError('duplicate_checkin') from uq_visits_client_id_gym_date
+    bubbles to _app_error_handler → 409 (criterion #5 same-day replay guard).
+    """
+    claims = decode_qr_token(token)
+    client_id = UUID(claims.sub)  # sole authoritative source (D-70-10)
+    result = await create_visit_client_qr(session, client_id)
+    r = cast(Any, result)
+    return ClientCheckInResponse(
+        id=r.id,
+        gym_date=r.gym_date,
+        checked_in_at=r.checked_in_at,
+        channel=str(r.channel),
     )
 
 

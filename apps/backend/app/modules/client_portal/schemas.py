@@ -135,13 +135,21 @@ class ClientBookingResponse(ResponseData):
 
     Mirrors BookingResponse from app.modules.bookings.schemas but declared here
     so client_portal never imports app.modules.bookings (D-20-MODULE).
+
+    Mapped from BookingResponse fields:
+      id               -> booking id
+      slot_id          -> slot_id
+      status           -> status (confirmed / cancelled)
+      start_time       -> slot_start_time (slot.start_time via eager-loaded join)
+      trainer_name     -> trainer_full_name (slot.trainer.full_name)
+    end_time is NOT in BookingResponse (no snapshot columns per D-38-08).
     """
 
     id: UUID
     slot_id: UUID
     status: str
     start_time: datetime
-    end_time: datetime
+    trainer_name: str
 
 
 class ClientAvailableSlotItem(ResponseData):
@@ -165,3 +173,50 @@ class ClientAvailableSlotItem(ResponseData):
     trainer_name: str
     start_time: datetime
     end_time: datetime
+
+
+# ---------------------------------------------------------------------------
+# Phase 70 CCHK-01..03 — QR self check-in schemas
+# ---------------------------------------------------------------------------
+
+
+class ClientQrTokenResponse(ResponseData):
+    """QR self check-in token response (CCHK-01 / D-70-09).
+
+    Returned by GET /client/qr-token (require_client gated, ~60s TTL).
+    The PWA renders the token as a QR code for the gym scanner to scan.
+    expires_in is informational — the PWA may use it to display a countdown
+    and refresh the token before it expires.
+    """
+
+    token: str
+    expires_in: int  # seconds; mirrors settings.qr_token_ttl_seconds (~60)
+
+
+class ClientCheckInRequest(ResponseData):
+    """POST /client/check-in body (Phase 70 CCHK-02 / D-70-10).
+
+    The signed QR token is the sole credential — client_id is NEVER in the
+    body (cross-client check-in structurally impossible, T-70-17).
+    extra='forbid' (inherited from ResponseData) rejects any injected
+    client_id from the body.
+    """
+
+    token: str
+
+
+class ClientCheckInResponse(ResponseData):
+    """Check-in success response — client-safe visit projection (CCHK-02).
+
+    Declared here so client_portal never imports app.modules.visits (D-20-MODULE).
+    Mapped from VisitResponse fields:
+      id           -> visit id
+      gym_date     -> visit date (Moscow TZ)
+      checked_in_at -> UTC timestamp of check-in
+      channel      -> always 'client_qr' for this path
+    """
+
+    id: UUID
+    gym_date: date
+    checked_in_at: datetime
+    channel: str

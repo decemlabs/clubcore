@@ -2,22 +2,35 @@
 
 Phase 69 CHOME-01..03, CHIST-01..03, CPLAN-01..03.
 Phase 70 CBOOK-02..05 — client booking POST (idempotent), cancel, and slots-read.
+Phase 70 CCHK-01..03 — QR token issuance + token-as-credential self check-in.
 
-All handlers gated via Depends(require_client()).
+All handlers gated via Depends(require_client()) EXCEPT POST /check-in, which is a
+token-as-credential endpoint (the signed QR token is the sole credential — D-70-11).
+
 No CSRF dep on GET endpoints (safe methods). POST/DELETE endpoints add
 Depends(verify_client_csrf) after require_client() per RBAC-04 ordering.
 Booking POST additionally adds Depends(verify_client_idempotency) per D-70-02.
 
+Rate-limiting (T-70-18 / CCHK-03):
+  Both /client/qr-token (authenticated) and /client/check-in (unauthenticated) carry
+  a per-IP Redis fixed-window rate limit (20 req/min for qr-token; 60 req/min for
+  check-in to accommodate multi-scanner gyms) using the INCR+EXPIRE pattern from
+  app/modules/auth/reset_rate_limit.py. RateLimited(429) bubbles to _app_error_handler.
+  Decision rationale: /check-in is unauthenticated — without this control it invites
+  brute-force QR token scanning floods. /qr-token is authenticated (require_client)
+  but a compromised session could spam token minting; the 20 req/min window is well
+  above legitimate use (a client refreshes once every ~50s).
+
 D-69-03: Empty states are 200 with null/[] — never 404 for own scope.
 D-20-IDOR: Every owned resource read has mandatory client_id filter in repo layer.
 D-20-OPENAPI: Client-Portal tag; client_ operationId prefix.
-D-20-MODULE: Write delegates via Protocol slots only — no app.modules.bookings import.
+D-20-MODULE: Write delegates via Protocol slots only — no app.modules.bookings/visits import.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -26,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import ClientPrincipal, require_client, verify_client_csrf
+from app.core.exceptions import RateLimited
 from app.core.idempotency import idempotent_execute, verify_client_idempotency
 from app.core.pagination import PageQuery, PaginatedData
 from app.core.redis import get_redis
@@ -37,14 +51,67 @@ from app.modules.client_portal.schemas import (
     ClientCatalogPlanResponse,
     ClientCatalogPtPackageResponse,
     ClientCatalogTrainerResponse,
+    ClientCheckInRequest,
+    ClientCheckInResponse,
     ClientCreateBookingRequest,
     ClientHomeResponse,
     ClientMembershipResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPtSessionItem,
+    ClientQrTokenResponse,
     ClientVisitItem,
 )
+
+# ---------------------------------------------------------------------------
+# Rate-limit constants for QR endpoints (T-70-18 — D-70-11 abuse control)
+# ---------------------------------------------------------------------------
+
+_QR_TOKEN_IP_LIMIT: Final[int] = 20  # req/min (authenticated; high legitimacy threshold)
+_QR_TOKEN_IP_WINDOW: Final[int] = 60  # seconds
+_CHECK_IN_IP_LIMIT: Final[int] = 60  # req/min (unauthenticated; gym may have multiple scanners)
+_CHECK_IN_IP_WINDOW: Final[int] = 60  # seconds
+
+
+def _qr_token_rate_key(ip: str) -> str:
+    return f"ratelimit:qr_token:ip:{ip}"
+
+
+def _check_in_rate_key(ip: str) -> str:
+    return f"ratelimit:check_in:ip:{ip}"
+
+
+async def _enforce_qr_token_rate_limit(redis: Redis, ip: str) -> None:
+    """Per-IP fixed-window rate limit for GET /client/qr-token (T-70-18).
+
+    20 req/min per IP. Legitimate clients refresh once every ~50s; threshold
+    is well above normal use. INCR+EXPIRE pattern mirrors reset_rate_limit.py.
+    """
+    key = _qr_token_rate_key(ip)
+    raw = await redis.get(key)
+    if raw is not None and int(raw) >= _QR_TOKEN_IP_LIMIT:
+        raise RateLimited("rate_limited")
+    pipe = redis.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, _QR_TOKEN_IP_WINDOW)
+    await pipe.execute()
+
+
+async def _enforce_check_in_rate_limit(redis: Redis, ip: str) -> None:
+    """Per-IP fixed-window rate limit for POST /client/check-in (T-70-18).
+
+    60 req/min per IP. Accommodates multi-scanner gym reception desks while
+    bounding brute-force QR token flood attacks on the unauthenticated endpoint.
+    INCR+EXPIRE pattern mirrors reset_rate_limit.py.
+    """
+    key = _check_in_rate_key(ip)
+    raw = await redis.get(key)
+    if raw is not None and int(raw) >= _CHECK_IN_IP_LIMIT:
+        raise RateLimited("rate_limited")
+    pipe = redis.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, _CHECK_IN_IP_WINDOW)
+    await pipe.execute()
 
 router = APIRouter(tags=["Client-Portal"])
 
@@ -381,3 +448,88 @@ async def client_list_slots(
         page_size=query.page_size,
     )
     return envelope(page)
+
+
+# ---------------------------------------------------------------------------
+# Phase 70 CCHK-01..03 — QR token issuance + self check-in
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/qr-token",
+    response_model=ResponseEnvelope[ClientQrTokenResponse],
+    operation_id="client_get_qr_token",
+    summary=(
+        "Mint a short-lived (~60s) signed QR self check-in token for the "
+        "authenticated client (CCHK-01; no membership pre-check)"
+    ),
+)
+async def client_get_qr_token(
+    request: Request,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> ResponseEnvelope[ClientQrTokenResponse]:
+    """Issue a signed QR self check-in JWT (Phase 70 CCHK-01 / D-70-09).
+
+    RBAC-04: require_client() gates this endpoint — the client must be
+    authenticated (D-70-09). No CSRF dep — GET is safe.
+
+    NO membership pre-check (D-70-09): gating on active membership happens
+    at scan time inside _create_visit_with_anti_fraud. The PWA can display a
+    QR code even before the client has an active membership, allowing the
+    reception to activate one on their behalf while they wait.
+
+    Rate-limit (T-70-18): 20 req/min per IP (per _enforce_qr_token_rate_limit).
+    Legitimate use: one refresh per ~50s. RateLimited(429) bubbles.
+
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    ip = request.client.host if request.client is not None else "unknown"
+    await _enforce_qr_token_rate_limit(redis, ip)
+    result = service.issue_qr_token(client.id)
+    return envelope(result)
+
+
+@router.post(
+    "/check-in",
+    response_model=ResponseEnvelope[ClientCheckInResponse],
+    status_code=status.HTTP_200_OK,
+    operation_id="client_check_in",
+    summary=(
+        "QR self check-in: validate the signed token and create a visit "
+        "(CCHK-02; token-as-credential — no require_client; client_id from sub only)"
+    ),
+)
+async def client_check_in(
+    payload: ClientCheckInRequest,
+    request: Request,
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientCheckInResponse]:
+    """QR self check-in endpoint (Phase 70 CCHK-02 / D-70-11).
+
+    DELIBERATELY NO require_client() — the signed QR token is the sole credential
+    (gym scanner / turnstile is the caller, D-70-11). There is NO client_id parameter
+    in the body, path, or query: cross-client check-in is structurally impossible
+    (T-70-17 / criterion #5). client_id derives ONLY from the verified sub claim
+    inside service.check_in_via_qr → decode_qr_token(token).sub.
+
+    Token validation (D-70-08):
+      - decode_qr_token asserts typ='qr_checkin' AND aud='qr'
+      - an access/refresh token → 401 wrong_token_type or wrong_audience
+      - an expired token → 401 token_expired
+      - InvalidAccessToken bubbles to _app_error_handler → 401
+
+    Same-day replay (criterion #5): _create_visit_with_anti_fraud collapses
+    to DuplicateCheckinError('duplicate_checkin') via uq_visits_client_id_gym_date.
+
+    Rate-limit (T-70-18): 60 req/min per IP (per _enforce_check_in_rate_limit).
+    Accommodates multi-scanner gym reception while bounding flood attacks.
+    RateLimited(429) bubbles to _app_error_handler.
+
+    No try/except for domain errors — AppError bubbles to _app_error_handler.
+    """
+    ip = request.client.host if request.client is not None else "unknown"
+    await _enforce_check_in_rate_limit(redis, ip)
+    result = await service.check_in_via_qr(session, token=payload.token)
+    return envelope(result)
