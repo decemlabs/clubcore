@@ -9,13 +9,22 @@ export default tseslint.config(
   {
     // D-69-06: existing .jsx/.js screens are in the allowJs ramp — do not lint them
     // until they are migrated to TypeScript in later phases.
+    // D-71-09: the five net-new placeholder screens are excluded from the global
+    // ignore so the dedicated no-restricted-paths block (below) can apply to them.
     ignores: [
       'dist',
       'node_modules',
       'coverage',
       // Pre-existing JSX/JS screens and utilities (D-69-06 allowJs ramp)
+      // Exceptions: the five net-new placeholder screens are NOT ignored here so
+      // the D-71-09 import-boundary block can lint them for the restricted-paths rule.
       'src/**/*.jsx',
       'src/**/*.js',
+      '!src/screens/ChatScreen.jsx',
+      '!src/screens/sheets/ReferralSheet.jsx',
+      '!src/screens/sheets/TrainerDetailSheet.jsx',
+      '!src/screens/sheets/NotificationsSheet.jsx',
+      '!src/screens/sheets/GymInfoSheet.jsx',
     ],
   },
   {
@@ -45,6 +54,59 @@ export default tseslint.config(
     rules: {
       'no-restricted-syntax': 'off',
       '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  // ─── D-71-09: Net-new screen import boundary ────────────────────────────────
+  // The five net-new placeholder screens are excluded from the global JSX ignore
+  // above (via negated patterns) so this block can apply the no-restricted-paths
+  // rule to them. These screens must NEVER import the query layer — they are
+  // "В разработке" placeholders (D-71-08) and making real API calls would violate
+  // PWA-05 success criterion #5 (net-new screens make zero backend calls).
+  {
+    files: [
+      'src/screens/ChatScreen.jsx',
+      'src/screens/sheets/ReferralSheet.jsx',
+      'src/screens/sheets/TrainerDetailSheet.jsx',
+      'src/screens/sheets/NotificationsSheet.jsx',
+      'src/screens/sheets/GymInfoSheet.jsx',
+    ],
+    plugins: { import: importPlugin },
+    languageOptions: {
+      ecmaVersion: 2023,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    settings: {
+      'import/resolver': { typescript: true, node: true },
+    },
+    rules: {
+      // D-71-09: net-new placeholder screens cannot import the query layer.
+      // Enforced structurally — not by review only.
+      'import/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            {
+              target: [
+                './src/screens/ChatScreen.jsx',
+                './src/screens/sheets/ReferralSheet.jsx',
+                './src/screens/sheets/TrainerDetailSheet.jsx',
+                './src/screens/sheets/NotificationsSheet.jsx',
+                './src/screens/sheets/GymInfoSheet.jsx',
+              ],
+              from: [
+                './src/lib/clientFetcher.ts',
+                './src/lib/clientQueries.ts',
+                './src/data/index.js',
+              ],
+              message:
+                'Net-new screens are placeholders (D-71-09) — no query layer imports.',
+            },
+          ],
+        },
+      ],
     },
   },
 )
