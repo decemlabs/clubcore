@@ -490,10 +490,13 @@ def create_app() -> FastAPI:
     async def _send_client_otp_dm(chat_id: int, code: str) -> None:
         # Dev-only convenience: surface the OTP in the backend log so local UAT can
         # sign in without a real Telegram chat (e.g. the fake-linked seed client from
-        # `scripts.seed_dev_client`). Gated on ENVIRONMENT=dev — never logs the code
-        # in staging/prod, where the real bot DM is the only delivery path.
+        # `scripts.seed_dev_client`). WR-06: the raw-code WARNING log is now gated on
+        # BOTH ENVIRONMENT=dev AND the explicit dev_otp_pin_enabled opt-in (default
+        # False; Settings fails fast if it is True outside dev), so the raw code is
+        # never dumped to logs unless an operator has deliberately opted in locally.
         if settings.environment == "dev":
-            _otp_log.warning("client_otp_dev_code", chat_id=chat_id, code=code)
+            if settings.dev_otp_pin_enabled:
+                _otp_log.warning("client_otp_dev_code", chat_id=chat_id, code=code)
             try:
                 await _otp_bot.send_message(chat_id=chat_id, text=f"Ваш код: {code}")
             except Exception:  # fake/unreachable chat_id in dev is expected

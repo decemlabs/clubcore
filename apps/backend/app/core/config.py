@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     otp_code_ttl_seconds: int = 300  # 5 min  — AUTH-TG-02
     otp_max_attempts: int = 5  # AUTH-TG-02
 
+    # Phase 71 WR-06: explicit second guard for the dev-pinned client OTP.
+    # The "111111" pin (and raw-code logging) is a local-UAT convenience that is
+    # a hard auth bypass if ENVIRONMENT is ever misset to "dev" in a deployed env.
+    # It now requires BOTH environment == "dev" AND this opt-in flag (default
+    # False). A model_validator below fails fast if it is ever True outside dev.
+    dev_otp_pin_enabled: bool = False
+
     # Phase 52 additions (D-52-09, NOT-04): Owner operator-alert recipients.
     # Consumed by the dispatch_payment_notification task for the payment_canceled
     # and fiscal_failed notification kinds — routes operator-actionable content
@@ -131,6 +138,19 @@ class Settings(BaseSettings):
             raise ValueError(
                 "gym_hours_end must be strictly greater than gym_hours_start "
                 "(midnight-spanning ranges deferred to v1.3+)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _dev_otp_pin_guard(self) -> Self:
+        # Phase 71 WR-06: the dev-pinned client OTP must never be enabled outside
+        # a dev environment. Fail fast at construction so a misset ENVIRONMENT
+        # plus a leftover DEV_OTP_PIN_ENABLED=true can never silently turn into a
+        # production auth bypass.
+        if self.dev_otp_pin_enabled and self.environment != "dev":
+            raise ValueError(
+                "dev_otp_pin_enabled must be False unless environment == 'dev' "
+                f"(got environment={self.environment!r}) — refusing to start."
             )
         return self
 

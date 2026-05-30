@@ -210,9 +210,12 @@ async def request_client_otp(
 
         settings = get_settings()
         # Dev-only: pin the client OTP to a constant so local UAT can sign in
-        # without reading the backend log. Gated on ENVIRONMENT=dev — staging/prod
-        # keep the random secrets.randbelow() code from generate_otp_code().
-        if settings.environment == "dev":
+        # without reading the backend log. WR-06: gated on BOTH ENVIRONMENT=dev
+        # AND the explicit dev_otp_pin_enabled opt-in (default False) so a misset
+        # ENVIRONMENT alone cannot turn this into an auth bypass. Settings also
+        # fails fast at startup if the flag is True outside dev. staging/prod keep
+        # the random secrets.randbelow() code from generate_otp_code().
+        if settings.environment == "dev" and settings.dev_otp_pin_enabled:
             raw_code = "111111"
             code_hash = _sha256_hex(raw_code)
 
