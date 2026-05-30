@@ -44,7 +44,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 - [x] **Phase 68: Client Auth Foundation** - Separate `ClientPrincipal` / `require_client()` / distinct cookies / anti-oracle OTP; unconditional blocker for all domain work (completed 2026-05-29)
 - [x] **Phase 69: Client Read Endpoints + PWA Stack Alignment** - All client-scoped read endpoints (membership, history, catalogs) + PWA bun→pnpm/TS/Vite-6 alignment with verified build; IDOR sweep covers read surface (completed 2026-05-29)
-- [ ] **Phase 70: Client Bookings + QR Self Check-In** - Self-booking (race-safe via existing partial-UNIQUE), cancellation policy, signed short-lived QR token, and QR-triggered visit creation via existing anti-fraud path
+- [x] **Phase 70: Client Bookings + QR Self Check-In** - Self-booking (race-safe via existing partial-UNIQUE), cancellation policy, signed short-lived QR token, and QR-triggered visit creation via existing anti-fraud path (completed 2026-05-30)
 - [ ] **Phase 71: Client Checkout + Full PWA Screen Wiring** - Client-initiated ЮKassa membership/PT-package purchase (server-side price, webhook-only activation, 54-ФЗ email gate); all PWA screens wired to real backend
 - [ ] **Phase 72: OpenAPI Handoff + CI + E2E Verification** - `Client-Portal` tag in spec, `_v20Checks` guards, client-pwa CI gates, drift gate confirms staff contract byte-identical; live E2E runbook gate
 
@@ -121,7 +121,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 70-04-PLAN.md — QR check-in: qr-token issue (require_client) + token-as-credential /check-in (sub-only); anti-replay/cross-client tests + human-verify checkpoint
+- [x] 70-04-PLAN.md — QR check-in: qr-token issue (require_client) + token-as-credential /check-in (sub-only); anti-replay/cross-client tests + human-verify checkpoint
 
 **UI hint**: yes
 
@@ -182,7 +182,7 @@ Plans:
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
-| 70. Client Bookings + QR Self Check-In | v2.0 | 3/4 | In Progress|  |
+| 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete   | 2026-05-30 |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/6 | Not started | - |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 

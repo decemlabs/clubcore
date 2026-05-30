@@ -43,8 +43,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 ### QR Self Check-In
 
 - [x] **CCHK-01**: Клиент получает короткоживущий подписанный QR-токен (≈60s TTL, signed JWT — не статический UUID)
-- [ ] **CCHK-02**: Чек-ин по QR создаёт визит через существующий anti-fraud-путь; сохраняется 1/день (`gym_date`) + требование активного абонемента; `visits.channel` расширен на `'client_qr'` (Alembic)
-- [ ] **CCHK-03**: QR нельзя реплеить и нельзя зачекинить другого клиента
+- [x] **CCHK-02**: Чек-ин по QR создаёт визит через существующий anti-fraud-путь; сохраняется 1/день (`gym_date`) + требование активного абонемента; `visits.channel` расширен на `'client_qr'` (Alembic)
+- [x] **CCHK-03**: QR нельзя реплеить и нельзя зачекинить другого клиента
 
 ### Client Checkout (ЮKassa)
 
@@ -164,8 +164,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CBOOK-04 | Phase 70 | Complete |
 | CBOOK-05 | Phase 70 | Complete |
 | CCHK-01 | Phase 70 | Complete |
-| CCHK-02 | Phase 70 | Pending |
-| CCHK-03 | Phase 70 | Pending |
+| CCHK-02 | Phase 70 | Complete |
+| CCHK-03 | Phase 70 | Complete |
 | CPAY-01 | Phase 71 | Pending |
 | CPAY-02 | Phase 71 | Pending |
 | CPAY-03 | Phase 71 | Pending |
