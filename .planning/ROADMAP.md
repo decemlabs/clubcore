@@ -63,7 +63,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   4. `PATCH /api/v1/client/me` accepts an email update; subsequent `GET /api/v1/client/me` returns the updated email
   5. OTP requests exceeding the rate limit (per-IP 5/15 min, per-phone daily cap) are rejected with 429; brute-force code guessing is blocked
 
-**Plans**: 6 plans (4 waves)
+**Plans**: 7 plans (5 waves) — plan 07 added 2026-05-30 as gap closure for the UAT redirect-loop blocker (no real client login + window.location redirect to a non-existent /login route)
 
 - [x] 68-01-PLAN.md — DB foundation: OtpCode.client_id + XOR CHECK + client_refresh_tokens table (Alembic 0043/0044)
 - [x] 68-02-PLAN.md — Client JWT + cookie primitives in security.py (decode_client_token aud=client, cc_client_* cookies)
@@ -138,7 +138,7 @@ Plans:
   4. The PWA Home, Profile, Book, Plans, Checkout, and QR screens fetch data from the real client backend; the mock data layer is replaced for these six screens
   5. Net-new screens (Chat, Referral, trainer reviews, notification inbox, gym-info) display a "coming soon" placeholder — no backend calls are made from them; the service worker never caches `/api/*` requests
 
-**Plans**: 6 plans (4 waves)
+**Plans**: 7 plans (5 waves) — plan 07 added 2026-05-30 as gap closure for the UAT redirect-loop blocker (no real client login + window.location redirect to a non-existent /login route)
 
 - [x] 71-01-PLAN.md — extract _sell_subject_core actor-agnostic helper + checkout Protocol slot + main.py wiring (CPAY-01..05)
 - [x] 71-02-PLAN.md — client_portal checkout endpoints (membership/PT POST + status GET) via Protocol slot; split idempotency; IDOR/anti-oracle status (CPAY-01..05)
@@ -146,6 +146,7 @@ Plans:
 - [x] 71-04-PLAN.md — PWA React Query foundation: queryClient + clientQueries hooks + data/index.js swap seam + ComingSoon + ESLint boundary (PWA-05)
 - [x] 71-05-PLAN.md — wire Home/Profile/Plans/Checkout + payment return route (anti-oracle); net-new screens → ComingSoon (PWA-05, CPAY-01..03)
 - [x] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
+- [ ] 71-07-PLAN.md — GAP: real client OTP login (/api/v1/client/otp/*) + AuthContext (/client/me probe) + /login route & RequireAuth guard; replace window.location redirect loop with router-based session-expiry signal (PWA-05)
 
 **UI hint**: yes
 
