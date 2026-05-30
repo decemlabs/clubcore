@@ -209,6 +209,13 @@ async def request_client_otp(
         placeholder_token_hash = f"{_CLIENT_OTP_TOKEN_PREFIX}{uuid4().hex}"
 
         settings = get_settings()
+        # Dev-only: pin the client OTP to a constant so local UAT can sign in
+        # without reading the backend log. Gated on ENVIRONMENT=dev — staging/prod
+        # keep the random secrets.randbelow() code from generate_otp_code().
+        if settings.environment == "dev":
+            raw_code = "111111"
+            code_hash = _sha256_hex(raw_code)
+
         otp_row = OtpCode(
             client_id=client.id,
             user_id=None,

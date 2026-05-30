@@ -2,12 +2,13 @@
 
 Creates (idempotently) a single alive client with a known E.164 phone and a
 fake ``telegram_user_id`` so the client OTP flow treats it as "linked" and
-generates a code. In ENVIRONMENT=dev the OTP sender (app.main) logs the code to
-the backend console — see ``_send_client_otp_dm`` — so you can sign in without a
-real Telegram chat:
+generates a code. In ENVIRONMENT=dev the client OTP is pinned to a constant (see
+``request_client_otp`` in client_auth.service) and also logged to the backend
+console (``_send_client_otp_dm``), so you can sign in without a real Telegram
+chat:
 
-    Phone to enter in the PWA login screen : +7 999 000-00-01
-    Backend log line after "Получить код"  : client_otp_dev_code ... code=NNNNNN
+    Phone to enter in the PWA login screen : +7 999 999-99-99
+    Code to enter                          : 111111   (fixed in dev)
 
 Run once (the compose stack does NOT auto-run it):
 
@@ -31,8 +32,8 @@ from app.modules.auth.models import User
 from app.modules.clients.models import Client
 
 # Stable, recognisable test fixture values.
-_DEV_CLIENT_PHONE = "+79990000001"  # entered as "999 000-00-01" in the +7 field
-_DEV_CLIENT_TELEGRAM_USER_ID = 999000001  # fake chat id — never a real Telegram chat
+_DEV_CLIENT_PHONE = "+79999999999"  # entered as "999 999-99-99" in the +7 field
+_DEV_CLIENT_TELEGRAM_USER_ID = 999999999  # fake chat id — never a real Telegram chat
 
 
 async def _run() -> int:
@@ -97,9 +98,9 @@ async def _run() -> int:
                 )
 
             print(
-                "\nLogin in the PWA with phone '999 000-00-01'. After tapping "
-                "'Получить код', read the 6-digit code from the backend log "
-                "(structlog event 'client_otp_dev_code')."
+                "\nLogin in the PWA with phone '999 999-99-99', then enter the "
+                "fixed dev code '111111' (ENVIRONMENT=dev pins it; the code is also "
+                "logged as structlog event 'client_otp_dev_code')."
             )
     finally:
         await engine.dispose()
