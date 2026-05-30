@@ -40,7 +40,14 @@ BOOKING_STATUS_TRANSITIONS: Mapping[str, frozenset[str]] = MappingProxyType(
 # automatically locks 24h before the slot fires.
 CANCEL_WINDOW_HOURS_RECEPTION = 24
 
+# Phase 70 D-70-05 / D-38-16 — client cancel window, measured against
+# slot.start_time (NOT created_at). Independently tunable from the reception
+# window; starts identical (24h) for predictable behavior. A booking made
+# far in advance automatically locks 24h before the slot fires.
+CANCEL_WINDOW_HOURS_CLIENT = 24
+
 __all__ = [
     "BOOKING_STATUS_TRANSITIONS",
     "CANCEL_WINDOW_HOURS_RECEPTION",
+    "CANCEL_WINDOW_HOURS_CLIENT",
 ]
