@@ -639,6 +639,254 @@
         "title": "BookingStatus",
         "type": "string"
       },
+      "ClientAvailableSlotItem": {
+        "description": "Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).\n\nNO owner-only economics. Verified column sources:\n  trainer_availability_slots (app/modules/schedule/models.py:64-152):\n    id           UUID PK\n    trainer_id   UUID FK trainers.id\n    start_time   DateTime(timezone=True)\n    end_time     DateTime(timezone=True)\n    status       String(16)\n  trainers (app/modules/trainers/models.py:23-43):\n    full_name    Text NOT NULL\nspecialization is NOT on the Trainer model in v1 (reserved for future);\nomitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).",
+        "properties": {
+          "endTime": {
+            "format": "date-time",
+            "title": "Endtime",
+            "type": "string"
+          },
+          "slotId": {
+            "format": "uuid",
+            "title": "Slotid",
+            "type": "string"
+          },
+          "startTime": {
+            "format": "date-time",
+            "title": "Starttime",
+            "type": "string"
+          },
+          "trainerId": {
+            "format": "uuid",
+            "title": "Trainerid",
+            "type": "string"
+          },
+          "trainerName": {
+            "title": "Trainername",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slotId",
+          "trainerId",
+          "trainerName",
+          "startTime",
+          "endTime"
+        ],
+        "title": "ClientAvailableSlotItem",
+        "type": "object"
+      },
+      "ClientBookingResponse": {
+        "description": "Booking write response payload — client-safe projection (Phase 70 CBOOK-03/05).\n\nMirrors BookingResponse from app.modules.bookings.schemas but declared here\nso client_portal never imports app.modules.bookings (D-20-MODULE).\n\nMapped from BookingResponse fields:\n  id               -> booking id\n  slot_id          -> slot_id\n  status           -> status (confirmed / cancelled)\n  start_time       -> slot_start_time (slot.start_time via eager-loaded join)\n  trainer_name     -> trainer_full_name (slot.trainer.full_name)\nend_time is NOT in BookingResponse (no snapshot columns per D-38-08).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "slotId": {
+            "format": "uuid",
+            "title": "Slotid",
+            "type": "string"
+          },
+          "startTime": {
+            "format": "date-time",
+            "title": "Starttime",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trainerName": {
+            "title": "Trainername",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slotId",
+          "status",
+          "startTime",
+          "trainerName"
+        ],
+        "title": "ClientBookingResponse",
+        "type": "object"
+      },
+      "ClientCatalogPlanResponse": {
+        "description": "Active membership plan — client-safe fields only (CPLAN-01, D-69-05).",
+        "properties": {
+          "durationDays": {
+            "title": "Durationdays",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priceKopecks": {
+            "title": "Pricekopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "priceKopecks",
+          "durationDays"
+        ],
+        "title": "ClientCatalogPlanResponse",
+        "type": "object"
+      },
+      "ClientCatalogPtPackageResponse": {
+        "description": "Active PT-package plan — client-safe fields only (CPLAN-02, D-69-05).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priceKopecks": {
+            "title": "Pricekopecks",
+            "type": "integer"
+          },
+          "sessionCount": {
+            "title": "Sessioncount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sessionCount",
+          "priceKopecks"
+        ],
+        "title": "ClientCatalogPtPackageResponse",
+        "type": "object"
+      },
+      "ClientCatalogTrainerResponse": {
+        "description": "Active trainer — client-safe projection (CPLAN-03, D-69-05).\n\nNO rates, NO phone, NO is_active flag, NO audit fields.\nspecialization is not present in the Trainer model (reserved for future).",
+        "properties": {
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fullName"
+        ],
+        "title": "ClientCatalogTrainerResponse",
+        "type": "object"
+      },
+      "ClientCheckInRequest": {
+        "description": "POST /client/check-in body (Phase 70 CCHK-02 / D-70-10).\n\nThe signed QR token is the sole credential — client_id is NEVER in the\nbody (cross-client check-in structurally impossible, T-70-17).\nextra='forbid' (inherited from ResponseData) rejects any injected\nclient_id from the body.",
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ClientCheckInRequest",
+        "type": "object"
+      },
+      "ClientCheckInResponse": {
+        "description": "Check-in success response — client-safe visit projection (CCHK-02).\n\nDeclared here so client_portal never imports app.modules.visits (D-20-MODULE).\nMapped from VisitResponse fields:\n  id           -> visit id\n  gym_date     -> visit date (Moscow TZ)\n  checked_in_at -> UTC timestamp of check-in\n  channel      -> always 'client_qr' for this path",
+        "properties": {
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "checkedInAt": {
+            "format": "date-time",
+            "title": "Checkedinat",
+            "type": "string"
+          },
+          "gymDate": {
+            "format": "date",
+            "title": "Gymdate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "gymDate",
+          "checkedInAt",
+          "channel"
+        ],
+        "title": "ClientCheckInResponse",
+        "type": "object"
+      },
+      "ClientCheckoutRequest": {
+        "description": "Request body for client-initiated checkout (CPAY-01/02).\n\nNo fields for membership (plan_id in path); for PT the idempotency_key is\nsupplied via Idempotency-Key header (D-71-04), not body.",
+        "properties": {},
+        "title": "ClientCheckoutRequest",
+        "type": "object"
+      },
+      "ClientCheckoutResponse": {
+        "description": "Checkout response: redirect URL + online_payment_id for status polling (CPAY-03).",
+        "properties": {
+          "confirmationUrl": {
+            "title": "Confirmationurl",
+            "type": "string"
+          },
+          "onlinePaymentId": {
+            "format": "uuid",
+            "title": "Onlinepaymentid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "onlinePaymentId",
+          "confirmationUrl"
+        ],
+        "title": "ClientCheckoutResponse",
+        "type": "object"
+      },
+      "ClientCreateBookingRequest": {
+        "description": "POST /client/booking body (Phase 70 CBOOK-03 / T-70-11).\n\nNO client_id field — the principal from require_client() is the IDOR-safe\nsource (T-70-11 mitigated structurally; extra='forbid' rejects any\ninjected client_id from the body).",
+        "properties": {
+          "ptPackageId": {
+            "format": "uuid",
+            "title": "Ptpackageid",
+            "type": "string"
+          },
+          "slotId": {
+            "format": "uuid",
+            "title": "Slotid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slotId",
+          "ptPackageId"
+        ],
+        "title": "ClientCreateBookingRequest",
+        "type": "object"
+      },
       "ClientCreateRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/clients body. Required: lastName, firstName, phone.",
@@ -753,6 +1001,370 @@
           "phone"
         ],
         "title": "ClientCreateRequest",
+        "type": "object"
+      },
+      "ClientHomeResponse": {
+        "description": "Composite home screen payload (D-69-01).\n\nServer-side fan-out: reuses get_client_membership + next-booking query.\nNull slots for missing data (D-69-03: own-scope empty is 200/null, not 404).",
+        "properties": {
+          "expiringSoon": {
+            "title": "Expiringsoon",
+            "type": "boolean"
+          },
+          "membership": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientMembershipResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextBooking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientNextBookingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "membership",
+          "nextBooking",
+          "expiringSoon"
+        ],
+        "title": "ClientHomeResponse",
+        "type": "object"
+      },
+      "ClientMePatchRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /client/me — email-only self-edit (D-04).\n\nName, birthday, phone, tags, and notes are staff-owned and read-only via\nthis endpoint; broader self-edit is deferred to a future phase.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "title": "ClientMePatchRequest",
+        "type": "object"
+      },
+      "ClientMeResponse": {
+        "additionalProperties": false,
+        "description": "GET /client/me — core identity only (D-05).\n\nExcludes staff-internal fields (notes, tags, created_by_user_id,\nemergency_contact) and all membership data — membership status is\nPhase 69 scope (GET /client/membership).",
+        "properties": {
+          "birthday": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birthday"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "firstName": {
+            "title": "Firstname",
+            "type": "string"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lastName": {
+            "title": "Lastname",
+            "type": "string"
+          },
+          "middleName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Middlename"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phone",
+          "email",
+          "firstName",
+          "lastName",
+          "middleName",
+          "birthday",
+          "gender"
+        ],
+        "title": "ClientMeResponse",
+        "type": "object"
+      },
+      "ClientMembershipResponse": {
+        "description": "Active membership payload with server-derived temporal fields (D-69-02).\n\nExposed fields only (D-69-05): no freeze_days_limit_snapshot internals, no audit fields.\ndays_until_end and expiring_soon are server-computed; the PWA renders only (D-69-02).",
+        "properties": {
+          "daysUntilEnd": {
+            "title": "Daysuntilend",
+            "type": "integer"
+          },
+          "endDate": {
+            "format": "date",
+            "title": "Enddate",
+            "type": "string"
+          },
+          "expiringSoon": {
+            "title": "Expiringsoon",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "planNameSnapshot": {
+            "title": "Plannamesnapshot",
+            "type": "string"
+          },
+          "startDate": {
+            "format": "date",
+            "title": "Startdate",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "planNameSnapshot",
+          "startDate",
+          "endDate",
+          "status",
+          "daysUntilEnd",
+          "expiringSoon"
+        ],
+        "title": "ClientMembershipResponse",
+        "type": "object"
+      },
+      "ClientNextBookingResponse": {
+        "description": "Nearest upcoming confirmed booking — display payload for home + bookings list.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "startTime": {
+            "format": "date-time",
+            "title": "Starttime",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trainerName": {
+            "title": "Trainername",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trainerName",
+          "startTime",
+          "status"
+        ],
+        "title": "ClientNextBookingResponse",
+        "type": "object"
+      },
+      "ClientOtpRequestBody": {
+        "additionalProperties": false,
+        "description": "POST /client/otp/request — phone-first OTP trigger (D-01, CAUTH-03).",
+        "properties": {
+          "phone": {
+            "pattern": "^\\+[1-9]\\d{1,14}$",
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "title": "ClientOtpRequestBody",
+        "type": "object"
+      },
+      "ClientOtpVerifyBody": {
+        "additionalProperties": false,
+        "description": "POST /client/otp/verify — consume OTP + issue session cookies (CAUTH-01).",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "phone": {
+            "pattern": "^\\+[1-9]\\d{1,14}$",
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "code"
+        ],
+        "title": "ClientOtpVerifyBody",
+        "type": "object"
+      },
+      "ClientPaymentItem": {
+        "description": "Single payment / refund row for the client payment history (CHIST-03).\n\nIncludes signed amount_kopecks so refunds (negative) render correctly.",
+        "properties": {
+          "amountKopecks": {
+            "title": "Amountkopecks",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "receivedAt": {
+            "format": "date-time",
+            "title": "Receivedat",
+            "type": "string"
+          },
+          "subjectKind": {
+            "title": "Subjectkind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subjectKind",
+          "amountKopecks",
+          "method",
+          "receivedAt"
+        ],
+        "title": "ClientPaymentItem",
+        "type": "object"
+      },
+      "ClientPaymentStatusResponse": {
+        "description": "Coarse payment status (CPAY-03 anti-oracle).\n\nOnly 'pending' | 'succeeded' | 'canceled' — never activation or membership details.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "ClientPaymentStatusResponse",
+        "type": "object"
+      },
+      "ClientPtSessionItem": {
+        "description": "Single PT-session row for the client PT-session history (CHIST-02).",
+        "properties": {
+          "cancelledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelledat"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "performedAt": {
+            "format": "date-time",
+            "title": "Performedat",
+            "type": "string"
+          },
+          "trainerNameSnapshot": {
+            "title": "Trainernamesnapshot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trainerNameSnapshot",
+          "performedAt"
+        ],
+        "title": "ClientPtSessionItem",
+        "type": "object"
+      },
+      "ClientQrTokenResponse": {
+        "description": "QR self check-in token response (CCHK-01 / D-70-09).\n\nReturned by GET /client/qr-token (require_client gated, ~60s TTL).\nThe PWA renders the token as a QR code for the gym scanner to scan.\nexpires_in is informational — the PWA may use it to display a countdown\nand refresh the token before it expires.",
+        "properties": {
+          "expiresIn": {
+            "title": "Expiresin",
+            "type": "integer"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expiresIn"
+        ],
+        "title": "ClientQrTokenResponse",
         "type": "object"
       },
       "ClientResponse": {
@@ -1033,6 +1645,33 @@
           }
         },
         "title": "ClientUpdateRequest",
+        "type": "object"
+      },
+      "ClientVisitItem": {
+        "description": "Single visit row for the client visit history (CHIST-01).",
+        "properties": {
+          "checkedInAt": {
+            "format": "date-time",
+            "title": "Checkedinat",
+            "type": "string"
+          },
+          "gymDate": {
+            "format": "date",
+            "title": "Gymdate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "gymDate",
+          "checkedInAt"
+        ],
+        "title": "ClientVisitItem",
         "type": "object"
       },
       "ClientsReportResponse": {
@@ -1896,6 +2535,130 @@
         "title": "PaginatedData[BookingResponse]",
         "type": "object"
       },
+      "PaginatedData_ClientAvailableSlotItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientAvailableSlotItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientAvailableSlotItem]",
+        "type": "object"
+      },
+      "PaginatedData_ClientNextBookingResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientNextBookingResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientNextBookingResponse]",
+        "type": "object"
+      },
+      "PaginatedData_ClientPaymentItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientPaymentItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientPaymentItem]",
+        "type": "object"
+      },
+      "PaginatedData_ClientPtSessionItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientPtSessionItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientPtSessionItem]",
+        "type": "object"
+      },
       "PaginatedData_ClientResponse_": {
         "properties": {
           "items": {
@@ -1925,6 +2688,37 @@
           "pageSize"
         ],
         "title": "PaginatedData[ClientResponse]",
+        "type": "object"
+      },
+      "PaginatedData_ClientVisitItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientVisitItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientVisitItem]",
         "type": "object"
       },
       "PaginatedData_MembershipPlanResponse_": {
@@ -3360,6 +4154,90 @@
         "title": "ResponseEnvelope[BookingResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_ClientBookingResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientBookingResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientBookingResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientCheckInResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientCheckInResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientCheckInResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientCheckoutResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientCheckoutResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientCheckoutResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientHomeResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientHomeResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientHomeResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientMeResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientMeResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientMeResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientPaymentStatusResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientPaymentStatusResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientPaymentStatusResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientQrTokenResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientQrTokenResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientQrTokenResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientResponse_": {
         "properties": {
           "data": {
@@ -3493,6 +4371,54 @@
         "title": "ResponseEnvelope[PaginatedData[BookingResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_ClientAvailableSlotItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientAvailableSlotItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientAvailableSlotItem]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ClientNextBookingResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientNextBookingResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientNextBookingResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ClientPaymentItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientPaymentItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientPaymentItem]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ClientPtSessionItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientPtSessionItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientPtSessionItem]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_ClientResponse__": {
         "properties": {
           "data": {
@@ -3503,6 +4429,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[ClientResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ClientVisitItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientVisitItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientVisitItem]]",
         "type": "object"
       },
       "ResponseEnvelope_PaginatedData_MembershipPlanResponse__": {
@@ -3841,6 +4779,25 @@
         "title": "ResponseEnvelope[TrainerUsageReportResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_Union_ClientMembershipResponse__NoneType__": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientMembershipResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[Union[ClientMembershipResponse, NoneType]]",
+        "type": "object"
+      },
       "ResponseEnvelope_UserCreateResponse_": {
         "properties": {
           "data": {
@@ -3887,6 +4844,54 @@
           "data"
         ],
         "title": "ResponseEnvelope[VisitsReportResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_list_ClientCatalogPlanResponse__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCatalogPlanResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[list[ClientCatalogPlanResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_list_ClientCatalogPtPackageResponse__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCatalogPtPackageResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[list[ClientCatalogPtPackageResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_list_ClientCatalogTrainerResponse__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCatalogTrainerResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[list[ClientCatalogTrainerResponse]]",
         "type": "object"
       },
       "RevenueBucket": {
@@ -6123,6 +7128,806 @@
         "summary": "Cancel a confirmed booking (reception ≤24h before slot.start per C-05 / owner anytime; 404 booking_not_found; 409 invalid_transition / cancel_window_expired; requires Idempotency-Key — D-38-14)",
         "tags": [
           "Bookings"
+        ]
+      }
+    },
+    "/api/v1/client/booking": {
+      "post": {
+        "description": "Create a confirmed booking for the authenticated client (Phase 70 CBOOK-03/04).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency\n→ get_db / get_redis.\n\nclient.id is the IDOR-safe source (T-70-11): NO client_id in the body\n(ClientCreateBookingRequest has no client_id field).\n\nCBOOK-04: PtPackageNotActiveError is mapped to 422 no_active_pt_package in the\nservice delegate (service.create_booking_for_client_request) so the PWA can\nroute the user to Plans/Checkout (D-70-03).\n\nCBOOK-03: SlotAlreadyBookedError from the partial-UNIQUE race bubbles as 409\nslot_already_booked. Two requests with DISTINCT Idempotency-Keys surface the\nrace at the DB partial UNIQUE (uq_bookings_slot_confirmed); same key replays.\n\nTwo-phase Redis idempotency (D-70-02 / D-66-LIFECYCLE-HELPER): mirrors staff\nPOST /bookings (bookings/router.py:116-128) with verify_client_idempotency\ninstead of verify_idempotency.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_create_booking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreateBookingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientBookingResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Create a confirmed booking for the authenticated client (CBOOK-03/04; 201 on success; 422 no_active_pt_package if no active PT-package; 409 slot_already_booked on race; requires Idempotency-Key — D-70-02)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/booking/{booking_id}/cancel": {
+      "post": {
+        "description": "Cancel the authenticated client's own confirmed booking (Phase 70 CBOOK-05).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\n\nIDOR 404-collapse (T-70-09 / D-20-IDOR): client.id is the ONLY ownership\nsource. Cancelling another client's booking returns 404 booking_not_found\n(anti-oracle — never 403 or an existence signal per D-70-09). Ownership\ncheck is inside bookings.service.cancel_booking_for_client.\n\nSlot restored to 'active' by the cancel delegate (CBOOK-05 slot-restore).\nNo credit action (D-70-06 — credit is at pt_sessions level).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_cancel_booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientBookingResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Cancel the authenticated client's own confirmed booking (CBOOK-05; 404 booking_not_found on non-owned booking — IDOR anti-oracle; 409 cancel_window_expired if outside client cancel window)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/bookings": {
+      "get": {
+        "description": "Granular upcoming-bookings endpoint — reused by the future Book screen (D-69-01).\n\n/home consumes the next booking internally via the same service function.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_bookings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientNextBookingResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Upcoming bookings for the authenticated client (CHOME-02, granular reuse D-69-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/check-in": {
+      "post": {
+        "description": "QR self check-in endpoint (Phase 70 CCHK-02 / D-70-11).\n\nDELIBERATELY NO require_client() — the signed QR token is the sole credential\n(gym scanner / turnstile is the caller, D-70-11). There is NO client_id parameter\nin the body, path, or query: cross-client check-in is structurally impossible\n(T-70-17 / criterion #5). client_id derives ONLY from the verified sub claim\ninside service.check_in_via_qr → decode_qr_token(token).sub.\n\nToken validation (D-70-08):\n  - decode_qr_token asserts typ='qr_checkin' AND aud='qr'\n  - an access/refresh token → 401 wrong_token_type or wrong_audience\n  - an expired token → 401 token_expired\n  - InvalidAccessToken bubbles to _app_error_handler → 401\n\nSame-day replay (criterion #5): _create_visit_with_anti_fraud collapses\nto DuplicateCheckinError('duplicate_checkin') via uq_visits_client_id_gym_date.\n\nRate-limit (T-70-18): 60 req/min per IP (per _enforce_check_in_rate_limit).\nAccommodates multi-scanner gym reception while bounding flood attacks.\nRateLimited(429) bubbles to _app_error_handler.\n\nNo try/except for domain errors — AppError bubbles to _app_error_handler.",
+        "operationId": "client_check_in",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCheckInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientCheckInResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "QR self check-in: validate the signed token and create a visit (CCHK-02; token-as-credential — no require_client; client_id from sub only)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/checkout/memberships/{plan_id}": {
+      "post": {
+        "description": "CPAY-01. Client-initiated membership checkout (Phase 71).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nServer-derived membership idempotency key (D-71-04): same-day repeat returns\nthe same confirmation_url (replay check in the core, CPAY-05).\nactor_user_id=None (D-71-02: client-initiated; online_payments.created_by_user_id nullable).\n422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).\nNo try/except — AppError bubbles to _app_error_handler.\nNo CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).",
+        "operationId": "client_checkout_membership",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientCheckoutResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Client-initiated membership checkout via ЮKassa redirect (CPAY-01); server-derived per-day idempotency key (D-71-04); 422 client_email_required_for_online_payment if email missing (CPAY-04)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/checkout/pt-packages/{plan_id}": {
+      "post": {
+        "description": "CPAY-02. Client-initiated PT-package checkout (Phase 71).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nClient-supplied Idempotency-Key header (D-71-04): PT allows same-day repurchase;\nPWA generates UUID per checkout intent, reuses on retry.\nactor_user_id=None (D-71-02: client-initiated).\n422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).\nNo try/except — AppError bubbles to _app_error_handler.\nNo CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).",
+        "operationId": "client_checkout_pt_package",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientCheckoutResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02); client-supplied Idempotency-Key header (D-71-04); 422 client_email_required_for_online_payment if email missing (CPAY-04)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/history/payments": {
+      "get": {
+        "description": "CHIST-03 — payment + refund history (signed-amount ledger). IDOR-safe.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_payment_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientPaymentItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Paginated payment + refund history for the authenticated client (CHIST-03)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/history/pt-sessions": {
+      "get": {
+        "description": "CHIST-02 — PT-session history ownership resolved via pt_packages.client_id JOIN.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_pt_session_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientPtSessionItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Paginated PT-session history for the authenticated client (CHIST-02)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/history/visits": {
+      "get": {
+        "description": "CHIST-01 — own visit history, IDOR-safe via mandatory client_id repo filter.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_visit_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientVisitItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Paginated visit history for the authenticated client (CHIST-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/home": {
+      "get": {
+        "description": "Server-side fan-out: reuses the same query functions as the granular endpoints.\n\nNull slots for missing data (D-69-03).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_home",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientHomeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Home screen composite: membership + nextBooking + expiringSoon (CHOME-01..03)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/me": {
+      "get": {
+        "description": "Return the authenticated client's core identity (D-05, T-68-27).\n\nNo CSRF check — GET is safe (D-09). Response excludes staff-internal fields\n(notes, tags, created_by_user_id, emergency_contact) and all membership data.",
+        "operationId": "client_get_me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientMeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Client Me",
+        "tags": [
+          "Client"
+        ]
+      },
+      "patch": {
+        "description": "Update the authenticated client's email (D-04).\n\nReturns 409 with code 'email_unavailable' on duplicate email (D-06).\nNon-enumerating: no indication of which account holds the address.",
+        "operationId": "client_patch_me",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientMePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientMeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Patch Client Me",
+        "tags": [
+          "Client"
+        ]
+      }
+    },
+    "/api/v1/client/membership": {
+      "get": {
+        "description": "Return active membership with server-derived days_until_end + expiring_soon (D-69-02).\n\nD-69-03: no active membership → 200 with null, not 404.\nD-20-IDOR: client_id injected from cookie principal, not URL param.\nNo CSRF dep — GET is safe.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_membership",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_Union_ClientMembershipResponse__NoneType__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active membership for the authenticated client (CHOME-01/03; 200 null if none)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/otp/request": {
+      "post": {
+        "description": "Trigger an OTP DM to the client's linked Telegram account (CAUTH-01/02/03).\n\nAlways returns 202 with a fixed ResponseEnvelope[None] body — the response\nis byte-identical for every phone (known/unknown/unlinked) so callers cannot\ninfer phone existence (T-68-22 / CAUTH-02 anti-oracle invariant).",
+        "operationId": "client_otp_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientOtpRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "security": [],
+        "summary": "Client Otp Request",
+        "tags": [
+          "Client"
+        ]
+      }
+    },
+    "/api/v1/client/otp/verify": {
+      "post": {
+        "description": "Consume a client OTP and issue cc_client_* session cookies (CAUTH-01/04).\n\nOn success, sets three cookies via issue_client_session_cookies:\n  cc_client_access   — httpOnly, Path=/\n  cc_client_refresh  — httpOnly, Path=/api/v1/client\n  clubcore_client_csrf — non-httpOnly, Path=/",
+        "operationId": "client_otp_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientOtpVerifyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "security": [],
+        "summary": "Client Otp Verify",
+        "tags": [
+          "Client"
+        ]
+      }
+    },
+    "/api/v1/client/payments/{payment_id}/status": {
+      "get": {
+        "description": "CPAY-03. Coarse payment status (Phase 71).\n\nAnti-oracle: returns only 'pending' | 'succeeded' | 'canceled' — never exposes\nmembership activation details or plan internals (T-71-05).\nD-20-IDOR: mandatory client_id filter in repository layer; None → NotFoundError → 404.\nA non-owned payment_id is indistinguishable from a non-existent one (404-collapse).\nNo CSRF dep — GET is safe (T-71-09: CSRF only on state-changing POST).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_payment_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientPaymentStatusResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Coarse payment status for the authenticated client (CPAY-03 anti-oracle); returns only pending|succeeded|canceled; 404 payment_not_found on non-owned payment (D-20-IDOR 404-collapse)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/plans": {
+      "get": {
+        "description": "CPLAN-01 — client-safe membership plans (no freeze_days_limit, no audit fields).\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_plans",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_list_ClientCatalogPlanResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active membership plans catalog for the authenticated client (CPLAN-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/pt-packages": {
+      "get": {
+        "description": "CPLAN-02 — client-safe PT-package plans (no rate internals, no audit fields).\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_pt_packages",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_list_ClientCatalogPtPackageResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active PT-package plans catalog for the authenticated client (CPLAN-02)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/qr-token": {
+      "get": {
+        "description": "Issue a signed QR self check-in JWT (Phase 70 CCHK-01 / D-70-09).\n\nRBAC-04: require_client() gates this endpoint — the client must be\nauthenticated (D-70-09). No CSRF dep — GET is safe.\n\nNO membership pre-check (D-70-09): gating on active membership happens\nat scan time inside _create_visit_with_anti_fraud. The PWA can display a\nQR code even before the client has an active membership, allowing the\nreception to activate one on their behalf while they wait.\n\nRate-limit (T-70-18): 20 req/min per IP (per _enforce_qr_token_rate_limit).\nLegitimate use: one refresh per ~50s. RateLimited(429) bubbles.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_qr_token",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientQrTokenResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mint a short-lived (~60s) signed QR self check-in token for the authenticated client (CCHK-01; no membership pre-check)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/session/logout": {
+      "post": {
+        "description": "Revoke the client session family and clear all cc_client_* cookies.\n\nIdempotent: if cc_client_refresh is absent or already revoked, the cookie\nclear still runs so the browser ends in a clean state.",
+        "operationId": "client_session_logout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Client Session Logout",
+        "tags": [
+          "Client"
+        ]
+      }
+    },
+    "/api/v1/client/session/refresh": {
+      "post": {
+        "description": "Rotate the client refresh token and reissue all three cookies (CAUTH-04).\n\nReads cc_client_refresh cookie directly — NOT via the auth dep so an\nexpired access token does not block a rotation call. CSRF dep exempt\n(mirrors /auth/refresh D-09 reasoning — identity lives in the cookie).",
+        "operationId": "client_session_refresh",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Client Session Refresh",
+        "tags": [
+          "Client"
+        ]
+      }
+    },
+    "/api/v1/client/slots": {
+      "get": {
+        "description": "Available bookable slots for the authenticated client (Phase 70 CBOOK-02).\n\nTrainer-pin: if the client's active PT-package pins a trainer, only that\ntrainer's active future slots are returned; else all trainers' slots.\n\nClient-safe projection (T-70-13): trainer name + times only — no owner-only\neconomics, no internal status details (D-69-05 catalog discipline).\n\nNo CSRF dep — GET is safe.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_slots",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientAvailableSlotItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Bookable active future slots filtered by the client's active PT-package trainer pin (CBOOK-02; client-safe projection; paginated)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/trainers": {
+      "get": {
+        "description": "CPLAN-03 — client-safe trainer catalog (name only; no phone, no is_active, no rates).\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_trainers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_list_ClientCatalogTrainerResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active trainers catalog for the authenticated client (CPLAN-03)",
+        "tags": [
+          "Client-Portal"
         ]
       }
     },
@@ -10303,6 +12108,10 @@
     {
       "description": "Operator admin — owner and reception account management (D-64-TAG-USERS).",
       "name": "Users"
+    },
+    {
+      "description": "Client-portal — authenticated gym member self-service: OTP auth, session management, profile (Phase 68 CAUTH-01..06 / CISO-01..05).",
+      "name": "Client"
     },
     {
       "description": "Gym client CRM — create, read, update, soft-delete clients.",

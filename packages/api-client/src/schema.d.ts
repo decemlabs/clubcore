@@ -546,6 +546,592 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a confirmed booking for the authenticated client (CBOOK-03/04; 201 on success; 422 no_active_pt_package if no active PT-package; 409 slot_already_booked on race; requires Idempotency-Key — D-70-02)
+         * @description Create a confirmed booking for the authenticated client (Phase 70 CBOOK-03/04).
+         *
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency
+         *     → get_db / get_redis.
+         *
+         *     client.id is the IDOR-safe source (T-70-11): NO client_id in the body
+         *     (ClientCreateBookingRequest has no client_id field).
+         *
+         *     CBOOK-04: PtPackageNotActiveError is mapped to 422 no_active_pt_package in the
+         *     service delegate (service.create_booking_for_client_request) so the PWA can
+         *     route the user to Plans/Checkout (D-70-03).
+         *
+         *     CBOOK-03: SlotAlreadyBookedError from the partial-UNIQUE race bubbles as 409
+         *     slot_already_booked. Two requests with DISTINCT Idempotency-Keys surface the
+         *     race at the DB partial UNIQUE (uq_bookings_slot_confirmed); same key replays.
+         *
+         *     Two-phase Redis idempotency (D-70-02 / D-66-LIFECYCLE-HELPER): mirrors staff
+         *     POST /bookings (bookings/router.py:116-128) with verify_client_idempotency
+         *     instead of verify_idempotency.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["client_create_booking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/booking/{booking_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel the authenticated client's own confirmed booking (CBOOK-05; 404 booking_not_found on non-owned booking — IDOR anti-oracle; 409 cancel_window_expired if outside client cancel window)
+         * @description Cancel the authenticated client's own confirmed booking (Phase 70 CBOOK-05).
+         *
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *
+         *     IDOR 404-collapse (T-70-09 / D-20-IDOR): client.id is the ONLY ownership
+         *     source. Cancelling another client's booking returns 404 booking_not_found
+         *     (anti-oracle — never 403 or an existence signal per D-70-09). Ownership
+         *     check is inside bookings.service.cancel_booking_for_client.
+         *
+         *     Slot restored to 'active' by the cancel delegate (CBOOK-05 slot-restore).
+         *     No credit action (D-70-06 — credit is at pt_sessions level).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["client_cancel_booking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upcoming bookings for the authenticated client (CHOME-02, granular reuse D-69-01)
+         * @description Granular upcoming-bookings endpoint — reused by the future Book screen (D-69-01).
+         *
+         *     /home consumes the next booking internally via the same service function.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_bookings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * QR self check-in: validate the signed token and create a visit (CCHK-02; token-as-credential — no require_client; client_id from sub only)
+         * @description QR self check-in endpoint (Phase 70 CCHK-02 / D-70-11).
+         *
+         *     DELIBERATELY NO require_client() — the signed QR token is the sole credential
+         *     (gym scanner / turnstile is the caller, D-70-11). There is NO client_id parameter
+         *     in the body, path, or query: cross-client check-in is structurally impossible
+         *     (T-70-17 / criterion #5). client_id derives ONLY from the verified sub claim
+         *     inside service.check_in_via_qr → decode_qr_token(token).sub.
+         *
+         *     Token validation (D-70-08):
+         *       - decode_qr_token asserts typ='qr_checkin' AND aud='qr'
+         *       - an access/refresh token → 401 wrong_token_type or wrong_audience
+         *       - an expired token → 401 token_expired
+         *       - InvalidAccessToken bubbles to _app_error_handler → 401
+         *
+         *     Same-day replay (criterion #5): _create_visit_with_anti_fraud collapses
+         *     to DuplicateCheckinError('duplicate_checkin') via uq_visits_client_id_gym_date.
+         *
+         *     Rate-limit (T-70-18): 60 req/min per IP (per _enforce_check_in_rate_limit).
+         *     Accommodates multi-scanner gym reception while bounding flood attacks.
+         *     RateLimited(429) bubbles to _app_error_handler.
+         *
+         *     No try/except for domain errors — AppError bubbles to _app_error_handler.
+         */
+        post: operations["client_check_in"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/checkout/memberships/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client-initiated membership checkout via ЮKassa redirect (CPAY-01); server-derived per-day idempotency key (D-71-04); 422 client_email_required_for_online_payment if email missing (CPAY-04)
+         * @description CPAY-01. Client-initiated membership checkout (Phase 71).
+         *
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     Server-derived membership idempotency key (D-71-04): same-day repeat returns
+         *     the same confirmation_url (replay check in the core, CPAY-05).
+         *     actor_user_id=None (D-71-02: client-initiated; online_payments.created_by_user_id nullable).
+         *     422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     No CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).
+         */
+        post: operations["client_checkout_membership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/checkout/pt-packages/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02); client-supplied Idempotency-Key header (D-71-04); 422 client_email_required_for_online_payment if email missing (CPAY-04)
+         * @description CPAY-02. Client-initiated PT-package checkout (Phase 71).
+         *
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     Client-supplied Idempotency-Key header (D-71-04): PT allows same-day repurchase;
+         *     PWA generates UUID per checkout intent, reuses on retry.
+         *     actor_user_id=None (D-71-02: client-initiated).
+         *     422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     No CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).
+         */
+        post: operations["client_checkout_pt_package"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/history/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated payment + refund history for the authenticated client (CHIST-03)
+         * @description CHIST-03 — payment + refund history (signed-amount ledger). IDOR-safe.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_payment_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/history/pt-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated PT-session history for the authenticated client (CHIST-02)
+         * @description CHIST-02 — PT-session history ownership resolved via pt_packages.client_id JOIN.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_pt_session_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/history/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated visit history for the authenticated client (CHIST-01)
+         * @description CHIST-01 — own visit history, IDOR-safe via mandatory client_id repo filter.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_visit_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Home screen composite: membership + nextBooking + expiringSoon (CHOME-01..03)
+         * @description Server-side fan-out: reuses the same query functions as the granular endpoints.
+         *
+         *     Null slots for missing data (D-69-03).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_home"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Client Me
+         * @description Return the authenticated client's core identity (D-05, T-68-27).
+         *
+         *     No CSRF check — GET is safe (D-09). Response excludes staff-internal fields
+         *     (notes, tags, created_by_user_id, emergency_contact) and all membership data.
+         */
+        get: operations["client_get_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Client Me
+         * @description Update the authenticated client's email (D-04).
+         *
+         *     Returns 409 with code 'email_unavailable' on duplicate email (D-06).
+         *     Non-enumerating: no indication of which account holds the address.
+         */
+        patch: operations["client_patch_me"];
+        trace?: never;
+    };
+    "/api/v1/client/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active membership for the authenticated client (CHOME-01/03; 200 null if none)
+         * @description Return active membership with server-derived days_until_end + expiring_soon (D-69-02).
+         *
+         *     D-69-03: no active membership → 200 with null, not 404.
+         *     D-20-IDOR: client_id injected from cookie principal, not URL param.
+         *     No CSRF dep — GET is safe.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_membership"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/otp/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client Otp Request
+         * @description Trigger an OTP DM to the client's linked Telegram account (CAUTH-01/02/03).
+         *
+         *     Always returns 202 with a fixed ResponseEnvelope[None] body — the response
+         *     is byte-identical for every phone (known/unknown/unlinked) so callers cannot
+         *     infer phone existence (T-68-22 / CAUTH-02 anti-oracle invariant).
+         */
+        post: operations["client_otp_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/otp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client Otp Verify
+         * @description Consume a client OTP and issue cc_client_* session cookies (CAUTH-01/04).
+         *
+         *     On success, sets three cookies via issue_client_session_cookies:
+         *       cc_client_access   — httpOnly, Path=/
+         *       cc_client_refresh  — httpOnly, Path=/api/v1/client
+         *       clubcore_client_csrf — non-httpOnly, Path=/
+         */
+        post: operations["client_otp_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/payments/{payment_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coarse payment status for the authenticated client (CPAY-03 anti-oracle); returns only pending|succeeded|canceled; 404 payment_not_found on non-owned payment (D-20-IDOR 404-collapse)
+         * @description CPAY-03. Coarse payment status (Phase 71).
+         *
+         *     Anti-oracle: returns only 'pending' | 'succeeded' | 'canceled' — never exposes
+         *     membership activation details or plan internals (T-71-05).
+         *     D-20-IDOR: mandatory client_id filter in repository layer; None → NotFoundError → 404.
+         *     A non-owned payment_id is indistinguishable from a non-existent one (404-collapse).
+         *     No CSRF dep — GET is safe (T-71-09: CSRF only on state-changing POST).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_payment_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active membership plans catalog for the authenticated client (CPLAN-01)
+         * @description CPLAN-01 — client-safe membership plans (no freeze_days_limit, no audit fields).
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_plans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/pt-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active PT-package plans catalog for the authenticated client (CPLAN-02)
+         * @description CPLAN-02 — client-safe PT-package plans (no rate internals, no audit fields).
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_pt_packages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/qr-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mint a short-lived (~60s) signed QR self check-in token for the authenticated client (CCHK-01; no membership pre-check)
+         * @description Issue a signed QR self check-in JWT (Phase 70 CCHK-01 / D-70-09).
+         *
+         *     RBAC-04: require_client() gates this endpoint — the client must be
+         *     authenticated (D-70-09). No CSRF dep — GET is safe.
+         *
+         *     NO membership pre-check (D-70-09): gating on active membership happens
+         *     at scan time inside _create_visit_with_anti_fraud. The PWA can display a
+         *     QR code even before the client has an active membership, allowing the
+         *     reception to activate one on their behalf while they wait.
+         *
+         *     Rate-limit (T-70-18): 20 req/min per IP (per _enforce_qr_token_rate_limit).
+         *     Legitimate use: one refresh per ~50s. RateLimited(429) bubbles.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_qr_token"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/session/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client Session Logout
+         * @description Revoke the client session family and clear all cc_client_* cookies.
+         *
+         *     Idempotent: if cc_client_refresh is absent or already revoked, the cookie
+         *     clear still runs so the browser ends in a clean state.
+         */
+        post: operations["client_session_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/session/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client Session Refresh
+         * @description Rotate the client refresh token and reissue all three cookies (CAUTH-04).
+         *
+         *     Reads cc_client_refresh cookie directly — NOT via the auth dep so an
+         *     expired access token does not block a rotation call. CSRF dep exempt
+         *     (mirrors /auth/refresh D-09 reasoning — identity lives in the cookie).
+         */
+        post: operations["client_session_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bookable active future slots filtered by the client's active PT-package trainer pin (CBOOK-02; client-safe projection; paginated)
+         * @description Available bookable slots for the authenticated client (Phase 70 CBOOK-02).
+         *
+         *     Trainer-pin: if the client's active PT-package pins a trainer, only that
+         *     trainer's active future slots are returned; else all trainers' slots.
+         *
+         *     Client-safe projection (T-70-13): trainer name + times only — no owner-only
+         *     economics, no internal status details (D-69-05 catalog discipline).
+         *
+         *     No CSRF dep — GET is safe.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_slots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/trainers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active trainers catalog for the authenticated client (CPLAN-03)
+         * @description CPLAN-03 — client-safe trainer catalog (name only; no phone, no is_active, no rates).
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_trainers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clients": {
         parameters: {
             query?: never;
@@ -2666,6 +3252,216 @@ export interface components {
          */
         BookingStatus: "confirmed" | "cancelled" | "no_show" | "completed";
         /**
+         * ClientAvailableSlotItem
+         * @description Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).
+         *
+         *     NO owner-only economics. Verified column sources:
+         *       trainer_availability_slots (app/modules/schedule/models.py:64-152):
+         *         id           UUID PK
+         *         trainer_id   UUID FK trainers.id
+         *         start_time   DateTime(timezone=True)
+         *         end_time     DateTime(timezone=True)
+         *         status       String(16)
+         *       trainers (app/modules/trainers/models.py:23-43):
+         *         full_name    Text NOT NULL
+         *     specialization is NOT on the Trainer model in v1 (reserved for future);
+         *     omitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).
+         */
+        ClientAvailableSlotItem: {
+            /**
+             * Endtime
+             * Format: date-time
+             */
+            endTime: string;
+            /**
+             * Slotid
+             * Format: uuid
+             */
+            slotId: string;
+            /**
+             * Starttime
+             * Format: date-time
+             */
+            startTime: string;
+            /**
+             * Trainerid
+             * Format: uuid
+             */
+            trainerId: string;
+            /** Trainername */
+            trainerName: string;
+        };
+        /**
+         * ClientBookingResponse
+         * @description Booking write response payload — client-safe projection (Phase 70 CBOOK-03/05).
+         *
+         *     Mirrors BookingResponse from app.modules.bookings.schemas but declared here
+         *     so client_portal never imports app.modules.bookings (D-20-MODULE).
+         *
+         *     Mapped from BookingResponse fields:
+         *       id               -> booking id
+         *       slot_id          -> slot_id
+         *       status           -> status (confirmed / cancelled)
+         *       start_time       -> slot_start_time (slot.start_time via eager-loaded join)
+         *       trainer_name     -> trainer_full_name (slot.trainer.full_name)
+         *     end_time is NOT in BookingResponse (no snapshot columns per D-38-08).
+         */
+        ClientBookingResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Slotid
+             * Format: uuid
+             */
+            slotId: string;
+            /**
+             * Starttime
+             * Format: date-time
+             */
+            startTime: string;
+            /** Status */
+            status: string;
+            /** Trainername */
+            trainerName: string;
+        };
+        /**
+         * ClientCatalogPlanResponse
+         * @description Active membership plan — client-safe fields only (CPLAN-01, D-69-05).
+         */
+        ClientCatalogPlanResponse: {
+            /** Durationdays */
+            durationDays: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Pricekopecks */
+            priceKopecks: number;
+        };
+        /**
+         * ClientCatalogPtPackageResponse
+         * @description Active PT-package plan — client-safe fields only (CPLAN-02, D-69-05).
+         */
+        ClientCatalogPtPackageResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Pricekopecks */
+            priceKopecks: number;
+            /** Sessioncount */
+            sessionCount: number;
+        };
+        /**
+         * ClientCatalogTrainerResponse
+         * @description Active trainer — client-safe projection (CPLAN-03, D-69-05).
+         *
+         *     NO rates, NO phone, NO is_active flag, NO audit fields.
+         *     specialization is not present in the Trainer model (reserved for future).
+         */
+        ClientCatalogTrainerResponse: {
+            /** Fullname */
+            fullName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * ClientCheckInRequest
+         * @description POST /client/check-in body (Phase 70 CCHK-02 / D-70-10).
+         *
+         *     The signed QR token is the sole credential — client_id is NEVER in the
+         *     body (cross-client check-in structurally impossible, T-70-17).
+         *     extra='forbid' (inherited from ResponseData) rejects any injected
+         *     client_id from the body.
+         */
+        ClientCheckInRequest: {
+            /** Token */
+            token: string;
+        };
+        /**
+         * ClientCheckInResponse
+         * @description Check-in success response — client-safe visit projection (CCHK-02).
+         *
+         *     Declared here so client_portal never imports app.modules.visits (D-20-MODULE).
+         *     Mapped from VisitResponse fields:
+         *       id           -> visit id
+         *       gym_date     -> visit date (Moscow TZ)
+         *       checked_in_at -> UTC timestamp of check-in
+         *       channel      -> always 'client_qr' for this path
+         */
+        ClientCheckInResponse: {
+            /** Channel */
+            channel: string;
+            /**
+             * Checkedinat
+             * Format: date-time
+             */
+            checkedInAt: string;
+            /**
+             * Gymdate
+             * Format: date
+             */
+            gymDate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * ClientCheckoutRequest
+         * @description Request body for client-initiated checkout (CPAY-01/02).
+         *
+         *     No fields for membership (plan_id in path); for PT the idempotency_key is
+         *     supplied via Idempotency-Key header (D-71-04), not body.
+         */
+        ClientCheckoutRequest: Record<string, never>;
+        /**
+         * ClientCheckoutResponse
+         * @description Checkout response: redirect URL + online_payment_id for status polling (CPAY-03).
+         */
+        ClientCheckoutResponse: {
+            /** Confirmationurl */
+            confirmationUrl: string;
+            /**
+             * Onlinepaymentid
+             * Format: uuid
+             */
+            onlinePaymentId: string;
+        };
+        /**
+         * ClientCreateBookingRequest
+         * @description POST /client/booking body (Phase 70 CBOOK-03 / T-70-11).
+         *
+         *     NO client_id field — the principal from require_client() is the IDOR-safe
+         *     source (T-70-11 mitigated structurally; extra='forbid' rejects any
+         *     injected client_id from the body).
+         */
+        ClientCreateBookingRequest: {
+            /**
+             * Ptpackageid
+             * Format: uuid
+             */
+            ptPackageId: string;
+            /**
+             * Slotid
+             * Format: uuid
+             */
+            slotId: string;
+        };
+        /**
          * ClientCreateRequest
          * @description POST /api/v1/clients body. Required: lastName, firstName, phone.
          */
@@ -2690,6 +3486,203 @@ export interface components {
             tags?: string[];
             /** Telegramuserid */
             telegramUserId?: number | null;
+        };
+        /**
+         * ClientHomeResponse
+         * @description Composite home screen payload (D-69-01).
+         *
+         *     Server-side fan-out: reuses get_client_membership + next-booking query.
+         *     Null slots for missing data (D-69-03: own-scope empty is 200/null, not 404).
+         */
+        ClientHomeResponse: {
+            /** Expiringsoon */
+            expiringSoon: boolean;
+            membership: components["schemas"]["ClientMembershipResponse"] | null;
+            nextBooking: components["schemas"]["ClientNextBookingResponse"] | null;
+        };
+        /**
+         * ClientMePatchRequest
+         * @description PATCH /client/me — email-only self-edit (D-04).
+         *
+         *     Name, birthday, phone, tags, and notes are staff-owned and read-only via
+         *     this endpoint; broader self-edit is deferred to a future phase.
+         */
+        ClientMePatchRequest: {
+            /** Email */
+            email?: string | null;
+        };
+        /**
+         * ClientMeResponse
+         * @description GET /client/me — core identity only (D-05).
+         *
+         *     Excludes staff-internal fields (notes, tags, created_by_user_id,
+         *     emergency_contact) and all membership data — membership status is
+         *     Phase 69 scope (GET /client/membership).
+         */
+        ClientMeResponse: {
+            /** Birthday */
+            birthday: string | null;
+            /** Email */
+            email: string | null;
+            /** Firstname */
+            firstName: string;
+            /** Gender */
+            gender: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lastname */
+            lastName: string;
+            /** Middlename */
+            middleName: string | null;
+            /** Phone */
+            phone: string;
+        };
+        /**
+         * ClientMembershipResponse
+         * @description Active membership payload with server-derived temporal fields (D-69-02).
+         *
+         *     Exposed fields only (D-69-05): no freeze_days_limit_snapshot internals, no audit fields.
+         *     days_until_end and expiring_soon are server-computed; the PWA renders only (D-69-02).
+         */
+        ClientMembershipResponse: {
+            /** Daysuntilend */
+            daysUntilEnd: number;
+            /**
+             * Enddate
+             * Format: date
+             */
+            endDate: string;
+            /** Expiringsoon */
+            expiringSoon: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Plannamesnapshot */
+            planNameSnapshot: string;
+            /**
+             * Startdate
+             * Format: date
+             */
+            startDate: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ClientNextBookingResponse
+         * @description Nearest upcoming confirmed booking — display payload for home + bookings list.
+         */
+        ClientNextBookingResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Starttime
+             * Format: date-time
+             */
+            startTime: string;
+            /** Status */
+            status: string;
+            /** Trainername */
+            trainerName: string;
+        };
+        /**
+         * ClientOtpRequestBody
+         * @description POST /client/otp/request — phone-first OTP trigger (D-01, CAUTH-03).
+         */
+        ClientOtpRequestBody: {
+            /** Phone */
+            phone: string;
+        };
+        /**
+         * ClientOtpVerifyBody
+         * @description POST /client/otp/verify — consume OTP + issue session cookies (CAUTH-01).
+         */
+        ClientOtpVerifyBody: {
+            /** Code */
+            code: string;
+            /** Phone */
+            phone: string;
+        };
+        /**
+         * ClientPaymentItem
+         * @description Single payment / refund row for the client payment history (CHIST-03).
+         *
+         *     Includes signed amount_kopecks so refunds (negative) render correctly.
+         */
+        ClientPaymentItem: {
+            /** Amountkopecks */
+            amountKopecks: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Method */
+            method: string;
+            /**
+             * Receivedat
+             * Format: date-time
+             */
+            receivedAt: string;
+            /** Subjectkind */
+            subjectKind: string;
+        };
+        /**
+         * ClientPaymentStatusResponse
+         * @description Coarse payment status (CPAY-03 anti-oracle).
+         *
+         *     Only 'pending' | 'succeeded' | 'canceled' — never activation or membership details.
+         */
+        ClientPaymentStatusResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ClientPtSessionItem
+         * @description Single PT-session row for the client PT-session history (CHIST-02).
+         */
+        ClientPtSessionItem: {
+            /** Cancelledat */
+            cancelledAt?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Performedat
+             * Format: date-time
+             */
+            performedAt: string;
+            /** Trainernamesnapshot */
+            trainerNameSnapshot: string;
+        };
+        /**
+         * ClientQrTokenResponse
+         * @description QR self check-in token response (CCHK-01 / D-70-09).
+         *
+         *     Returned by GET /client/qr-token (require_client gated, ~60s TTL).
+         *     The PWA renders the token as a QR code for the gym scanner to scan.
+         *     expires_in is informational — the PWA may use it to display a countdown
+         *     and refresh the token before it expires.
+         */
+        ClientQrTokenResponse: {
+            /** Expiresin */
+            expiresIn: number;
+            /** Token */
+            token: string;
         };
         /**
          * ClientResponse
@@ -2776,6 +3769,27 @@ export interface components {
             tags?: string[] | null;
             /** Telegramuserid */
             telegramUserId?: number | null;
+        };
+        /**
+         * ClientVisitItem
+         * @description Single visit row for the client visit history (CHIST-01).
+         */
+        ClientVisitItem: {
+            /**
+             * Checkedinat
+             * Format: date-time
+             */
+            checkedInAt: string;
+            /**
+             * Gymdate
+             * Format: date
+             */
+            gymDate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /**
          * ClientsReportResponse
@@ -3213,10 +4227,65 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[ClientAvailableSlotItem] */
+        PaginatedData_ClientAvailableSlotItem_: {
+            /** Items */
+            items: components["schemas"]["ClientAvailableSlotItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[ClientNextBookingResponse] */
+        PaginatedData_ClientNextBookingResponse_: {
+            /** Items */
+            items: components["schemas"]["ClientNextBookingResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[ClientPaymentItem] */
+        PaginatedData_ClientPaymentItem_: {
+            /** Items */
+            items: components["schemas"]["ClientPaymentItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[ClientPtSessionItem] */
+        PaginatedData_ClientPtSessionItem_: {
+            /** Items */
+            items: components["schemas"]["ClientPtSessionItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[ClientResponse] */
         PaginatedData_ClientResponse_: {
             /** Items */
             items: components["schemas"]["ClientResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[ClientVisitItem] */
+        PaginatedData_ClientVisitItem_: {
+            /** Items */
+            items: components["schemas"]["ClientVisitItem"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -3933,6 +5002,34 @@ export interface components {
         ResponseEnvelope_BookingResponse_: {
             data: components["schemas"]["BookingResponse"];
         };
+        /** ResponseEnvelope[ClientBookingResponse] */
+        ResponseEnvelope_ClientBookingResponse_: {
+            data: components["schemas"]["ClientBookingResponse"];
+        };
+        /** ResponseEnvelope[ClientCheckInResponse] */
+        ResponseEnvelope_ClientCheckInResponse_: {
+            data: components["schemas"]["ClientCheckInResponse"];
+        };
+        /** ResponseEnvelope[ClientCheckoutResponse] */
+        ResponseEnvelope_ClientCheckoutResponse_: {
+            data: components["schemas"]["ClientCheckoutResponse"];
+        };
+        /** ResponseEnvelope[ClientHomeResponse] */
+        ResponseEnvelope_ClientHomeResponse_: {
+            data: components["schemas"]["ClientHomeResponse"];
+        };
+        /** ResponseEnvelope[ClientMeResponse] */
+        ResponseEnvelope_ClientMeResponse_: {
+            data: components["schemas"]["ClientMeResponse"];
+        };
+        /** ResponseEnvelope[ClientPaymentStatusResponse] */
+        ResponseEnvelope_ClientPaymentStatusResponse_: {
+            data: components["schemas"]["ClientPaymentStatusResponse"];
+        };
+        /** ResponseEnvelope[ClientQrTokenResponse] */
+        ResponseEnvelope_ClientQrTokenResponse_: {
+            data: components["schemas"]["ClientQrTokenResponse"];
+        };
         /** ResponseEnvelope[ClientResponse] */
         ResponseEnvelope_ClientResponse_: {
             data: components["schemas"]["ClientResponse"];
@@ -3978,9 +5075,29 @@ export interface components {
         ResponseEnvelope_PaginatedData_BookingResponse__: {
             data: components["schemas"]["PaginatedData_BookingResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[ClientAvailableSlotItem]] */
+        ResponseEnvelope_PaginatedData_ClientAvailableSlotItem__: {
+            data: components["schemas"]["PaginatedData_ClientAvailableSlotItem_"];
+        };
+        /** ResponseEnvelope[PaginatedData[ClientNextBookingResponse]] */
+        ResponseEnvelope_PaginatedData_ClientNextBookingResponse__: {
+            data: components["schemas"]["PaginatedData_ClientNextBookingResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[ClientPaymentItem]] */
+        ResponseEnvelope_PaginatedData_ClientPaymentItem__: {
+            data: components["schemas"]["PaginatedData_ClientPaymentItem_"];
+        };
+        /** ResponseEnvelope[PaginatedData[ClientPtSessionItem]] */
+        ResponseEnvelope_PaginatedData_ClientPtSessionItem__: {
+            data: components["schemas"]["PaginatedData_ClientPtSessionItem_"];
+        };
         /** ResponseEnvelope[PaginatedData[ClientResponse]] */
         ResponseEnvelope_PaginatedData_ClientResponse__: {
             data: components["schemas"]["PaginatedData_ClientResponse_"];
+        };
+        /** ResponseEnvelope[PaginatedData[ClientVisitItem]] */
+        ResponseEnvelope_PaginatedData_ClientVisitItem__: {
+            data: components["schemas"]["PaginatedData_ClientVisitItem_"];
         };
         /** ResponseEnvelope[PaginatedData[MembershipPlanResponse]] */
         ResponseEnvelope_PaginatedData_MembershipPlanResponse__: {
@@ -4094,6 +5211,10 @@ export interface components {
         ResponseEnvelope_TrainerUsageReportResponse_: {
             data: components["schemas"]["TrainerUsageReportResponse"];
         };
+        /** ResponseEnvelope[Union[ClientMembershipResponse, NoneType]] */
+        ResponseEnvelope_Union_ClientMembershipResponse__NoneType__: {
+            data: components["schemas"]["ClientMembershipResponse"] | null;
+        };
         /** ResponseEnvelope[UserCreateResponse] */
         ResponseEnvelope_UserCreateResponse_: {
             data: components["schemas"]["UserCreateResponse"];
@@ -4109,6 +5230,21 @@ export interface components {
         /** ResponseEnvelope[VisitsReportResponse] */
         ResponseEnvelope_VisitsReportResponse_: {
             data: components["schemas"]["VisitsReportResponse"];
+        };
+        /** ResponseEnvelope[list[ClientCatalogPlanResponse]] */
+        ResponseEnvelope_list_ClientCatalogPlanResponse__: {
+            /** Data */
+            data: components["schemas"]["ClientCatalogPlanResponse"][];
+        };
+        /** ResponseEnvelope[list[ClientCatalogPtPackageResponse]] */
+        ResponseEnvelope_list_ClientCatalogPtPackageResponse__: {
+            /** Data */
+            data: components["schemas"]["ClientCatalogPtPackageResponse"][];
+        };
+        /** ResponseEnvelope[list[ClientCatalogTrainerResponse]] */
+        ResponseEnvelope_list_ClientCatalogTrainerResponse__: {
+            /** Data */
+            data: components["schemas"]["ClientCatalogTrainerResponse"][];
         };
         /**
          * RevenueBucket
@@ -5430,6 +6566,533 @@ export interface operations {
                 };
             };
             422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_create_booking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientCreateBookingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientBookingResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_cancel_booking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientBookingResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_bookings: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ClientNextBookingResponse__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_check_in: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientCheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientCheckInResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_checkout_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientCheckoutResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_checkout_pt_package: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientCheckoutResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_payment_history: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ClientPaymentItem__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_pt_session_history: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ClientPtSessionItem__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_visit_history: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ClientVisitItem__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_get_home: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientHomeResponse_"];
+                };
+            };
+        };
+    };
+    client_get_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientMeResponse_"];
+                };
+            };
+        };
+    };
+    client_patch_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientMePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientMeResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_get_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_Union_ClientMembershipResponse__NoneType__"];
+                };
+            };
+        };
+    };
+    client_otp_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientOtpRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_otp_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientOtpVerifyBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_get_payment_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientPaymentStatusResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_plans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_list_ClientCatalogPlanResponse__"];
+                };
+            };
+        };
+    };
+    client_list_pt_packages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_list_ClientCatalogPtPackageResponse__"];
+                };
+            };
+        };
+    };
+    client_get_qr_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientQrTokenResponse_"];
+                };
+            };
+        };
+    };
+    client_session_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+        };
+    };
+    client_session_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+        };
+    };
+    client_list_slots: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ClientAvailableSlotItem__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_trainers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_list_ClientCatalogTrainerResponse__"];
+                };
+            };
         };
     };
     list_clients: {
