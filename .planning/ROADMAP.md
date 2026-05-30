@@ -146,7 +146,7 @@ Plans:
 - [x] 71-04-PLAN.md — PWA React Query foundation: queryClient + clientQueries hooks + data/index.js swap seam + ComingSoon + ESLint boundary (PWA-05)
 - [x] 71-05-PLAN.md — wire Home/Profile/Plans/Checkout + payment return route (anti-oracle); net-new screens → ComingSoon (PWA-05, CPAY-01..03)
 - [x] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
-- [ ] 71-07-PLAN.md — GAP: real client OTP login (/api/v1/client/otp/*) + AuthContext (/client/me probe) + /login route & RequireAuth guard; replace window.location redirect loop with router-based session-expiry signal (PWA-05)
+- [x] 71-07-PLAN.md — GAP: real client OTP login (/api/v1/client/otp/*) + AuthContext (/client/me probe) + /login route & RequireAuth guard; replace window.location redirect loop with router-based session-expiry signal (PWA-05)
 
 **UI hint**: yes
 
@@ -184,7 +184,7 @@ Plans:
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete    | 2026-05-30 |
-| 71. Client Checkout + Full PWA Wiring | v2.0 | 6/6 | Complete   | 2026-05-30 |
+| 71. Client Checkout + Full PWA Wiring | v2.0 | 7/7 | Complete   | 2026-05-30 |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 
 ---
