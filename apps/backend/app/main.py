@@ -64,6 +64,7 @@ from app.core.dependencies import (
     register_booking_for_client_creator,  # Phase 70 D-70-01 — HTTP-only single-wire.
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
+    register_client_checkout_core,  # Phase 71 D-71-01 — HTTP-only single-wire.
     register_client_loader,  # Phase 68 D-08 — client principal composition-root slot.
     register_email_dispatcher,
     register_fiscal_receipt_dispatcher,  # Phase 47 D-47-01 — double-wire.
@@ -589,6 +590,15 @@ def create_app() -> FastAPI:
     )
 
     register_visit_client_qr_creator(visits_service.create_visit_client_qr)
+
+    # Phase 71 D-71-01 / D-20-MODULE — client checkout core Protocol slot.
+    # HTTP-only single-wire (client checkout endpoint has no ARQ or bot entry
+    # path). Zero new ignore_imports — client_portal reaches the online_payments
+    # sell logic ONLY through core.dependencies.invoke_client_checkout_core.
+    # app.main is exempt from core-not-depend-on-modules (source_modules=app.core).
+    from app.modules.online_payments.service import _sell_subject_core
+
+    register_client_checkout_core(_sell_subject_core)
 
     # Phase 42 D-42-26 / EMAIL-04 — REG-29-03 double-wire of the EmailDispatcher
     # slot. The IDENTICAL symbol reference ``enqueue_email_dispatch`` is also

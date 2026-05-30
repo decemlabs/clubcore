@@ -1634,3 +1634,74 @@ async def create_visit_client_qr(
             "app/main.py:create_app() (HTTP-only single-wire; see Phase 70 D-20-MODULE)."
         )
     return await _visit_client_qr_creator(session, client_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 71 D-71-01 / D-20-MODULE — ClientCheckoutCore slot.
+#
+# Allows client_portal to invoke the extracted _sell_subject_core helper
+# WITHOUT importing app.modules.online_payments directly (D-20-MODULE:
+# zero new ignore_imports). The slot is wired once in app.main.create_app()
+# and is the ONLY permitted cross-module path from client_portal to the
+# online_payments sell logic.
+#
+# The return type is ``Any`` in the callable type alias to respect the
+# core-not-depend-on-modules import-linter contract: importing
+# ``SellResponse`` from ``app.modules.online_payments`` directly inside
+# ``app.core`` — even under TYPE_CHECKING — is detected by import-linter
+# as a static dependency and breaks the contract. Using ``Any`` avoids
+# any cross-module reference at this scope.
+#
+# HTTP-only single-wire (no ARQ or bot entry path). Defensive-raise accessor
+# — a missing checkout core in the client checkout flow is a hard
+# misconfiguration.
+# ─────────────────────────────────────────────────────────────────────────────
+
+SellSubjectCoreCallable = Callable[..., Awaitable[Any]]
+"""Async callable: (session, *, subject_kind, plan_id, client_id,
+idempotency_key, actor_user_id, confirmation_type, yookassa_settings)
+-> SellResponse.
+
+Return type is ``Any`` at this scope because ``SellResponse`` lives in
+``app.modules.online_payments.schemas`` — importing it here at runtime
+would violate the ``core-not-depend-on-modules`` import-linter contract.
+Type safety is enforced at the implementation site
+(app.modules.online_payments.service._sell_subject_core) and at the
+accessor callsite in client_portal which maps the result to its own schema.
+"""
+
+_client_checkout_core: SellSubjectCoreCallable | None = None
+
+
+def register_client_checkout_core(fn: SellSubjectCoreCallable) -> None:
+    """Composition-root setter — called by ``app.main.create_app()`` (Phase 71 D-71-01).
+
+    HTTP-only single-wire (client checkout endpoint has no ARQ or bot entry
+    path). Idempotent: re-registering replaces the slot (mirrors WR-05
+    reasoning; useful for tests that inject a stub).
+    """
+    global _client_checkout_core
+    _client_checkout_core = fn
+
+
+async def invoke_client_checkout_core(
+    session: AsyncSession,
+    **kwargs: Any,
+) -> Any:
+    """Consumer entry point — used by ``app.modules.client_portal`` (Phase 71 D-71-01).
+
+    Defensive-raise when the slot is not registered. A missing checkout-core
+    wiring is a hard misconfiguration (mirrors ``get_payment_recorder`` at
+    line ~398 — not a recoverable state).
+
+    Return type is ``Any``; callers (client_portal) map the result to their
+    own ``ClientCheckoutResponse`` schema. Zero new ``ignore_imports`` —
+    ``client_portal`` never imports ``app.modules.online_payments`` directly.
+    """
+    if _client_checkout_core is None:
+        raise RuntimeError(
+            "client_checkout_core slot not registered — register via "
+            "app.core.dependencies.register_client_checkout_core() in "
+            "app/main.py:create_app() (HTTP-only single-wire; see Phase 71 D-20-MODULE)."
+        )
+    return await _client_checkout_core(session, **kwargs)
