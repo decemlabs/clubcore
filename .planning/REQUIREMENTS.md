@@ -72,7 +72,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 - [x] **PWA-02**: `client-pwa` переведён на TypeScript (allowJs ramp, file-by-file); подключён общий ESLint/Prettier/import-linter
 - [x] **PWA-03**: `client-pwa` переиспользует `@clubcore/api-client` (typed fetcher + `schema.d.ts`) через тонкий `clientFetcher.ts` (свои cookie-имена + refresh-URL); **react-router v6 сохранён** (без миграции на TanStack)
 - [x] **PWA-04**: Vite 5→6 выровнен; PWA собирается и проходит typecheck + lint + test
-- [ ] **PWA-05**: Экраны Home / Profile / Book / Plans / Checkout / QR работают на реальном backend через клиентский API
+- [x] **PWA-05**: Экраны Home / Profile / Book / Plans / Checkout / QR работают на реальном backend через клиентский API
 - [x] **PWA-06**: Net-new экраны (Chat, Referral, отзывы тренеров, лента уведомлений, gym-info) остаются на mock-данных / плейсхолдере «в разработке» — без backend-вызовов
 - [x] **PWA-07**: PWA installable (manifest + SW shell для install-prompt), но service-worker НИКОГДА не кеширует `/api/*` запросы (нет stale authed data)
 
@@ -171,7 +171,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CPAY-03 | Phase 71 | Complete |
 | CPAY-04 | Phase 71 | Complete |
 | CPAY-05 | Phase 71 | Complete |
-| PWA-05 | Phase 71 | Pending |
+| PWA-05 | Phase 71 | Complete |
 | HND-01 | Phase 72 | Pending |
 | HND-02 | Phase 72 | Pending |
 | HND-03 | Phase 72 | Pending |
