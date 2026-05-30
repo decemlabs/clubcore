@@ -95,7 +95,12 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   3. A client can cancel their own confirmed booking within the cancellation-policy window; cancelling another client's booking returns 404 (anti-oracle)
   4. A client receives a short-lived signed JWT QR token (≈60s TTL); scanning it creates a visit via the existing `_create_visit_with_anti_fraud()` path, recording `visits.channel = 'client_qr'` (Alembic migration applied)
   5. Replaying an expired QR token is rejected; using a valid QR token to check in a different client's session is rejected (cross-client check-in impossible)
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 70-01-PLAN.md — QR token helpers (encode/decode + ~60s TTL) + CANCEL_WINDOW_HOURS_CLIENT + visits.channel 'client_qr' Alembic migration
+- [ ] 70-02-PLAN.md — Extract actor-agnostic booking + cancel core; expose via composition-root Protocol slots (staff byte-identical)
+- [ ] 70-03-PLAN.md — Client booking POST (idempotent, 422 no_active_pt_package) + cancel (IDOR 404) + available-slots read; race + IDOR tests
+- [ ] 70-04-PLAN.md — QR check-in: qr-token issue (require_client) + token-as-credential /check-in (sub-only); anti-replay/cross-client tests + human-verify checkpoint
 **UI hint**: yes
 
 ### Phase 71: Client Checkout + Full PWA Screen Wiring
