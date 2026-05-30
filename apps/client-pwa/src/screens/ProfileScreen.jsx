@@ -17,7 +17,7 @@ import { useAuth } from '@/context/AuthContext.jsx';
 // Mirrors the adapter in HomeScreen.jsx
 function toSubInfo(membership) {
   if (!membership) {
-    return { daysLeft: 0, total: 90, until: '—', label: 'Нет абонемента', tone: 'danger' };
+    return { daysLeft: 0, total: 0, until: '—', label: 'Нет абонемента', tone: 'danger' };
   }
   const daysLeft = Math.max(0, membership.days_until_end ?? 0);
   const tone = membership.expiring_soon
@@ -25,11 +25,24 @@ function toSubInfo(membership) {
     : 'ok';
   return {
     daysLeft,
-    total: 90,
+    // WR-03: derive the real plan duration from start_date/end_date instead of
+    // a hardcoded 90 so the progress bar reflects the actual membership length.
+    total: subTotalDays(membership.start_date, membership.end_date),
     until: membership.end_date ?? '—',
     label: membership.plan_name_snapshot ?? 'Абонемент',
     tone,
   };
+}
+
+// WR-03: whole-day span between two ISO date-only strings (YYYY-MM-DD).
+// Parses as UTC midnight to avoid the DST risk of new Date(dateOnlyString)
+// (CLAUDE.md domain convention). Returns 0 if either bound is missing/invalid.
+function subTotalDays(startDate, endDate) {
+  if (!startDate || !endDate) return 0;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 86_400_000));
 }
 
 export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, onOpenGymInfo, onOpenPersonalData, onOpenCard, onOpenFAQ, onOpenVisitHistory, onOpenTrainingHistory }) => {
@@ -92,7 +105,7 @@ export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, o
               }}>
                 <div style={{
                   height: '100%',
-                  width: `${Math.max(4, Math.min(100, (sub.daysLeft / sub.total) * 100))}%`,
+                  width: `${sub.total > 0 ? Math.max(4, Math.min(100, (sub.daysLeft / sub.total) * 100)) : 0}%`,
                   background: sub.tone === 'ok' ? 'var(--accent)'
                             : sub.tone === 'warn' ? 'var(--warn)'
                             : 'var(--danger)',

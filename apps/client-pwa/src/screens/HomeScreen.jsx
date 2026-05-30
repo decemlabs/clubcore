@@ -14,9 +14,20 @@ import { getSubInfo } from '@/utils/subInfo.js';
 // ─── In-file adapter: API membership shape → existing subInfo render shape ───
 // API: ClientMembershipResponse { id, plan_name_snapshot, start_date, end_date,
 //       status, days_until_end, expiring_soon } | null
+// WR-03: whole-day span between two ISO date-only strings (YYYY-MM-DD).
+// Parses as UTC midnight to avoid the DST risk of new Date(dateOnlyString)
+// (CLAUDE.md domain convention). Returns 0 if either bound is missing/invalid.
+function subTotalDays(startDate, endDate) {
+  if (!startDate || !endDate) return 0;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 86_400_000));
+}
+
 function toSubInfo(membership) {
   if (!membership) {
-    return { daysLeft: 0, total: 90, until: '—', label: 'Нет абонемента', tone: 'danger' };
+    return { daysLeft: 0, total: 0, until: '—', label: 'Нет абонемента', tone: 'danger' };
   }
   const daysLeft = Math.max(0, membership.days_until_end ?? 0);
   const tone = membership.expiring_soon
@@ -24,7 +35,9 @@ function toSubInfo(membership) {
     : 'ok';
   return {
     daysLeft,
-    total: 90, // display denominator; server doesn't expose total days
+    // WR-03: derive the real plan duration from start_date/end_date instead of
+    // a hardcoded 90 so the progress bar reflects the actual membership length.
+    total: subTotalDays(membership.start_date, membership.end_date),
     until: membership.end_date ?? '—',
     label: membership.plan_name_snapshot ?? 'Абонемент',
     tone,
@@ -115,7 +128,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
 
   const subTone = sub.tone === 'ok' ? 'chip-accent' : sub.tone === 'warn' ? 'chip-warn' : 'chip-danger';
   const fillTone = sub.tone === 'ok' ? '' : sub.tone === 'warn' ? 'warn' : 'danger';
-  const pct = Math.max(2, Math.min(100, (sub.daysLeft / sub.total) * 100));
+  const pct = sub.total > 0 ? Math.max(2, Math.min(100, (sub.daysLeft / sub.total) * 100)) : 0;
 
   // Real next_booking from API (or null)
   const nextBooking = homeData?.next_booking ?? null;
