@@ -456,13 +456,21 @@ class BookingCancelledPayload(BaseModel):
     `cancel_reason` captures operator-or-client intent; the 24h
     Europe/Moscow cancellation-window math lives in service code
     (Phase 38 plan, NOT this schema).
+
+    Phase 70 D-70-05 additive extension: ``cancelled_by_user_id`` becomes
+    Optional (default None) to support the client self-cancel path where no
+    staff user is the actor (mirrors the BookingCreatedPayload.created_by_user_id
+    widening in Phase 40 D-40-05).  Existing staff callsites continue to pass
+    a UUID; the client cancel path passes None.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     booking_id: UUID
     slot_id: UUID
-    cancelled_by_user_id: UUID
+    # Phase 70 D-70-05: Optional for client self-cancel (NULL = actor_role implied
+    # by absence of a staff user; mirrors BookingCreatedPayload.created_by_user_id).
+    cancelled_by_user_id: UUID | None = None
     cancel_reason: str
 
 

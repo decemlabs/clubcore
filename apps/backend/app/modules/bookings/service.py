@@ -1545,6 +1545,115 @@ async def cancel_booking(
 
 
 # ---------------------------------------------------------------------------
+# Public mutating orchestrator — cancel_booking_for_client (Phase 70 D-70-05/06).
+# ---------------------------------------------------------------------------
+
+
+async def cancel_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    booking_id: UUID,
+    cancel_reason: str = "",
+) -> BookingResponse:
+    """Client self-cancel path — Phase 70 D-70-05 / D-70-06.
+
+    Mirrors ``cancel_booking``'s sequence except:
+
+      1. IDOR 404-collapse (D-20-IDOR / T-70-05): load via
+         ``get_booking_by_id_for_update_with_slot`` then check
+         ``booking.client_id == client_id``. If the booking is None OR
+         owned by a different client, raise ``BookingNotFoundError
+         ("booking_not_found")`` — anti-oracle: never reveal that a
+         booking exists for another client (never 403 or existence leak).
+
+      2. FSM guard via ``_assert_can_transition(target='cancelled')``
+         (same as staff cancel).
+
+      3. Client window (D-70-05 / D-38-16): drop the
+         ``Role.RECEPTION`` branch — always apply
+         ``CANCEL_WINDOW_HOURS_CLIENT`` measured against
+         ``booking.slot.start_time`` (NOT ``created_at``). Raises
+         ``CancelWindowExpiredError("cancel_window_expired")`` when inside
+         the window.
+
+      4-9. Same sequence as ``cancel_booking`` verbatim: mutate in-place,
+         ``restore_booking_slot``, flush, ``audit.emit("booking_cancelled"
+         ...)``, commit.
+
+      10. NO ``sessions_remaining`` mutation (D-70-06 — credit is only
+          consumed/restored at ``pt_sessions`` level; the active PT-package
+          is simply free to book again once the slot restores to 'active').
+          NO Telegram DM dispatch (client-cancel DM out of scope for this
+          plan; Plan 70-03 may add it at the router layer).
+
+    Owns the UoW — ``await session.commit()`` at end (SVC001 gate).
+    """
+    # Step 1 — Load with row lock + eager-loaded slot.
+    booking = await repository.get_booking_by_id_for_update_with_slot(session, booking_id)
+
+    # IDOR 404-collapse (D-20-IDOR / T-70-05): non-owned booking collapses to
+    # BookingNotFoundError("booking_not_found") — anti-oracle, never 403 or
+    # existence leak. This is the ONE divergence from the staff cancel path
+    # (staff can cancel any booking; clients can only cancel their own).
+    if booking is None or booking.client_id != client_id:
+        raise BookingNotFoundError("booking_not_found")
+
+    # Step 2 — FSM gate (consults BOOKING_STATUS_TRANSITIONS).
+    _assert_can_transition(booking, target="cancelled")
+
+    # Step 3 — Client cancel window (D-70-05 / D-38-16).
+    # Unlike the staff path, there is no Role branch: always apply
+    # CANCEL_WINDOW_HOURS_CLIENT measured against slot.start_time (NOT created_at).
+    now_utc = datetime.now(UTC)
+    if booking.slot.start_time - now_utc < timedelta(hours=CANCEL_WINDOW_HOURS_CLIENT):
+        raise CancelWindowExpiredError("cancel_window_expired")
+
+    # Step 4 — Mutate booking in-place (cancelled_at / cancel_reason).
+    booking.status = "cancelled"
+    booking.cancelled_at = now_utc
+    booking.cancel_reason = cancel_reason
+
+    # Step 5 — Restore linked slot booked→active in the same UoW via the
+    # Phase 37 BookingSlotRestorer Protocol slot. Mirrors cancel_booking verbatim.
+    await restore_booking_slot(session, booking.slot_id)
+
+    # Step 6 — Flush before audit emit.
+    await session.flush()
+
+    # Step 7 — Emit booking_cancelled (LITERAL strings for INFRA-11 AST gate).
+    # Payload: 4 keys matching BookingCancelledPayload (extra='forbid').
+    # NOTE: client_id is NOT in BookingCancelledPayload (4-key schema) —
+    # cancelled_by_user_id=None (Phase 70 D-70-05 widening; no fake staff user
+    # mirrors D-70-07 anti-fabrication principle from create_booking_for_client).
+    await audit.emit(
+        session,
+        "booking_cancelled",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=None,  # RAW None — audit.emit signature is UUID | None
+        resource_type="booking",  # LITERAL — INFRA-11 AST gate
+        resource_id=booking.id,
+        booking_id=str(booking.id),
+        slot_id=str(booking.slot_id),
+        cancelled_by_user_id=None,  # Phase 70 D-70-05: client self-cancel, no staff user
+        cancel_reason=cancel_reason,
+    )
+
+    # Step 8 — NO Telegram DM dispatch (out of scope for this plan).
+    # Step 9 — NO sessions_remaining mutation (D-70-06 — credit only at pt_sessions level).
+
+    # Step 9 — Commit (SVC001 gate).
+    await session.commit()
+
+    # Step 10 — Reload with slot+trainer joinedload (Phase 40 BLOCKER-2).
+    reloaded = await repository.get_booking_by_id(session, booking_id)
+    if reloaded is None:
+        raise RuntimeError(
+            "cancel_booking_for_client: just-cancelled booking disappeared on reload"
+        )
+    return _booking_response_from_orm(reloaded)
+
+
+# ---------------------------------------------------------------------------
 # Read-only orchestrators (no commit, no audit) — list / get / per-client.
 # ---------------------------------------------------------------------------
 
