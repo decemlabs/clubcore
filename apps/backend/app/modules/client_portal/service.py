@@ -26,7 +26,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, cast
-from uuid import UUID
+from urllib.parse import quote
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +41,7 @@ from app.core.dependencies import (
     invoke_client_checkout_core,
 )
 from app.core.exceptions import (
+    BadGatewayAppError,
     ConflictError,
     InvalidSession,
     NoActivePtPackageError,
@@ -261,13 +263,19 @@ async def create_booking_for_client_request(
     *,
     client_id: UUID,
     slot_id: UUID,
-    pt_package_id: UUID,
+    pt_package_id: UUID | None,
 ) -> ClientBookingResponse:
     """Delegate booking creation to the Protocol-slot accessor (D-20-MODULE / CBOOK-03).
 
     Calls ``app.core.dependencies.create_booking_for_client`` — the composition-root
     slot wired to ``bookings.service.create_booking_for_client`` in ``main.py``.
     NO direct ``app.modules.bookings`` import (D-20-MODULE / zero new ignore_imports).
+
+    CR-03 (Phase 71 fix): ``pt_package_id`` is now optional. When the client omits it,
+    the active PT-package is resolved server-side from ``get_active_pt_package``. If no
+    active package is found, ``NoActivePtPackageError`` is raised immediately (CBOOK-04
+    redirect branch is reachable). When the client supplies a UUID, it is passed through
+    directly (bookings.service validates it matches the active package).
 
     CBOOK-04 mapping: PtPackageNotActiveError (code='pt_package_not_active', 409 in
     the bookings domain) is caught HERE (by code match on ConflictError from core.exceptions)
@@ -279,6 +287,12 @@ async def create_booking_for_client_request(
       - SlotAlreadyBookedError → 409 slot_already_booked (CBOOK-03 race)
       - SlotNotFoundError → 404, TrainerMismatchError → 409, etc.
     """
+    # CR-03: resolve active PT-package server-side when client omits pt_package_id.
+    if pt_package_id is None:
+        pkg = await get_active_pt_package(session, client_id)
+        if pkg is None:
+            raise NoActivePtPackageError("no_active_pt_package")
+        pt_package_id = pkg.id
     try:
         result = await create_booking_for_client(
             session,
@@ -477,8 +491,18 @@ async def client_checkout_membership(
     into the extracted online_payments core via the composition-root Protocol
     slot (D-20-MODULE). actor_user_id=None (D-71-02: client-initiated).
     No session.commit() — caller-owns-txn (D-32-10 / D-49-19).
+
+    CR-01/CR-02 (Phase 71 fix): generates op_id deterministically so the
+    ЮKassa return_url carries payment_id before the INSERT. On the replay path
+    the core returns the existing row's confirmation_url unchanged (op_id is
+    ignored for replays per _sell_subject_core semantics). The replay return_url
+    already carries the original payment_id from the first create call.
     """
     idem_key = _derive_membership_idempotency_key(plan_id=plan_id, client_id=client.id)
+    # CR-01: generate deterministic op_id for the redirect return_url.
+    # Derive from idem_key so same-day retries generate the same UUID (stable).
+    op_id = UUID(bytes=bytes.fromhex(idem_key)[:16]) if len(idem_key) >= 32 else uuid4()
+    return_url = f"{yookassa_settings.client_return_url}?payment_id={op_id}"
     result = await invoke_client_checkout_core(
         session,
         subject_kind="membership",
@@ -488,8 +512,13 @@ async def client_checkout_membership(
         actor_user_id=None,
         confirmation_type="redirect",
         yookassa_settings=yookassa_settings,
+        online_payment_id_override=op_id,
+        return_url_override=return_url,
     )
     r = cast(Any, result)
+    # WR-02: confirmation_url must not be None for a redirect response.
+    if r.confirmation_url is None:
+        raise BadGatewayAppError("checkout_confirmation_url_missing")
     return ClientCheckoutResponse(
         online_payment_id=r.online_payment_id,
         confirmation_url=str(r.confirmation_url),
@@ -510,7 +539,18 @@ async def client_checkout_pt_package(
     core (D-71-04: PT allows same-day repurchase; PWA generates UUID per intent).
     actor_user_id=None (D-71-02: client-initiated).
     No session.commit() — caller-owns-txn (D-32-10 / D-49-19).
+
+    CR-02 (Phase 71 fix): generates a fresh op_id (uuid4) and builds the PWA
+    return_url carrying both payment_id and idempotency_key query params so
+    PaymentReturnScreen can poll the status endpoint and retry if needed.
+    The idempotency_key is percent-encoded to survive URL round-trips safely.
     """
+    op_id = uuid4()
+    return_url = (
+        f"{yookassa_settings.client_return_url}"
+        f"?payment_id={op_id}"
+        f"&idempotency_key={quote(idempotency_key, safe='')}"
+    )
     result = await invoke_client_checkout_core(
         session,
         subject_kind="pt_package",
@@ -520,8 +560,13 @@ async def client_checkout_pt_package(
         actor_user_id=None,
         confirmation_type="redirect",
         yookassa_settings=yookassa_settings,
+        online_payment_id_override=op_id,
+        return_url_override=return_url,
     )
     r = cast(Any, result)
+    # WR-02: confirmation_url must not be None for a redirect response.
+    if r.confirmation_url is None:
+        raise BadGatewayAppError("checkout_confirmation_url_missing")
     return ClientCheckoutResponse(
         online_payment_id=r.online_payment_id,
         confirmation_url=str(r.confirmation_url),
