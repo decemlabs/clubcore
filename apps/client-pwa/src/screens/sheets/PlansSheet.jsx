@@ -2,24 +2,105 @@ import React from 'react';
 import { Icon } from '@/components/Icon.jsx';
 import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { PLANS, PLAN_FEATURES } from '@/data';
+import { useClientPlans, useClientPtPackages } from '@/data';
+
+// ─── In-file adapters: API plan shapes → card render shapes ──────────────
+// API: ClientCatalogPlanResponse { id, name, price_kopecks, duration_days }
+function toMembershipCard(p) {
+  const priceRub = p.price_kopecks / 100;
+  const durationMonths = Math.round(p.duration_days / 30);
+  const pricePerMonth = durationMonths > 0 ? Math.round(priceRub / durationMonths) : priceRub;
+  return {
+    id: String(p.id),
+    name: p.name,
+    tagline: `${p.duration_days} дней`,
+    priceMonth: pricePerMonth,
+    priceTotal: priceRub,
+    period: durationMonths === 1 ? '1 мес' : durationMonths < 12 ? `${durationMonths} мес` : '12 мес',
+    popular: durationMonths === 6,
+    badge: durationMonths === 12 ? 'Выгоднее всего' : durationMonths === 6 ? 'Популярный' : null,
+    kind: 'sub',
+  };
+}
+
+// API: ClientCatalogPtPackageResponse { id, name, session_count, price_kopecks }
+function toPtCard(p) {
+  const priceRub = p.price_kopecks / 100;
+  const pricePerSession = p.session_count > 0 ? Math.round(priceRub / p.session_count) : priceRub;
+  return {
+    id: String(p.id),
+    name: p.name,
+    tagline: `${p.session_count} занятий`,
+    priceMonth: pricePerSession,
+    priceTotal: priceRub,
+    period: `${p.session_count} тренировок`,
+    popular: p.session_count === 10,
+    badge: null,
+    kind: 'pt',
+  };
+}
 
 export const PlansSheet = ({ onClose, onPick, currentPlanId }) => {
-  // Default-select the popular plan; falls back to current if user already on one
-  const [picked, setPicked] = React.useState(() => {
-    return currentPlanId || PLANS.find(p => p.popular)?.id || PLANS[0].id;
-  });
+  const { data: membershipPlans, isLoading: plansLoading, isError: plansError } = useClientPlans();
+  const { data: ptPackages, isLoading: ptLoading, isError: ptError } = useClientPtPackages();
+
+  const isLoading = plansLoading || ptLoading;
+  const isError = plansError || ptError;
+
+  // Adapt API data to card render shapes
+  const allPlans = React.useMemo(() => {
+    const plans = (membershipPlans ?? []).map(toMembershipCard);
+    const ptCards = (ptPackages ?? []).map(toPtCard);
+    return [...plans, ...ptCards];
+  }, [membershipPlans, ptPackages]);
+
+  const [picked, setPicked] = React.useState(null);
   const [confirming, setConfirming] = React.useState(false);
 
-  const plan = PLANS.find(p => p.id === picked);
+  // Set default selection once data loads
+  React.useEffect(() => {
+    if (allPlans.length > 0 && picked === null) {
+      const defaultPlan = currentPlanId
+        ? (allPlans.find(p => p.id === currentPlanId) ?? allPlans.find(p => p.popular) ?? allPlans[0])
+        : (allPlans.find(p => p.popular) ?? allPlans[0]);
+      setPicked(defaultPlan?.id ?? null);
+    }
+  }, [allPlans, picked, currentPlanId]);
 
-  if (confirming) {
+  const plan = allPlans.find(p => p.id === picked);
+
+  if (isLoading) {
+    return (
+      <div className="sheet" style={{ background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="ptr-spin" style={{ width: 28, height: 28, borderWidth: 2 }} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="sheet" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
+        <Icon name="alert" size={32} color="var(--danger)" strokeWidth={2} />
+        <div className="t-h3" style={{ textAlign: 'center' }}>Не удалось загрузить тарифы</div>
+        <button onClick={onClose} className="btn" style={{ height: 44, padding: '0 24px' }}>
+          Закрыть
+        </button>
+      </div>
+    );
+  }
+
+  if (confirming && plan) {
     return <PlanConfirm
       plan={plan}
       onBack={() => setConfirming(false)}
+      onClose={onClose}
       onPaid={() => { onPick && onPick(plan); onClose(); }}
     />;
   }
+
+  // Separate membership plans from PT packages for display
+  const membershipCards = allPlans.filter(p => p.kind === 'sub');
+  const ptCards = allPlans.filter(p => p.kind === 'pt');
 
   return (
     <div className="sheet" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -27,34 +108,50 @@ export const PlansSheet = ({ onClose, onPick, currentPlanId }) => {
       <SheetTopBar title="Тарифы" onClose={onClose} />
 
       <div className="scroller" style={{ paddingTop: 4 }}>
-        <div style={{ padding: '4px 20px 16px' }}>
-          <div className="t-mini" style={{ color: 'var(--text-3)' }}>Подписка</div>
-          <div className="t-h1" style={{ marginTop: 4 }}>Выбери свой ритм</div>
-          <div className="t-small" style={{ marginTop: 6, color: 'var(--text-2)', maxWidth: 320 }}>
-            Чем длиннее период — тем выгоднее в месяц. Заморозить или сменить можно в любой момент.
-          </div>
-        </div>
+        {membershipCards.length > 0 && (
+          <>
+            <div style={{ padding: '4px 20px 16px' }}>
+              <div className="t-mini" style={{ color: 'var(--text-3)' }}>Подписка</div>
+              <div className="t-h1" style={{ marginTop: 4 }}>Выбери свой ритм</div>
+              <div className="t-small" style={{ marginTop: 6, color: 'var(--text-2)', maxWidth: 320 }}>
+                Чем длиннее период — тем выгоднее в месяц. Заморозить или сменить можно в любой момент.
+              </div>
+            </div>
 
-        {/* Plan cards — vertically stacked, "compare side-by-side" via a metric strip below */}
-        <div className="stack-2" style={{ padding: '0 16px' }}>
-          {PLANS.map(p => (
-            <PlanCard
-              key={p.id}
-              plan={p}
-              selected={picked === p.id}
-              isCurrent={p.id === currentPlanId}
-              onSelect={() => setPicked(p.id)}
-            />
-          ))}
-        </div>
+            <div className="stack-2" style={{ padding: '0 16px' }}>
+              {membershipCards.map(p => (
+                <PlanCard
+                  key={p.id}
+                  plan={p}
+                  selected={picked === p.id}
+                  isCurrent={p.id === currentPlanId}
+                  onSelect={() => setPicked(p.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
-        {/* Comparison table */}
-        <PlanCompareTable
-          plans={PLANS}
-          features={PLAN_FEATURES}
-          picked={picked}
-          onPick={setPicked}
-        />
+        {ptCards.length > 0 && (
+          <>
+            <div style={{ padding: membershipCards.length > 0 ? '24px 20px 12px' : '4px 20px 12px' }}>
+              <div className="t-mini" style={{ color: 'var(--text-3)' }}>Персональные тренировки</div>
+              <div className="t-h2" style={{ marginTop: 4 }}>Пакеты с тренером</div>
+            </div>
+
+            <div className="stack-2" style={{ padding: '0 16px' }}>
+              {ptCards.map(p => (
+                <PlanCard
+                  key={p.id}
+                  plan={p}
+                  selected={picked === p.id}
+                  isCurrent={p.id === currentPlanId}
+                  onSelect={() => setPicked(p.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Disclaimers */}
         <div style={{ padding: '14px 24px 0' }}>
@@ -77,212 +174,26 @@ export const PlansSheet = ({ onClose, onPick, currentPlanId }) => {
           className="btn btn-accent"
           style={{ width: '100%', height: 54 }}
           onClick={() => setConfirming(true)}
+          disabled={!plan}
         >
           {plan?.id === currentPlanId
             ? `Текущий тариф`
-            : `Оформить · ${plan?.priceTotal.toLocaleString('ru-RU')} ₽`}
+            : plan
+              ? (plan.kind === 'pt'
+                  ? `Купить · ${plan.priceTotal.toLocaleString('ru-RU')} ₽`
+                  : `Оформить · ${plan.priceTotal.toLocaleString('ru-RU')} ₽`)
+              : 'Выберите тариф'}
         </button>
         <div className="t-small" style={{
           textAlign: 'center', color: 'var(--text-3)', marginTop: 8, fontSize: 12,
         }}>
-          {plan && <>{plan.priceMonth.toLocaleString('ru-RU')} ₽ / мес · карта •••• 4821</>}
+          {plan && plan.kind === 'sub' && <>{plan.priceMonth.toLocaleString('ru-RU')} ₽ / мес · карта •••• 4821</>}
+          {plan && plan.kind === 'pt' && <>{plan.priceMonth.toLocaleString('ru-RU')} ₽ / занятие · карта •••• 4821</>}
         </div>
       </div>
     </div>
   );
 };
-
-// Short labels for the comparison table header. The plan cards above
-// keep the full name; in the narrow table columns we use a uniform
-// numeric form ("1 мес / 6 мес / 12 мес") for rhythm and fit.
-const PLAN_LABELS_SHORT = {
-  monthly: '1 мес',
-  half:    '6 мес',
-  annual:  '12 мес',
-};
-
-// Short-form values for the compact comparison table.
-// Keeps the source PLANS data verbose (used in cards), but the table needs
-// values that fit one or two lines in a narrow column.
-const PLAN_FEATURES_SHORT = {
-  access:      { monthly: '8–22',        half: '24 / 7',        annual: '24 / 7' },
-  freeze:      { monthly: null,          half: '14 дней',       annual: '30 дней' },
-  guest:       { monthly: null,          half: '1 / мес',       annual: '2 / мес' },
-  sauna:       { monthly: null,          half: 'Сауна',         annual: 'Сауна, бассейн' },
-  group:       { monthly: '2 / нед',     half: 'Без лимита',    annual: 'Без лимита' },
-  pt_discount: { monthly: null,          half: '−10%',          annual: '−15%' },
-};
-
-function PlanCompareTable({ plans, features, picked, onPick }) {
-  // minmax(0, …) so columns ignore content min-widths and stay aligned
-  // across every row (each row is its own grid).
-  const GRID = 'minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)';
-
-  return (
-    <div style={{ padding: '28px 16px 8px' }}>
-      <div className="row" style={{
-        padding: '0 4px 10px', justifyContent: 'space-between', alignItems: 'baseline',
-      }}>
-        <div className="t-mini" style={{ color: 'var(--text-3)' }}>Сравнение</div>
-        <div className="t-mini" style={{ color: 'var(--text-3)', fontSize: 9.5, letterSpacing: 0.4 }}>
-          ТАП ПО КОЛОНКЕ
-        </div>
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {/* Header row — tappable plan columns with name + monthly price */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: GRID,
-          borderBottom: '0.5px solid var(--border)',
-        }}>
-          {/* Mirror the button's vertical structure so the caption sits on
-              the exact same baseline as the per-plan monthly prices. */}
-          <div style={{ padding: '16px 14px 14px' }}>
-            <div aria-hidden="true" style={{
-              fontSize: 12.5, fontWeight: 600, lineHeight: 1.2,
-              visibility: 'hidden',
-            }}>
-              .
-            </div>
-            <div style={{
-              fontSize: 9.5, marginTop: 4, lineHeight: 1.2,
-              fontWeight: 600, letterSpacing: 0.5,
-              color: 'var(--text-3)', textTransform: 'uppercase',
-            }}>
-              Цена / мес
-            </div>
-          </div>
-          {plans.map((p) => {
-            const isSel = picked === p.id;
-            return (
-              <button
-                key={p.id}
-                onClick={() => onPick(p.id)}
-                className="press"
-                style={{
-                  appearance: 'none', border: 0, cursor: 'pointer',
-                  padding: '16px 6px 14px',
-                  background: isSel ? 'var(--text)' : 'transparent',
-                  color: isSel ? 'var(--bg)' : 'var(--text)',
-                  borderLeft: '0.5px solid var(--border)',
-                  position: 'relative',
-                  transition: 'background 0.15s, color 0.15s',
-                }}>
-                {p.popular && (
-                  <div style={{
-                    position: 'absolute', top: 5, left: '50%', transform: 'translateX(-50%)',
-                    width: 4, height: 4, borderRadius: 999,
-                    background: 'var(--accent)',
-                  }} />
-                )}
-                <div style={{
-                  fontSize: 12.5, fontWeight: 600, letterSpacing: -0.1,
-                  opacity: isSel ? 1 : 0.85,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {PLAN_LABELS_SHORT[p.id] || p.name}
-                </div>
-                <div style={{
-                  fontSize: 10.5, marginTop: 4, fontVariantNumeric: 'tabular-nums',
-                  letterSpacing: 0.1,
-                  opacity: isSel ? 0.7 : 0.55,
-                }}>
-                  {p.priceMonth.toLocaleString('ru-RU')} ₽/мес
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Body — feature rows. Selected column gets matching tinted cells
-            so the whole column reads as one continuous stripe. */}
-        {features.map((f, i) => (
-          <div key={f.key} style={{
-            display: 'grid', gridTemplateColumns: GRID,
-            borderTop: i === 0 ? 0 : '0.5px solid var(--border)',
-            alignItems: 'stretch',
-          }}>
-            <div style={{
-              fontSize: 12.5, fontWeight: 500, color: 'var(--text-2)',
-              padding: '12px 14px', display: 'flex', alignItems: 'center',
-            }}>
-              {f.label}
-            </div>
-            {plans.map((p) => {
-              const short = PLAN_FEATURES_SHORT[f.key]?.[p.id];
-              const isSel = picked === p.id;
-              return (
-                <div key={p.id} style={{
-                  padding: '12px 8px', textAlign: 'center',
-                  borderLeft: '0.5px solid var(--border)',
-                  background: isSel ? 'var(--surface-2)' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {short ? (
-                    <div style={{
-                      fontSize: 11.5, lineHeight: 1.25,
-                      color: isSel ? 'var(--text)' : 'var(--text-2)',
-                      fontWeight: isSel ? 600 : 500,
-                      letterSpacing: -0.1,
-                      textWrap: 'balance',
-                      wordBreak: 'normal',
-                    }}>
-                      {short}
-                    </div>
-                  ) : (
-                    <div style={{
-                      width: 10, height: 1, background: 'var(--text-3)', opacity: 0.5,
-                    }} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-
-        {/* Total-price footer row */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: GRID,
-          borderTop: '0.5px solid var(--border)',
-          background: 'var(--surface-2)',
-        }}>
-          <div style={{
-            fontSize: 11, fontWeight: 600, color: 'var(--text-3)',
-            padding: '12px 14px', display: 'flex', alignItems: 'center',
-            letterSpacing: 0.4, textTransform: 'uppercase',
-          }}>
-            Итого
-          </div>
-          {plans.map((p) => {
-            const isSel = picked === p.id;
-            return (
-              <div key={p.id} style={{
-                padding: '12px 6px', textAlign: 'center',
-                borderLeft: '0.5px solid var(--border)',
-                background: isSel ? 'var(--text)' : 'transparent',
-                color: isSel ? 'var(--bg)' : 'var(--text)',
-              }}>
-                <div style={{
-                  fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-                  letterSpacing: -0.2,
-                }}>
-                  {p.priceTotal.toLocaleString('ru-RU')} ₽
-                </div>
-                <div style={{
-                  fontSize: 9.5, marginTop: 2,
-                  opacity: isSel ? 0.65 : 0.5,
-                  letterSpacing: 0.2,
-                }}>
-                  за {p.period}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function PlanCard({ plan, selected, isCurrent, onSelect }) {
   const isPopular = plan.popular;
@@ -359,7 +270,7 @@ function PlanCard({ plan, selected, isCurrent, onSelect }) {
             fontSize: 13,
             color: selected ? 'color-mix(in srgb, var(--bg) 65%, transparent)' : 'var(--text-2)',
           }}>
-            / мес
+            {plan.kind === 'pt' ? '/ занятие' : '/ мес'}
           </span>
         </div>
         <div style={{
@@ -374,43 +285,14 @@ function PlanCard({ plan, selected, isCurrent, onSelect }) {
   );
 }
 
-function PlanConfirm({ plan, onBack, onPaid }) {
-  const [paying, setPaying] = React.useState(false);
-  const [paid, setPaid] = React.useState(false);
-
-  const pay = () => {
-    setPaying(true);
-    setTimeout(() => {
-      setPaying(false);
-      setPaid(true);
-      setTimeout(onPaid, 1100);
-    }, 1200);
+// PlanConfirm shows checkout details and delegates actual payment to CheckoutSheet
+// via onPaid which opens CheckoutSheet with the selected planId+kind.
+function PlanConfirm({ plan, onBack, onClose, onPaid }) {
+  // Redirect to checkout — pass planId + kind to the checkout flow
+  const handleCheckout = () => {
+    // onPaid triggers App.jsx → ui.setCheckoutCtx({ kind, planId, ... })
+    onPaid();
   };
-
-  if (paid) {
-    return (
-      <div className="sheet" style={{ background: 'var(--bg)' }}>
-        <StatusBar />
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', padding: '0 28px',
-        }}>
-          <div className="scale-in haptic" style={{
-            width: 84, height: 84, borderRadius: 999, background: 'var(--accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icon name="check" size={44} color="#06120c" strokeWidth={2.6} />
-          </div>
-          <div className="t-display" style={{ marginTop: 24, textAlign: 'center', letterSpacing: -0.8 }}>
-            Оплачено
-          </div>
-          <div className="t-body" style={{ color: 'var(--text-2)', marginTop: 8, textAlign: 'center' }}>
-            {plan.name} активен. Чек придёт на почту.
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="sheet" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -424,15 +306,13 @@ function PlanConfirm({ plan, onBack, onPaid }) {
             {plan.priceTotal.toLocaleString('ru-RU')} ₽
           </div>
           <div className="t-small" style={{ marginTop: 4 }}>
-            {plan.name} · {plan.period} · {plan.priceMonth.toLocaleString('ru-RU')} ₽/мес
+            {plan.name} · {plan.period} · {plan.priceMonth.toLocaleString('ru-RU')} ₽/{plan.kind === 'pt' ? 'занятие' : 'мес'}
           </div>
         </div>
 
         <div style={{ padding: '0 16px' }}>
           <div className="card" style={{ padding: 4 }}>
             <RowItem icon="card" label="Карта" value="Visa •••• 4821" sub="Привязанная по умолчанию" />
-            <Divider />
-            <RowItem icon="calendar" label="Списание" value="Сегодня" sub={`Следующее — через ${plan.period}`} />
             <Divider />
             <RowItem icon="info" label="Возврат" value="14 дней" sub="Полный, если ни разу не приходил" />
           </div>
@@ -447,12 +327,11 @@ function PlanConfirm({ plan, onBack, onPaid }) {
         background: 'linear-gradient(to top, var(--bg) 70%, transparent)',
       }}>
         <button
-          onClick={pay}
-          disabled={paying}
+          onClick={handleCheckout}
           className="btn btn-accent"
-          style={{ width: '100%', height: 54, opacity: paying ? 0.7 : 1 }}
+          style={{ width: '100%', height: 54 }}
         >
-          {paying ? 'Оплачиваем…' : `Оплатить ${plan.priceTotal.toLocaleString('ru-RU')} ₽`}
+          Перейти к оплате · {plan.priceTotal.toLocaleString('ru-RU')} ₽
         </button>
       </div>
     </div>
@@ -477,4 +356,3 @@ function SheetTopBar({ title, onClose, onBack }) {
     </div>
   );
 }
-

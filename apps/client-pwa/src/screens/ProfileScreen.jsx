@@ -3,12 +3,43 @@ import { Avatar } from '@/components/Avatar.jsx';
 import { EmptyState } from '@/components/EmptyState.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { PURCHASE_HISTORY, TRAINING_HISTORY, VISIT_HISTORY } from '@/data';
+import {
+  useClientHome,
+  useClientVisitHistory,
+  useClientPtHistory,
+  useClientPaymentHistory,
+} from '@/data';
 import { getSubInfo } from '@/utils/subInfo.js';
+
+// ─── In-file adapter: API membership shape → subInfo render shape ─────────
+// Mirrors the adapter in HomeScreen.jsx
+function toSubInfo(membership) {
+  if (!membership) {
+    return { daysLeft: 0, total: 90, until: '—', label: 'Нет абонемента', tone: 'danger' };
+  }
+  const daysLeft = Math.max(0, membership.days_until_end ?? 0);
+  const tone = membership.expiring_soon
+    ? (daysLeft === 0 ? 'danger' : 'warn')
+    : 'ok';
+  return {
+    daysLeft,
+    total: 90,
+    until: membership.end_date ?? '—',
+    label: membership.plan_name_snapshot ?? 'Абонемент',
+    tone,
+  };
+}
 
 export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, onOpenGymInfo, onOpenPersonalData, onOpenCard, onOpenFAQ, onOpenVisitHistory, onOpenTrainingHistory }) => {
   const [tab, setTab] = React.useState('visits');
-  const sub = getSubInfo(tweaks.subState);
+
+  const { data: homeData } = useClientHome();
+
+  // Use real API sub data when available; fall back to tweaks for demo mode.
+  const sub = homeData?.membership
+    ? toSubInfo(homeData.membership)
+    : getSubInfo(tweaks.subState);
+
   const isEmpty = tweaks.dataMode === 'empty';
   const userName = tweaks.userName || 'Саша';
   const subTone = sub.tone === 'ok' ? 'chip-accent' : sub.tone === 'warn' ? 'chip-warn' : 'chip-danger';
@@ -199,7 +230,10 @@ export const ProfileScreen = ({ tweaks, setTweak, onOpenPlans, onOpenReferral, o
   );
 };
 
+// ─── Visit history tab — real data from useClientVisitHistory ─────────────
 function VisitsList({ isEmpty, onOpenAll }) {
+  const { data, isLoading, isError, refetch } = useClientVisitHistory(1);
+
   if (isEmpty) {
     return (
       <div style={{ padding: '8px 16px' }}>
@@ -213,30 +247,72 @@ function VisitsList({ isEmpty, onOpenAll }) {
       </div>
     );
   }
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
+        <div className="ptr-spin" style={{ width: 24, height: 24, borderWidth: 2 }} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{ padding: '8px 16px' }}>
+        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+          <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 12 }}>Не удалось загрузить визиты</div>
+          <button onClick={() => void refetch()} className="btn" style={{ height: 38, padding: '0 20px' }}>Повторить</button>
+        </div>
+      </div>
+    );
+  }
+
+  const items = data?.items ?? [];
+
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: '8px 16px' }}>
+        <div className="card" style={{ padding: 0 }}>
+          <EmptyState
+            illustration="visits"
+            title="Ещё не было визитов"
+            body="Покажем дату и продолжительность каждого посещения после первого входа по QR."
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '8px 16px' }}>
       <div className="row-between" style={{ padding: '4px 4px 12px' }}>
-        <div className="t-mini" style={{ color: 'var(--text-3)' }}>Этот месяц</div>
-        <div className="t-small"><b style={{ color: 'var(--text)' }}>14</b> посещений</div>
+        <div className="t-mini" style={{ color: 'var(--text-3)' }}>Последние визиты</div>
+        <div className="t-small"><b style={{ color: 'var(--text)' }}>{data?.total ?? items.length}</b> посещений</div>
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {VISIT_HISTORY.slice(0, 4).map((v, i) => (
-          <React.Fragment key={v.id}>
+        {items.slice(0, 4).map((v, i) => (
+          <React.Fragment key={String(v.id)}>
             {i > 0 && <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 56 }} />}
             <div style={{ padding: '12px 14px', display: 'flex', gap: 12, alignItems: 'center' }}>
               <div style={{
                 width: 32, height: 32, borderRadius: 999,
-                background: v.trainer ? 'var(--accent-soft)' : 'var(--surface-2)',
+                background: 'var(--surface-2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Icon name={v.trainer ? 'user' : 'check'} size={16}
-                      color={v.trainer ? 'var(--accent-deep)' : 'var(--text-2)'} strokeWidth={2.2} />
+                <Icon name="check" size={16} color="var(--text-2)" strokeWidth={2.2} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="t-h3" style={{ fontSize: 15 }}>{v.date}</div>
-                <div className="t-small" style={{ marginTop: 1 }}>{v.kind} · вход в {v.time}</div>
+                <div className="t-h3" style={{ fontSize: 15 }}>
+                  {v.gym_date
+                    ? new Date(v.gym_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+                    : '—'}
+                </div>
+                <div className="t-small" style={{ marginTop: 1 }}>
+                  вход в {v.checked_in_at
+                    ? new Date(v.checked_in_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+                    : '—'}
+                </div>
               </div>
-              <div className="t-small t-num" style={{ color: 'var(--text-2)', fontWeight: 600 }}>{v.duration}</div>
             </div>
           </React.Fragment>
         ))}
@@ -249,7 +325,7 @@ function VisitsList({ isEmpty, onOpenAll }) {
           padding: '10px', cursor: 'pointer', display: 'flex',
           alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
-          Все посещения · {VISIT_HISTORY.length}
+          Все посещения · {data?.total ?? items.length}
           <Icon name="arrowRight" size={14} color="var(--accent-deep)" strokeWidth={2} />
         </button>
       )}
@@ -257,7 +333,10 @@ function VisitsList({ isEmpty, onOpenAll }) {
   );
 }
 
+// ─── Training history tab — real data from useClientPtHistory ──────────────
 function TrainingsList({ isEmpty, onOpenAll }) {
+  const { data, isLoading, isError, refetch } = useClientPtHistory(1);
+
   if (isEmpty) {
     return (
       <div style={{ padding: '8px 16px' }}>
@@ -271,28 +350,69 @@ function TrainingsList({ isEmpty, onOpenAll }) {
       </div>
     );
   }
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
+        <div className="ptr-spin" style={{ width: 24, height: 24, borderWidth: 2 }} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{ padding: '8px 16px' }}>
+        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+          <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 12 }}>Не удалось загрузить тренировки</div>
+          <button onClick={() => void refetch()} className="btn" style={{ height: 38, padding: '0 20px' }}>Повторить</button>
+        </div>
+      </div>
+    );
+  }
+
+  const items = data?.items ?? [];
+
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: '8px 16px' }}>
+        <div className="card" style={{ padding: 0 }}>
+          <EmptyState
+            illustration="dumbbell"
+            title="История тренировок пуста"
+            body="Запишись к тренеру — здесь будут заметки после занятий."
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '8px 16px' }}>
       <div className="row-between" style={{ padding: '4px 4px 12px' }}>
         <div className="t-mini" style={{ color: 'var(--text-3)' }}>Всего тренировок</div>
-        <div className="t-small"><b style={{ color: 'var(--text)' }}>{TRAINING_HISTORY.length}</b> с тренерами</div>
+        <div className="t-small"><b style={{ color: 'var(--text)' }}>{data?.total ?? items.length}</b> с тренерами</div>
       </div>
       <div className="stack-2">
-        {TRAINING_HISTORY.slice(0, 3).map(t => (
-          <div key={t.id} className="card" style={{ padding: 14, display: 'flex', gap: 12 }}>
-            <Avatar initials={t.initials} bg={t.bg} color={t.color} size={40} />
+        {items.slice(0, 3).map(t => (
+          <div key={String(t.id)} className="card" style={{ padding: 14, display: 'flex', gap: 12 }}>
+            <Avatar initials="Т" bg="var(--surface-2)" color="var(--text-2)" size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row-between">
-                <div className="t-h3" style={{ fontSize: 15 }}>{t.focus}</div>
-                <div className="t-small" style={{ color: 'var(--text-3)' }}>{t.date}</div>
+                <div className="t-h3" style={{ fontSize: 15 }}>{t.trainer_name_snapshot ?? 'Тренер'}</div>
+                <div className="t-small" style={{ color: 'var(--text-3)' }}>
+                  {t.performed_at
+                    ? new Date(t.performed_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'Europe/Moscow' })
+                    : '—'}
+                </div>
               </div>
-              <div className="t-small" style={{ marginTop: 2 }}>с {t.trainer}</div>
-              <div className="t-small" style={{ marginTop: 6, color: 'var(--text-2)' }}>{t.notes}</div>
+              {t.cancelled_at && (
+                <div className="t-small" style={{ marginTop: 2, color: 'var(--danger)' }}>Отменена</div>
+              )}
             </div>
           </div>
         ))}
       </div>
-      {onOpenAll && TRAINING_HISTORY.length > 3 && (
+      {onOpenAll && (data?.total ?? items.length) > 3 && (
         <button onClick={onOpenAll} className="press" style={{
           width: '100%', marginTop: 10, border: 0,
           background: 'transparent', color: 'var(--accent-deep)',
@@ -300,7 +420,7 @@ function TrainingsList({ isEmpty, onOpenAll }) {
           padding: '10px', cursor: 'pointer', display: 'flex',
           alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
-          Все тренировки · {TRAINING_HISTORY.length}
+          Все тренировки · {data?.total ?? items.length}
           <Icon name="arrowRight" size={14} color="var(--accent-deep)" strokeWidth={2} />
         </button>
       )}
@@ -409,8 +529,10 @@ function Divider2() {
   return <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 14 }} />;
 }
 
-// ─── Purchases (history of payments) ─────────────────────────
+// ─── Purchases tab — real data from useClientPaymentHistory ───────────────
 function PurchasesList({ onOpenPlans, isEmpty }) {
+  const { data, isLoading, isError, refetch } = useClientPaymentHistory(1);
+
   if (isEmpty) {
     return (
       <div style={{ padding: '8px 16px' }}>
@@ -426,33 +548,54 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
       </div>
     );
   }
-  const total = PURCHASE_HISTORY
-    .filter(p => p.status === 'ok')
-    .reduce((s, p) => s + p.amount, 0);
 
-  // Group by month — using crude string match on date
-  const groups = [];
-  PURCHASE_HISTORY.forEach(p => {
-    const month = p.date.split(' ')[1] || 'апр';
-    let g = groups.find(x => x.month === month);
-    if (!g) { g = { month, items: [] }; groups.push(g); }
-    g.items.push(p);
-  });
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
+        <div className="ptr-spin" style={{ width: 24, height: 24, borderWidth: 2 }} />
+      </div>
+    );
+  }
 
-  const monthLabel = (m) => {
-    const map = { янв: 'Январь', фев: 'Февраль', мар: 'Март', апр: 'Апрель',
-                  мая: 'Май', май: 'Май', июн: 'Июнь', июл: 'Июль', авг: 'Август',
-                  сен: 'Сентябрь', окт: 'Октябрь', ноя: 'Ноябрь', дек: 'Декабрь' };
-    return map[m] || m;
-  };
+  if (isError) {
+    return (
+      <div style={{ padding: '8px 16px' }}>
+        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+          <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 12 }}>Не удалось загрузить покупки</div>
+          <button onClick={() => void refetch()} className="btn" style={{ height: 38, padding: '0 20px' }}>Повторить</button>
+        </div>
+      </div>
+    );
+  }
 
-  const subTotal = PURCHASE_HISTORY.filter(p => p.kind === 'sub' && p.status === 'ok').reduce((s, p) => s + p.amount, 0);
-  const trainerTotal = PURCHASE_HISTORY.filter(p => p.kind === 'training' && p.status === 'ok').reduce((s, p) => s + p.amount, 0);
-  const shopTotal = PURCHASE_HISTORY.filter(p => p.kind === 'shop' && p.status === 'ok').reduce((s, p) => s + p.amount, 0);
+  const items = data?.items ?? [];
+
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: '8px 16px' }}>
+        <div className="card" style={{ padding: 0 }}>
+          <EmptyState
+            illustration="card"
+            title="Покупок пока нет"
+            body="Здесь появятся оплаты — абонемент, тренер, магазин."
+            cta="Посмотреть тарифы"
+            onCta={onOpenPlans}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // total in kopecks (sum of positive amounts only)
+  const totalKopecks = items
+    .filter(p => p.amount_kopecks > 0)
+    .reduce((s, p) => s + p.amount_kopecks, 0);
+
+  const total = totalKopecks / 100;
 
   return (
     <div style={{ padding: '8px 16px' }}>
-      {/* Summary card — total + 3-col breakdown */}
+      {/* Summary card */}
       <div className="card" style={{ padding: 18, marginBottom: 12 }}>
         <div className="row-between" style={{ alignItems: 'flex-start' }}>
           <div>
@@ -474,81 +617,45 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
             <Icon name="chevronRight" size={14} color="var(--accent-deep)" strokeWidth={2.2} />
           </button>
         </div>
-        <div style={{
-          marginTop: 16, paddingTop: 14,
-          borderTop: '0.5px solid var(--border)',
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-        }}>
-          <SpendCol label="Подписка" amount={subTotal} total={total} />
-          <SpendCol label="Тренеры" amount={trainerTotal} total={total} divider />
-          <SpendCol label="Магазин" amount={shopTotal} total={total} divider />
-        </div>
       </div>
 
-      {/* Grouped list */}
-      {groups.map(g => (
-        <div key={g.month} style={{ marginBottom: 12 }}>
-          <div className="t-mini" style={{
-            color: 'var(--text-3)', padding: '8px 4px 8px',
-          }}>
-            {monthLabel(g.month)} 2026
-          </div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {g.items.map((p, i) => (
-              <React.Fragment key={p.id}>
-                {i > 0 && <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 56 }} />}
-                <PurchaseRow p={p} />
-              </React.Fragment>
-            ))}
-          </div>
+      {/* Payment list */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {items.slice(0, 10).map((p, i) => (
+          <React.Fragment key={String(p.id)}>
+            {i > 0 && <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 56 }} />}
+            <PurchaseRow p={p} />
+          </React.Fragment>
+        ))}
+      </div>
+
+      {(data?.total ?? items.length) > items.length && (
+        <div className="t-small" style={{ textAlign: 'center', color: 'var(--text-3)', marginTop: 10 }}>
+          Показано {items.length} из {data?.total ?? items.length}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
-function SpendCol({ label, amount, total, divider }) {
-  const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
-  return (
-    <div style={{
-      padding: '0 12px',
-      borderLeft: divider ? '0.5px solid var(--border)' : '0',
-      display: 'flex', flexDirection: 'column', gap: 4,
-      minWidth: 0,
-    }}>
-      <div className="t-mini" style={{
-        color: 'var(--text-3)', fontSize: 10, letterSpacing: 0.4,
-      }}>{label}</div>
-      <div className="t-num" style={{
-        fontSize: 16, fontWeight: 600,
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-      }}>{amount.toLocaleString('ru-RU')} ₽</div>
-      <div className="t-mini" style={{
-        color: 'var(--text-3)', fontSize: 10,
-        textTransform: 'none', letterSpacing: 0, fontWeight: 500,
-      }}>{pct}%</div>
-    </div>
-  );
-}
-
-function SummaryPill({ label, amount }) {
-  if (!amount) return null;
-  return (
-    <div style={{
-      padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 8,
-      display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-    }}>
-      <span className="t-mini" style={{ fontSize: 9.5, color: 'var(--text-3)' }}>{label}</span>
-      <span className="t-num" style={{ fontSize: 13, fontWeight: 600 }}>
-        {amount.toLocaleString('ru-RU')} ₽
-      </span>
-    </div>
-  );
-}
-
+// ─── Single payment row — adapts API ClientPaymentItem shape ──────────────
+// API: { id, subject_kind, amount_kopecks (signed), method, received_at }
 function PurchaseRow({ p }) {
-  const iconName = p.kind === 'sub' ? 'card' : p.kind === 'training' ? 'user' : p.kind === 'shop' ? 'tag' : 'card';
-  const isRefund = p.status === 'refund' || p.amount < 0;
+  const isRefund = p.amount_kopecks < 0;
+  const amountRub = Math.abs(p.amount_kopecks) / 100;
+  const iconName = p.subject_kind === 'membership' ? 'card'
+    : p.subject_kind === 'pt_package' ? 'user'
+    : isRefund ? 'tag'
+    : 'card';
+  const title = p.subject_kind === 'membership' ? 'Абонемент'
+    : p.subject_kind === 'pt_package' ? 'Персональные тренировки'
+    : isRefund ? 'Возврат'
+    : 'Оплата';
+  const dateStr = p.received_at
+    ? new Date(p.received_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+    : '—';
+  const methodLabel = p.method === 'online' ? 'онлайн' : p.method === 'cash' ? 'наличные' : p.method ?? '';
+
   return (
     <div style={{ padding: '12px 14px', display: 'flex', gap: 12, alignItems: 'center' }}>
       <div style={{
@@ -561,9 +668,9 @@ function PurchaseRow({ p }) {
               color={isRefund ? '#a36a16' : 'var(--text-2)'} strokeWidth={2} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="t-h3" style={{ fontSize: 14 }}>{p.title}</div>
+        <div className="t-h3" style={{ fontSize: 14 }}>{title}</div>
         <div className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-3)' }}>
-          {p.date} · {p.sub}
+          {dateStr} · {methodLabel}
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
@@ -571,7 +678,7 @@ function PurchaseRow({ p }) {
           fontSize: 14,
           color: isRefund ? '#a36a16' : 'var(--text)',
         }}>
-          {isRefund ? '' : '−'}{Math.abs(p.amount).toLocaleString('ru-RU')} ₽
+          {isRefund ? '+' : '−'}{amountRub.toLocaleString('ru-RU')} ₽
         </div>
         <div className="t-mini" style={{ fontSize: 9.5, color: 'var(--text-3)' }}>
           {isRefund ? 'возврат' : 'оплачено'}
@@ -580,4 +687,3 @@ function PurchaseRow({ p }) {
     </div>
   );
 }
-

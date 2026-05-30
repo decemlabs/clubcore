@@ -6,16 +6,46 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
-import { GYM_INFO, NOTIFICATIONS, TRAINER_CANCEL, UPCOMING_BOOKING } from '@/data';
+import { useClientHome } from '@/data';
 import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 import { getSubInfo } from '@/utils/subInfo.js';
 
+// ─── In-file adapter: API membership shape → existing subInfo render shape ───
+// API: ClientMembershipResponse { id, plan_name_snapshot, start_date, end_date,
+//       status, days_until_end, expiring_soon } | null
+function toSubInfo(membership) {
+  if (!membership) {
+    return { daysLeft: 0, total: 90, until: '—', label: 'Нет абонемента', tone: 'danger' };
+  }
+  const daysLeft = Math.max(0, membership.days_until_end ?? 0);
+  const tone = membership.expiring_soon
+    ? (daysLeft === 0 ? 'danger' : 'warn')
+    : 'ok';
+  return {
+    daysLeft,
+    total: 90, // display denominator; server doesn't expose total days
+    until: membership.end_date ?? '—',
+    label: membership.plan_name_snapshot ?? 'Абонемент',
+    tone,
+  };
+}
+
+// ─── Static demo-only data (tweaks-driven — TRAINER_CANCEL shown only when
+//     tweaks.gymEvent === 'trainer-cancelled'; never from real API) ──────────
+const DEMO_TRAINER_CANCEL = {
+  trainer: 'Аня Соколова',
+  initials: 'АС',
+  bg: '#fef3c7',
+  color: '#f59e0b',
+  date: 'Сегодня, 18:00',
+  reason: 'заболела',
+  reasonFull: 'Аня приболела и не сможет провести тренировку сегодня.',
+  refund: 2200,
+};
+
 // Open/closed status chip — shown in home header, opens GymInfoSheet
 export function GymStatusPill({ onClick }) {
-  const g = (typeof GYM_INFO !== 'undefined') ? GYM_INFO : null;
-  if (!g) return null;
-  const open = g.status.open;
-  const label = open ? `Открыто до ${g.status.until}` : `Закрыто · откроемся в ${g.hours[(g.todayIdx + 1) % 7].open}`;
+  // Gym status is not returned by the home API; show a neutral pill as placeholder.
   return (
     <button
       onClick={onClick}
@@ -31,9 +61,7 @@ export function GymStatusPill({ onClick }) {
     >
       <span style={{
         width: 7, height: 7, borderRadius: 999,
-        background: open ? '#10b981' : 'var(--text-3)',
-        boxShadow: open ? '0 0 0 3px rgba(16,185,129,0.18)' : 'none',
-        animation: open ? 'pulse-soft 2.4s ease-in-out infinite' : 'none',
+        background: 'var(--text-3)',
         flexShrink: 0,
       }} />
       <span style={{
@@ -41,7 +69,7 @@ export function GymStatusPill({ onClick }) {
         color: 'var(--text-2)', whiteSpace: 'nowrap',
         overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
-        {label}
+        О зале
       </span>
       <Icon name="chevronRight" size={12} color="var(--text-3)" strokeWidth={2.2} />
     </button>
@@ -49,12 +77,19 @@ export function GymStatusPill({ onClick }) {
 }
 
 export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpenReferral, onOpenGymInfo, onOpenNotifications, onTab, setTweak }) => {
-  const sub = getSubInfo(tweaks.subState);
+  const { data: homeData, isLoading, isError, refetch } = useClientHome();
+
+  // Use real API sub data when available; fall back to tweaks for demo mode.
+  const sub = homeData?.membership
+    ? toSubInfo(homeData.membership)
+    : getSubInfo(tweaks.subState);
+
   const variant = tweaks.homeVariant || 'classic';
   const userName = tweaks.userName || 'Саша';
   const isEmpty = tweaks.dataMode === 'empty';
   const trainerCancelled = tweaks.gymEvent === 'trainer-cancelled';
-  const unread = isEmpty ? 0 : NOTIFICATIONS.filter(n => n.unread).length;
+  // Notifications count: not in API — use 0 when loaded, show no badge.
+  const unread = 0;
   const [showToast, setShowToast] = React.useState(false);
 
   const greeting = (() => {
@@ -65,9 +100,32 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
     return 'Добрый вечер';
   })();
 
+  if (isLoading) {
+    return (
+      <div className="page" style={{ background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="ptr-spin" style={{ width: 28, height: 28, borderWidth: 2 }} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="page" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
+        <Icon name="alert" size={32} color="var(--danger)" strokeWidth={2} />
+        <div className="t-h3" style={{ textAlign: 'center' }}>Не удалось загрузить данные</div>
+        <button onClick={() => void refetch()} className="btn btn-accent" style={{ height: 44, padding: '0 24px' }}>
+          Повторить
+        </button>
+      </div>
+    );
+  }
+
   const subTone = sub.tone === 'ok' ? 'chip-accent' : sub.tone === 'warn' ? 'chip-warn' : 'chip-danger';
   const fillTone = sub.tone === 'ok' ? '' : sub.tone === 'warn' ? 'warn' : 'danger';
   const pct = Math.max(2, Math.min(100, (sub.daysLeft / sub.total) * 100));
+
+  // Real next_booking from API (or null)
+  const nextBooking = homeData?.next_booking ?? null;
 
   return (
     <div className="page" style={{ background: 'var(--bg)' }}>
@@ -77,7 +135,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
         onRefresh={() => {
           setShowToast(true);
           setTimeout(() => setShowToast(false), 2400);
-          return new Promise(r => setTimeout(r, 700));
+          return refetch().then(() => undefined);
         }}
       >
         {showToast && <div className="ptr-toast">Обновлено · сейчас</div>}
@@ -99,36 +157,21 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
           <GymStatusPill onClick={onOpenGymInfo} />
         </div>
 
-        {variant === 'classic' && <HomeClassic isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} subCardStyle={tweaks.subCardStyle || 'eyebrow'} />}
-        {variant === 'qr-hero' && <HomeQrHero isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} />}
-        {variant === 'minimal' && <HomeMinimal isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} />}
+        {variant === 'classic' && <HomeClassic isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} subCardStyle={tweaks.subCardStyle || 'eyebrow'} nextBooking={nextBooking} />}
+        {variant === 'qr-hero' && <HomeQrHero isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
+        {variant === 'minimal' && <HomeMinimal isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
 
         <div style={{ height: 24 }} />
       </PullToRefresh>
     </div>
   );
-
-  function HomePullToRefreshScroller({ children }) {
-    return (
-      <PullToRefresh
-        scrollPaddingTop={54}
-        onRefresh={() => {
-          setShowToast(true);
-          setTimeout(() => setShowToast(false), 2400);
-          return new Promise(r => setTimeout(r, 700));
-        }}
-      >
-        {children}
-      </PullToRefresh>
-    );
-  }
 };
 
 // Variant A: Classic — subscription card + QR button + actions + feed
-export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, subCardStyle }) {
+export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, subCardStyle, nextBooking }) {
   return (
     <>
-      {/* Trainer cancelled — strong alert */}
+      {/* Trainer cancelled — strong alert (demo-only, tweaks-driven) */}
       {trainerCancelled && (
         <div style={{ padding: '0 16px 12px' }}>
           <TrainerCancelCard onTab={onTab} />
@@ -215,8 +258,8 @@ export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
       </div>
 
       {/* Upcoming booking — tappable to manage */}
-      {!isEmpty ? (
-        <UpcomingCard onClick={onOpenManage} onCancel={onOpenManage} />
+      {!isEmpty && nextBooking ? (
+        <UpcomingCard booking={nextBooking} onClick={onOpenManage} onCancel={onOpenManage} />
       ) : (
         <div style={{ padding: '0 16px 12px' }}>
           <button
@@ -275,7 +318,7 @@ export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
       {/* Quick actions */}
       <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <QuickTile icon="calendar" title="Записаться" sub="к тренеру" onClick={() => onTab('book')} />
-        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab('chat')} badge={2} />
+        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab('chat')} badge={unread > 0 ? unread : null} />
       </div>
 
       {/* Feed */}
@@ -303,7 +346,7 @@ export function SubDot({ tone }) {
 }
 
 // Variant B: QR-hero — QR is huge at top
-export function HomeQrHero({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled }) {
+export function HomeQrHero({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, nextBooking }) {
   return (
     <>
       {trainerCancelled && (
@@ -357,11 +400,11 @@ export function HomeQrHero({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onO
         </div>
       </div>
 
-      {!isEmpty && <UpcomingCard onClick={onOpenManage} onCancel={onOpenManage} compact />}
+      {!isEmpty && nextBooking && <UpcomingCard booking={nextBooking} onClick={onOpenManage} onCancel={onOpenManage} compact />}
 
       <div style={{ padding: '4px 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <QuickTile icon="calendar" title="Записаться" sub="к тренеру" onClick={() => onTab('book')} />
-        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab('chat')} badge={isEmpty ? 0 : 2} />
+        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab('chat')} badge={isEmpty ? 0 : unread > 0 ? unread : null} />
       </div>
 
       <FeedSection unread={unread} isEmpty={isEmpty} onOpenNotifications={onOpenNotifications} />
@@ -370,7 +413,7 @@ export function HomeQrHero({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onO
 }
 
 // Variant C: Minimal — single big "next thing" hero
-export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled }) {
+export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, nextBooking }) {
   const ms = useCountdown(4 * 3600 * 1000 + 12 * 60 * 1000);
   const cd = formatCountdown(ms);
   const banner = (
@@ -387,7 +430,14 @@ export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
       )}
     </>
   );
-  if (isEmpty) {
+
+  // Format next_booking for display
+  const bookingTime = nextBooking?.start_time
+    ? new Date(nextBooking.start_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+    : null;
+  const bookingTrainer = nextBooking?.trainer_name ?? null;
+
+  if (isEmpty || !nextBooking) {
     return (
       <>
         {banner}
@@ -426,13 +476,13 @@ export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
       {banner}
       <div style={{ padding: '0 20px 8px' }}>
         <div className="t-mini" style={{ color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
-          Сегодня в {UPCOMING_BOOKING.time} · через {cd.primary}
+          {bookingTime ? `Сегодня в ${bookingTime} · через ${cd.primary}` : `через ${cd.primary}`}
         </div>
         <div className="t-display" style={{ marginTop: 4, marginBottom: 6, letterSpacing: -1 }}>
-          Тренировка<br/>с {UPCOMING_BOOKING.trainerInstr}
+          Тренировка<br/>{bookingTrainer ? `с ${bookingTrainer}` : ''}
         </div>
         <div className="t-body" style={{ color: 'var(--text-2)' }}>
-          Зал на Тверской · {UPCOMING_BOOKING.focus}
+          Зал на Тверской
         </div>
       </div>
 
@@ -483,12 +533,20 @@ export function HomeMinimal({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
   );
 }
 
-// ─── Upcoming booking card (used on classic + qr-hero) ─────────
-export function UpcomingCard({ onClick, compact, onCancel }) {
-  const b = UPCOMING_BOOKING;
-  // 4h 12m from "now" — ticks down each second
+// ─── Upcoming booking card — receives real booking from API ─────────────────
+// booking: ClientNextBookingResponse | null { id, trainer_name, start_time, status }
+export function UpcomingCard({ booking, onClick, compact, onCancel }) {
   const ms = useCountdown(4 * 3600 * 1000 + 12 * 60 * 1000);
   const cd = formatCountdown(ms);
+
+  const trainerName = booking?.trainer_name ?? 'Тренер';
+  const startTime = booking?.start_time
+    ? new Date(booking.start_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+    : '—';
+  const startDate = booking?.start_time
+    ? new Date(booking.start_time).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', timeZone: 'Europe/Moscow' })
+    : '—';
+
   const cardInner = (
     <button
       onClick={onClick}
@@ -502,18 +560,11 @@ export function UpcomingCard({ onClick, compact, onCancel }) {
     >
       <div style={{
         width: 48, height: 48, borderRadius: 12,
-        background: b.trainerBg, color: b.trainerColor,
+        background: 'var(--accent-soft)', color: 'var(--accent-deep)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <span className="t-mini" style={{
-          fontSize: 9, letterSpacing: 0.6, color: b.trainerColor, fontWeight: 700,
-          opacity: 0.85,
-        }}>{b.dow.toUpperCase()}</span>
-        <span style={{
-          fontSize: 18, fontWeight: 700, lineHeight: 1, color: b.trainerColor,
-          fontVariantNumeric: 'tabular-nums',
-        }}>{b.dayNum}</span>
+        <Icon name="calendar" size={20} color="currentColor" strokeWidth={1.8} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="row-between" style={{ gap: 8 }}>
@@ -523,10 +574,10 @@ export function UpcomingCard({ onClick, compact, onCancel }) {
           </div>
         </div>
         <div className="t-h3" style={{ marginTop: 2, fontSize: 15 }}>
-          {b.time} · {b.focus}
+          {startTime} · {startDate}
         </div>
         <div className="row-between" style={{ marginTop: 1, gap: 8 }}>
-          <div className="t-small">с {b.trainer}</div>
+          <div className="t-small">с {trainerName}</div>
           <span style={{
             color: 'var(--accent-deep)', fontSize: 12.5, fontWeight: 600,
             display: 'inline-flex', alignItems: 'center', gap: 2,
@@ -614,9 +665,9 @@ export function ExpiredAlert({ sub, onOpenPlans }) {
   );
 }
 
-// ─── Trainer cancellation card ───────────────────────────────────
+// ─── Trainer cancellation card (demo-only, tweaks-driven) ────────────────────
 export function TrainerCancelCard({ onTab }) {
-  const c = TRAINER_CANCEL;
+  const c = DEMO_TRAINER_CANCEL;
   return (
     <div className="card fade-up" style={{
       padding: 0, overflow: 'hidden',
@@ -678,8 +729,7 @@ export function FeedSection({ unread, isEmpty, onOpenNotifications }) {
       </div>
     );
   }
-  const visible = NOTIFICATIONS.slice(0, 3);
-  const hasMore = NOTIFICATIONS.length > visible.length;
+  // Notifications are not yet available from the API — show empty state
   return (
     <div style={{ padding: '8px 4px 0' }}>
       <button
@@ -721,53 +771,16 @@ export function FeedSection({ unread, isEmpty, onOpenNotifications }) {
           </span>
         )}
       </button>
-      <div className="stack-2" style={{ padding: '0 16px' }}>
-        {visible.map(n => (
-          <div key={n.id} className="card press" style={{
-            padding: '14px 16px', display: 'flex', gap: 12,
-            border: n.unread ? '0.5px solid var(--border-strong)' : '0.5px solid var(--border)',
-          }}>
-            <div style={{
-              width: 38, height: 38, borderRadius: 10,
-              background: n.kind === 'promo' ? 'var(--accent-soft)' :
-                          n.kind === 'schedule' ? 'var(--warn-soft)' :
-                          n.kind === 'message' ? '#fef3c7' : 'var(--surface-2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0,
-            }}>
-              <Icon
-                name={n.kind === 'promo' ? 'tag' : n.kind === 'schedule' ? 'clock' : n.kind === 'message' ? 'chat' : 'info'}
-                size={20}
-                color={n.kind === 'promo' ? 'var(--accent-deep)' :
-                       n.kind === 'schedule' ? '#a36a16' :
-                       n.kind === 'message' ? '#a36a16' : 'var(--text-2)'}
-              />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="row-between" style={{ alignItems: 'flex-start' }}>
-                <div className="t-h3" style={{ fontSize: 15 }}>{n.title}</div>
-                {n.unread && <span className="dot" style={{ marginTop: 7 }} />}
-              </div>
-              <div className="t-small" style={{ marginTop: 2, color: 'var(--text-2)' }}>{n.body}</div>
-              <div className="t-mini" style={{ marginTop: 6, fontWeight: 500, letterSpacing: 0.2, color: 'var(--text-3)', textTransform: 'none' }}>{n.time}</div>
-            </div>
-          </div>
-        ))}
-        {hasMore && onOpenNotifications && (
-          <button onClick={onOpenNotifications} className="press" style={{
-            appearance: 'none', border: '0.5px dashed var(--border-strong)',
-            background: 'transparent', borderRadius: 'var(--r-lg)',
-            padding: '12px 16px', cursor: 'pointer',
-            color: 'var(--text-2)', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            fontSize: 13, fontWeight: 600,
-          }}>
-            Ещё {NOTIFICATIONS.length - visible.length}
-            <Icon name="chevronRight" size={14} color="var(--text-3)" strokeWidth={2.2} />
-          </button>
-        )}
+      <div style={{ padding: '0 16px' }}>
+        <div className="card" style={{ padding: 0 }}>
+          <EmptyState
+            illustration="sparkle"
+            title="Нет новых уведомлений"
+            body="Здесь появятся новости, акции и изменения расписания."
+            compact
+          />
+        </div>
       </div>
     </div>
   );
 }
-
