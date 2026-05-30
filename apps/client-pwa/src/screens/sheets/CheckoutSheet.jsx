@@ -1,34 +1,96 @@
 import React from 'react';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
+import { useClientCheckoutMembership, useClientCheckoutPtPackage } from '@/data';
 
-// Accepts: { kind: 'training' | 'sub' | 'shop', title, subtitle, amount, lineItems? }
+// Accepts: { kind: 'sub' | 'pt', planId, title, subtitle, amount }
+// kind: 'sub' → membership checkout (CPAY-01)
+// kind: 'pt'  → PT-package checkout (CPAY-02, client-supplied idempotency key D-71-04)
+
+// ─── Error code → inline error kind mapping (D-71-02 discretion) ───────────
+function mapApiErrorToKind(code) {
+  if (code === 'client_email_required_for_online_payment') return 'email-required';
+  if (code === 'yookassa_unavailable') return 'offline';
+  if (code === 'yookassa_permanent_error') return 'payment';
+  if (code === 'network_error') return 'offline';
+  return 'payment';
+}
 
 export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
-  const [stage, setStage] = React.useState('review'); // 'review' | 'paying' | 'done' | 'error'
-  const [errorKind, setErrorKind] = React.useState(null); // 'payment' | 'slot-busy' | 'offline'
-  const [card, setCard] = React.useState('saved');    // 'saved' | 'apple' | 'new'
+  const [stage, setStage] = React.useState('review'); // 'review' | 'paying' | 'error'
+  const [errorKind, setErrorKind] = React.useState(null); // 'payment' | 'slot-busy' | 'offline' | 'email-required'
+  const [card, setCard] = React.useState('saved');
   const [savePromo, setSavePromo] = React.useState(false);
   const [promoCode, setPromoCode] = React.useState('');
   const [promoApplied, setPromoApplied] = React.useState(false);
+
+  // D-71-04: generate idempotency key once per checkout intent (for PT packages).
+  // The key is generated when the component mounts and persists for the lifetime of
+  // this checkout session. It is encoded into the ЮKassa return_url query param
+  // so it survives the redirect round-trip (sole persistence channel — no localStorage).
+  const idempotencyKey = React.useRef(
+    typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+  );
+
+  const checkoutMembership = useClientCheckoutMembership();
+  const checkoutPtPackage = useClientCheckoutPtPackage();
 
   if (!ctx) return null;
 
   const discount = promoApplied ? Math.round(ctx.amount * 0.1) : 0;
   const total = ctx.amount - discount;
 
-  const startPay = () => {
-    setStage('paying');
-    setTimeout(() => {
-      const outcome = forceOutcome || 'ok';
-      if (outcome === 'ok') setStage('done');
-      else { setErrorKind(outcome); setStage('error'); }
-    }, 1300);
-  };
+  const startPay = async () => {
+    // Demo mode override: if forceOutcome is set, use mock behavior.
+    if (forceOutcome && forceOutcome !== 'ok') {
+      setStage('paying');
+      setTimeout(() => {
+        setErrorKind(forceOutcome);
+        setStage('error');
+      }, 1300);
+      return;
+    }
 
-  if (stage === 'done') {
-    return <CheckoutDone ctx={ctx} total={total} onClose={() => { onClose(); onDone && onDone(); }} />;
-  }
+    if (!ctx.planId) {
+      // No planId — cannot call real checkout; fall back to demo behavior.
+      setStage('paying');
+      setTimeout(() => {
+        setStage('error');
+        setErrorKind('payment');
+      }, 1300);
+      return;
+    }
+
+    setStage('paying');
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      let result;
+
+      if (ctx.kind === 'sub') {
+        // CPAY-01: membership checkout — server-derived idempotency key (D-71-04)
+        const returnUrl = `${origin}/payment/return?payment_id=`;
+        result = await checkoutMembership.mutateAsync({ planId: ctx.planId });
+        // Navigate to ЮKassa confirmation URL (return_url already encoded in server response)
+        window.location.href = result.confirmationUrl;
+      } else {
+        // CPAY-02: PT-package checkout — client-supplied idempotency key (D-71-04)
+        // PT return_url includes &idempotency_key= so the key survives the redirect round-trip.
+        const idemKey = idempotencyKey.current;
+        result = await checkoutPtPackage.mutateAsync({
+          planId: ctx.planId,
+          idempotencyKey: idemKey,
+        });
+        // Redirect to ЮKassa. PaymentReturnScreen reads idempotency_key from useSearchParams()
+        // for retry if needed (D-71-04 sole persistence channel).
+        window.location.href = result.confirmationUrl + `&idempotency_key=${encodeURIComponent(idemKey)}`;
+      }
+      // After setting window.location.href the component unmounts; no state update needed.
+    } catch (err) {
+      const code = err?.code ?? err?.message ?? 'payment';
+      setErrorKind(mapApiErrorToKind(code));
+      setStage('error');
+    }
+  };
 
   if (stage === 'error') {
     return <CheckoutError kind={errorKind}
@@ -83,7 +145,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
                 background: 'var(--surface-2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Icon name={ctx.kind === 'sub' ? 'card' : ctx.kind === 'training' ? 'user' : 'tag'}
+                <Icon name={ctx.kind === 'sub' ? 'card' : ctx.kind === 'pt' ? 'user' : 'tag'}
                       size={20} color="var(--text)" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -289,68 +351,7 @@ function Divider2c() {
   return <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 12 }} />;
 }
 
-function CheckoutDone({ ctx, total, onClose }) {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 240,
-      background: 'var(--bg)', display: 'flex', flexDirection: 'column',
-      animation: 'fade-up 0.4s ease-out',
-    }}>
-      <StatusBar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', padding: '40px 28px' }}>
-        <div style={{
-          width: 84, height: 84, borderRadius: 999, background: 'var(--accent)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          animation: 'scale-in 0.4s cubic-bezier(0.32, 1.4, 0.4, 1)',
-          marginBottom: 24,
-        }}>
-          <svg width="44" height="44" viewBox="0 0 24 24">
-            <path d="M5 12l5 5L20 7" stroke="#06120c" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <div className="t-display" style={{ textAlign: 'center', letterSpacing: -1, fontSize: 32 }}>
-          Готово!
-        </div>
-        <div className="t-body" style={{
-          textAlign: 'center', marginTop: 10, color: 'var(--text-2)',
-          maxWidth: 280, lineHeight: 1.5,
-        }}>
-          {ctx.kind === 'sub' ? 'Абонемент активирован. QR в зале уже работает.' :
-           ctx.kind === 'training' ? 'Записали и сохранили в твоём расписании. Напомним за час.' :
-           'Оплата прошла. Чек придёт на почту.'}
-        </div>
-        <div style={{
-          marginTop: 22, padding: '12px 18px',
-          background: 'var(--surface)', borderRadius: 'var(--r-lg)',
-          border: '0.5px solid var(--border)',
-          display: 'flex', gap: 14, alignItems: 'center',
-        }}>
-          <Icon name="card" size={18} color="var(--text-3)" />
-          <div>
-            <div className="t-mini" style={{ color: 'var(--text-3)' }}>Списано</div>
-            <div className="t-h3 t-num" style={{ fontSize: 16 }}>
-              {total.toLocaleString('ru-RU')} ₽ · •••• 4821
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button onClick={() => { onClose(); window.__openReceipt?.(ctx, total); }} className="btn" style={{
-          width: '100%', height: 50, background: 'var(--surface)', color: 'var(--text)',
-          border: '0.5px solid var(--border-strong)',
-        }}>
-          Посмотреть чек
-        </button>
-        <button onClick={onClose} className="btn btn-accent" style={{ width: '100%', height: 54 }}>
-          Хорошо
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Inline error states — payment-rejected / slot-busy / offline
+// Inline error states — payment-rejected / slot-busy / offline / email-required
 function CheckoutError({ kind, onRetry, onClose }) {
   const variants = {
     payment: {
@@ -372,6 +373,13 @@ function CheckoutError({ kind, onRetry, onClose }) {
       title: 'Нет связи',
       body: 'Похоже, интернет пропал. Попробуй ещё раз, когда появится сеть.',
       primary: 'Повторить',
+      secondary: 'Закрыть',
+    },
+    'email-required': {
+      icon: 'alert', tone: 'warn',
+      title: 'Нужен email',
+      body: 'Для онлайн-оплаты нужен email для чека (54-ФЗ). Укажи email в личных данных и повтори.',
+      primary: 'Понятно',
       secondary: 'Закрыть',
     },
   }[kind] || {
@@ -433,4 +441,3 @@ function CheckoutError({ kind, onRetry, onClose }) {
     </div>
   );
 }
-

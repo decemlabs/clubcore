@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 import '@/styles.css';
 
@@ -13,8 +14,14 @@ import { useTweaksCtx } from '@/context/TweaksContext.jsx';
 import { useUI } from '@/context/UIContext.jsx';
 
 import { CONVERSATIONS, TRAINERS } from '@/data';
+import { queryClient } from '@/lib/queryClient.ts';
 
 import { TweaksRoot } from '@/components/Tweaks/TweaksRoot.jsx';
+
+// ── Payment return route (ЮKassa return_url target) ───────────────────────
+const PaymentReturnScreen = lazy(() =>
+  import('@/routes/PaymentReturnScreen.jsx').then(m => ({ default: m.PaymentReturnScreen }))
+);
 
 // ── Lazy tab screens — each is its own chunk ───────────────────────────────
 const HomeScreen     = lazy(() => import('@/screens/HomeScreen.jsx').then(m => ({ default: m.HomeScreen })));
@@ -187,6 +194,7 @@ export default function App() {
   const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen;
 
   return (
+    <QueryClientProvider client={queryClient}>
     <div className="stage" data-screen-label="Прототип">
       <div
         data-screen-label={`01 ${tab}`}
@@ -210,12 +218,13 @@ export default function App() {
               {tabLoading ? <TabFallback tab={tab} /> : (
                 <Suspense fallback={<TabFallback tab={tab} />}>
                   <Routes>
-                    <Route path="/"        element={<Navigate to="/home" replace />} />
-                    <Route path="/home"    element={<HomeRoute />} />
-                    <Route path="/book"    element={<BookRoute />} />
-                    <Route path="/chat"    element={<ChatRoute />} />
-                    <Route path="/profile" element={<ProfileRoute />} />
-                    <Route path="*"        element={<Navigate to="/home" replace />} />
+                    <Route path="/"               element={<Navigate to="/home" replace />} />
+                    <Route path="/home"           element={<HomeRoute />} />
+                    <Route path="/book"           element={<BookRoute />} />
+                    <Route path="/chat"           element={<ChatRoute />} />
+                    <Route path="/profile"        element={<ProfileRoute />} />
+                    <Route path="/payment/return" element={<PaymentReturnScreen />} />
+                    <Route path="*"               element={<Navigate to="/home" replace />} />
                   </Routes>
                 </Suspense>
               )}
@@ -391,5 +400,6 @@ export default function App() {
       {/* Tweaks panel — host-protocol aware */}
       <TweaksRoot />
     </div>
+    </QueryClientProvider>
   );
 }
