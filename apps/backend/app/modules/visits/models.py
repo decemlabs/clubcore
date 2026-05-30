@@ -95,8 +95,9 @@ class Visit(Base, UUIDPkMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "channel IN ('reception', 'telegram_bot')",
-            # NAMING_CONVENTION expands to ck_visits_channel
+            "channel IN ('reception', 'telegram_bot', 'client_qr')",
+            # NAMING_CONVENTION expands to ck_visits_channel; kept in sync with
+            # alembic/versions/0045_visits_channel_client_qr.py (D-70-11).
             name="channel",
         ),
         UniqueConstraint(
