@@ -147,8 +147,8 @@ Plans:
 - [x] 71-05-PLAN.md — wire Home/Profile/Plans/Checkout + payment return route (anti-oracle); net-new screens → ComingSoon (PWA-05, CPAY-01..03)
 - [x] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
 - [x] 71-07-PLAN.md — GAP: real client OTP login (/api/v1/client/otp/*) + AuthContext (/client/me probe) + /login route & RequireAuth guard; replace window.location redirect loop with router-based session-expiry signal (PWA-05)
-- [ ] 71-08-PLAN.md — GAP: harden public/sw.js to network-only /api/* + activate-time purge + bump cache gym-v3 (PWA-05 / PWA-07 / T-69-07)
-- [ ] 71-09-PLAN.md — GAP: align wired-screen adapters to camelCase API contract (price/duration/membership/booking/history) + seed dev catalog (PWA-05, CPAY-01/02)
+- [x] 71-08-PLAN.md — GAP: harden public/sw.js to network-only /api/* + activate-time purge + bump cache gym-v3 (PWA-05 / PWA-07 / T-69-07)
+- [x] 71-09-PLAN.md — GAP: align wired-screen adapters to camelCase API contract (price/duration/membership/booking/history) + seed dev catalog (PWA-05, CPAY-01/02)
 - [ ] 71-10-PLAN.md — GAP: bind Home/Profile identity to /client/me + real empty-membership state, drop mock identity (PWA-05, ROADMAP SC4)
 
 **UI hint**: yes
@@ -187,7 +187,7 @@ Plans:
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete    | 2026-05-30 |
-| 71. Client Checkout + Full PWA Wiring | v2.0 | 7/7 | Complete   | 2026-05-30 |
+| 71. Client Checkout + Full PWA Wiring | v2.0 | 9/10 | In Progress|  |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 
 ---
