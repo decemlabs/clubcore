@@ -624,3 +624,295 @@ async def test_duplicate_webhook_does_not_double_activate(
     )
     assert op is not None
     assert op.status == "succeeded", f"Expected status=succeeded, got: {op.status!r}"
+
+
+# ===========================================================================
+# Phase 71 review fix tests: CR-01/CR-02 return_url, WR-01 replay, WR-02 None-guard
+# ===========================================================================
+
+
+async def test_membership_checkout_return_url_contains_payment_id(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> None:
+    """CR-01 (Phase 71 fix): membership checkout ЮKassa return_url must carry payment_id.
+
+    The server-built return_url (sent to ЮKassa as confirmation.return_url) must
+    include ``?payment_id={online_payment_id}`` so PaymentReturnScreen can poll
+    the status endpoint after ЮKassa redirects the user back.
+
+    The test captures the ЮKassa POST request body and asserts:
+      1. The response row id (onlinePaymentId) matches the payment_id in the
+         captured return_url.
+      2. The return_url is the YOOKASSA_CLIENT_RETURN_URL base (not the staff
+         YOOKASSA_RETURN_URL), confirming per-payment routing is active.
+    """
+    client = await _seed_client_with_email(
+        db_session,
+        phone=f"+7930{uuid4().int % 10_000_000:07d}",
+    )
+    plan = await _seed_membership_plan(db_session)
+
+    await _auth_as_client(async_client, db_session, client)
+
+    captured_return_url: list[str] = []
+    fake_url = f"https://yoomoney.ru/checkout/cr01-{uuid4().hex[:8]}"
+
+    def _capture_request(request: httpx.Request) -> httpx.Response:
+        import json as _json
+
+        body = _json.loads(request.content)
+        captured_return_url.append(body.get("confirmation", {}).get("return_url", ""))
+        return httpx.Response(
+            200,
+            json={
+                "id": f"yk-{uuid4().hex[:24]}",
+                "status": "pending",
+                "amount": {"value": "2500.00", "currency": "RUB"},
+                "confirmation": {
+                    "type": "redirect",
+                    "confirmation_url": fake_url,
+                },
+            },
+        )
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.post("payments").mock(side_effect=_capture_request)
+
+        r = await async_client.post(
+            f"/api/v1/client/checkout/memberships/{plan.id}",
+            headers=_checkout_headers(async_client),
+            json={},
+        )
+
+    assert r.status_code == 201, r.text
+    data = r.json()["data"]
+    online_payment_id = data["onlinePaymentId"]
+
+    assert len(captured_return_url) == 1, "Expected exactly one ЮKassa create_payment call"
+    return_url_sent = captured_return_url[0]
+
+    assert return_url_sent, "return_url must not be empty in the ЮKassa request"
+    assert f"payment_id={online_payment_id}" in return_url_sent, (
+        f"return_url must contain payment_id={online_payment_id!r}; "
+        f"got return_url={return_url_sent!r}"
+    )
+
+
+async def test_pt_checkout_return_url_contains_payment_id_and_idempotency_key(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> None:
+    """CR-02 (Phase 71 fix): PT-package checkout return_url carries payment_id + idempotency_key.
+
+    The ЮKassa return_url for the PT path must include BOTH:
+      - ``payment_id={online_payment_id}`` (for PaymentReturnScreen polling)
+      - ``idempotency_key={...}`` (for D-71-04 retry safety)
+    """
+    client = await _seed_client_with_email(
+        db_session,
+        phone=f"+7931{uuid4().int % 10_000_000:07d}",
+    )
+    pt_plan = await _seed_pt_package_plan(db_session)
+    idem_key = uuid4().hex
+
+    await _auth_as_client(async_client, db_session, client)
+
+    captured_return_url: list[str] = []
+    fake_url = f"https://yoomoney.ru/checkout/cr02-{uuid4().hex[:8]}"
+
+    def _capture_request(request: httpx.Request) -> httpx.Response:
+        import json as _json
+
+        body = _json.loads(request.content)
+        captured_return_url.append(body.get("confirmation", {}).get("return_url", ""))
+        return httpx.Response(
+            200,
+            json={
+                "id": f"yk-{uuid4().hex[:24]}",
+                "status": "pending",
+                "amount": {"value": "5000.00", "currency": "RUB"},
+                "confirmation": {
+                    "type": "redirect",
+                    "confirmation_url": fake_url,
+                },
+            },
+        )
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.post("payments").mock(side_effect=_capture_request)
+
+        r = await async_client.post(
+            f"/api/v1/client/checkout/pt-packages/{pt_plan.id}",
+            headers=_pt_checkout_headers(async_client, idempotency_key=idem_key),
+            json={},
+        )
+
+    assert r.status_code == 201, r.text
+    data = r.json()["data"]
+    online_payment_id = data["onlinePaymentId"]
+
+    assert len(captured_return_url) == 1, "Expected exactly one ЮKassa create_payment call"
+    return_url_sent = captured_return_url[0]
+
+    assert f"payment_id={online_payment_id}" in return_url_sent, (
+        f"PT return_url must contain payment_id={online_payment_id!r}; "
+        f"got return_url={return_url_sent!r}"
+    )
+    assert "idempotency_key=" in return_url_sent, (
+        f"PT return_url must contain idempotency_key; got return_url={return_url_sent!r}"
+    )
+
+
+async def test_membership_replay_returns_original_confirmation_url(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> None:
+    """WR-01 + CR-01 replay (Phase 71 fix): replay after email cleared returns original URL.
+
+    1. First checkout succeeds (creates row with confirmation_url).
+    2. Client email is cleared (simulating post-checkout email removal).
+    3. Second POST (same-day replay) must return the ORIGINAL confirmation_url —
+       NOT a 422 email-gate error (WR-01 fix: replay check is before email gate).
+    """
+    client = await _seed_client_with_email(
+        db_session,
+        phone=f"+7932{uuid4().int % 10_000_000:07d}",
+    )
+    plan = await _seed_membership_plan(db_session)
+
+    await _auth_as_client(async_client, db_session, client)
+
+    fake_url = f"https://yoomoney.ru/checkout/wr01-{uuid4().hex[:8]}"
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.post("payments").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": f"yk-{uuid4().hex[:24]}",
+                    "status": "pending",
+                    "amount": {"value": "2500.00", "currency": "RUB"},
+                    "confirmation": {
+                        "type": "redirect",
+                        "confirmation_url": fake_url,
+                    },
+                },
+            )
+        )
+
+        r1 = await async_client.post(
+            f"/api/v1/client/checkout/memberships/{plan.id}",
+            headers=_checkout_headers(async_client),
+            json={},
+        )
+        assert r1.status_code == 201, r1.text
+        url1 = r1.json()["data"]["confirmationUrl"]
+
+    # Clear the client's email to simulate WR-01 scenario.
+    from sqlalchemy import update
+
+    await db_session.execute(
+        update(Client).where(Client.id == client.id).values(email=None)
+    )
+    await db_session.commit()
+
+    # Replay POST — same-day server-derived key. Must NOT raise 422 email gate.
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False):
+        r2 = await async_client.post(
+            f"/api/v1/client/checkout/memberships/{plan.id}",
+            headers=_checkout_headers(async_client),
+            json={},
+        )
+
+    assert r2.status_code == 201, (
+        f"WR-01: replay after email clear must return 201 (not 422 email gate), "
+        f"got {r2.status_code}: {r2.text}"
+    )
+    url2 = r2.json()["data"]["confirmationUrl"]
+    assert url1 == url2, (
+        f"WR-01: replay must return the original confirmation_url: {url1!r} != {url2!r}"
+    )
+
+
+async def test_checkout_confirmation_url_none_raises_bad_gateway(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> None:
+    """WR-02 (Phase 71 fix): None confirmation_url raises BadGateway, not str(None).
+
+    When _sell_subject_core returns a SellResponse with confirmation_url=None
+    (possible for QR-style replay keyed on the same idempotency key), the client
+    checkout service must NOT coerce it to the string "None" — it must raise
+    BadGatewayAppError (502) instead.
+
+    This test seeds a QR-typed OnlinePayment row with the same idempotency key
+    that the client checkout would derive, triggering the QR-replay path which
+    returns confirmation_url=None, and asserts that the endpoint returns 502.
+    """
+    from datetime import UTC, datetime
+    from hashlib import sha256
+
+    client = await _seed_client_with_email(
+        db_session,
+        phone=f"+7933{uuid4().int % 10_000_000:07d}",
+    )
+    plan = await _seed_membership_plan(db_session)
+
+    await _auth_as_client(async_client, db_session, client)
+
+    # Derive the same idempotency key the server will use for membership checkout.
+    today_iso = datetime.now(tz=UTC).date().isoformat()
+    raw = f"sell-membership:{plan.id}:{client.id}:{today_iso}"
+    idem_key = sha256(raw.encode("utf-8")).hexdigest()
+
+    # Seed a QR-typed OnlinePayment row with this idempotency key.
+    # This causes _sell_subject_core to hit the QR-replay branch → confirmation_url=None.
+    qr_payment = OnlinePayment(
+        client_id=client.id,
+        membership_plan_id=plan.id,
+        pt_package_plan_id=None,
+        yookassa_payment_id=f"yk-wr02-{uuid4().hex[:24]}",
+        idempotency_key=idem_key,
+        amount_kopecks=250_000,
+        status=STATUS_PENDING,
+        confirmation_url=None,  # QR rows have no confirmation_url
+        confirmation_type="qr",  # QR type triggers QR-replay → returns confirmation_url=None
+        audit_correlation_id=uuid4(),
+    )
+    db_session.add(qr_payment)
+    await db_session.commit()
+
+    # QR replay requires a ЮKassa GET /payments/{id} call.
+    yk_payment_id = qr_payment.yookassa_payment_id
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.get(f"payments/{yk_payment_id}").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": yk_payment_id,
+                    "status": "pending",
+                    "amount": {"value": "2500.00", "currency": "RUB"},
+                    "confirmation": {
+                        "type": "qr",
+                        # QR response has confirmation_data, not confirmation_url
+                        "confirmation_data": "https://qr.nspk.ru/fake-qr",
+                    },
+                },
+            )
+        )
+
+        r = await async_client.post(
+            f"/api/v1/client/checkout/memberships/{plan.id}",
+            headers=_checkout_headers(async_client),
+            json={},
+        )
+
+    assert r.status_code == 502, (
+        f"WR-02: None confirmation_url must raise 502 BadGateway (not return 'None' string), "
+        f"got {r.status_code}: {r.text}"
+    )
