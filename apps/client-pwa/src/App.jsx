@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
 
 import '@/styles.css';
 
@@ -12,15 +11,21 @@ import { HomeSkeleton, ListSkeleton, ProfileSkeleton } from '@/components/skelet
 
 import { useTweaksCtx } from '@/context/TweaksContext.jsx';
 import { useUI } from '@/context/UIContext.jsx';
+import { useAuth } from '@/context/AuthContext.jsx';
+import { RequireAuth } from '@/context/RequireAuth.jsx';
 
 import { CONVERSATIONS, TRAINERS } from '@/data';
-import { queryClient } from '@/lib/queryClient.ts';
 
 import { TweaksRoot } from '@/components/Tweaks/TweaksRoot.jsx';
 
 // ── Payment return route (ЮKassa return_url target) ───────────────────────
 const PaymentReturnScreen = lazy(() =>
   import('@/routes/PaymentReturnScreen.jsx').then(m => ({ default: m.PaymentReturnScreen }))
+);
+
+// ── Login screen ───────────────────────────────────────────────────────────
+const LoginScreen = lazy(() =>
+  import('@/screens/LoginScreen.jsx').then(m => ({ default: m.LoginScreen }))
 );
 
 // ── Lazy tab screens — each is its own chunk ───────────────────────────────
@@ -159,7 +164,9 @@ function TabFallback({ tab }) {
 export default function App() {
   const { t, setTweak } = useTweaksCtx();
   const ui = useUI();
+  const { status } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const tab = useTabFromRoute();
   const tabLoading = useTabLoading();
 
@@ -192,10 +199,12 @@ export default function App() {
     }
   };
 
-  const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen;
+  // Hide tab bar on sheets, login screen, or while loading auth
+  const isLoginRoute = pathname === '/login';
+  const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen
+    || isLoginRoute || status === 'unknown' || status === 'anon';
 
   return (
-    <QueryClientProvider client={queryClient}>
     <div className="stage" data-screen-label="Прототип">
       <div
         data-screen-label={`01 ${tab}`}
@@ -219,13 +228,23 @@ export default function App() {
               {tabLoading ? <TabFallback tab={tab} /> : (
                 <Suspense fallback={<TabFallback tab={tab} />}>
                   <Routes>
-                    <Route path="/"               element={<Navigate to="/home" replace />} />
-                    <Route path="/home"           element={<HomeRoute />} />
-                    <Route path="/book"           element={<BookRoute />} />
-                    <Route path="/chat"           element={<ChatRoute />} />
-                    <Route path="/profile"        element={<ProfileRoute />} />
-                    <Route path="/payment/return" element={<PaymentReturnScreen />} />
-                    <Route path="*"               element={<Navigate to="/home" replace />} />
+                    {/* Public routes — no auth guard */}
+                    <Route path="/login" element={<LoginScreen />} />
+                    <Route path="/"     element={<Navigate to="/home" replace />} />
+
+                    {/* Protected tab routes */}
+                    <Route path="/home"    element={<RequireAuth><HomeRoute /></RequireAuth>} />
+                    <Route path="/book"    element={<RequireAuth><BookRoute /></RequireAuth>} />
+                    <Route path="/chat"    element={<RequireAuth><ChatRoute /></RequireAuth>} />
+                    <Route path="/profile" element={<RequireAuth><ProfileRoute /></RequireAuth>} />
+                    <Route path="/payment/return" element={<RequireAuth><PaymentReturnScreen /></RequireAuth>} />
+
+                    {/* Catch-all: anon → /login via RequireAuth; authed → /home */}
+                    <Route path="*" element={
+                      <RequireAuth>
+                        <Navigate to="/home" replace />
+                      </RequireAuth>
+                    } />
                   </Routes>
                 </Suspense>
               )}
@@ -401,6 +420,5 @@ export default function App() {
       {/* Tweaks panel — host-protocol aware */}
       <TweaksRoot />
     </div>
-    </QueryClientProvider>
   );
 }
