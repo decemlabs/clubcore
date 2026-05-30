@@ -29,6 +29,7 @@ __all__ = (
     "fetch_available_slots",
     "fetch_client_membership",
     "fetch_client_next_booking",
+    "fetch_client_payment_status",
     "fetch_client_payments_page",
     "fetch_client_pt_sessions_page",
     "fetch_client_visits_page",
@@ -482,3 +483,38 @@ async def fetch_trainers_catalog(
         )
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Phase 71 CPAY-03 — IDOR-safe coarse payment status reader
+# ---------------------------------------------------------------------------
+
+
+async def fetch_client_payment_status(
+    session: AsyncSession,
+    payment_id: UUID,
+    client_id: UUID,
+) -> dict[str, object] | None:
+    """Coarse online payment status for a specific client (CPAY-03, D-20-IDOR).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of OnlinePayment.
+    Verified columns (apps/backend/app/modules/online_payments/models.py:58-112):
+      - id           PgUUID (UUIDPkMixin)
+      - client_id    PgUUID NOT NULL (IDOR filter — fk_online_payments_client_id_clients)
+      - status       Text NOT NULL ('pending' | 'succeeded' | 'canceled')
+
+    IDOR: mandatory :payment_id AND :client_id bind params — non-owned rows
+    return None; service layer raises NotFoundError → 404-collapse (D-20-IDOR).
+    Anti-oracle (CPAY-03): SELECT projects ONLY id + status — never exposes
+    membership_plan_id, pt_package_plan_id, amount_kopecks, or activation details.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT id, status FROM online_payments "
+                "WHERE id = :payment_id AND client_id = :client_id"
+            ),
+            {"payment_id": str(payment_id), "client_id": str(client_id)},
+        )
+    ).mappings().one_or_none()
+    return dict(row) if row else None

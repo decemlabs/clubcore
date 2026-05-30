@@ -220,3 +220,33 @@ class ClientCheckInResponse(ResponseData):
     gym_date: date
     checked_in_at: datetime
     channel: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 71 CPAY-01..05 — checkout write + status read schemas
+# ---------------------------------------------------------------------------
+
+
+class ClientCheckoutRequest(ResponseData):
+    """Request body for client-initiated checkout (CPAY-01/02).
+
+    No fields for membership (plan_id in path); for PT the idempotency_key is
+    supplied via Idempotency-Key header (D-71-04), not body.
+    """
+
+
+class ClientCheckoutResponse(ResponseData):
+    """Checkout response: redirect URL + online_payment_id for status polling (CPAY-03)."""
+
+    online_payment_id: UUID
+    confirmation_url: str  # redirect to ЮKassa — never null for redirect flow
+
+
+class ClientPaymentStatusResponse(ResponseData):
+    """Coarse payment status (CPAY-03 anti-oracle).
+
+    Only 'pending' | 'succeeded' | 'canceled' — never activation or membership details.
+    """
+
+    id: UUID
+    status: str  # Literal['pending', 'succeeded', 'canceled'] at runtime
