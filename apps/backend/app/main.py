@@ -62,6 +62,7 @@ from app.core.dependencies import (
     register_booking_completer,
     register_booking_for_client_canceller,  # Phase 70 D-70-05 — HTTP-only single-wire.
     register_booking_for_client_creator,  # Phase 70 D-70-01 — HTTP-only single-wire.
+    register_visit_client_qr_creator,  # Phase 70 D-70-11 — HTTP-only single-wire.
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
     register_client_loader,  # Phase 68 D-08 — client principal composition-root slot.
@@ -578,6 +579,16 @@ def create_app() -> FastAPI:
     # reaches these writes ONLY through core.dependencies accessors.
     register_booking_for_client_creator(bookings_service.create_booking_for_client)
     register_booking_for_client_canceller(bookings_service.cancel_booking_for_client)
+
+    # Phase 70 D-70-11 / D-20-MODULE — client QR self check-in Protocol slot.
+    # HTTP-only single-wire (QR scan endpoint is an HTTP POST; no ARQ or bot
+    # path). Zero new ignore_imports — client_portal reaches this write ONLY
+    # through core.dependencies accessor.
+    from app.modules.visits import (
+        service as visits_service,
+    )
+
+    register_visit_client_qr_creator(visits_service.create_visit_client_qr)
 
     # Phase 42 D-42-26 / EMAIL-04 — REG-29-03 double-wire of the EmailDispatcher
     # slot. The IDENTICAL symbol reference ``enqueue_email_dispatch`` is also

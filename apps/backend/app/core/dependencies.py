@@ -1572,3 +1572,65 @@ async def cancel_booking_for_client(
     return await _booking_for_client_canceller(
         session, client_id=client_id, booking_id=booking_id, cancel_reason=cancel_reason
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 70 D-70-11 / D-20-MODULE — VisitClientQrCreator slot.
+#
+# Allows client_portal to invoke visits.service.create_visit_client_qr
+# WITHOUT importing app.modules.visits directly (D-20-MODULE: zero new
+# ignore_imports). Value-returning callable; mirrors BookingForClientCreator
+# shape above. Defensive-raise accessor — a missing wiring in the QR check-in
+# path is a hard misconfiguration.
+#
+# HTTP-only single-wire (no ARQ or bot entry path; client portal does not run
+# in the worker). VisitResponse type is late-bound via TYPE_CHECKING to
+# respect the core-not-depend-on-modules import contract.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+VisitClientQrCreator = Callable[..., Awaitable[Any]]
+"""Async callable: (session, client_id: UUID) -> VisitResponse.
+
+Return type is ``Any`` at this scope because ``VisitResponse`` lives in
+``app.modules.visits.schemas`` — importing it here would violate the
+``core-not-depend-on-modules`` import-linter contract. Type safety is
+enforced at the service callsite (visits/service.py) and at the accessor
+callsites in client_portal which type-narrows via its own local schema.
+"""
+
+_visit_client_qr_creator: VisitClientQrCreator | None = None
+
+
+def register_visit_client_qr_creator(creator: VisitClientQrCreator) -> None:
+    """Composition-root setter — called by ``app.main.create_app()`` (Phase 70 D-70-11).
+
+    HTTP-only single-wire (client QR check-in endpoint has no ARQ or bot entry
+    path). Idempotent: re-registering replaces the slot (mirrors WR-05
+    reasoning; useful for tests that inject a stub).
+    """
+    global _visit_client_qr_creator
+    _visit_client_qr_creator = creator
+
+
+async def create_visit_client_qr(
+    session: AsyncSession,
+    client_id: UUID,
+) -> Any:
+    """Consumer entry point — used by ``app.modules.client_portal`` (Phase 70 D-70-11).
+
+    Defensive-raise when the slot is not registered (QR check-in write MUST be
+    wired; mirrors ``get_payment_recorder`` at line ~398 — a missing wiring
+    is a hard misconfiguration, not a recoverable state).
+
+    Return type is ``Any``; callers (client_portal) map the result to their
+    own ``ClientCheckInResponse`` schema. Zero new ``ignore_imports`` —
+    ``client_portal`` never imports ``app.modules.visits`` directly.
+    """
+    if _visit_client_qr_creator is None:
+        raise RuntimeError(
+            "VisitClientQrCreator slot not registered — register via "
+            "app.core.dependencies.register_visit_client_qr_creator() in "
+            "app/main.py:create_app() (HTTP-only single-wire; see Phase 70 D-20-MODULE)."
+        )
+    return await _visit_client_qr_creator(session, client_id)

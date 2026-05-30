@@ -262,6 +262,39 @@ async def create_visit_self_checkin(
     )
 
 
+# ─── Public client QR path (Phase 70 CCHK-02) ────────────────────────────────
+async def create_visit_client_qr(
+    session: AsyncSession,
+    client_id: UUID,
+) -> VisitResponse:
+    """QR self check-in path — Phase 70 CCHK-02 (D-70-10/11).
+
+    client_id comes strictly from the verified QR token's ``sub`` claim — the
+    caller (client_portal service) is responsible for decoding the token and
+    passing only the extracted UUID. This wrapper never inspects cookies or
+    request parameters — cross-client check-in is structurally impossible at
+    this layer (D-70-10).
+
+    Calls ``_create_visit_with_anti_fraud`` with channel='client_qr' and
+    checked_in_by=None (self-service nullable, D-40-05 — mirrors telegram_bot
+    path). A same-day replay collapses to DuplicateCheckinError('duplicate_checkin')
+    via uq_visits_client_id_gym_date (criterion #5 replay guard, D-70-07).
+    Active-membership and gym-hours checks are unchanged — single source of
+    truth (D-70-09).
+
+    Returns VisitResponse only (discards membership end_date — the QR scanner
+    has no DM target unlike the telegram_bot path in D-22-11).
+    """
+    visit_response, _end_date = await _create_visit_with_anti_fraud(
+        session,
+        client_id=client_id,
+        channel="client_qr",
+        checked_in_by=None,
+        audit_actor_user_id=None,
+    )
+    return visit_response
+
+
 # ─── Read-side ───────────────────────────────────────────────────────────────
 async def list_visits(session: AsyncSession, query: VisitListQuery) -> PaginatedData[VisitResponse]:
     """GET /api/v1/visits — paginated list, default sort checked_in_at DESC (VIS-EP-01)."""
