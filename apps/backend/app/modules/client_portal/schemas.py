@@ -124,10 +124,18 @@ class ClientCreateBookingRequest(ResponseData):
     NO client_id field — the principal from require_client() is the IDOR-safe
     source (T-70-11 mitigated structurally; extra='forbid' rejects any
     injected client_id from the body).
+
+    CR-03 (Phase 71 fix): ``pt_package_id`` is now OPTIONAL. When the client
+    omits it (or sends null), the service resolves the client's active PT-package
+    server-side via ``get_active_pt_package``. This lets the PWA skip the
+    burden of reading and passing the active package UUID, and ensures the
+    ``no_active_pt_package`` CBOOK-04 redirect branch is actually reachable
+    (previously an empty-string sent by BookScreen always 422'd before the
+    service even ran).
     """
 
     slot_id: UUID
-    pt_package_id: UUID
+    pt_package_id: UUID | None = None
 
 
 class ClientBookingResponse(ResponseData):
