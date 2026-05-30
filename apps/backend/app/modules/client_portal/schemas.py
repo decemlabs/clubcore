@@ -111,3 +111,57 @@ class ClientCatalogTrainerResponse(ResponseData):
 
     id: UUID
     full_name: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 70 CBOOK-02..05 — booking write, cancel, and available-slots schemas
+# ---------------------------------------------------------------------------
+
+
+class ClientCreateBookingRequest(ResponseData):
+    """POST /client/booking body (Phase 70 CBOOK-03 / T-70-11).
+
+    NO client_id field — the principal from require_client() is the IDOR-safe
+    source (T-70-11 mitigated structurally; extra='forbid' rejects any
+    injected client_id from the body).
+    """
+
+    slot_id: UUID
+    pt_package_id: UUID
+
+
+class ClientBookingResponse(ResponseData):
+    """Booking write response payload — client-safe projection (Phase 70 CBOOK-03/05).
+
+    Mirrors BookingResponse from app.modules.bookings.schemas but declared here
+    so client_portal never imports app.modules.bookings (D-20-MODULE).
+    """
+
+    id: UUID
+    slot_id: UUID
+    status: str
+    start_time: datetime
+    end_time: datetime
+
+
+class ClientAvailableSlotItem(ResponseData):
+    """Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).
+
+    NO owner-only economics. Verified column sources:
+      trainer_availability_slots (app/modules/schedule/models.py:64-152):
+        id           UUID PK
+        trainer_id   UUID FK trainers.id
+        start_time   DateTime(timezone=True)
+        end_time     DateTime(timezone=True)
+        status       String(16)
+      trainers (app/modules/trainers/models.py:23-43):
+        full_name    Text NOT NULL
+    specialization is NOT on the Trainer model in v1 (reserved for future);
+    omitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).
+    """
+
+    slot_id: UUID
+    trainer_id: UUID
+    trainer_name: str
+    start_time: datetime
+    end_time: datetime

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.pagination import PaginatedData
 
 __all__ = (
+    "fetch_available_slots",
     "fetch_client_membership",
     "fetch_client_next_booking",
     "fetch_client_payments_page",
@@ -35,6 +36,90 @@ __all__ = (
     "fetch_pt_packages_catalog",
     "fetch_trainers_catalog",
 )
+
+
+async def fetch_available_slots(
+    session: AsyncSession,
+    *,
+    trainer_id: UUID | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict[str, object]], int]:
+    """Active future slots bookable by a client (CBOOK-02 / D-70-04 / T-70-13).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of TrainerAvailabilitySlot
+    or Trainer.
+
+    Verified column sources:
+      trainer_availability_slots (app/modules/schedule/models.py:64-152):
+        id           UUID PK
+        trainer_id   UUID FK trainers.id
+        start_time   DateTime(timezone=True)
+        end_time     DateTime(timezone=True)
+        status       String(16) IN ('active','booked','cancelled')
+      trainers (app/modules/trainers/models.py:23-43):
+        id           UUID PK
+        full_name    Text NOT NULL
+        is_active    Boolean NOT NULL DEFAULT true
+        deleted_at   DateTime NULLABLE (SoftDeleteMixin)
+
+    Filters:
+      - s.status = 'active' (open for booking; 'booked'/'cancelled' excluded)
+      - s.start_time > now() (future slots only)
+      - :trainer_id IS NULL OR s.trainer_id = :trainer_id (PT-package trainer pin)
+      - t.is_active = true AND t.deleted_at IS NULL (alive trainers only)
+
+    Returns (rows, total) — rows are dicts with slot_id, trainer_id, trainer_name,
+    start_time, end_time. No client_id filter here — caller derives trainer_id
+    from the client's active PT-package (or None for all trainers).
+    No client_id bind: non-owned public catalog filtered by package trainer pin.
+    IDOR: client_id does NOT appear in the SQL — ownership is enforced at the
+    service layer (the client's active PT-package is resolved first, then
+    trainer_id is extracted from it).
+    """
+    bind: dict[str, object] = {
+        "trainer_id": str(trainer_id) if trainer_id is not None else None,
+        "limit": limit,
+        "offset": offset,
+    }
+
+    count_row = (
+        await session.execute(
+            text(
+                "SELECT COUNT(*) AS cnt "
+                "FROM trainer_availability_slots s "
+                "JOIN trainers t ON s.trainer_id = t.id "
+                "WHERE s.status = 'active' "
+                "  AND s.start_time > now() "
+                "  AND (:trainer_id IS NULL OR s.trainer_id = :trainer_id::uuid) "
+                "  AND t.is_active = true "
+                "  AND t.deleted_at IS NULL"
+            ),
+            {"trainer_id": str(trainer_id) if trainer_id is not None else None},
+        )
+    ).mappings().one()
+    total = int(count_row["cnt"])
+
+    rows = (
+        await session.execute(
+            text(
+                "SELECT s.id AS slot_id, s.trainer_id, t.full_name AS trainer_name, "
+                "  s.start_time, s.end_time "
+                "FROM trainer_availability_slots s "
+                "JOIN trainers t ON s.trainer_id = t.id "
+                "WHERE s.status = 'active' "
+                "  AND s.start_time > now() "
+                "  AND (:trainer_id IS NULL OR s.trainer_id = :trainer_id::uuid) "
+                "  AND t.is_active = true "
+                "  AND t.deleted_at IS NULL "
+                "ORDER BY s.start_time ASC "
+                "LIMIT :limit OFFSET :offset"
+            ),
+            bind,
+        )
+    ).mappings().all()
+
+    return [dict(r) for r in rows], total
 
 
 async def fetch_client_membership(
