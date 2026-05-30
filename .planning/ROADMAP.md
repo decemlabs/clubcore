@@ -108,7 +108,13 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   3. Attempting checkout without a client email returns 422 `client_email_required_for_online_payment` (54-ФЗ fiscal receipt gate)
   4. The PWA Home, Profile, Book, Plans, Checkout, and QR screens fetch data from the real client backend; the mock data layer is replaced for these six screens
   5. Net-new screens (Chat, Referral, trainer reviews, notification inbox, gym-info) display a "coming soon" placeholder — no backend calls are made from them; the service worker never caches `/api/*` requests
-**Plans**: TBD
+**Plans**: 6 plans (4 waves)
+- [ ] 71-01-PLAN.md — extract _sell_subject_core actor-agnostic helper + checkout Protocol slot + main.py wiring (CPAY-01..05)
+- [ ] 71-02-PLAN.md — client_portal checkout endpoints (membership/PT POST + status GET) via Protocol slot; split idempotency; IDOR/anti-oracle status (CPAY-01..05)
+- [ ] 71-03-PLAN.md — checkout integration tests: success, dual idempotency, 422 email gate, IDOR 404, anti-oracle status, duplicate-webhook activation (CPAY-01..05)
+- [ ] 71-04-PLAN.md — PWA React Query foundation: queryClient + clientQueries hooks + data/index.js swap seam + ComingSoon + ESLint boundary (PWA-05)
+- [ ] 71-05-PLAN.md — wire Home/Profile/Plans/Checkout + payment return route (anti-oracle); net-new screens → ComingSoon (PWA-05, CPAY-01..03)
+- [ ] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
 **UI hint**: yes
 
 ### Phase 72: OpenAPI Handoff + CI + E2E Verification
@@ -142,7 +148,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 0/TBD | Not started | - |
-| 71. Client Checkout + Full PWA Wiring | v2.0 | 0/TBD | Not started | - |
+| 71. Client Checkout + Full PWA Wiring | v2.0 | 0/6 | Not started | - |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 
 ---
