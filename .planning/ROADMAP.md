@@ -45,7 +45,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 68: Client Auth Foundation** - Separate `ClientPrincipal` / `require_client()` / distinct cookies / anti-oracle OTP; unconditional blocker for all domain work (completed 2026-05-29)
 - [x] **Phase 69: Client Read Endpoints + PWA Stack Alignment** - All client-scoped read endpoints (membership, history, catalogs) + PWA bun→pnpm/TS/Vite-6 alignment with verified build; IDOR sweep covers read surface (completed 2026-05-29)
 - [x] **Phase 70: Client Bookings + QR Self Check-In** - Self-booking (race-safe via existing partial-UNIQUE), cancellation policy, signed short-lived QR token, and QR-triggered visit creation via existing anti-fraud path (completed 2026-05-30)
-- [ ] **Phase 71: Client Checkout + Full PWA Screen Wiring** - Client-initiated ЮKassa membership/PT-package purchase (server-side price, webhook-only activation, 54-ФЗ email gate); all PWA screens wired to real backend
+- [x] **Phase 71: Client Checkout + Full PWA Screen Wiring** - Client-initiated ЮKassa membership/PT-package purchase (server-side price, webhook-only activation, 54-ФЗ email gate); all PWA screens wired to real backend (completed 2026-05-30)
 - [ ] **Phase 72: OpenAPI Handoff + CI + E2E Verification** - `Client-Portal` tag in spec, `_v20Checks` guards, client-pwa CI gates, drift gate confirms staff contract byte-identical; live E2E runbook gate
 
 ## Phase Details
@@ -145,7 +145,7 @@ Plans:
 - [x] 71-03-PLAN.md — checkout integration tests: success, dual idempotency, 422 email gate, IDOR 404, anti-oracle status, duplicate-webhook activation (CPAY-01..05)
 - [x] 71-04-PLAN.md — PWA React Query foundation: queryClient + clientQueries hooks + data/index.js swap seam + ComingSoon + ESLint boundary (PWA-05)
 - [x] 71-05-PLAN.md — wire Home/Profile/Plans/Checkout + payment return route (anti-oracle); net-new screens → ComingSoon (PWA-05, CPAY-01..03)
-- [ ] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
+- [x] 71-06-PLAN.md — wire Book/QR screens to Phase-70 endpoints (DEPENDS ON PHASE 70) (PWA-05)
 
 **UI hint**: yes
 
@@ -183,7 +183,7 @@ Plans:
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete    | 2026-05-30 |
-| 71. Client Checkout + Full PWA Wiring | v2.0 | 5/6 | In Progress|  |
+| 71. Client Checkout + Full PWA Wiring | v2.0 | 6/6 | Complete   | 2026-05-30 |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 
 ---
