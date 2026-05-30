@@ -385,5 +385,6 @@ __all__ = (
     "idempotent_response",
     "load_idempotency_response",
     "store_idempotency_response",
+    "verify_client_idempotency",  # Phase 70 addition
     "verify_idempotency",
 )
