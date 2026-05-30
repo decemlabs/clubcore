@@ -34,8 +34,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### My Bookings + Self-Booking
 
-- [ ] **CBOOK-01**: Клиент видит свои предстоящие и прошедшие брони
-- [ ] **CBOOK-02**: Клиент видит доступные слоты тренеров для записи
+- [x] **CBOOK-01**: Клиент видит свои предстоящие и прошедшие брони
+- [x] **CBOOK-02**: Клиент видит доступные слоты тренеров для записи
 - [x] **CBOOK-03**: Клиент бронирует слот к тренеру, используя свой активный PT-пакет (idempotency-keyed, race-safe через существующий partial-UNIQUE)
 - [x] **CBOOK-04**: Клиент без активного PT-пакета не может записаться; ответ направляет в Plans/Checkout (`Booking.pt_package_id` NOT NULL)
 - [x] **CBOOK-05**: Клиент отменяет свою бронь в рамках политики окна отмены (через существующий booking FSM)
@@ -158,8 +158,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PWA-04 | Phase 69 | Complete |
 | PWA-06 | Phase 69 | Complete |
 | PWA-07 | Phase 69 | Complete |
-| CBOOK-01 | Phase 70 | Pending |
-| CBOOK-02 | Phase 70 | Pending |
+| CBOOK-01 | Phase 70 | Complete |
+| CBOOK-02 | Phase 70 | Complete |
 | CBOOK-03 | Phase 70 | Complete |
 | CBOOK-04 | Phase 70 | Complete |
 | CBOOK-05 | Phase 70 | Complete |

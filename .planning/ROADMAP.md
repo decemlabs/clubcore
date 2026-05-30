@@ -117,7 +117,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 70-03-PLAN.md — Client booking POST (idempotent, 422 no_active_pt_package) + cancel (IDOR 404) + available-slots read; race + IDOR tests
+- [x] 70-03-PLAN.md — Client booking POST (idempotent, 422 no_active_pt_package) + cancel (IDOR 404) + available-slots read; race + IDOR tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -182,7 +182,7 @@ Plans:
 | 63-67. API Handoff + Production Hardening | v1.11 | 26/26 | Complete | 2026-05-29 |
 | 68. Client Auth Foundation | v2.0 | 6/6 | Complete    | 2026-05-29 |
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
-| 70. Client Bookings + QR Self Check-In | v2.0 | 2/4 | In Progress|  |
+| 70. Client Bookings + QR Self Check-In | v2.0 | 3/4 | In Progress|  |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 0/6 | Not started | - |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 0/TBD | Not started | - |
 
