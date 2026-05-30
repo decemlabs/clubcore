@@ -196,9 +196,10 @@ async def _seed_active_membership(db_session: AsyncSession, client_id: UUID) -> 
 
 
 def _patch_gym_hours_always_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Monkeypatch gym hours to 00:00–23:59 so tests pass at any wall-clock time."""
-    import app.modules.visits.service as svc_mod
+    """Monkeypatch gym hours to 00:00-23:59 so tests pass at any wall-clock time."""
     from datetime import time
+
+    import app.modules.visits.service as svc_mod
 
     settings = get_settings()
     monkeypatch.setattr(settings, "gym_hours_start", time(0, 0))
@@ -226,7 +227,6 @@ async def test_expired_qr_token_rejected(
     staff = await _seed_staff(db_session)
     client = await _seed_client(db_session, staff, phone="+79200000001")
 
-    settings = get_settings()
     # Mint a token that expired: now = 120s ago > (TTL=60 + leeway=30)
     past = datetime.now(tz=UTC) - timedelta(seconds=120)
     expired_token = encode_qr_token(client.id, now=past)
@@ -241,7 +241,9 @@ async def test_expired_qr_token_rejected(
     # The specific error discriminator is in exc.message (passed as the first arg to the
     # constructor). This mirrors how unit tests check exc_info.value.message == "token_expired".
     assert body["code"] == "invalid_token", f"Expected 'invalid_token', got: {body['code']}"
-    assert body["message"] == "token_expired", f"Expected message 'token_expired', got: {body['message']}"
+    assert body["message"] == "token_expired", (
+        f"Expected message 'token_expired', got: {body['message']}"
+    )
 
 
 # ---------------------------------------------------------------------------

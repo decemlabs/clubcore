@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from time import time as epoch_time
 from uuid import uuid4
 
 import pytest

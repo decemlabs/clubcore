@@ -62,7 +62,6 @@ from app.core.dependencies import (
     register_booking_completer,
     register_booking_for_client_canceller,  # Phase 70 D-70-05 — HTTP-only single-wire.
     register_booking_for_client_creator,  # Phase 70 D-70-01 — HTTP-only single-wire.
-    register_visit_client_qr_creator,  # Phase 70 D-70-11 — HTTP-only single-wire.
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
     register_client_loader,  # Phase 68 D-08 — client principal composition-root slot.
@@ -77,6 +76,7 @@ from app.core.dependencies import (
     register_trainer_by_id_resolver,
     register_user_loader,
     register_user_session_invalidator,  # Phase 43 D-43-26/27 — single-wire.
+    register_visit_client_qr_creator,  # Phase 70 D-70-11 — HTTP-only single-wire.
     register_yookassa_client_provider,  # Phase 47 D-47-01 — double-wire.
 )
 from app.core.exceptions import register_exception_handlers
