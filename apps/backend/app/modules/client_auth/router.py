@@ -48,7 +48,7 @@ from app.modules.client_auth.schemas import (
     ClientOtpVerifyBody,
 )
 
-router = APIRouter(tags=["Client"])
+router = APIRouter(tags=["Client-Portal"])
 
 
 @router.post(

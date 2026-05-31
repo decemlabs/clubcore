@@ -148,10 +148,13 @@ OPENAPI_TAGS: list[dict[str, str]] = [
         ),
     },
     {
-        "name": "Client",
+        "name": "Client-Portal",
         "description": (
-            "Client-portal — authenticated gym member self-service: OTP auth, "
-            "session management, profile (Phase 68 CAUTH-01..06 / CISO-01..05)."
+            "Client-portal — authenticated gym member self-service: phone-OTP auth, "
+            "session management, profile, membership/PT-package read, bookings, QR "
+            "check-in, checkout, and payment status "
+            "(Phases 68–71 CAUTH-01..06 / CHOME-01..03 / CHIST-01..03 / "
+            "CPLAN-01..03 / CBOOK-02..05 / CCHK-01..03 / CPAY-01..05)."
         ),
     },
     {
