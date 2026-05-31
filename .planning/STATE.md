@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.4 UI-SPEC approved
-last_updated: "2026-05-31T15:26:33.640Z"
+last_updated: "2026-05-31T15:45:08.049Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 34
-  completed_plans: 32
+  completed_plans: 33
   percent: 67
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 ## Current Position
 
 Phase: 999.4 (client-pwa-checkout-visual-restyle) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-05-31
 
-Progress: [█████████░] 94%
+Progress: [██████████] 97%
 
 ## v2.0 Roadmap Summary
 
@@ -77,6 +77,7 @@ Progress: [█████████░] 94%
 | Phase 999.4 P01 | 15min | 3 tasks | 5 files |
 | Phase 999.4 P04 | 12min | 2 tasks | 4 files |
 | Phase 999.4 P02 | 12min | 2 tasks | 5 files |
+| Phase 999.4 P03 | 16m | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,10 @@ Progress: [█████████░] 94%
 - **D-999.4-02-A**: fiscal_receipts D-11 join goes via memberships.plan_id/pt_packages.plan_id (2-hop JOIN through memberships/pt_packages→payments→fiscal_receipts) — no direct online_payments→fiscal_receipts link exists
 - **D-999.4-02-B**: PromoNotFoundError etc. are local ValidationAppError subclasses in promo_codes/service.py with stable code= attributes (bounded to promo domain, not in app.core.exceptions)
 - **D-999.4-02-C**: validate_promo_code uses integer floor division only (no float); percentage discount_value=percent*100; fixed caps at plan price; 6 D-09 error codes
+- **D-999.4-03-A**: price_override_kopecks replaces plan price after server-side read — description still from plan row; ЮKassa receipt shows plan name at discounted amount
+- **D-999.4-03-B**: applied_promo_code_id persisted at INSERT time so succeeded-webhook is self-contained (reads row.promo_code_id, no extra state via webhook body)
+- **D-999.4-03-C**: webhook handler uses raw SQL text() for plan_price lookup — no cross-module ORM import in handlers.py (D-54-08 pattern); discount_kopecks = max(0, plan_price - row.amount_kopecks)
+- **D-999.4-03-D**: webhook redemption tests verify via direct record_promo_redemption calls (SAVEPOINT-mode db_session incompatible with session.begin() in webhook handler)
 
 ### Blockers/Concerns
 
@@ -118,6 +123,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T15:26:33.636Z
+Last session: 2026-05-31T15:45:08.045Z
 Stopped at: Phase 999.4 UI-SPEC approved
 Resume: Execute 68-05-PLAN.md next.
