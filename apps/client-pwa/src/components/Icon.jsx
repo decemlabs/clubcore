@@ -57,6 +57,13 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.
     wifiOff: <><path d="M1 1l22 22M16.7 16.7A10 10 0 005.3 5.3M10.7 10.7A6 6 0 0113 12.6M10.8 16.8A3 3 0 0115 17" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/><circle cx="12" cy="20" r="1" fill={color}/></>,
     alertCircle: <><circle cx="12" cy="12" r="9" stroke={color} strokeWidth={s} fill="none"/><path d="M12 8v4M12 16h0" stroke={color} strokeWidth={s + 0.4} strokeLinecap="round"/></>,
     x: <><path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/></>,
+    // Phase 999.5 onboarding icons
+    flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/><line x1="4" x2="4" y1="22" y2="15" stroke={color} strokeWidth={s} strokeLinecap="round"/></>,
+    idCard: <><rect x="2" y="5" width="20" height="14" rx="2.5" stroke={color} strokeWidth={s} fill="none"/><circle cx="9" cy="11" r="2" stroke={color} strokeWidth={s} fill="none"/><path d="M6.2 15.2a3 3 0 0 1 5.6 0" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/><path d="M15.5 10.5h3M15.5 14h3" stroke={color} strokeWidth={s} strokeLinecap="round"/></>,
+    ruler: <><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2" stroke={color} strokeWidth={s} strokeLinecap="round"/></>,
+    barbell: <><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
+    lightning: <><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
+    heart: <><path d="M20.8 5.6a5 5 0 0 0-8.8-1.6A5 5 0 0 0 3.2 5.6c-1.6 2.5-.8 5.5 3 8.7L12 19l5.8-4.7c3.8-3.2 4.6-6.2 3-8.7z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24"

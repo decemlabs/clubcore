@@ -1151,3 +1151,58 @@ textarea:focus-visible {
   margin-top: 24px;
 }
 
+/* ── Onboarding questionnaire — Phase 999.5-04 ───────────────────────────── */
+/* New keyframes (scene-in, float, spot-float) — UI-SPEC §Animations verbatim */
+@keyframes scene-in {
+  0%   { transform: rotate(-4deg) scale(0.5); opacity: 0; }
+  60%  { transform: rotate(-4deg) scale(1.06); }
+  100% { transform: rotate(-4deg) scale(1); opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50%       { transform: translateY(-7px) rotate(8deg); }
+}
+
+@keyframes spot-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50%       { transform: translateY(-6px) rotate(10deg); }
+}
+
+/* pop keyframe — also used for «Готово!» circle entrance (reuse icon-pop spec) */
+@keyframes pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Field primitive — onboarding name input + receipt-email input */
+.field {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field.focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field.error {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+/* Topbar button pill — back/close in onboarding + receipt email screens */
+.topbar-btn {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  box-shadow: var(--sh-1);
+  border-radius: 999px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, background 0.15s;
+}
+.topbar-btn:active { transform: scale(0.94); background: var(--surface-2); }
+

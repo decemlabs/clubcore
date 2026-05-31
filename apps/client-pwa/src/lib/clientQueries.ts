@@ -84,11 +84,27 @@ interface HomeData {
   membershipState: 'active' | 'newbie' | 'lapsed'
 }
 
+/** GET /client/me response shape — Phase 999.5 profile fields (camelCase wire, D-91). */
+interface ClientMeData {
+  firstName: string
+  lastName: string
+  phone: string
+  email: string | null
+  goal: 'lose_weight' | 'gain_mass' | 'tone' | 'maintain' | null
+  heightCm: number | null
+  weightKg: number | null
+  onboardingCompletedAt: string | null
+}
+
 interface PaymentStatusData {
   id: string
   status: 'pending' | 'succeeded' | 'canceled'
   /** ЮKassa fiscal receipt URL — populated by backend only when a succeeded receipt exists (D-11). */
   receiptUrl?: string | null
+  /** Receipt destination email — populated only on succeeded status (anti-oracle T-999.5-09). */
+  receiptEmail?: string | null
+  /** Receipt destination phone — populated only on succeeded status (anti-oracle T-999.5-09). */
+  receiptPhone?: string | null
 }
 
 interface CheckoutResult {
@@ -123,24 +139,99 @@ export function useClientHome() {
 // ---------------------------------------------------------------------------
 
 /**
- * GET /api/v1/client/me — auth probe.
+ * GET /api/v1/client/me — auth probe + profile data (Phase 999.5).
  *
  * Used by AuthContext to bootstrap auth status on mount.
  * retry: false so a 401 probe fails fast to anon (no retry storm).
  * /client/me is CLIENT_AUTH_EXEMPT — a 401 here does NOT trigger
  * single-flight refresh; clientFetcher throws ApiError('<code>') from the body.
  * Treat ANY thrown error as anon.
+ *
+ * Also exposes onboarding fields (goal/heightCm/weightKg/onboardingCompletedAt)
+ * so the auto-redirect gate in HomeScreen can read onboardingCompletedAt (D-04/D-05).
  */
 export function useClientMe(enabled = true) {
   return useQuery({
     queryKey: clientPortalKeys.me(),
     queryFn: async () => {
       const res = await clientRequest('get', '/api/v1/client/me')
-      return (res as { data: unknown }).data
+      return (res as { data: ClientMeData }).data
     },
     enabled,
     retry: false,
     staleTime: 30_000,
+  })
+}
+
+/**
+ * PATCH /api/v1/client/me — write onboarding profile fields (D-08).
+ *
+ * Atomic single-submit on «Перейти в "Мой зал"» — steps held in local state until finish.
+ * MUST include onboardingCompleted: true on the finish call (D-08) — omitting it causes
+ * the auto-redirect loop to re-fire after completion (SUPERSEDED-PATTERN note in PLAN.md).
+ * onSettled invalidates /client/me + /client/home so the onboarding gate reruns correctly.
+ */
+export function useUpdateClientProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: {
+      firstName?: string
+      goal?: string
+      heightCm?: number
+      weightKg?: number
+      onboardingCompleted?: boolean
+      email?: string
+    }) => {
+      const res = await clientRequest('patch', '/api/v1/client/me', { body: payload })
+      return (res as { data: ClientMeData }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.me() })
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.home() })
+    },
+  })
+}
+
+/**
+ * PATCH /api/v1/client/me — skip path: write ONLY the onboarding flag (D-05/D-08).
+ *
+ * «Пропустить»/«Заполью позже» sends body { onboardingCompleted: true } with NO profile
+ * fields. This is a distinct hook to enforce the D-08 invariant at the call site — callers
+ * cannot accidentally include profile fields in the skip path.
+ * onSettled invalidates /client/me + /client/home.
+ */
+export function useCompleteOnboarding() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await clientRequest('patch', '/api/v1/client/me', {
+        body: { onboardingCompleted: true },
+      })
+      return (res as { data: ClientMeData }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.me() })
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.home() })
+    },
+  })
+}
+
+/**
+ * PATCH /api/v1/client/me — write email for receipt gate (D-02/D-10).
+ *
+ * Called from ReceiptEmailGate before the ЮKassa redirect.
+ * onSettled invalidates /client/me so subsequent reads see the updated email.
+ */
+export function useUpdateClientEmail() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      const res = await clientRequest('patch', '/api/v1/client/me', { body: { email } })
+      return (res as { data: ClientMeData }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.me() })
+    },
   })
 }
 

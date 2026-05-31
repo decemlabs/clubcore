@@ -39,6 +39,10 @@ export {
   useCreateBooking,
   useCancelBooking,
   useClientQrToken,
+  // Plan 999.5-04: onboarding profile mutations
+  useUpdateClientProfile,
+  useCompleteOnboarding,
+  useUpdateClientEmail,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────
