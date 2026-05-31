@@ -166,6 +166,34 @@ function PaymentSucceededView({ data, onDone }) {
         <div className="state-title">Готово!</div>
         <div className="state-desc">Оплата подтверждена.</div>
 
+        {/* D-09: receipt destination — info-only, no editing (anti-oracle: rendered
+            ONLY here inside the succeeded branch; never in loading/pending/canceled) */}
+        {(data?.receiptEmail || data?.receiptPhone) && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginTop: 16,
+            padding: '10px 14px',
+            background: 'var(--surface)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 'var(--r-md)',
+          }}>
+            <Icon name="mail" size={20} color="var(--text-2)" />
+            <div>
+              <div style={{
+                fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
+                color: 'var(--text-3)', textTransform: 'uppercase',
+              }}>
+                ЧЕК ОТПРАВЛЕН НА
+              </div>
+              <div style={{
+                fontSize: 15, fontWeight: 650, letterSpacing: -0.2,
+                color: 'var(--text)',
+              }}>
+                {data.receiptEmail ?? data.receiptPhone}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* state-actions at bottom */}
         <div
           className="state-actions"
