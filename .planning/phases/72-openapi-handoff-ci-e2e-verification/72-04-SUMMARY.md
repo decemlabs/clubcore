@@ -5,7 +5,7 @@ subsystem: handoff-documentation
 tags: [runbook, operator-evidence, e2e, yookassa, otp-auth, client-portal]
 dependency_graph:
   requires: [72-01, 72-02, 72-03]
-  provides: [v2.0-runbook, v2.0-operator-evidence-scaffold]
+  provides: [v2.0-runbook, v2.0-operator-evidence-scaffold, live-read-path-evidence]
   affects: [VER-01, VER-04]
 tech_stack:
   added: []
@@ -14,22 +14,23 @@ key_files:
   created:
     - .planning/handoff/clubcore-v2.0-runbook.md
     - .planning/milestones/v2.0-OPERATOR-EVIDENCE.md
-  modified: []
+  modified:
+    - .planning/milestones/v2.0-OPERATOR-EVIDENCE.md (RUN-00 flipped COMPLETE 2026-05-31 with real transcript)
 decisions:
   - "D-72-07: active membership + PT-package for read-path established via staff sell/activate (primary path), seed does not auto-grant membership/PT-package — seed_demo_data only creates the catalog plans"
   - "D-72-09: runbook depth mirrors clubcore-auth-runbook.md (577 lines, 8 sections, bilingual, curl+cookie-jar+CSRF pattern)"
-  - "D-72-06: ЮKassa checkout leg captured as RUN-01 OPERATOR-PENDING with trigger condition; read-path is hard gate (RUN-00 PENDING until human walkthrough)"
+  - "D-72-06: ЮKassa checkout leg captured as RUN-01 OPERATOR-PENDING with trigger condition; read-path hard gate PASSED (RUN-00 COMPLETE 2026-05-31)"
 metrics:
   duration: 3m
   completed_date: "2026-05-31"
-  tasks_completed: 2
-  tasks_pending: 1
+  tasks_completed: 3
+  tasks_pending: 0
   files_created: 2
 ---
 
 # Phase 72 Plan 04: v2.0 Runbook + E2E Evidence Scaffold Summary
 
-**One-liner:** Bilingual v2.0 client-portal runbook (577 lines, 8 sections, all /api/v1/client/* curl examples + CSRF discipline) + append-only operator-evidence scaffold (RUN-00 gate PENDING, RUN-01 ЮKassa OPERATOR-PENDING).
+**One-liner:** Bilingual v2.0 client-portal runbook (577 lines, 8 sections, all /api/v1/client/* curl examples + CSRF discipline) + live read-path walkthrough PASSED (RUN-00 COMPLETE 2026-05-31, real curl transcript) + ЮKassa leg OPERATOR-PENDING per D-72-06.
 
 ## Tasks Completed
 
@@ -37,12 +38,11 @@ metrics:
 |------|------|--------|-------|
 | 1 | Author v2.0 client-portal runbook | bdb7124b | .planning/handoff/clubcore-v2.0-runbook.md |
 | 2 | Scaffold v2.0 operator-evidence file | 95989c97 | .planning/milestones/v2.0-OPERATOR-EVIDENCE.md |
+| 3 | Live read-path E2E walkthrough (milestone gate) | 001fd7e9 | .planning/milestones/v2.0-OPERATOR-EVIDENCE.md (RUN-00 COMPLETE) |
 
 ## Tasks Pending
 
-| Task | Name | Status | Gate |
-|------|------|--------|------|
-| 3 | Live read-path E2E walkthrough (milestone gate) | CHECKPOINT:human-verify | blocking |
+None — all 3 tasks complete.
 
 ## Runbook Coverage (Task 1)
 
@@ -86,11 +86,37 @@ None — this plan creates documentation artifacts only; no UI components or dat
 
 None — runbook uses only dev-pinned OTP (111111, dev-only, ENVIRONMENT=dev guard) and ЮKassa SANDBOX test card; no production secrets committed. T-72-12 mitigated.
 
+## Live Read-Path Evidence (Task 3)
+
+`.planning/milestones/v2.0-OPERATOR-EVIDENCE.md` RUN-00-read-path-live — **COMPLETE 2026-05-31** (commit `001fd7e9`).
+
+**Requirements satisfied:** VER-01 (live E2E client flow) + VER-04 (runbook gate) per D-72-06 hard gate.
+
+**Walkthrough result:** Full sequence login → home → membership → slots → book → QR → check-in → history passed end-to-end against local `docker compose` stack. Real curl transcript captured (no fabrication, D-67-03 / T-72-10 mitigated).
+
+**Key evidence points (RUN-00-CAPTURED):**
+- `POST /api/v1/client/otp/request` → HTTP 202 (anti-oracle CAUTH-02)
+- `POST /api/v1/client/otp/verify` → HTTP 200, three cookies set (cc_client_access, cc_client_refresh, clubcore_client_csrf)
+- `GET /api/v1/client/home` → HTTP 200, membership active "Месяц безлимит", endDate 2026-06-29
+- `POST /api/v1/client/booking` → HTTP 201, booking `3a210c79…` confirmed
+- `GET /api/v1/client/qr-token` → HTTP 200, signed JWT returned
+- `POST /api/v1/client/check-in` → HTTP 200, visit `ac19dec9…` created
+- `GET /api/v1/client/history/visits` → HTTP 200, visit surfaced
+- `GET /api/v1/client/home` (re-check) → HTTP 200, `nextBooking.startTime` populated (2026-06-02)
+
+**Honest deviations recorded in evidence file:**
+- `/check-in` returned HTTP 200 (runbook anticipated 201) — visit was created correctly; runbook expectation was off.
+- `/history/pt-sessions` total=0 at capture — expected: PT-session materializes on attendance, booked slot is future-dated (2026-06-02). Not a failure.
+
+**ЮKassa leg (VER-02):** RUN-01 remains OPERATOR-PENDING per D-72-06 (intentional — credentialed sandbox checkout not a phase-completion blocker). Trigger condition and procedure documented in the evidence file.
+
 ## Self-Check: PASSED
 
 - [x] `.planning/handoff/clubcore-v2.0-runbook.md` exists (577 lines, ≥120 requirement met)
 - [x] Contains "111111", "5555 5555 5555 4477", "OPERATOR-PENDING", "/api/v1/client/"
 - [x] `.planning/milestones/v2.0-OPERATOR-EVIDENCE.md` exists
 - [x] Contains "RUN-00-read-path-live", "OPERATOR-PENDING", "append-only"
-- [x] Commits bdb7124b and 95989c97 verified in git log
-- [x] Task 3 (checkpoint:human-verify) NOT auto-passed — paused for operator
+- [x] Commits bdb7124b, 95989c97, and 001fd7e9 verified in git log
+- [x] Task 3 COMPLETE — RUN-00 COMPLETE 2026-05-31 with real captured transcript
+- [x] RUN-01 (ЮKassa) correctly remains OPERATOR-PENDING
+- [x] VER-01 (live read-path) + VER-04 (runbook gate) satisfied
