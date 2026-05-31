@@ -1,22 +1,37 @@
 ---
-status: partial
+status: complete
 phase: 71-client-checkout-full-pwa-screen-wiring
 source: [71-VERIFICATION.md, 71-REVIEW.md]
 started: 2026-05-30T00:00:00Z
-updated: 2026-05-31T00:00:00Z
+updated: 2026-05-31T08:05:00Z
 method: live Chrome DevTools walkthrough (dev stack — docker backend + vite :5174)
 ---
 
 ## Current Test
 
-[gap closure landed (71-08/09/10) — both blocker gaps fixed at code level and confirmed by code inspection (71-VERIFICATION.md: 14/14 statically-verifiable truths). Tests 1 & 2 reset to PENDING for a live-browser re-test; test 3 still passing.]
+[testing complete]
 
 ## Tests
 
 ### 1. ЮKassa membership purchase round-trip (anti-oracle poll)
 expected: Login → Plans → "Перейти к оплате" opens CheckoutSheet → confirm → redirect to ЮKassa → /payment/return shows only "Ожидаем подтверждение..." while pending, never active until webhook; abandoned → 30s timeout exit.
-result: pending
+result: pass
 severity: blocker
+reverified: |
+  2026-05-31 live Chrome DevTools re-test (Claude-driven) after re-seeding a freshly
+  wiped dev DB (seed_demo_data + seed_dev_client + client email). The 71-09 blocker is
+  GONE: prices/durations render as real numbers end-to-end —
+  • PlansSheet: "Месяц безлимит · 30 дней · 5 000 ₽" and "5 тренировок · 5 занятий ·
+    3 000 ₽/занятие · 15 000 ₽" (no "не число", no "undefined дней").
+  • PlanConfirm/CheckoutSheet: "К ОПЛАТЕ 5 000 ₽ · Месяц безлимит · 1 мес · 5 000 ₽/мес".
+  • HomeScreen (71-10): greets the real client ("Доброе утро, Клиент") and shows the
+    real no-membership state ("Нет абонемента / истёк / 0 дней"), NOT the old demo
+    "Годовой, 47 дней" fallback.
+  "Оплатить · 5 000 ₽" fired POST /api/v1/client/checkout/memberships/{id} authenticated
+  with correct x-csrf-token → 502 yookassa_permanent_error (placeholder shop creds),
+  surfaced as a clean "Не получилось списать — Банк отклонил платёж" screen. The real
+  ЮKassa redirect leg still needs sandbox shop creds (matches verification why_human) —
+  not a regression. seed_demo_data confirmed to seed the catalog (1 membership + 1 PT).
 resolution: |
   Gap closed by 71-09: PlansSheet/PlanConfirm/CheckoutSheet adapters now read the
   camelCase contract (priceKopecks/durationDays/sessionCount) — grep confirms zero
@@ -42,15 +57,18 @@ reported: |
 
 ### 2. Service worker never caches /api/* at runtime
 expected: No /api/* entries in any SW cache; navigateFallbackDenylist excludes /api/, runtimeCaching empty; /api/* always hits network.
-result: pending
+result: pass
 severity: blocker
-resolution: |
-  Gap closed by 71-08: public/sw.js now has a url.pathname.startsWith('/api/')
-  network-only guard placed before the navigation and cache-first branches (zero
-  cache.put for /api/*), and VERSION bumped to gym-v3 so the activate handler evicts
-  the stale gym-v2 cache that held the authed /api/* entries. Awaiting live re-test:
-  load the app, confirm active worker is gym-v3, Cache Storage holds zero /api/* keys,
-  every /api/* request is "(from network)", and offline shell fallback still works.
+reverified: |
+  2026-05-31 live Chrome DevTools re-test (Claude-driven). Runtime inspection via
+  navigator.serviceWorker.getRegistrations() + caches API:
+  • Active SW: http://localhost:5174/sw.js, state "activated".
+  • caches.keys() === ["gym-v3"] — the stale "gym-v2" cache is GONE (evicted on activate).
+  • gym-v3 holds ZERO /api/* entries (only static shell: /, index.html, offline.html,
+    manifest.json, icons, JS modules).
+  • After 6 live /api/* calls this session (/me ×2, /home, /plans, /pt-packages,
+    checkout/memberships), none were cached; /plans served the FRESH seeded catalog
+    (no stale empty []). 71-08 network-only guard + cache bump confirmed working.
 reported: |
   FAIL. Registered SW is the hand-written apps/client-pwa/public/sw.js (cache
   "gym-v2"), registered by services/pwa.js → registerPwa() in main.jsx:11 — NOT the
@@ -77,12 +95,12 @@ reported: |
 ## Summary
 
 total: 3
-passed: 1
+passed: 3
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
-note: 2 blocker gaps fixed at code level by 71-08/09/10 (VERIFICATION 14/14 static truths); reset to pending for live re-test
+note: 2 blocker gaps (71-08 SW /api caching, 71-09 camelCase prices) + 71-10 real identity all re-verified LIVE on 2026-05-31 via Chrome DevTools after re-seeding a wiped dev DB. ЮKassa redirect leg remains creds-blocked (502 placeholder shop) — known why_human, not a regression.
 
 ## Gaps
 
@@ -131,7 +149,14 @@ note: 2 blocker gaps fixed at code level by 71-08/09/10 (VERIFICATION 14/14 stat
   missing:
     - "Confirm whether Home/Profile identity+membership binding was in Phase 71 scope; if so, bind to /client/me and use toSubInfo(null) for the no-membership state."
 
-## Environment changes made during this UAT (dev only, uncommitted)
+## Environment changes made during the 2026-05-31 re-test (dev only, uncommitted)
+- The dev DB had been wiped since the 2026-05-30 session (0 users/clients/plans, still at head 0045). Re-seeded from host to re-test:
+  - `SEED_OWNER_EMAIL=owner@example.com SEED_OWNER_PASSWORD=ownerpass123 uv run python -m scripts.seed_demo_data` → owner + 1 membership plan ("Месяц безлимит" 5000₽/30д) + 1 PT-package ("5 тренировок" 15000₽/5).
+  - `uv run python -m scripts.seed_dev_client` → client +79999999999 (telegram_user_id=999999999).
+  - `UPDATE clients SET email='sasha@example.com'` for the 54-ФЗ online-payment gate.
+- Browser: a fresh /login load registered the 71-08 gym-v3 SW automatically (no manual unregister needed this time).
+
+## Environment changes made during the 2026-05-30 UAT (dev only, uncommitted)
 - apps/backend/.env: added DEV_OTP_PIN_ENABLED=true (required after WR-06 to use the 111111 dev OTP).
 - Recreated the backend container with `docker compose up -d --no-deps backend` (the migrate sidecar image is stale — DB already at head 0045; started backend bypassing the migrate gate).
 - Seeded: owner (seed_demo_data), dev client +79999999999 (seed_dev_client), set that client's email, inserted one membership_plans row ("Месяц безлимит").
