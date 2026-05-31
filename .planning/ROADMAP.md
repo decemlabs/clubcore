@@ -166,7 +166,12 @@ Plans:
   4. IDOR / anti-oracle / two-principal automated tests are green in CI; no cross-client data access is possible
   5. A live `docker compose up` + PWA walkthrough of the full client journey (phone-OTP login → home → book slot → checkout → QR check-in → history) passes end-to-end; the v2.0 runbook is authored and the walkthrough serves as the milestone gate
 
-**Plans**: TBD
+**Plans**: 4 plans (3 waves)
+
+- [ ] 72-01-PLAN.md — Unify client paths under Client-Portal tag + additive openapi.json regen + staff drift verify (HND-01, VER-03)
+- [ ] 72-02-PLAN.md — Byte-stable schema.d.ts regen + _v20Checks forward-guard (23 ops) (HND-02)
+- [ ] 72-03-PLAN.md — CI: parallel client-pwa job + frontend de-dup + backend pytest/Postgres/Redis gate for IDOR/two-principal tests (HND-03, VER-02)
+- [ ] 72-04-PLAN.md — Live read-path E2E walkthrough (milestone gate) + v2.0 runbook + operator-evidence scaffold (VER-01, VER-04)
 
 ## Progress
 
