@@ -1206,3 +1206,105 @@ textarea:focus-visible {
 }
 .topbar-btn:active { transform: scale(0.94); background: var(--surface-2); }
 
+/* ── Receipt-email gate primitives — Phase 999.5-05 ─────────────────────── */
+
+/* Domain-suggestion chip — 30px pill per UI-SPEC §"Screen 2" */
+.domain-chip {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 0.5px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.12s ease, transform 0.1s ease;
+}
+.domain-chip:active { transform: scale(0.95); background: var(--surface-2); }
+
+/* 54-ФЗ reassurance note card */
+.note {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 16px;
+  padding: 13px 15px;
+}
+.note .n-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 11px;
+  border-bottom: 0.5px solid var(--border);
+  margin-bottom: 10px;
+}
+.note .n-shield {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.note .n-title {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+.note .n-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-2);
+  margin-top: 6px;
+}
+.note .n-row:first-of-type { margin-top: 0; }
+.note .n-row b { color: var(--text); font-weight: 600; }
+
+/* Done-flash overlay (success flash in receipt-email gate — per UI-SPEC Note 9,
+   primary flow skips it; included for completeness) */
+.done-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  animation: state-in 0.26s ease both;
+}
+.done-flash .df-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pop 0.45s cubic-bezier(0.32, 1.6, 0.32, 1) both;
+}
+.done-flash .dt {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+.done-flash .ds {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-align: center;
+  max-width: 260px;
+}
+
