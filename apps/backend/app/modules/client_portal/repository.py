@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.pagination import PaginatedData
 
 __all__ = (
+    "client_has_any_membership",
     "fetch_available_slots",
     "fetch_client_membership",
     "fetch_client_next_booking",
@@ -37,6 +38,41 @@ __all__ = (
     "fetch_pt_packages_catalog",
     "fetch_trainers_catalog",
 )
+
+
+async def client_has_any_membership(
+    session: AsyncSession,
+    client_id: UUID,
+) -> bool:
+    """True if the client has EVER had any membership row of any status (D-01 lapsed-vs-newbie).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of Membership (D-54-08/D-20-MODULE).
+    Verified column source:
+      memberships (apps/backend/app/modules/memberships/models.py:88-165):
+        client_id  UUID FK to clients.id
+        status     String(16) IN ('active', 'expired', 'cancelled', 'frozen')
+
+    IDOR: mandatory :client_id bind param cast to str — result is scoped to the caller's
+    own client_id; never queries another client's rows.
+
+    Semantics (D-01):
+      - A 'newbie' has ZERO membership rows: returns False.
+      - A 'lapsed' member has >=1 rows (typically status='expired' or 'cancelled'): returns True.
+      - An 'active' member also has >=1 rows (status='active'): returns True.
+      The service layer (get_client_home) uses this in combination with the active-membership
+      check to derive the ternary 'active' | 'lapsed' | 'newbie' state.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT EXISTS("
+                "SELECT 1 FROM memberships WHERE client_id = :client_id"
+                ") AS ever"
+            ),
+            {"client_id": str(client_id)},
+        )
+    ).mappings().one()
+    return bool(row["ever"])
 
 
 async def fetch_available_slots(
