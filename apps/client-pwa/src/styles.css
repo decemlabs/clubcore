@@ -1054,3 +1054,100 @@ textarea:focus-visible {
   background: linear-gradient(135deg, var(--c1), var(--c2));
 }
 
+/* ── State screens — Plan 999.4-04 ───────────────────────────────────────── */
+/* Full-screen state overlay: success / pending / canceled / error.
+   All colors use var(--token) exclusively; only two UI-SPEC-pinned hex values
+   are used: #06120c (accent icon text) and #a36a16 (warn icon, light theme). */
+
+@keyframes state-in {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes icon-pop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  animation: state-in 0.32s cubic-bezier(0.32, 0.72, 0.2, 1) both;
+}
+
+.state .state-icon {
+  animation: icon-pop 0.4s cubic-bezier(0.32, 1.4, 0.4, 1) both;
+}
+
+.state-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+/* Tone modifiers */
+.state-icon.ok {
+  background: var(--accent);
+  color: #06120c;
+}
+.state-icon.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.state-icon.warn {
+  background: var(--warn-soft);
+  color: #a36a16;
+}
+[data-theme="dark"] .state-icon.warn {
+  color: var(--warn);
+}
+.state-icon.info {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.state-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1.15;
+  text-wrap: balance;
+  text-align: center;
+}
+
+.state-desc {
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.5;
+  max-width: 290px;
+  text-wrap: pretty;
+  text-align: center;
+  margin-top: 12px;
+}
+
+.state-actions {
+  padding: 16px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.state-meta {
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  border: 0.5px solid var(--border);
+  margin-top: 24px;
+}
+

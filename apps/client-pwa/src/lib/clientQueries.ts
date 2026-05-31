@@ -86,6 +86,8 @@ interface HomeData {
 interface PaymentStatusData {
   id: string
   status: 'pending' | 'succeeded' | 'canceled'
+  /** ЮKassa fiscal receipt URL — populated by backend only when a succeeded receipt exists (D-11). */
+  receiptUrl?: string | null
 }
 
 interface CheckoutResult {
