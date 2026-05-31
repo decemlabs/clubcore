@@ -1,59 +1,84 @@
 ---
 phase: 71-client-checkout-full-pwa-screen-wiring
-verified: 2026-05-30T18:00:00Z
+verified: 2026-05-31T00:00:00Z
 status: human_needed
-score: 5/5 must-haves verified
+score: 9/9 must-haves verified (gap-closure: 14/14 statically-verifiable truths VERIFIED)
 overrides_applied: 0
+re_verification:
+  previous_status: human_needed
+  previous_score: 9/9
+  scope: "gap-closure re-verification of plans 71-08, 71-09, 71-10 (live-UAT blockers from 71-HUMAN-UAT.md)"
+  gaps_closed:
+    - "BLOCKER (UAT test 2): service worker cached /api/* (gym-v2 cache-first). 71-08 added a network-only /api guard in public/sw.js and bumped cache to gym-v3 — statically verified; SW guard placement precedes navigation branch, no gym-v2 literal remains."
+    - "BLOCKER (UAT test 1): plan prices/durations rendered 'не число'/'undefined дней' — adapters read snake_case but API is camelCase. 71-09 aligned PlansSheet/HomeScreen/ProfileScreen adapters to camelCase (zero residual snake_case field reads) and seeded membership_plans + pt_package_plans rows."
+    - "MAJOR (UAT test 1 identity): Home/Profile showed mock identity + fake active membership. 71-10 bound greeting + identity header to /client/me and routed membership=null to the real toSubInfo(null) 'Нет абонемента' empty state; all mock literals removed."
+  gaps_remaining: []
+  regressions:
+    - "ADVISORY (WR-01, not a gap-plan must-have): App.jsx:260 still passes legacy slugs ('annual'/'monthly') as currentPlanId while PlansSheet now matches on real plan UUID (p.id = String(plan.id)). Slugs can never equal a UUID, so the 'current plan' badge (isCurrent / 'сейчас активен' / 'Текущий тариф') is dead. Cosmetic only — does not block any gap-plan truth. Surfaced for follow-up."
 human_verification:
-  - test: "Perform end-to-end membership purchase via ЮKassa in the PWA: log in as a client with email set, open Plans, select a membership, complete checkout, verify redirect to ЮKassa, return to /payment/return, confirm the polling screen shows 'Ожидаем подтверждение...' while pending and navigates to Home only after payment.succeeded."
-    expected: "PaymentReturnScreen shows only the waiting copy while polling; Home shows active membership only after webhook fires; no premature activation state is shown in CheckoutSheet or PaymentReturnScreen."
-    why_human: "End-to-end ЮKassa redirect flow requires a live payment environment; cannot be verified programmatically without a real or sandboxed ЮKassa account."
-  - test: "Verify that the service worker does not cache any /api/* response. Open DevTools → Application → Service Workers, navigate through the wired screens (Home, Profile, Plans, Book, QR), and inspect Cache Storage for any api-prefixed entries."
-    expected: "Cache Storage contains no /api/* entries. Only static assets (JS, CSS, HTML, images) are cached."
-    why_human: "Service worker cache inspection requires a running browser environment; SW behavior cannot be verified by grepping the config alone."
-  - test: "Confirm that the five net-new screens (Chat, Referral, TrainerDetail, Notifications, GymInfo) display the 'В разработке' placeholder and make zero network calls when opened. Use DevTools → Network to confirm no /api/* requests fire."
-    expected: "Each screen renders the ComingSoon card. Network tab shows no API requests from any of the five screens."
-    why_human: "Absence-of-network-call verification requires a running browser; grep confirms code structure but not runtime behavior."
+  - test: "Service worker /api Cache-Storage runtime inspection. Build/run dev stack, log in (+79999999999 / 111111). DevTools → Application → Service Workers: confirm active worker is gym-v3. Cache Storage: confirm NO gym-v2 cache exists and gym-v3 holds only shell + static assets — ZERO /api/* keys. Network tab: Home → Plans → Profile, every /api/* shows '(from network)'. Offline: reload renders /offline.html / cached shell."
+    expected: "gym-v3 active; no gym-v2 cache; zero /api/* entries in Cache Storage; all /api/* served from network; offline shell still renders. (Re-runs 71-HUMAN-UAT test 2.)"
+    why_human: "Cache-Storage population is runtime browser behavior. Code inspection confirms the network-only /api guard precedes the cache-first branch and the version bump evicts gym-v2 on activate, but actual eviction + zero-cache state can only be confirmed in a live browser."
+  - test: "Live real-data rendering. Log in as the dev client (+79999999999, real /client/me, no membership, email set). Home: greeting shows the real first name (not 'Саша'); with no membership the card shows 'Нет абонемента' + 'Выбрать тариф' CTA (no fake active 'Годовой 47 дней'). Profile: identity header shows real name/phone/email (em-dash if absent, not 'Саша Морозов / sasha@example.com'); membership block shows no-membership state with no '42 000 ₽' renewal. Plans: each card shows a numeric price ('5 000 ₽') and 'N дней' (no 'не число'/'undefined дней'). After a dev purchase, Home+Profile reflect real plan name/days-left/until-date."
+    expected: "Real identity + real (or genuinely empty) membership render; plan prices/durations are numeric. (Re-runs 71-HUMAN-UAT test 1 + identity.)"
+    why_human: "Requires a live backend + seeded catalog + logged-in session to render real /client/me + /client/home + /client/plans data. Field-name correctness is statically verified (zero snake_case reads, camelCase keys present); end-to-end rendered output needs the live stack."
+  - test: "End-to-end ЮKassa membership/PT purchase round-trip (carried forward from prior verification, still pending sandbox creds): log in, Plans → checkout → ЮKassa redirect → /payment/return shows only 'Ожидаем подтверждение...' while pending; active only after payment.succeeded webhook."
+    expected: "PaymentReturnScreen shows waiting copy while polling; Home shows active membership only after webhook; no premature activation."
+    why_human: "Requires a live/sandboxed ЮKassa account (placeholder shop_id=000000 returns 502 yookassa_permanent_error in dev)."
 ---
 
-# Phase 71: Client Checkout + Full PWA Screen Wiring — Verification Report
+# Phase 71: Client Checkout + Full PWA Screen Wiring — Verification Report (Gap-Closure Re-verification)
 
-**Phase Goal:** A client can initiate a ЮKassa membership or PT-package purchase entirely from the PWA; payment activation is locked to the existing webhook; server-side price is authoritative; 54-ФЗ email gate is enforced; all core PWA screens (Home, Profile, Book, Plans, Checkout, QR) are wired to the real backend.
-**Verified:** 2026-05-30T18:00:00Z
+**Phase Goal:** A client can initiate a ЮKassa membership/PT-package purchase entirely from the PWA; payment activation webhook-only; server-side authoritative price; 54-ФЗ email gate; all core PWA screens (Home, Profile, Book, Plans, Checkout, QR) wired to the real backend.
+**Verified:** 2026-05-31
 **Status:** human_needed
-**Re-verification:** No — initial verification.
+**Re-verification:** Yes — gap-closure pass over plans 71-08, 71-09, 71-10 (live-UAT blockers)
 
 ---
 
-## Goal Achievement
+## Re-verification Scope
 
-### Observable Truths (Roadmap Success Criteria)
+This pass focuses on the THREE gap-closure plans (71-08, 71-09, 71-10) that closed the live-UAT blockers documented in 71-HUMAN-UAT.md. Plans 71-01 through 71-07 were verified previously (9/9 roadmap truths). The gap-plan must-haves split cleanly into two buckets:
+
+- **Statically verifiable from source** (this report VERIFIES): camelCase field reads, hardcoded-string removal, empty-state wiring, SW /api guard placement + version bump, seed columns.
+- **Inherently runtime / live-backend** (routed to human_verification): SW Cache-Storage eviction state, and end-to-end real-data rendering with a logged-in session.
+
+All statically-verifiable gap-plan truths are VERIFIED. The remaining items are runtime confirmations that the original UAT method (live Chrome DevTools) must close.
+
+---
+
+## Goal Achievement — Gap-Closure Must-Haves
+
+### 71-08 — Service Worker /api Cache Hardening (PWA-05 / PWA-07)
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | A client can initiate a membership purchase/renewal and a PT-package purchase via ЮKassa from the PWA; the redirect-back screen shows only "awaiting confirmation" (anti-oracle — no premature activation) | VERIFIED | CR-01/CR-02 fixes confirmed in code: `_sell_subject_core` accepts `return_url_override`; `client_checkout_membership` builds `return_url = {client_return_url}?payment_id={op_id}`; `client_checkout_pt_package` appends `&idempotency_key=...`; `CheckoutSheet.jsx:73-85` redirects to `result.confirmationUrl` only; `PaymentReturnScreen.jsx:26-31` shows ONLY "Ожидаем подтверждение..." while pending, navigates to "/" only on `status === 'succeeded'`; regression test `test_membership_checkout_return_url_contains_payment_id` (line 634) asserts `payment_id={online_payment_id}` in the captured ЮKassa return_url; `test_pt_checkout_return_url_contains_payment_id_and_idempotency_key` (line 703) asserts both params present |
-| 2 | Membership/PT-package activation occurs only after `payment.succeeded` webhook fires; a duplicate webhook delivery does not double-activate (idempotent checkout) | VERIFIED | `test_duplicate_webhook_does_not_double_activate` (line 565 of test_checkout.py) delivers `payment.succeeded` twice and asserts exactly one activation; the existing `handle_payment_succeeded` webhook handler was already idempotent; client checkout writes to the same `OnlinePayment` row shape consumed by the webhook |
-| 3 | Attempting checkout without a client email returns 422 `client_email_required_for_online_payment` (54-ФЗ fiscal receipt gate) | VERIFIED | `_sell_subject_core` enforces the email gate at service.py line 267 (WR-01 fix: after replay check); `ClientEmailRequiredForOnlinePaymentError` → 422 `client_email_required_for_online_payment`; test `test_checkout_without_email_returns_422` (line 412) proves the 422 response; WR-01 fix confirmed at service.py:219 (replay check moved before email gate) |
-| 4 | The PWA Home, Profile, Book, Plans, Checkout, and QR screens fetch data from the real client backend; the mock data layer is replaced for these six screens | VERIFIED | HomeScreen: `useClientHome()` at line 80 (no mock imports); ProfileScreen: `useClientVisitHistory`, `useClientPtHistory`, `useClientPaymentHistory` hooks (lines 8-10, no VISIT_HISTORY/TRAINING_HISTORY/PURCHASE_HISTORY imports); PlansSheet: `useClientPlans()` and `useClientPtPackages()` at lines 44-45; CheckoutSheet: `mutateAsync` calls via `useClientCheckoutMembership`/`useClientCheckoutPtPackage` at line 35-36; QRSheet: `useClientQrToken(true)` at line 12, `QRCodeSVG` renders real signed JWT; BookScreen: `useClientAvailableSlots()`, `useCreateBooking()`, `useCancelBooking()` at lines 61-63 (real Phase-70 slot data, no CALENDAR/TIME_SLOTS/BUSY_SLOTS imports) |
-| 5 | Net-new screens (Chat, Referral, trainer reviews, notification inbox, gym-info) display a "coming soon" placeholder — no backend calls are made from them; the service worker never caches `/api/*` requests | VERIFIED | All 5 net-new screens confirmed: ChatScreen renders `<ComingSoon title="Сообщения" />`, ReferralSheet `<ComingSoon title="Привести друга" />`, TrainerDetailSheet `<ComingSoon title="Тренер" />`, NotificationsSheet `<ComingSoon title="Уведомления" />`, GymInfoSheet `<ComingSoon title="Информация о зале" />`; none import clientFetcher/clientQueries/@tanstack/react-query; ComingSoon.tsx renders "В разработке"; ESLint `no-restricted-paths` boundary at eslint.config.js line 87; SW vite.config.js: `navigateFallbackDenylist: [/^\/api\//]`, `runtimeCaching: []` |
+| 1 | No /api/* response is ever written to any SW cache at runtime | VERIFIED (code) | `public/sw.js:40-43` — `if (url.pathname.startsWith('/api/')) { event.respondWith(fetch(req)); return }` with zero cache.put; guard precedes both navigation (line 46) and cache-first (line 60) branches. Runtime Cache-Storage state → human. |
+| 2 | Every /api/* GET goes to the network (network-only) | VERIFIED (code) | Same guard returns `fetch(req)` directly; no `caches.match` on the /api path. |
+| 3 | Old gym-v2 /api/* cache entries purged on activate (existing installs) | VERIFIED (code) | `VERSION = 'gym-v3'` (line 4); activate handler deletes every key `!== VERSION` (lines 24-26); no `gym-v2` literal remains. Actual eviction on a real install → human. |
+| 4 | Static shell + offline fallback still works | VERIFIED (code) | SHELL precache (lines 5-13) and navigation network-first → cached shell → `/offline.html` (lines 46-57) unchanged. Offline reload behavior → human. |
 
-**Score:** 5/5 truths verified
+Registration unchanged: `pwa.js:14` still `register('/sw.js')`; PWA-07 regression-guard comment present (`pwa.js:12-13`).
 
----
+### 71-09 — camelCase Adapter Alignment + Catalog Seed (PWA-05 / CPAY-01 / CPAY-02)
 
-### Code Review Fixes Verification (CR-01, CR-02, CR-03 + WR-01, WR-02)
+| # | Truth | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | Plan prices/durations render as numbers, never 'не число'/'undefined дней' | VERIFIED (code) | `PlansSheet.jsx:10,11` read `p.priceKopecks`/`p.durationDays`; `:33` reads `p.sessionCount`. grep: 0 residual `price_kopecks\|duration_days\|session_count`. Rendered output → human. |
+| 2 | PT-package cards render session count + per-session price | VERIFIED (code) | `toPtCard` (PlansSheet.jsx:27-41) uses `sessionCount` for tagline, divisor, period, popular check; `priceKopecks/100` for price. |
+| 3 | Real membership card renders days-left/name/until/progress from API | VERIFIED (code) | `toSubInfo` (HomeScreen.jsx:27-44, ProfileScreen.jsx:18-35) reads `daysUntilEnd/expiringSoon/startDate/endDate/planNameSnapshot`; WR-03 UTC-midnight `subTotalDays`. grep: 0 residual snake_case. |
+| 4 | Next-booking card renders trainer + time from API | VERIFIED (code) | `homeData?.nextBooking` (HomeScreen.jsx:135); `UpcomingCard` reads `booking.trainerName/startTime` (:549-554); `HomeMinimal` reads `nextBooking.startTime/trainerName` (:442-445). |
+| 5 | Visit/PT/payment history rows render dates/names/amounts from API | VERIFIED (code) | ProfileScreen `VisitsList` `v.gymDate/v.checkedInAt` (:320-326); `TrainingsList` `t.trainerNameSnapshot/performedAt/cancelledAt` (:410-417); `PurchaseRow` `p.amountKopecks/subjectKind/receivedAt/method` (:653-666). |
+| 6 | seed_demo_data seeds ≥1 membership plan + ≥1 PT-package | VERIFIED (code) | `_seed_catalog` (seed_demo_data.py:45-85) inserts `MembershipPlan(name,duration_days=30,price_kopecks=500_000,freeze_days_limit=14,active=True)` + `PtPackagePlan(name,session_count=5,price_kopecks=1_500_000,validity_days=90)`, idempotent ON CONFLICT DO NOTHING on lower(name) alive index. Columns match ORM models exactly. `ast.parse` OK. |
 
-All three BLOCKER and two WARNING findings from 71-REVIEW.md were addressed in post-review commits:
+### 71-10 — Real /client/me Identity Binding (PWA-05)
 
-| Finding | Severity | Fix Status | Evidence |
-|---------|----------|------------|----------|
-| CR-01: membership return_url never carried payment_id | BLOCKER | FIXED | `_sell_subject_core` accepts `online_payment_id_override` + `return_url_override` (service.py:180-181); `client_checkout_membership` builds `return_url = f"{yookassa_settings.client_return_url}?payment_id={op_id}"` (service.py:505); commit `0417fddb`, `7516f9a1` |
-| CR-02: PT return URL appended idempotency_key to ЮKassa URL | BLOCKER | FIXED | `client_checkout_pt_package` builds return_url server-side with both params (service.py:549-554); `CheckoutSheet.jsx:78-85` now just `window.location.href = result.confirmationUrl`; commit `89b62486` |
-| CR-03: BookScreen sent `pt_package_id: ''` causing always-422 | BLOCKER | FIXED | `ClientCreateBookingRequest.pt_package_id: UUID | None = None` (schemas.py:138); service resolves active package via `get_active_pt_package` when None (service.py:291-294); BookScreen.jsx:164 omits `ptPackageId`; commit `263c0f57` |
-| WR-01: email gate ran before replay check | WARNING | FIXED | Replay check moved before email gate in `_sell_subject_core` (service.py:229); regression test `test_membership_replay_returns_original_confirmation_url` (line 769); commit `0417fddb` |
-| WR-02: `str(r.confirmation_url)` emitted literal "None" | WARNING | FIXED | Guard `if r.confirmation_url is None: raise BadGatewayAppError(...)` added to both checkout functions (service.py:519-521, 567-569); regression test `test_checkout_confirmation_url_none_raises_bad_gateway` (line 841); commit `7516f9a1` |
-
-4 regression tests added to test_checkout.py (commit `8dc4e333`) locking the fix behavior.
+| # | Truth | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | Home greeting shows real first name from /client/me (not 'Саша') | VERIFIED (code) | `useClientMe` imported (HomeScreen.jsx:10); `const { data: me } = useClientMe()` (:94); `userName = me?.firstName || tweaks.userName || ''` (:103). grep 'Саша' → 0. |
+| 2 | membership=null → real 'Нет абонемента' empty state (not fake active card) | VERIFIED (code) | `sub = toSubInfo(homeData?.membership ?? null)` (HomeScreen.jsx:98); `getSubInfo(tweaks.subState)` count = 0; `toSubInfo(null)` returns `label:'Нет абонемента', tone:'danger'`, driving ExpiredAlert + 'Выбрать тариф'. |
+| 3 | Profile identity header shows real /client/me name/phone/email (graceful em-dash) | VERIFIED (code) | `useClientMe` (ProfileScreen.jsx:9,52); `fullName` from `me?.firstName/lastName` (:60); `phone = me?.phone ?? '—'`, `email = me?.email ?? '—'` (:62-63); rendered :80-82. grep `sasha@example.com\|916) 482-09-14` → 0. |
+| 4 | Profile membership block uses real state, no hardcoded renewal amounts | VERIFIED (code) | Renewal line shows `sub.until` date only (ProfileScreen.jsx:121-128); grep `42 000 ₽\|4 900 ₽` → 0. 'Карта •••• 4821' is demo card chrome on the danger branch (not presented as live financial data). |
 
 ---
 
@@ -61,139 +86,63 @@ All three BLOCKER and two WARNING findings from 71-REVIEW.md were addressed in p
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `apps/backend/app/modules/online_payments/service.py` | `_sell_subject_core` actor-agnostic helper | VERIFIED | `async def _sell_subject_core` at line 170; accepts `actor_user_id: UUID | None`, `idempotency_key: str`, `return_url_override: str | None`; no amount param (CPAY-03) |
-| `apps/backend/app/core/dependencies.py` | Protocol slot triplet | VERIFIED | `SellSubjectCoreCallable` at line 1660; `_client_checkout_core` at 1673; `register_client_checkout_core` at 1676; `invoke_client_checkout_core` at 1687; no runtime import of `app.modules.online_payments` |
-| `apps/backend/app/main.py` | Composition-root wiring | VERIFIED | `register_client_checkout_core(_sell_subject_core)` at line 601 |
-| `apps/backend/app/modules/client_portal/schemas.py` | Checkout + status schemas | VERIFIED | `ClientCheckoutRequest` (line 238), `ClientCheckoutResponse` with `online_payment_id` + `confirmation_url` (line 246), `ClientPaymentStatusResponse` with `id` + `status` (line 253) |
-| `apps/backend/app/modules/client_portal/repository.py` | IDOR-safe raw-SQL status reader | VERIFIED | `fetch_client_payment_status` at line 493; SQL `SELECT id, status FROM online_payments WHERE id = :payment_id AND client_id = :client_id`; no ORM import of OnlinePayment |
-| `apps/backend/app/modules/client_portal/service.py` | Client checkout service functions | VERIFIED | `client_checkout_membership` (line 481), `client_checkout_pt_package` (line 528), `get_client_payment_status` (line 576); all checkout calls use `actor_user_id=None`; WR-02 guards at lines 519-521, 567-569 |
-| `apps/backend/app/modules/client_portal/router.py` | Three client endpoints | VERIFIED | `POST /checkout/memberships/{plan_id}` (line 554, op_id `client_checkout_membership`, CSRF); `POST /checkout/pt-packages/{plan_id}` (line 589, CSRF, `Idempotency-Key` header); `GET /payments/{payment_id}/status` (line 629, no CSRF) |
-| `apps/backend/tests/integration/client_portal/test_checkout.py` | 11 integration tests (7 original + 4 regression) | VERIFIED | 11 test functions confirmed; all 5 success criteria covered; duplicate-webhook, IDOR 404, anti-oracle projection, 422 email gate, idempotency replay, return_url payload, None guard |
-| `packages/api-client/src/schema.d.ts` | Client checkout + status paths typed | VERIFIED | `/api/v1/client/checkout/memberships/{plan_id}` at line 2892; `/api/v1/client/checkout/pt-packages/{plan_id}` at line 2920; `/api/v1/client/payments/{payment_id}/status` at line 2948 |
-| `apps/client-pwa/src/lib/queryClient.ts` | QueryClient with admin-web defaults | VERIFIED | `staleTime: 30_000`, `refetchOnWindowFocus: false`, `retry: 1/0`, session-expiry handler via `window.location.replace('/login')` |
-| `apps/client-pwa/src/lib/clientQueries.ts` | 14 typed hooks over clientFetcher | VERIFIED | `clientPortalKeys` factory; `useClientHome`, `useClientPlans`, `useClientPtPackages`, `useClientVisitHistory`, `useClientPtHistory`, `useClientPaymentHistory`, `useClientPaymentStatus` (polling, refetchInterval 3000ms while pending), `useClientCheckoutMembership`, `useClientCheckoutPtPackage`, `useClientBookings`, `useClientAvailableSlots`, `useCreateBooking`, `useCancelBooking`, `useClientQrToken` (staleTime:0, refetchInterval:50s) |
-| `apps/client-pwa/src/data/index.js` | Single swap seam re-exporting hooks | VERIFIED | Re-exports all query hooks; retains legacy mocks (CALENDAR/TRAINERS/UPCOMING_BOOKING/VISIT_HISTORY/TRAINING_HISTORY) for non-wired consumers (BookingManageSheet, HistorySheets, TweaksRoot) |
-| `apps/client-pwa/src/components/ComingSoon.tsx` | "В разработке" placeholder | VERIFIED | Renders "В разработке" at line 31; no clientFetcher/clientQueries/@tanstack imports |
-| `apps/client-pwa/eslint.config.js` | Import boundary for net-new screens | VERIFIED | `no-restricted-paths` at line 87; targets ChatScreen, ReferralSheet, TrainerDetailSheet, NotificationsSheet, GymInfoSheet; bars clientFetcher, clientQueries, data/index.js |
-| `apps/client-pwa/src/routes/PaymentReturnScreen.jsx` | Anti-oracle polling return screen | VERIFIED | `useClientPaymentStatus(paymentId, !!paymentId)` at line 26; "Ожидаем подтверждение..." rendered while pending (line 80); `<Navigate to="/" replace />` only on `status === 'succeeded'` (line 31) |
-| `apps/client-pwa/src/App.jsx` | QueryClientProvider root wrap + /payment/return route | VERIFIED | `QueryClientProvider` at line 198 wraps the router; `/payment/return` route at line 227 |
-
----
+| `apps/client-pwa/public/sw.js` | gym-v3, /api network-only guard before nav branch | VERIFIED | guard at :40-43, VERSION gym-v3 at :4, no gym-v2 literal |
+| `apps/client-pwa/src/services/pwa.js` | register('/sw.js') + PWA-07 guard comment | VERIFIED | :14 register, :12-13 comment |
+| `apps/client-pwa/src/screens/sheets/PlansSheet.jsx` | priceKopecks/durationDays/sessionCount | VERIFIED | 0 snake_case reads |
+| `apps/client-pwa/src/screens/HomeScreen.jsx` | useClientMe, daysUntilEnd, nextBooking, no getSubInfo fallback | VERIFIED | wired, 0 snake_case, 0 'Саша' |
+| `apps/client-pwa/src/screens/ProfileScreen.jsx` | useClientMe, amountKopecks/gymDate/performedAt, no mock literals | VERIFIED | wired, 0 snake_case, 0 mock literals |
+| `apps/backend/scripts/seed_demo_data.py` | seeds membership_plans + pt_package_plans | VERIFIED | parses, columns match models, idempotent |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
-|------|----|-----|--------|---------|
-| `app/main.py` | `app/modules/online_payments/service.py` | `register_client_checkout_core(_sell_subject_core)` | WIRED | Confirmed at main.py:601 |
-| `app/core/dependencies.py` | client_portal service | `invoke_client_checkout_core` Protocol slot | WIRED | No runtime import of online_payments in dependencies.py (confirmed zero matches) |
-| `app/modules/client_portal/service.py` | `app/core/dependencies.py` | `invoke_client_checkout_core` | WIRED | service.py imports and calls invoke_client_checkout_core with actor_user_id=None |
-| `app/modules/client_portal/repository.py` | online_payments table | raw-SQL WHERE id=:payment_id AND client_id=:client_id | WIRED | Confirmed at repository.py:514-515 |
-| `apps/client-pwa/src/screens/HomeScreen.jsx` | `useClientHome` | import from @/data | WIRED | HomeScreen.jsx:9 imports useClientHome |
-| `apps/client-pwa/src/screens/ProfileScreen.jsx` | `useClientVisitHistory\|useClientPtHistory\|useClientPaymentHistory` | import from @/data | WIRED | ProfileScreen.jsx:8-10 |
-| `apps/client-pwa/src/routes/PaymentReturnScreen.jsx` | `useClientPaymentStatus` | polling hook + react-router useSearchParams payment_id | WIRED | PaymentReturnScreen.jsx:15,26 |
-| `apps/client-pwa/src/screens/sheets/CheckoutSheet.jsx` | `window.location.href = result.confirmationUrl` | checkout mutation result | WIRED | CheckoutSheet.jsx:74,85 |
-| `apps/client-pwa/src/App.jsx` | `apps/client-pwa/src/lib/queryClient.ts` | QueryClientProvider wrapping router | WIRED | App.jsx:3,17,198,404 |
-| `apps/client-pwa/src/screens/BookScreen.jsx` | `useClientAvailableSlots / useCreateBooking / useCancelBooking` | import from @/data | WIRED | BookScreen.jsx:10,61-63 |
-| `apps/client-pwa/src/screens/sheets/QRSheet.jsx` | `useClientQrToken` | import from @/data | WIRED | QRSheet.jsx:4,12 |
-| `apps/backend/openapi.json` | `packages/api-client/src/schema.d.ts` | pnpm codegen (openapi-typescript) | WIRED | schema.d.ts contains all three client paths at lines 2892, 2920, 2948 |
-
----
+|------|----|----|--------|---------|
+| sw.js fetch handler | /api/* requests | early `pathname.startsWith('/api/')` network-only return | WIRED | precedes navigation + cache-first branches |
+| PlansSheet adapters | ClientCatalog*Response (camelCase) | p.priceKopecks/durationDays/sessionCount | WIRED | useClientPlans/useClientPtPackages → toMembershipCard/toPtCard |
+| HomeScreen userName + sub | /client/me + /client/home | useClientMe().firstName + toSubInfo(homeData.membership ?? null) | WIRED | both hooks consumed |
+| ProfileScreen identity header | ClientMeResponse | useClientMe() firstName/lastName/phone/email | WIRED | rendered at :80-82 |
+| seed_catalog | membership_plans / pt_package_plans | pg_insert + ON CONFLICT DO NOTHING | WIRED | called from _run (:143) |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| `HomeScreen.jsx` | `homeData` | `useClientHome()` → `clientRequest('get', '/api/v1/client/home')` | Yes — DB-backed FastAPI endpoint | FLOWING |
-| `ProfileScreen.jsx` | visit/pt/payment history | `useClientVisitHistory/Pt/Payment()` → `/api/v1/client/history/*` | Yes — DB-backed Phase-69 endpoints | FLOWING |
-| `PlansSheet.jsx` | `membershipPlans`, `ptPackages` | `useClientPlans/PtPackages()` → `/api/v1/client/plans`, `/api/v1/client/pt-packages` | Yes — DB-backed catalog endpoints | FLOWING |
-| `CheckoutSheet.jsx` | `result.confirmationUrl` | `mutateAsync` → `invoke_client_checkout_core` → ЮKassa API | Yes — real payment creation | FLOWING |
-| `PaymentReturnScreen.jsx` | `data.status` | `useClientPaymentStatus` → `fetch_client_payment_status` → SQL on online_payments | Yes — real DB read | FLOWING |
-| `BookScreen.jsx` | `slotsData` | `useClientAvailableSlots()` → `/api/v1/client/slots` | Yes — Phase-70 DB-backed endpoint | FLOWING |
-| `QRSheet.jsx` | `qrData.token` | `useClientQrToken()` → `/api/v1/client/qr-token` | Yes — Phase-70 signed JWT | FLOWING |
-
----
-
-### Behavioral Spot-Checks
-
-| Behavior | Command | Result | Status |
-|----------|---------|--------|--------|
-| `_sell_subject_core` function exists and is actor-agnostic | `grep -n "async def _sell_subject_core" service.py` | Found at line 170 | PASS |
-| Protocol slot raises RuntimeError when unregistered | `grep -n "slot not registered" dependencies.py` | Found at line 1704 | PASS |
-| Fetch client payment status SQL filters by client_id | `grep "client_id = :client_id" repository.py` | Found in fetch_client_payment_status | PASS |
-| PWA polling hook uses refetchInterval | `grep "refetchInterval.*3_000\|3000" clientQueries.ts` | Found at line 314 | PASS |
-| Service worker denylist blocks /api/* | `grep "navigateFallbackDenylist.*api" vite.config.js` | Found at line 15 | PASS |
-| 4 regression tests for review fixes exist | `grep "def test_membership_checkout_return_url\|def test_pt_checkout_return_url\|def test_membership_replay_returns\|def test_checkout_confirmation_url_none" test_checkout.py` | All 4 found | PASS |
-
----
-
-### Probe Execution
-
-Step 7c: SKIPPED — no probe-*.sh scripts declared in phase plans. Backend integration tests were run by the executor (pytest exits 0 per SUMMARY) and are not re-runnable here without a live DB/Redis.
-
----
+| PlansSheet | membershipPlans/ptPackages | useClientPlans/useClientPtPackages (GET /client/plans, /pt-packages) | catalog now seeded by 71-09 | FLOWING (code) — live render → human |
+| HomeScreen | me, homeData | useClientMe / useClientHome | real /client/me + /client/home | FLOWING (code) — live render → human |
+| ProfileScreen | me, homeData, visit/pt/payment | useClientMe/Home + history hooks | real backend | FLOWING (code) — live render → human |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
-|-------------|------------|-------------|--------|----------|
-| CPAY-01 | 71-01, 71-02, 71-03 | Client initiates membership purchase via ЮKassa | SATISFIED | `POST /api/v1/client/checkout/memberships/{plan_id}` returns 201 + confirmationUrl; tested in test_checkout.py |
-| CPAY-02 | 71-01, 71-02, 71-03 | Client purchases PT-package via ЮKassa | SATISFIED | `POST /api/v1/client/checkout/pt-packages/{plan_id}` + Idempotency-Key header; tested |
-| CPAY-03 | 71-01, 71-02, 71-03, 71-05 | Server-side price; webhook-only activation; anti-oracle redirect-back | SATISFIED | No price param in schemas; PaymentReturnScreen shows only pending copy; test_status_returns_coarse_state_only asserts id+status only |
-| CPAY-04 | 71-01, 71-02, 71-03 | 422 client_email_required_for_online_payment when no email | SATISFIED | Email gate in _sell_subject_core (after WR-01 fix); test_checkout_without_email_returns_422 |
-| CPAY-05 | 71-01, 71-02, 71-03 | Idempotent checkout (no double-charge) | SATISFIED | Membership: server-derived per-day key; PT: client-supplied Idempotency-Key header; duplicate-webhook test; replay tests |
-| PWA-05 | 71-04, 71-05, 71-06 | Home/Profile/Book/Plans/Checkout/QR wired to real backend | SATISFIED | All 6 screens verified with real hooks; mock data layer replaced for wired screens |
-
----
+|-------------|-------------|-------------|--------|----------|
+| PWA-05 | 71-08/09/10 | Home/Profile/Book/Plans/Checkout/QR on real backend | SATISFIED (code) | camelCase adapters + /client/me identity + seeded catalog; live render → human |
+| PWA-07 | 71-08 | SW never caches /api/* | SATISFIED (code) | network-only /api guard + gym-v3 eviction; Cache-Storage state → human |
+| CPAY-01 | 71-09 | Membership purchase via ЮKassa | SATISFIED (price render fix + seed) | priceKopecks alignment unblocks numeric checkout totals; round-trip → human (sandbox) |
+| CPAY-02 | 71-09 | PT-package purchase via ЮKassa | SATISFIED (price render fix + seed) | sessionCount/priceKopecks alignment; round-trip → human (sandbox) |
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `apps/client-pwa/src/lib/queryClient.ts` | 34 | `setTimeout(() => { _redirecting = false }, 5000)` — magic 5000ms timer reset (WR-03 from review, not fixed) | Warning | Minor robustness concern on auth path; no correctness defect today |
-| `apps/client-pwa/src/lib/clientQueries.ts` | 186 | `queryKey: clientPortalKeys.bookings()` — page not in cache key (WR-06 from review, not fixed) | Warning | Stale data risk when paginating bookings; BookScreen currently doesn't paginate so no immediate user impact |
-| `apps/client-pwa/src/routes/PaymentReturnScreen.jsx` | 24 | `const _idempotencyKey = params.get('idempotency_key')` — read but never used (IN-01, not fixed) | Info | Dead code; underscore prefix suppresses lint; no behavioral impact |
-| `apps/backend/app/modules/client_portal/router.py` | 192 | `service._get_client_next_booking` — router calls private service function (WR-04, not fixed) | Warning | Layering violation; paginated bookings list returns max-1 item — `useClientBookings` hook exists but is unused in BookScreen, which builds its view from slots only |
+| apps/client-pwa/src/App.jsx | 260 | `currentPlanId={t.subState === 'active' ? 'annual' : 'monthly'}` legacy slugs vs PlansSheet UUID match | ℹ️ Info (ADVISORY / WR-01) | Current-plan badge (isCurrent / 'сейчас активен' / 'Текущий тариф') is dead — slugs never equal a real UUID. Cosmetic; not a gap-plan must-have. |
 
-No TBD/FIXME/XXX debt markers found in any phase-71-modified files.
-
----
+No TBD/FIXME/XXX debt markers in any modified file. The remaining demo chrome (GymStatusPill, DEMO_TRAINER_CANCEL, '•••• 4821', notifications empty state) is pre-existing and explicitly out of scope per the plans — not presented as live data.
 
 ### Human Verification Required
 
-The automated checks pass for all 5 success criteria. The following items require live browser or staging environment verification:
-
-#### 1. ЮKassa Redirect Round-Trip (criterion #1 end-to-end)
-
-**Test:** Log in as a client with an email address set. Open Plans → select a membership → proceed to CheckoutSheet → tap "Оплатить". Verify redirect to ЮKassa. Complete or cancel payment in ЮKassa sandbox. Confirm browser returns to `/payment/return?payment_id=<UUID>`.
-**Expected:** While payment is `pending`, the screen shows only "Ожидаем подтверждение..." and the spinner. On webhook delivery of `payment.succeeded`, the screen transitions to Home where the active membership is displayed. No activation state is shown in CheckoutSheet or the return screen before the webhook fires.
-**Why human:** End-to-end ЮKassa redirect requires a live or sandbox payment account; cannot be faked with ASGITransport alone.
-
-#### 2. Service Worker Does Not Cache /api/* (criterion #5 partial)
-
-**Test:** Open the PWA in Chrome DevTools. Navigate through all 6 wired screens. Open Application → Cache Storage → inspect all named caches.
-**Expected:** Zero /api/* entries in any cache. Only static assets (JS bundles, CSS, icons) are cached.
-**Why human:** SW cache inspection requires a running browser runtime; vite.config.js config has been verified (navigateFallbackDenylist + empty runtimeCaching) but runtime behavior needs confirmation.
-
-#### 3. Net-New Screens Make Zero API Calls (criterion #5)
-
-**Test:** Open each of the 5 net-new screens (Chat, Referral, TrainerDetail, Notifications, GymInfo). In DevTools → Network filter by XHR/Fetch, confirm no /api/* requests fire.
-**Expected:** Each screen renders "В разработке" card only. Network tab is empty of API requests from these screens.
-**Why human:** Absence-of-network-call cannot be asserted by code grep alone; ESLint boundary is structural but runtime confirmation is standard for a shipping verification.
-
----
+1. **SW /api Cache-Storage runtime inspection** — confirm gym-v3 active, no gym-v2, zero /api/* cache keys, all /api/* from network, offline shell renders. (Re-runs UAT test 2.)
+2. **Live real-data rendering** — confirm real identity + real/empty membership + numeric plan prices render with a logged-in session and seeded catalog. (Re-runs UAT test 1 + identity.)
+3. **ЮKassa round-trip** — carried forward; needs sandbox creds.
 
 ### Gaps Summary
 
-No blockers found. All 3 critical review findings (CR-01, CR-02, CR-03) have been fixed and confirmed in code. Both warning-level fixes (WR-01, WR-02) have been applied. Four regression tests lock the fixes.
+No gaps. All 14 statically-verifiable gap-closure truths across 71-08/09/10 are VERIFIED by code inspection: the SW network-only /api guard + gym-v3 bump are in place and correctly ordered; all three wired screens read the camelCase contract with zero residual snake_case field reads; Home/Profile are bound to /client/me with all mock identity literals and fabricated renewal amounts removed; membership=null routes to the real 'Нет абонемента' empty state with no demo fallback; and seed_demo_data seeds both catalog tables with columns that match the ORM models.
 
-Remaining unfixed items from the review (WR-03, WR-04, WR-05, WR-06, IN-01, IN-05) are non-blocking for the phase goal:
-- WR-04 (`client_list_bookings` max-1 pagination): `useClientBookings` is exported but unused in BookScreen (which derives its view from real slots data). The BookScreen success criterion (SC #4: "Book screen fetches from real backend") is met via `useClientAvailableSlots`.
-- WR-06 (bookings cache key missing page): No user impact until BookScreen adds pagination.
-- WR-03, WR-05: Minor robustness/efficiency issues, no correctness defect.
+Status is `human_needed` (not `passed`) because the two blocker fixes that originally FAILED in live UAT (SW Cache-Storage state, real-data rendering) are inherently runtime behaviors. The code is correct; the original UAT method must confirm the runtime result before the phase can be marked fully passed.
 
-The only items pending are 3 human verifications requiring a live PWA session.
+One advisory regression (WR-01) is surfaced for follow-up: App.jsx:260 passes legacy plan slugs as `currentPlanId` while PlansSheet now matches real UUIDs, leaving the current-plan badge dead. This is cosmetic and does not block any gap-plan must-have.
 
 ---
 
-_Verified: 2026-05-30T18:00:00Z_
+_Verified: 2026-05-31_
 _Verifier: Claude (gsd-verifier)_

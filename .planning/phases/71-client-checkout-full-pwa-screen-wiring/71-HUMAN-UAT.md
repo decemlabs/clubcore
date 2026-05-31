@@ -1,22 +1,28 @@
 ---
-status: diagnosed
+status: partial
 phase: 71-client-checkout-full-pwa-screen-wiring
 source: [71-VERIFICATION.md, 71-REVIEW.md]
 started: 2026-05-30T00:00:00Z
-updated: 2026-05-30T22:30:00Z
+updated: 2026-05-31T00:00:00Z
 method: live Chrome DevTools walkthrough (dev stack — docker backend + vite :5174)
 ---
 
 ## Current Test
 
-[testing complete — 3 tests run, 2 issues + 1 pass; additional findings logged]
+[gap closure landed (71-08/09/10) — both blocker gaps fixed at code level and confirmed by code inspection (71-VERIFICATION.md: 14/14 statically-verifiable truths). Tests 1 & 2 reset to PENDING for a live-browser re-test; test 3 still passing.]
 
 ## Tests
 
 ### 1. ЮKassa membership purchase round-trip (anti-oracle poll)
 expected: Login → Plans → "Перейти к оплате" opens CheckoutSheet → confirm → redirect to ЮKassa → /payment/return shows only "Ожидаем подтверждение..." while pending, never active until webhook; abandoned → 30s timeout exit.
-result: issue
+result: pending
 severity: blocker
+resolution: |
+  Gap closed by 71-09: PlansSheet/PlanConfirm/CheckoutSheet adapters now read the
+  camelCase contract (priceKopecks/durationDays/sessionCount) — grep confirms zero
+  residual snake_case reads; seed_demo_data now seeds membership_plans + pt_package_plans
+  so the catalog is non-empty. Awaiting live re-test: confirm prices/durations render
+  as numbers and the ЮKassa redirect leg (needs sandbox shop creds).
 reported: |
   CR-02 wiring VERIFIED working end-to-end: login (+79999999999/111111) → Plans →
   "Перейти к оплате" → CheckoutSheet opens → "Оплатить" fires
@@ -36,8 +42,15 @@ reported: |
 
 ### 2. Service worker never caches /api/* at runtime
 expected: No /api/* entries in any SW cache; navigateFallbackDenylist excludes /api/, runtimeCaching empty; /api/* always hits network.
-result: issue
+result: pending
 severity: blocker
+resolution: |
+  Gap closed by 71-08: public/sw.js now has a url.pathname.startsWith('/api/')
+  network-only guard placed before the navigation and cache-first branches (zero
+  cache.put for /api/*), and VERSION bumped to gym-v3 so the activate handler evicts
+  the stale gym-v2 cache that held the authed /api/* entries. Awaiting live re-test:
+  load the app, confirm active worker is gym-v3, Cache Storage holds zero /api/* keys,
+  every /api/* request is "(from network)", and offline shell fallback still works.
 reported: |
   FAIL. Registered SW is the hand-written apps/client-pwa/public/sw.js (cache
   "gym-v2"), registered by services/pwa.js → registerPwa() in main.jsx:11 — NOT the
@@ -65,15 +78,17 @@ reported: |
 
 total: 3
 passed: 1
-issues: 2
-pending: 0
+issues: 0
+pending: 2
 skipped: 0
 blocked: 0
+note: 2 blocker gaps fixed at code level by 71-08/09/10 (VERIFICATION 14/14 static truths); reset to pending for live re-test
 
 ## Gaps
 
 - truth: "Service worker must never cache /api/* (PWA-07)"
-  status: failed
+  status: resolved
+  resolved_by: 71-08
   severity: blocker
   test: 2
   root_cause: "App registers hand-written public/sw.js (cache 'gym-v2') via registerPwa() in main.jsx:11. sw.js fetch handler is cache-first for all non-navigation GETs and caches any same-origin res.ok response, so /api/* (same-origin via dev proxy) gets cached, including authed /me + /home. The VitePWA workbox config with the /api denylist is generated but never registered."
@@ -89,7 +104,8 @@ blocked: 0
     - "An activate-time purge that deletes any existing /api/* entries from old caches on the client."
 
 - truth: "Plan/membership prices and durations display correctly in the checkout flow"
-  status: failed
+  status: resolved
+  resolved_by: 71-09
   severity: blocker
   test: 1
   root_cause: "Frontend adapters read snake_case fields (price_kopecks, duration_days, days_until_end, plan_name_snapshot, start_date, end_date) but the API serializes camelCase (priceKopecks, durationDays, ...). undefined / 100 = NaN → toLocaleString('ru-RU') renders 'не число'; durationDays undefined → 'undefined дней'."
@@ -102,7 +118,8 @@ blocked: 0
     - "Decide canonical casing (api-client schema.d.ts) and align the adapters to camelCase (or convert at the fetcher boundary)."
 
 - truth: "Wired screens display the logged-in client's real identity and membership (full PWA screen wiring)"
-  status: failed
+  status: resolved
+  resolved_by: 71-10
   severity: major
   test: 1
   root_cause: "HomeScreen userName is hardcoded to tweaks.userName || 'Саша' (never bound to /client/me); when /client/home returns membership=null the code falls back to demo getSubInfo(tweaks.subState) (HomeScreen.jsx:97-99,106) so a no-membership client sees a fake active 'Годовой, 47 дней' instead of the toSubInfo(null) 'Нет абонемента' state. ProfileScreen renders fully mock identity ('Саша Морозов / sasha@example.com / Годовой / 42 000 ₽') that does not match /client/me (Клиент Тестовый, no email, no membership) despite calling /client/me. Confirmed with the service worker cleared, so this is code-level, not stale cache."
