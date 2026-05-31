@@ -244,3 +244,18 @@ Plans:
 - [x] 999.4-04-PLAN.md — Frontend: PaymentReturnScreen success/pending/canceled restyle + state CSS (D-10/D-11/D-12)
 - [x] 999.4-05-PLAN.md — Frontend: CheckoutSheet restyle + info plate + server promo wiring (D-01/D-02/D-09/D-12/D-13)
 - [x] 999.4-06-PLAN.md — GAP: fix checkout amount units — pass kopecks into checkoutCtx so CheckoutSheet shows real price (sub + pt), promo original >= discounted (CPAY-01/CPAY-02)
+
+### Phase 999.5: client-pwa onboarding questionnaire + post-payment receipt-email (PENDING — UI)
+
+**Goal:** Add two new `apps/client-pwa` screens matching the approved mockups, both persisted to the backend: (1) a newbie onboarding questionnaire (4 steps — имя → цель → рост/вес → проверка → «Готово!», progress segments + slide transitions) shown for new clients and finishing into newbie Home; (2) a post-payment receipt-email screen («Куда отправить чек?» — email field with validation + domain-suggestion chips, 54-ФЗ reassurance note, «Отправить чек»/«Чек не нужен», success flash) shown after a successful payment from the PaymentReturnScreen success flow.
+
+**Depends on:** Phase 72, Phase 999.3 (newbie Home — onboarding finishes into it), Phase 999.4 (PaymentReturnScreen success flow + the `client_email_required_for_online_payment` gate)
+**Scope:** Frontend + backend. Backend: new client-profile fields (`name`/`goal`/`height_cm`/`weight_kg`) with a client-portal write endpoint, and a write path for `client.email` (feeds the 54-ФЗ fiscal receipt). Frontend: reuse the existing `styles.css` token system + `.state`/`.btn` primitives — no hardcoded hex; map mockup colors to `var(--token)` (mockups share the 999.4 jade/stone palette). Onboarding profile + receipt email both persist server-side (decision: "оба на бэкенд").
+**Open question (resolve in discuss/spec):** the backend currently raises `client_email_required_for_online_payment` BEFORE online payment (verified live in 999.4 UAT — dev client has no email and checkout blocks), which conflicts with collecting the receipt email *after* payment under 54-ФЗ (fiscal receipt generated at payment time). Resolve the email-timing contract — likely onboarding collects email up-front so checkout never blocks, and the post-payment screen confirms/edits the receipt destination.
+**Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/onboarding.html`, `.planning/design-inputs/client-pwa-newbie-and-payment/receipt-email.html`
+**UI hint:** yes
+
+**Plans:** not planned yet
+
+Plans:
+- [ ] (run /gsd:plan-phase 999.5)

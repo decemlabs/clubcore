@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Почта для чека — Мой зал</title>
+<style>
+  :root {
+    --accent: #2dd4a4;
+    --accent-deep: #0f9b76;
+    --accent-soft: #d6f5ea;
+
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #a8a29e;
+
+    --danger: #dc2626;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "Inter Variable", "Inter", system-ui, sans-serif;
+
+    --r-pill: 999px;
+    --r-lg: 20px;
+
+    --sh-1: 0 1px 2px rgba(28, 25, 23, 0.04);
+    --sh-2: 0 1px 3px rgba(28, 25, 23, 0.05), 0 4px 14px rgba(28, 25, 23, 0.04);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #e7e5e4;
+    color: var(--text);
+    min-height: 100vh;
+  }
+  button { font-family: inherit; }
+
+  .stage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+
+  /* Device */
+  .device {
+    width: 390px; height: 844px; position: relative;
+    border-radius: 54px; background: #0a0a0a; padding: 12px;
+    box-shadow: 0 50px 100px rgba(28, 25, 23, 0.25), 0 0 0 1px rgba(28, 25, 23, 0.15);
+  }
+  .device-inner {
+    position: absolute; inset: 12px;
+    border-radius: 44px; overflow: hidden;
+    background: var(--bg);
+  }
+  .island {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px; border-radius: 999px;
+    background: #000; z-index: 300; pointer-events: none;
+  }
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 10px; height: 44px;
+    color: var(--text); font-size: 15px; font-weight: 600;
+    pointer-events: none;
+  }
+  .status-bar span { font-variant-numeric: tabular-nums; }
+  .status-bar .glyphs { display: flex; gap: 6px; align-items: center; }
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; background: var(--text);
+    opacity: 0.85; border-radius: 3px; z-index: 10;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    padding-top: 44px;
+  }
+
+  /* Top bar */
+  .topbar {
+    height: 52px; padding: 0 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .topbar-btn {
+    width: 38px; height: 38px; border-radius: 999px;
+    border: 0.5px solid var(--border); background: var(--surface);
+    box-shadow: var(--sh-1);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text); cursor: pointer; padding: 0;
+    transition: transform 0.12s ease, background 0.15s;
+  }
+  .topbar-btn:active { transform: scale(0.94); background: var(--surface-2); }
+  .topbar-title { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .topbar-spacer { width: 38px; }
+
+  /* Body */
+  .body {
+    flex: 1;
+    display: flex; flex-direction: column;
+    padding: 4px 28px 0;
+    overflow: hidden;
+  }
+
+  /* ─── Spot illustration: fiscal receipt → email ─── */
+  .illus {
+    width: 100%; height: 158px;
+    position: relative;
+    margin: 2px 0 4px;
+    flex-shrink: 0;
+  }
+  /* subtle branded backdrop rings */
+  .illus .halo {
+    position: absolute; left: 50%; top: 52%;
+    transform: translate(-50%, -50%);
+    width: 188px; height: 188px; border-radius: 50%;
+    background:
+      radial-gradient(circle, color-mix(in oklab, var(--accent) 18%, transparent) 0%, transparent 62%);
+  }
+  .illus .ring {
+    position: absolute; left: 50%; top: 52%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 1.5px dashed color-mix(in oklab, var(--accent) 45%, transparent);
+    opacity: 0.5;
+  }
+  .illus .ring.r1 { width: 150px; height: 150px; }
+  .illus .ring.r2 { width: 198px; height: 198px; opacity: 0.28; }
+
+  /* floating decorative chips */
+  .spark {
+    position: absolute; border-radius: 3px;
+    background: var(--accent);
+    animation: float 3.4s ease-in-out infinite;
+  }
+  .spark.s1 { width: 9px; height: 9px; left: 30px; top: 18px; transform: rotate(18deg); background: var(--accent-deep); }
+  .spark.s2 { width: 7px; height: 7px; right: 36px; top: 30px; border-radius: 50%; animation-delay: 0.6s; }
+  .spark.s3 { width: 6px; height: 6px; right: 58px; bottom: 22px; transform: rotate(-12deg); animation-delay: 1.1s; background: var(--accent-deep); }
+  .spark.s4 { width: 8px; height: 8px; left: 46px; bottom: 26px; border-radius: 50%; animation-delay: 0.3s; }
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-7px) rotate(8deg); }
+  }
+
+  /* the receipt slip */
+  .receipt {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) rotate(-5deg);
+    width: 116px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    box-shadow: 0 14px 30px rgba(28, 25, 23, 0.12), 0 2px 6px rgba(28, 25, 23, 0.05);
+    border-radius: 10px 10px 0 0;
+    padding: 16px 15px 18px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 2;
+    /* torn / perforated bottom edge */
+    -webkit-mask:
+      linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat,
+      radial-gradient(circle 5px at 50% 100%, #0000 96%, #000) bottom left / 14px 14px repeat-x;
+    mask:
+      linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat,
+      radial-gradient(circle 5px at 50% 100%, #0000 96%, #000) bottom left / 14px 14px repeat-x;
+  }
+  .receipt .r-head {
+    display: flex; align-items: center; gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1.5px dashed var(--border-strong);
+  }
+  .receipt .r-mark {
+    width: 18px; height: 18px; border-radius: 6px;
+    background: var(--text); color: var(--bg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .receipt .r-mark svg { width: 11px; height: 11px; }
+  .receipt .r-title { height: 5px; width: 46px; border-radius: 999px; background: var(--border-strong); }
+  .receipt .r-line { height: 4px; border-radius: 999px; background: var(--border); }
+  .receipt .r-line.w1 { width: 100%; }
+  .receipt .r-line.w2 { width: 72%; }
+  .receipt .r-line.w3 { width: 86%; }
+  .receipt .r-total {
+    margin-top: 3px; padding-top: 8px;
+    border-top: 1.5px dashed var(--border-strong);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .receipt .r-total .lbl { height: 5px; width: 26px; border-radius: 999px; background: var(--border-strong); }
+  .receipt .r-total .amt { height: 7px; width: 38px; border-radius: 999px; background: var(--accent); }
+
+  /* @ envelope badge clipped to the corner */
+  .at-badge {
+    position: absolute;
+    right: 40px; bottom: 30px;
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #06120c;
+    border: 4px solid var(--bg);
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 12px 26px rgba(15, 155, 118, 0.4);
+    z-index: 3;
+    animation: pop 0.5s 0.1s cubic-bezier(0.32, 1.6, 0.32, 1) both;
+  }
+  .at-badge svg { width: 30px; height: 30px; }
+  @keyframes pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.08); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Heading */
+  .heading { text-align: center; margin-top: 4px; }
+  .title {
+    font-size: 24px; font-weight: 700;
+    letter-spacing: -0.5px; line-height: 1.2;
+    text-wrap: balance;
+  }
+  .subtitle {
+    margin-top: 10px;
+    font-size: 14.5px; line-height: 1.5;
+    color: var(--text-2);
+    text-wrap: pretty;
+    max-width: 300px; margin-left: auto; margin-right: auto;
+  }
+
+  /* Email field */
+  .field {
+    margin-top: 22px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0 14px;
+    height: 56px;
+    box-shadow: var(--sh-1);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field.focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field.error { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12); }
+  .field .icon { color: var(--text-3); display: inline-flex; flex-shrink: 0; transition: color 0.15s; }
+  .field.focused .icon { color: var(--accent-deep); }
+  .field input {
+    flex: 1; appearance: none; border: 0; background: transparent;
+    height: 100%; padding: 0;
+    font-family: inherit; font-size: 17px; font-weight: 500;
+    color: var(--text); outline: none; letter-spacing: 0.1px;
+  }
+  .field input::placeholder { color: var(--text-3); font-weight: 400; }
+  .field .clear {
+    border: 0; background: var(--surface-2); color: var(--text-3);
+    width: 24px; height: 24px; border-radius: 999px; cursor: pointer;
+    display: none; align-items: center; justify-content: center; flex-shrink: 0;
+    padding: 0;
+  }
+  .field .clear.show { display: inline-flex; }
+
+  .field-hint {
+    margin-top: 10px; font-size: 12.5px; line-height: 1.45;
+    color: var(--text-3); text-align: center; text-wrap: pretty;
+    min-height: 18px;
+  }
+  .field-hint.err { color: var(--danger); }
+
+  /* Suggestion chips */
+  .suggest {
+    margin-top: 12px;
+    display: flex; flex-wrap: wrap; gap: 7px; justify-content: center;
+  }
+  .chip {
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-2);
+    height: 30px; padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12.5px; font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--sh-1);
+    transition: transform 0.12s ease, border-color 0.15s, color 0.15s;
+  }
+  .chip:active { transform: scale(0.96); }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Reassurance note */
+  .note {
+    margin-top: 14px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 16px;
+    padding: 13px 15px;
+    box-shadow: var(--sh-1);
+  }
+  .note .n-head {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 11px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .note .n-shield {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: var(--accent-soft); color: var(--accent-deep);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .note .n-shield svg { width: 15px; height: 15px; }
+  .note .n-head .n-title {
+    font-size: 13px; font-weight: 650; letter-spacing: -0.2px; color: var(--text);
+  }
+  .note .n-list {
+    margin-top: 11px;
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  .note .n-row {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 12.5px; line-height: 1.35; color: var(--text-2);
+    text-wrap: pretty;
+  }
+  .note .n-row svg {
+    width: 14px; height: 14px; color: var(--accent-deep); flex-shrink: 0;
+  }
+  .note .n-row strong { color: var(--text); font-weight: 600; }
+
+  /* CTA */
+  .cta-wrap {
+    margin-top: auto;
+    padding: 16px 0 26px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .btn {
+    appearance: none; border: 0;
+    background: var(--text); color: var(--bg);
+    height: 54px; padding: 0 22px;
+    border-radius: var(--r-pill);
+    font-size: 16px; font-weight: 600; letter-spacing: -0.2px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform 0.12s ease, opacity 0.15s ease, background 0.15s;
+    width: 100%;
+  }
+  .btn:active:not(:disabled) { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-accent { background: var(--accent); color: #06120c; }
+  .btn .spin {
+    width: 18px; height: 18px; border-radius: 999px;
+    border: 2px solid rgba(6, 18, 12, 0.25); border-top-color: #06120c;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn-ghost {
+    background: transparent; color: var(--text-2);
+    height: 44px; font-weight: 500; font-size: 14px;
+  }
+  .btn-ghost:active { background: var(--surface-2); }
+
+  /* Success flash */
+  .done-flash {
+    position: absolute; inset: 0; z-index: 40;
+    background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 0 40px; text-align: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.24s ease;
+  }
+  .done-flash.show { opacity: 1; pointer-events: auto; }
+  .done-circle {
+    width: 88px; height: 88px; border-radius: 999px;
+    background: var(--accent); color: #06120c;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 14px 40px rgba(45, 212, 164, 0.45);
+    animation: pop 0.4s cubic-bezier(0.32, 1.6, 0.32, 1) both;
+  }
+  .done-circle svg { width: 42px; height: 42px; }
+  .done-flash .dt { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+  .done-flash .ds { font-size: 14px; color: var(--text-2); line-height: 1.45; }
+  .done-flash .ds b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="device" data-screen-label="Почта для чека">
+      <div class="device-inner">
+        <div class="island"></div>
+
+        <div class="status-bar" aria-hidden="true">
+          <span>9:41</span>
+          <div class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="0.5" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="0.5" fill="currentColor"/><rect x="9" y="2.5" width="3" height="8.5" rx="0.5" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="0.5" fill="currentColor"/></svg>
+            <svg width="24" height="11" viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="3" stroke="currentColor" stroke-opacity="0.4" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5" fill="currentColor"/><rect x="21" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor" fill-opacity="0.4"/></svg>
+          </div>
+        </div>
+
+        <div class="screen">
+          <div class="topbar">
+            <button class="topbar-btn" type="button" aria-label="Назад" onclick="history.back()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+            </button>
+            <div class="topbar-title">Чек об оплате</div>
+            <div class="topbar-spacer"></div>
+          </div>
+
+          <div class="body">
+            <!-- Spot illustration -->
+            <div class="illus" aria-hidden="true">
+              <div class="halo"></div>
+              <div class="ring r2"></div>
+              <div class="ring r1"></div>
+
+              <span class="spark s1"></span>
+              <span class="spark s2"></span>
+              <span class="spark s3"></span>
+              <span class="spark s4"></span>
+
+              <div class="receipt">
+                <div class="r-head">
+                  <span class="r-mark">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9v6M9 7v10M15 7v10M18 9v6M9 12h6"></path></svg>
+                  </span>
+                  <span class="r-title"></span>
+                </div>
+                <div class="r-line w1"></div>
+                <div class="r-line w3"></div>
+                <div class="r-line w2"></div>
+                <div class="r-total">
+                  <span class="lbl"></span>
+                  <span class="amt"></span>
+                </div>
+              </div>
+
+              <div class="at-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+                  <path d="M4 7l8 6 8-6"></path>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Heading -->
+            <div class="heading">
+              <div class="title">Куда отправить чек?</div>
+              <div class="subtitle">
+                Укажите почту — на неё придёт электронный кассовый чек об оплате абонемента.
+              </div>
+            </div>
+
+            <!-- Email field -->
+            <div class="field" id="field">
+              <span class="icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M4 7l8 6 8-6"></path></svg>
+              </span>
+              <input
+                id="email"
+                type="email"
+                inputmode="email"
+                autocomplete="email"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder="you@example.com"
+              />
+              <button class="clear" id="clear" type="button" aria-label="Очистить">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+              </button>
+            </div>
+            <div class="field-hint" id="hint">Чек придёт в течение пары минут после оплаты.</div>
+
+            <!-- Domain suggestions -->
+            <div class="suggest" id="suggest"></div>
+
+            <!-- Reassurance -->
+            <div class="note" data-comment-anchor="a7c961e2:67">
+              <div class="n-head">
+                <span class="n-shield" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path><path d="M9.5 12l1.8 1.8 3.4-3.6"></path></svg>
+                </span>
+                <span class="n-title">Почта в безопасности</span>
+              </div>
+              <div class="n-list">
+                <div class="n-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+                  <span>Используем только для чека по <strong>54-ФЗ</strong></span>
+                </div>
+                <div class="n-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+                  <span>Без рекламных рассылок и передачи третьим лицам</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- CTA -->
+            <div class="cta-wrap">
+              <button class="btn btn-accent" id="submit" type="button" disabled>
+                <span id="submit-label">Отправить чек</span>
+              </button>
+              <button class="btn btn-ghost" type="button" id="skip">Чек не нужен</button>
+            </div>
+          </div>
+
+          <!-- Success -->
+          <div class="done-flash" id="done" aria-hidden="true">
+            <div class="done-circle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg>
+            </div>
+            <div class="dt">Чек отправлен</div>
+            <div class="ds">Письмо придёт на<br/><b id="done-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6f16001a2f0a170e021f030a410c0002">[email&#160;protected]</a></b></div>
+          </div>
+
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+(function () {
+  const field   = document.getElementById('field');
+  const input   = document.getElementById('email');
+  const clearBtn= document.getElementById('clear');
+  const hint    = document.getElementById('hint');
+  const suggest = document.getElementById('suggest');
+  const submit  = document.getElementById('submit');
+  const label   = document.getElementById('submit-label');
+  const done    = document.getElementById('done');
+  const doneEmail = document.getElementById('done-email');
+  const skip    = document.getElementById('skip');
+
+  const DOMAINS = ['gmail.com', 'yandex.ru', 'mail.ru', 'icloud.com'];
+  const RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const defaultHint = 'Чек придёт в течение пары минут после оплаты.';
+
+  function isValid(v) { return RE.test(v.trim()); }
+
+  function renderSuggest() {
+    const v = input.value.trim();
+    suggest.innerHTML = '';
+    const at = v.indexOf('@');
+    // Only suggest once a local part exists and there's no full domain yet
+    if (at <= 0) return;
+    const local = v.slice(0, at);
+    const domainPart = v.slice(at + 1).toLowerCase();
+    if (v.endsWith('@') || (domainPart && !domainPart.includes('.'))) {
+      DOMAINS
+        .filter(d => !domainPart || d.startsWith(domainPart))
+        .slice(0, 4)
+        .forEach(d => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'chip';
+          chip.textContent = local + '@' + d;
+          chip.addEventListener('click', () => {
+            input.value = local + '@' + d;
+            update();
+            input.focus();
+          });
+          suggest.appendChild(chip);
+        });
+    }
+  }
+
+  function update() {
+    const v = input.value;
+    clearBtn.classList.toggle('show', v.length > 0);
+    field.classList.remove('error');
+    hint.classList.remove('err');
+    hint.textContent = defaultHint;
+    submit.disabled = !isValid(v);
+    renderSuggest();
+  }
+
+  input.addEventListener('input', update);
+  input.addEventListener('focus', () => field.classList.add('focused'));
+  input.addEventListener('blur', () => {
+    field.classList.remove('focused');
+    const v = input.value.trim();
+    if (v && !isValid(v)) {
+      field.classList.add('error');
+      hint.classList.add('err');
+      hint.textContent = 'Похоже, в адресе опечатка. Проверьте почту.';
+    }
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !submit.disabled) submit.click();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    update();
+    input.focus();
+  });
+
+  submit.addEventListener('click', () => {
+    const v = input.value.trim();
+    if (!isValid(v)) return;
+    submit.disabled = true;
+    const orig = submit.innerHTML;
+    submit.innerHTML = '<span class="spin"></span>';
+    setTimeout(() => {
+      doneEmail.textContent = v;
+      done.classList.add('show');
+      setTimeout(() => {
+        // demo loopback
+        done.classList.remove('show');
+        submit.innerHTML = orig;
+        input.value = '';
+        update();
+      }, 2200);
+    }, 1000);
+  });
+
+  skip.addEventListener('click', () => {
+    skip.textContent = 'Хорошо, без чека';
+    skip.disabled = true;
+    setTimeout(() => { skip.textContent = 'Чек не нужен'; skip.disabled = false; }, 1400);
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>

@@ -86,6 +86,7 @@ Progress: [██████████] 100%
 
 - Phase 999.3 added: client-pwa Home newbie (no-subscription) state — UI, frontend-only
 - Phase 999.4 added: client-pwa Checkout visual restyle — UI, ЮKassa redirect unchanged (D-71-04), no in-app card form
+- Phase 999.5 added: client-pwa onboarding questionnaire + post-payment receipt-email — UI + backend (client profile fields name/goal/height_cm/weight_kg + endpoint, client.email write for 54-ФЗ receipt). Open question: email-timing vs `client_email_required_for_online_payment` gate (collect email "после оплаты" conflicts with email-required-before-pay; resolve in discuss/spec)
 
 ### Key v2.0 Decisions (pre-locked from research)
 
