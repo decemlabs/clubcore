@@ -84,10 +84,10 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### E2E Verification Gate
 
-- [ ] **VER-01**: Live `docker compose up` + PWA: сквозной клиентский флоу (phone-OTP login → home → book slot → checkout → QR check-in → history) проходит end-to-end
+- [x] **VER-01**: Live `docker compose up` + PWA: сквозной клиентский флоу (phone-OTP login → home → book slot → checkout → QR check-in → history) проходит end-to-end
 - [x] **VER-02**: IDOR / anti-oracle / two-principal автотесты зелёные; межклиентский доступ невозможен
 - [x] **VER-03**: Drift gate подтверждает staff-контракт byte-identical; ни один staff-эндпоинт не сломан
-- [ ] **VER-04**: Runbook v2.0 авторизован (клиентские флоу + auth); live-walkthrough служит milestone gate (per v1.6/v1.9 прецедент)
+- [x] **VER-04**: Runbook v2.0 авторизован (клиентские флоу + auth); live-walkthrough служит milestone gate (per v1.6/v1.9 прецедент)
 
 ## Future Requirements
 
@@ -175,10 +175,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | HND-01 | Phase 72 | Complete |
 | HND-02 | Phase 72 | Complete |
 | HND-03 | Phase 72 | Complete |
-| VER-01 | Phase 72 | Pending |
+| VER-01 | Phase 72 | Complete |
 | VER-02 | Phase 72 | Complete |
 | VER-03 | Phase 72 | Complete |
-| VER-04 | Phase 72 | Pending |
+| VER-04 | Phase 72 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 47 total

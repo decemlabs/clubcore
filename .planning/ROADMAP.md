@@ -46,7 +46,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 69: Client Read Endpoints + PWA Stack Alignment** - All client-scoped read endpoints (membership, history, catalogs) + PWA bun→pnpm/TS/Vite-6 alignment with verified build; IDOR sweep covers read surface (completed 2026-05-29)
 - [x] **Phase 70: Client Bookings + QR Self Check-In** - Self-booking (race-safe via existing partial-UNIQUE), cancellation policy, signed short-lived QR token, and QR-triggered visit creation via existing anti-fraud path (completed 2026-05-30)
 - [x] **Phase 71: Client Checkout + Full PWA Screen Wiring** - Client-initiated ЮKassa membership/PT-package purchase (server-side price, webhook-only activation, 54-ФЗ email gate); all PWA screens wired to real backend (completed 2026-05-30)
-- [ ] **Phase 72: OpenAPI Handoff + CI + E2E Verification** - `Client-Portal` tag in spec, `_v20Checks` guards, client-pwa CI gates, drift gate confirms staff contract byte-identical; live E2E runbook gate
+- [x] **Phase 72: OpenAPI Handoff + CI + E2E Verification** - `Client-Portal` tag in spec, `_v20Checks` guards, client-pwa CI gates, drift gate confirms staff contract byte-identical; live E2E runbook gate (completed 2026-05-31)
 
 ## Phase Details
 
@@ -171,7 +171,7 @@ Plans:
 - [x] 72-01-PLAN.md — Unify client paths under Client-Portal tag + additive openapi.json regen + staff drift verify (HND-01, VER-03)
 - [x] 72-02-PLAN.md — Byte-stable schema.d.ts regen + _v20Checks forward-guard (23 ops) (HND-02)
 - [x] 72-03-PLAN.md — CI: parallel client-pwa job + frontend de-dup + backend pytest/Postgres/Redis gate for IDOR/two-principal tests (HND-03, VER-02)
-- [ ] 72-04-PLAN.md — Live read-path E2E walkthrough (milestone gate) + v2.0 runbook + operator-evidence scaffold (VER-01, VER-04)
+- [x] 72-04-PLAN.md — Live read-path E2E walkthrough (milestone gate) + v2.0 runbook + operator-evidence scaffold (VER-01, VER-04)
 
 ## Progress
 
@@ -193,7 +193,7 @@ Plans:
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete    | 2026-05-30 |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 10/10 | Complete   | 2026-05-30 |
-| 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 3/4 | In Progress|  |
+| 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 4/4 | Complete   | 2026-05-31 |
 
 ---
 
