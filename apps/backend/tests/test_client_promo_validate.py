@@ -207,10 +207,15 @@ async def test_valid_fixed_discount_caps_at_price(
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> None:
-    """Fixed 500_00-kopeck code where plan price=300_00 → discount caps at price; newAmount=0."""
+    """Fixed 500_00-kopeck code where plan price=300_00 → newAmount would be 0 → 422 not_applicable.
+
+    CR-03 fix: a 100% (or more) discount that results in a zero final amount is rejected
+    server-side with PromoNotApplicableError (code='not_applicable') BEFORE reaching ЮKassa,
+    since ЮKassa requires amount > 0. Previously this returned HTTP 200 with newAmountKopecks=0.
+    """
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=30_000)  # 300 RUB
-    # discount_value=50000 (500 RUB fixed) > plan price (300 RUB) → caps at price
+    # discount_value=50000 (500 RUB fixed) > plan price (300 RUB) → caps at price → 0 ₽
     await _seed_promo_code(
         db_session, code="TESTFIXED500", discount_type="fixed", discount_value=50_000
     )
@@ -222,10 +227,36 @@ async def test_valid_fixed_discount_caps_at_price(
         headers=_promo_headers(async_client),
         json={"code": "TESTFIXED500", "kind": "sub", "planId": str(plan.id)},
     )
+    # CR-03: zero-amount discount raises PromoNotApplicableError → 422 not_applicable
+    assert r.status_code == 422, r.text
+    body = r.json()
+    assert body["code"] == "not_applicable", f"Expected 'not_applicable', got {body.get('code')!r}"
+
+
+async def test_valid_fixed_discount_partial(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> None:
+    """Fixed 100_00-kopeck code on a 300_00-kopeck plan → newAmount=200_00 (positive → success)."""
+    client = await _seed_client(db_session)
+    plan = await _seed_membership_plan(db_session, price_kopecks=30_000)  # 300 RUB
+    # discount_value=10000 (100 RUB fixed) < plan price (300 RUB) → partial discount
+    await _seed_promo_code(
+        db_session, code="TESTFIXED100", discount_type="fixed", discount_value=10_000
+    )
+
+    await _auth_as_client(async_client, db_session, client)
+
+    r = await async_client.post(
+        "/api/v1/client/promo/validate",
+        headers=_promo_headers(async_client),
+        json={"code": "TESTFIXED100", "kind": "sub", "planId": str(plan.id)},
+    )
     assert r.status_code == 200, r.text
     data = r.json()["data"]
-    assert data["discountKopecks"] == 30_000, f"Expected 30000 (capped at price), got {data['discountKopecks']}"
-    assert data["newAmountKopecks"] == 0, f"Expected 0, got {data['newAmountKopecks']}"
+    assert data["discountKopecks"] == 10_000, f"Expected 10000, got {data['discountKopecks']}"
+    assert data["newAmountKopecks"] == 20_000, f"Expected 20000, got {data['newAmountKopecks']}"
     assert data["discountType"] == "fixed"
 
 

@@ -524,26 +524,18 @@ async def client_checkout_membership(
     price_override: int | None = None
     applied_promo_code_id: UUID | None = None
     if promo_code:
-        _discount_kopecks, price_override, _discount_type = await _promo_service.validate_promo_code(
-            session,
-            code=promo_code,
-            kind="sub",
-            plan_id=plan_id,
-            client_id=client.id,
-        )
-        # Resolve the PromoCode.id for the FK column.
-        from sqlalchemy import text as _text  # noqa: PLC0415 — local to avoid circular at module level
-        promo_id_row = (
-            await session.execute(
-                _text(
-                    "SELECT id FROM promo_codes "
-                    "WHERE upper(code) = :code AND deleted_at IS NULL"
-                ),
-                {"code": promo_code.upper()},
+        # CR-02 fix: validate_promo_code now returns promo_id as the 4th tuple element,
+        # eliminating the separate SELECT id FROM promo_codes lookup that had a TOCTOU
+        # window (promo could be soft-deleted between the two queries).
+        _discount_kopecks, price_override, _discount_type, applied_promo_code_id = (
+            await _promo_service.validate_promo_code(
+                session,
+                code=promo_code,
+                kind="sub",
+                plan_id=plan_id,
+                client_id=client.id,
             )
-        ).mappings().one_or_none()
-        if promo_id_row is not None:
-            applied_promo_code_id = promo_id_row["id"]
+        )
 
     # CR-01 (fix): generate a FRESH op_id (uuid4) for the redirect return_url,
     # mirroring the PT path. Deriving the PK from the per-day idem_key collided
@@ -603,26 +595,16 @@ async def client_checkout_pt_package(
     price_override: int | None = None
     applied_promo_code_id: UUID | None = None
     if promo_code:
-        _discount_kopecks, price_override, _discount_type = await _promo_service.validate_promo_code(
-            session,
-            code=promo_code,
-            kind="pt",
-            plan_id=plan_id,
-            client_id=client.id,
-        )
-        # Resolve the PromoCode.id for the FK column.
-        from sqlalchemy import text as _text  # noqa: PLC0415 — local to avoid circular at module level
-        promo_id_row = (
-            await session.execute(
-                _text(
-                    "SELECT id FROM promo_codes "
-                    "WHERE upper(code) = :code AND deleted_at IS NULL"
-                ),
-                {"code": promo_code.upper()},
+        # CR-02 fix: use the promo_id returned by validate_promo_code directly.
+        _discount_kopecks, price_override, _discount_type, applied_promo_code_id = (
+            await _promo_service.validate_promo_code(
+                session,
+                code=promo_code,
+                kind="pt",
+                plan_id=plan_id,
+                client_id=client.id,
             )
-        ).mappings().one_or_none()
-        if promo_id_row is not None:
-            applied_promo_code_id = promo_id_row["id"]
+        )
 
     op_id = uuid4()
     return_url = (
@@ -702,6 +684,8 @@ async def get_client_payment_status(
                                 ON op.membership_plan_id = m.plan_id
                             WHERE op.id = :op_id
                               AND m.client_id = op.client_id
+                            ORDER BY m.created_at DESC
+                            LIMIT 1
                         ))
                         OR
                         (p.subject_kind = 'pt_package' AND p.subject_id IN (
@@ -744,7 +728,7 @@ async def validate_promo_code(
     Raises per-reason ValidationAppError subclasses (D-09 distinct error codes).
     No session.commit() — read-only path.
     """
-    discount_kopecks, new_amount_kopecks, discount_type = (
+    discount_kopecks, new_amount_kopecks, discount_type, _promo_id = (
         await _promo_service.validate_promo_code(
             session,
             code=code,
