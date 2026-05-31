@@ -62,6 +62,8 @@ from app.modules.client_portal.schemas import (
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
+    ClientPromoValidateRequest,
+    ClientPromoValidateResponse,
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientVisitItem,
@@ -652,6 +654,49 @@ async def client_get_payment_status(
     A non-owned payment_id is indistinguishable from a non-existent one (404-collapse).
     No CSRF dep — GET is safe (T-71-09: CSRF only on state-changing POST).
     No try/except — AppError bubbles to _app_error_handler.
+    Phase 999.4 D-11: receiptUrl populated from fiscal_receipts (succeeded only).
     """
     result = await service.get_client_payment_status(session, payment_id, client.id)
+    return envelope(result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 999.4 Plan 02 — promo code validate endpoint (D-06/D-09)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/promo/validate",
+    response_model=ResponseEnvelope[ClientPromoValidateResponse],
+    status_code=status.HTTP_200_OK,
+    operation_id="client_validate_promo",
+    summary=(
+        "Validate a promo code and return the authoritative discounted amount (D-06); "
+        "422 with per-reason error code if invalid (D-09)"
+    ),
+)
+async def client_validate_promo(
+    payload: ClientPromoValidateRequest,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientPromoValidateResponse]:
+    """D-06: validate promo code server-side, return authoritative discounted amount.
+
+    RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+    No try/except — AppError bubbles to _app_error_handler.
+    Read-only path — no session.commit() (D-32-10/D-49-19 caller-owns-txn).
+    D-09: distinct error codes per failure reason (not_found / expired /
+    not_yet_active / used_up / not_applicable / inactive).
+    T-999.4-04: client passes only code + kind + planId — never a price.
+    T-999.4-06: require_client() gate first; validate logic unreachable unauthenticated.
+    T-999.4-07: verify_client_csrf dep on this POST (RBAC-04).
+    """
+    result = await service.validate_promo_code(
+        session,
+        code=payload.code,
+        kind=payload.kind,
+        plan_id=payload.plan_id,
+        client_id=client.id,
+    )
     return envelope(result)

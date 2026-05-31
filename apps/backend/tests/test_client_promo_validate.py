@@ -17,11 +17,12 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+import pytest_asyncio
+from fastapi import FastAPI
 from httpx import AsyncClient
-from sqlalchemy import text
+from redis.asyncio import Redis
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.permissions import Role
@@ -32,6 +33,19 @@ from app.modules.memberships.models import MembershipPlan
 from app.modules.promo_codes.models import PromoCode
 
 pytestmark = pytest.mark.asyncio
+
+
+# ---------------------------------------------------------------------------
+# Redis clean fixture — flush between tests to reset rate-limit keys
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def redis_clean(app: FastAPI) -> Redis:
+    """Flush Redis between tests so OTP rate-limit keys don't bleed across tests."""
+    redis: Redis = app.state.redis
+    await redis.flushdb()
+    return redis
 
 # ---------------------------------------------------------------------------
 # Auth helper (mirrors test_checkout.py:_auth_as_client)
@@ -167,6 +181,7 @@ async def _seed_promo_code(
 async def test_valid_percentage_discount(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """Active 10% code on a 1_000_00-kopeck plan → discountKopecks=10000, newAmountKopecks=90000."""
     client = await _seed_client(db_session)
@@ -190,6 +205,7 @@ async def test_valid_percentage_discount(
 async def test_valid_fixed_discount_caps_at_price(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """Fixed 500_00-kopeck code where plan price=300_00 → discount caps at price; newAmount=0."""
     client = await _seed_client(db_session)
@@ -216,6 +232,7 @@ async def test_valid_fixed_discount_caps_at_price(
 async def test_percentage_floor_division(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """10% on a 33_333-kopeck plan → floor(33333 * 1000 / 100 / 100) = 3333 (floor, not 3333.3)."""
     client = await _seed_client(db_session)
@@ -244,6 +261,7 @@ async def test_percentage_floor_division(
 async def test_promo_not_found(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """Unknown code → HTTP 422, error code 'not_found'."""
     client = await _seed_client(db_session)
@@ -263,6 +281,7 @@ async def test_promo_not_found(
 async def test_promo_inactive(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """is_active=False → error code 'inactive'."""
     client = await _seed_client(db_session)
@@ -283,6 +302,7 @@ async def test_promo_inactive(
 async def test_promo_expired(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """now > valid_until → error code 'expired'."""
     client = await _seed_client(db_session)
@@ -306,6 +326,7 @@ async def test_promo_expired(
 async def test_promo_not_yet_active(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """now < valid_from → error code 'not_yet_active'."""
     client = await _seed_client(db_session)
@@ -329,6 +350,7 @@ async def test_promo_not_yet_active(
 async def test_promo_not_applicable(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """applicable_to='pt_package' but kind='sub' → error code 'not_applicable'."""
     client = await _seed_client(db_session)
@@ -351,6 +373,7 @@ async def test_promo_not_applicable(
 async def test_promo_used_up_per_client_limit(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """per_client_limit=1 with one prior redemption by this client → error code 'used_up'."""
     client = await _seed_client(db_session)
@@ -375,8 +398,8 @@ async def test_promo_used_up_per_client_limit(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect')"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
         ),
         {
             "id": str(op_id),
@@ -417,6 +440,7 @@ async def test_promo_used_up_per_client_limit(
 async def test_promo_used_up_global(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """max_uses=1 globally reached → error code 'used_up'."""
     client1 = await _seed_client(db_session)
@@ -432,8 +456,8 @@ async def test_promo_used_up_global(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect')"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
         ),
         {
             "id": str(op_id),
@@ -494,6 +518,7 @@ async def test_promo_validate_requires_auth(
 async def test_promo_validate_requires_csrf(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """Authenticated POST without X-CSRF-Token → 403 csrf_mismatch."""
     client = await _seed_client(db_session)
@@ -519,6 +544,7 @@ async def test_promo_validate_requires_csrf(
 async def test_payment_status_includes_receipt_url_when_succeeded_fiscal_receipt_exists(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """GET /payments/{id}/status for a succeeded payment WITH a succeeded fiscal receipt
     returns receiptUrl = 'https://yookassa.ru/my/receipt/{yookassa_receipt_id}' (D-11).
@@ -532,8 +558,8 @@ async def test_payment_status_includes_receipt_url_when_succeeded_fiscal_receipt
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect')"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
         ),
         {
             "id": str(op_id),
@@ -557,8 +583,12 @@ async def test_payment_status_includes_receipt_url_when_succeeded_fiscal_receipt
     membership_id = uuid4()
     await db_session.execute(
         text(
-            "INSERT INTO memberships (id, client_id, membership_plan_id, start_date, end_date, status) "
-            "VALUES (:id, :client_id, :plan_id, CURRENT_DATE, CURRENT_DATE + 30, 'active')"
+            "INSERT INTO memberships "
+            "(id, client_id, plan_id, plan_name_snapshot, duration_days_snapshot, "
+            " price_kopecks_snapshot, freeze_days_limit_snapshot, start_date, end_date, "
+            " status, activation_policy) "
+            "VALUES (:id, :client_id, :plan_id, 'TestPlan', 30, 100000, 0, "
+            "        CURRENT_DATE, CURRENT_DATE + 30, 'active', 'purchase_date')"
         ),
         {
             "id": str(membership_id),
@@ -608,6 +638,7 @@ async def test_payment_status_includes_receipt_url_when_succeeded_fiscal_receipt
 async def test_payment_status_receipt_url_null_when_no_succeeded_fiscal_receipt(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """GET /payments/{id}/status for a payment with NO succeeded fiscal receipt
     → receiptUrl is null/absent (D-11 — honest, never fabricated).
@@ -621,8 +652,8 @@ async def test_payment_status_receipt_url_null_when_no_succeeded_fiscal_receipt(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'pending', 'redirect')"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'pending', 'redirect', gen_random_uuid())"
         ),
         {
             "id": str(op_id),
@@ -648,6 +679,7 @@ async def test_payment_status_receipt_url_null_when_no_succeeded_fiscal_receipt(
 async def test_payment_status_receipt_url_null_when_fiscal_receipt_pending(
     async_client: AsyncClient,
     db_session: AsyncSession,
+    redis_clean: Redis,
 ) -> None:
     """GET /payments/{id}/status: a fiscal_receipts row with status='pending' (not succeeded)
     → receiptUrl is null (D-11: only succeeded receipts produce a URL).
@@ -660,8 +692,8 @@ async def test_payment_status_receipt_url_null_when_fiscal_receipt_pending(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect')"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
         ),
         {
             "id": str(op_id),
@@ -678,8 +710,12 @@ async def test_payment_status_receipt_url_null_when_fiscal_receipt_pending(
     membership_id = uuid4()
     await db_session.execute(
         text(
-            "INSERT INTO memberships (id, client_id, membership_plan_id, start_date, end_date, status) "
-            "VALUES (:id, :client_id, :plan_id, CURRENT_DATE, CURRENT_DATE + 30, 'active')"
+            "INSERT INTO memberships "
+            "(id, client_id, plan_id, plan_name_snapshot, duration_days_snapshot, "
+            " price_kopecks_snapshot, freeze_days_limit_snapshot, start_date, end_date, "
+            " status, activation_policy) "
+            "VALUES (:id, :client_id, :plan_id, 'TestPlan', 30, 100000, 0, "
+            "        CURRENT_DATE, CURRENT_DATE + 30, 'active', 'purchase_date')"
         ),
         {"id": str(membership_id), "client_id": str(client.id), "plan_id": str(plan.id)},
     )

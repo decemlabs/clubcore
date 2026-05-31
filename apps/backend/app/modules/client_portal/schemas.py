@@ -255,7 +255,39 @@ class ClientPaymentStatusResponse(ResponseData):
     """Coarse payment status (CPAY-03 anti-oracle).
 
     Only 'pending' | 'succeeded' | 'canceled' — never activation or membership details.
+    Phase 999.4 D-11: receipt_url exposed when a ЮKassa fiscal receipt exists and succeeded.
     """
 
     id: UUID
     status: str  # Literal['pending', 'succeeded', 'canceled'] at runtime
+    receipt_url: str | None = None  # wire: receiptUrl; None if not yet available (D-11 honest)
+
+
+# ---------------------------------------------------------------------------
+# Phase 999.4 Plan 02 — promo code validate schemas (D-06)
+# ---------------------------------------------------------------------------
+
+
+class ClientPromoValidateRequest(ResponseData):
+    """POST /client/promo/validate request body (D-06).
+
+    camelCase wire: code, kind, planId (via alias_generator=to_camel on ResponseData).
+    Client passes ONLY the code + product kind + planId — never a price (T-999.4-04).
+    Server reads plan price and computes authoritative discounted amount.
+    """
+
+    code: str      # raw promo code (server normalizes to upper)
+    kind: str      # 'sub' | 'pt' (maps to 'membership' | 'pt_package' server-side)
+    plan_id: UUID  # wire: planId
+
+
+class ClientPromoValidateResponse(ResponseData):
+    """Promo code validate response — server-authoritative discounted amounts (D-06).
+
+    camelCase wire: discountKopecks, newAmountKopecks, discountType.
+    All amounts in integer kopecks (BigInteger discipline — no float, no Decimal).
+    """
+
+    discount_kopecks: int    # wire: discountKopecks — computed discount
+    new_amount_kopecks: int  # wire: newAmountKopecks — authoritative final amount
+    discount_type: str       # wire: discountType — 'percentage' | 'fixed'

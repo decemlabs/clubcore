@@ -64,10 +64,12 @@ from app.modules.client_portal.schemas import (
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
+    ClientPromoValidateResponse,
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientVisitItem,
 )
+import app.modules.promo_codes.service as _promo_service
 
 _EXPIRING_SOON_DAYS = 7  # days threshold for expiring_soon flag (D-69-02)
 
@@ -596,12 +598,97 @@ async def get_client_payment_status(
     Anti-oracle: returns only 'pending' | 'succeeded' | 'canceled'.
     D-20-IDOR: fetch_client_payment_status has mandatory :client_id filter;
     None result → NotFoundError 404-collapse (anti-oracle, non-owned row).
+    D-11: populate receipt_url from fiscal_receipts only when a succeeded
+    fiscal receipt exists — honest, never fabricated.
     No session.commit() — read path.
     """
+    from sqlalchemy import text as _text  # noqa: PLC0415 — local to avoid circular at module level
+
     row = await repository.fetch_client_payment_status(session, payment_id, client_id)
     if row is None:
         raise NotFoundError("payment_not_found")  # D-20-IDOR: 404-collapse
+
+    op_status = str(cast(Any, row)["status"])
+    op_id = cast(Any, row)["id"]
+
+    # D-11: fetch receipt_url only when the online payment succeeded.
+    # Cross-module read via raw SQL (D-54-08/D-58-19 precedent — no ORM import).
+    # fiscal_receipts.payment_id → payments.id (NOT online_payments.id).
+    # Join path: online_payments → (memberships via membership_plan_id + client_id)
+    #            → payments (subject_id = membership.id, method = 'online')
+    #            → fiscal_receipts (payment_id = payments.id, kind='payment', status='succeeded').
+    # T-999.4-15 mitigation: online_payments scoped to client_id via row (D-20-IDOR).
+    receipt_url: str | None = None
+    if op_status == "succeeded":
+        fr_row = (
+            await session.execute(
+                _text(
+                    """
+                    SELECT fr.yookassa_receipt_id
+                    FROM fiscal_receipts fr
+                    INNER JOIN payments p ON p.id = fr.payment_id
+                    WHERE fr.kind = 'payment'
+                      AND fr.status = 'succeeded'
+                      AND (
+                        (p.subject_kind = 'membership' AND p.subject_id IN (
+                            SELECT m.id FROM memberships m
+                            INNER JOIN online_payments op
+                                ON op.membership_plan_id = m.plan_id
+                            WHERE op.id = :op_id
+                              AND m.client_id = op.client_id
+                        ))
+                        OR
+                        (p.subject_kind = 'pt_package' AND p.subject_id IN (
+                            SELECT pkg.id FROM pt_packages pkg
+                            INNER JOIN online_payments op
+                                ON op.pt_package_plan_id = pkg.plan_id
+                            WHERE op.id = :op_id
+                              AND pkg.client_id = op.client_id
+                        ))
+                      )
+                    LIMIT 1
+                    """
+                ),
+                {"op_id": str(op_id)},
+            )
+        ).mappings().one_or_none()
+
+        if fr_row is not None and fr_row["yookassa_receipt_id"] is not None:
+            receipt_url = f"https://yookassa.ru/my/receipt/{fr_row['yookassa_receipt_id']}"
+
     return ClientPaymentStatusResponse(
         id=cast(Any, row)["id"],
-        status=str(cast(Any, row)["status"]),
+        status=op_status,
+        receipt_url=receipt_url,
+    )
+
+
+async def validate_promo_code(
+    session: AsyncSession,
+    *,
+    code: str,
+    kind: str,
+    plan_id: UUID,
+    client_id: UUID,
+) -> ClientPromoValidateResponse:
+    """Validate a promo code and return the authoritative discounted amount (D-06).
+
+    Delegates to promo_codes.service.validate_promo_code (D-20-MODULE: Option B
+    direct import, ignore edge registered in .importlinter Plan 01).
+    Raises per-reason ValidationAppError subclasses (D-09 distinct error codes).
+    No session.commit() — read-only path.
+    """
+    discount_kopecks, new_amount_kopecks, discount_type = (
+        await _promo_service.validate_promo_code(
+            session,
+            code=code,
+            kind=kind,
+            plan_id=plan_id,
+            client_id=client_id,
+        )
+    )
+    return ClientPromoValidateResponse(
+        discount_kopecks=discount_kopecks,
+        new_amount_kopecks=new_amount_kopecks,
+        discount_type=discount_type,
     )
