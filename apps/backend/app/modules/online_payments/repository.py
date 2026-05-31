@@ -41,6 +41,7 @@ async def insert_online_payment(
     created_by_user_id: UUID | None,
     audit_correlation_id: UUID,
     id_override: UUID | None = None,
+    promo_code_id: UUID | None = None,
 ) -> OnlinePayment:
     """Insert OnlinePayment row; caller owns flush + commit (D-49-07).
 
@@ -49,6 +50,10 @@ async def insert_online_payment(
     Used by the client checkout path so the PWA can embed the payment_id in the
     ЮKassa return_url BEFORE the INSERT — both the row id and the return_url
     carry the same UUID. Staff callers never pass this parameter.
+
+    ``promo_code_id`` (Phase 999.4 D-06/D-07): when provided, persists the promo
+    code FK on the row so the succeeded-webhook can record the redemption.
+    Staff callers never pass this parameter (NULL for non-promo payments).
     """
     kwargs: dict[str, Any] = dict(
         client_id=client_id,
@@ -65,6 +70,8 @@ async def insert_online_payment(
     )
     if id_override is not None:
         kwargs["id"] = id_override
+    if promo_code_id is not None:
+        kwargs["promo_code_id"] = promo_code_id
     row = OnlinePayment(**kwargs)
     session.add(row)
     return row

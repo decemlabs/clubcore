@@ -179,6 +179,8 @@ async def _sell_subject_core(
     yookassa_settings: YooKassaSettings,
     online_payment_id_override: UUID | None = None,
     return_url_override: str | None = None,
+    price_override_kopecks: int | None = None,
+    applied_promo_code_id: UUID | None = None,
 ) -> SellResponse:
     """Actor-agnostic sell flow (Phase 71 D-71-01).
 
@@ -285,6 +287,14 @@ async def _sell_subject_core(
     else:
         price_kopecks, description = await _read_pt_package_plan_or_raise(session, plan_id)
 
+    # Phase 999.4 D-06: apply promo price override when provided.
+    # price_override_kopecks is the server-computed discounted amount from
+    # validate_promo_code (called by client_portal.service BEFORE this core).
+    # description still comes from the plan read (unchanged — receipt shows plan name).
+    # Staff callers never pass this param → byte-identical to before.
+    if price_override_kopecks is not None:
+        price_kopecks = price_override_kopecks
+
     # 5. Build receipt + 6. call ЮKassa.
     receipt_items = [
         build_receipt_item(
@@ -326,6 +336,7 @@ async def _sell_subject_core(
             created_by_user_id=actor_user_id,  # None for client-initiated (D-71-02)
             audit_correlation_id=correlation_id,
             id_override=online_payment_id_override,  # CR-01/CR-02: None for staff path
+            promo_code_id=applied_promo_code_id,  # Phase 999.4 D-06/D-07: None for non-promo
         )
         # surface FK + CHECK + UNIQUE conflicts BEFORE audit emit (D-49-19)
         await session.flush()

@@ -22,13 +22,16 @@ No session.commit() — read-only path (D-32-10/D-49-19 caller-owns-txn).
 
 from __future__ import annotations
 
+import structlog
 from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationAppError
+from app.modules.promo_codes.models import PromoRedemption
 
 
 # ---------------------------------------------------------------------------
@@ -259,8 +262,115 @@ async def _read_plan_price(
     return int(row["price_kopecks"])
 
 
+_log = structlog.get_logger("modules.promo_codes.service")
+
+
+# ---------------------------------------------------------------------------
+# record_promo_redemption
+# ---------------------------------------------------------------------------
+
+
+async def record_promo_redemption(
+    session: AsyncSession,
+    *,
+    promo_code_id: UUID,
+    client_id: UUID,
+    online_payment_id: UUID,
+    discount_kopecks: int,
+) -> None:
+    """Record a PromoRedemption ledger row on successful payment (D-07).
+
+    Idempotent: uses ``on_conflict_do_nothing`` on the UNIQUE(online_payment_id)
+    constraint (``uq_promo_redemptions_online_payment_id``) so a webhook replay
+    does NOT double-insert.
+
+    Race-safety belt-and-suspenders: re-checks ``max_uses`` at record time.
+    If the global cap is already met when we arrive here (e.g. a concurrent
+    checkout validated against an in-flight count), we log and return WITHOUT
+    raising — the discount was already granted at checkout validation time and
+    there is no safe way to undo the ЮKassa redirect.  The residual over-grant
+    under extreme concurrency is bounded to at most 1-per-payment and is
+    accepted for single-gym scale (T-999.4-09).
+
+    ``session.flush()`` only — caller (webhook handler) owns the commit.
+
+    Parameters
+    ----------
+    session:
+        Active async SQLAlchemy session (caller owns txn).
+    promo_code_id:
+        UUID of the PromoCode row (read from online_payments.promo_code_id).
+    client_id:
+        UUID of the authenticated client (from online_payments.client_id).
+    online_payment_id:
+        UUID of the OnlinePayment row (from online_payments.id).
+    discount_kopecks:
+        Discount actually granted (plan_price − row.amount_kopecks at record time).
+    """
+    # Re-check max_uses cap at record time (T-999.4-09 belt-and-suspenders).
+    promo_row = (
+        await session.execute(
+            text("SELECT max_uses FROM promo_codes WHERE id = :id AND deleted_at IS NULL"),
+            {"id": str(promo_code_id)},
+        )
+    ).mappings().one_or_none()
+
+    if promo_row is None:
+        # PromoCode was soft-deleted between checkout and succeeded.
+        # Log and skip — do not raise inside the webhook path.
+        _log.warning(
+            "record_promo_redemption_promo_not_found",
+            promo_code_id=str(promo_code_id),
+            online_payment_id=str(online_payment_id),
+        )
+        return
+
+    max_uses = promo_row["max_uses"]
+    if max_uses is not None:
+        count_row = (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM promo_redemptions "
+                    "WHERE promo_code_id = :promo_id"
+                ),
+                {"promo_id": str(promo_code_id)},
+            )
+        ).mappings().one()
+        global_count = int(count_row["cnt"])
+        if global_count >= max_uses:
+            _log.warning(
+                "record_promo_redemption_cap_already_met",
+                promo_code_id=str(promo_code_id),
+                online_payment_id=str(online_payment_id),
+                global_count=global_count,
+                max_uses=max_uses,
+            )
+            return
+
+    # Insert idempotently — on_conflict_do_nothing on UNIQUE(online_payment_id).
+    stmt = (
+        pg_insert(PromoRedemption)
+        .values(
+            promo_code_id=promo_code_id,
+            client_id=client_id,
+            online_payment_id=online_payment_id,
+            discount_kopecks=discount_kopecks,
+        )
+        .on_conflict_do_nothing(constraint="uq_promo_redemptions_online_payment_id")
+    )
+    await session.execute(stmt)
+    await session.flush()
+    _log.info(
+        "record_promo_redemption",
+        promo_code_id=str(promo_code_id),
+        online_payment_id=str(online_payment_id),
+        discount_kopecks=discount_kopecks,
+    )
+
+
 __all__ = (
     "validate_promo_code",
+    "record_promo_redemption",
     "PromoNotFoundError",
     "PromoInactiveError",
     "PromoExpiredError",
