@@ -33,6 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ValidationAppError
 from app.modules.promo_codes.models import PromoRedemption
 
+_log = structlog.get_logger("modules.promo_codes.service")
+
 
 # ---------------------------------------------------------------------------
 # D-09 distinct per-reason error classes (stable code= attribute)
@@ -103,7 +105,7 @@ async def validate_promo_code(
     kind: str,
     plan_id: UUID,
     client_id: UUID,
-) -> tuple[int, int, str]:
+) -> tuple[int, int, str, UUID]:
     """Validate a promo code and return authoritative discounted amounts (D-06/D-09).
 
     Parameters
@@ -121,16 +123,17 @@ async def validate_promo_code(
 
     Returns
     -------
-    tuple[discount_kopecks, new_amount_kopecks, discount_type]
+    tuple[discount_kopecks, new_amount_kopecks, discount_type, promo_id]
         discount_kopecks:    computed discount in integer kopecks.
-        new_amount_kopecks:  price − discount (never < 0).
+        new_amount_kopecks:  price − discount (never < 0; zero raises PromoNotApplicableError).
         discount_type:       'percentage' | 'fixed'.
+        promo_id:            UUID of the PromoCode row (CR-02 — eliminates second lookup).
 
     Raises
     ------
     PromoNotFoundError    — code not found or soft-deleted.
     PromoInactiveError    — is_active=False.
-    PromoNotApplicableError — applicable_to mismatch.
+    PromoNotApplicableError — applicable_to mismatch or zero final amount (100% discount).
     PromoExpiredError     — now > valid_until.
     PromoNotYetActiveError — now < valid_from.
     PromoUsedUpError      — max_uses or per_client_limit reached.
@@ -227,7 +230,16 @@ async def validate_promo_code(
         discount_kopecks = min(discount_value, price_kopecks)
 
     new_amount_kopecks = max(0, price_kopecks - discount_kopecks)
-    return discount_kopecks, new_amount_kopecks, discount_type
+
+    # CR-03 fix: reject a zero final amount before it reaches ЮKassa.
+    # ЮKassa requires amount > 0; a 100% discount via a fixed code >= plan price
+    # would produce 0 ₽ and be rejected by ЮKassa at payment creation time.
+    # Raise PromoNotApplicableError so the client sees a clear per-reason error
+    # (code='not_applicable') instead of a downstream ЮKassa validation failure.
+    if new_amount_kopecks <= 0:
+        raise PromoNotApplicableError("promo_results_in_zero_amount")
+
+    return discount_kopecks, new_amount_kopecks, discount_type, promo_id
 
 
 async def _read_plan_price(
@@ -260,9 +272,6 @@ async def _read_plan_price(
         raise PromoNotFoundError(f"{table}_not_found")
 
     return int(row["price_kopecks"])
-
-
-_log = structlog.get_logger("modules.promo_codes.service")
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +316,16 @@ async def record_promo_redemption(
     discount_kopecks:
         Discount actually granted (plan_price − row.amount_kopecks at record time).
     """
-    # Re-check max_uses cap at record time (T-999.4-09 belt-and-suspenders).
+    # CR-01 fix: acquire row lock on the promo_codes row BEFORE the COUNT check so
+    # concurrent webhook handlers serialise on this promo code and cannot both pass
+    # the cap check for the same promo code (T-999.4-09 race-safe enforcement).
+    # Also reads per_client_limit for WR-01 re-check below.
     promo_row = (
         await session.execute(
-            text("SELECT max_uses FROM promo_codes WHERE id = :id AND deleted_at IS NULL"),
+            text(
+                "SELECT max_uses, per_client_limit FROM promo_codes "
+                "WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
+            ),
             {"id": str(promo_code_id)},
         )
     ).mappings().one_or_none()
@@ -344,6 +359,33 @@ async def record_promo_redemption(
                 online_payment_id=str(online_payment_id),
                 global_count=global_count,
                 max_uses=max_uses,
+            )
+            return
+
+    # WR-01 fix: also re-check per_client_limit at record time (not just max_uses).
+    # Concurrent per_client_limit=1 redemptions for the same client can both pass
+    # validate_promo_code simultaneously; this re-check (serialised by the FOR UPDATE
+    # lock above) prevents the second redemption row from being written.
+    per_client_limit = promo_row["per_client_limit"]
+    if per_client_limit is not None:
+        client_count_row = (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM promo_redemptions "
+                    "WHERE promo_code_id = :promo_id AND client_id = :client_id"
+                ),
+                {"promo_id": str(promo_code_id), "client_id": str(client_id)},
+            )
+        ).mappings().one()
+        client_count = int(client_count_row["cnt"])
+        if client_count >= per_client_limit:
+            _log.warning(
+                "record_promo_redemption_per_client_cap_met",
+                promo_code_id=str(promo_code_id),
+                online_payment_id=str(online_payment_id),
+                client_id=str(client_id),
+                client_count=client_count,
+                per_client_limit=per_client_limit,
             )
             return
 
