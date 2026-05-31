@@ -58,7 +58,10 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
     setPromoError(null);
     try {
       const result = await promoValidate.mutateAsync({ code: promoCode, kind: ctx.kind, planId: ctx.planId });
-      setPromoResult(result);
+      // WR-03 fix: snapshot the validated code string into promoResult so that
+      // appliedPromoCode at checkout time uses the validated code, not the live
+      // input state (which is disabled after validation but fragile as a correctness invariant).
+      setPromoResult({ ...result, _validatedCode: promoCode });
     } catch (err) {
       setPromoError(err?.code ?? 'not_found');
     } finally {
@@ -97,8 +100,12 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
     setStage('paying');
     try {
       let result;
-      // D-06: pass promoCode only when a valid promo has been applied
-      const appliedPromoCode = promoResult ? promoCode : undefined;
+      // D-06: pass promoCode only when a valid promo has been applied.
+      // WR-03 fix: use the validated code snapshot from promoResult._validatedCode
+      // rather than the live promoCode input state, so the sent code always matches
+      // the code that produced the validated discount (input is disabled after validation,
+      // but correctness must not rely on UI disabled-ness as an invariant).
+      const appliedPromoCode = promoResult ? promoResult._validatedCode : undefined;
 
       if (ctx.kind === 'sub') {
         // CPAY-01: membership checkout — server-derived idempotency key (D-71-04).
