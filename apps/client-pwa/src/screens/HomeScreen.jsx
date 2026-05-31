@@ -7,7 +7,7 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
-import { useClientHome, useClientMe } from '@/data';
+import { useClientHome, useClientMe, useClientBookings } from '@/data';
 import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 
 // ─── In-file adapter: API membership shape → existing subInfo render shape ───
@@ -127,6 +127,8 @@ export function GymStatusPill({ onClick }) {
 export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpenReferral, onOpenGymInfo, onOpenNotifications, onTab, setTweak }) => {
   const { data: homeData, isLoading, isError, refetch } = useClientHome();
   const { data: me } = useClientMe();
+  // useClientBookings: needed for Step 4 live derivation in the newbie gate (D-05/D-06)
+  const { data: bookings } = useClientBookings();
 
   // Real membership from /client/home; null → genuine "Нет абонемента" empty state
   // (toSubInfo(null)), never the demo getSubInfo fallback.
@@ -181,33 +183,415 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
         }}
       >
         {showToast && <div className="ptr-toast">Обновлено · сейчас</div>}
-        {/* Header */}
-        <div style={{
-          padding: '4px 16px 18px',
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="t-small" style={{
-              color: 'var(--text-3)', fontWeight: 500, fontSize: 12,
-            }}>{greeting}</div>
-            <div className="t-h2" style={{
-              marginTop: 1, fontSize: 22, letterSpacing: -0.3,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{userName}</div>
-          </div>
 
-          <GymStatusPill onClick={onOpenGymInfo} />
-        </div>
-
-        {variant === 'classic' && <HomeClassic isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} subCardStyle={tweaks.subCardStyle || 'eyebrow'} nextBooking={nextBooking} />}
-        {variant === 'qr-hero' && <HomeQrHero isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
-        {variant === 'minimal' && <HomeMinimal isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
+        {/* Newbie render gate (D-01/D-02): keys on membershipState === 'newbie' ONLY.
+            A lapsed member also has membership===null but must NOT see newbie copy.
+            HomeNewbie owns its own Header as the first stagger child. */}
+        {homeData?.membershipState === 'newbie' ? (
+          <HomeNewbie
+            me={me}
+            homeData={homeData}
+            bookings={bookings}
+            userName={userName}
+            greeting={greeting}
+            onOpenPlans={onOpenPlans}
+            onOpenGymInfo={onOpenGymInfo}
+            onTab={onTab}
+          />
+        ) : (
+          <>
+            {/* Header — shared across non-newbie variants */}
+            <div style={{
+              padding: '4px 16px 18px',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="t-small" style={{
+                  color: 'var(--text-3)', fontWeight: 500, fontSize: 12,
+                }}>{greeting}</div>
+                <div className="t-h2" style={{
+                  marginTop: 1, fontSize: 22, letterSpacing: -0.3,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{userName}</div>
+              </div>
+              <GymStatusPill onClick={onOpenGymInfo} />
+            </div>
+            {variant === 'classic' && <HomeClassic isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} subCardStyle={tweaks.subCardStyle || 'eyebrow'} nextBooking={nextBooking} />}
+            {variant === 'qr-hero' && <HomeQrHero isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
+            {variant === 'minimal' && <HomeMinimal isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
+          </>
+        )}
 
         <div style={{ height: 24 }} />
       </PullToRefresh>
     </div>
   );
 };
+
+// ─── Newbie components — Plan 999.3-02 ──────────────────────────────────────
+
+// Hero card for newbie state — dark background, "Выбрать абонемент" CTA
+export function HeroNewbie({ onOpenPlans }) {
+  return (
+    <div style={{
+      margin: '0 16px 12px',
+      borderRadius: 'var(--r-xl)',
+      background: 'var(--text)',
+      color: 'var(--bg)',
+      padding: '22px 22px 20px',
+      position: 'relative',
+      overflow: 'hidden',
+      boxShadow: '0 12px 36px rgba(28,25,23,0.18)',
+    }}>
+      {/* Decorative shape 1 */}
+      <div style={{
+        position: 'absolute', right: -54, top: -54,
+        width: 220, height: 220, borderRadius: '50%',
+        background: 'radial-gradient(circle at 30% 30%, color-mix(in oklab, var(--accent) 75%, transparent), transparent 65%)',
+        pointerEvents: 'none',
+      }} />
+      {/* Decorative shape 2 */}
+      <div style={{
+        position: 'absolute', left: -40, bottom: -60,
+        width: 160, height: 160, borderRadius: '50%',
+        background: 'radial-gradient(circle at 70% 70%, rgba(255,255,255,0.05), transparent 60%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* Eyebrow with pulse dot */}
+      <div style={{
+        position: 'relative',
+        fontSize: 11, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
+        color: 'color-mix(in oklab, var(--bg) 60%, transparent)',
+        display: 'inline-flex', alignItems: 'center', gap: 7,
+      }}>
+        <span style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: 'var(--accent)',
+          boxShadow: '0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent)',
+          animation: 'pulse-soft 2.4s ease-in-out infinite',
+          flexShrink: 0,
+        }} />
+        Аккаунт создан
+      </div>
+
+      {/* Title */}
+      <div className="t-h1" style={{
+        position: 'relative',
+        marginTop: 10, fontSize: 26, fontWeight: 700,
+        letterSpacing: '-0.6px', lineHeight: 1.1,
+        color: 'var(--bg)',
+      }}>
+        Остался один шаг до зала
+      </div>
+
+      {/* Body */}
+      <div className="t-body" style={{
+        position: 'relative',
+        marginTop: 8, fontSize: 14, fontWeight: 400, lineHeight: 1.45,
+        color: 'color-mix(in oklab, var(--bg) 78%, transparent)',
+        maxWidth: 280,
+      }}>
+        Выбери абонемент — QR-пропуск активируется сразу. Заморозить или сменить тариф можно в любой момент.
+      </div>
+
+      {/* Static meta chips (deferred: not wired to live catalog) */}
+      <div style={{
+        position: 'relative',
+        marginTop: 14, display: 'flex', alignItems: 'center', gap: 14,
+        color: 'color-mix(in oklab, var(--bg) 65%, transparent)',
+        fontSize: 12, fontWeight: 500,
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          3 тарифа
+        </span>
+        <span style={{
+          width: 4, height: 4, borderRadius: '50%',
+          background: 'currentColor', opacity: 0.6, flexShrink: 0,
+        }} />
+        <span>от 3 500 ₽/мес</span>
+      </div>
+
+      {/* CTA button */}
+      <button
+        onClick={onOpenPlans}
+        className="btn btn-accent"
+        style={{
+          position: 'relative',
+          marginTop: 16, width: '100%', height: 50,
+          borderRadius: 'var(--r-pill)',
+          fontSize: 15.5, fontWeight: 600, letterSpacing: '-0.2px',
+          color: '#06120c',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
+        Выбрать абонемент
+        <Icon name="arrowRight" size={17} color="currentColor" strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+// Dismissible onboarding strip with 4 step chips and a progress bar
+export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, onTab }) {
+  const [dismissed, setDismissed] = React.useState(false);
+  const [dismissing, setDismissing] = React.useState(false);
+
+  if (dismissed) return null;
+
+  function handleDismiss() {
+    setDismissing(true);
+    setTimeout(() => setDismissed(true), 360);
+  }
+
+  function handleStepClick(step) {
+    if (step.key === 'plan') onOpenPlans?.();
+    else if (step.key === 'profile') onTab?.('profile');
+    else if (step.key === 'visit') onTab?.('book');
+    // Step 1 (account, done) — no action
+  }
+
+  const stepIcons = { account: 'user', plan: 'card', profile: 'user', visit: 'calendar' };
+  const fillPct = (doneCount / 4) * 100;
+
+  return (
+    <div
+      className={`card onboard-card${dismissing ? ' dismissing' : ''}`}
+      style={{ margin: '0 16px 12px', overflow: 'hidden' }}
+    >
+      {/* Header */}
+      <div style={{
+        padding: '14px 16px 10px',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+            color: 'var(--accent-deep)',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent-deep)' }} />
+            Старт новичка
+          </div>
+          <div className="t-h3" style={{ fontSize: 15, fontWeight: 650, letterSpacing: '-0.15px' }}>
+            {title}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--text-2)',
+            fontVariantNumeric: 'tabular-nums',
+            background: 'var(--surface-2)', border: '0.5px solid var(--border)',
+            height: 24, padding: '0 9px', borderRadius: 999,
+            display: 'inline-flex', alignItems: 'center', letterSpacing: '-0.1px',
+            flexShrink: 0,
+          }}>
+            {badge}
+          </span>
+          <button
+            onClick={handleDismiss}
+            aria-label="Скрыть"
+            style={{
+              appearance: 'none', border: 0, width: 24, height: 24,
+              borderRadius: 999, background: 'transparent', color: 'var(--text-3)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', padding: 0,
+            }}
+          >
+            <Icon name="close" size={14} color="currentColor" strokeWidth={2} />
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ padding: '0 16px 12px' }}>
+        <div className="progress-track">
+          <div className="onboard-fill" style={{ width: `${fillPct}%` }} />
+        </div>
+      </div>
+
+      {/* Step chips — horizontal scroll */}
+      <div style={{
+        padding: '0 16px 12px',
+        display: 'flex', gap: 8,
+        overflowX: 'auto', overflowY: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
+      }}>
+        {steps.map((step) => {
+          const isDone = step.state === 'done';
+          const isNext = step.state === 'next';
+          const clickable = step.key !== 'account';
+          return (
+            <button
+              key={step.key}
+              onClick={clickable ? () => handleStepClick(step) : undefined}
+              className={`step${isDone ? ' done' : isNext ? ' next' : ''}`}
+              style={!clickable ? { cursor: 'default' } : undefined}
+            >
+              {/* Icon ring */}
+              <span style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: isDone ? 'var(--accent)' : isNext ? 'var(--text)' : 'var(--surface)',
+                border: isDone ? '1.5px solid var(--accent)' : isNext ? '1.5px solid var(--text)' : '1.5px solid var(--border-strong)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                color: isDone ? '#06120c' : isNext ? 'var(--bg)' : 'var(--text-2)',
+                flexShrink: 0,
+              }}>
+                {isDone
+                  ? <Icon name="check" size={14} color="currentColor" strokeWidth={2.2} />
+                  : <Icon name={stepIcons[step.key] || 'user'} size={14} color="currentColor" strokeWidth={2} />}
+              </span>
+              {/* Label */}
+              <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.1px', lineHeight: 1.25 }}>
+                {step.label}
+              </span>
+              {/* Meta */}
+              <span style={{
+                fontSize: 11, letterSpacing: '-0.05px', lineHeight: 1.3,
+                color: isDone ? 'var(--accent-deep)' : isNext ? 'var(--text-2)' : 'var(--text-3)',
+                fontWeight: isNext ? 500 : 400,
+              }}>
+                {step.meta}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Dashed-border tappable row nudging client toward first visit (Первый визит)
+export function FirstVisitNudge({ onTab }) {
+  return (
+    <div style={{ margin: '0 16px 12px' }}>
+      <button
+        onClick={() => onTab?.('book')}
+        className="press"
+        style={{
+          width: '100%', appearance: 'none',
+          border: '0.5px dashed var(--border-strong)', background: 'transparent',
+          borderRadius: 'var(--r-md)', padding: '10px 14px',
+          display: 'flex', alignItems: 'center', gap: 12,
+          cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'var(--text)',
+        }}
+      >
+        <span style={{
+          width: 32, height: 32, borderRadius: 9,
+          background: 'var(--accent-soft)', color: 'var(--accent-deep)',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <Icon name="star" size={18} color="currentColor" strokeWidth={1.8} />
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, letterSpacing: '-0.15px', lineHeight: 1.25 }}>
+            Первый визит — бесплатно
+          </span>
+          <span className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.3, display: 'block' }}>
+            Экскурсия с админом · 30 мин
+          </span>
+        </span>
+        <Icon name="chevronRight" size={14} color="var(--text-3)" strokeWidth={2.2} />
+      </button>
+    </div>
+  );
+}
+
+// Static non-interactive strip showing QR pass is locked until subscription paid
+export function QrPlaceholder() {
+  return (
+    <div
+      role="img"
+      style={{
+        margin: '0 16px 14px',
+        background: 'var(--surface-2)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 'var(--r-md)',
+        padding: '10px 14px',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}
+    >
+      <span style={{
+        width: 32, height: 32, borderRadius: 9,
+        background: 'var(--surface)', border: '0.5px solid var(--border)',
+        color: 'var(--text-3)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <Icon name="qr" size={18} color="currentColor" strokeWidth={1.8} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', color: 'var(--text-2)', lineHeight: 1.2 }}>
+          QR-пропуск
+        </span>
+        <span className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.3, display: 'block' }}>
+          Активируется после оплаты абонемента
+        </span>
+      </span>
+      <span style={{ color: 'var(--text-3)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="lock" size={16} color="currentColor" strokeWidth={1.8} />
+      </span>
+    </div>
+  );
+}
+
+// Top-level newbie variant — composes all newbie sub-components with stagger
+export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenPlans, onOpenGymInfo, onTab }) {
+  const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings);
+
+  return (
+    <div className="stagger">
+      {/* (1) Header — greeting + name + GymStatusPill (stagger child 1) */}
+      <div style={{
+        padding: '4px 16px 18px',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="t-small" style={{ color: 'var(--text-3)', fontWeight: 500, fontSize: 12 }}>
+            {greeting}
+          </div>
+          <div className="t-h2" style={{
+            marginTop: 1, fontSize: 22, letterSpacing: -0.3,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {userName}
+          </div>
+        </div>
+        <GymStatusPill onClick={onOpenGymInfo} />
+      </div>
+
+      {/* (2) HeroNewbie (stagger child 2) */}
+      <HeroNewbie onOpenPlans={onOpenPlans} />
+
+      {/* (3) OnboardingStrip (stagger child 3) */}
+      <OnboardingStrip
+        steps={steps}
+        doneCount={doneCount}
+        title={title}
+        badge={badge}
+        onOpenPlans={onOpenPlans}
+        onTab={onTab}
+      />
+
+      {/* (4) FirstVisitNudge + (5) QrPlaceholder grouped as one stagger child */}
+      <div>
+        <FirstVisitNudge onTab={onTab} />
+        <QrPlaceholder />
+      </div>
+
+      {/* (6) Quick tiles grid (stagger child 5) */}
+      <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <QuickTile icon="users" title="Тренеры" sub="кто работает в зале" onClick={() => onTab?.('book')} />
+        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab?.('chat')} />
+      </div>
+
+      {/* (7) Bottom spacer */}
+      <div style={{ height: 8 }} />
+    </div>
+  );
+}
 
 // Variant A: Classic — subscription card + QR button + actions + feed
 export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, subCardStyle, nextBooking }) {
