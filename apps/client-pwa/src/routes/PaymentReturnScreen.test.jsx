@@ -60,4 +60,29 @@ describe('PaymentReturnScreen anti-oracle gate', () => {
     // Pending copy must NOT be present
     expect(screen.queryByText('Ожидаем подтверждение')).not.toBeInTheDocument()
   })
+
+  // WR-04: D-11 receipt URL conditional — "Открыть чек" must appear only when receiptUrl is non-null.
+  it('succeeded state with receiptUrl: shows "Открыть чек" link with correct href', () => {
+    useClientPaymentStatus.mockReturnValue({
+      data: { id: 'test-id', status: 'succeeded', receiptUrl: 'https://yookassa.ru/my/receipt/abc' },
+      isLoading: false,
+    })
+
+    render(<PaymentReturnScreen />)
+
+    const link = screen.getByText('Открыть чек')
+    expect(link).toBeInTheDocument()
+    expect(link.getAttribute('href')).toBe('https://yookassa.ru/my/receipt/abc')
+  })
+
+  it('succeeded state without receiptUrl: "Открыть чек" is absent', () => {
+    useClientPaymentStatus.mockReturnValue({
+      data: { id: 'test-id', status: 'succeeded', receiptUrl: null },
+      isLoading: false,
+    })
+
+    render(<PaymentReturnScreen />)
+
+    expect(screen.queryByText('Открыть чек')).not.toBeInTheDocument()
+  })
 })
