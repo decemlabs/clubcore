@@ -17,6 +17,24 @@ method: live Chrome DevTools walkthrough (dev stack — docker backend + vite :5
 expected: Login → Plans → "Перейти к оплате" opens CheckoutSheet → confirm → redirect to ЮKassa → /payment/return shows only "Ожидаем подтверждение..." while pending, never active until webhook; abandoned → 30s timeout exit.
 result: pass
 severity: blocker
+reverified_full_roundtrip: |
+  2026-05-31 — FULL live round-trip completed end-to-end with REAL ЮKassa test-shop
+  creds (shop 1372271), Claude-driven via Chrome DevTools. PWA login → Plans (prices
+  render: 5 000 ₽ / 15 000 ₽) → "Оплатить" → POST /client/checkout/memberships/{id}
+  → 201 + confirmationUrl → redirect to the real ЮKassa test page → paid with test
+  card 5555 5555 5555 4477 + 3-DS → ЮKassa status=succeeded → payment.succeeded webhook
+  (fired to localhost; SANDBOX bypasses IP allowlist) → membership ACTIVATED. Home now
+  shows "Месяц безлимит · активен · 29 дней · до 2026-06-29". Anti-oracle held: the
+  status endpoint returned only {id,status} (pending→succeeded); no membership existed
+  until the webhook. This closes the creds-blocked redirect leg noted below.
+
+  BLOCKER FOUND + FIXED during this run: the client checkout endpoints flushed the
+  online_payments INSERT but had no commit owner (get_db rolls back on close), so the
+  row never persisted — replay/idempotency broke and the webhook had no row to activate
+  (entire CPAY round-trip non-functional). Phase-71 integration tests passed only
+  because the SAVEPOINT harness + mocked ЮKassa masked the missing commit. Fixed in
+  commit f122b52c (await session.commit() in both endpoints) + 2 real-commit regression
+  tests; resolved debug session at .planning/debug/resolved/client-checkout-no-commit.md.
 reverified: |
   2026-05-31 live Chrome DevTools re-test (Claude-driven) after re-seeding a freshly
   wiped dev DB (seed_demo_data + seed_dev_client + client email). The 71-09 blocker is
@@ -100,7 +118,7 @@ issues: 0
 pending: 0
 skipped: 0
 blocked: 0
-note: 2 blocker gaps (71-08 SW /api caching, 71-09 camelCase prices) + 71-10 real identity all re-verified LIVE on 2026-05-31 via Chrome DevTools after re-seeding a wiped dev DB. ЮKassa redirect leg remains creds-blocked (502 placeholder shop) — known why_human, not a regression.
+note: 2 blocker gaps (71-08 SW /api caching, 71-09 camelCase prices) + 71-10 real identity all re-verified LIVE on 2026-05-31 via Chrome DevTools after re-seeding a wiped dev DB. The FULL ЮKassa round-trip is now ALSO verified live with real test-shop creds (test card 5555 5555 5555 4477 → 3-DS → webhook → membership activated) — the previously creds-blocked redirect leg is CLOSED. One blocker was found and fixed during this run: client checkout never committed the online_payments row (commit f122b52c + regression tests).
 
 ## Gaps
 

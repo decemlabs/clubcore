@@ -1,8 +1,19 @@
 ---
 phase: 71-client-checkout-full-pwa-screen-wiring
 verified: 2026-05-31T00:00:00Z
-status: human_needed
-score: 9/9 must-haves verified (gap-closure: 14/14 statically-verifiable truths VERIFIED)
+status: passed
+score: 9/9 must-haves verified (gap-closure: 14/14 statically-verifiable truths VERIFIED); full ЮKassa round-trip verified LIVE 2026-05-31
+live_roundtrip_verification:
+  date: 2026-05-31
+  scope: "All 3 human_verification items below are now CLOSED via live Chrome DevTools + real ЮKassa test-shop creds (shop 1372271)."
+  results:
+    - "SW /api Cache-Storage: gym-v3 active, gym-v2 evicted, zero /api/* keys, all /api/* from network — confirmed live."
+    - "Real-data rendering: real identity + numeric plan prices (5 000 ₽ / 15 000 ₽) + real empty→active membership — confirmed live."
+    - "ЮKassa round-trip: checkout → real ЮKassa test page → test card 5555 5555 5555 4477 + 3-DS → status=succeeded → payment.succeeded webhook → membership ACTIVATED (Home: 'Месяц безлимит · активен · 29 дней'). Anti-oracle held (status endpoint only {id,status}; no membership until webhook)."
+  blocker_found_and_fixed:
+    summary: "Client checkout endpoints flushed the online_payments INSERT but had no commit owner (get_db rolls back on close) → row never persisted → webhook had no row to activate → entire CPAY round-trip was non-functional. Phase-71 integration tests passed only because the SAVEPOINT harness + mocked ЮKassa masked the missing commit. THIS PHASE'S 'verified' STATUS WAS BASED ON BROKEN CODE until 2026-05-31."
+    fix: "commit f122b52c — await session.commit() in client_checkout_membership + client_checkout_pt_package; + 2 real-commit regression tests (test_*_checkout_row_committed_to_db) that fail on the unfixed code."
+    debug_session: ".planning/debug/resolved/client-checkout-no-commit.md"
 overrides_applied: 0
 re_verification:
   previous_status: human_needed
@@ -31,8 +42,10 @@ human_verification:
 
 **Phase Goal:** A client can initiate a ЮKassa membership/PT-package purchase entirely from the PWA; payment activation webhook-only; server-side authoritative price; 54-ФЗ email gate; all core PWA screens (Home, Profile, Book, Plans, Checkout, QR) wired to the real backend.
 **Verified:** 2026-05-31
-**Status:** human_needed
-**Re-verification:** Yes — gap-closure pass over plans 71-08, 71-09, 71-10 (live-UAT blockers)
+**Status:** passed (full ЮKassa round-trip verified live 2026-05-31; see `live_roundtrip_verification` in frontmatter)
+**Re-verification:** Yes — gap-closure pass over plans 71-08, 71-09, 71-10 (live-UAT blockers), THEN a full live round-trip with real test-shop creds that found + fixed a commit-ownership blocker (f122b52c).
+
+> ⚠️ **Post-verification correction (2026-05-31):** the original `human_needed` verification was based on code where client checkout never committed the `online_payments` row — the CPAY round-trip could not complete. Found during the live round-trip and fixed (commit f122b52c + real-commit regression tests). The phase is now genuinely round-trip-verified live.
 
 ---
 

@@ -73,7 +73,7 @@ These are runtime/E2E/sandbox confirmations of logic already automated above. Th
 |----------|-------------|------------|-------------------|
 | SW runtime Cache-Storage population (zero `/api/*` keys; `gym-v2` actually evicted on a real install) | PWA-07 | Cache-Storage population is live browser behavior; the *logic* (guard ordering, eviction) is now unit-tested, but actual eviction state needs Chrome DevTools | Build/run dev stack, log in (+79999999999 / 111111), DevTools → Application → Cache Storage: confirm active worker `gym-v3`, no `gym-v2` cache, zero `/api/*` keys; Network tab shows every `/api/*` `(from network)`; offline reload renders shell. (71-HUMAN-UAT test 2 — re-verified live, passed.) |
 | Live real-data rendering (real identity + real/empty membership + numeric plan prices) | PWA-05 / CPAY-01/02 | Requires live backend + seeded catalog + logged-in session to render real `/client/me`+`/client/home`+`/client/plans`; field-name correctness is statically + unit verified | Log in as dev client, confirm Home greeting = real first name, no-membership → 'Нет абонемента' + 'Выбрать тариф'; Profile real name/phone/email; Plans cards show numeric '₽' + 'N дней'. (71-HUMAN-UAT test 1 — re-verified live, passed.) |
-| End-to-end ЮKassa membership/PT purchase round-trip | CPAY-01/02/03 | Requires live/sandboxed ЮKassa account (dev placeholder `shop_id=000000` → 502 `yookassa_permanent_error`) | Log in, Plans → checkout → ЮKassa redirect → `/payment/return` shows only 'Ожидаем подтверждение…' while pending; Home shows active membership only after `payment.succeeded` webhook (no premature activation). (Carried forward — pending sandbox creds.) |
+| End-to-end ЮKassa membership/PT purchase round-trip | CPAY-01/02/03 | Requires live ЮKassa test-shop creds | ✅ **VERIFIED LIVE 2026-05-31** (real test shop 1372271): checkout → real ЮKassa test page → test card `5555 5555 5555 4477` + 3-DS → status=succeeded → `payment.succeeded` webhook → membership activated (Home: 'Месяц безлимит · активен · 29 дней'). `/payment/return` showed only 'Ожидаем подтверждение…' while pending; no activation before the webhook. |
 
 ---
 
@@ -100,3 +100,14 @@ These are runtime/E2E/sandbox confirmations of logic already automated above. Th
 | Manual-only (runtime/E2E/sandbox) | 3 |
 
 Reconstructed from artifacts (State B). Backend CPAY-01..05 fully automated (9 integration tests in `test_checkout.py` + supporting suites). PWA-05 adapter/identity logic unit-covered. PWA-07 service-worker `/api/*` network-only + eviction logic newly covered by `src/sw/sw.test.jsx` (3 tests, green). Residual manual-only items are live confirmations of already-automated logic.
+
+## Validation Audit 2026-05-31 (live round-trip + blocker fix)
+
+| Metric | Count |
+|--------|-------|
+| Manual-only items verified live | 3/3 (SW cache, real-data render, ЮKassa round-trip) |
+| Blockers found during live round-trip | 1 |
+| Blockers fixed | 1 |
+| New regression tests | 2 |
+
+⚠️ **Test-coverage correction:** the prior CPAY-01/02 "SATISFIED" rating was **masking a blocker** — the client checkout endpoints flushed the `online_payments` INSERT but never committed it (`get_db` rolls back on close), so the row never persisted and the webhook had no row to activate. The existing `test_checkout.py` tests passed anyway because the SAVEPOINT harness + mocked ЮKassa made the flushed-but-uncommitted row visible within the same transaction. Found during the live round-trip; fixed in commit `f122b52c` (added `await session.commit()` to both endpoints) and closed the gap with 2 **real-commit** regression tests (`test_membership_checkout_row_committed_to_db`, `test_pt_checkout_row_committed_to_db`) that read the row from a fresh connection and fail on the unfixed code. The full round-trip is now verified live (real test shop 1372271). Debug session: `.planning/debug/resolved/client-checkout-no-commit.md`.
