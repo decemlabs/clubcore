@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
-status: executing
-stopped_at: Phase 999.4 UI-SPEC approved
-last_updated: "2026-05-31T15:45:08.049Z"
+status: verifying
+stopped_at: Phase 999.4 Plan 05 complete — all 5 plans executed; phase ready for verification
+last_updated: "2026-05-31T15:52:44.258Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 34
-  completed_plans: 33
-  percent: 67
+  completed_plans: 34
+  percent: 78
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 
 Phase: 999.4 (client-pwa-checkout-visual-restyle) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-31
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## v2.0 Roadmap Summary
 
@@ -78,6 +78,7 @@ Progress: [██████████] 97%
 | Phase 999.4 P04 | 12min | 2 tasks | 4 files |
 | Phase 999.4 P02 | 12min | 2 tasks | 5 files |
 | Phase 999.4 P03 | 16m | 3 tasks | 10 files |
+| Phase 999.4 P05 | 15min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Progress: [██████████] 97%
 - **D-999.4-03-B**: applied_promo_code_id persisted at INSERT time so succeeded-webhook is self-contained (reads row.promo_code_id, no extra state via webhook body)
 - **D-999.4-03-C**: webhook handler uses raw SQL text() for plan_price lookup — no cross-module ORM import in handlers.py (D-54-08 pattern); discount_kopecks = max(0, plan_price - row.amount_kopecks)
 - **D-999.4-03-D**: webhook redemption tests verify via direct record_promo_redemption calls (SAVEPOINT-mode db_session incompatible with session.begin() in webhook handler)
+- **D-999.4-05-A**: formatMoney added to src/utils/format.js (client-pwa has no src/shared/lib/money.ts — that path is admin-web only)
+- **D-999.4-05-B**: Icon.jsx extended with mail/wifiOff/alertCircle/x icons required by UI-SPEC error table (D-12)
 
 ### Blockers/Concerns
 
@@ -123,6 +126,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T15:45:08.045Z
-Stopped at: Phase 999.4 UI-SPEC approved
-Resume: Execute 68-05-PLAN.md next.
+Last session: 2026-05-31T16:10:00.000Z
+Stopped at: Phase 999.4 Plan 05 complete — all 5 plans executed; phase ready for HUMAN-UAT
+Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
