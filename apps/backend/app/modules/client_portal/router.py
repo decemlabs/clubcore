@@ -58,10 +58,12 @@ from app.modules.client_portal.schemas import (
     ClientCheckoutResponse,
     ClientCreateBookingRequest,
     ClientHomeResponse,
+    ClientMeResponse,
     ClientMembershipResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
+    ClientProfileUpdateRequest,
     ClientPromoValidateRequest,
     ClientPromoValidateResponse,
     ClientPtSessionItem,
@@ -704,4 +706,75 @@ async def client_validate_promo(
         plan_id=payload.plan_id,
         client_id=client.id,
     )
+    return envelope(result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 999.5 Plan 02 — GET /me + PATCH /me (onboarding profile + receipt-email gate)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/me",
+    response_model=ResponseEnvelope[ClientMeResponse],
+    operation_id="client_get_me",
+    summary=(
+        "Profile for the authenticated client including onboarding fields "
+        "(Phase 999.5 D-08); name, goal, heightCm, weightKg, email, onboardingCompletedAt"
+    ),
+    tags=["Client-Portal"],
+)
+async def client_get_me(
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientMeResponse]:
+    """GET /client/me — own profile read (Phase 999.5 D-08).
+
+    D-20-IDOR: write is scoped to client.id from require_client() — never reads
+    a client_id from the request. Soft-deleted client → 404-collapse (D-20-IDOR).
+    No CSRF dep — GET is a safe method (RBAC-04).
+    No try/except — AppError bubbles to _app_error_handler.
+    No session.commit() — read path.
+    """
+    result = await service.get_client_me(session, client.id)
+    return envelope(result)
+
+
+@router.patch(
+    "/me",
+    response_model=ResponseEnvelope[ClientMeResponse],
+    status_code=status.HTTP_200_OK,
+    operation_id="client_update_me",
+    summary=(
+        "Partial profile update for the authenticated client (Phase 999.5 D-08); "
+        "writes firstName, goal, heightCm, weightKg, onboardingCompletedAt, email. "
+        "422 with stable error code on validation failure (D-07/D-08/D-10)."
+    ),
+    tags=["Client-Portal"],
+)
+async def client_update_me(
+    payload: ClientProfileUpdateRequest,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientMeResponse]:
+    """PATCH /client/me — partial own-profile write (Phase 999.5 D-08).
+
+    IDOR (T-999.5-04): write is scoped to client.id from require_client() principal.
+    The client_id is NEVER accepted from the request body — a client can only write
+    their own row; cross-client writes are structurally impossible.
+
+    RBAC-04 ordering: require_client() -> verify_client_csrf -> get_db.
+    T-999.5-08: verify_client_csrf dep on PATCH (state-changing method).
+    D-05: onboarding_completed=True -> onboarding_completed_at stamped server-side.
+    D-07: goal allow-list enforced in service (service.update_client_profile).
+    D-10: email format validated server-side before write.
+    D-08: height/weight clamped 140-210/40-150; first_name max 24 chars.
+    No try/except — AppError bubbles to _app_error_handler.
+    Commit owner: caller-owns-txn (D-32-10/D-49-19); service never commits.
+    """
+    result = await service.update_client_profile(
+        session, client_id=client.id, payload=payload
+    )
+    await session.commit()
     return envelope(result)
