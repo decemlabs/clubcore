@@ -1,12 +1,12 @@
 """Phase 71 Plan 71-03 — Client checkout integration tests.
 
 Proves all 5 Phase 71 checkout success criteria:
-  1. (CPAY-03 / criterion #1) Anti-oracle redirect-back: status endpoint returns only
-     pending|succeeded|canceled — no membership/activation details exposed.
+  1. (CPAY-03 / T-71-11) Anti-oracle redirect-back: status endpoint returns only
+     pending|succeeded|canceled — no membership/activation or receipt-destination data exposed.
   2. (CPAY-05 / criterion #2) Idempotent webhook activation: duplicate payment.succeeded
      delivery does NOT create a second membership row.
-  3. (CPAY-04 / criterion #3) 54-ФЗ email gate: checkout without email → 422
-     client_email_required_for_online_payment.
+  3. (D-10 / Phase 999.5) 54-ФЗ phone-receipt gate: NULL-email client with phone proceeds
+     to payment (phone is the 54-ФЗ fallback). Pre-D-10 CPAY-04 (422 email gate) is superseded.
   4. IDOR safety: GET /payments/{id}/status for another client's payment → 404.
   5. Idempotency split (D-71-04): membership replay same URL; PT different key → new payment id.
 
@@ -409,15 +409,20 @@ async def test_pt_checkout_idempotency_key_replay(
     )
 
 
-async def test_checkout_without_email_returns_422(
+async def test_checkout_without_email_proceeds_via_phone_receipt(
     async_client: AsyncClient,
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> None:
-    """CPAY-04: client with NULL email POSTs membership checkout → 422.
+    """D-10 (Phase 999.5): client with NULL email + valid phone POSTs membership checkout → 201.
 
-    Expected error code: client_email_required_for_online_payment.
-    54-ФЗ email gate is enforced inside _sell_subject_core before the ЮKassa call.
+    Pre-D-10 behavior (CPAY-04) required email for 54-ФЗ fiscal receipt and returned 422.
+    D-10 revised the gate: email OR phone is sufficient — and because every client has a
+    phone (OTP invariant, clients.phone NOT NULL), the gate is effectively always satisfied.
+    The 54-ФЗ fiscal receipt is routed to the phone via ЮKassa receipt.customer.phone.
+
+    ЮKassa IS called (phone-receipt path, not blocked). Response must be HTTP 201 with
+    a confirmationUrl and onlinePaymentId.
     """
     suffix = uuid4().hex[:8]
     staff = User(
@@ -433,7 +438,7 @@ async def test_checkout_without_email_returns_422(
         first_name="NoEmail",
         last_name=f"Client-{suffix}",
         phone=f"+7920{uuid4().int % 10_000_000:07d}",
-        email=None,  # explicitly NULL — triggers 54-ФЗ gate
+        email=None,  # explicitly NULL — D-10: phone is 54-ФЗ fallback, gate passes
         telegram_user_id=uuid4().int % 2_000_000_000 + 800_000_000,
         created_by_user_id=staff.id,
     )
@@ -444,19 +449,40 @@ async def test_checkout_without_email_returns_422(
 
     await _auth_as_client(async_client, db_session, no_email_client)
 
-    # ЮKassa must NOT be called (email gate fires before any network call)
-    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False):
+    fake_url = f"https://yoomoney.ru/checkout/phone-receipt-{uuid4().hex[:8]}"
+
+    # D-10: ЮKassa IS called — phone-receipt path proceeds to payment creation.
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.post("payments").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": f"yk-{uuid4().hex[:24]}",
+                    "status": "pending",
+                    "amount": {"value": "2500.00", "currency": "RUB"},
+                    "confirmation": {
+                        "type": "redirect",
+                        "confirmation_url": fake_url,
+                    },
+                },
+            )
+        )
+
         r = await async_client.post(
             f"/api/v1/client/checkout/memberships/{plan.id}",
             headers=_checkout_headers(async_client),
             json={},
         )
 
-    assert r.status_code == 422, r.text
-    body = r.json()
-    assert body["message"] == "client_email_required_for_online_payment", (
-        f"Expected 'client_email_required_for_online_payment', got: {body.get('message')!r}"
+    assert r.status_code == 201, (
+        f"D-10: NULL-email client with phone must get 201 (phone-receipt path), "
+        f"got {r.status_code}: {r.text}"
     )
+    data = r.json()["data"]
+    assert data["confirmationUrl"].startswith("https://"), (
+        f"Expected confirmationUrl to start with https://, got: {data['confirmationUrl']!r}"
+    )
+    assert "onlinePaymentId" in data, "onlinePaymentId must be present in response"
 
 
 # ===========================================================================
@@ -469,10 +495,21 @@ async def test_status_returns_coarse_state_only(
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> None:
-    """CPAY-03 / criterion #1: GET /payments/{id}/status returns ONLY id + status.
+    """CPAY-03 / T-71-11 (anti-oracle): pending payment exposes no activation or receipt data.
 
-    Anti-oracle regression guard (T-71-11): no membership/plan/activation fields exposed.
-    Response data must have exactly two keys: 'id' and 'status'.
+    The ClientPaymentStatusResponse schema grew nullable fields in Phase 999.4/999.5:
+      - receiptUrl  (D-11, Phase 999.4)
+      - receiptEmail (D-09, Phase 999.5)
+      - receiptPhone (D-10, Phase 999.5)
+
+    The REAL anti-oracle guarantee is: a PENDING payment must reveal
+      1. No activation/membership/plan data (unchanged from T-71-11).
+      2. No receipt destination data — all receipt_* fields must be null while pending
+         (T-999.5-09 mitigation: receipt_email/receipt_phone are set ONLY in the
+         succeeded branch of get_client_payment_status; oracle-collapse preserved).
+
+    The updated assertion allows the evolved schema while still catching any future
+    regression that leaks non-null receipt or activation data into a pending response.
     """
     client = await _seed_client_with_email(
         db_session,
@@ -506,10 +543,24 @@ async def test_status_returns_coarse_state_only(
 
     assert data["status"] == "pending", f"Expected status=pending, got: {data['status']!r}"
 
-    # Anti-oracle: EXACTLY {id, status} and nothing more (T-71-11)
-    extra_keys = set(data.keys()) - {"id", "status"}
-    assert set(data.keys()) == {"id", "status"}, (
-        f"Anti-oracle violated: response data contains extra keys: {extra_keys!r}"
+    # Anti-oracle (T-71-11 / T-999.5-09): PENDING response must not leak activation or
+    # receipt-destination data. The schema now includes nullable receipt_* fields — all must
+    # be null while pending (set only in the succeeded branch of get_client_payment_status).
+    #
+    # Guard 1: keys are confined to the known schema — no new surprise fields.
+    known_schema_keys = {"id", "status", "receiptUrl", "receiptEmail", "receiptPhone"}
+    unexpected_keys = set(data.keys()) - known_schema_keys
+    assert not unexpected_keys, (
+        f"Anti-oracle violated: response data contains unexpected keys: {unexpected_keys!r}"
+    )
+
+    # Guard 2: every non-id/status field is null while pending — no receipt data exposed.
+    receipt_keys_with_data = {
+        k: v for k, v in data.items() if k not in {"id", "status"} and v is not None
+    }
+    assert not receipt_keys_with_data, (
+        f"Anti-oracle violated: pending payment must not expose receipt data, "
+        f"but got non-null values: {receipt_keys_with_data!r}"
     )
 
 
