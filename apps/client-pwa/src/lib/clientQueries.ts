@@ -79,6 +79,8 @@ interface HomeData {
   membership: unknown
   next_booking: unknown
   expiring_soon: boolean
+  /** Server-derived membership state — camelCase wire (Plan 999.3-01). */
+  membershipState: 'active' | 'newbie' | 'lapsed'
 }
 
 interface PaymentStatusData {

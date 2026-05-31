@@ -33,6 +33,7 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.
     flame: <><path d="M12 3c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4-1 4 4 4 3-1 0-2 0-3 0-5z" stroke={color} strokeWidth={s} fill="none" strokeLinejoin="round"/></>,
     clock: <><circle cx="12" cy="12" r="9" stroke={color} strokeWidth={s} fill="none"/><path d="M12 7v5l3 2" stroke={color} strokeWidth={s} strokeLinecap="round"/></>,
     card: <><rect x="3" y="6" width="18" height="13" rx="3" stroke={color} strokeWidth={s} fill="none"/><path d="M3 11h18" stroke={color} strokeWidth={s}/></>,
+    lock: <><rect x="5" y="11" width="14" height="10" rx="2" stroke={color} strokeWidth={s} fill="none"/><path d="M8 11V7a4 4 0 018 0v4" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/></>,
     info: <><circle cx="12" cy="12" r="9" stroke={color} strokeWidth={s} fill="none"/><path d="M12 11v6M12 7.5v.5" stroke={color} strokeWidth={s} strokeLinecap="round"/></>,
     tag: <><path d="M3 12V4a1 1 0 011-1h8l9 9-9 9-9-9z" stroke={color} strokeWidth={s} fill="none" strokeLinejoin="round"/><circle cx="8" cy="8" r="1.5" fill={color}/></>,
     sparkle: <><path d="M12 3v18M3 12h18M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={s * 0.7} strokeLinecap="round" opacity="0.8"/></>,

@@ -43,6 +43,41 @@ export function toSubInfo(membership) {
   };
 }
 
+// ─── deriveOnboardingSteps — Plan 999.3-02 (D-05/D-06) ──────────────────────
+// Pure helper — exported for unit tests (HomeScreen.adapters.test.jsx).
+// Computes step states from live /client/me + /client/home + /client/bookings.
+//
+// Each step.state: 'done' | 'next' | 'pending'
+//   Step 1 Аккаунт  — always 'done'
+//   Step 2 Абонемент — always 'next' (the single actionable step; D-06)
+//   Step 3 Профиль   — 'done' iff me.birthday AND me.gender are truthy
+//   Step 4 Визит     — 'done' iff client has any booking
+//
+// Returns { steps, doneCount, title, badge }
+// doneCount = steps where state === 'done' (the 'next' step is NOT counted)
+export function deriveOnboardingSteps(me, homeData, bookings) {
+  const profileDone = !!(me?.birthday && me?.gender)
+  const visitDone = !!(
+    (bookings?.total ?? 0) > 0 ||
+    (bookings?.items?.length ?? 0) > 0 ||
+    homeData?.nextBooking != null
+  )
+
+  const steps = [
+    { key: 'account', label: 'Аккаунт',      meta: 'Создан',              state: 'done'               },
+    { key: 'plan',    label: 'Абонемент',     meta: 'Не выбран',           state: 'next'               },
+    { key: 'profile', label: 'Профиль',       meta: 'Дата рождения, пол',  state: profileDone ? 'done' : 'pending' },
+    { key: 'visit',   label: 'Первый визит',  meta: '30 мин экскурсия',    state: visitDone   ? 'done' : 'pending' },
+  ]
+
+  const doneCount = steps.filter((s) => s.state === 'done').length
+  const remaining = 4 - doneCount
+  const badge = `${doneCount} / 4`
+  const title = `Ещё ${remaining} шага до полного старта`
+
+  return { steps, doneCount, title, badge }
+}
+
 // ─── Static demo-only data (tweaks-driven — TRAINER_CANCEL shown only when
 //     tweaks.gymEvent === 'trainer-cancelled'; never from real API) ──────────
 const DEMO_TRAINER_CANCEL = {
