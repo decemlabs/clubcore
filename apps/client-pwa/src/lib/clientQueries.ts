@@ -34,6 +34,7 @@ export const clientPortalKeys = {
   ptHistory: (page: number) => [...clientPortalKeys.all, 'pt-sessions', page] as const,
   paymentHistory: (page: number) => [...clientPortalKeys.all, 'payments', page] as const,
   paymentStatus: (id: string) => [...clientPortalKeys.all, 'payment-status', id] as const,
+  promoValidate: (code: string) => [...clientPortalKeys.all, 'promo-validate', code] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,12 @@ interface PaymentStatusData {
 interface CheckoutResult {
   onlinePaymentId: string
   confirmationUrl: string
+}
+
+interface PromoValidateResult {
+  discountKopecks: number
+  newAmountKopecks: number
+  discountType: 'percentage' | 'fixed'
 }
 
 // ---------------------------------------------------------------------------
@@ -384,13 +391,13 @@ export function useClientPaymentStatus(paymentId: string | null, enabled: boolea
 export function useClientCheckoutMembership() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ planId }: { planId: string }) => {
+    mutationFn: async ({ planId, promoCode }: { planId: string; promoCode?: string }) => {
       const res = await clientRequest(
         'post',
         '/api/v1/client/checkout/memberships/{plan_id}',
         {
           params: { plan_id: planId },
-          body: {},
+          body: promoCode ? { promoCode } : {},
         },
       )
       return (res as { data: CheckoutResult }).data
@@ -410,13 +417,21 @@ export function useClientCheckoutMembership() {
 export function useClientCheckoutPtPackage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ planId, idempotencyKey }: { planId: string; idempotencyKey: string }) => {
+    mutationFn: async ({
+      planId,
+      idempotencyKey,
+      promoCode,
+    }: {
+      planId: string
+      idempotencyKey: string
+      promoCode?: string
+    }) => {
       const res = await clientRequest(
         'post',
         '/api/v1/client/checkout/pt-packages/{plan_id}',
         {
           params: { plan_id: planId },
-          body: {},
+          body: promoCode ? { promoCode } : {},
           headers: { 'Idempotency-Key': idempotencyKey },
         },
       )
@@ -424,6 +439,32 @@ export function useClientCheckoutPtPackage() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientPortalKeys.membership() })
+    },
+  })
+}
+
+/**
+ * POST /api/v1/client/promo/validate — validate a promo code server-side.
+ *
+ * Returns server-authoritative { discountKopecks, newAmountKopecks, discountType } on 200.
+ * Rejects with an error exposing `.code` (per-reason D-09 string) on 422.
+ * No cache invalidation — validate is a stateless read.
+ */
+export function usePromoValidate() {
+  return useMutation({
+    mutationFn: async ({
+      code,
+      kind,
+      planId,
+    }: {
+      code: string
+      kind: 'sub' | 'pt'
+      planId: string
+    }) => {
+      const res = await clientRequest('post', '/api/v1/client/promo/validate', {
+        body: { code, kind, planId },
+      })
+      return (res as { data: PromoValidateResult }).data
     },
   })
 }

@@ -32,6 +32,7 @@ export {
   useClientPaymentStatus,
   useClientCheckoutMembership,
   useClientCheckoutPtPackage,
+  usePromoValidate,
   // Plan 06: Book/QR hooks
   useClientBookings,
   useClientAvailableSlots,
