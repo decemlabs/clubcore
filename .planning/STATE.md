@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.3 context gathered
-last_updated: "2026-05-31T12:29:28.786Z"
-last_activity: 2026-05-31 -- Phase 999.3 planning complete
+last_updated: "2026-05-31T12:35:59.120Z"
+last_activity: 2026-05-31
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 29
-  completed_plans: 27
+  completed_plans: 28
   percent: 56
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** Phase 999.3 — client-pwa-home-newbie-state
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
+Phase: 999.3 (client-pwa-home-newbie-state) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-05-31 -- Phase 999.3 planning complete
+Last activity: 2026-05-31
 
-Progress: [██████████] 100%
+Progress: [██████████] 97%
 
 ## v2.0 Roadmap Summary
 
@@ -72,6 +72,7 @@ Progress: [██████████] 100%
 | Phase 72 P01 | 5min | 2 tasks | 3 files |
 | Phase 72-openapi-handoff-ci-e2e-verification P02 | 8min | 2 tasks | 2 files |
 | Phase 72 P04 | 10m | 3 tasks | 2 files |
+| Phase 999.3 P01 | 4min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T12:07:00.378Z
+Last session: 2026-05-31T12:35:59.116Z
 Stopped at: Phase 999.3 context gathered
 Resume: Execute 68-05-PLAN.md next.
