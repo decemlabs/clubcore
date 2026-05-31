@@ -259,11 +259,57 @@ class ClientPaymentStatusResponse(ResponseData):
 
     Only 'pending' | 'succeeded' | 'canceled' — never activation or membership details.
     Phase 999.4 D-11: receipt_url exposed when a ЮKassa fiscal receipt exists and succeeded.
+    Phase 999.5 D-09/D-10: receipt_email and receipt_phone for post-payment receipt display.
     """
 
     id: UUID
     status: str  # Literal['pending', 'succeeded', 'canceled'] at runtime
-    receipt_url: str | None = None  # wire: receiptUrl; None if not yet available (D-11 honest)
+    receipt_url: str | None = None    # wire: receiptUrl; None if not yet available (D-11 honest)
+    receipt_email: str | None = None  # wire: receiptEmail — D-09 info display
+    receipt_phone: str | None = None  # wire: receiptPhone — D-10 phone-fallback receipt contact
+
+
+# ---------------------------------------------------------------------------
+# Phase 999.5 Plan 01 — onboarding profile write + /client/me response schemas
+# ---------------------------------------------------------------------------
+
+
+class ClientProfileUpdateRequest(ResponseData):
+    """PATCH /client/me body — onboarding profile write (Phase 999.5 D-08).
+
+    All fields optional (partial update). camelCase wire via alias_generator.
+    first_name writes to clients.first_name (wire: firstName — D-06).
+    goal, height_cm, weight_kg, onboarding_completed: new fields (Phase 999.5).
+    email: separate write path for receipt gate (D-02/D-10).
+
+    NO server-side validation logic here — clamping/enum/email-format enforced
+    in Plan 02 service layer. Wire-shape schema only.
+    """
+
+    first_name: str | None = None            # wire: firstName — D-06
+    goal: str | None = None                  # wire: goal — D-07 (4-value enum enforced in service)
+    height_cm: int | None = None             # wire: heightCm
+    weight_kg: int | None = None             # wire: weightKg
+    onboarding_completed: bool | None = None  # wire: onboardingCompleted — D-05
+    email: str | None = None                 # wire: email — D-02/D-10 receipt-email gate
+
+
+class ClientMeResponse(ResponseData):
+    """GET /client/me profile payload — includes onboarding + body-metrics fields (Phase 999.5).
+
+    camelCase wire via alias_generator=to_camel on ResponseData base:
+      first_name → firstName, last_name → lastName, height_cm → heightCm,
+      weight_kg → weightKg, onboarding_completed_at → onboardingCompletedAt.
+    """
+
+    first_name: str
+    last_name: str
+    phone: str
+    email: str | None = None
+    goal: str | None = None                          # wire: goal
+    height_cm: int | None = None                     # wire: heightCm
+    weight_kg: int | None = None                     # wire: weightKg
+    onboarding_completed_at: datetime | None = None  # wire: onboardingCompletedAt (D-05)
 
 
 # ---------------------------------------------------------------------------
