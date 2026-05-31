@@ -24,7 +24,7 @@ because SQLAlchemy autogenerate cannot represent expression indexes
 those two indexes.
 """
 
-from datetime import date, datetime  # noqa: F401  -- datetime used by mixin Mapped types
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID as UUIDType  # noqa: N811
@@ -36,6 +36,7 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     Index,
+    SmallInteger,
     Text,
     UniqueConstraint,
     text,
@@ -53,6 +54,15 @@ class Gender(StrEnum):
 
     MALE = "male"
     FEMALE = "female"
+
+
+class ClientGoal(StrEnum):
+    """Client fitness goal (Phase 999.5 D-07). Closed enum — 4 mockup options."""
+
+    LOSE_WEIGHT = "lose_weight"
+    GAIN_MASS = "gain_mass"
+    TONE = "tone"
+    MAINTAIN = "maintain"
 
 
 class Client(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
@@ -95,11 +105,36 @@ class Client(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    goal: Mapped[ClientGoal | None] = mapped_column(
+        SAEnum(
+            ClientGoal,
+            native_enum=False,
+            length=16,
+            validate_strings=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=True,
+    )
+    height_cm: Mapped[int | None] = mapped_column(
+        SmallInteger,
+        nullable=True,
+    )
+    weight_kg: Mapped[int | None] = mapped_column(
+        SmallInteger,
+        nullable=True,
+    )
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint(
             "gender IN ('male', 'female')",
             name="ck_clients_gender",
+        ),
+        CheckConstraint(
+            "goal IN ('lose_weight', 'gain_mass', 'tone', 'maintain')",
+            name="ck_clients_goal",
         ),
         UniqueConstraint("telegram_user_id", name="uq_clients_telegram_user_id"),
         Index(
