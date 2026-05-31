@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.5 UI-SPEC approved
-last_updated: "2026-05-31T20:01:50.229Z"
+last_updated: "2026-05-31T20:08:36.919Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 10
@@ -132,6 +132,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T20:01:50.225Z
+Last session: 2026-05-31T20:08:36.914Z
 Stopped at: Phase 999.5 UI-SPEC approved
 Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
