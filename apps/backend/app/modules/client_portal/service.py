@@ -23,6 +23,7 @@ D-20-MODULE: client_portal writes via Protocol slots only; zero new ignore_impor
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, cast
@@ -46,6 +47,7 @@ from app.core.exceptions import (
     InvalidSession,
     NoActivePtPackageError,
     NotFoundError,
+    ValidationAppError,
 )
 from app.core.pagination import PageQuery, PaginatedData
 from app.core.security import decode_qr_token, encode_qr_token
@@ -60,10 +62,12 @@ from app.modules.client_portal.schemas import (
     ClientCheckInResponse,
     ClientCheckoutResponse,
     ClientHomeResponse,
+    ClientMeResponse,
     ClientMembershipResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
+    ClientProfileUpdateRequest,
     ClientPromoValidateResponse,
     ClientPtSessionItem,
     ClientQrTokenResponse,
@@ -72,6 +76,126 @@ from app.modules.client_portal.schemas import (
 import app.modules.promo_codes.service as _promo_service
 
 _EXPIRING_SOON_DAYS = 7  # days threshold for expiring_soon flag (D-69-02)
+
+# ---------------------------------------------------------------------------
+# Phase 999.5 Plan 02 — local validation errors for update_client_profile
+# ---------------------------------------------------------------------------
+
+_VALID_GOALS = frozenset({"lose_weight", "gain_mass", "tone", "maintain"})
+_HEIGHT_MIN = 140
+_HEIGHT_MAX = 210
+_WEIGHT_MIN = 40
+_WEIGHT_MAX = 150
+_FIRST_NAME_MAX = 24
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+
+
+class _InvalidGoalError(ValidationAppError):
+    code = "invalid_goal"
+    status_code = 422
+
+
+class _InvalidHeightError(ValidationAppError):
+    code = "invalid_height_cm"
+    status_code = 422
+
+
+class _InvalidWeightError(ValidationAppError):
+    code = "invalid_weight_kg"
+    status_code = 422
+
+
+class _InvalidEmailError(ValidationAppError):
+    code = "invalid_email"
+    status_code = 422
+
+
+class _InvalidFirstNameError(ValidationAppError):
+    code = "invalid_first_name"
+    status_code = 422
+
+
+# ---------------------------------------------------------------------------
+# Phase 999.5 Plan 02 — get_client_me + update_client_profile
+# ---------------------------------------------------------------------------
+
+
+async def get_client_me(
+    session: AsyncSession,
+    client_id: UUID,
+) -> ClientMeResponse:
+    """Read client profile row for GET /client/me (Phase 999.5 D-08).
+
+    D-20-IDOR: repository.fetch_client_me has mandatory :client_id filter +
+    deleted_at IS NULL guard; None → NotFoundError 404-collapse.
+    No session.commit() — read path.
+    """
+    row = await repository.fetch_client_me(session, client_id)
+    r: dict[str, Any] = row
+    return ClientMeResponse(
+        first_name=str(r["first_name"]),
+        last_name=str(r["last_name"]),
+        phone=str(r["phone"]),
+        email=r.get("email"),
+        goal=r.get("goal"),
+        height_cm=r.get("height_cm"),
+        weight_kg=r.get("weight_kg"),
+        onboarding_completed_at=r.get("onboarding_completed_at"),
+    )
+
+
+async def update_client_profile(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    payload: ClientProfileUpdateRequest,
+) -> ClientMeResponse:
+    """Partial profile write — onboarding fields + email (D-08/D-10).
+
+    All payload fields are optional; only non-None fields are written.
+    Server-side validation BEFORE any repository call:
+      - goal: must be in the 4-value allow-list (D-07)
+      - height_cm: 140-210 inclusive (Claude's Discretion bounds)
+      - weight_kg: 40-150 inclusive (Claude's Discretion bounds)
+      - email: strict server-side format check (D-10 receipt-email gate)
+      - first_name: max 24 chars (D-08 mockup maxlength)
+    D-05: onboarding_completed=True → onboarding_completed_at = now() (DB-side).
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    Raises ValidationAppError with stable code= on any rejection.
+    """
+    # --- Server-side validation ---
+    if payload.goal is not None and payload.goal not in _VALID_GOALS:
+        raise _InvalidGoalError(
+            f"goal must be one of: {', '.join(sorted(_VALID_GOALS))}"
+        )
+    if payload.height_cm is not None and not (_HEIGHT_MIN <= payload.height_cm <= _HEIGHT_MAX):
+        raise _InvalidHeightError(
+            f"height_cm must be between {_HEIGHT_MIN} and {_HEIGHT_MAX}"
+        )
+    if payload.weight_kg is not None and not (_WEIGHT_MIN <= payload.weight_kg <= _WEIGHT_MAX):
+        raise _InvalidWeightError(
+            f"weight_kg must be between {_WEIGHT_MIN} and {_WEIGHT_MAX}"
+        )
+    if payload.email is not None and not _EMAIL_RE.match(payload.email):
+        raise _InvalidEmailError("email format is invalid")
+    if payload.first_name is not None:
+        trimmed = payload.first_name.strip()
+        if len(trimmed) > _FIRST_NAME_MAX:
+            raise _InvalidFirstNameError(
+                f"first_name must be at most {_FIRST_NAME_MAX} characters"
+            )
+        # Write the trimmed name back so the repository stores it clean
+        payload = ClientProfileUpdateRequest(
+            first_name=trimmed,
+            goal=payload.goal,
+            height_cm=payload.height_cm,
+            weight_kg=payload.weight_kg,
+            onboarding_completed=payload.onboarding_completed,
+            email=payload.email,
+        )
+
+    await repository.update_client_profile(session, client_id=client_id, payload=payload)
+    return await get_client_me(session, client_id)
 
 
 async def get_client_membership(
@@ -650,7 +774,7 @@ async def get_client_payment_status(
     fiscal receipt exists — honest, never fabricated.
     No session.commit() — read path.
     """
-    from sqlalchemy import text as _text  # noqa: PLC0415 — local to avoid circular at module level
+    from sqlalchemy import text as _text  # noqa: PLC0415
 
     row = await repository.fetch_client_payment_status(session, payment_id, client_id)
     if row is None:
@@ -666,7 +790,11 @@ async def get_client_payment_status(
     #            → payments (subject_id = membership.id, method = 'online')
     #            → fiscal_receipts (payment_id = payments.id, kind='payment', status='succeeded').
     # T-999.4-15 mitigation: online_payments scoped to client_id via row (D-20-IDOR).
+    # D-09/D-10: receipt_email + receipt_phone exposed ONLY inside succeeded branch (anti-oracle).
+    # T-999.5-09 mitigation: never populated for pending/canceled — oracle collapse preserved.
     receipt_url: str | None = None
+    receipt_email: str | None = None
+    receipt_phone: str | None = None
     if op_status == "succeeded":
         fr_row = (
             await session.execute(
@@ -706,10 +834,32 @@ async def get_client_payment_status(
         if fr_row is not None and fr_row["yookassa_receipt_id"] is not None:
             receipt_url = f"https://yookassa.ru/my/receipt/{fr_row['yookassa_receipt_id']}"
 
+        # D-09/D-10: read client's email + phone for receipt destination display.
+        # client_id is already validated by fetch_client_payment_status (D-20-IDOR).
+        # Raw SQL — no ORM import of Client (D-54-08 discipline).
+        contact_row = (
+            await session.execute(
+                _text(
+                    "SELECT email, phone FROM clients "
+                    "WHERE id = :client_id AND deleted_at IS NULL"
+                ),
+                {"client_id": str(client_id)},
+            )
+        ).mappings().one_or_none()
+
+        if contact_row is not None:
+            client_email = contact_row["email"]
+            client_phone = contact_row["phone"]
+            # D-10: email-preferred-else-phone; phone is not None (OTP invariant).
+            receipt_email = client_email if client_email else None
+            receipt_phone = client_phone if client_email is None else None
+
     return ClientPaymentStatusResponse(
         id=cast(Any, row)["id"],
         status=op_status,
         receipt_url=receipt_url,
+        receipt_email=receipt_email,
+        receipt_phone=receipt_phone,
     )
 
 

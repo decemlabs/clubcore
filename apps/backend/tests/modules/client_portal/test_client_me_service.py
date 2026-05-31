@@ -270,32 +270,68 @@ async def test_update_client_profile_boundary_weight_accepted(
 
 # ── get_client_payment_status — receipt fields (anti-oracle) ─────────────────
 
+# Helper: insert an online_payments row using a real membership_plan_id FK.
+# The online_payments table requires: yookassa_payment_id (unique text),
+# confirmation_type ('redirect'|'qr'), audit_correlation_id (UUID), amount_kopecks > 0,
+# and exactly one of membership_plan_id / pt_package_plan_id.
+
+
+async def _insert_online_payment(
+    db_session: AsyncSession,
+    *,
+    client_id: UUID,
+    status: str,
+) -> UUID:
+    """Insert a minimal online_payments row using raw SQL with a real membership_plan.
+
+    Creates a membership_plan first (to satisfy the FK), then inserts the payment.
+    Returns the payment UUID.
+    """
+    from sqlalchemy import text
+
+    payment_id = uuid4()
+    audit_id = uuid4()
+    plan_id = uuid4()
+
+    # Create a minimal membership_plan row to satisfy FK
+    await db_session.execute(
+        text(
+            "INSERT INTO membership_plans (id, name, duration_days, price_kopecks, freeze_days_limit) "
+            "VALUES (:id, :name, 30, 250000, 14)"
+        ),
+        {"id": str(plan_id), "name": f"test-plan-{plan_id}"},
+    )
+
+    await db_session.execute(
+        text(
+            "INSERT INTO online_payments "
+            "(id, client_id, membership_plan_id, status, amount_kopecks, "
+            " idempotency_key, yookassa_payment_id, confirmation_type, audit_correlation_id) "
+            "VALUES (:id, :cid, :plan_id, :status, 250000, :ikey, :yk_id, 'redirect', :audit)"
+        ),
+        {
+            "id": str(payment_id),
+            "cid": str(client_id),
+            "plan_id": str(plan_id),
+            "status": status,
+            "ikey": f"ikey-{payment_id}",
+            "yk_id": f"yk-{payment_id}",
+            "audit": str(audit_id),
+        },
+    )
+    await db_session.commit()
+    return payment_id
+
 
 async def test_payment_status_succeeded_populates_receipt_email(
     db_session: AsyncSession,
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
     """D-09: succeeded payment with email → receipt_email set, receipt_phone None."""
-    from sqlalchemy import text
-
     client = await make_client(email="receipt@example.com")
-
-    # Insert a minimal online_payments row with status='succeeded'
-    payment_id = uuid4()
-    await db_session.execute(
-        text(
-            "INSERT INTO online_payments "
-            "(id, client_id, subject_kind, status, amount_kopecks, idempotency_key) "
-            "VALUES (:id, :cid, 'membership', 'succeeded', 250000, :ikey)"
-        ),
-        {
-            "id": str(payment_id),
-            "cid": str(client.id),
-            "ikey": f"ikey-{payment_id}",
-        },
+    payment_id = await _insert_online_payment(
+        db_session, client_id=client.id, status="succeeded"
     )
-    await db_session.commit()
-
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "succeeded"
     assert result.receipt_email == "receipt@example.com"
@@ -307,24 +343,10 @@ async def test_payment_status_succeeded_phone_fallback_when_no_email(
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
     """D-10: succeeded payment with email=None → receipt_phone set, receipt_email None."""
-    from sqlalchemy import text
-
     client = await make_client(email=None)
-    payment_id = uuid4()
-    await db_session.execute(
-        text(
-            "INSERT INTO online_payments "
-            "(id, client_id, subject_kind, status, amount_kopecks, idempotency_key) "
-            "VALUES (:id, :cid, 'membership', 'succeeded', 250000, :ikey)"
-        ),
-        {
-            "id": str(payment_id),
-            "cid": str(client.id),
-            "ikey": f"ikey-{payment_id}",
-        },
+    payment_id = await _insert_online_payment(
+        db_session, client_id=client.id, status="succeeded"
     )
-    await db_session.commit()
-
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "succeeded"
     assert result.receipt_email is None
@@ -336,24 +358,10 @@ async def test_payment_status_pending_no_receipt_contact(
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
     """Anti-oracle: pending payment → receipt_email and receipt_phone both None."""
-    from sqlalchemy import text
-
     client = await make_client(email="pending@example.com")
-    payment_id = uuid4()
-    await db_session.execute(
-        text(
-            "INSERT INTO online_payments "
-            "(id, client_id, subject_kind, status, amount_kopecks, idempotency_key) "
-            "VALUES (:id, :cid, 'membership', 'pending', 250000, :ikey)"
-        ),
-        {
-            "id": str(payment_id),
-            "cid": str(client.id),
-            "ikey": f"ikey-{payment_id}",
-        },
+    payment_id = await _insert_online_payment(
+        db_session, client_id=client.id, status="pending"
     )
-    await db_session.commit()
-
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "pending"
     assert result.receipt_email is None
@@ -365,24 +373,10 @@ async def test_payment_status_canceled_no_receipt_contact(
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
     """Anti-oracle: canceled payment → receipt_email and receipt_phone both None."""
-    from sqlalchemy import text
-
     client = await make_client(email="canceled@example.com")
-    payment_id = uuid4()
-    await db_session.execute(
-        text(
-            "INSERT INTO online_payments "
-            "(id, client_id, subject_kind, status, amount_kopecks, idempotency_key) "
-            "VALUES (:id, :cid, 'membership', 'canceled', 250000, :ikey)"
-        ),
-        {
-            "id": str(payment_id),
-            "cid": str(client.id),
-            "ikey": f"ikey-{payment_id}",
-        },
+    payment_id = await _insert_online_payment(
+        db_session, client_id=client.id, status="canceled"
     )
-    await db_session.commit()
-
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "canceled"
     assert result.receipt_email is None
