@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.5 UI-SPEC approved
-last_updated: "2026-05-31T19:21:06.394Z"
+last_updated: "2026-05-31T19:37:34.309Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 40
-  completed_plans: 36
+  completed_plans: 37
   percent: 70
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 ## Current Position
 
 Phase: 999.5 (client-pwa-onboarding-and-receipt-email) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-05-31
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 93%
 
 ## v2.0 Roadmap Summary
 
@@ -80,6 +80,7 @@ Progress: [█████████░] 90%
 | Phase 999.4 P03 | 16m | 3 tasks | 10 files |
 | Phase 999.4 P05 | 15min | 3 tasks | 5 files |
 | Phase 999.5 P01 | 3min | 3 tasks | 3 files |
+| Phase 999.5 P03 | 25min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Progress: [█████████░] 90%
 - **D-999.4-03-D**: webhook redemption tests verify via direct record_promo_redemption calls (SAVEPOINT-mode db_session incompatible with session.begin() in webhook handler)
 - **D-999.4-05-A**: formatMoney added to src/utils/format.js (client-pwa has no src/shared/lib/money.ts — that path is admin-web only)
 - **D-999.4-05-B**: Icon.jsx extended with mail/wifiOff/alertCircle/x icons required by UI-SPEC error table (D-12)
+- **D-999.5-03-A**: create_payment two-kwarg receipt contact: customer_email→JSON "email" key, customer_phone→JSON "phone" key — never crossed (T-999.5-11); phone is E.164 in DB, no normalization needed
+- **D-999.5-03-B**: _read_client_email_or_raise (D-49-12) replaced by _read_client_receipt_contact_or_raise returning (email|None, phone); gate relaxed from email-required to email-OR-phone (D-10); phone is NOT NULL (OTP invariant), so gate never blocks
 
 ### Blockers/Concerns
 
@@ -128,6 +131,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T19:21:06.390Z
+Last session: 2026-05-31T19:37:34.305Z
 Stopped at: Phase 999.5 UI-SPEC approved
 Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
