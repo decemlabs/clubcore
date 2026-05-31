@@ -235,7 +235,7 @@ Plans:
 **Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/payment.html`
 **UI hint:** yes
 
-**Plans:** 5/5 plans complete
+**Plans:** 6 plans (5 complete; 06 gap closure pending)
 
 Plans:
 - [x] 999.4-01-PLAN.md — Backend: promo_codes + promo_redemptions models, migration 0046, idempotent seeds, import-linter registration
@@ -243,3 +243,4 @@ Plans:
 - [x] 999.4-03-PLAN.md — Backend: discounted amount through checkout core + redemption recording on succeeded webhook (D-05/D-06/D-07)
 - [x] 999.4-04-PLAN.md — Frontend: PaymentReturnScreen success/pending/canceled restyle + state CSS (D-10/D-11/D-12)
 - [x] 999.4-05-PLAN.md — Frontend: CheckoutSheet restyle + info plate + server promo wiring (D-01/D-02/D-09/D-12/D-13)
+- [ ] 999.4-06-PLAN.md — GAP: fix checkout amount units — pass kopecks into checkoutCtx so CheckoutSheet shows real price (sub + pt), promo original >= discounted (CPAY-01/CPAY-02)
