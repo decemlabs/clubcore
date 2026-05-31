@@ -267,6 +267,11 @@ async def test_home_composite_empty_client_returns_null_slots(
         f"Empty client /home should have expiringSoon=False, "
         f"got {data.get('expiringSoon')!r}"
     )
+    # D-01: client with zero membership rows is a 'newbie'
+    assert data.get("membershipState") == "newbie", (
+        f"Client with zero membership rows should have membershipState='newbie', "
+        f"got {data.get('membershipState')!r}"
+    )
 
 
 async def test_home_composite_with_data_returns_fields(
@@ -285,6 +290,11 @@ async def test_home_composite_with_data_returns_fields(
     assert "nextBooking" in data
     assert "expiringSoon" in data
     assert isinstance(data["expiringSoon"], bool)
+    # D-01: active client_a must have membershipState='active'
+    assert data.get("membershipState") == "active", (
+        f"client_a with active membership should have membershipState='active', "
+        f"got {data.get('membershipState')!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -470,3 +480,85 @@ async def test_pt_packages_catalog_returns_items(
     assert "name" in item
     assert "sessionCount" in item  # camelCase form of session_count
     assert "priceKopecks" in item  # camelCase form of price_kopecks
+
+
+# ---------------------------------------------------------------------------
+# D-01 / D-03: membershipState enum — newbie / lapsed / active
+# ---------------------------------------------------------------------------
+
+
+async def test_home_membership_state_lapsed(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    seeded_owned_data: SeededOwnedData,
+    redis_clean: object,
+) -> None:
+    """D-01: /home for a client whose only membership is expired returns membershipState='lapsed'.
+
+    A lapsed member has >=1 rows in memberships (status='expired') but no active one.
+    This is distinct from a newbie (zero rows) — D-01 requires server-side detection.
+    """
+    suffix = uuid4().hex[:6]
+    staff = User(
+        email=f"staff-lapsed-{suffix}@example.com",
+        password_hash=await hash_password("test-pw-123"),
+        role=Role.RECEPTION,
+        full_name="Staff Lapsed",
+    )
+    db_session.add(staff)
+    await db_session.flush()
+
+    lapsed_client = Client(
+        first_name="Lapsed",
+        last_name=f"Client-{suffix}",
+        phone=f"+7999333{int(suffix[:4], 16) % 10000:04d}",
+        telegram_user_id=333_000_000 + int(suffix[:4], 16),
+        created_by_user_id=staff.id,
+    )
+    db_session.add(lapsed_client)
+    await db_session.flush()
+
+    now = datetime.now(tz=UTC)
+    plan = MembershipPlan(
+        name=f"Lapsed Plan {suffix}",
+        duration_days=30,
+        price_kopecks=50_000,
+        freeze_days_limit=5,
+        active=True,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+
+    # Insert an expired membership (status='expired') — lapsed member pattern
+    expired_membership = Membership(
+        client_id=lapsed_client.id,
+        plan_id=plan.id,
+        plan_name_snapshot=plan.name,
+        duration_days_snapshot=plan.duration_days,
+        price_kopecks_snapshot=plan.price_kopecks,
+        freeze_days_limit_snapshot=plan.freeze_days_limit,
+        start_date=(now - timedelta(days=60)).date(),
+        end_date=(now - timedelta(days=30)).date(),
+        status="expired",
+    )
+    db_session.add(expired_membership)
+    await db_session.commit()
+
+    token = await _auth_as_client(async_client, db_session, lapsed_client)
+    resp = await async_client.get(
+        "/api/v1/client/home",
+        headers={"Cookie": f"cc_client_access={token}"},
+    )
+    assert resp.status_code == 200, (
+        f"Lapsed /home should return 200, got {resp.status_code}"
+    )
+    data = resp.json().get("data")
+    assert data is not None, "/home should always return a data object for a lapsed client"
+    assert data.get("membership") is None, (
+        f"Lapsed client should have membership=null (no active), "
+        f"got {data.get('membership')!r}"
+    )
+    assert data.get("membershipState") == "lapsed", (
+        f"Client with only expired membership should have membershipState='lapsed', "
+        f"got {data.get('membershipState')!r}"
+    )
