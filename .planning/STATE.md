@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
-status: ready_to_plan
-stopped_at: Phase 72 complete (4/4) — ready to discuss Phase 999.1
-last_updated: 2026-05-31T11:09:12.675Z
+status: planning
+stopped_at: Phase 999.3 context gathered
+last_updated: "2026-05-31T12:07:00.383Z"
 last_activity: 2026-05-31
 progress:
-  total_phases: 7
+  total_phases: 9
   completed_phases: 5
   total_plans: 27
   completed_plans: 27
-  percent: 71
+  percent: 56
 ---
 
 # Project State
@@ -75,6 +75,11 @@ Progress: [██████████] 100%
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 999.3 added: client-pwa Home newbie (no-subscription) state — UI, frontend-only
+- Phase 999.4 added: client-pwa Checkout visual restyle — UI, ЮKassa redirect unchanged (D-71-04), no in-app card form
+
 ### Key v2.0 Decisions (pre-locked from research)
 
 - **D-20-PRINCIPAL**: Separate `ClientPrincipal` + `require_client()` + `aud:"client"` + distinct `cc_client_*` cookies — `Role.CLIENT` is BANNED in `permissions.py` (breaks staff byte-parity with frozen admin-web)
@@ -105,6 +110,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T10:58:02.510Z
-Stopped at: Completed 72-04 plan (live read-path gate passed, RUN-00 COMPLETE)
+Last session: 2026-05-31T12:07:00.378Z
+Stopped at: Phase 999.3 context gathered
 Resume: Execute 68-05-PLAN.md next.
