@@ -235,11 +235,11 @@ Plans:
 **Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/payment.html`
 **UI hint:** yes
 
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 
 Plans:
 - [x] 999.4-01-PLAN.md — Backend: promo_codes + promo_redemptions models, migration 0046, idempotent seeds, import-linter registration
-- [ ] 999.4-02-PLAN.md — Backend: server-authoritative /client/promo/validate endpoint with per-reason errors (D-06/D-09)
+- [x] 999.4-02-PLAN.md — Backend: server-authoritative /client/promo/validate endpoint with per-reason errors (D-06/D-09)
 - [ ] 999.4-03-PLAN.md — Backend: discounted amount through checkout core + redemption recording on succeeded webhook (D-05/D-06/D-07)
 - [x] 999.4-04-PLAN.md — Frontend: PaymentReturnScreen success/pending/canceled restyle + state CSS (D-10/D-11/D-12)
 - [ ] 999.4-05-PLAN.md — Frontend: CheckoutSheet restyle + info plate + server promo wiring (D-01/D-02/D-09/D-12/D-13)

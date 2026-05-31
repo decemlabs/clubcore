@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.4 UI-SPEC approved
-last_updated: "2026-05-31T15:04:28.649Z"
+last_updated: "2026-05-31T15:26:33.640Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 34
-  completed_plans: 31
+  completed_plans: 32
   percent: 67
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 ## Current Position
 
 Phase: 999.4 (client-pwa-checkout-visual-restyle) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-05-31
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 94%
 
 ## v2.0 Roadmap Summary
 
@@ -76,6 +76,7 @@ Progress: [█████████░] 91%
 | Phase 999.3 P02 | 7min | 3 tasks | 6 files |
 | Phase 999.4 P01 | 15min | 3 tasks | 5 files |
 | Phase 999.4 P04 | 12min | 2 tasks | 4 files |
+| Phase 999.4 P02 | 12min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,9 @@ Progress: [█████████░] 91%
 - **D-20-IDOR**: Every client-scoped endpoint MUST carry mandatory `client_id` repo param + `assert_owns()` on get-by-ID → 404-collapse (anti-oracle); IDOR parametrized sweep covers all owned resource types
 
 - **D-68-04-SENDER**: `register_client_otp_sender` composition-root slot — bot sender None until plan 05 wires it; service silently skips DM in test mode
+- **D-999.4-02-A**: fiscal_receipts D-11 join goes via memberships.plan_id/pt_packages.plan_id (2-hop JOIN through memberships/pt_packages→payments→fiscal_receipts) — no direct online_payments→fiscal_receipts link exists
+- **D-999.4-02-B**: PromoNotFoundError etc. are local ValidationAppError subclasses in promo_codes/service.py with stable code= attributes (bounded to promo domain, not in app.core.exceptions)
+- **D-999.4-02-C**: validate_promo_code uses integer floor division only (no float); percentage discount_value=percent*100; fixed caps at plan price; 6 D-09 error codes
 
 ### Blockers/Concerns
 
@@ -114,6 +118,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T15:04:28.645Z
+Last session: 2026-05-31T15:26:33.636Z
 Stopped at: Phase 999.4 UI-SPEC approved
 Resume: Execute 68-05-PLAN.md next.
