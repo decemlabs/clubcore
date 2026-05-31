@@ -39,6 +39,11 @@ modules =
     # goes via the PayrollClawbackRecorder Protocol slot in app.core.dependencies
     # (D-58-20), so the pt_packages → payroll import remains forbidden as
     # intended (mirror Phase 32 D-32-14 PaymentRefunder pattern).
+    app.modules.promo_codes
+    # Phase 999.4 D-04 — promo codes module registered preemptively (INFRA-15 discipline).
+    # Read-only validation + redemption recording accessed by client_portal and
+    # online_payments via ignore_imports edges declared below (Option B — direct,
+    # mirrors app.modules.online_payments.service -> app.modules.clients.models precedent).
     app.modules.client_auth
     # Phase 68 CAUTH-01..06 / CISO-01..05 — client auth module registered here.
     # Cross-module reads (auth.exceptions, auth.models for OtpCode, clients.models
@@ -171,6 +176,17 @@ ignore_imports =
     app.modules.client_auth.service -> app.modules.auth.exceptions
     app.modules.client_auth.service -> app.modules.auth.models
     app.modules.client_auth.service -> app.modules.clients.models
+    # Phase 999.4 D-02/D-06/D-07 — promo code validation + redemption recording
+    # called by client_portal.service (validate endpoint D-06) and
+    # online_payments.service (redemption recording on succeeded webhook D-07).
+    # Option B (direct ignore edges) mirrors the existing
+    # app.modules.online_payments.service -> app.modules.clients.models precedent.
+    # promo_codes.service is created in Plan 02 — registering forward-safe now;
+    # unmatched_ignore_imports_alerting = warn keeps the build green.
+    app.modules.client_portal.service -> app.modules.promo_codes.models
+    app.modules.client_portal.service -> app.modules.promo_codes.service
+    app.modules.online_payments.service -> app.modules.promo_codes.models
+    app.modules.online_payments.service -> app.modules.promo_codes.service
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear

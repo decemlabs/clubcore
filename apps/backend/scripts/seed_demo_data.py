@@ -85,6 +85,51 @@ async def _seed_catalog(session: AsyncSession) -> None:
     print("Seeded client catalog: 1 membership plan + 1 PT-package (idempotent).")
 
 
+async def _seed_promo_codes(session: AsyncSession) -> None:
+    """Idempotently seed demo promo codes for 999.4 UAT (D-04).
+
+    ON CONFLICT DO NOTHING on partial-UNIQUE uq_promo_codes_code_alive
+    (upper(code) WHERE deleted_at IS NULL). Re-running is a no-op.
+
+    discount_value encoding:
+    - 'percentage' type: store value * 100 as integer (10% → 1000,
+      keeping kopeck-integer discipline — no float in the DB).
+    - 'fixed' type: store directly in kopecks (500 ₽ → 50000).
+    """
+    from app.modules.promo_codes.models import PromoCode
+
+    codes = [
+        {
+            "code": "FIT10",
+            "discount_type": "percentage",
+            "discount_value": 10_00,  # 10% encoded as percent*100 = 1000
+            "max_uses": None,
+            "per_client_limit": 1,
+            "is_active": True,
+        },
+        {
+            "code": "FIRST500",
+            "discount_type": "fixed",
+            "discount_value": 500_00,  # 500 ₽ = 50000 kopecks
+            "max_uses": 50,
+            "per_client_limit": 1,
+            "is_active": True,
+        },
+    ]
+    for c in codes:
+        stmt = (
+            pg_insert(PromoCode)
+            .values(**c)
+            .on_conflict_do_nothing(
+                index_elements=[func.upper(PromoCode.code)],
+                index_where=PromoCode.deleted_at.is_(None),
+            )
+        )
+        await session.execute(stmt)
+    await session.commit()
+    print(f"Seeded {len(codes)} promo codes (idempotent).")
+
+
 async def _run() -> int:
     email = os.environ.get("SEED_OWNER_EMAIL")
     password = os.environ.get("SEED_OWNER_PASSWORD")
@@ -141,6 +186,8 @@ async def _run() -> int:
 
             # Plan 71-09 (Gap 4) — non-empty client catalog for local UAT.
             await _seed_catalog(session)
+            # Phase 999.4 D-04 — demo promo codes for checkout UAT.
+            await _seed_promo_codes(session)
     finally:
         await engine.dispose()
     return 0
