@@ -141,7 +141,8 @@ class YooKassaClient:
         amount_kopecks: int,
         description: str,
         receipt_items: list[dict[str, Any]],
-        customer_email: str,
+        customer_email: str | None = None,
+        customer_phone: str | None = None,
         idempotency_key: UUID | str,
         confirmation_type: Literal["redirect", "qr"] = "redirect",
         return_url: str | None = None,
@@ -162,12 +163,34 @@ class YooKassaClient:
         ``result.idempotency_key`` is ``None`` (the typed dataclass field
         is ``UUID | None``); the caller already owns the key.
 
+        Receipt contact (D-10 Phase 999.5):
+        ``customer_email`` maps to ЮKassa ``receipt.customer.email`` key.
+        ``customer_phone`` maps to ЮKassa ``receipt.customer.phone`` key.
+        Exactly one must be supplied — email is preferred when present
+        (staff + email-gate paths); phone is the 54-ФЗ fallback when email
+        is absent («Чек не нужен» path).  Both None is an invariant violation.
+        PII discipline (T-51-03-01 / T-999.5-12): contact values NEVER appear
+        in structlog events — only in the ЮKassa request body (non-logged).
+
         Returns ``YooKassaPaymentResult`` — never re-raises (SC1).
         """
         # Preserved key for echo into the result dataclass (UUID-typed only).
         result_idempotency_key: UUID | None = (
             idempotency_key if isinstance(idempotency_key, UUID) else None
         )
+        # D-10 / T-999.5-11: build customer object with the correct key.
+        # Email maps to "email" key; phone maps to "phone" key — never crossed.
+        # Both None is an invariant violation (phone is DB NOT NULL via OTP auth,
+        # so this guard should never fire in production).
+        if customer_email is not None:
+            customer_obj: dict[str, str] = {"email": customer_email}
+        elif customer_phone is not None:
+            customer_obj = {"phone": customer_phone}
+        else:
+            raise ValueError(
+                "create_payment requires either customer_email or customer_phone; "
+                "neither was provided (invariant violation — phone is NOT NULL)"
+            )
         # CR-01/CR-02: caller can supply a per-payment return_url (client path bakes
         # payment_id into the URL so PWA can poll status). Staff callers pass nothing
         # → falls back to the shared settings.return_url (byte-identical behaviour).
@@ -185,7 +208,7 @@ class YooKassaClient:
             "capture": True,
             "confirmation": confirmation_body,
             "receipt": {
-                "customer": {"email": customer_email},
+                "customer": customer_obj,
                 "items": receipt_items,
                 "tax_system_code": int(self._settings.tax_system_code),
             },
