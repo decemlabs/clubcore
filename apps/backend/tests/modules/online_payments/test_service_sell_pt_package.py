@@ -12,7 +12,6 @@ from sqlalchemy import select
 
 from app.core.exceptions import (
     BadGatewayAppError,
-    ClientEmailRequiredForOnlinePaymentError,
     ServiceUnavailableAppError,
     ValidationAppError,
 )
@@ -22,30 +21,35 @@ from app.modules.online_payments.models import OnlinePayment
 pytestmark = pytest.mark.asyncio
 
 
-async def test_sell_pt_package_email_gate_blocks_when_email_null(
+async def test_sell_pt_package_phone_only_client_proceeds_d10(
     app,
     db_session,
     make_client_no_email,
     make_pt_package_plan,
     make_actor,
+    yookassa_create_payment_success,
     yookassa_settings,
 ):
-    """FIS-05 / D-49-12."""
+    """D-10 / Phase 999.5 — clients.email IS NULL but phone present → proceeds (gate relaxed).
+
+    Mirrors sell_membership test — FIS-05/D-49-12 email-required gate is rewritten.
+    """
     client = await make_client_no_email()
     plan = await make_pt_package_plan()
     actor = await make_actor()
-    with pytest.raises(ClientEmailRequiredForOnlinePaymentError) as ei:
-        await service.sell_pt_package(
-            db_session,
-            plan_id=plan.id,
-            client_id=client.id,
-            confirmation_type="redirect",
-            actor=actor,
-            yookassa_settings=yookassa_settings,
-        )
-    assert ei.value.code == "client_email_required_for_online_payment"
+    resp = await service.sell_pt_package(
+        db_session,
+        plan_id=plan.id,
+        client_id=client.id,
+        confirmation_type="redirect",
+        actor=actor,
+        yookassa_settings=yookassa_settings,
+    )
+    assert resp.confirmation_url is not None, (
+        "Phone-only client must receive a confirmation_url — gate must not block (D-10)"
+    )
     rows = (await db_session.execute(select(OnlinePayment))).all()
-    assert rows == []
+    assert len(rows) == 1
 
 
 async def test_sell_pt_package_ok_redirect(

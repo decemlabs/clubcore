@@ -198,7 +198,9 @@ class YooKassaClient:
         if confirmation_type == "redirect":
             confirmation_body = {
                 "type": "redirect",
-                "return_url": return_url if return_url is not None else str(self._settings.return_url),
+                "return_url": (
+                    return_url if return_url is not None else str(self._settings.return_url)
+                ),
             }
         else:  # "qr"
             confirmation_body = {"type": "qr"}

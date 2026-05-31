@@ -1,7 +1,9 @@
 """Online payments service — sell orchestrator (Phase 49 PAY-03..06 / D-49-08..20).
 
-ORDER OF OPERATIONS (D-49-10):
-  1. Validate clients.email present (D-49-12 — raise ClientEmailRequiredForOnlinePaymentError).
+ORDER OF OPERATIONS (D-49-10, updated D-10 Phase 999.5):
+  1. Validate clients.email OR phone present (D-10 gate — rewritten from D-49-12).
+     Phone is NOT NULL (OTP auth invariant), so the gate effectively never blocks.
+     Returns (email|None, phone). Email preferred; phone is 54-ФЗ fallback.
   2. Lookup plan price + name (in-module raw SQL SELECT — BLOCKER #3 + D-49-03 invariant).
   3. Compute deterministic Idempotence-Key (D-49-08).
   4. Replay check via repository.get_online_payment_by_idempotency_key
@@ -15,6 +17,9 @@ ORDER OF OPERATIONS (D-49-10):
      .build_receipt_item.
   6. Call YooKassaClient.create_payment (boundary returns
      YooKassaPaymentResult — never raises).
+     Receipt contact: customer_email=email when email present;
+     customer_phone=phone when email absent (D-10).
+     Phone NEVER passed via customer_email (T-999.5-11).
   7. Switch on result.classification:
      - ok → INSERT row → emit online_payment_initiated (ROOT) →
        emit yookassa_payment_created (CHILD) → 201
@@ -27,7 +32,7 @@ The CALLER (router) owns the commit per caller-owns-txn discipline
 dependency commits on response.
 
 Cross-module imports (narrow-scope, per .importlinter ignore_imports):
-  - app.modules.clients.models      (D-49-13 — clients.email gate)
+  - app.modules.clients.models      (D-49-13 — clients.email + phone gate)
   - app.modules.payments.models     (D-49-29 — TYPE_CHECKING only; Phase 50 flips runtime)
 
 Plan-price + plan-name reads use raw SQL `text()` SELECT against the
@@ -97,12 +102,32 @@ def _derive_idempotency_key(*, subject_kind: str, plan_id: UUID, client_id: UUID
     return sha256(raw.encode("utf-8")).hexdigest()
 
 
-async def _read_client_email_or_raise(session: AsyncSession, client_id: UUID) -> str:
-    """FIS-05 gate (D-49-12): raise if clients.email IS NULL."""
-    email: str | None = await session.scalar(select(Client.email).where(Client.id == client_id))
-    if email is None:
+async def _read_client_receipt_contact_or_raise(
+    session: AsyncSession, client_id: UUID
+) -> tuple[str | None, str]:
+    """D-10 gate (Phase 999.5): email OR phone present — phone is always present (OTP invariant).
+
+    Returns (email_or_None, phone). Phone is the 54-ФЗ fallback receipt contact.
+    Since every client has a phone (OTP auth), this gate never blocks online payment.
+
+    Guard: if both email and phone are None, raises ClientEmailRequiredForOnlinePaymentError
+    using the existing error code (invariant — unreachable because phone is NOT NULL).
+
+    Replaces _read_client_email_or_raise (D-49-12) which raised when email was None.
+    """
+    row = (
+        await session.execute(
+            select(Client.email, Client.phone).where(Client.id == client_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise NotFoundError("client_not_found")
+    email: str | None = row.email
+    phone: str = row.phone  # NOT NULL — OTP auth invariant
+    # D-10: email OR phone — phone is never null, so gate is effectively always satisfied.
+    if email is None and phone is None:
         raise ClientEmailRequiredForOnlinePaymentError(ErrorCode.CLIENT_EMAIL_REQUIRED.value)
-    return email
+    return email, phone
 
 
 async def _read_membership_plan_or_raise(session: AsyncSession, plan_id: UUID) -> tuple[int, str]:
@@ -276,9 +301,10 @@ async def _sell_subject_core(
     if existing is not None:
         idem_key = f"{idempotency_key}:retry-{uuid4().hex}"
 
-    # 1. FIS-05 email gate — checked AFTER replay (WR-01: replay is side-effect-free;
+    # 1. D-10 email-OR-phone gate — checked AFTER replay (WR-01: replay is side-effect-free;
     #    a cleared email must not block returning an existing confirmation_url).
-    customer_email = await _read_client_email_or_raise(session, client_id)
+    #    Since phone is NOT NULL (OTP auth invariant), this gate never blocks.
+    email, phone = await _read_client_receipt_contact_or_raise(session, client_id)
 
     # 2. Server-side price + description read (CPAY-03 — inside the core,
     #    never from caller).
@@ -307,11 +333,16 @@ async def _sell_subject_core(
     ]
     provider = get_yookassa_client_provider()
     yookassa_client = await provider()
+    # D-10 / T-999.5-11: pass contact to the correct ЮKassa key.
+    # customer_email=email when email present; customer_phone=phone when email absent.
+    # Phone NEVER passed via customer_email — the superseded PATTERNS.md collapsing
+    # pattern is explicitly rejected (it would emit {"email": "+7..."} = illegal receipt).
     result = await yookassa_client.create_payment(
         amount_kopecks=price_kopecks,
         description=description,
         receipt_items=receipt_items,
-        customer_email=customer_email,
+        customer_email=email,
+        customer_phone=(phone if email is None else None),
         idempotency_key=idem_key,
         confirmation_type=confirmation_type,
         return_url=return_url_override,  # CR-01/CR-02: None for staff (uses settings default)

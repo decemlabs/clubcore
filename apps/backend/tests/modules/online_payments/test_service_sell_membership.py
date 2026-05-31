@@ -18,7 +18,6 @@ from sqlalchemy import select
 
 from app.core.exceptions import (
     BadGatewayAppError,
-    ClientEmailRequiredForOnlinePaymentError,
     ServiceUnavailableAppError,
     ValidationAppError,
 )
@@ -34,30 +33,38 @@ from app.modules.online_payments.models import OnlinePayment
 pytestmark = pytest.mark.asyncio
 
 
-async def test_sell_membership_email_gate_blocks_when_email_null(
+async def test_sell_membership_phone_only_client_proceeds_d10(
     app,
     db_session,
     make_client_no_email,
     make_membership_plan,
     make_actor,
+    yookassa_create_payment_success,
     yookassa_settings,
 ):
-    """FIS-05 / D-49-12 — clients.email IS NULL → 422 locked code, no DB row."""
+    """D-10 / Phase 999.5 — clients.email IS NULL but phone present → proceeds (gate relaxed).
+
+    Pre-D-10 (D-49-12): raised ClientEmailRequiredForOnlinePaymentError when email was None.
+    Post-D-10: phone-only client proceeds; receipt goes to phone (54-ФЗ fallback).
+    Since clients.phone is NOT NULL (OTP auth invariant), the gate effectively never blocks.
+    """
     client = await make_client_no_email()
     plan = await make_membership_plan()
     actor = await make_actor()
-    with pytest.raises(ClientEmailRequiredForOnlinePaymentError) as ei:
-        await service.sell_membership(
-            db_session,
-            plan_id=plan.id,
-            client_id=client.id,
-            confirmation_type="redirect",
-            actor=actor,
-            yookassa_settings=yookassa_settings,
-        )
-    assert ei.value.code == "client_email_required_for_online_payment"
+    # Must NOT raise — D-10 relaxes the gate to email-OR-phone
+    resp = await service.sell_membership(
+        db_session,
+        plan_id=plan.id,
+        client_id=client.id,
+        confirmation_type="redirect",
+        actor=actor,
+        yookassa_settings=yookassa_settings,
+    )
+    assert resp.confirmation_url is not None, (
+        "Phone-only client must receive a confirmation_url — gate must not block (D-10)"
+    )
     rows = (await db_session.execute(select(OnlinePayment))).all()
-    assert rows == []
+    assert len(rows) == 1, "A successful online_payment row must be inserted"
 
 
 async def test_sell_membership_happy_path_uses_real_receipt_builder(

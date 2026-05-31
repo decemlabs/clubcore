@@ -132,13 +132,19 @@ async def test_e2e_audit_chain_pt_package_qr_sell_uses_qr_confirmation_type(
 
 
 @pytest.mark.asyncio
-async def test_e2e_audit_chain_no_audit_on_email_gate_failure(
+async def test_e2e_audit_chain_phone_only_client_emits_audit_rows_d10(
     authed_client_reception,
     db_session,
     make_client_no_email,
     make_membership_plan,
+    yookassa_create_payment_success,
 ) -> None:
-    """D-49-20 — email-gate 422 emits NO audit rows (no business event happened)."""
+    """D-10 / Phase 999.5 — phone-only client proceeds and emits audit chain.
+
+    Pre-D-10 (D-49-12, D-49-20): email-gate failure → 422 → no audit rows.
+    Post-D-10: phone-only client proceeds → 201 → audit chain emitted (2 rows).
+    The gate is relaxed; phone is the 54-ФЗ fallback receipt contact.
+    """
     from tests.integration.online_payments.conftest import sell_headers
 
     client_row = await make_client_no_email()
@@ -149,17 +155,16 @@ async def test_e2e_audit_chain_no_audit_on_email_gate_failure(
         json={"clientId": str(client_row.id)},
         headers=sell_headers(authed_client_reception),
     )
-    assert response.status_code == 422, response.text
-    assert "client_email_required_for_online_payment" in response.text
+    # D-10: must succeed — phone-only client is no longer blocked
+    assert response.status_code == 201, response.text
 
-    # No online_payment_initiated row should exist for this client
+    # Audit chain IS emitted (online_payment_initiated + yookassa_payment_created)
     audit_rows = (
         await db_session.scalars(
             select(AuditLog).where(AuditLog.action == "online_payment_initiated")
         )
     ).all()
-    # Filter to this test's client to avoid pollution from concurrent runs.
     matching = [a for a in audit_rows if a.payload.get("client_id") == str(client_row.id)]
-    assert matching == [], (
-        f"D-49-20: no audit row should exist on email-gate failure; got {matching}"
+    assert len(matching) == 1, (
+        f"D-10: audit row must exist for phone-only client sell; got {matching}"
     )

@@ -173,14 +173,19 @@ async def test_e2e_sc2_pt_package_qr(
 
 
 @pytest.mark.asyncio
-async def test_e2e_sc3_email_gate_422(
+async def test_e2e_sc3_phone_only_client_proceeds_d10(
     authed_client_reception,
     db_session,
     make_client_no_email,
     make_membership_plan,
     yookassa_create_payment_success,
 ) -> None:
-    """SC#3 — email-less client → 422 with locked code; no DB row, no ЮKassa call."""
+    """SC#3 (D-10 / Phase 999.5) — email-less client with phone → 201, DB row inserted.
+
+    Pre-D-10 (D-49-12): 422 with client_email_required_for_online_payment.
+    Post-D-10: phone-only client proceeds; receipt goes to phone (54-ФЗ fallback).
+    Since clients.phone is NOT NULL (OTP auth invariant), the gate effectively never blocks.
+    """
     from tests.integration.online_payments.conftest import sell_headers
 
     client_row = await make_client_no_email()
@@ -191,14 +196,15 @@ async def test_e2e_sc3_email_gate_422(
         json={"clientId": str(client_row.id)},
         headers=sell_headers(authed_client_reception),
     )
-    assert response.status_code == 422, response.text
-    assert "client_email_required_for_online_payment" in response.text
+    # D-10: phone-only client must proceed, not 422
+    assert response.status_code == 201, response.text
+    assert response.json()["data"]["confirmationUrl"] is not None
 
-    # No DB row written
+    # DB row written
     rows = (await db_session.execute(select(OnlinePayment))).all()
-    assert rows == []
-    # ЮKassa NOT called (respx fixture call counter is zero)
-    assert yookassa_create_payment_success.calls.call_count == 0
+    assert len(rows) == 1
+    # ЮKassa WAS called
+    assert yookassa_create_payment_success.calls.call_count == 1
 
 
 # ─── Classification chain end-to-end ────────────────────────────────────────
