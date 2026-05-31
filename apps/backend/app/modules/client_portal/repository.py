@@ -18,16 +18,19 @@ INVARIANTS:
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedData
 
 __all__ = (
     "client_has_any_membership",
     "fetch_available_slots",
+    "fetch_client_me",
     "fetch_client_membership",
     "fetch_client_next_booking",
     "fetch_client_payment_status",
@@ -37,6 +40,7 @@ __all__ = (
     "fetch_membership_plans_catalog",
     "fetch_pt_packages_catalog",
     "fetch_trainers_catalog",
+    "update_client_profile",
 )
 
 
@@ -524,6 +528,87 @@ async def fetch_trainers_catalog(
 # ---------------------------------------------------------------------------
 # Phase 71 CPAY-03 — IDOR-safe coarse payment status reader
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Phase 999.5 Plan 02 — client profile read + write (raw SQL, no ORM import)
+# ---------------------------------------------------------------------------
+
+
+async def fetch_client_me(
+    session: AsyncSession,
+    client_id: UUID,
+) -> dict[str, object]:
+    """SELECT clients profile row for /client/me (Phase 999.5 D-08).
+
+    CROSS-MODULE READ — raw SQL only (D-54-08/D-20-MODULE).
+    Verified columns: clients (apps/backend/app/modules/clients/models.py):
+      first_name, last_name, phone, email, goal,
+      height_cm, weight_kg, onboarding_completed_at.
+
+    IDOR: mandatory :client_id bind param + deleted_at IS NULL guard.
+    D-20-IDOR 404-collapse: None (non-existent or soft-deleted) → NotFoundError.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT first_name, last_name, phone, email, goal, "
+                "  height_cm, weight_kg, onboarding_completed_at "
+                "FROM clients WHERE id = :client_id AND deleted_at IS NULL"
+            ),
+            {"client_id": str(client_id)},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        raise NotFoundError("client_not_found")
+    return dict(row)
+
+
+async def update_client_profile(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    payload: Any,  # ClientProfileUpdateRequest at runtime
+) -> None:
+    """Partial UPDATE on clients row — only non-None payload fields written.
+
+    CROSS-MODULE WRITE — raw SQL text() with bind params (D-54-08/D-20-MODULE).
+    SET clause is built from FIXED string literals (never user-supplied SQL).
+    Only values are parameterized — prevents SQL injection.
+
+    D-05: onboarding_completed=True → sets onboarding_completed_at = now().
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    """
+    sets: list[str] = []
+    bind: dict[str, object] = {"client_id": str(client_id)}
+
+    if payload.first_name is not None:
+        sets.append("first_name = :first_name")
+        bind["first_name"] = payload.first_name
+    if payload.goal is not None:
+        sets.append("goal = :goal")
+        bind["goal"] = payload.goal
+    if payload.height_cm is not None:
+        sets.append("height_cm = :height_cm")
+        bind["height_cm"] = payload.height_cm
+    if payload.weight_kg is not None:
+        sets.append("weight_kg = :weight_kg")
+        bind["weight_kg"] = payload.weight_kg
+    if payload.email is not None:
+        sets.append("email = :email")
+        bind["email"] = payload.email
+    if payload.onboarding_completed:
+        sets.append("onboarding_completed_at = now()")
+
+    if not sets:
+        return  # no-op: nothing to write
+
+    await session.execute(
+        text(  # noqa: S608 — SET fragments are fixed literal strings, never user-supplied SQL
+            f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"
+        ),
+        bind,
+    )
 
 
 async def fetch_client_payment_status(
