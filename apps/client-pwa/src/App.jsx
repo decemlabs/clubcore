@@ -265,7 +265,7 @@ export default function App() {
                         planId: plan.id,
                         title: plan.name,
                         subtitle: plan.period,
-                        amount: plan.priceTotal,
+                        amount: plan.priceKopecks,
                       })
                     }}
                   />
