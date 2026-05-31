@@ -22,6 +22,17 @@ describe('toMembershipCard (camelCase ClientCatalogPlanResponse)', () => {
     expect(card.tagline).not.toContain('undefined')
     expect(Number.isNaN(card.priceTotal)).toBe(false)
   })
+
+  it('exposes raw priceKopecks and maintains units relationship', () => {
+    const card = toMembershipCard({
+      id: 'p1',
+      name: 'Месяц',
+      priceKopecks: 500000,
+      durationDays: 30,
+    })
+    expect(card.priceKopecks).toBe(500000)
+    expect(card.priceKopecks).toBe(card.priceTotal * 100)
+  })
 })
 
 describe('toPtCard (camelCase ClientCatalogPtPackageResponse)', () => {
@@ -36,5 +47,16 @@ describe('toPtCard (camelCase ClientCatalogPtPackageResponse)', () => {
     expect(card.tagline).toBe('10 занятий')
     expect(card.priceMonth).toBe(300)
     expect(Number.isFinite(card.priceMonth)).toBe(true)
+  })
+
+  it('exposes raw priceKopecks and maintains units relationship', () => {
+    const card = toPtCard({
+      id: 'pt1',
+      name: 'Пакет',
+      sessionCount: 10,
+      priceKopecks: 300000,
+    })
+    expect(card.priceKopecks).toBe(300000)
+    expect(card.priceKopecks).toBe(card.priceTotal * 100)
   })
 })
