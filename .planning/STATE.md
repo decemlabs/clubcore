@@ -4,12 +4,12 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 72 context gathered
-last_updated: "2026-05-31T10:07:12.420Z"
-last_activity: 2026-05-30 -- Phase 71 execution started
+last_updated: "2026-05-31T10:26:55.343Z"
+last_activity: 2026-05-31 -- Phase 72 planning complete
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 23
+  total_plans: 27
   completed_plans: 23
   percent: 57
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 
 Phase: 71 (client-checkout-full-pwa-screen-wiring) — EXECUTING
 Plan: 1 of 3
-Status: Executing Phase 71
-Last activity: 2026-05-30 -- Phase 71 execution started
+Status: Ready to execute
+Last activity: 2026-05-31 -- Phase 72 planning complete
 
 Progress: [██████████] 100%
 
