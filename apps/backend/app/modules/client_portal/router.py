@@ -578,10 +578,12 @@ async def client_checkout_membership(
     422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).
     No try/except — AppError bubbles to _app_error_handler.
     No CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).
+    Commit owner: caller-owns-txn (D-32-10/D-49-19); service only flushes.
     """
     result = await service.client_checkout_membership(
         session, plan_id=plan_id, client=client, yookassa_settings=yookassa_settings
     )
+    await session.commit()
     return envelope(result)
 
 
@@ -614,6 +616,7 @@ async def client_checkout_pt_package(
     422 email gate enforced inside _sell_subject_core (CPAY-04, 54-ФЗ).
     No try/except — AppError bubbles to _app_error_handler.
     No CSRF applied to GET methods; CSRF dep required on this POST (T-71-09).
+    Commit owner: caller-owns-txn (D-32-10/D-49-19); service only flushes.
     """
     result = await service.client_checkout_pt_package(
         session,
@@ -622,6 +625,7 @@ async def client_checkout_pt_package(
         idempotency_key=idempotency_key,
         yookassa_settings=yookassa_settings,
     )
+    await session.commit()
     return envelope(result)
 
 

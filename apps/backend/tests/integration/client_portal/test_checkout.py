@@ -916,3 +916,281 @@ async def test_checkout_confirmation_url_none_raises_bad_gateway(
         f"WR-02: None confirmation_url must raise 502 BadGateway (not return 'None' string), "
         f"got {r.status_code}: {r.text}"
     )
+
+
+# ===========================================================================
+# Phase 71 bug fix regression: online_payments row must be COMMITTED
+# (not merely flushed), visible in a fresh connection after checkout.
+#
+# Root bug (client-checkout-no-commit): both checkout endpoints lacked a
+# commit owner. get_db never commits; the service only flushes; so the
+# INSERT was rolled back on session close. The SAVEPOINT harness (async_client)
+# masked the bug because session.commit() inside the router became a SAVEPOINT
+# RELEASE — flushed data stayed visible within the outer transaction.
+#
+# This test uses the real-commit harness (checkout_commit_client +
+# checkout_commit_db_session + checkout_commit_engine) so that session.commit()
+# inside the router is a genuine COMMIT. A fresh session opened AFTER the
+# request verifies the row is present under READ COMMITTED isolation.
+# ===========================================================================
+
+
+async def _auth_as_client_real_commit(
+    http_client: AsyncClient,
+    seed_session: AsyncSession,
+    client: Client,
+) -> None:
+    """OTP auth using a real-commit seed session.
+
+    Same flow as _auth_as_client but the seed_session issues real commits,
+    so the patched OTP row is visible to the route handler's own session.
+    """
+    req = await http_client.post(
+        "/api/v1/client/otp/request",
+        json={"phone": client.phone},
+    )
+    assert req.status_code == 202, f"OTP request failed for {client.phone}: {req.text}"
+
+    otp_row = await seed_session.scalar(
+        select(OtpCode).where(
+            OtpCode.client_id == client.id,
+            OtpCode.consumed_at.is_(None),
+        )
+    )
+    assert otp_row is not None, f"OtpCode row not found for client {client.id}"
+
+    settings = get_settings()
+    raw_code, code_hash = generate_otp_code()
+    otp_row.code_hash = code_hash
+    otp_row.expires_at = datetime.now(tz=UTC) + timedelta(seconds=settings.otp_code_ttl_seconds)
+    await seed_session.commit()
+
+    verify = await http_client.post(
+        "/api/v1/client/otp/verify",
+        json={"phone": client.phone, "code": raw_code},
+    )
+    assert verify.status_code == 200, f"OTP verify failed for {client.phone}: {verify.text}"
+
+
+async def test_membership_checkout_row_committed_to_db(
+    checkout_commit_client: AsyncClient,
+    checkout_commit_db_session: AsyncSession,
+    checkout_commit_engine: Any,
+    redis_clean: Redis,
+) -> None:
+    """Regression: membership checkout COMMITs the online_payments row (not just flush).
+
+    Root bug (client-checkout-no-commit): endpoints lacked a commit owner so the
+    INSERT was rolled back on session close. This test uses the real-commit
+    harness so session.commit() inside the router is a genuine Postgres COMMIT.
+    After the 201 response, a fresh AsyncSession opened against the same engine
+    verifies the row is present under READ COMMITTED isolation.
+
+    This test would have failed (online_payments count = 0) on the unfixed code.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    # --- Seed client + plan via real-commit session ---
+    suffix = uuid4().hex[:8]
+    tg_id = uuid4().int % 2_000_000_000 + 800_000_000
+
+    staff = User(
+        email=f"staff-commit-reg-{suffix}@example.com",
+        password_hash=await hash_password("test-staff-pw-123"),
+        role=Role.RECEPTION,
+        full_name=f"Staff {suffix}",
+    )
+    checkout_commit_db_session.add(staff)
+    await checkout_commit_db_session.flush()
+
+    client = Client(
+        first_name="Commit",
+        last_name=f"Reg-{suffix}",
+        phone=f"+7912{uuid4().int % 10_000_000:07d}",
+        email=f"commit-reg-{suffix}@example.com",
+        telegram_user_id=tg_id,
+        created_by_user_id=staff.id,
+    )
+    checkout_commit_db_session.add(client)
+    await checkout_commit_db_session.commit()
+    await checkout_commit_db_session.refresh(client)
+
+    plan = MembershipPlan(
+        name=f"Commit Reg Plan {uuid4().hex[:6]}",
+        duration_days=30,
+        price_kopecks=250_000,
+        freeze_days_limit=7,
+        active=True,
+    )
+    checkout_commit_db_session.add(plan)
+    await checkout_commit_db_session.commit()
+    await checkout_commit_db_session.refresh(plan)
+
+    # --- Authenticate via real-commit OTP flow ---
+    await _auth_as_client_real_commit(
+        checkout_commit_client, checkout_commit_db_session, client
+    )
+
+    # --- Call the checkout endpoint (ЮKassa mocked via respx) ---
+    fake_url = f"https://yoomoney.ru/checkout/commit-reg-{uuid4().hex[:8]}"
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.post("payments").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": f"yk-{uuid4().hex[:24]}",
+                    "status": "pending",
+                    "amount": {"value": "2500.00", "currency": "RUB"},
+                    "confirmation": {
+                        "type": "redirect",
+                        "confirmation_url": fake_url,
+                    },
+                },
+            )
+        )
+
+        csrf_token = checkout_commit_client.cookies.get("clubcore_client_csrf") or ""
+        r = await checkout_commit_client.post(
+            f"/api/v1/client/checkout/memberships/{plan.id}",
+            headers={"X-CSRF-Token": csrf_token},
+            json={},
+        )
+
+    assert r.status_code == 201, (
+        f"Membership checkout must return 201; got {r.status_code}: {r.text}"
+    )
+    data = r.json()["data"]
+    online_payment_id = data["onlinePaymentId"]
+
+    # --- Open a FRESH session and verify the row is committed ---
+    # Under READ COMMITTED isolation, a row is only visible if it has been
+    # committed. An unflushed or merely-flushed-then-rolled-back row is invisible.
+    fresh_session_factory = async_sessionmaker(checkout_commit_engine, expire_on_commit=False)
+    async with fresh_session_factory() as fresh_session:
+        from uuid import UUID as _UUID
+        row = await fresh_session.scalar(
+            select(OnlinePayment).where(
+                OnlinePayment.id == _UUID(online_payment_id)
+            )
+        )
+
+    assert row is not None, (
+        f"online_payments row {online_payment_id!r} is NOT visible in a fresh connection — "
+        "the INSERT was rolled back (commit owner missing). "
+        "Add await session.commit() in the router endpoint."
+    )
+    assert row.status == "pending", (
+        f"Expected status=pending, got: {row.status!r}"
+    )
+    assert row.client_id == client.id, (
+        f"Row client_id mismatch: expected {client.id!r}, got {row.client_id!r}"
+    )
+
+
+async def test_pt_checkout_row_committed_to_db(
+    checkout_commit_client: AsyncClient,
+    checkout_commit_db_session: AsyncSession,
+    checkout_commit_engine: Any,
+    redis_clean: Redis,
+) -> None:
+    """Regression: PT-package checkout COMMITs the online_payments row (not just flush).
+
+    Mirrors test_membership_checkout_row_committed_to_db for the PT path.
+    PT uses a client-supplied Idempotency-Key header (D-71-04).
+    """
+    from uuid import UUID as _UUID
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker as _async_sessionmaker
+
+    suffix = uuid4().hex[:8]
+    tg_id = uuid4().int % 2_000_000_000 + 800_000_000
+
+    staff = User(
+        email=f"staff-pt-commit-{suffix}@example.com",
+        password_hash=await hash_password("test-staff-pw-123"),
+        role=Role.RECEPTION,
+        full_name=f"Staff PT {suffix}",
+    )
+    checkout_commit_db_session.add(staff)
+    await checkout_commit_db_session.flush()
+
+    client = Client(
+        first_name="PTCommit",
+        last_name=f"Reg-{suffix}",
+        phone=f"+7913{uuid4().int % 10_000_000:07d}",
+        email=f"pt-commit-{suffix}@example.com",
+        telegram_user_id=tg_id,
+        created_by_user_id=staff.id,
+    )
+    checkout_commit_db_session.add(client)
+    await checkout_commit_db_session.commit()
+    await checkout_commit_db_session.refresh(client)
+
+    from app.modules.pt_packages.models import PtPackagePlan as _PtPackagePlan
+
+    pt_plan = _PtPackagePlan(
+        name=f"Commit PT Plan {uuid4().hex[:6]}",
+        session_count=10,
+        price_kopecks=500_000,
+        validity_days=90,
+    )
+    checkout_commit_db_session.add(pt_plan)
+    await checkout_commit_db_session.commit()
+    await checkout_commit_db_session.refresh(pt_plan)
+
+    await _auth_as_client_real_commit(
+        checkout_commit_client, checkout_commit_db_session, client
+    )
+
+    idem_key = uuid4().hex
+    fake_url = f"https://yoomoney.ru/checkout/pt-commit-{uuid4().hex[:8]}"
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.post("payments").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": f"yk-{uuid4().hex[:24]}",
+                    "status": "pending",
+                    "amount": {"value": "5000.00", "currency": "RUB"},
+                    "confirmation": {
+                        "type": "redirect",
+                        "confirmation_url": fake_url,
+                    },
+                },
+            )
+        )
+
+        csrf_token = checkout_commit_client.cookies.get("clubcore_client_csrf") or ""
+        r = await checkout_commit_client.post(
+            f"/api/v1/client/checkout/pt-packages/{pt_plan.id}",
+            headers={"X-CSRF-Token": csrf_token, "Idempotency-Key": idem_key},
+            json={},
+        )
+
+    assert r.status_code == 201, (
+        f"PT checkout must return 201; got {r.status_code}: {r.text}"
+    )
+    data = r.json()["data"]
+    online_payment_id = data["onlinePaymentId"]
+
+    fresh_session_factory = _async_sessionmaker(checkout_commit_engine, expire_on_commit=False)
+    async with fresh_session_factory() as fresh_session:
+        row = await fresh_session.scalar(
+            select(OnlinePayment).where(
+                OnlinePayment.id == _UUID(online_payment_id)
+            )
+        )
+
+    assert row is not None, (
+        f"PT online_payments row {online_payment_id!r} is NOT visible in a fresh connection — "
+        "the INSERT was rolled back (commit owner missing). "
+        "Add await session.commit() in the router endpoint."
+    )
+    assert row.status == "pending", (
+        f"Expected status=pending, got: {row.status!r}"
+    )
+    assert row.client_id == client.id, (
+        f"Row client_id mismatch: expected {client.id!r}, got {row.client_id!r}"
+    )

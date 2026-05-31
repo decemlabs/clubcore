@@ -15,21 +15,35 @@ Provides:
 
 All fixtures use the SAVEPOINT-rolled-back db_session from the root conftest.
 Mirrors tests/integration/client_auth/conftest.py discipline.
+
+Real-commit harness (checkout commit regression — Phase 71 bug fix):
+  - checkout_commit_engine / checkout_commit_db_session / checkout_commit_client:
+    mirror the webhook_engine / webhook_db_session / webhook_client pattern but
+    scoped to the checkout flow. Used by test_checkout_row_committed_to_db to
+    assert the online_payments INSERT is COMMITTED (visible in a fresh connection),
+    not merely flushed and rolled back on session close (the root bug).
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.config import get_settings
+from app.core.database import get_db
 from app.core.permissions import Role
+from app.core.redis import get_redis
 from app.core.security import hash_password
 from app.modules.auth.models import User
 from app.modules.clients.models import Client
@@ -414,3 +428,101 @@ async def seeded_owned_data(
     data_a = await _seed_client_owned_data(db_session, client_a, seeded_staff, phone_index=1)
     data_b = await _seed_client_owned_data(db_session, client_b, seeded_staff, phone_index=2)
     return SeededOwnedData(a=data_a, b=data_b)
+
+
+# ---------------------------------------------------------------------------
+# Real-commit harness for checkout commit regression (Phase 71 bug fix).
+#
+# The root bug (client-checkout-no-commit): both checkout endpoints lacked a
+# commit owner — get_db never commits, the service only flushes, so the
+# online_payments INSERT was rolled back on session close.
+#
+# The SAVEPOINT harness (async_client + db_session) masks this because
+# session.commit() inside the router becomes a SAVEPOINT RELEASE — the flushed
+# row stays visible within the outer transaction. A real-commit harness with a
+# FRESH second connection is required to prove actual database persistence.
+#
+# Pattern mirrors tests/integration/webhook_yookassa/conftest.py:webhook_engine
+# (Plan 50-06 D-13). Tables to truncate include everything the checkout auth
+# flow touches: otp_codes, client_refresh_tokens, clients, users,
+# membership_plans, pt_package_plans, online_payments (CASCADE covers the rest).
+# ---------------------------------------------------------------------------
+
+_CHECKOUT_COMMIT_TRUNCATE_TABLES = (
+    "audit_log",
+    "online_payments",
+    "membership_plans",
+    "pt_package_plans",
+    "otp_codes",
+    "client_refresh_tokens",
+    "clients",
+    "users",
+)
+
+
+@pytest_asyncio.fixture
+async def checkout_commit_engine() -> AsyncIterator[Any]:
+    """Real-commit engine for the checkout commit regression test.
+
+    Creates a fresh async engine. On teardown, TRUNCATEs all tables touched by
+    the checkout auth + checkout flow, then disposes the engine.
+    """
+    settings = get_settings()
+    engine = create_async_engine(str(settings.database_url), pool_pre_ping=True)
+    try:
+        yield engine
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    f"TRUNCATE {', '.join(_CHECKOUT_COMMIT_TRUNCATE_TABLES)}"
+                    " RESTART IDENTITY CASCADE"
+                )
+            )
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def checkout_commit_db_session(
+    checkout_commit_engine: Any,
+) -> AsyncIterator[AsyncSession]:
+    """Real BEGIN/COMMIT session for seeding checkout commit regression data.
+
+    A separate session for the route's per-request session is created inside
+    checkout_commit_client so each route invocation gets a fresh session.
+    """
+    session_factory = async_sessionmaker(checkout_commit_engine, expire_on_commit=False)
+    async with session_factory() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def checkout_commit_client(
+    app: FastAPI,
+    checkout_commit_engine: Any,
+    checkout_commit_db_session: AsyncSession,  # noqa: ARG001 — ensures engine is ready before client
+) -> AsyncIterator[AsyncClient]:
+    """AsyncClient with real-commit get_db override for checkout commit regression.
+
+    Each route invocation creates a FRESH session from checkout_commit_engine so
+    session.commit() inside the router actually COMMITs to Postgres (not a SAVEPOINT).
+    The seeding session (checkout_commit_db_session) is a separate session that
+    commits independently — rows seeded there are visible to the route session.
+    """
+    session_factory = async_sessionmaker(checkout_commit_engine, expire_on_commit=False)
+
+    async def _override_get_db() -> AsyncIterator[AsyncSession]:
+        async with session_factory() as session:
+            yield session
+
+    def _override_get_redis() -> Any:
+        return app.state.redis
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_redis] = _override_get_redis
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
