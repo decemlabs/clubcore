@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Оплата — Мой зал</title>
+<style>
+  :root {
+    --accent: #2dd4a4;
+    --accent-deep: #0f9b76;
+    --accent-soft: #d6f5ea;
+
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #a8a29e;
+
+    --danger: #dc2626;
+    --danger-soft: #fee2e2;
+    --warn: #e9a23b;
+    --warn-soft: #fef3e2;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "Inter Variable", "Inter", system-ui, sans-serif;
+    --font-num: "SF Mono", ui-monospace, "Menlo", monospace;
+
+    --r-sm: 10px;
+    --r-md: 14px;
+    --r-lg: 20px;
+    --r-pill: 999px;
+
+    --sh-1: 0 1px 2px rgba(28,25,23,0.04);
+    --sh-2: 0 1px 3px rgba(28,25,23,0.05), 0 4px 14px rgba(28,25,23,0.04);
+
+    --page-bg: #e7e5e4;
+    --device-shell: #0a0a0a;
+    --device-shadow: 0 50px 100px rgba(28,25,23,0.25), 0 0 0 1px rgba(28,25,23,0.15);
+
+    color-scheme: light;
+  }
+
+  [data-theme="dark"] {
+    /* Warm espresso dark — matches src/styles.css */
+    --bg: #1a1511;
+    --surface: #221d17;
+    --surface-2: #2c2620;
+    --border: #3a3128;
+    --border-strong: #4a4035;
+    --text: #f4ebde;
+    --text-2: #c2b39d;
+    --text-3: #8a7c69;
+    --accent-soft: rgba(45, 212, 164, 0.18);
+    --danger-soft: rgba(220, 38, 38, 0.18);
+    --warn-soft: rgba(233, 162, 59, 0.20);
+
+    --sh-1: 0 1px 2px rgba(0,0,0,0.4);
+    --sh-2: 0 1px 3px rgba(0,0,0,0.5), 0 4px 14px rgba(0,0,0,0.3);
+
+    --page-bg: #0e0a07;
+    --device-shell: #050403;
+    --device-shadow: 0 50px 100px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04);
+
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--page-bg);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.3s ease;
+  }
+  button, input { font-family: inherit; }
+
+  .stage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+
+  /* Device shell */
+  .device {
+    width: 390px; height: 844px; position: relative;
+    border-radius: 54px; background: var(--device-shell); padding: 12px;
+    box-shadow: var(--device-shadow);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .device-inner {
+    position: absolute; inset: 12px;
+    border-radius: 44px; overflow: hidden;
+    background: var(--bg);
+  }
+  .island {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px; border-radius: 999px;
+    background: #000; z-index: 300; pointer-events: none;
+  }
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 10px; height: 44px;
+    color: var(--text); font-size: 15px; font-weight: 600;
+    pointer-events: none;
+  }
+  .status-bar span { font-variant-numeric: tabular-nums; }
+  .status-bar .glyphs { display: flex; gap: 6px; align-items: center; }
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; background: var(--text);
+    opacity: 0.85; border-radius: 3px; z-index: 10;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    color: var(--text);
+    display: flex; flex-direction: column;
+    padding-top: 44px;
+    overflow: hidden;
+  }
+
+  /* Top bar */
+  .topbar {
+    padding: 6px 12px 4px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 999px; border: 0;
+    background: var(--surface); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text);
+    transition: transform 0.12s ease, background 0.15s ease;
+  }
+  .icon-btn:active { transform: scale(0.93); }
+  .topbar .title { font-size: 15px; font-weight: 650; letter-spacing: -0.1px; }
+
+  /* Scroller */
+  .scroller {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: none;
+    padding-bottom: 140px;
+  }
+  .scroller::-webkit-scrollbar { display: none; }
+
+  /* Big sum */
+  .sum-wrap {
+    padding: 8px 20px 18px;
+    text-align: center;
+  }
+  .sum-eyebrow {
+    font-size: 11px; font-weight: 700;
+    color: var(--text-3);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .sum-amount {
+    margin-top: 6px;
+    font-size: 44px; font-weight: 700;
+    letter-spacing: -1.4px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .sum-amount .cur { color: var(--text-3); margin-left: 4px; }
+
+  /* Order summary card */
+  .section { padding: 0 16px 12px; }
+  .section .label {
+    color: var(--text-3); padding: 4px 4px 8px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .card {
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    border: 0.5px solid var(--border);
+    box-shadow: var(--sh-1);
+    overflow: hidden;
+  }
+  .order {
+    padding: 14px;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .order .thumb {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--surface-2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .order .meta { flex: 1; min-width: 0; }
+  .order .meta .t { font-size: 15px; font-weight: 650; letter-spacing: -0.1px; }
+  .order .meta .s { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+  .order .amt { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  /* Method segmented control */
+  .seg {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface);
+    border-radius: var(--r-pill);
+    border: 0.5px solid var(--border);
+    box-shadow: var(--sh-1);
+    position: relative;
+    user-select: none;
+  }
+  .seg-pill {
+    position: absolute;
+    top: 4px; bottom: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    background: var(--text);
+    border-radius: var(--r-pill);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.2, 1);
+    z-index: 1;
+  }
+  .seg.is-sbp .seg-pill { transform: translateX(100%); }
+  .seg-btn {
+    position: relative; z-index: 2;
+    height: 44px; border: 0; background: transparent;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    font-size: 14px; font-weight: 600; letter-spacing: -0.1px;
+    color: var(--text-2);
+    transition: color 0.2s ease;
+  }
+  .seg-btn.is-active { color: var(--bg); }
+  .seg-btn svg { width: 18px; height: 18px; }
+  .seg-btn .sbp-mark {
+    width: 16px; height: 16px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800;
+    letter-spacing: 0;
+    color: var(--text-2);
+    background: var(--surface-2);
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .seg-btn.is-active .sbp-mark {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* Method panels — crossfade */
+  .panels { position: relative; }
+  .panel {
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+  }
+  .panel.is-active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .panel.is-hidden { display: none; }
+
+  /* Card visual preview */
+  .card-vis {
+    aspect-ratio: 1.6 / 1;
+    background:
+      radial-gradient(120% 80% at 100% 0%, rgba(255,255,255,0.18), transparent 50%),
+      linear-gradient(135deg, #1c1917 0%, #2c2620 100%);
+    border-radius: var(--r-lg);
+    color: #f4ebde;
+    padding: 18px 20px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(28,25,23,0.18);
+    transition: box-shadow 0.3s ease, background 0.3s ease;
+  }
+  [data-theme="dark"] .card-vis {
+    background:
+      radial-gradient(140% 90% at 100% 0%, rgba(255,255,255,0.12), transparent 55%),
+      linear-gradient(135deg, #3d342a 0%, #5a4d3f 100%);
+    box-shadow:
+      0 0 0 0.5px rgba(244,235,222,0.12),
+      0 18px 40px rgba(0,0,0,0.55),
+      0 2px 0 rgba(244,235,222,0.05) inset;
+  }
+  .card-vis .chip {
+    width: 32px; height: 24px;
+    background: linear-gradient(135deg, #d4af37, #b8941f);
+    border-radius: 4px;
+    position: relative;
+  }
+  .card-vis .chip::before, .card-vis .chip::after {
+    content: ''; position: absolute; left: 4px; right: 4px;
+    height: 1px; background: rgba(0,0,0,0.25);
+  }
+  .card-vis .chip::before { top: 8px; }
+  .card-vis .chip::after { bottom: 8px; }
+  .card-vis .num {
+    font-family: var(--font-num);
+    font-size: 18px; letter-spacing: 1.2px;
+    font-weight: 500;
+    word-spacing: 4px;
+  }
+  .card-vis .row {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 16px;
+  }
+  .card-vis .row .lbl {
+    font-size: 9px; color: rgba(244,235,222,0.55);
+    letter-spacing: 0.6px; text-transform: uppercase;
+    font-weight: 600;
+  }
+  .card-vis .row .val {
+    font-family: var(--font-num);
+    font-size: 13px; letter-spacing: 0.4px;
+    margin-top: 3px;
+  }
+  .card-vis .brand {
+    position: absolute; top: 18px; right: 20px;
+    font-size: 13px; font-weight: 700; letter-spacing: -0.2px;
+    color: #f4ebde;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+  }
+  .card-vis .brand.is-on { opacity: 1; }
+  .card-vis .brand .visa { font-style: italic; letter-spacing: -0.5px; }
+  .card-vis .brand .mc-dots { display: inline-flex; gap: -6px; align-items: center; }
+  .card-vis .brand .mc-dots span {
+    width: 16px; height: 16px; border-radius: 50%;
+    display: inline-block;
+  }
+  .card-vis .brand .mc-dots span:first-child {
+    background: #eb001b;
+  }
+  .card-vis .brand .mc-dots span:last-child {
+    background: #f79e1b;
+    margin-left: -6px;
+    mix-blend-mode: lighten;
+  }
+  .card-vis .brand .mir {
+    font-weight: 800; letter-spacing: -0.3px;
+    background: linear-gradient(90deg, #00bf68, #006649);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Inputs */
+  .fields { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .field {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field:focus-within {
+    border-color: var(--accent-deep);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field .l {
+    font-size: 10px; font-weight: 700;
+    color: var(--text-3);
+    letter-spacing: 0.4px; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .field input {
+    width: 100%; border: 0; outline: 0; background: transparent;
+    color: var(--text);
+    font-size: 16px; font-weight: 500;
+    padding: 4px 0 2px;
+    letter-spacing: -0.1px;
+  }
+  .field input.num { font-family: var(--font-num); font-size: 17px; letter-spacing: 0.6px; font-weight: 500; }
+  .field input::placeholder { color: var(--text-3); font-weight: 400; }
+  .field.is-error { border-color: var(--danger); }
+  .field.is-error .l { color: var(--danger); }
+
+  .help {
+    margin-top: 10px;
+    display: flex; gap: 8px; align-items: center;
+    font-size: 12px; color: var(--text-3);
+  }
+  .help svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* Save card toggle */
+  .save-row {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 4px;
+  }
+  .switch {
+    width: 44px; height: 26px; border-radius: 999px;
+    background: var(--border-strong);
+    position: relative; flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border: 0;
+  }
+  .switch::after {
+    content: ''; position: absolute;
+    top: 2px; left: 2px;
+    width: 22px; height: 22px; border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transition: transform 0.22s cubic-bezier(0.32, 0.72, 0.2, 1);
+  }
+  .switch.is-on { background: var(--accent); }
+  .switch.is-on::after { transform: translateX(18px); }
+  .save-row .lbl { flex: 1; font-size: 14px; color: var(--text); letter-spacing: -0.1px; }
+  .save-row .sub { font-size: 12px; color: var(--text-3); margin-top: 2px; letter-spacing: -0.05px; }
+
+  /* СБП panel */
+  .sbp-hero {
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    border: 0.5px solid var(--border);
+    box-shadow: var(--sh-1);
+    padding: 18px 18px 14px;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .sbp-logo {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #1e88e5 0%, #00c853 50%, #ff6f00 100%);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    box-shadow: 0 6px 16px rgba(30,136,229,0.25);
+  }
+  .sbp-hero .t { font-size: 16px; font-weight: 650; letter-spacing: -0.2px; }
+  .sbp-hero .s {
+    font-size: 13px; color: var(--text-2);
+    margin-top: 3px; line-height: 1.4;
+  }
+
+  .banks-label {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 16px 4px 8px;
+  }
+  .banks-label .l {
+    font-size: 11px; font-weight: 700; color: var(--text-3);
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .banks-label .all {
+    font-size: 12px; font-weight: 600; color: var(--accent-deep);
+    cursor: pointer; background: 0; border: 0; padding: 0;
+  }
+
+  .banks {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-1);
+    padding: 4px;
+  }
+  .bank {
+    width: 100%;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 10px;
+    background: transparent; border: 0; cursor: pointer;
+    border-radius: var(--r-md);
+    text-align: left;
+    color: var(--text);
+    transition: background 0.15s ease;
+  }
+  .bank:hover { background: var(--surface-2); }
+  .bank-logo {
+    width: 40px; height: 40px; border-radius: 12px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 14px; font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .bank-logo.tin   { background: #ffdd2d; color: #1c1917; }
+  .bank-logo.sber  { background: linear-gradient(135deg, #21a038, #198038); }
+  .bank-logo.alfa  { background: #ef3124; }
+  .bank-logo.vtb   { background: #0a2973; }
+  .bank-logo.gpb   { background: #2c4a82; }
+  .bank-logo.raif  { background: #fee600; color: #1c1917; }
+  .bank-logo.psb   { background: #ee7203; }
+
+  .bank .meta { flex: 1; min-width: 0; }
+  .bank .meta .n { font-size: 15px; font-weight: 600; letter-spacing: -0.1px; }
+  .bank .meta .sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .bank .radio {
+    width: 22px; height: 22px; border-radius: 999px;
+    border: 1.5px solid var(--border-strong);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s ease;
+  }
+  .bank.is-on .radio { border-color: var(--accent); }
+  .bank.is-on .radio::after {
+    content: ''; width: 10px; height: 10px; border-radius: 999px;
+    background: var(--accent);
+  }
+  .bank-divider {
+    height: 0.5px; background: var(--border);
+    margin: 0 10px;
+  }
+
+  /* Pay bar */
+  .paybar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 14px 16px 22px;
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 0.5px solid var(--border);
+    z-index: 30;
+  }
+  .btn {
+    appearance: none; border: 0;
+    background: var(--text); color: var(--bg);
+    width: 100%; height: 54px;
+    border-radius: var(--r-pill);
+    font-size: 16px; font-weight: 650;
+    letter-spacing: -0.2px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px;
+    transition: transform 0.12s ease, opacity 0.15s ease;
+  }
+  .btn:active { transform: scale(0.985); }
+  .btn[disabled] {
+    background: var(--surface-2);
+    color: var(--text-3);
+    cursor: default;
+  }
+  .btn[disabled]:active { transform: none; }
+  .btn-accent { background: var(--accent); color: #06120c; }
+  .btn .spin {
+    width: 18px; height: 18px; border-radius: 999px;
+    border: 2.4px solid rgba(6,18,12,0.25);
+    border-top-color: #06120c;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .pay-note {
+    text-align: center; margin-top: 8px;
+    font-size: 11px; color: var(--text-3); letter-spacing: -0.05px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .pay-note svg { width: 11px; height: 11px; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* SBP "open bank app" overlay */
+  .sbp-overlay {
+    position: absolute; inset: 0; z-index: 240;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    animation: fade-up 0.3s ease;
+  }
+  .sbp-overlay .body {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 32px 28px;
+    text-align: center;
+  }
+  .sbp-overlay .bigicon {
+    width: 96px; height: 96px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #1e88e5 0%, #00c853 50%, #ff6f00 100%);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; letter-spacing: 0.5px;
+    margin-bottom: 24px;
+    box-shadow: 0 16px 36px rgba(30,136,229,0.32);
+  }
+  .sbp-overlay h2 {
+    margin: 0; font-size: 26px; font-weight: 700;
+    letter-spacing: -0.6px; line-height: 1.15;
+  }
+  .sbp-overlay .desc {
+    margin-top: 12px; max-width: 280px;
+    font-size: 14px; color: var(--text-2); line-height: 1.5;
+  }
+  .sbp-overlay .bank-pill {
+    margin-top: 22px;
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 14px 8px 8px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+  }
+  .sbp-overlay .bank-pill .lg {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 11px; font-weight: 800;
+  }
+  .sbp-overlay .countdown {
+    margin-top: 20px;
+    font-size: 13px; color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .sbp-overlay .progress {
+    width: 80%; max-width: 220px;
+    height: 3px; border-radius: 999px;
+    background: var(--border);
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .sbp-overlay .progress span {
+    display: block; height: 100%;
+    background: var(--text);
+    transform-origin: left;
+    animation: prog 6s linear forwards;
+  }
+  @keyframes prog { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .sbp-overlay .actions {
+    padding: 14px 16px 22px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  /* ── Generic full-screen state (success / error / 3DS) ─────────── */
+  .state {
+    position: absolute; inset: 0; z-index: 250;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    animation: state-in 0.32s cubic-bezier(0.32, 0.72, 0.2, 1);
+  }
+  @keyframes state-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .state-head {
+    padding: 50px 12px 4px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .state-head .ttl { font-size: 15px; font-weight: 650; letter-spacing: -0.1px; }
+  .state-body {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px 28px;
+    text-align: center;
+  }
+  .state-icon {
+    width: 96px; height: 96px;
+    border-radius: 24px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 22px;
+    animation: icon-pop 0.4s cubic-bezier(0.32, 1.4, 0.4, 1) both;
+  }
+  @keyframes icon-pop {
+    0% { transform: scale(0.3); opacity: 0; }
+    60% { transform: scale(1.06); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .state-icon.ok    { background: var(--accent); color: #06120c; }
+  .state-icon.error { background: var(--danger-soft); color: var(--danger); }
+  .state-icon.warn  { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .state-icon.warn { color: #e9a23b; }
+  .state-icon.info  { background: var(--surface-2); color: var(--text-2); }
+  .state-icon svg { width: 44px; height: 44px; }
+
+  .state-title {
+    font-size: 28px; font-weight: 700;
+    letter-spacing: -0.6px; line-height: 1.15;
+    text-wrap: balance;
+  }
+  .state-desc {
+    margin-top: 12px; max-width: 290px;
+    font-size: 14px; color: var(--text-2); line-height: 1.5;
+    text-wrap: pretty;
+  }
+  .state-meta {
+    margin-top: 22px; padding: 12px 18px;
+    background: var(--surface); border-radius: var(--r-md);
+    border: 0.5px solid var(--border);
+    display: flex; gap: 14px; align-items: center;
+    text-align: left;
+  }
+  .state-meta .l { font-size: 11px; color: var(--text-3); letter-spacing: 0.3px; text-transform: uppercase; font-weight: 600; }
+  .state-meta .v { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .state-actions {
+    padding: 14px 16px 22px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .btn-ghost {
+    background: transparent; color: var(--text-2);
+    border: 0.5px solid var(--border-strong);
+  }
+
+  /* 3-D Secure code input */
+  .otp {
+    display: flex; gap: 8px; justify-content: center;
+    margin-top: 28px;
+  }
+  .otp input {
+    width: 44px; height: 54px;
+    border: 0.5px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--text);
+    text-align: center;
+    font-family: var(--font-num);
+    font-size: 22px; font-weight: 600;
+    outline: 0;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .otp input:focus {
+    border-color: var(--accent-deep);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .otp.is-error input {
+    border-color: var(--danger);
+    animation: shake 0.4s;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+  .otp-meta {
+    margin-top: 14px; font-size: 12px; color: var(--text-3);
+    display: flex; gap: 6px; justify-content: center; align-items: center;
+  }
+  .otp-meta .resend {
+    background: 0; border: 0; padding: 0; color: var(--accent-deep);
+    font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .otp-meta .resend[disabled] { color: var(--text-3); cursor: default; }
+
+  /* Spinner for centered loading */
+  .big-spin {
+    width: 56px; height: 56px;
+    border-radius: 999px;
+    border: 4px solid var(--surface-2);
+    border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="device" data-screen-label="Оплата">
+      <div class="device-inner">
+        <div class="island"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <div class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true">
+              <rect x="0" y="7" width="3" height="4" rx="0.6" fill="currentColor"/>
+              <rect x="4.5" y="5" width="3" height="6" rx="0.6" fill="currentColor"/>
+              <rect x="9" y="3" width="3" height="8" rx="0.6" fill="currentColor"/>
+              <rect x="13.5" y="0" width="3" height="11" rx="0.6" fill="currentColor"/>
+            </svg>
+            <svg width="15" height="11" viewBox="0 0 15 11" aria-hidden="true" fill="currentColor">
+              <path d="M7.5 2.4c2.3 0 4.4.86 6 2.3l1.1-1.2A10.3 10.3 0 0 0 7.5.9 10.3 10.3 0 0 0 .4 3.5l1.1 1.2a8.7 8.7 0 0 1 6-2.3Zm0 3.5c1.4 0 2.6.5 3.6 1.4l1.1-1.2A6.5 6.5 0 0 0 7.5 4.4 6.5 6.5 0 0 0 2.8 6.1l1.1 1.2A5 5 0 0 1 7.5 5.9Zm0 3.5c.4 0 .8.16 1.1.44l1.1-1.2a3.1 3.1 0 0 0-4.4 0l1.1 1.2c.3-.28.7-.44 1.1-.44Z"/>
+            </svg>
+            <svg width="27" height="11" viewBox="0 0 27 11" aria-hidden="true">
+              <rect x="0.5" y="0.5" width="22" height="10" rx="2.4" stroke="currentColor" fill="none" stroke-opacity="0.4"/>
+              <rect x="2" y="2" width="19" height="7" rx="1.4" fill="currentColor"/>
+              <rect x="23.5" y="3.5" width="2" height="4" rx="0.6" fill="currentColor" fill-opacity="0.4"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="screen">
+          <!-- Top bar -->
+          <div class="topbar">
+            <button class="icon-btn" type="button" aria-label="Назад">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <div class="title">Оплата</div>
+            <div style="width:36px"></div>
+          </div>
+
+          <div class="scroller">
+            <!-- Amount -->
+            <div class="sum-wrap">
+              <div class="sum-eyebrow">К оплате</div>
+              <div class="sum-amount">4 200<span class="cur"> ₽</span></div>
+            </div>
+
+            <!-- Order summary -->
+            <div class="section">
+              <div class="label">Заказ</div>
+              <div class="card">
+                <div class="order">
+                  <div class="thumb">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>
+                    </svg>
+                  </div>
+                  <div class="meta">
+                    <div class="t">Тренировка с Аней</div>
+                    <div class="s">Завтра, Чт · 18:00 · Ноги + спина</div>
+                  </div>
+                  <div class="amt">4 200 ₽</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment method segmented -->
+            <div class="section">
+              <div class="label">Способ оплаты</div>
+              <div class="seg" id="seg" role="tablist">
+                <span class="seg-pill" aria-hidden="true"></span>
+                <button class="seg-btn is-active" data-method="card" type="button" role="tab" aria-selected="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="6" width="18" height="13" rx="2.5"/>
+                    <path d="M3 10h18"/><path d="M7 15h4"/>
+                  </svg>
+                  Карта
+                </button>
+                <button class="seg-btn" data-method="sbp" type="button" role="tab" aria-selected="false">
+                  <span class="sbp-mark">СБП</span>
+                  СБП
+                </button>
+              </div>
+            </div>
+
+            <!-- Method panels -->
+            <div class="panels">
+              <!-- CARD PANEL -->
+              <div class="panel is-active" id="panel-card" role="tabpanel">
+                <div class="section" style="padding-top:4px">
+                  <!-- card visual -->
+                  <div class="card-vis">
+                    <div class="brand" id="cardBrand">
+                      <span class="visa">VISA</span>
+                    </div>
+                    <div class="chip"></div>
+                    <div class="num" id="cardNumDisp">•••• •••• •••• ••••</div>
+                    <div class="row">
+                      <div>
+                        <div class="lbl">Владелец</div>
+                        <div class="val" id="cardHolderDisp">ИМЯ ФАМИЛИЯ</div>
+                      </div>
+                      <div>
+                        <div class="lbl">До</div>
+                        <div class="val" id="cardExpDisp">••/••</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- fields -->
+                  <div class="fields">
+                    <div class="field" id="f-num">
+                      <div class="l"><span>Номер карты</span><span id="numBrandLabel" style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:500;font-size:11px"></span></div>
+                      <input class="num" inputmode="numeric" autocomplete="cc-number" maxlength="23"
+                             placeholder="1234 5678 9012 3456" id="inpNum" />
+                    </div>
+                    <div class="field-row">
+                      <div class="field">
+                        <div class="l">Срок</div>
+                        <input class="num" inputmode="numeric" autocomplete="cc-exp" maxlength="5"
+                               placeholder="ММ/ГГ" id="inpExp" />
+                      </div>
+                      <div class="field">
+                        <div class="l">CVC / CVV</div>
+                        <input class="num" inputmode="numeric" autocomplete="cc-csc" maxlength="3"
+                               placeholder="•••" id="inpCvv" type="password" />
+                      </div>
+                    </div>
+                    <div class="field">
+                      <div class="l">Имя как на карте</div>
+                      <input autocomplete="cc-name" placeholder="IVAN IVANOV" id="inpHolder"
+                             style="text-transform: uppercase" />
+                    </div>
+                  </div>
+
+                  <div class="save-row">
+                    <div style="flex:1">
+                      <div class="lbl" style="font-size:14px;color:var(--text)">Сохранить карту</div>
+                      <div class="sub">В следующий раз быстрее</div>
+                    </div>
+                    <button class="switch is-on" id="saveSwitch" type="button" aria-pressed="true"></button>
+                  </div>
+
+                  <div class="help">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+                    </svg>
+                    Данные шифруются и хранятся в банке-эквайере
+                  </div>
+                </div>
+              </div>
+
+              <!-- СБП PANEL -->
+              <div class="panel is-hidden" id="panel-sbp" role="tabpanel">
+                <div class="section" style="padding-top:4px">
+                  <div class="sbp-hero">
+                    <div class="sbp-logo">СБП</div>
+                    <div>
+                      <div class="t">Оплата через банк</div>
+                      <div class="s">Откроем приложение твоего банка. Без комиссии и без ввода реквизитов.</div>
+                    </div>
+                  </div>
+
+                  <div class="banks-label">
+                    <span class="l">Выбери банк</span>
+                    <button class="all" type="button">Все банки →</button>
+                  </div>
+
+                  <div class="banks" id="banks">
+                    <button class="bank is-on" data-bank="tin" type="button">
+                      <span class="bank-logo tin">T</span>
+                      <div class="meta">
+                        <div class="n">Т‑Банк</div>
+                        <div class="sub">Был использован недавно</div>
+                      </div>
+                      <span class="radio"></span>
+                    </button>
+                    <div class="bank-divider"></div>
+                    <button class="bank" data-bank="sber" type="button">
+                      <span class="bank-logo sber">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                          <path d="M19.6 6.2 12 13.8 7.2 9l-1.4 1.4L12 16.6l9-9z"/>
+                        </svg>
+                      </span>
+                      <div class="meta">
+                        <div class="n">СберБанк</div>
+                        <div class="sub">Перейти в приложение</div>
+                      </div>
+                      <span class="radio"></span>
+                    </button>
+                    <div class="bank-divider"></div>
+                    <button class="bank" data-bank="alfa" type="button">
+                      <span class="bank-logo alfa">α</span>
+                      <div class="meta">
+                        <div class="n">Альфа‑Банк</div>
+                        <div class="sub">Перейти в приложение</div>
+                      </div>
+                      <span class="radio"></span>
+                    </button>
+                    <div class="bank-divider"></div>
+                    <button class="bank" data-bank="vtb" type="button">
+                      <span class="bank-logo vtb">ВТБ</span>
+                      <div class="meta">
+                        <div class="n">ВТБ</div>
+                        <div class="sub">Перейти в приложение</div>
+                      </div>
+                      <span class="radio"></span>
+                    </button>
+                    <div class="bank-divider"></div>
+                    <button class="bank" data-bank="raif" type="button">
+                      <span class="bank-logo raif">R</span>
+                      <div class="meta">
+                        <div class="n">Райффайзен</div>
+                        <div class="sub">Перейти в приложение</div>
+                      </div>
+                      <span class="radio"></span>
+                    </button>
+                  </div>
+
+                  <div class="help" style="margin-top:14px">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="0.5"/>
+                    </svg>
+                    Переключим тебя в приложение банка для подтверждения
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pay bar -->
+          <div class="paybar">
+            <button class="btn btn-accent" id="payBtn" type="button" disabled>
+              <span id="payLabel">Введи данные карты</span>
+            </button>
+            <div class="pay-note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+              </svg>
+              Защищено · 3‑D Secure
+            </div>
+          </div>
+
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  /* ── Method switching ─────────────────────────────────────────── */
+  const seg = document.getElementById('seg');
+  const segBtns = seg.querySelectorAll('.seg-btn');
+  const panelCard = document.getElementById('panel-card');
+  const panelSbp = document.getElementById('panel-sbp');
+  const payBtn = document.getElementById('payBtn');
+  const payLabel = document.getElementById('payLabel');
+
+  let method = 'card';
+
+  function setMethod(m) {
+    method = m;
+    seg.classList.toggle('is-sbp', m === 'sbp');
+    segBtns.forEach(b => {
+      const active = b.dataset.method === m;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    // Crossfade panels
+    if (m === 'card') {
+      panelSbp.classList.remove('is-active');
+      panelCard.classList.remove('is-hidden');
+      requestAnimationFrame(() => panelCard.classList.add('is-active'));
+      setTimeout(() => panelSbp.classList.add('is-hidden'), 280);
+    } else {
+      panelCard.classList.remove('is-active');
+      panelSbp.classList.remove('is-hidden');
+      requestAnimationFrame(() => panelSbp.classList.add('is-active'));
+      setTimeout(() => panelCard.classList.add('is-hidden'), 280);
+    }
+    updatePayBtn();
+  }
+  segBtns.forEach(b => b.addEventListener('click', () => setMethod(b.dataset.method)));
+
+  /* ── Card formatting ──────────────────────────────────────────── */
+  const inpNum = document.getElementById('inpNum');
+  const inpExp = document.getElementById('inpExp');
+  const inpCvv = document.getElementById('inpCvv');
+  const inpHolder = document.getElementById('inpHolder');
+  const cardNumDisp = document.getElementById('cardNumDisp');
+  const cardExpDisp = document.getElementById('cardExpDisp');
+  const cardHolderDisp = document.getElementById('cardHolderDisp');
+  const cardBrand = document.getElementById('cardBrand');
+  const numBrandLabel = document.getElementById('numBrandLabel');
+
+  function detectBrand(num) {
+    const d = num.replace(/\D/g, '');
+    if (/^4/.test(d)) return 'visa';
+    if (/^(5[1-5]|2[2-7])/.test(d)) return 'mc';
+    if (/^(220[0-4])/.test(d)) return 'mir';
+    if (/^(2|22)/.test(d) && d.length < 4) return 'mir';
+    return null;
+  }
+  function brandMarkup(b) {
+    if (b === 'visa') return '<span class="visa">VISA</span>';
+    if (b === 'mc')   return '<span class="mc-dots"><span></span><span></span></span>';
+    if (b === 'mir')  return '<span class="mir">МИР</span>';
+    return '<span class="visa">VISA</span>';
+  }
+  function brandLabel(b) {
+    if (b === 'visa') return 'Visa';
+    if (b === 'mc')   return 'Mastercard';
+    if (b === 'mir')  return 'Мир';
+    return '';
+  }
+
+  inpNum.addEventListener('input', e => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 19);
+    const groups = v.match(/.{1,4}/g) || [];
+    e.target.value = groups.join(' ');
+    // Visual update
+    const padded = (v + '•'.repeat(16)).slice(0, 16);
+    const disp = (padded.match(/.{1,4}/g) || []).join(' ');
+    cardNumDisp.textContent = disp;
+    // Brand
+    const b = detectBrand(v);
+    cardBrand.innerHTML = brandMarkup(b);
+    cardBrand.classList.toggle('is-on', !!b);
+    numBrandLabel.textContent = brandLabel(b);
+    updatePayBtn();
+  });
+
+  inpExp.addEventListener('input', e => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (v.length >= 3) v = v.slice(0, 2) + '/' + v.slice(2);
+    e.target.value = v;
+    cardExpDisp.textContent = v.length ? (v + '••/••'.slice(v.length)) : '••/••';
+    updatePayBtn();
+  });
+
+  inpCvv.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 3);
+    updatePayBtn();
+  });
+
+  inpHolder.addEventListener('input', e => {
+    const v = e.target.value.toUpperCase().replace(/[^A-ZА-ЯЁ\s\-']/gi, '');
+    e.target.value = v;
+    cardHolderDisp.textContent = v.trim() || 'ИМЯ ФАМИЛИЯ';
+    updatePayBtn();
+  });
+
+  /* ── Save switch ─────────────────────────────────────────────── */
+  const saveSwitch = document.getElementById('saveSwitch');
+  saveSwitch.addEventListener('click', () => {
+    const on = saveSwitch.classList.toggle('is-on');
+    saveSwitch.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+
+  /* ── Bank selection ───────────────────────────────────────────── */
+  let selectedBank = 'tin';
+  const bankBtns = document.querySelectorAll('.bank');
+  bankBtns.forEach(b => b.addEventListener('click', () => {
+    bankBtns.forEach(x => x.classList.remove('is-on'));
+    b.classList.add('is-on');
+    selectedBank = b.dataset.bank;
+    updatePayBtn();
+  }));
+
+  /* ── Pay button state ─────────────────────────────────────────── */
+  function cardValid() {
+    const num = inpNum.value.replace(/\D/g, '');
+    const exp = inpExp.value;
+    const cvv = inpCvv.value;
+    return num.length >= 16 && /^\d{2}\/\d{2}$/.test(exp) && cvv.length === 3;
+  }
+  function updatePayBtn() {
+    if (method === 'card') {
+      if (cardValid()) {
+        payBtn.disabled = false;
+        payLabel.textContent = 'Оплатить · 4 200 ₽';
+      } else {
+        payBtn.disabled = true;
+        payLabel.textContent = 'Введи данные карты';
+      }
+    } else {
+      payBtn.disabled = false;
+      const bankNames = { tin: 'Т‑Банк', sber: 'СберБанк', alfa: 'Альфа‑Банк', vtb: 'ВТБ', raif: 'Райффайзен' };
+      payLabel.textContent = 'Перейти в ' + (bankNames[selectedBank] || 'банк');
+    }
+  }
+
+  /* ── Outcome simulation (controlled by Tweaks) ─────────────────── */
+  // Card outcomes: 'ok' | 'ok-no3ds' | 'declined' | 'insufficient' | 'wrong-cvv' | '3ds-fail' | 'timeout' | 'offline'
+  // СБП outcomes:  'ok' | 'cancelled' | 'timeout' | 'offline'
+  window.__paymentOutcome = 'ok';
+
+  const AMOUNT = 4200;
+  const fmt = (n) => n.toLocaleString('ru-RU') + ' ₽';
+
+  /* ── State overlay framework ──────────────────────────────────── */
+  function clearState() {
+    document.querySelectorAll('.state, .sbp-overlay').forEach(n => n.remove());
+    updatePayBtn();
+  }
+
+  function buildState({ tone = 'ok', icon, title, desc, meta, primary, secondary, headTitle, onPrimary, onSecondary, onClose, body }) {
+    const screen = document.querySelector('.screen');
+    const el = document.createElement('div');
+    el.className = 'state';
+    el.innerHTML = `
+      <div class="state-head">
+        <button class="icon-btn" type="button" data-action="close" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <div class="ttl">${headTitle || ''}</div>
+        <div style="width:36px"></div>
+      </div>
+      <div class="state-body">
+        ${icon ? `<div class="state-icon ${tone}">${icon}</div>` : ''}
+        ${title ? `<div class="state-title">${title}</div>` : ''}
+        ${desc ? `<div class="state-desc">${desc}</div>` : ''}
+        ${body || ''}
+        ${meta ? `<div class="state-meta">${meta}</div>` : ''}
+      </div>
+      <div class="state-actions">
+        ${primary ? `<button class="btn btn-accent" type="button" data-action="primary">${primary}</button>` : ''}
+        ${secondary ? `<button class="btn btn-ghost" type="button" data-action="secondary">${secondary}</button>` : ''}
+      </div>
+    `;
+    screen.appendChild(el);
+    el.querySelector('[data-action="close"]').addEventListener('click', () => { (onClose || clearState)(); });
+    el.querySelector('[data-action="primary"]')?.addEventListener('click', () => { (onPrimary || clearState)(); });
+    el.querySelector('[data-action="secondary"]')?.addEventListener('click', () => { (onSecondary || clearState)(); });
+    return el;
+  }
+
+  /* ── Icons ────────────────────────────────────────────────────── */
+  const IC = {
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+    card:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="0.5" fill="currentColor" stroke="none"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    wifi:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0"/><path d="M5 12a11 11 0 0 1 14 0"/><path d="M8.5 15.5a6 6 0 0 1 7 0"/><circle cx="12" cy="19" r="0.8" fill="currentColor" stroke="none"/><path d="M3 3l18 18"/></svg>',
+    lock:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    x:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  };
+
+  /* ── State: processing (centered spinner) ─────────────────────── */
+  function showProcessing(label = 'Оплачиваем…') {
+    const screen = document.querySelector('.screen');
+    const el = document.createElement('div');
+    el.className = 'state';
+    el.innerHTML = `
+      <div class="state-head"><div style="width:36px"></div><div class="ttl"></div><div style="width:36px"></div></div>
+      <div class="state-body">
+        <div class="big-spin"></div>
+        <div class="state-title" style="margin-top:24px;font-size:22px">${label}</div>
+        <div class="state-desc">Не закрывай экран — это займёт пару секунд.</div>
+      </div>
+      <div class="state-actions"></div>
+    `;
+    screen.appendChild(el);
+    return el;
+  }
+
+  /* ── State: 3-D Secure ────────────────────────────────────────── */
+  function show3DS(onComplete) {
+    const bankName = 'Банк‑эмитент';
+    const last4 = inpNum.value.replace(/\D/g, '').slice(-4) || '••••';
+    const body = `
+      <div class="otp" id="otp">
+        ${Array.from({length: 6}).map((_, i) => `<input inputmode="numeric" maxlength="1" data-i="${i}" />`).join('')}
+      </div>
+      <div class="otp-meta">
+        Код не пришёл? <button class="resend" type="button" id="resend" disabled>Запросить ещё раз · <span id="rt">30</span> с</button>
+      </div>
+    `;
+    const el = buildState({
+      headTitle: '3-D Secure',
+      icon: IC.lock, tone: 'info',
+      title: 'Подтверди оплату',
+      desc: `${bankName} отправил код на телефон, привязанный к карте •••• ${last4}. Введи 6 цифр из СМС.`,
+      body,
+      secondary: 'Отмена',
+      onSecondary: clearState,
+      onClose: clearState,
+    });
+
+    // OTP behaviour
+    const inputs = el.querySelectorAll('.otp input');
+    inputs[0].focus();
+    const otpBox = el.querySelector('#otp');
+    let timer = 30;
+    const resendBtn = el.querySelector('#resend');
+    const rt = el.querySelector('#rt');
+    const countdown = setInterval(() => {
+      timer--;
+      if (rt) rt.textContent = String(timer);
+      if (timer <= 0) {
+        clearInterval(countdown);
+        resendBtn.disabled = false;
+        resendBtn.innerHTML = 'Запросить ещё раз';
+      }
+    }, 1000);
+
+    inputs.forEach((inp, i) => {
+      inp.addEventListener('input', e => {
+        const v = e.target.value.replace(/\D/g, '');
+        e.target.value = v.slice(0, 1);
+        if (v && i < inputs.length - 1) inputs[i + 1].focus();
+        // Submit when full
+        const code = Array.from(inputs).map(x => x.value).join('');
+        if (code.length === 6) {
+          clearInterval(countdown);
+          // Verify outcome
+          if (window.__paymentOutcome === '3ds-fail') {
+            otpBox.classList.add('is-error');
+            setTimeout(() => {
+              inputs.forEach(x => x.value = '');
+              otpBox.classList.remove('is-error');
+              inputs[0].focus();
+            }, 600);
+            return;
+          }
+          // Disable inputs, show processing
+          el.remove();
+          showProcessing('Подтверждаем…');
+          setTimeout(onComplete, 1100);
+        }
+      });
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !e.target.value && i > 0) inputs[i - 1].focus();
+      });
+    });
+  }
+
+  /* ── State: success ───────────────────────────────────────────── */
+  function showSuccess() {
+    const last4 = method === 'card'
+      ? (inpNum.value.replace(/\D/g, '').slice(-4) || '4821')
+      : null;
+    const bankNames = { tin: 'Т‑Банк', sber: 'СберБанк', alfa: 'Альфа‑Банк', vtb: 'ВТБ', raif: 'Райффайзен' };
+    const via = method === 'card'
+      ? `Карта •••• ${last4}`
+      : `СБП · ${bankNames[selectedBank]}`;
+    buildState({
+      tone: 'ok',
+      icon: IC.check,
+      title: 'Готово!',
+      desc: method === 'card'
+        ? 'Запись подтверждена. Напомним за час до тренировки.'
+        : 'Платёж прошёл через СБП. Запись подтверждена.',
+      meta: `<div>${IC.card}</div><div><div class="l">Списано</div><div class="v">${fmt(AMOUNT)} · ${via}</div></div>`,
+      primary: 'Хорошо',
+      secondary: 'Открыть чек',
+      onPrimary: clearState,
+      onSecondary: () => { /* receipt: stays for now */ clearState(); },
+      headTitle: '',
+    });
+  }
+
+  /* ── State: error variants ────────────────────────────────────── */
+  const ERR_VARIANTS = {
+    declined: {
+      tone: 'error', icon: IC.card,
+      title: 'Банк отклонил платёж',
+      desc: 'Попробуй другую карту или СБП. Деньги не списали.',
+      primary: 'Попробовать снова',
+      secondary: 'Поменять способ',
+    },
+    insufficient: {
+      tone: 'warn', icon: IC.card,
+      title: 'Недостаточно средств',
+      desc: 'На карте не хватает 4 200 ₽. Пополни счёт или выбери другой способ.',
+      primary: 'Поменять карту',
+      secondary: 'Назад',
+    },
+    'wrong-cvv': {
+      tone: 'error', icon: IC.alert,
+      title: 'Карта не принята',
+      desc: 'Возможно, неверно введён номер, срок или CVV. Проверь и попробуй ещё раз.',
+      primary: 'Проверить данные',
+      secondary: 'Закрыть',
+    },
+    timeout: {
+      tone: 'warn', icon: IC.clock,
+      title: 'Время вышло',
+      desc: 'Банк не ответил вовремя. Если деньги списались — они вернутся в течение часа.',
+      primary: 'Повторить',
+      secondary: 'Закрыть',
+    },
+    offline: {
+      tone: 'info', icon: IC.wifi,
+      title: 'Нет связи',
+      desc: 'Похоже, интернет пропал. Попробуй ещё раз, когда появится сеть.',
+      primary: 'Повторить',
+      secondary: 'Закрыть',
+    },
+    cancelled: {
+      tone: 'info', icon: IC.x,
+      title: 'Платёж отменён',
+      desc: 'Ты отменил оплату в приложении банка. Деньги не списались.',
+      primary: 'Попробовать снова',
+      secondary: 'Поменять способ',
+    },
+  };
+
+  function showError(kind, onRetry) {
+    const v = ERR_VARIANTS[kind] || ERR_VARIANTS.declined;
+    buildState({
+      ...v,
+      onPrimary: () => { clearState(); (onRetry || (() => {}))(); },
+      onSecondary: () => { clearState(); if (kind === 'declined' || kind === 'cancelled') setMethod(method === 'card' ? 'sbp' : 'card'); },
+    });
+  }
+
+  /* ── Pay click → orchestrate ──────────────────────────────────── */
+  payBtn.addEventListener('click', () => {
+    if (payBtn.disabled) return;
+    if (method === 'card') runCardFlow();
+    else runSbpFlow();
+  });
+
+  // Exposed for the Tweaks "test scenario" button — bypasses the form
+  // validation so reviewers can preview any outcome without filling the card.
+  window.__testPayment = () => {
+    // Pre-fill dummy card data if empty so the success state shows •••• 4242
+    if (method === 'card' && !inpNum.value) {
+      inpNum.value = '4242 4242 4242 4242';
+      inpExp.value = '12/27';
+      inpCvv.value = '123';
+      inpHolder.value = 'IVAN IVANOV';
+      cardNumDisp.textContent = '4242 4242 4242 4242';
+      cardExpDisp.textContent = '12/27';
+      cardHolderDisp.textContent = 'IVAN IVANOV';
+      cardBrand.innerHTML = '<span class="visa">VISA</span>';
+      cardBrand.classList.add('is-on');
+    }
+    if (method === 'card') runCardFlow();
+    else runSbpFlow();
+  };
+
+  function runCardFlow() {
+    const outcome = window.__paymentOutcome || 'ok';
+    // Offline check before anything else
+    if (outcome === 'offline') {
+      showError('offline', runCardFlow);
+      return;
+    }
+    if (outcome === 'wrong-cvv') {
+      showProcessing('Проверяем карту…');
+      setTimeout(() => {
+        clearState();
+        showError('wrong-cvv', () => inpCvv.focus());
+      }, 900);
+      return;
+    }
+    // Normal flow: spinner → maybe 3DS → spinner → outcome
+    const proc = showProcessing('Оплачиваем…');
+    setTimeout(() => {
+      proc.remove();
+      if (outcome === 'ok-no3ds') return showSuccess();
+      if (outcome === 'declined')   return showError('declined', runCardFlow);
+      if (outcome === 'insufficient') return showError('insufficient', runCardFlow);
+      if (outcome === 'timeout')    return showError('timeout', runCardFlow);
+      // Default: go through 3DS
+      show3DS(() => {
+        if (outcome === '3ds-fail') {
+          // unreachable; 3ds-fail caught inside otp
+          showError('declined', runCardFlow);
+        } else {
+          showSuccess();
+        }
+      });
+    }, 1100);
+  }
+
+  function runSbpFlow() {
+    const bankNames = { tin: 'Т‑Банк', sber: 'СберБанк', alfa: 'Альфа‑Банк', vtb: 'ВТБ', raif: 'Райффайзен' };
+    const bankClass = { tin: 'tin', sber: 'sber', alfa: 'alfa', vtb: 'vtb', raif: 'raif' };
+    const bankInitial = { tin: 'T', sber: 'С', alfa: 'α', vtb: 'ВТБ', raif: 'R' };
+    const outcome = window.__paymentOutcome || 'ok';
+    if (outcome === 'offline') {
+      showError('offline', runSbpFlow);
+      return;
+    }
+    const screen = document.querySelector('.screen');
+    const overlay = document.createElement('div');
+    overlay.className = 'sbp-overlay';
+    const bn = bankNames[selectedBank];
+    overlay.innerHTML = `
+      <div class="topbar" style="padding-top:50px;padding-bottom:4px">
+        <button class="icon-btn" type="button" data-action="close" aria-label="Назад">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <div style="font-size:15px;font-weight:650">Переход в банк</div>
+        <div style="width:36px"></div>
+      </div>
+      <div class="body">
+        <div class="bigicon">СБП</div>
+        <h2>Открываем ${bn}</h2>
+        <div class="desc">Подтверди платёж на ${fmt(AMOUNT)} в приложении банка. Мы дождёмся ответа автоматически.</div>
+        <div class="bank-pill">
+          <span class="lg ${bankClass[selectedBank]}">${bankInitial[selectedBank]}</span>
+          <span style="font-size:14px;font-weight:600">${bn}</span>
+        </div>
+        <div class="countdown">Ждём подтверждение · <span data-cd>06</span> с</div>
+        <div class="progress"><span></span></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-accent" type="button" data-action="retry">Открыть приложение снова</button>
+        <button class="btn btn-ghost" type="button" data-action="cancel">Отменить</button>
+      </div>
+    `;
+    screen.appendChild(overlay);
+    let s = 6;
+    const cd = overlay.querySelector('[data-cd]');
+    const tick = setInterval(() => {
+      s--;
+      if (cd) cd.textContent = String(s).padStart(2, '0');
+      if (s <= 0) {
+        clearInterval(tick);
+        overlay.remove();
+        // Resolve outcome
+        if (outcome === 'cancelled') showError('cancelled', runSbpFlow);
+        else if (outcome === 'timeout') showError('timeout', runSbpFlow);
+        else showSuccess();
+      }
+    }, 1000);
+    const closeIt = () => { clearInterval(tick); overlay.remove(); };
+    overlay.querySelector('[data-action="close"]').addEventListener('click', closeIt);
+    overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+      clearInterval(tick); overlay.remove();
+      showError('cancelled', runSbpFlow);
+    });
+    overlay.querySelector('[data-action="retry"]').addEventListener('click', () => {
+      // restart countdown
+      s = 6;
+      if (cd) cd.textContent = '06';
+    });
+  }
+
+  // Initial state
+  updatePayBtn();
+</script>
+
+<!-- React + Babel for Tweaks panel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<div id="tweaks-root"></div>
+
+<script>
+  // Fetch + inline JSX modules using the preview server's auth token (Babel's
+  // own XHR loader doesn't forward the `?t=…` query param, so external src=
+  // gets 401 and the tweaks panel silently fails to mount).
+  (async () => {
+    const t = new URL(location.href).searchParams.get('t');
+    const q = t ? '?t=' + encodeURIComponent(t) : '';
+    const files = ['tweaks-panel.jsx', 'payment-tweaks.jsx'];
+    for (const f of files) {
+      try {
+        const r = await fetch(f + q);
+        if (!r.ok) { console.error('Tweaks load failed', f, r.status); continue; }
+        const code = await r.text();
+        const s = document.createElement('script');
+        s.type = 'text/babel';
+        s.textContent = code;
+        document.body.appendChild(s);
+      } catch (e) { console.error('Tweaks fetch err', f, e); }
+    }
+    // Compile newly-added text/babel scripts (Babel auto-runs only once at load).
+    if (window.Babel && Babel.transformScriptTags) Babel.transformScriptTags();
+  })();
+</script>
+
+</body>
+</html>
+</body>
+</html>

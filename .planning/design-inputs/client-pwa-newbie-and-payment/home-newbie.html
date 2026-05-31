@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Главная (новичок) — Мой зал</title>
+<style>
+  :root {
+    --accent: #2dd4a4;
+    --accent-deep: #0f9b76;
+    --accent-soft: #d6f5ea;
+
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #a8a29e;
+
+    --warn: #e9a23b;
+    --warn-soft: #fef3e2;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "Inter Variable", "Inter", system-ui, sans-serif;
+
+    --r-sm: 10px;
+    --r-md: 14px;
+    --r-lg: 20px;
+    --r-xl: 28px;
+    --r-pill: 999px;
+
+    --sh-1: 0 1px 2px rgba(28,25,23,0.04);
+    --sh-2: 0 1px 3px rgba(28,25,23,0.05), 0 4px 14px rgba(28,25,23,0.04);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #e7e5e4;
+    color: var(--text);
+    min-height: 100vh;
+  }
+  button { font-family: inherit; }
+
+  .stage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+
+  .device {
+    width: 390px; height: 844px; position: relative;
+    border-radius: 54px; background: #0a0a0a; padding: 12px;
+    box-shadow: 0 50px 100px rgba(28,25,23,0.25), 0 0 0 1px rgba(28,25,23,0.15);
+  }
+  .device-inner {
+    position: absolute; inset: 12px;
+    border-radius: 44px; overflow: hidden;
+    background: var(--bg);
+  }
+  .island {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px; border-radius: 999px;
+    background: #000; z-index: 300; pointer-events: none;
+  }
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 10px; height: 44px;
+    color: var(--text); font-size: 15px; font-weight: 600;
+    pointer-events: none;
+  }
+  .status-bar span { font-variant-numeric: tabular-nums; }
+  .status-bar .glyphs { display: flex; gap: 6px; align-items: center; }
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; background: var(--text);
+    opacity: 0.85; border-radius: 3px; z-index: 10;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .scroller {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-top: 50px;
+  }
+  .scroller::-webkit-scrollbar { display: none; }
+
+  /* Header */
+  .header {
+    padding: 4px 16px 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .header .greet { flex: 1; min-width: 0; }
+  .header .eyebrow {
+    font-size: 12px; font-weight: 500;
+    color: var(--text-3);
+  }
+  .header .name {
+    margin-top: 1px;
+    font-size: 22px; font-weight: 650;
+    letter-spacing: -0.3px;
+    line-height: 1.1;
+  }
+  .gym-pill {
+    height: 30px; padding: 0 12px 0 10px;
+    border-radius: 999px;
+    border: 0.5px solid var(--border);
+    background: var(--surface);
+    display: inline-flex; align-items: center; gap: 7px;
+    cursor: pointer;
+    flex-shrink: 0;
+    appearance: none;
+    color: var(--text-2);
+    font-size: 12px; font-weight: 600;
+    letter-spacing: -0.1px;
+    font-family: inherit;
+  }
+  .gym-pill .dot {
+    width: 7px; height: 7px; border-radius: 999px;
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.18);
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+  .gym-pill svg { width: 12px; height: 12px; color: var(--text-3); }
+  @keyframes pulse-dot {
+    0%,100% { transform: scale(1); }
+    50%     { transform: scale(1.15); }
+  }
+
+  /* Onboarding strip card */
+  .onboard-card {
+    margin: 0 16px 12px;
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    box-shadow: var(--sh-1);
+    overflow: hidden;
+  }
+  .onboard-head {
+    padding: 14px 16px 10px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px;
+  }
+  .onboard-titles {
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 0;
+  }
+  .onboard-eyebrow {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--accent-deep);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .onboard-eyebrow .pin {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent-deep);
+  }
+  .onboard-title {
+    font-size: 15px; font-weight: 650;
+    letter-spacing: -0.15px;
+  }
+  .onboard-count {
+    font-size: 12px; font-weight: 600;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    height: 24px; padding: 0 9px;
+    border-radius: 999px;
+    display: inline-flex; align-items: center;
+    letter-spacing: -0.1px;
+    flex-shrink: 0;
+  }
+  .onboard-bar { padding: 0 16px 12px; }
+  .onboard-track {
+    height: 6px; border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .onboard-fill {
+    height: 100%; width: 25%;
+    background: var(--accent);
+    border-radius: 999px;
+  }
+
+  .onboard-steps {
+    padding: 0 16px 12px;
+    display: flex; gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-padding-inline: 16px;
+  }
+  .onboard-steps::-webkit-scrollbar { display: none; }
+  .step {
+    appearance: none; border: 0;
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 12px 11px;
+    display: flex; flex-direction: column; gap: 7px;
+    align-items: flex-start;
+    min-width: 124px;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+    text-align: left;
+    transition: transform 0.12s ease, border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .step:nth-child(1) { animation-delay: 0.15s; }
+  .step:nth-child(2) { animation-delay: 0.22s; }
+  .step:nth-child(3) { animation-delay: 0.29s; }
+  .step:nth-child(4) { animation-delay: 0.36s; }
+  @keyframes chip-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .step:active { transform: scale(0.985); }
+  .step .ico {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-2);
+  }
+  .step .ico svg { width: 14px; height: 14px; }
+  .step .lbl {
+    font-size: 12.5px; font-weight: 600;
+    letter-spacing: -0.1px;
+    line-height: 1.25;
+  }
+  .step .meta {
+    font-size: 11px;
+    color: var(--text-3);
+    letter-spacing: -0.05px;
+    line-height: 1.3;
+  }
+
+  .step.done {
+    background: color-mix(in oklab, var(--accent-soft) 70%, var(--surface));
+    border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+  }
+  .step.done .ico {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #06120c;
+  }
+  .step.done .lbl { color: var(--text); }
+  .step.done .meta { color: var(--accent-deep); }
+  @keyframes tick-halo {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
+    25%      { box-shadow: 0 0 0 7px color-mix(in oklab, var(--accent) 24%, transparent); }
+    50%      { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
+  }
+
+  .step.next {
+    border-color: var(--text);
+    background: var(--surface);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--text) 7%, transparent);
+  }
+  .step.next .ico {
+    background: var(--text); border-color: var(--text); color: var(--bg);
+  }
+  .step.next .meta { color: var(--text-2); font-weight: 500; }
+
+  /* Dismiss × in header */
+  .onboard-actions {
+    display: flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+  }
+  .onboard-x {
+    appearance: none; border: 0;
+    width: 24px; height: 24px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-3);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .onboard-x:hover { background: var(--surface-2); color: var(--text-2); }
+  .onboard-x svg { width: 14px; height: 14px; }
+
+  /* Hero — drops in place of the subscription card */
+  .hero {
+    margin: 0 16px 12px;
+    border-radius: var(--r-xl);
+    background: var(--text);
+    color: var(--bg);
+    padding: 22px 22px 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 12px 36px rgba(28,25,23,0.18);
+  }
+  .hero-shape {
+    position: absolute;
+    right: -54px; top: -54px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, color-mix(in oklab, var(--accent) 75%, transparent), transparent 65%);
+    pointer-events: none;
+  }
+  .hero-shape-2 {
+    position: absolute;
+    left: -40px; bottom: -60px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 70% 70%, rgba(255,255,255,0.05), transparent 60%);
+    pointer-events: none;
+  }
+  .hero-eyebrow {
+    position: relative;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    color: color-mix(in oklab, var(--bg) 60%, transparent);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .hero-eyebrow .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+    animation: pulse-soft 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse-soft {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.18); opacity: 0.85; }
+  }
+  .hero-title {
+    position: relative;
+    margin-top: 10px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.6px;
+    line-height: 1.1;
+    text-wrap: pretty;
+  }
+  .hero-body {
+    position: relative;
+    margin-top: 8px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: color-mix(in oklab, var(--bg) 78%, transparent);
+    max-width: 280px;
+    text-wrap: pretty;
+  }
+  .hero-meta {
+    position: relative;
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 14px;
+    color: color-mix(in oklab, var(--bg) 65%, transparent);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .hero-meta .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .hero-meta .chip-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: currentColor; opacity: 0.6;
+  }
+  .hero-cta {
+    position: relative;
+    margin-top: 16px;
+    appearance: none;
+    border: 0;
+    background: var(--accent);
+    color: #06120c;
+    width: 100%;
+    height: 50px;
+    padding: 0 22px;
+    border-radius: var(--r-pill);
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: transform 0.12s ease;
+  }
+  .hero-cta:active { transform: scale(0.985); }
+  .hero-cta svg { width: 17px; height: 17px; }
+
+  /* Booking nudge — slim row */
+  .booking-empty {
+    margin: 0 16px 12px;
+    appearance: none;
+    border: 0.5px dashed var(--border-strong);
+    background: transparent;
+    border-radius: var(--r-md);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px;
+    width: calc(100% - 32px);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    color: var(--text);
+    transition: transform 0.12s ease, background 0.15s;
+  }
+  .booking-empty:active { transform: scale(0.992); background: var(--surface-2); }
+  .booking-empty .ico {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .booking-empty .ico svg { width: 18px; height: 18px; }
+  .booking-empty .body { flex: 1; min-width: 0; }
+  .booking-empty .t {
+    font-size: 14px; font-weight: 600;
+    letter-spacing: -0.15px;
+    line-height: 1.25;
+  }
+  .booking-empty .s {
+    margin-top: 1px;
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.3;
+  }
+  .booking-empty .chev { color: var(--text-3); flex-shrink: 0; }
+  .booking-empty .chev svg { width: 14px; height: 14px; }
+
+  /* QR pass placeholder — locked until plan is paid */
+  .qr-placeholder {
+    margin: 0 16px 14px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .qrp-ico {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    color: var(--text-3);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .qrp-ico svg { width: 18px; height: 18px; }
+  .qrp-body { flex: 1; min-width: 0; }
+  .qrp-t {
+    font-size: 13.5px; font-weight: 600;
+    letter-spacing: -0.1px;
+    color: var(--text-2);
+    line-height: 1.2;
+  }
+  .qrp-s {
+    margin-top: 1px;
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.3;
+  }
+  .qrp-lock {
+    color: var(--text-3);
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .qrp-lock svg { width: 16px; height: 16px; }
+
+  /* QR big button */
+  .qr-btn {
+    margin: 4px 16px 12px;
+    appearance: none; border: 0;
+    background: var(--text); color: var(--bg);
+    border-radius: var(--r-xl);
+    padding: 20px 22px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    width: calc(100% - 32px);
+    text-align: left;
+    font-family: inherit;
+    transition: transform 0.12s ease;
+  }
+  .qr-btn:active { transform: scale(0.992); }
+  .qr-btn .eyebrow {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--text-3);
+    opacity: 0.85;
+  }
+  .qr-btn .t {
+    margin-top: 4px;
+    font-size: 20px; font-weight: 650;
+    letter-spacing: -0.3px;
+  }
+  .qr-btn .s {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-3);
+  }
+  .qr-btn .square {
+    width: 64px; height: 64px;
+    border-radius: 16px;
+    background: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #0a0a0a;
+    flex-shrink: 0;
+  }
+  .qr-btn .square svg { width: 36px; height: 36px; }
+
+  /* Quick tiles */
+  .tiles {
+    padding: 0 16px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .tile {
+    appearance: none;
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    border: 0.5px solid var(--border);
+    padding: 16px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+    font-family: inherit;
+    position: relative;
+  }
+  .tile-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .tile-ico {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .tile-ico svg { width: 20px; height: 20px; }
+  .tile .t {
+    font-size: 17px; font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+  .tile .s {
+    margin-top: 2px;
+    font-size: 13px; color: var(--text-2);
+  }
+
+  /* Tab bar */
+  .tabbar {
+    height: 80px;
+    padding: 8px 16px 22px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: color-mix(in oklab, var(--surface) 85%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 0.5px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+  }
+  .tab {
+    appearance: none; border: 0;
+    background: transparent;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px;
+    color: var(--text-3);
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.1px;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+  }
+  .tab.active { color: var(--text); }
+  .tab svg { width: 24px; height: 24px; }
+
+  /* fade-up */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-up { animation: fade-up 0.32s ease-out both; }
+  .fade-up.d1 { animation-delay: 0.05s; }
+  .fade-up.d2 { animation-delay: 0.10s; }
+  .fade-up.d3 { animation-delay: 0.15s; }
+  .fade-up.d4 { animation-delay: 0.20s; }
+
+  /* dismiss collapse */
+  @keyframes onboard-collapse {
+    0%   { opacity: 1; transform: translateY(0) scale(1); max-height: 360px; margin-bottom: 12px; }
+    60%  { opacity: 0; transform: translateY(-6px) scale(0.985); max-height: 360px; margin-bottom: 12px; }
+    100% { opacity: 0; transform: translateY(-6px) scale(0.985); max-height: 0; margin-bottom: 0;
+           padding-top: 0; padding-bottom: 0; border-width: 0; }
+  }
+  .onboard-card.dismissing {
+    overflow: hidden;
+    animation: onboard-collapse 0.36s cubic-bezier(0.32, 0.72, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="device" data-screen-label="Главная — новичок">
+      <div class="device-inner">
+        <div class="island"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <div class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true">
+              <rect x="0" y="7" width="3" height="4" rx="0.6" fill="currentColor"/>
+              <rect x="4.5" y="5" width="3" height="6" rx="0.6" fill="currentColor"/>
+              <rect x="9" y="3" width="3" height="8" rx="0.6" fill="currentColor"/>
+              <rect x="13.5" y="0" width="3" height="11" rx="0.6" fill="currentColor"/>
+            </svg>
+            <svg width="15" height="11" viewBox="0 0 15 11" aria-hidden="true" fill="currentColor">
+              <path d="M7.5 2.4c2.3 0 4.4.86 6 2.3l1.1-1.2A10.3 10.3 0 0 0 7.5.9 10.3 10.3 0 0 0 .4 3.5l1.1 1.2a8.7 8.7 0 0 1 6-2.3Zm0 3.5c1.4 0 2.6.5 3.6 1.4l1.1-1.2A6.5 6.5 0 0 0 7.5 4.4 6.5 6.5 0 0 0 2.8 6.1l1.1 1.2A5 5 0 0 1 7.5 5.9Zm0 3.5c.4 0 .8.16 1.1.44l1.1-1.2a3.1 3.1 0 0 0-4.4 0l1.1 1.2c.3-.28.7-.44 1.1-.44Z"/>
+            </svg>
+            <svg width="27" height="11" viewBox="0 0 27 11" aria-hidden="true">
+              <rect x="0.5" y="0.5" width="22" height="10" rx="2.4" stroke="currentColor" fill="none" stroke-opacity="0.4"/>
+              <rect x="2" y="2" width="19" height="7" rx="1.4" fill="currentColor"/>
+              <rect x="23.5" y="3.5" width="2" height="4" rx="0.6" fill="currentColor" fill-opacity="0.4"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="screen">
+          <div class="scroller">
+            <!-- Header -->
+            <div class="header fade-up">
+              <div class="greet">
+                <div class="eyebrow">Доброе утро</div>
+                <div class="name">Саша</div>
+              </div>
+              <button class="gym-pill" type="button">
+                <span class="dot"></span>
+                Открыто до 23:00
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Hero — drops in place of the subscription card -->
+            <div class="hero fade-up d1">
+              <div class="hero-shape"></div>
+              <div class="hero-shape-2"></div>
+              <div class="hero-eyebrow">
+                <span class="dot"></span>
+                Аккаунт создан
+              </div>
+              <div class="hero-title">Остался один шаг до зала</div>
+              <div class="hero-body">
+                Выбери абонемент — QR-пропуск активируется сразу. Заморозить или сменить тариф можно в любой момент.
+              </div>
+              <div class="hero-meta">
+                <span class="chip">3 тарифа</span>
+                <span class="chip-dot"></span>
+                <span class="chip">от 3 500 ₽/мес</span>
+              </div>
+              <button class="hero-cta" type="button">
+                Выбрать абонемент
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Onboarding strip -->
+            <div class="onboard-card fade-up d2" data-onboard-card>
+              <div class="onboard-head">
+                <div class="onboard-titles">
+                  <div class="onboard-eyebrow"><span class="pin"></span>Старт новичка</div>
+                  <div class="onboard-title">Ещё 3 шага до полного старта</div>
+                </div>
+                <div class="onboard-actions">
+                  <div class="onboard-count">1 / 4</div>
+                  <button class="onboard-x" type="button" data-action="dismiss-onboard" aria-label="Скрыть">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="onboard-bar">
+                <div class="onboard-track"><div class="onboard-fill"></div></div>
+              </div>
+              <div class="onboard-steps" style="padding-bottom:14px">
+                <button class="step done" type="button">
+                  <span class="ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 6"/></svg>
+                  </span>
+                  <span class="lbl">Аккаунт</span>
+                  <span class="meta">Создан</span>
+                </button>
+                <button class="step" type="button">
+                  <span class="ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                      <rect x="3" y="6" width="18" height="13" rx="3"/>
+                      <path d="M3 11h18"/>
+                    </svg>
+                  </span>
+                  <span class="lbl">Абонемент</span>
+                  <span class="meta">Не выбран</span>
+                </button>
+                <button class="step" type="button">
+                  <span class="ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4"/>
+                      <path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>
+                    </svg>
+                  </span>
+                  <span class="lbl">Профиль</span>
+                  <span class="meta">Фото, рост, вес</span>
+                </button>
+                <button class="step" type="button">
+                  <span class="ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                      <rect x="3" y="5" width="18" height="16" rx="3"/>
+                      <path d="M3 10h18M8 3v4M16 3v4"/>
+                    </svg>
+                  </span>
+                  <span class="lbl">Первый визит</span>
+                  <span class="meta">30 мин экскурсия</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- First-visit nudge — works without a subscription -->
+            <button class="booking-empty fade-up d3" type="button">
+              <span class="ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3l2.5 5 5.5.8-4 4 1 5.5L12 16l-5 2.3 1-5.5-4-4L9.5 8 12 3z"/>
+                </svg>
+              </span>
+              <div class="body">
+                <div class="t">Первый визит — бесплатно</div>
+                <div class="s">Экскурсия с админом · 30 мин</div>
+              </div>
+              <span class="chev">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6"/>
+                </svg>
+              </span>
+            </button>
+
+            <!-- QR placeholder strip — QR not active until plan is paid -->
+            <div class="qr-placeholder fade-up d3">
+              <span class="qrp-ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                  <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                  <path d="M14 14h3v3M21 14v7M14 21h3M17 17v4"/>
+                </svg>
+              </span>
+              <div class="qrp-body">
+                <div class="qrp-t">QR-пропуск</div>
+                <div class="qrp-s">Активируется после оплаты абонемента</div>
+              </div>
+              <span class="qrp-lock">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="4" y="11" width="16" height="10" rx="2"/>
+                  <path d="M8 11V8a4 4 0 018 0v3"/>
+                </svg>
+              </span>
+            </div>
+
+            <!-- Quick tiles -->
+            <div class="tiles fade-up d4">
+              <button class="tile" type="button">
+                <div class="tile-head">
+                  <span class="tile-ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                      <circle cx="9" cy="8" r="3.5"/>
+                      <path d="M2 20c0-3.5 3.5-6 7-6s7 2.5 7 6"/>
+                      <circle cx="17" cy="6.5" r="3"/>
+                      <path d="M16 14c3 0.3 6 2.4 6 5.5"/>
+                    </svg>
+                  </span>
+                </div>
+                <div class="t">Тренеры</div>
+                <div class="s">кто работает в зале</div>
+              </button>
+              <button class="tile" type="button">
+                <div class="tile-head">
+                  <span class="tile-ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 5a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4 4v-4H6a2 2 0 01-2-2V5z"/>
+                    </svg>
+                  </span>
+                </div>
+                <div class="t">Чат</div>
+                <div class="s">админ + тренер</div>
+              </button>
+            </div>
+
+            <div style="height:8px"></div>
+          </div>
+
+          <!-- Tab bar -->
+          <div class="tabbar">
+            <button class="tab active" type="button" aria-label="Главная">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1v-9z"/>
+              </svg>
+              Главная
+            </button>
+            <button class="tab" type="button" aria-label="Запись">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="16" rx="3"/>
+                <path d="M3 10h18M8 3v4M16 3v4"/>
+              </svg>
+              Запись
+            </button>
+            <button class="tab" type="button" aria-label="Чат">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 5a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4 4v-4H6a2 2 0 01-2-2V5z"/>
+              </svg>
+              Чат
+            </button>
+            <button class="tab" type="button" aria-label="Профиль">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>
+              </svg>
+              Профиль
+            </button>
+          </div>
+
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+  (function () {
+    var card = document.querySelector('[data-onboard-card]');
+    var btn  = document.querySelector('[data-action="dismiss-onboard"]');
+    if (!card || !btn) return;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      card.classList.add('dismissing');
+      setTimeout(function () { card.remove(); }, 380);
+    });
+  })();
+</script>
+</html>
