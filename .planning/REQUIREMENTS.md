@@ -79,7 +79,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 ### OpenAPI Handoff + Contract Preservation
 
 - [x] **HND-01**: Клиентские пути добавлены в `openapi.json` под тегом `Client-Portal` с префиксом operationId `client_`; staff-пути byte-identical к baseline `contract-freeze-v1.11.0` (drift gate зелёный, diff additions-only)
-- [ ] **HND-02**: `schema.d.ts` regen byte-stable; новый `_v20Checks` `AssertNonNever` блок покрывает клиентские пути; staff `_v1xChecks` блоки не тронуты
+- [x] **HND-02**: `schema.d.ts` regen byte-stable; новый `_v20Checks` `AssertNonNever` блок покрывает клиентские пути; staff `_v1xChecks` блоки не тронуты
 - [x] **HND-03**: CI-гейты для `client-pwa` (typecheck / lint / test) добавлены в workflow
 
 ### E2E Verification Gate
@@ -173,7 +173,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CPAY-05 | Phase 71 | Complete |
 | PWA-05 | Phase 71 | Complete |
 | HND-01 | Phase 72 | Complete |
-| HND-02 | Phase 72 | Pending |
+| HND-02 | Phase 72 | Complete |
 | HND-03 | Phase 72 | Complete |
 | VER-01 | Phase 72 | Pending |
 | VER-02 | Phase 72 | Complete |

@@ -169,7 +169,7 @@ Plans:
 **Plans**: 4 plans (3 waves)
 
 - [x] 72-01-PLAN.md — Unify client paths under Client-Portal tag + additive openapi.json regen + staff drift verify (HND-01, VER-03)
-- [ ] 72-02-PLAN.md — Byte-stable schema.d.ts regen + _v20Checks forward-guard (23 ops) (HND-02)
+- [x] 72-02-PLAN.md — Byte-stable schema.d.ts regen + _v20Checks forward-guard (23 ops) (HND-02)
 - [x] 72-03-PLAN.md — CI: parallel client-pwa job + frontend de-dup + backend pytest/Postgres/Redis gate for IDOR/two-principal tests (HND-03, VER-02)
 - [ ] 72-04-PLAN.md — Live read-path E2E walkthrough (milestone gate) + v2.0 runbook + operator-evidence scaffold (VER-01, VER-04)
 
@@ -193,7 +193,7 @@ Plans:
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete    | 2026-05-30 |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 10/10 | Complete   | 2026-05-30 |
-| 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 2/4 | In Progress|  |
+| 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 3/4 | In Progress|  |
 
 ---
 
