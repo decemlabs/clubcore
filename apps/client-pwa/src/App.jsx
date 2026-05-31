@@ -28,6 +28,11 @@ const LoginScreen = lazy(() =>
   import('@/screens/LoginScreen.jsx').then(m => ({ default: m.LoginScreen }))
 );
 
+// ── Onboarding screen (D-04 — newbie first-login questionnaire) ────────────
+const OnboardingScreen = lazy(() =>
+  import('@/screens/OnboardingScreen.jsx').then(m => ({ default: m.OnboardingScreen }))
+);
+
 // ── Lazy tab screens — each is its own chunk ───────────────────────────────
 const HomeScreen     = lazy(() => import('@/screens/HomeScreen.jsx').then(m => ({ default: m.HomeScreen })));
 const BookScreen     = lazy(() => import('@/screens/BookScreen.jsx').then(m => ({ default: m.BookScreen })));
@@ -199,10 +204,11 @@ export default function App() {
     }
   };
 
-  // Hide tab bar on sheets, login screen, or while loading auth
+  // Hide tab bar on sheets, login screen, onboarding, or while loading auth
   const isLoginRoute = pathname === '/login';
+  const isOnboardingRoute = pathname === '/onboarding';
   const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen
-    || isLoginRoute || status === 'unknown' || status === 'anon';
+    || isLoginRoute || isOnboardingRoute || status === 'unknown' || status === 'anon';
 
   return (
     <div className="stage" data-screen-label="Прототип">
@@ -238,6 +244,8 @@ export default function App() {
                     <Route path="/chat"    element={<RequireAuth><ChatRoute /></RequireAuth>} />
                     <Route path="/profile" element={<RequireAuth><ProfileRoute /></RequireAuth>} />
                     <Route path="/payment/return" element={<RequireAuth><PaymentReturnScreen /></RequireAuth>} />
+                    {/* Onboarding questionnaire — D-04: newbie first-login + manual re-entry */}
+                    <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
 
                     {/* Catch-all: anon → /login via RequireAuth; authed → /home */}
                     <Route path="*" element={

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/Avatar.jsx';
 import { EmptyState } from '@/components/EmptyState.jsx';
 import { LoadError } from '@/components/LoadError.jsx';
@@ -129,6 +130,24 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   const { data: me } = useClientMe();
   // useClientBookings: needed for Step 4 live derivation in the newbie gate (D-05/D-06)
   const { data: bookings } = useClientBookings();
+  const navigate = useNavigate();
+
+  // D-04/D-05 auto-redirect gate: newbie + empty profile + !onboardingCompletedAt → /onboarding
+  // Fires once (replace: true so back-button doesn't bounce back into a completed questionnaire).
+  // Conditions (all must be true to redirect):
+  //   1. membershipState === 'newbie' (never fires for active/lapsed members)
+  //   2. me is loaded AND !me.onboardingCompletedAt (flag is server-owned; once set, never re-fires)
+  //   3. profile is empty: no goal, no heightCm, no weightKg, no non-trivial firstName
+  // T-999.5-15 mitigation: precise condition + replace:true prevents redirect loop.
+  React.useEffect(() => {
+    if (
+      homeData?.membershipState === 'newbie' &&
+      me && !me.onboardingCompletedAt &&
+      !me.goal && !me.heightCm && !me.weightKg
+    ) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [homeData, me, navigate]);
 
   // Real membership from /client/home; null → genuine "Нет абонемента" empty state
   // (toSubInfo(null)), never the demo getSubInfo fallback.
@@ -197,6 +216,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
             onOpenPlans={onOpenPlans}
             onOpenGymInfo={onOpenGymInfo}
             onTab={onTab}
+            onOpenOnboarding={() => navigate('/onboarding')}
           />
         ) : (
           <>
@@ -333,7 +353,7 @@ export function HeroNewbie({ onOpenPlans }) {
 }
 
 // Dismissible onboarding strip with 4 step chips and a progress bar
-export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, onTab }) {
+export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, onTab, onOpenOnboarding }) {
   const [dismissed, setDismissed] = React.useState(false);
   const [dismissing, setDismissing] = React.useState(false);
 
@@ -346,7 +366,8 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
 
   function handleStepClick(step) {
     if (step.key === 'plan') onOpenPlans?.();
-    else if (step.key === 'profile') onTab?.('profile');
+    // D-04: «Профиль» step re-enters the questionnaire via /onboarding (manual re-entry)
+    else if (step.key === 'profile') onOpenOnboarding?.();
     else if (step.key === 'visit') onTab?.('book');
     // Step 1 (account, done) — no action
   }
@@ -538,7 +559,7 @@ export function QrPlaceholder() {
 }
 
 // Top-level newbie variant — composes all newbie sub-components with stagger
-export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenPlans, onOpenGymInfo, onTab }) {
+export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenPlans, onOpenGymInfo, onTab, onOpenOnboarding }) {
   const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings);
 
   return (
@@ -566,6 +587,7 @@ export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenP
       <HeroNewbie onOpenPlans={onOpenPlans} />
 
       {/* (3) OnboardingStrip (stagger child 3) */}
+      {/* D-04: onOpenOnboarding navigates to /onboarding for the «Профиль» step (manual re-entry) */}
       <OnboardingStrip
         steps={steps}
         doneCount={doneCount}
@@ -573,6 +595,7 @@ export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenP
         badge={badge}
         onOpenPlans={onOpenPlans}
         onTab={onTab}
+        onOpenOnboarding={onOpenOnboarding}
       />
 
       {/* (4) FirstVisitNudge + (5) QrPlaceholder grouped as one stagger child */}
