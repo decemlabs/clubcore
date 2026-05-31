@@ -495,6 +495,7 @@ async def client_checkout_membership(
     plan_id: UUID,
     client: ClientPrincipal,
     yookassa_settings: YooKassaSettings,
+    promo_code: str | None = None,
 ) -> ClientCheckoutResponse:
     """Client-initiated membership checkout via ЮKassa redirect (CPAY-01).
 
@@ -510,8 +511,40 @@ async def client_checkout_membership(
     carries the original payment_id from the first create call. For the same-day
     cancel-then-retry path the core regenerates a unique idempotency_key for the
     fresh INSERT so neither the PK nor the idempotency_key UNIQUE constraint fires.
+
+    Phase 999.4 D-06: optional promo_code param. When provided, validate_promo_code
+    is called FIRST (raises 422 with per-reason code before any ЮKassa call if
+    invalid). The validated discounted amount is passed as price_override_kopecks
+    and the PromoCode.id is passed as applied_promo_code_id to the core so the
+    row.promo_code_id column is populated for the succeeded-webhook redemption path.
     """
     idem_key = _derive_membership_idempotency_key(plan_id=plan_id, client_id=client.id)
+
+    # Phase 999.4 D-06: validate promo BEFORE invoking the core.
+    price_override: int | None = None
+    applied_promo_code_id: UUID | None = None
+    if promo_code:
+        _discount_kopecks, price_override, _discount_type = await _promo_service.validate_promo_code(
+            session,
+            code=promo_code,
+            kind="sub",
+            plan_id=plan_id,
+            client_id=client.id,
+        )
+        # Resolve the PromoCode.id for the FK column.
+        from sqlalchemy import text as _text  # noqa: PLC0415 — local to avoid circular at module level
+        promo_id_row = (
+            await session.execute(
+                _text(
+                    "SELECT id FROM promo_codes "
+                    "WHERE upper(code) = :code AND deleted_at IS NULL"
+                ),
+                {"code": promo_code.upper()},
+            )
+        ).mappings().one_or_none()
+        if promo_id_row is not None:
+            applied_promo_code_id = promo_id_row["id"]
+
     # CR-01 (fix): generate a FRESH op_id (uuid4) for the redirect return_url,
     # mirroring the PT path. Deriving the PK from the per-day idem_key collided
     # on the same-day cancel-then-retry path (the replay short-circuit skips
@@ -529,6 +562,8 @@ async def client_checkout_membership(
         yookassa_settings=yookassa_settings,
         online_payment_id_override=op_id,
         return_url_override=return_url,
+        price_override_kopecks=price_override,
+        applied_promo_code_id=applied_promo_code_id,
     )
     r = cast(Any, result)
     # WR-02: confirmation_url must not be None for a redirect response.
@@ -547,6 +582,7 @@ async def client_checkout_pt_package(
     client: ClientPrincipal,
     idempotency_key: str,
     yookassa_settings: YooKassaSettings,
+    promo_code: str | None = None,
 ) -> ClientCheckoutResponse:
     """Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02).
 
@@ -559,7 +595,35 @@ async def client_checkout_pt_package(
     return_url carrying both payment_id and idempotency_key query params so
     PaymentReturnScreen can poll the status endpoint and retry if needed.
     The idempotency_key is percent-encoded to survive URL round-trips safely.
+
+    Phase 999.4 D-06: optional promo_code param. Same validate-before-core
+    pattern as client_checkout_membership (kind='pt').
     """
+    # Phase 999.4 D-06: validate promo BEFORE invoking the core.
+    price_override: int | None = None
+    applied_promo_code_id: UUID | None = None
+    if promo_code:
+        _discount_kopecks, price_override, _discount_type = await _promo_service.validate_promo_code(
+            session,
+            code=promo_code,
+            kind="pt",
+            plan_id=plan_id,
+            client_id=client.id,
+        )
+        # Resolve the PromoCode.id for the FK column.
+        from sqlalchemy import text as _text  # noqa: PLC0415 — local to avoid circular at module level
+        promo_id_row = (
+            await session.execute(
+                _text(
+                    "SELECT id FROM promo_codes "
+                    "WHERE upper(code) = :code AND deleted_at IS NULL"
+                ),
+                {"code": promo_code.upper()},
+            )
+        ).mappings().one_or_none()
+        if promo_id_row is not None:
+            applied_promo_code_id = promo_id_row["id"]
+
     op_id = uuid4()
     return_url = (
         f"{yookassa_settings.client_return_url}"
@@ -577,6 +641,8 @@ async def client_checkout_pt_package(
         yookassa_settings=yookassa_settings,
         online_payment_id_override=op_id,
         return_url_override=return_url,
+        price_override_kopecks=price_override,
+        applied_promo_code_id=applied_promo_code_id,
     )
     r = cast(Any, result)
     # WR-02: confirmation_url must not be None for a redirect response.

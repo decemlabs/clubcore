@@ -239,9 +239,12 @@ class ClientCheckInResponse(ResponseData):
 class ClientCheckoutRequest(ResponseData):
     """Request body for client-initiated checkout (CPAY-01/02).
 
-    No fields for membership (plan_id in path); for PT the idempotency_key is
-    supplied via Idempotency-Key header (D-71-04), not body.
+    No fields required for membership (plan_id in path); for PT the
+    idempotency_key is supplied via Idempotency-Key header (D-71-04), not body.
+    Phase 999.4 D-06: optional promo_code field (wire: promoCode).
     """
+
+    promo_code: str | None = None  # wire: promoCode (D-06); None = no promo applied
 
 
 class ClientCheckoutResponse(ResponseData):

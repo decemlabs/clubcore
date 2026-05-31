@@ -583,7 +583,11 @@ async def client_checkout_membership(
     Commit owner: caller-owns-txn (D-32-10/D-49-19); service only flushes.
     """
     result = await service.client_checkout_membership(
-        session, plan_id=plan_id, client=client, yookassa_settings=yookassa_settings
+        session,
+        plan_id=plan_id,
+        client=client,
+        yookassa_settings=yookassa_settings,
+        promo_code=payload.promo_code,
     )
     await session.commit()
     return envelope(result)
@@ -626,6 +630,7 @@ async def client_checkout_pt_package(
         client=client,
         idempotency_key=idempotency_key,
         yookassa_settings=yookassa_settings,
+        promo_code=payload.promo_code,
     )
     await session.commit()
     return envelope(result)

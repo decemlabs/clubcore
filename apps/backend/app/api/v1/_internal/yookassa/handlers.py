@@ -82,7 +82,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,6 +126,7 @@ from app.modules.online_refunds.models import OnlineRefund
 from app.modules.online_refunds.settle import _settle_online_refund
 from app.modules.payments.repository import _is_refund_of_uniqueness_conflict
 from app.modules.payments.service import AlreadyRefundedError
+from app.modules.promo_codes.service import record_promo_redemption
 
 _log = structlog.get_logger("api.v1._internal.yookassa.handlers")
 
@@ -469,6 +470,40 @@ async def handle_payment_succeeded(
         )
         await session.flush()
         fiscal_receipt_row_id: UUID = fr_row.id
+
+        # Phase 999.4 D-07: record promo redemption if payment used a promo code.
+        # row.promo_code_id was set at checkout (migration 0047 + ORM column).
+        # record_promo_redemption is idempotent (on_conflict_do_nothing on
+        # uq_promo_redemptions_online_payment_id) so webhook replay is safe.
+        # discount_kopecks is derived from the plan price minus the stored amount.
+        if row.promo_code_id is not None:
+            # Determine the plan price to compute the discount granted.
+            # subject_kind + subject_id already resolved above; use raw SQL
+            # (D-54-08 — no cross-module ORM import from handlers.py).
+            if subject_kind == SUBJECT_KIND_MEMBERSHIP:
+                _plan_table = "membership_plans"
+            else:
+                _plan_table = "pt_package_plans"
+            _plan_price_row = (
+                await session.execute(
+                    text(
+                        f"SELECT price_kopecks FROM {_plan_table} WHERE id = :id"  # noqa: S608
+                    ),
+                    {"id": str(subject_id)},
+                )
+            ).mappings().one_or_none()
+            plan_price_kopecks: int = (
+                int(_plan_price_row["price_kopecks"]) if _plan_price_row else row.amount_kopecks
+            )
+            discount_kopecks_for_redemption = max(0, plan_price_kopecks - row.amount_kopecks)
+            if discount_kopecks_for_redemption > 0:
+                await record_promo_redemption(
+                    session,
+                    promo_code_id=row.promo_code_id,
+                    client_id=row.client_id,
+                    online_payment_id=row.id,
+                    discount_kopecks=discount_kopecks_for_redemption,
+                )
 
         # CHILD audit emit — online_payment_succeeded chained to
         # webhook_intake_corr (D-50-18 step 7). UUIDs are cast to str for
