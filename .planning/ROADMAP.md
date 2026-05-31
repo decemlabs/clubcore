@@ -193,7 +193,7 @@ Plans:
 | 69. Client Read Endpoints + PWA Alignment | v2.0 | 3/3 | Complete    | 2026-05-29 |
 | 70. Client Bookings + QR Self Check-In | v2.0 | 4/4 | Complete    | 2026-05-30 |
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 10/10 | Complete   | 2026-05-30 |
-| 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 4/4 | Complete   | 2026-05-31 |
+| 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 4/4 | Complete    | 2026-05-31 |
 
 ---
 

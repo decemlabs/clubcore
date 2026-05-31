@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
-status: verifying
-stopped_at: Completed 72-04 plan (live read-path gate passed, RUN-00 COMPLETE)
-last_updated: "2026-05-31T10:58:02.514Z"
+status: ready_to_plan
+stopped_at: Phase 72 complete (4/4) — ready to discuss Phase 999.1
+last_updated: 2026-05-31T11:09:12.675Z
 last_activity: 2026-05-31
 progress:
   total_phases: 7
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 72 — openapi-handoff-ci-e2e-verification
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
 
 ## Current Position
 
-Phase: 72 (openapi-handoff-ci-e2e-verification) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-31
 
 Progress: [██████████] 100%
@@ -48,7 +48,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 20
 - Average duration: ~6m
 - Total execution time: ~18m
 
