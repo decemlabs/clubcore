@@ -64,6 +64,8 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.
     barbell: <><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
     lightning: <><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
     heart: <><path d="M20.8 5.6a5 5 0 0 0-8.8-1.6A5 5 0 0 0 3.2 5.6c-1.6 2.5-.8 5.5 3 8.7L12 19l5.8-4.7c3.8-3.2 4.6-6.2 3-8.7z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
+    // Phase 999.5-05: receipt-email gate icon
+    shield: <><path d="M12 3l8 3v5c0 5-4 8.5-8 10C8 19.5 4 16 4 11V6l8-3z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24"

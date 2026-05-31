@@ -1,8 +1,9 @@
 import React from 'react';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { useClientCheckoutMembership, useClientCheckoutPtPackage, usePromoValidate } from '@/data';
+import { useClientCheckoutMembership, useClientCheckoutPtPackage, usePromoValidate, useClientMe } from '@/data';
 import { formatMoney } from '@/utils/format.js';
+import { ReceiptEmailGate } from './ReceiptEmailGate.jsx';
 
 // Accepts: { kind: 'sub' | 'pt', planId, title, subtitle, amount }
 // kind: 'sub' → membership checkout (CPAY-01)
@@ -29,7 +30,7 @@ const PROMO_ERROR_MESSAGES = {
 };
 
 export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
-  const [stage, setStage] = React.useState('review'); // 'review' | 'paying' | 'error'
+  const [stage, setStage] = React.useState('review'); // 'review' | 'email-gate' | 'paying' | 'error'
   const [errorKind, setErrorKind] = React.useState(null); // 'payment' | 'slot-busy' | 'offline' | 'email-required'
   const [promoCode, setPromoCode] = React.useState('');
   const [promoLoading, setPromoLoading] = React.useState(false);
@@ -44,6 +45,8 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   const checkoutMembership = useClientCheckoutMembership();
   const checkoutPtPackage = useClientCheckoutPtPackage();
   const promoValidate = usePromoValidate();
+  // D-03: read clientMe to decide whether to show the email-gate or skip it.
+  const { data: clientMe } = useClientMe();
 
   if (!ctx) return null;
 
@@ -77,6 +80,13 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   };
 
   const startPay = async () => {
+    // D-02/D-03: if email absent, show receipt-email gate before proceeding.
+    // Skip check when already in email-gate (gate calls startPay after saving).
+    if (!clientMe?.email && stage !== 'email-gate') {
+      setStage('email-gate');
+      return;
+    }
+
     // Demo mode override: if forceOutcome is set, use mock behavior.
     if (forceOutcome && forceOutcome !== 'ok') {
       setStage('paying');
@@ -134,6 +144,69 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
         kind={errorKind}
         onRetry={() => { setStage('review'); setErrorKind(null); }}
         onClose={onClose}
+      />
+    );
+  }
+
+  // D-02: show receipt-email gate when email absent (D-03: skipped when email present).
+  if (stage === 'email-gate') {
+    return (
+      <ReceiptEmailGate
+        onSaved={() => {
+          // Email saved — invalidation already fired by useUpdateClientEmail onSettled.
+          // Proceed directly to paying (startPay will skip gate since email now in cache).
+          setStage('paying');
+          // Call the actual pay logic directly (bypass gate re-check since we just set paying).
+          void (async () => {
+            try {
+              let result;
+              const appliedPromoCode = promoResult ? promoResult._validatedCode : undefined;
+              if (ctx.kind === 'sub') {
+                result = await checkoutMembership.mutateAsync({ planId: ctx.planId, promoCode: appliedPromoCode });
+                window.location.href = result.confirmationUrl;
+              } else {
+                const idemKey = idempotencyKey.current;
+                result = await checkoutPtPackage.mutateAsync({
+                  planId: ctx.planId,
+                  idempotencyKey: idemKey,
+                  promoCode: appliedPromoCode,
+                });
+                window.location.href = result.confirmationUrl;
+              }
+            } catch (err) {
+              const code = err?.code ?? err?.message ?? 'payment';
+              setErrorKind(mapApiErrorToKind(code));
+              setStage('error');
+            }
+          })();
+        }}
+        onSkip={() => {
+          // D-10: no email collected; receipt goes to phone. Proceed to pay.
+          setStage('paying');
+          void (async () => {
+            try {
+              let result;
+              const appliedPromoCode = promoResult ? promoResult._validatedCode : undefined;
+              if (ctx.kind === 'sub') {
+                result = await checkoutMembership.mutateAsync({ planId: ctx.planId, promoCode: appliedPromoCode });
+                window.location.href = result.confirmationUrl;
+              } else {
+                const idemKey = idempotencyKey.current;
+                result = await checkoutPtPackage.mutateAsync({
+                  planId: ctx.planId,
+                  idempotencyKey: idemKey,
+                  promoCode: appliedPromoCode,
+                });
+                window.location.href = result.confirmationUrl;
+              }
+            } catch (err) {
+              const code = err?.code ?? err?.message ?? 'payment';
+              setErrorKind(mapApiErrorToKind(code));
+              setStage('error');
+            }
+          })();
+        }}
+        onBack={() => setStage('review')}
       />
     );
   }
