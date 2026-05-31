@@ -49,6 +49,10 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://app:app@localhost:5432/clubcore
       REDIS_URL: redis://localhost:6379/0
+      # CI-only throwaway value — Settings.secret_key is required (no default).
+      # Declared explicitly here so the pytest gate fails with a clear config
+      # error rather than depending on conftest.py's implicit .env.example load.
+      SECRET_KEY: ci-only-test-secret-key-not-real-0123456789
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -138,7 +142,7 @@ jobs:
         run: pnpm -r --filter '!@clubcore/client-pwa' typecheck
 
       - name: Test (workspaces)
-        run: pnpm -r --filter '!@clubcore/client-pwa' test
+        run: pnpm -r --filter '!@clubcore/client-pwa' --filter '!@clubcore/api-client' test
 
       - name: Test @clubcore/api-client
         run: pnpm -F @clubcore/api-client test
