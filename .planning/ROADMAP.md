@@ -219,6 +219,12 @@ Plans:
 **UI design contract:** `.planning/phases/999.3-client-pwa-home-newbie-state/999.3-UI-SPEC.md` (visuals locked; CONTEXT D-05/D-06 override its static onboarding step/progress values with live data)
 **UI hint:** yes
 
+**Plans:** 2 plans (2 waves)
+
+Plans:
+- [ ] 999.3-01-PLAN.md — Backend: add server-derived `membershipState` enum to `/client/home` (newbie/lapsed/active) + integration tests
+- [ ] 999.3-02-PLAN.md — Frontend: newbie Home render gate + 5 components + live onboarding-step derivation + tests
+
 ### Phase 999.4: client-pwa Checkout — visual restyle (PENDING — UI)
 
 **Goal:** Restyle the existing client checkout surface (`CheckoutSheet.jsx` + paying / success / error / return state screens) to match the approved payment mockup's visual language (amount header, order summary card, method affordances, state screens).
