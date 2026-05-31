@@ -53,6 +53,10 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.
     kids: <><circle cx="9" cy="6" r="2.5" stroke={color} strokeWidth={s} fill="none"/><circle cx="17" cy="9" r="2" stroke={color} strokeWidth={s} fill="none"/><path d="M3 22c0-3 3-5 6-5s6 2 6 5M14 22c0-2 2-4 4-4s4 2 4 4" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/></>,
     instagram: <><rect x="3" y="3" width="18" height="18" rx="5" stroke={color} strokeWidth={s} fill="none"/><circle cx="12" cy="12" r="4" stroke={color} strokeWidth={s} fill="none"/><circle cx="17" cy="7" r="0.8" fill={color}/></>,
     telegram: <><path d="M3 11l18-7-3 17-7-5-3 4v-5l11-9-13 8-3-3z" stroke={color} strokeWidth={s} fill="none" strokeLinejoin="round"/></>,
+    mail: <><rect x="3" y="5" width="18" height="14" rx="2" stroke={color} strokeWidth={s} fill="none"/><path d="M3 8l9 6 9-6" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/></>,
+    wifiOff: <><path d="M1 1l22 22M16.7 16.7A10 10 0 005.3 5.3M10.7 10.7A6 6 0 0113 12.6M10.8 16.8A3 3 0 0115 17" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/><circle cx="12" cy="20" r="1" fill={color}/></>,
+    alertCircle: <><circle cx="12" cy="12" r="9" stroke={color} strokeWidth={s} fill="none"/><path d="M12 8v4M12 16h0" stroke={color} strokeWidth={s + 0.4} strokeLinecap="round"/></>,
+    x: <><path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24"
