@@ -52,6 +52,7 @@ class ClientHomeResponse(ResponseData):
     membership: ClientMembershipResponse | None  # null if no active membership (D-69-03)
     next_booking: ClientNextBookingResponse | None
     expiring_soon: bool  # convenience field mirroring membership.expiring_soon
+    membership_state: str  # 'active' | 'newbie' | 'lapsed' (D-01); camelCase wire: membershipState
 
 
 class ClientVisitItem(ResponseData):

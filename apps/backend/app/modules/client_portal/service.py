@@ -122,13 +122,22 @@ async def get_client_home(
 
     Server-side fan-out: REUSES get_client_membership + the next-booking query function —
     no duplicated query logic. Null slots for missing data (D-69-03).
+
+    membership_state (D-01):
+      - 'active'  — client has an active membership row.
+      - 'lapsed'  — client has had a membership before but none is currently active.
+      - 'newbie'  — client has never had any membership row (zero rows in memberships table).
+    State is server-derived only; never client-supplied (D-04).
     """
     membership = await get_client_membership(session, client_id)
     next_booking = await _get_client_next_booking(session, client_id)
+    ever = await repository.client_has_any_membership(session, client_id)
+    state = "active" if membership is not None else "lapsed" if ever else "newbie"
     return ClientHomeResponse(
         membership=membership,
         next_booking=next_booking,
         expiring_soon=membership.expiring_soon if membership is not None else False,
+        membership_state=state,
     )
 
 
