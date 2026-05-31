@@ -439,6 +439,71 @@ const _v19Checks: [
   _ReportsTrainersCsvGet,
 ] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true]
 
+// --- v2.0 surface — Client-Portal (Phases 68–71) --------------------------
+// auth/profile (Phase 68 CAUTH-*): otp/request, otp/verify, session/refresh,
+//   session/logout, GET /me, PATCH /me
+// read (Phase 69 CHOME/CHIST/CPLAN): membership, home, bookings-list,
+//   visit-history, pt-session-history, payment-history, plans, pt-packages, trainers
+// write (Phase 70 CBOOK/CCHK): booking POST, booking cancel, slots GET,
+//   qr-token GET, check-in POST
+// checkout (Phase 71 CPAY): checkout/memberships, checkout/pt-packages, payment status
+//
+// All paths are LANDED (Phase 71 complete); hard AssertNonNever guards — no HasPath<>.
+type _ClientOtpRequest = AssertNonNever<paths['/api/v1/client/otp/request']['post']>
+type _ClientOtpVerify = AssertNonNever<paths['/api/v1/client/otp/verify']['post']>
+type _ClientSessionRefresh = AssertNonNever<paths['/api/v1/client/session/refresh']['post']>
+type _ClientSessionLogout = AssertNonNever<paths['/api/v1/client/session/logout']['post']>
+type _ClientGetMe = AssertNonNever<paths['/api/v1/client/me']['get']>
+type _ClientPatchMe = AssertNonNever<paths['/api/v1/client/me']['patch']>
+type _ClientGetMembership = AssertNonNever<paths['/api/v1/client/membership']['get']>
+type _ClientGetHome = AssertNonNever<paths['/api/v1/client/home']['get']>
+type _ClientListBookings = AssertNonNever<paths['/api/v1/client/bookings']['get']>
+type _ClientListVisitHistory = AssertNonNever<paths['/api/v1/client/history/visits']['get']>
+type _ClientListPtSessionHistory = AssertNonNever<paths['/api/v1/client/history/pt-sessions']['get']>
+type _ClientListPaymentHistory = AssertNonNever<paths['/api/v1/client/history/payments']['get']>
+type _ClientListPlans = AssertNonNever<paths['/api/v1/client/plans']['get']>
+type _ClientListPtPackages = AssertNonNever<paths['/api/v1/client/pt-packages']['get']>
+type _ClientListTrainers = AssertNonNever<paths['/api/v1/client/trainers']['get']>
+type _ClientCreateBooking = AssertNonNever<paths['/api/v1/client/booking']['post']>
+type _ClientCancelBooking = AssertNonNever<paths['/api/v1/client/booking/{booking_id}/cancel']['post']>
+type _ClientListSlots = AssertNonNever<paths['/api/v1/client/slots']['get']>
+type _ClientGetQrToken = AssertNonNever<paths['/api/v1/client/qr-token']['get']>
+type _ClientCheckIn = AssertNonNever<paths['/api/v1/client/check-in']['post']>
+type _ClientCheckoutMembership = AssertNonNever<paths['/api/v1/client/checkout/memberships/{plan_id}']['post']>
+type _ClientCheckoutPtPackage = AssertNonNever<paths['/api/v1/client/checkout/pt-packages/{plan_id}']['post']>
+type _ClientGetPaymentStatus = AssertNonNever<paths['/api/v1/client/payments/{payment_id}/status']['get']>
+
+// Static checks for v2.0 Client-Portal surface — each must resolve to true.
+const _v20Checks: [
+  _ClientOtpRequest,
+  _ClientOtpVerify,
+  _ClientSessionRefresh,
+  _ClientSessionLogout,
+  _ClientGetMe,
+  _ClientPatchMe,
+  _ClientGetMembership,
+  _ClientGetHome,
+  _ClientListBookings,
+  _ClientListVisitHistory,
+  _ClientListPtSessionHistory,
+  _ClientListPaymentHistory,
+  _ClientListPlans,
+  _ClientListPtPackages,
+  _ClientListTrainers,
+  _ClientCreateBooking,
+  _ClientCancelBooking,
+  _ClientListSlots,
+  _ClientGetQrToken,
+  _ClientCheckIn,
+  _ClientCheckoutMembership,
+  _ClientCheckoutPtPackage,
+  _ClientGetPaymentStatus,
+] = [
+  true, true, true, true, true, true, true, true,
+  true, true, true, true, true, true, true, true,
+  true, true, true, true, true, true, true,
+]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -476,5 +541,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v1.9 trainers surface (Phases 58-60)', () => {
     expect(_v19Checks).toHaveLength(14)
+  })
+
+  it('compiles against the regenerated v2.0 Client-Portal surface (Phases 68-71)', () => {
+    expect(_v20Checks).toHaveLength(23)
   })
 })
