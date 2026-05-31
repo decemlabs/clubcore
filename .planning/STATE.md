@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.5 UI-SPEC approved
-last_updated: "2026-05-31T19:12:48.915Z"
-last_activity: 2026-05-31 -- Phase 999.5 planning complete
+last_updated: "2026-05-31T19:21:06.394Z"
+last_activity: 2026-05-31
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 40
-  completed_plans: 35
+  completed_plans: 36
   percent: 70
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.4 — client-pwa-checkout-visual-restyle
+**Current focus:** Phase 999.5 — client-pwa-onboarding-and-receipt-email
 
 ## Current Position
 
-Phase: 999.4 (client-pwa-checkout-visual-restyle) — EXECUTING
-Plan: 1 of 6
+Phase: 999.5 (client-pwa-onboarding-and-receipt-email) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-05-31 -- Phase 999.5 planning complete
+Last activity: 2026-05-31
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ## v2.0 Roadmap Summary
 
@@ -79,6 +79,7 @@ Progress: [██████████] 100%
 | Phase 999.4 P02 | 12min | 2 tasks | 5 files |
 | Phase 999.4 P03 | 16m | 3 tasks | 10 files |
 | Phase 999.4 P05 | 15min | 3 tasks | 5 files |
+| Phase 999.5 P01 | 3min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T18:33:09.081Z
+Last session: 2026-05-31T19:21:06.390Z
 Stopped at: Phase 999.5 UI-SPEC approved
 Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).

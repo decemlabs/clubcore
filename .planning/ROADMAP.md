@@ -255,10 +255,10 @@ Plans:
 **Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/onboarding.html`, `.planning/design-inputs/client-pwa-newbie-and-payment/receipt-email.html`
 **UI hint:** yes
 
-**Plans:** 5 plans (4 waves)
+**Plans:** 1/5 plans executed
 
 Plans:
-- [ ] 999.5-01-PLAN.md — Backend data layer: clients goal/height/weight/onboarding columns + 0048 migration + client_portal schemas
+- [x] 999.5-01-PLAN.md — Backend data layer: clients goal/height/weight/onboarding columns + 0048 migration + client_portal schemas
 - [ ] 999.5-02-PLAN.md — Backend client_portal endpoints: GET/PATCH /client/me (server-validated, IDOR-safe) + receiptEmail/Phone on payment-status
 - [ ] 999.5-03-PLAN.md — Backend gate rewrite: email-OR-phone online-payment gate + ЮKassa customer.phone receipt fallback (inspect-first)
 - [ ] 999.5-04-PLAN.md — Frontend onboarding: 4-step questionnaire + «Готово!» overlay + /onboarding route + newbie auto-redirect + re-entry
