@@ -78,7 +78,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### OpenAPI Handoff + Contract Preservation
 
-- [ ] **HND-01**: Клиентские пути добавлены в `openapi.json` под тегом `Client-Portal` с префиксом operationId `client_`; staff-пути byte-identical к baseline `contract-freeze-v1.11.0` (drift gate зелёный, diff additions-only)
+- [x] **HND-01**: Клиентские пути добавлены в `openapi.json` под тегом `Client-Portal` с префиксом operationId `client_`; staff-пути byte-identical к baseline `contract-freeze-v1.11.0` (drift gate зелёный, diff additions-only)
 - [ ] **HND-02**: `schema.d.ts` regen byte-stable; новый `_v20Checks` `AssertNonNever` блок покрывает клиентские пути; staff `_v1xChecks` блоки не тронуты
 - [ ] **HND-03**: CI-гейты для `client-pwa` (typecheck / lint / test) добавлены в workflow
 
@@ -86,7 +86,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 - [ ] **VER-01**: Live `docker compose up` + PWA: сквозной клиентский флоу (phone-OTP login → home → book slot → checkout → QR check-in → history) проходит end-to-end
 - [ ] **VER-02**: IDOR / anti-oracle / two-principal автотесты зелёные; межклиентский доступ невозможен
-- [ ] **VER-03**: Drift gate подтверждает staff-контракт byte-identical; ни один staff-эндпоинт не сломан
+- [x] **VER-03**: Drift gate подтверждает staff-контракт byte-identical; ни один staff-эндпоинт не сломан
 - [ ] **VER-04**: Runbook v2.0 авторизован (клиентские флоу + auth); live-walkthrough служит milestone gate (per v1.6/v1.9 прецедент)
 
 ## Future Requirements
@@ -172,12 +172,12 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CPAY-04 | Phase 71 | Complete |
 | CPAY-05 | Phase 71 | Complete |
 | PWA-05 | Phase 71 | Complete |
-| HND-01 | Phase 72 | Pending |
+| HND-01 | Phase 72 | Complete |
 | HND-02 | Phase 72 | Pending |
 | HND-03 | Phase 72 | Pending |
 | VER-01 | Phase 72 | Pending |
 | VER-02 | Phase 72 | Pending |
-| VER-03 | Phase 72 | Pending |
+| VER-03 | Phase 72 | Complete |
 | VER-04 | Phase 72 | Pending |
 
 **Coverage:**
