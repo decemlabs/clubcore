@@ -87,6 +87,15 @@ class OnlinePayment(Base, UUIDPkMixin):
         ),
         nullable=True,
     )
+    promo_code_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "promo_codes.id",
+            ondelete="RESTRICT",
+            name="fk_online_payments_promo_code_id_promo_codes",
+        ),
+        nullable=True,
+    )
     yookassa_payment_id: Mapped[str] = mapped_column(Text, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     amount_kopecks: Mapped[int] = mapped_column(Integer, nullable=False)
