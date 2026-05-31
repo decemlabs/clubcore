@@ -23,6 +23,32 @@ jobs:
     defaults:
       run:
         working-directory: apps/backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: clubcore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d clubcore"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://app:app@localhost:5432/clubcore
+      REDIS_URL: redis://localhost:6379/0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,6 +89,18 @@ jobs:
           git ls-files --error-unmatch apps/backend/openapi.json
           git diff --exit-code apps/backend/openapi.json
 
+      # VER-02 / D-72-08: run the full pytest suite against the live Postgres +
+      # Redis service containers with a migrated schema. The IDOR / anti-oracle /
+      # two-principal tests (client_portal/test_idor_sweep.py,
+      # client_auth/test_idor.py, client_auth/test_byte_parity.py,
+      # client_auth/test_otp_isolation.py) skip if DATABASE_URL is unreachable
+      # (conftest.py L79/L87). With the service containers above they EXECUTE.
+      - name: Migrate schema
+        run: uv run alembic upgrade head
+
+      - name: pytest
+        run: uv run pytest
+
   frontend:
     name: Frontend (drift gates + statics)
     runs-on: ubuntu-latest
@@ -90,14 +128,17 @@ jobs:
       - name: pnpm install
         run: pnpm install --frozen-lockfile
 
+      # D-72-05: exclude @clubcore/client-pwa from recursive steps — it has a
+      # dedicated parallel `client-pwa` job. Running it here too would double-run
+      # lint/typecheck/test across two CI jobs for every push.
       - name: Lint (workspaces)
-        run: pnpm -r lint
+        run: pnpm -r --filter '!@clubcore/client-pwa' lint
 
       - name: Typecheck (workspaces)
-        run: pnpm -r typecheck
+        run: pnpm -r --filter '!@clubcore/client-pwa' typecheck
 
       - name: Test (workspaces)
-        run: pnpm -r test
+        run: pnpm -r --filter '!@clubcore/client-pwa' test
 
       - name: Test @clubcore/api-client
         run: pnpm -F @clubcore/api-client test
@@ -115,6 +156,44 @@ jobs:
         run: |
           git ls-files --error-unmatch packages/api-client/src/schema.d.ts
           git diff --exit-code packages/api-client/src/schema.d.ts
+
+  # D-72-03/04 (HND-03): dedicated parallel client-pwa gate — runs typecheck,
+  # lint, test, AND build alongside backend / frontend / redocly-lint (no needs:).
+  # The build step is mandatory (D-72-04): `vite build` + vite-plugin-pwa
+  # service-worker / manifest generation is a failure surface that
+  # `tsc -b --noEmit` typecheck alone does not cover.
+  client-pwa:
+    name: Client PWA (typecheck + lint + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -F @clubcore/client-pwa typecheck
+
+      - name: Lint
+        run: pnpm -F @clubcore/client-pwa lint
+
+      - name: Test
+        run: pnpm -F @clubcore/client-pwa test
+
+      - name: Build
+        run: pnpm -F @clubcore/client-pwa build
 
   # FRZ-07 / D-64-REDOCLY-CI-PLACEMENT — 7th parallel CI gate.
   # Validates apps/backend/openapi.json against the `recommended` Redocly ruleset
