@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 Phase: 999.5 (client-pwa-onboarding-and-receipt-email) — EXECUTING
 Plan: 1 of 3
 Status: Executing Phase 999.5
-Last activity: 2026-06-01 -- Completed quick task 260601-oan: newbie Home v2 restyle (auto tasks; human-verify pending)
+Last activity: 2026-06-01 -- Completed quick task 260601-sxf: "К оплате v2" checkout restyle (browser-verified; deferred loyalty-bonus backend → future phase)
 
 Progress: [██████████] 100%
 
@@ -137,6 +137,7 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 |----|------|------|--------|
 | 260601-luw | Remove client-pwa desktop device-frame wrapper — render full-bleed | 2026-06-01 | complete ✓ |
 | 260601-oan | Apply v2 visual design to client-pwa newbie Home (live-bind + graceful fallback) | 2026-06-01 | complete ✓ (browser-verified) |
+| 260601-sxf | Integrate "К оплате v2" checkout restyle into client-pwa (drop redundant PlanConfirm; hidden promo-chip + bonus scaffolding behind flags) | 2026-06-01 | complete ✓ (browser-verified) |
 
 ## Session Continuity
 
