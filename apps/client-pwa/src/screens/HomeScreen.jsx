@@ -272,8 +272,8 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   const sub = toSubInfo(homeData?.membership ?? null);
 
   const variant = tweaks.homeVariant || 'classic';
-  // Bind the greeting to the real /client/me principal; tweaks.userName is kept
-  // only as a dev-panel override, never a hardcoded human name default.
+  // Bind the display name to the real /client/me principal; tweaks.userName is
+  // kept only as a dev-panel override, never a hardcoded human name default.
   const userName = me?.firstName || tweaks.userName || '';
   const isEmpty = tweaks.dataMode === 'empty';
   const trainerCancelled = tweaks.gymEvent === 'trainer-cancelled';
