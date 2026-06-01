@@ -220,7 +220,8 @@ export function useCompleteOnboarding() {
  * PATCH /api/v1/client/me — write email for receipt gate (D-02/D-10).
  *
  * Called from ReceiptEmailGate before the ЮKassa redirect.
- * onSettled invalidates /client/me so subsequent reads see the updated email.
+ * onSettled invalidates /client/me + /client/home so subsequent gate reads see the updated
+ * email (WR-06: matches useUpdateClientProfile / useCompleteOnboarding invalidation set).
  */
 export function useUpdateClientEmail() {
   const qc = useQueryClient()
@@ -231,6 +232,7 @@ export function useUpdateClientEmail() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientPortalKeys.me() })
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.home() })
     },
   })
 }
