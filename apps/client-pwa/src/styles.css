@@ -1370,3 +1370,619 @@ textarea:focus-visible {
   max-width: 260px;
 }
 
+/* ── Checkout v2 — Plan 260601-sxf ───────────────────────────────────────── */
+/* All colors use var(--token); only sanctioned raw hex: #06120c (on-accent).  */
+
+/* Number-tick keyframe + helper class */
+@keyframes tickA {
+  0%   { transform: translateY(0); }
+  42%  { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+.co-tick { animation: tickA 0.42s cubic-bezier(0.32, 1.6, 0.32, 1); }
+
+/* ── Section label (caps + trailing rule) ────────────────────────────────── */
+.co-sec-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 4px -8px;
+}
+.co-ln {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Membership-pass hero card ───────────────────────────────────────────── */
+.co-pass {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  padding: 20px 20px 18px;
+  color: var(--text);
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  box-shadow: var(--sh-3);
+}
+
+/* Barbell watermark — absolute, bottom-right */
+.co-pass-mark {
+  position: absolute;
+  right: -14px;
+  bottom: -10px;
+  width: 188px;
+  height: 120px;
+  color: var(--accent);
+  opacity: 0.13;
+  pointer-events: none;
+  transform: rotate(-18deg);
+}
+
+/* Brand row */
+.co-pass-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.co-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.co-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: var(--accent);
+  color: #06120c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.5px;
+}
+.co-brand-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.1px;
+}
+.co-brand-name span {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: 0.2px;
+  margin-top: 1px;
+}
+
+/* Duration pill */
+.co-pass-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--r-pill);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.1px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  border: 0.5px solid transparent;
+}
+.co-pass-pill .co-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+/* Pass body */
+.co-pass-body {
+  position: relative;
+  z-index: 2;
+  margin-top: 26px;
+}
+.co-pass-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.co-pass-name {
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -0.9px;
+  line-height: 1.04;
+  margin-top: 6px;
+}
+.co-pass-meta {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.co-pass-meta i {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--text-3);
+  opacity: 0.7;
+  font-style: normal;
+  display: inline-block;
+}
+
+/* Pass footer — dashed separator */
+.co-pass-foot {
+  position: relative;
+  z-index: 2;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 0.5px dashed var(--border-strong);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.co-pass-price-lbl {
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.2px;
+}
+.co-pass-price {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.co-pass-price small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: -0.2px;
+}
+
+/* Guarantee badge */
+.co-pass-secure {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.co-pass-secure svg {
+  width: 13px;
+  height: 13px;
+  color: var(--accent-deep);
+  flex-shrink: 0;
+}
+
+/* ── Promo coupon ticket ─────────────────────────────────────────────────── */
+.co-coupon {
+  position: relative;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+  padding: 14px 15px;
+  overflow: hidden;
+}
+
+/* Ticket notch circles */
+.co-coupon::before,
+.co-coupon::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  top: 50%;
+  transform: translateY(-50%);
+  box-shadow: inset 0 0 0 0.5px var(--border);
+}
+.co-coupon::before { left: -9px; }
+.co-coupon::after  { right: -9px; }
+
+/* Accent edge strip */
+.co-coupon-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--accent);
+}
+
+/* Error + applied states */
+.co-coupon.error {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+.co-coupon.applied {
+  border-color: rgba(45, 212, 164, 0.5);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--sh-2);
+}
+
+/* Coupon field row */
+.co-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.co-tag-ic {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.co-tag-ic svg {
+  width: 19px;
+  height: 19px;
+}
+.co-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.co-input-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.2px;
+}
+.co-input-wrap input {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 2px 0 0;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  outline: none;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.co-input-wrap input::placeholder {
+  color: var(--text-3);
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  text-transform: none;
+}
+
+/* Apply button */
+.co-promo-apply {
+  appearance: none;
+  border: 0.5px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, transform 0.12s, box-shadow 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.co-promo-apply.ready {
+  background: var(--text);
+  color: var(--bg);
+  border-color: transparent;
+  box-shadow: none;
+}
+.co-promo-apply.ready:active { transform: scale(0.95); }
+
+/* Error / hint text */
+.co-promo-hint {
+  margin: 11px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.co-promo-hint.err { color: var(--danger); }
+
+/* Applied view */
+.co-applied-view {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.co-av-check {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #06120c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 5px 14px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+.co-av-check svg {
+  width: 19px;
+  height: 19px;
+}
+.co-av-text {
+  flex: 1;
+  min-width: 0;
+}
+.co-av-code {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+.co-av-desc {
+  font-size: 12px;
+  color: var(--accent-deep);
+  font-weight: 600;
+  margin-top: 1px;
+}
+.co-av-remove {
+  appearance: none;
+  border: 0;
+  background: var(--surface-2);
+  color: var(--text-3);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.co-av-remove:hover { color: var(--text); background: var(--border); }
+.co-av-remove svg { width: 14px; height: 14px; }
+
+/* ── Summary card ────────────────────────────────────────────────────────── */
+.co-sum {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  padding: 6px 18px 18px;
+}
+.co-sum-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  font-size: 14px;
+  color: var(--text-2);
+  border-bottom: 0.5px solid var(--border);
+}
+.co-sum-row .co-sv {
+  font-weight: 650;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.co-sum-row.discount,
+.co-sum-row.discount .co-sv {
+  color: var(--accent-deep);
+}
+.co-sum-row .co-sl-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.co-sum-row .co-sl-tag .co-mini {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  text-transform: uppercase;
+}
+
+/* Total row */
+.co-sum-total {
+  padding-top: 15px;
+}
+.co-sum-total .co-tt {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.co-tl {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.co-tl small {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-top: 2px;
+  letter-spacing: 0;
+}
+.co-amount {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1.1px;
+  font-variant-numeric: tabular-nums;
+  line-height: 0.95;
+  white-space: nowrap;
+}
+
+/* Savings bar */
+.co-save-wrap {
+  margin-top: 14px;
+  display: none;
+}
+.co-save-wrap.show { display: block; }
+.co-save-bar {
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 0.5px solid var(--border);
+  overflow: hidden;
+  display: flex;
+}
+.co-pay-seg {
+  background: var(--text);
+  transition: width 0.5s cubic-bezier(0.32, 0.72, 0.2, 1);
+}
+.co-save-seg {
+  background: var(--accent);
+  transition: width 0.5s cubic-bezier(0.32, 0.72, 0.2, 1);
+}
+.co-save-legend {
+  margin-top: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.co-save-legend .co-sl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.co-save-legend .co-dotm {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+.co-save-legend b {
+  color: var(--accent-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── ЮKassa method plate ─────────────────────────────────────────────────── */
+.co-method {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+  padding: 13px 15px;
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+.co-method-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: 21px;
+  box-shadow: var(--sh-1);
+}
+.co-method-text {
+  flex: 1;
+  min-width: 0;
+}
+.co-method-name {
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+.co-method-sub {
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.co-method-lock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+/* ── In-sheet toast ──────────────────────────────────────────────────────── */
+.co-toast {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 124px;
+  z-index: 200;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 14px;
+  padding: 11px 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  box-shadow: 0 16px 40px rgba(28, 25, 23, 0.32);
+  transform: translateY(180%);
+  opacity: 0;
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0.2, 1),
+              opacity 0.3s;
+  pointer-events: none;
+}
+.co-toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.co-toast-ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: var(--accent);
+  color: #06120c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.co-toast-ic svg {
+  width: 17px;
+  height: 17px;
+}
+.co-toast-tx {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.1px;
+  line-height: 1.25;
+}
+
