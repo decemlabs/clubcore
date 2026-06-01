@@ -136,7 +136,7 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 | ID | Task | Date | Status |
 |----|------|------|--------|
 | 260601-luw | Remove client-pwa desktop device-frame wrapper — render full-bleed | 2026-06-01 | complete ✓ |
-| 260601-oan | Apply v2 visual design to client-pwa newbie Home (live-bind + graceful fallback) | 2026-06-01 | auto ✓ · human-verify pending |
+| 260601-oan | Apply v2 visual design to client-pwa newbie Home (live-bind + graceful fallback) | 2026-06-01 | complete ✓ (browser-verified) |
 
 ## Session Continuity
 
