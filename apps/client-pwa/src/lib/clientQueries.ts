@@ -134,6 +134,36 @@ export function useClientHome() {
   })
 }
 
+/** GET /api/v1/client/membership response shape (camelCase wire, D-69-02 / D-69-05). */
+interface ClientMembershipData {
+  id: string
+  planNameSnapshot: string
+  startDate: string
+  endDate: string
+  status: string
+  daysUntilEnd: number
+  expiringSoon: boolean
+}
+
+/**
+ * GET /api/v1/client/membership — active membership read hook (D-10 anti-oracle gate).
+ *
+ * `enabled` must be passed as `data?.status === 'succeeded'` from the payment-return
+ * caller so this query is NEVER issued while a payment is still pending.
+ * Returns null when the endpoint returns 200 with no active membership.
+ */
+export function useClientMembership(enabled = true) {
+  return useQuery({
+    queryKey: clientPortalKeys.membership(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/membership')
+      return (res as { data: ClientMembershipData | null }).data
+    },
+    enabled,
+    staleTime: 30_000,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Auth probe + OTP hooks (Plan 71-07 — login flow)
 // ---------------------------------------------------------------------------

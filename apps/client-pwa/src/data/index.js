@@ -24,6 +24,7 @@ export {
   useOtpRequest,
   useOtpVerify,
   useClientHome,
+  useClientMembership,
   useClientPlans,
   useClientPtPackages,
   useClientVisitHistory,
