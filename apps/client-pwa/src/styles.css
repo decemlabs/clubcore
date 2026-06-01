@@ -2096,3 +2096,257 @@ textarea:focus-visible {
 .co-bonus-switch[aria-checked="true"] { background: var(--accent); }
 .co-bonus-switch[aria-checked="true"] .co-bonus-knob { transform: translateX(18px); }
 
+/* ── Plan Activated success screen — Plan 260601-vxr ─────────────────────── */
+/* All colors use var(--token); sanctioned raw hexes: #06120c (on-accent),    */
+/* #fbbf24 / #f87171 (decorative confetti accents from mockup — acceptable    */
+/* per plan; ESLint raw-palette rule targets Tailwind classes, not CSS).       */
+
+/* Keyframes */
+
+/* Medallion pop entrance */
+@keyframes pa-check-pop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+/* Radiating wave rings */
+@keyframes pa-wave-out {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* Check stroke draw-on */
+@keyframes pa-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Confetti burst */
+@keyframes pa-confetti-out {
+  0%   { opacity: 0; transform: translate(-50%, -50%) rotate(0); }
+  20%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) rotate(var(--rot)); }
+}
+
+/* Fade-up entrance (staggered by delay at use site) */
+@keyframes pa-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Screen scroll container */
+.pa-screen {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 22px 10px;
+  position: relative;
+  z-index: 1;
+}
+.pa-screen::-webkit-scrollbar { display: none; }
+
+/* Animated check medallion — 104px round, accent bg */
+.pa-check-hero {
+  margin: 38px auto 18px;
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #06120c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow:
+    0 0 0 12px color-mix(in oklab, var(--accent) 22%, transparent),
+    0 0 0 26px color-mix(in oklab, var(--accent) 11%, transparent),
+    0 20px 50px rgba(15, 155, 118, 0.35);
+  animation: pa-check-pop 0.6s cubic-bezier(0.32, 1.6, 0.32, 1) both;
+}
+
+/* Continuous radiating wave rings */
+.pa-check-hero::before,
+.pa-check-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: -1;
+  border: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
+  animation: pa-wave-out 3.2s 0.9s ease-out infinite;
+}
+.pa-check-hero::after { animation-delay: 2s; }
+
+/* Check SVG path — stroke-draw animation */
+.pa-check-hero svg { width: 50px; height: 50px; }
+.pa-check-hero svg path {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: pa-check-draw 0.5s 0.35s cubic-bezier(0.32, 0.72, 0.2, 1) forwards;
+}
+
+/* Confetti dots burst */
+.pa-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.pa-confetti i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: pa-confetti-out 1.2s 0.45s cubic-bezier(0.22, 0.72, 0.2, 1) forwards;
+}
+.pa-confetti i:nth-child(1) { background: var(--accent);      top: 50%; left: 50%; --tx: -120px; --ty: -100px; --rot: -25deg; }
+.pa-confetti i:nth-child(2) { background: var(--accent-deep); top: 50%; left: 50%; --tx:  130px; --ty:  -90px; --rot:  40deg; }
+.pa-confetti i:nth-child(3) { background: #fbbf24;            top: 50%; left: 50%; --tx: -150px; --ty:   20px; --rot:  15deg; border-radius: 50%; }
+.pa-confetti i:nth-child(4) { background: #f87171;            top: 50%; left: 50%; --tx:  140px; --ty:   40px; --rot: -10deg; border-radius: 50%; }
+.pa-confetti i:nth-child(5) { background: var(--accent);      top: 50%; left: 50%; --tx:  -40px; --ty: -140px; --rot:  60deg; }
+.pa-confetti i:nth-child(6) { background: var(--accent-deep); top: 50%; left: 50%; --tx:   60px; --ty: -150px; --rot: -50deg; }
+.pa-confetti i:nth-child(7) { background: #fbbf24;            top: 50%; left: 50%; --tx: -100px; --ty:  100px; --rot:  30deg; }
+.pa-confetti i:nth-child(8) { background: #f87171;            top: 50%; left: 50%; --tx:  110px; --ty:  110px; --rot: -20deg; }
+
+/* Headline */
+.pa-title {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1.08;
+  animation: pa-fade-up 0.45s 0.45s ease-out both;
+}
+
+/* Sub copy */
+.pa-sub {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-2);
+  max-width: 290px;
+  align-self: center;
+  text-wrap: pretty;
+  animation: pa-fade-up 0.45s 0.55s ease-out both;
+}
+
+/* Plan card */
+.pa-card {
+  margin-top: 14px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+  padding: 13px 15px;
+  animation: pa-fade-up 0.45s 0.65s ease-out both;
+}
+
+/* Card header row: plan name + badge */
+.pa-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pa-card-name {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+/* "Активен" status badge */
+.pa-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* Card meta line: validity date */
+.pa-card-meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.35;
+}
+
+/* "Впереди N дней" line */
+.pa-days {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Receipt destination chip — preserved from old succeeded view */
+.pa-receipt-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+/* CTA stack at bottom */
+.pa-actions {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: pa-fade-up 0.45s 0.75s ease-out both;
+}
+
+/* Reduced-motion: suppress ALL pa-* animations; show final state immediately */
+@media (prefers-reduced-motion: reduce) {
+  /* Medallion entrance — show at rest */
+  .pa-check-hero {
+    animation: none;
+    opacity: 1;
+    transform: scale(1);
+  }
+  /* Wave rings — hide (they never show final state meaningfully) */
+  .pa-check-hero::before,
+  .pa-check-hero::after {
+    animation: none;
+    opacity: 0;
+  }
+  /* Check stroke — reveal immediately */
+  .pa-check-hero svg path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  /* Confetti — never shown */
+  .pa-confetti i {
+    animation: none;
+    opacity: 0;
+  }
+  /* Fade-up elements — show immediately at rest */
+  .pa-title,
+  .pa-sub,
+  .pa-card,
+  .pa-actions {
+    animation: none;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
