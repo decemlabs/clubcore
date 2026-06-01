@@ -955,15 +955,17 @@ textarea:focus-visible {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
 }
-/* Rounded focus ring for pills and circular buttons */
+/* Rounded focus ring for pills and circular buttons.
+   Uses box-shadow (not outline) so the ring follows the element's
+   border-radius — CSS `outline` is drawn rectangular by Safari/macOS,
+   which made pill buttons look square when focused. */
 button:focus-visible,
 [role="button"]:focus-visible,
 .btn:focus-visible,
 .tabbar-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1.5px var(--accent);
 }
 /* Inputs get a soft ring instead of a hard outline */
 input:focus-visible,
