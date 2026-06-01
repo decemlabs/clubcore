@@ -255,7 +255,7 @@ Plans:
 **Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/onboarding.html`, `.planning/design-inputs/client-pwa-newbie-and-payment/receipt-email.html`
 **UI hint:** yes
 
-**Plans:** 5/5 plans complete
+**Plans:** 5/5 base plans complete + 3 gap-closure plans (UAT 999.5)
 
 Plans:
 - [x] 999.5-01-PLAN.md — Backend data layer: clients goal/height/weight/onboarding columns + 0048 migration + client_portal schemas
@@ -263,3 +263,6 @@ Plans:
 - [x] 999.5-03-PLAN.md — Backend gate rewrite: email-OR-phone online-payment gate + ЮKassa customer.phone receipt fallback (inspect-first)
 - [x] 999.5-04-PLAN.md — Frontend onboarding: 4-step questionnaire + «Готово!» overlay + /onboarding route + newbie auto-redirect + re-entry
 - [x] 999.5-05-PLAN.md — Frontend receipt-email gate (CheckoutSheet stage) + post-payment receipt-destination confirmation (anti-oracle) + human-verify checkpoint
+- [ ] 999.5-06-PLAN.md — Gap (UAT 10, MAJOR): retry membership checkout once with a fresh key on ЮKassa Idempotence-Key collision (fixes 502 yookassa_permanent_error)
+- [ ] 999.5-07-PLAN.md — Gap (UAT 12, BLOCKER) foundation: migration 0049 phone-aware fiscal_receipts + create_receipt email-OR-phone
+- [ ] 999.5-08-PLAN.md — Gap (UAT 12, BLOCKER): phone-only payment.succeeded webhook + ARQ dispatch fiscalize-to-phone (fixes webhook 500)
