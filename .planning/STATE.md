@@ -131,6 +131,12 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 | v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 scope — plan in Phase 72 |
 | v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 — deferred |
 
+## Quick Tasks Completed
+
+| ID | Task | Date | Status |
+|----|------|------|--------|
+| 260601-luw | Remove client-pwa desktop device-frame wrapper — render full-bleed | 2026-06-01 | complete ✓ |
+
 ## Session Continuity
 
 Last session: 2026-05-31T20:12:28.266Z
