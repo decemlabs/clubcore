@@ -64,7 +64,11 @@ class FiscalReceipt(Base, UUIDPkMixin):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     yookassa_receipt_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    customer_email: Mapped[str] = mapped_column(Text, nullable=False)
+    # Phase 999.5 Plan 07 (D-10): email-OR-phone contact. customer_email is now
+    # nullable; customer_phone is the 54-ФЗ fallback for «Чек не нужен» (phone-only)
+    # payments. The contact-present CHECK below forbids a both-NULL row.
+    customer_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -94,5 +98,11 @@ class FiscalReceipt(Base, UUIDPkMixin):
             "payment_id",
             "kind",
             name="uq_fiscal_receipts_payment_id_kind",
+        ),
+        CheckConstraint(
+            "customer_email IS NOT NULL OR customer_phone IS NOT NULL",
+            # NAMING_CONVENTION expands to ck_fiscal_receipts_contact_present —
+            # must match migration 0049's op.f("ck_fiscal_receipts_contact_present").
+            name="contact_present",
         ),
     )
