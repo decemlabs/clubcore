@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
-stopped_at: Phase 999.5 UI-SPEC approved
-last_updated: "2026-06-01T13:51:32.653Z"
-last_activity: 2026-06-01 -- Completed quick task 260601-oan: newbie Home v2 restyle (auto tasks; human-verify pending)
+stopped_at: Phase 73 context gathered
+last_updated: "2026-06-01T21:23:33.810Z"
+last_activity: "2026-06-02 -- Completed quick task 260601-vxr: "Plan Activated" payment-success screen restyle (real membership card via existing endpoint; browser-verified)"
 progress:
-  total_phases: 10
-  completed_phases: 7
+  total_phases: 11
+  completed_phases: 8
   total_plans: 43
-  completed_plans: 40
-  percent: 70
+  completed_plans: 43
+  percent: 73
 ---
 
 # Project State
@@ -91,6 +91,7 @@ Progress: [██████████] 100%
 - Phase 999.3 added: client-pwa Home newbie (no-subscription) state — UI, frontend-only
 - Phase 999.4 added: client-pwa Checkout visual restyle — UI, ЮKassa redirect unchanged (D-71-04), no in-app card form
 - Phase 999.5 added: client-pwa onboarding questionnaire + post-payment receipt-email — UI + backend (client profile fields name/goal/height_cm/weight_kg + endpoint, client.email write for 54-ФЗ receipt). Open question: email-timing vs `client_email_required_for_online_payment` gate (collect email "после оплаты" conflicts with email-required-before-pay; resolve in discuss/spec)
+- Phase 73 added: Обновить экран «Главная» по новому макету без изменений в интерфейсе и дизайне
 
 ### Key v2.0 Decisions (pre-locked from research)
 
@@ -142,6 +143,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-05-31T20:12:28.266Z
-Stopped at: Phase 999.5 UI-SPEC approved
+Last session: 2026-06-01T21:23:33.805Z
+Stopped at: Phase 73 context gathered
 Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
