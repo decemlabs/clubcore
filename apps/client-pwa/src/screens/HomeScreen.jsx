@@ -423,8 +423,11 @@ export function HeroNewbie({ onOpenPlans, isDark }) {
                     : '1px solid var(--border)',
                   borderRadius: 15,
                   padding: '11px 11px 12px',
+                  // --accent-soft is a fixed light value (#d6f5ea), so in dark it
+                  // over-brightens; use a surface-based accent mix in dark (mockup parity).
+                  // Popular-selected uses a lighter 60% mix than plain 70% (mockup).
                   background: isSel
-                    ? 'color-mix(in oklab, var(--accent-soft) 70%, var(--surface))'
+                    ? `color-mix(in oklab, ${isDark ? 'color-mix(in oklab, var(--accent) 22%, var(--surface))' : 'var(--accent-soft)'} ${isPopSel ? '60%' : '70%'}, var(--surface))`
                     : 'var(--surface-2)',
                   textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
                   boxShadow: isSel ? '0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent)' : 'none',
