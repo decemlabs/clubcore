@@ -823,6 +823,51 @@ textarea:focus-visible {
 .progress-fill.warn { background: var(--warn); }
 .progress-fill.danger { background: var(--danger); }
 
+/* ── Newbie Home v2 shared keyframes — Plan 260601-oan ────────────────────── */
+/* pulse-soft: canonical definition (replaces inline block in ExpiredAlert).
+   Scale 1.18/opacity 0.85 from mockup plan-card variant — ExpiredAlert shares it. */
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.18); opacity: 0.85; }
+}
+
+/* pulse-dot: live-dot in hero-card stats */
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
+
+/* chat-dot: typing bubble dots bounce */
+@keyframes chat-dot {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+/* pass-in: membership-pass entrance in plan-card top panel */
+@keyframes pass-in {
+  0%   { transform: translateY(-50%) rotate(-7deg) scale(0.6); opacity: 0; }
+  60%  { transform: translateY(-50%) rotate(-7deg) scale(1.05); }
+  100% { transform: translateY(-50%) rotate(-7deg) scale(1); opacity: 1; }
+}
+
+/* chip-in: step chip entrance */
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* cta-pulse: primary CTA attention ring */
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
+  50%      { box-shadow: 0 0 0 7px color-mix(in oklab, var(--accent) 13%, transparent); }
+}
+
+/* bar-breathe: load-bar opacity breathing (kept for future use) */
+@keyframes bar-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
 /* ── Newbie onboarding strip — Plan 999.3-02 ──────────────────────────────── */
 
 /* Onboarding progress fill (separate class from .progress-fill to avoid

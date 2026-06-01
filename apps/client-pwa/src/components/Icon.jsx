@@ -66,6 +66,8 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.
     heart: <><path d="M20.8 5.6a5 5 0 0 0-8.8-1.6A5 5 0 0 0 3.2 5.6c-1.6 2.5-.8 5.5 3 8.7L12 19l5.8-4.7c3.8-3.2 4.6-6.2 3-8.7z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
     // Phase 999.5-05: receipt-email gate icon
     shield: <><path d="M12 3l8 3v5c0 5-4 8.5-8 10C8 19.5 4 16 4 11V6l8-3z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/></>,
+    // Plan 260601-oan: ticket icon for first-visit promo illustration
+    ticket: <><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" stroke={color} strokeWidth={s} fill="none" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 6v12" stroke={color} strokeWidth={s} strokeLinecap="round" strokeDasharray="2.5 2.5"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24"
