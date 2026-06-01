@@ -195,6 +195,16 @@ Plans:
 | 71. Client Checkout + Full PWA Wiring | v2.0 | 10/10 | Complete   | 2026-05-30 |
 | 72. OpenAPI Handoff + CI + E2E Verification | v2.0 | 4/4 | Complete    | 2026-05-31 |
 
+### Phase 73: Обновить экран «Главная» по новому макету (Downloads/Home.html)
+
+**Goal:** The active-subscription branch of `apps/client-pwa` `HomeScreen.jsx` renders the new `Home.html` mockup visual (HomeHeroCard with static «Свободно» occupancy widget + GymStatusPill, canonical SubCardSpot card across active/warn/danger tones, BookSpot «Запишись» CTA, large QR button, BookTile/ChatTile, FeedSection) using real API data and no new endpoints; the newbie branch (999.3/999.5), the `App.jsx` mount contract, and the co-located adapters/identity tests are unchanged and still green.
+**Requirements**: Decision-driven (CONTEXT D-01..D-11) — no formal REQUIREMENTS.md IDs; this is a visual restyle phase
+**Depends on:** Phase 72
+**Plans:** 1 plan (1 wave)
+
+Plans:
+- [ ] 73-01-PLAN.md — Restyle active-subscription Home to the Home.html mockup: HomeHeroCard (static «Свободно» occupancy + GymStatusPill), canonical SubCardSpot across active/warn/danger, BookSpot «Запишись» CTA, big QR, BookTile/ChatTile, FeedSection; flip default subCardStyle 'eyebrow'→'spot'; newbie branch + App.jsx contract + adapters/identity tests preserved
+
 ---
 
 *Roadmap last updated: 2026-05-29 — v2.0 Frontend Integration — Client PWA roadmap created (5 phases 68-72, 47 requirements mapped, zero orphans; v1.11 shipped and archived).*
