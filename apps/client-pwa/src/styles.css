@@ -89,17 +89,18 @@ html, body {
 
 button { font-family: inherit; }
 
-/* Stage — center the device frame */
-.stage {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  gap: 32px;
+/* Full-bleed app container — fills the viewport and is the positioning
+   context for .screen (replaces the old device-frame .stage wrapper) */
+html, body, #root { height: 100%; }
+
+.app-viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
 }
 
-/* The device frame is a pure container; the screen inside provides theming */
+/* The screen fills its positioned parent and provides theming */
 .screen {
   position: absolute;
   inset: 0;

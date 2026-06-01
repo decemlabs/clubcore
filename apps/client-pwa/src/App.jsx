@@ -211,229 +211,211 @@ export default function App() {
     || isLoginRoute || isOnboardingRoute || status === 'unknown' || status === 'anon';
 
   return (
-    <div className="stage" data-screen-label="Прототип">
-      <div
-        data-screen-label={`01 ${tab}`}
-        style={{
-          width: 390, height: 844, position: 'relative',
-          borderRadius: 54, background: '#0a0a0a', padding: 12,
-          boxShadow: '0 50px 100px rgba(28,25,23,0.25), 0 0 0 1px rgba(28,25,23,0.15)',
-        }}
-      >
-        <div style={{ position: 'absolute', inset: 12, borderRadius: 44, overflow: 'hidden', background: 'var(--bg)' }}>
-          {/* Dynamic island */}
-          <div style={{
-            position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
-            width: 120, height: 32, borderRadius: 999, background: '#000', zIndex: 300,
-            pointerEvents: 'none',
-          }} />
+    <div className="app-viewport">
+      <div className="screen">
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {/* Routed tab screen (with a brief tab-loading skeleton on transitions) */}
+          {tabLoading ? <TabFallback tab={tab} /> : (
+            <Suspense fallback={<TabFallback tab={tab} />}>
+              <Routes>
+                {/* Public routes — no auth guard */}
+                <Route path="/login" element={<LoginScreen />} />
+                <Route path="/"     element={<Navigate to="/home" replace />} />
 
-          <div className="screen">
-            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-              {/* Routed tab screen (with a brief tab-loading skeleton on transitions) */}
-              {tabLoading ? <TabFallback tab={tab} /> : (
-                <Suspense fallback={<TabFallback tab={tab} />}>
-                  <Routes>
-                    {/* Public routes — no auth guard */}
-                    <Route path="/login" element={<LoginScreen />} />
-                    <Route path="/"     element={<Navigate to="/home" replace />} />
+                {/* Protected tab routes */}
+                <Route path="/home"    element={<RequireAuth><HomeRoute /></RequireAuth>} />
+                <Route path="/book"    element={<RequireAuth><BookRoute /></RequireAuth>} />
+                <Route path="/chat"    element={<RequireAuth><ChatRoute /></RequireAuth>} />
+                <Route path="/profile" element={<RequireAuth><ProfileRoute /></RequireAuth>} />
+                <Route path="/payment/return" element={<RequireAuth><PaymentReturnScreen /></RequireAuth>} />
+                {/* Onboarding questionnaire — D-04: newbie first-login + manual re-entry */}
+                <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
 
-                    {/* Protected tab routes */}
-                    <Route path="/home"    element={<RequireAuth><HomeRoute /></RequireAuth>} />
-                    <Route path="/book"    element={<RequireAuth><BookRoute /></RequireAuth>} />
-                    <Route path="/chat"    element={<RequireAuth><ChatRoute /></RequireAuth>} />
-                    <Route path="/profile" element={<RequireAuth><ProfileRoute /></RequireAuth>} />
-                    <Route path="/payment/return" element={<RequireAuth><PaymentReturnScreen /></RequireAuth>} />
-                    {/* Onboarding questionnaire — D-04: newbie first-login + manual re-entry */}
-                    <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
+                {/* Catch-all: anon → /login via RequireAuth; authed → /home */}
+                <Route path="*" element={
+                  <RequireAuth>
+                    <Navigate to="/home" replace />
+                  </RequireAuth>
+                } />
+              </Routes>
+            </Suspense>
+          )}
 
-                    {/* Catch-all: anon → /login via RequireAuth; authed → /home */}
-                    <Route path="*" element={
-                      <RequireAuth>
-                        <Navigate to="/home" replace />
-                      </RequireAuth>
-                    } />
-                  </Routes>
-                </Suspense>
-              )}
+          {/* ─── Lazy-loaded sheet overlays ─── */}
+          <Suspense fallback={null}>
+            <SheetGate open={ui.qrOpen} variant="qr">
+              <QRSheet onClose={() => ui.setQrOpen(false)} userName={t.userName} />
+            </SheetGate>
+            <SheetGate open={ui.plansOpen} variant="plans">
+              <PlansSheet
+                onClose={() => ui.setPlansOpen(false)}
+                currentPlanId={t.subState === 'active' ? 'annual' : 'monthly'}
+                onPick={(plan) => {
+                  ui.setPlansOpen(false)
+                  ui.setCheckoutCtx({
+                    kind: plan.kind,
+                    planId: plan.id,
+                    title: plan.name,
+                    subtitle: plan.period,
+                    amount: plan.priceKopecks,
+                  })
+                }}
+              />
+            </SheetGate>
+            <SheetGate open={ui.manageOpen} variant="detail">
+              <BookingManageSheet
+                onClose={() => ui.setManageOpen(false)}
+                onCancelled={() => { ui.setManageOpen(false); handleTab('home'); }}
+                onRescheduled={() => { ui.setManageOpen(false); handleTab('home'); }}
+                onChat={() => { ui.setManageOpen(false); handleTab('chat'); setTimeout(() => ui.setPendingChat('c2'), 360); }}
+                onRules={() => { ui.setManageOpen(false); ui.setFaqOpen(true); }}
+              />
+            </SheetGate>
+            <SheetGate open={ui.referralOpen} variant="detail">
+              <ReferralSheet onClose={() => ui.setReferralOpen(false)} userName={t.userName} />
+            </SheetGate>
+            <SheetGate open={ui.gymInfoOpen} variant="detail">
+              <GymInfoSheet onClose={() => ui.setGymInfoOpen(false)} />
+            </SheetGate>
+            <SheetGate open={ui.notifsOpen} variant="list">
+              <NotificationsSheet
+                onClose={() => ui.setNotifsOpen(false)}
+                onOpenChat={() => { ui.setNotifsOpen(false); handleTab('chat'); }}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.trainerDetail} variant="detail" keyFor={ui.trainerDetail?.id}>
+              <TrainerDetailSheet
+                trainer={ui.trainerDetail}
+                onClose={() => ui.setTrainerDetail(null)}
+                onBook={() => { ui.setTrainerDetail(null); handleTab('book'); }}
+                onCheckout={(ctx) => { ui.setTrainerDetail(null); ui.setCheckoutCtx(ctx); }}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.checkoutCtx} variant="checkout" keyFor={ui.checkoutCtx?.title}>
+              <CheckoutSheet
+                ctx={ui.checkoutCtx}
+                onClose={() => ui.setCheckoutCtx(null)}
+                forceOutcome={t.paymentOutcome === 'ok' ? null : t.paymentOutcome}
+              />
+            </SheetGate>
+            <SheetGate open={ui.personalOpen} variant="detail">
+              <PersonalDataSheet
+                onClose={() => ui.setPersonalOpen(false)}
+                userName={t.userName}
+                setTweak={setTweak}
+              />
+            </SheetGate>
+            <SheetGate open={ui.cardOpen} variant="detail">
+              <CardSheet onClose={() => ui.setCardOpen(false)} />
+            </SheetGate>
+            <SheetGate open={ui.faqOpen} variant="list">
+              <FAQSheet
+                onClose={() => ui.setFaqOpen(false)}
+                onOpenChat={() => { ui.setFaqOpen(false); handleTab('chat'); }}
+              />
+            </SheetGate>
+            <SheetGate open={ui.visitHistOpen} variant="list">
+              <VisitHistorySheet onClose={() => ui.setVisitHistOpen(false)} />
+            </SheetGate>
+            <SheetGate open={ui.trainHistOpen} variant="list">
+              <TrainingHistorySheet onClose={() => ui.setTrainHistOpen(false)} />
+            </SheetGate>
 
-              {/* ─── Lazy-loaded sheet overlays ─── */}
-              <Suspense fallback={null}>
-                <SheetGate open={ui.qrOpen} variant="qr">
-                  <QRSheet onClose={() => ui.setQrOpen(false)} userName={t.userName} />
-                </SheetGate>
-                <SheetGate open={ui.plansOpen} variant="plans">
-                  <PlansSheet
-                    onClose={() => ui.setPlansOpen(false)}
-                    currentPlanId={t.subState === 'active' ? 'annual' : 'monthly'}
-                    onPick={(plan) => {
-                      ui.setPlansOpen(false)
-                      ui.setCheckoutCtx({
-                        kind: plan.kind,
-                        planId: plan.id,
-                        title: plan.name,
-                        subtitle: plan.period,
-                        amount: plan.priceKopecks,
-                      })
-                    }}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.manageOpen} variant="detail">
-                  <BookingManageSheet
-                    onClose={() => ui.setManageOpen(false)}
-                    onCancelled={() => { ui.setManageOpen(false); handleTab('home'); }}
-                    onRescheduled={() => { ui.setManageOpen(false); handleTab('home'); }}
-                    onChat={() => { ui.setManageOpen(false); handleTab('chat'); setTimeout(() => ui.setPendingChat('c2'), 360); }}
-                    onRules={() => { ui.setManageOpen(false); ui.setFaqOpen(true); }}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.referralOpen} variant="detail">
-                  <ReferralSheet onClose={() => ui.setReferralOpen(false)} userName={t.userName} />
-                </SheetGate>
-                <SheetGate open={ui.gymInfoOpen} variant="detail">
-                  <GymInfoSheet onClose={() => ui.setGymInfoOpen(false)} />
-                </SheetGate>
-                <SheetGate open={ui.notifsOpen} variant="list">
-                  <NotificationsSheet
-                    onClose={() => ui.setNotifsOpen(false)}
-                    onOpenChat={() => { ui.setNotifsOpen(false); handleTab('chat'); }}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.trainerDetail} variant="detail" keyFor={ui.trainerDetail?.id}>
-                  <TrainerDetailSheet
-                    trainer={ui.trainerDetail}
-                    onClose={() => ui.setTrainerDetail(null)}
-                    onBook={() => { ui.setTrainerDetail(null); handleTab('book'); }}
-                    onCheckout={(ctx) => { ui.setTrainerDetail(null); ui.setCheckoutCtx(ctx); }}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.checkoutCtx} variant="checkout" keyFor={ui.checkoutCtx?.title}>
-                  <CheckoutSheet
-                    ctx={ui.checkoutCtx}
-                    onClose={() => ui.setCheckoutCtx(null)}
-                    forceOutcome={t.paymentOutcome === 'ok' ? null : t.paymentOutcome}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.personalOpen} variant="detail">
-                  <PersonalDataSheet
-                    onClose={() => ui.setPersonalOpen(false)}
-                    userName={t.userName}
-                    setTweak={setTweak}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.cardOpen} variant="detail">
-                  <CardSheet onClose={() => ui.setCardOpen(false)} />
-                </SheetGate>
-                <SheetGate open={ui.faqOpen} variant="list">
-                  <FAQSheet
-                    onClose={() => ui.setFaqOpen(false)}
-                    onOpenChat={() => { ui.setFaqOpen(false); handleTab('chat'); }}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.visitHistOpen} variant="list">
-                  <VisitHistorySheet onClose={() => ui.setVisitHistOpen(false)} />
-                </SheetGate>
-                <SheetGate open={ui.trainHistOpen} variant="list">
-                  <TrainingHistorySheet onClose={() => ui.setTrainHistOpen(false)} />
-                </SheetGate>
+            {/* Flows */}
+            <SheetGate open={!!ui.cancelBookingOpen} variant="detail">
+              <Flows.Cancel
+                booking={typeof ui.cancelBookingOpen === 'object' ? ui.cancelBookingOpen : null}
+                onClose={() => ui.setCancelBookingOpen(false)}
+                onConfirm={() => ui.setCancelBookingOpen(false)}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.subManageMode} variant="detail" keyFor={ui.subManageMode}>
+              <Flows.SubManage
+                mode={ui.subManageMode}
+                onClose={() => ui.setSubManageMode(null)}
+                onConfirm={() => ui.setSubManageMode(null)}
+              />
+            </SheetGate>
+            <SheetGate open={ui.paymentMethodsOpen} variant="list">
+              <Flows.Payments onClose={() => ui.setPaymentMethodsOpen(false)} />
+            </SheetGate>
+            <SheetGate open={ui.deleteAccountOpen} variant="detail">
+              <Flows.Delete
+                onClose={() => ui.setDeleteAccountOpen(false)}
+                onDeleted={() => ui.setDeleteAccountOpen(false)}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.smsVerifyCtx} variant="detail" keyFor={ui.smsVerifyCtx?.target}>
+              <Flows.Sms
+                channel={ui.smsVerifyCtx?.channel}
+                target={ui.smsVerifyCtx?.target}
+                onClose={() => ui.setSmsVerifyCtx(null)}
+                onVerified={() => ui.setSmsVerifyCtx(null)}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.reviewCtx} variant="detail">
+              <Flows.Review
+                training={ui.reviewCtx}
+                onClose={() => ui.setReviewCtx(null)}
+                onSubmit={() => ui.setReviewCtx(null)}
+              />
+            </SheetGate>
+            <SheetGate open={ui.trainerCancelledOpen} variant="detail">
+              <Flows.TrainerCx
+                onClose={() => ui.setTrainerCancelledOpen(false)}
+                onReschedule={() => {
+                  ui.setTrainerCancelledOpen(false);
+                  ui.setBookingConfirmedCtx({
+                    date: 'Завтра, Чт', time: '18:00',
+                    trainer: 'Аня Соколова', kind: 'Ноги + спина',
+                  });
+                }}
+                onChat={() => { ui.setTrainerCancelledOpen(false); handleTab('book'); }}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.receiptCtx} variant="detail">
+              <Flows.Receipt
+                ctx={ui.receiptCtx?.ctx}
+                total={ui.receiptCtx?.total}
+                onClose={() => ui.setReceiptCtx(null)}
+              />
+            </SheetGate>
+            <SheetGate open={!!ui.bookingConfirmedCtx} variant="detail">
+              <Flows.Booking
+                booking={ui.bookingConfirmedCtx}
+                onClose={() => ui.setBookingConfirmedCtx(null)}
+              />
+            </SheetGate>
 
-                {/* Flows */}
-                <SheetGate open={!!ui.cancelBookingOpen} variant="detail">
-                  <Flows.Cancel
-                    booking={typeof ui.cancelBookingOpen === 'object' ? ui.cancelBookingOpen : null}
-                    onClose={() => ui.setCancelBookingOpen(false)}
-                    onConfirm={() => ui.setCancelBookingOpen(false)}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.subManageMode} variant="detail" keyFor={ui.subManageMode}>
-                  <Flows.SubManage
-                    mode={ui.subManageMode}
-                    onClose={() => ui.setSubManageMode(null)}
-                    onConfirm={() => ui.setSubManageMode(null)}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.paymentMethodsOpen} variant="list">
-                  <Flows.Payments onClose={() => ui.setPaymentMethodsOpen(false)} />
-                </SheetGate>
-                <SheetGate open={ui.deleteAccountOpen} variant="detail">
-                  <Flows.Delete
-                    onClose={() => ui.setDeleteAccountOpen(false)}
-                    onDeleted={() => ui.setDeleteAccountOpen(false)}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.smsVerifyCtx} variant="detail" keyFor={ui.smsVerifyCtx?.target}>
-                  <Flows.Sms
-                    channel={ui.smsVerifyCtx?.channel}
-                    target={ui.smsVerifyCtx?.target}
-                    onClose={() => ui.setSmsVerifyCtx(null)}
-                    onVerified={() => ui.setSmsVerifyCtx(null)}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.reviewCtx} variant="detail">
-                  <Flows.Review
-                    training={ui.reviewCtx}
-                    onClose={() => ui.setReviewCtx(null)}
-                    onSubmit={() => ui.setReviewCtx(null)}
-                  />
-                </SheetGate>
-                <SheetGate open={ui.trainerCancelledOpen} variant="detail">
-                  <Flows.TrainerCx
-                    onClose={() => ui.setTrainerCancelledOpen(false)}
-                    onReschedule={() => {
-                      ui.setTrainerCancelledOpen(false);
-                      ui.setBookingConfirmedCtx({
-                        date: 'Завтра, Чт', time: '18:00',
-                        trainer: 'Аня Соколова', kind: 'Ноги + спина',
-                      });
-                    }}
-                    onChat={() => { ui.setTrainerCancelledOpen(false); handleTab('book'); }}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.receiptCtx} variant="detail">
-                  <Flows.Receipt
-                    ctx={ui.receiptCtx?.ctx}
-                    total={ui.receiptCtx?.total}
-                    onClose={() => ui.setReceiptCtx(null)}
-                  />
-                </SheetGate>
-                <SheetGate open={!!ui.bookingConfirmedCtx} variant="detail">
-                  <Flows.Booking
-                    booking={ui.bookingConfirmedCtx}
-                    onClose={() => ui.setBookingConfirmedCtx(null)}
-                  />
-                </SheetGate>
-
-                {/* Chat attachment sheet — small popover, no gate needed */}
-                {ui.chatAttachOpen && (
-                  <Flows.Attach
-                    onClose={() => ui.setChatAttachOpen(false)}
-                    onPick={(kind) => { window.__attachPick?.(kind); }}
-                  />
-                )}
-              </Suspense>
-
-              {/* Push notification overlay — always above sheets */}
-              {ui.pushKind && (
-                <PushToast
-                  kind={ui.pushKind}
-                  onDismiss={() => { ui.setPushKind(null); setTweak('pushKind', 'idle'); }}
-                  onTap={handlePushTap}
-                />
-              )}
-            </div>
-
-            {!hideTabBar && (
-              <TabBar
-                active={tab}
-                onChange={handleTab}
-                unreadChat={unreadChat}
+            {/* Chat attachment sheet — small popover, no gate needed */}
+            {ui.chatAttachOpen && (
+              <Flows.Attach
+                onClose={() => ui.setChatAttachOpen(false)}
+                onPick={(kind) => { window.__attachPick?.(kind); }}
               />
             )}
-          </div>
+          </Suspense>
 
-          <HomeIndicator />
+          {/* Push notification overlay — always above sheets */}
+          {ui.pushKind && (
+            <PushToast
+              kind={ui.pushKind}
+              onDismiss={() => { ui.setPushKind(null); setTweak('pushKind', 'idle'); }}
+              onTap={handlePushTap}
+            />
+          )}
         </div>
+
+        {!hideTabBar && (
+          <TabBar
+            active={tab}
+            onChange={handleTab}
+            unreadChat={unreadChat}
+          />
+        )}
       </div>
+
+      <HomeIndicator />
 
       {/* Tweaks panel — host-protocol aware */}
       <TweaksRoot />
