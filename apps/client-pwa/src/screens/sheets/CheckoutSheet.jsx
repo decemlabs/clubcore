@@ -29,6 +29,28 @@ const PROMO_ERROR_MESSAGES = {
   inactive:       'Промокод неактивен',
 };
 
+// ─── Deferred-feature scaffolding (BUILT, HIDDEN) ─────────────────────────
+// Two UI blocks are fully built but gated OFF here. To reveal one, flip its flag.
+//
+//  • recommendedPromo — a one-tap chip that applies RECOMMENDED_PROMO.code through
+//    the existing server-authoritative promo flow (handlePromoApply). When the flag
+//    is true AND the code is a real, server-known promo, it works end-to-end.
+//
+//  • clubBonuses — the "Списать бонусы" toggle. The UI is built, but REAL point
+//    redemption is NOT wired: it requires the deferred loyalty backend (server-
+//    authoritative price override via price_override_kopecks, a balance source, and
+//    webhook redemption). See 260601-sxf-CONTEXT.md <deferred>. While the flag is on
+//    the toggle renders, but it MUST NOT mutate `total`/`discount` client-side (D-06)
+//    until that backend lands — flipping it true here only reveals the UI.
+const CHECKOUT_FEATURE_FLAGS = {
+  recommendedPromo: false,
+  clubBonuses:      false,
+};
+// Placeholder until a real "recommended promo" source exists on the backend.
+const RECOMMENDED_PROMO = { code: 'FIT15', label: '−15%' };
+// Placeholder loyalty display — replace with real balance data when the backend lands.
+const BONUS_PLACEHOLDER = { balance: 1080, toGold: 220 };
+
 // ─── Barbell SVG watermark (inline, accent-colored, aria-hidden) ─────────
 function BarbellMark() {
   return (
@@ -135,17 +157,22 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   };
 
   // ─── Promo "Применить" handler ──────────────────────────────────────────
-  const handlePromoApply = async () => {
-    if (!promoCode || promoLoading) return;
+  const handlePromoApply = async (codeArg) => {
+    // codeArg lets the (hidden) recommended-promo chip apply a configured code.
+    // onClick passes a React event, not a string — the typeof guard ignores it
+    // and falls back to the live input, so existing call sites are unaffected.
+    const code = (typeof codeArg === 'string' ? codeArg : promoCode).trim();
+    if (!code || promoLoading) return;
     setPromoLoading(true);
     setPromoError(null);
     try {
-      const result = await promoValidate.mutateAsync({ code: promoCode, kind: ctx.kind, planId: ctx.planId });
+      const result = await promoValidate.mutateAsync({ code, kind: ctx.kind, planId: ctx.planId });
       // WR-03 fix: snapshot the validated code string into promoResult so that
       // appliedPromoCode at checkout time uses the validated code, not the live
       // input state (which is disabled after validation but fragile as a correctness invariant).
-      setPromoResult({ ...result, _validatedCode: promoCode });
-      showToast(`Промокод ${promoCode} применён`);
+      setPromoResult({ ...result, _validatedCode: code });
+      setPromoCode(code);
+      showToast(`Промокод ${code} применён`);
     } catch (err) {
       setPromoError(err?.code ?? 'not_found');
     } finally {
@@ -333,6 +360,10 @@ function ReviewStage({
   // Eyebrow label from ctx.kind
   const eyebrow = ctx.kind === 'pt' ? 'Тренировки' : 'Абонемент';
 
+  // Hidden "Списать бонусы" toggle — local UI state only. Does NOT affect
+  // total/discount (D-06): real redemption needs the deferred loyalty backend.
+  const [bonusOn, setBonusOn] = React.useState(false);
+
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 240,
@@ -416,6 +447,23 @@ function ReviewStage({
 
         {/* ── 2. Promo coupon ── */}
         <div className="co-sec-label">Промокод<span className="co-ln" /></div>
+
+        {/* Recommended-promo chip — BUILT, HIDDEN (CHECKOUT_FEATURE_FLAGS.recommendedPromo).
+            Applies a configured code via the existing server-authoritative flow. */}
+        {CHECKOUT_FEATURE_FLAGS.recommendedPromo && !promoResult && (
+          <div className="co-promo-rec">
+            <button
+              type="button"
+              className="co-rec-chip"
+              onClick={() => handlePromoApply(RECOMMENDED_PROMO.code)}
+              disabled={promoLoading}
+            >
+              <span className="co-rec-tag">{RECOMMENDED_PROMO.label}</span>
+              Применить {RECOMMENDED_PROMO.code}
+            </button>
+          </div>
+        )}
+
         <PromoSection
           promoCode={promoCode}
           setPromoCode={setPromoCode}
@@ -427,6 +475,48 @@ function ReviewStage({
           handlePromoApply={handlePromoApply}
           handlePromoRemove={handlePromoRemove}
         />
+
+        {/* ── 2b. Club bonuses ── BUILT, HIDDEN (CHECKOUT_FEATURE_FLAGS.clubBonuses).
+            UI only — toggling does NOT change the total (D-06). Real point redemption
+            requires the deferred loyalty backend (see 260601-sxf-CONTEXT.md <deferred>). */}
+        {CHECKOUT_FEATURE_FLAGS.clubBonuses && (
+          <>
+            <div className="co-sec-label">Бонусы клуба<span className="co-ln" /></div>
+            <div className="co-bonus">
+              <div className="co-bonus-ring" aria-hidden="true">
+                <svg viewBox="0 0 62 62">
+                  <circle className="co-bonus-track" cx="31" cy="31" r="25.5" />
+                  <circle className="co-bonus-prog" cx="31" cy="31" r="25.5" />
+                </svg>
+                <span className="co-bonus-coin">₽</span>
+              </div>
+              <div className="co-bonus-text">
+                <div className="co-bonus-title">Списать бонусы</div>
+                <div className="co-bonus-sub">
+                  На счёте <b>{BONUS_PLACEHOLDER.balance.toLocaleString('ru-RU')}</b>
+                  {' · '}до Gold осталось <b>{BONUS_PLACEHOLDER.toGold}</b>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="co-bonus-switch"
+                role="switch"
+                aria-checked={bonusOn}
+                aria-label="Списать бонусы"
+                onClick={() => {
+                  // TODO(loyalty-phase): wire server-authoritative redemption here.
+                  // MUST keep `total`/`discount` server-derived — do NOT subtract bonuses
+                  // on the client (D-06). For now this only flips local UI state.
+                  const next = !bonusOn;
+                  setBonusOn(next);
+                  showToast(next ? 'Бонусы будут списаны' : 'Списание бонусов отменено');
+                }}
+              >
+                <span className="co-bonus-knob" />
+              </button>
+            </div>
+          </>
+        )}
 
         {/* ── 3. Summary card ── */}
         <div className="co-sec-label">Итог<span className="co-ln" /></div>
