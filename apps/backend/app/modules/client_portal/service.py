@@ -184,15 +184,11 @@ async def update_client_profile(
             raise _InvalidFirstNameError(
                 f"first_name must be at most {_FIRST_NAME_MAX} characters"
             )
-        # Write the trimmed name back so the repository stores it clean
-        payload = ClientProfileUpdateRequest(
-            first_name=trimmed,
-            goal=payload.goal,
-            height_cm=payload.height_cm,
-            weight_kg=payload.weight_kg,
-            onboarding_completed=payload.onboarding_completed,
-            email=payload.email,
-        )
+        # WR-04 (Phase 999.5): map empty-after-trim to None so the repository's
+        # `if payload.first_name is not None` guard skips it instead of overwriting a
+        # stored real name with "". Use model_copy so adding a field to
+        # ClientProfileUpdateRequest later cannot silently drop it here.
+        payload = payload.model_copy(update={"first_name": trimmed or None})
 
     await repository.update_client_profile(session, client_id=client_id, payload=payload)
     return await get_client_me(session, client_id)
