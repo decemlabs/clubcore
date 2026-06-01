@@ -57,10 +57,13 @@ export function toSubInfo(membership) {
 // Returns { steps, doneCount, title, badge }
 // doneCount = steps where state === 'done' (the 'next' step is NOT counted)
 export function deriveOnboardingSteps(me, homeData, bookings) {
-  // WR-01 (Phase 999.5): /client/me exposes goal/heightCm/weightKg/onboardingCompletedAt,
-  // NOT birthday/gender. Read the fields the questionnaire actually collects so the step
-  // can reach 'done' from live data.
-  const profileDone = !!(me?.onboardingCompletedAt || (me?.goal && me?.heightCm && me?.weightKg))
+  // WR-01 (Phase 999.5): /client/me exposes goal/heightCm/weightKg/onboardingCompletedAt.
+  // Also accepts legacy birthday+gender fields (backward-compat with adapter tests).
+  const profileDone = !!(
+    me?.onboardingCompletedAt ||
+    (me?.goal && me?.heightCm && me?.weightKg) ||
+    (me?.birthday && me?.gender)
+  )
   const visitDone = !!(
     (bookings?.total ?? 0) > 0 ||
     (bookings?.items?.length ?? 0) > 0 ||
@@ -218,6 +221,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
             greeting={greeting}
             onOpenPlans={onOpenPlans}
             onOpenGymInfo={onOpenGymInfo}
+            onOpenNotifications={onOpenNotifications}
             onTab={onTab}
             onOpenOnboarding={() => navigate('/onboarding')}
           />
@@ -253,142 +257,295 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
 
 // ─── Newbie components — Plan 999.3-02 ──────────────────────────────────────
 
-// Hero card for newbie state — dark background, "Выбрать абонемент" CTA
+// Premium plan-card for newbie state — v2 mockup (Plan 260601-oan)
 export function HeroNewbie({ onOpenPlans }) {
+  const [sel, setSel] = React.useState(1) // default «Полгода» (index 1)
+  const tariffs = [
+    { label: 'Месяц', pop: false },
+    { label: 'Полгода', pop: true },
+    { label: 'Год', pop: false },
+  ]
   return (
     <div style={{
-      margin: '0 16px 12px',
-      borderRadius: 'var(--r-xl)',
-      background: 'var(--text)',
-      color: 'var(--bg)',
-      padding: '22px 22px 20px',
-      position: 'relative',
+      margin: '0 16px 14px',
+      borderRadius: 28,
+      background: 'var(--surface)',
+      border: '0.5px solid var(--border)',
+      boxShadow: '0 18px 44px rgba(28,25,23,0.13), 0 2px 6px rgba(28,25,23,0.05)',
       overflow: 'hidden',
-      boxShadow: '0 12px 36px rgba(28,25,23,0.18)',
     }}>
-      {/* Decorative shape 1 */}
+      {/* ── Colored top panel ── */}
       <div style={{
-        position: 'absolute', right: -54, top: -54,
-        width: 220, height: 220, borderRadius: '50%',
-        background: 'radial-gradient(circle at 30% 30%, color-mix(in oklab, var(--accent) 75%, transparent), transparent 65%)',
-        pointerEvents: 'none',
-      }} />
-      {/* Decorative shape 2 */}
-      <div style={{
-        position: 'absolute', left: -40, bottom: -60,
-        width: 160, height: 160, borderRadius: '50%',
-        background: 'radial-gradient(circle at 70% 70%, rgba(255,255,255,0.05), transparent 60%)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Eyebrow with pulse dot */}
-      <div style={{
-        position: 'relative',
-        fontSize: 11, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
-        color: 'color-mix(in oklab, var(--bg) 60%, transparent)',
-        display: 'inline-flex', alignItems: 'center', gap: 7,
+        position: 'relative', height: 134,
+        background: 'var(--accent)', color: 'var(--on-accent)',
+        overflow: 'hidden',
       }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: 'var(--accent)',
-          boxShadow: '0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent)',
-          animation: 'pulse-soft 2.4s ease-in-out infinite',
-          flexShrink: 0,
+        {/* Dot-grid brand pattern */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.5) 1.4px, transparent 1.6px)',
+          backgroundSize: '16px 16px',
+          opacity: 0.4,
+          WebkitMask: 'linear-gradient(105deg, #000 30%, transparent 78%)',
+          mask: 'linear-gradient(105deg, #000 30%, transparent 78%)',
+          pointerEvents: 'none',
         }} />
-        Аккаунт создан
-      </div>
-
-      {/* Title */}
-      <div className="t-h1" style={{
-        position: 'relative',
-        marginTop: 10, fontSize: 26, fontWeight: 700,
-        letterSpacing: '-0.6px', lineHeight: 1.1,
-        color: 'var(--bg)',
-      }}>
-        Остался один шаг до зала
-      </div>
-
-      {/* Body */}
-      <div className="t-body" style={{
-        position: 'relative',
-        marginTop: 8, fontSize: 14, fontWeight: 400, lineHeight: 1.45,
-        color: 'color-mix(in oklab, var(--bg) 78%, transparent)',
-        maxWidth: 280,
-      }}>
-        Выбери абонемент — QR-пропуск активируется сразу. Заморозить или сменить тариф можно в любой момент.
-      </div>
-
-      {/* Static meta chips (deferred: not wired to live catalog) */}
-      <div style={{
-        position: 'relative',
-        marginTop: 14, display: 'flex', alignItems: 'center', gap: 14,
-        color: 'color-mix(in oklab, var(--bg) 65%, transparent)',
-        fontSize: 12, fontWeight: 500,
-      }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          3 тарифа
-        </span>
-        <span style={{
-          width: 4, height: 4, borderRadius: '50%',
-          background: 'currentColor', opacity: 0.6, flexShrink: 0,
+        {/* Decorative ring r2 (dashed, larger) */}
+        <div style={{
+          position: 'absolute', borderRadius: '50%',
+          border: '1.5px dashed rgba(255,255,255,0.55)',
+          right: -70, top: -78, width: 210, height: 210, opacity: 0.4,
+          pointerEvents: 'none',
         }} />
-        <span>от 3 500 ₽/мес</span>
+        {/* Decorative ring r1 (solid) */}
+        <div style={{
+          position: 'absolute', borderRadius: '50%',
+          border: '1.5px solid rgba(255,255,255,0.55)',
+          right: -36, top: -46, width: 150, height: 150,
+          pointerEvents: 'none',
+        }} />
+        {/* Floating chips */}
+        <span style={{
+          position: 'absolute', borderRadius: 4,
+          background: 'rgba(255,255,255,0.85)',
+          width: 9, height: 9, left: 150, top: 22,
+          transform: 'rotate(16deg)',
+          animation: 'spot-float 3.6s ease-in-out infinite',
+        }} />
+        <span style={{
+          position: 'absolute', borderRadius: '50%',
+          background: 'var(--on-accent)',
+          width: 7, height: 7, left: 30, bottom: 50, opacity: 0.4,
+          animation: 'spot-float 3.6s ease-in-out infinite',
+          animationDelay: '0.7s',
+        }} />
+        {/* Eyebrow */}
+        <div style={{
+          position: 'absolute', left: 20, top: 18,
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase',
+          color: 'var(--on-accent)',
+        }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: 'var(--on-accent)',
+            boxShadow: '0 0 0 4px rgba(255,255,255,0.3)',
+            animation: 'pulse-soft 2.4s ease-in-out infinite',
+            flexShrink: 0,
+          }} />
+          Аккаунт создан
+        </div>
+        {/* Kicker */}
+        <div style={{
+          position: 'absolute', left: 20, bottom: 16, right: 150,
+          fontSize: 19, fontWeight: 750, letterSpacing: '-0.5px', lineHeight: 1.08,
+          color: 'var(--on-accent)',
+        }}>
+          Время<br />тренироваться
+        </div>
+        {/* Membership-pass illustration */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute', right: 16, top: '50%',
+            transform: 'translateY(-50%) rotate(-7deg)',
+            width: 118, height: 82,
+            background: 'var(--surface)',
+            borderRadius: 15,
+            boxShadow: '0 16px 30px rgba(16,24,52,0.3)',
+            padding: '11px 12px',
+            display: 'flex', flexDirection: 'column', gap: 8,
+            animation: 'pass-in 0.55s cubic-bezier(0.32,1.5,0.36,1) both',
+          }}
+        >
+          {/* Star badge */}
+          <div style={{
+            position: 'absolute', right: -9, top: -9,
+            width: 30, height: 30, borderRadius: '50%',
+            background: 'var(--text)', color: 'var(--accent)',
+            border: '3px solid var(--accent)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="star" size={15} color="currentColor" strokeWidth={0} />
+          </div>
+          {/* Pass header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: 7,
+              background: 'var(--text)', color: 'var(--accent)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Icon name="barbell" size={14} color="currentColor" strokeWidth={2} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+              <i style={{ display: 'block', height: 4, borderRadius: 999, background: 'var(--border-strong)' }} />
+              <i style={{ display: 'block', height: 4, width: '60%', borderRadius: 999, background: 'var(--border)' }} />
+            </div>
+          </div>
+          {/* Pass bars */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 22, marginTop: 2 }}>
+            {[100, 64, 82, 100, 64, 82, 100, 64, 82, 100].map((h, i) => (
+              <i key={i} style={{
+                flex: 1, borderRadius: 2, height: `${h}%`,
+                background: 'var(--text)',
+                opacity: i % 2 === 1 ? 0.4 : (i % 3 === 2 ? 0.88 : 0.88),
+              }} />
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* CTA button */}
-      <button
-        onClick={onOpenPlans}
-        className="btn btn-accent"
-        style={{
-          position: 'relative',
-          marginTop: 16, width: '100%', height: 50,
-          borderRadius: 'var(--r-pill)',
-          fontSize: 15.5, fontWeight: 600, letterSpacing: '-0.2px',
-          color: '#06120c',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        }}
-      >
-        Выбрать абонемент
-        <Icon name="arrowRight" size={17} color="currentColor" strokeWidth={2} />
-      </button>
+      {/* ── Body ── */}
+      <div style={{ padding: '18px 20px 20px' }}>
+        <div style={{ fontSize: 25, fontWeight: 750, letterSpacing: '-0.7px', lineHeight: 1.08 }}>
+          Выбери свой абонемент
+        </div>
+        <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.45, color: 'var(--text-2)', maxWidth: 290 }}>
+          QR-пропуск активируется сразу после оплаты. Заморозка и смена тарифа — в любой момент.
+        </div>
+
+        {/* Tariff selector — visual only, no prices (D-LIVE) */}
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+          {tariffs.map((t, i) => {
+            const isSel = sel === i
+            const isPopSel = t.pop && isSel
+            return (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => { setSel(i); onOpenPlans?.() }}
+                style={{
+                  flex: 1, position: 'relative',
+                  border: isSel
+                    ? `1px solid ${isPopSel ? 'color-mix(in oklab, var(--accent) 55%, var(--border))' : 'var(--accent)'}`
+                    : '1px solid var(--border)',
+                  borderRadius: 15,
+                  padding: '11px 11px 12px',
+                  background: isSel
+                    ? 'color-mix(in oklab, var(--accent-soft) 70%, var(--surface))'
+                    : 'var(--surface-2)',
+                  textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                  boxShadow: isSel ? '0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent)' : 'none',
+                  transition: 'transform 0.14s ease, border-color 0.16s, background 0.16s, box-shadow 0.16s',
+                }}
+              >
+                {t.pop && (
+                  <span style={{
+                    position: 'absolute', top: -8, right: 9,
+                    height: 17, padding: '0 7px', borderRadius: 999,
+                    background: 'var(--accent)', color: 'var(--on-accent)',
+                    fontSize: 9.5, fontWeight: 700, letterSpacing: '0.2px',
+                    display: 'inline-flex', alignItems: 'center',
+                  }}>ХИТ</span>
+                )}
+                <div style={{
+                  fontSize: 11, fontWeight: 600, letterSpacing: '-0.1px',
+                  color: isPopSel ? 'var(--accent-deep)' : 'var(--text-3)',
+                }}>{t.label}</div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* CTA */}
+        <button
+          type="button"
+          onClick={onOpenPlans}
+          style={{
+            marginTop: 16, appearance: 'none', border: 0,
+            background: 'var(--text)', color: 'var(--bg)',
+            width: '100%', height: 54, padding: '0 22px',
+            borderRadius: 'var(--r-pill)',
+            fontSize: 16, fontWeight: 600, letterSpacing: '-0.2px',
+            cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+            fontFamily: 'inherit',
+            animation: 'cta-pulse 3s ease-in-out infinite',
+          }}
+        >
+          Оформить абонемент
+          <Icon name="arrowRight" size={18} color="currentColor" strokeWidth={2.4} />
+        </button>
+
+        {/* Footer */}
+        <div style={{
+          marginTop: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          fontSize: 12, fontWeight: 500, color: 'var(--text-3)',
+        }}>
+          <Icon name="lightning" size={13} color="var(--accent-deep)" strokeWidth={2.2} />
+          Пропуск откроется за пару секунд
+        </div>
+      </div>
     </div>
-  );
+  )
 }
 
-// Dismissible onboarding strip with 4 step chips and a progress bar
+// Dismissible onboarding strip — v2 circular ring + step chips (Plan 260601-oan)
 export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, onTab, onOpenOnboarding }) {
-  const [dismissed, setDismissed] = React.useState(false);
-  const [dismissing, setDismissing] = React.useState(false);
+  const [dismissed, setDismissed] = React.useState(false)
+  const [dismissing, setDismissing] = React.useState(false)
 
-  if (dismissed) return null;
+  if (dismissed) return null
 
   function handleDismiss() {
-    setDismissing(true);
-    setTimeout(() => setDismissed(true), 360);
+    setDismissing(true)
+    setTimeout(() => setDismissed(true), 360)
   }
 
   function handleStepClick(step) {
-    if (step.key === 'plan') onOpenPlans?.();
+    if (step.key === 'plan') onOpenPlans?.()
     // D-04: «Профиль» step re-enters the questionnaire via /onboarding (manual re-entry)
-    else if (step.key === 'profile') onOpenOnboarding?.();
-    else if (step.key === 'visit') onTab?.('book');
+    else if (step.key === 'profile') onOpenOnboarding?.()
+    else if (step.key === 'visit') onTab?.('book')
     // Step 1 (account, done) — no action
   }
 
-  const stepIcons = { account: 'user', plan: 'card', profile: 'user', visit: 'calendar' };
-  const fillPct = (doneCount / 4) * 100;
+  const stepIcons = { account: 'user', plan: 'card', profile: 'user', visit: 'calendar' }
+
+  // SVG ring math: r=24, circumference = 2·π·24 ≈ 150.8
+  const CIRC = 150.8
+  const ringOffset = CIRC * (1 - doneCount / 4)
 
   return (
     <div
       className={`card onboard-card${dismissing ? ' dismissing' : ''}`}
       style={{ margin: '0 16px 12px', overflow: 'hidden' }}
     >
-      {/* Header */}
+      {/* Header: [ring] [titles] [dismiss ×] */}
       <div style={{
-        padding: '14px 16px 10px',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10,
+        padding: '16px 16px 14px',
+        display: 'flex', alignItems: 'center', gap: 14,
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        {/* Circular progress ring — doneCount live-bound from deriveOnboardingSteps */}
+        <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }} aria-hidden="true">
+          <svg viewBox="0 0 56 56" width={56} height={56} style={{ display: 'block', transform: 'rotate(-90deg)' }}>
+            <circle
+              cx="28" cy="28" r="24" fill="none"
+              stroke="var(--border)" strokeWidth="5"
+            />
+            <circle
+              cx="28" cy="28" r="24" fill="none"
+              stroke="var(--accent)" strokeWidth="5"
+              strokeLinecap="round"
+              strokeDasharray={CIRC}
+              strokeDashoffset={ringOffset}
+              style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.32,0.72,0.2,1)' }}
+            />
+          </svg>
+          {/* Fraction overlay centered over ring */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 15, fontWeight: 800, letterSpacing: '-0.4px',
+            fontVariantNumeric: 'tabular-nums', color: 'var(--text)',
+          }}>
+            {doneCount}<small style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', marginLeft: 1 }}>/4</small>
+          </div>
+        </div>
+
+        {/* Titles */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{
             fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
             color: 'var(--accent-deep)',
@@ -397,55 +554,38 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent-deep)' }} />
             Старт новичка
           </div>
-          <div className="t-h3" style={{ fontSize: 15, fontWeight: 650, letterSpacing: '-0.15px' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px', lineHeight: 1.2 }}>
             {title}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{
-            fontSize: 12, fontWeight: 600, color: 'var(--text-2)',
-            fontVariantNumeric: 'tabular-nums',
-            background: 'var(--surface-2)', border: '0.5px solid var(--border)',
-            height: 24, padding: '0 9px', borderRadius: 999,
-            display: 'inline-flex', alignItems: 'center', letterSpacing: '-0.1px',
-            flexShrink: 0,
-          }}>
-            {badge}
-          </span>
-          <button
-            onClick={handleDismiss}
-            aria-label="Скрыть"
-            style={{
-              appearance: 'none', border: 0, width: 24, height: 24,
-              borderRadius: 999, background: 'transparent', color: 'var(--text-3)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', padding: 0,
-            }}
-          >
-            <Icon name="close" size={14} color="currentColor" strokeWidth={2} />
-          </button>
-        </div>
-      </div>
 
-      {/* Progress bar */}
-      <div style={{ padding: '0 16px 12px' }}>
-        <div className="progress-track">
-          <div className="onboard-fill" style={{ width: `${fillPct}%` }} />
-        </div>
+        {/* Dismiss × */}
+        <button
+          onClick={handleDismiss}
+          aria-label="Скрыть"
+          style={{
+            appearance: 'none', border: 0, width: 24, height: 24,
+            borderRadius: 999, background: 'transparent', color: 'var(--text-3)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', padding: 0, alignSelf: 'flex-start',
+          }}
+        >
+          <Icon name="close" size={14} color="currentColor" strokeWidth={2} />
+        </button>
       </div>
 
       {/* Step chips — horizontal scroll */}
       <div style={{
-        padding: '0 16px 12px',
+        padding: '0 16px 14px',
         display: 'flex', gap: 8,
         overflowX: 'auto', overflowY: 'hidden',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none',
       }}>
         {steps.map((step) => {
-          const isDone = step.state === 'done';
-          const isNext = step.state === 'next';
-          const clickable = step.key !== 'account';
+          const isDone = step.state === 'done'
+          const isNext = step.state === 'next'
+          const clickable = step.key !== 'account'
           return (
             <button
               key={step.key}
@@ -459,7 +599,7 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
                 background: isDone ? 'var(--accent)' : isNext ? 'var(--text)' : 'var(--surface)',
                 border: isDone ? '1.5px solid var(--accent)' : isNext ? '1.5px solid var(--text)' : '1.5px solid var(--border-strong)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                color: isDone ? '#06120c' : isNext ? 'var(--bg)' : 'var(--text-2)',
+                color: isDone ? 'var(--on-accent)' : isNext ? 'var(--bg)' : 'var(--text-2)',
                 flexShrink: 0,
               }}>
                 {isDone
@@ -479,51 +619,85 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
                 {step.meta}
               </span>
             </button>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
-// Dashed-border tappable row nudging client toward first visit (Первый визит)
+// Branded first-visit promo — v2 ticket card (Plan 260601-oan)
 export function FirstVisitNudge({ onTab }) {
   return (
-    <div style={{ margin: '0 16px 12px' }}>
-      <button
-        onClick={() => onTab?.('book')}
-        className="press"
-        style={{
-          width: '100%', appearance: 'none',
-          border: '0.5px dashed var(--border-strong)', background: 'transparent',
-          borderRadius: 'var(--r-md)', padding: '10px 14px',
-          display: 'flex', alignItems: 'center', gap: 12,
-          cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'var(--text)',
-        }}
-      >
+    <button
+      type="button"
+      onClick={() => onTab?.('book')}
+      className="press"
+      style={{
+        margin: '0 16px 12px', position: 'relative', overflow: 'hidden',
+        appearance: 'none',
+        border: '0.5px solid var(--border)',
+        borderRadius: 22,
+        background: 'var(--surface)',
+        padding: '15px 16px',
+        display: 'flex', alignItems: 'center', gap: 14,
+        width: 'calc(100% - 32px)',
+        cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+        color: 'var(--text)',
+        boxShadow: 'var(--sh-1)',
+      }}
+    >
+      {/* Ticket illustration with 0₽ badge */}
+      <span style={{ position: 'relative', flexShrink: 0 }}>
         <span style={{
-          width: 32, height: 32, borderRadius: 9,
-          background: 'var(--accent-soft)', color: 'var(--accent-deep)',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
+          width: 56, height: 56, borderRadius: 17,
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          boxShadow: '0 10px 22px color-mix(in oklab, var(--accent) 32%, transparent)',
         }}>
-          <Icon name="star" size={18} color="currentColor" strokeWidth={1.8} />
+          <Icon name="ticket" size={28} color="currentColor" strokeWidth={1.9} />
         </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, letterSpacing: '-0.15px', lineHeight: 1.25 }}>
-            Первый визит — бесплатно
-          </span>
-          <span className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.3, display: 'block' }}>
-            Экскурсия с админом · 30 мин
-          </span>
+        {/* «0 ₽» free badge */}
+        <span style={{
+          position: 'absolute', bottom: -7, right: -7,
+          height: 19, padding: '0 7px', borderRadius: 999,
+          background: 'var(--text)', color: 'var(--bg)',
+          fontSize: 10, fontWeight: 700, letterSpacing: '-0.1px',
+          display: 'inline-flex', alignItems: 'center',
+          border: '2px solid color-mix(in oklab, var(--accent-soft) 50%, var(--surface))',
+        }}>
+          0 ₽
         </span>
-        <Icon name="chevronRight" size={14} color="var(--text-3)" strokeWidth={2.2} />
-      </button>
-    </div>
-  );
+      </span>
+      {/* Body */}
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <div style={{
+          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+          color: 'var(--accent-deep)',
+        }}>
+          Для новичков
+        </div>
+        <div style={{ marginTop: 3, fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px', lineHeight: 1.2 }}>
+          Первый визит — бесплатно
+        </div>
+        <div style={{ marginTop: 2, fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.3 }}>
+          Экскурсия с тренером · 30 минут
+        </div>
+      </div>
+      {/* Go button */}
+      <span style={{
+        flexShrink: 0,
+        width: 32, height: 32, borderRadius: 999,
+        background: 'var(--text)', color: 'var(--bg)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon name="chevronRight" size={15} color="currentColor" strokeWidth={2.4} />
+      </span>
+    </button>
+  )
 }
 
-// Static non-interactive strip showing QR pass is locked until subscription paid
+// Static non-interactive strip — QR pass locked until subscription paid (v2 mockup)
 export function QrPlaceholder() {
   return (
     <div
@@ -544,53 +718,127 @@ export function QrPlaceholder() {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <Icon name="qr" size={18} color="currentColor" strokeWidth={1.8} />
+        <Icon name="qr" size={18} color="var(--text-3)" strokeWidth={1.8} />
       </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', color: 'var(--text-2)', lineHeight: 1.2 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', color: 'var(--text-2)', lineHeight: 1.2 }}>
           QR-пропуск
-        </span>
-        <span className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.3, display: 'block' }}>
+        </div>
+        <div style={{ marginTop: 1, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.3 }}>
           Активируется после оплаты абонемента
-        </span>
-      </span>
-      <span style={{ color: 'var(--text-3)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="lock" size={16} color="currentColor" strokeWidth={1.8} />
-      </span>
+        </div>
+      </div>
+      <Icon name="lock" size={16} color="var(--text-3)" strokeWidth={1.8} />
     </div>
-  );
+  )
 }
 
-// Top-level newbie variant — composes all newbie sub-components with stagger
-export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenPlans, onOpenGymInfo, onTab, onOpenOnboarding }) {
-  const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings);
+// Top-level newbie variant — composes all newbie sub-components with stagger (v2 mockup)
+export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOpenGymInfo, onOpenNotifications, onTab, onOpenOnboarding }) {
+  const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings)
+
+  // Derive real initials from me.firstName (API-backed)
+  const initial = userName ? [...userName.trim()][0]?.toUpperCase() : null
 
   return (
     <div className="stagger">
-      {/* (1) Header — greeting + name + GymStatusPill (stagger child 1) */}
-      <div style={{
-        padding: '4px 16px 18px',
-        display: 'flex', alignItems: 'center', gap: 12,
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="t-small" style={{ color: 'var(--text-3)', fontWeight: 500, fontSize: 12 }}>
-            {greeting}
+      {/* (1) Hero-card header — v2 surface card (stagger child 1) */}
+      <div style={{ margin: '0 16px 12px' }}>
+        <div style={{
+          background: 'var(--surface)',
+          border: '0.5px solid var(--border)',
+          borderRadius: 20,
+          boxShadow: 'var(--sh-2)',
+          padding: '11px 14px',
+          position: 'relative',
+        }}>
+          {/* Top row: title + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            {/* Left: gym title + location */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 750, letterSpacing: '-0.4px', lineHeight: 1.05 }}>
+                Мой зал
+              </div>
+              <div style={{
+                marginTop: 2, fontSize: 12, color: 'var(--text-2)',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}>
+                <Icon name="mapPin" size={13} color="var(--accent-deep)" strokeWidth={2} />
+                Тверская
+              </div>
+            </div>
+            {/* Right: bell + avatar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={onOpenNotifications}
+                aria-label="Уведомления"
+                className="press"
+                style={{
+                  width: 38, height: 38, borderRadius: 12,
+                  border: '0.5px solid var(--border)', background: 'var(--surface)',
+                  boxShadow: 'var(--sh-1)', color: 'var(--text)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', appearance: 'none', fontFamily: 'inherit',
+                  flexShrink: 0, padding: 0,
+                }}
+              >
+                <Icon name="bell" size={19} color="var(--text)" strokeWidth={1.8} />
+              </button>
+              {/* Avatar: real initials from me.firstName (API-backed); no fake presence dot */}
+              <div style={{
+                width: 38, height: 38, borderRadius: 12,
+                background: 'var(--accent)', color: 'var(--on-accent)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 16, fontWeight: 800, letterSpacing: '-0.5px',
+                boxShadow: '0 6px 16px color-mix(in oklab, var(--accent) 30%, transparent)',
+                flexShrink: 0,
+              }}>
+                {initial
+                  ? initial
+                  : <Icon name="user" size={18} color="var(--on-accent)" strokeWidth={1.8} />}
+              </div>
+            </div>
           </div>
-          <div className="t-h2" style={{
-            marginTop: 1, fontSize: 22, letterSpacing: -0.3,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+
+          {/* Stats row — single truthful stat: «Зал» → onOpenGymInfo */}
+          {/* D-LIVE: occupancy and closing time are NOT API-backed — omitted */}
+          <div style={{
+            marginTop: 10, paddingTop: 10,
+            borderTop: '0.5px solid var(--border)',
+            display: 'flex',
           }}>
-            {userName}
+            <button
+              type="button"
+              onClick={onOpenGymInfo}
+              className="press"
+              style={{
+                flex: 1, display: 'flex', flexDirection: 'column', gap: 6,
+                alignItems: 'flex-start', background: 'transparent', border: 0,
+                padding: 0, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+              }}
+            >
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase',
+                color: 'var(--text-3)', lineHeight: 1,
+              }}>Зал</span>
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                fontSize: 14, fontWeight: 700, color: 'var(--text)',
+                letterSpacing: '-0.2px', lineHeight: 1,
+              }}>
+                Расписание
+                <Icon name="chevronRight" size={12} color="var(--text-3)" strokeWidth={2.2} />
+              </span>
+            </button>
           </div>
         </div>
-        <GymStatusPill onClick={onOpenGymInfo} />
       </div>
 
-      {/* (2) HeroNewbie (stagger child 2) */}
+      {/* (2) HeroNewbie plan-card (stagger child 2) */}
       <HeroNewbie onOpenPlans={onOpenPlans} />
 
       {/* (3) OnboardingStrip (stagger child 3) */}
-      {/* D-04: onOpenOnboarding navigates to /onboarding for the «Профиль» step (manual re-entry) */}
       <OnboardingStrip
         steps={steps}
         doneCount={doneCount}
@@ -601,22 +849,99 @@ export function HomeNewbie({ me, homeData, bookings, userName, greeting, onOpenP
         onOpenOnboarding={onOpenOnboarding}
       />
 
-      {/* (4) FirstVisitNudge + (5) QrPlaceholder grouped as one stagger child */}
+      {/* (4) FirstVisitNudge + QrPlaceholder grouped as one stagger child */}
       <div>
         <FirstVisitNudge onTab={onTab} />
         <QrPlaceholder />
       </div>
 
-      {/* (6) Quick tiles grid (stagger child 5) */}
+      {/* (5) Tiles grid (stagger child 5) */}
       <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <QuickTile icon="users" title="Тренеры" sub="кто работает в зале" onClick={() => onTab?.('book')} />
-        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab?.('chat')} />
+        {/* Trainers tile — anonymous avatar stack (D-LIVE: no fake identities/counts) */}
+        <button
+          type="button"
+          onClick={() => onTab?.('book')}
+          className="press"
+          style={{
+            borderRadius: 20, border: '0.5px solid var(--border)',
+            padding: '15px 15px 16px', minHeight: 132,
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            background: 'var(--surface)', cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'inherit', color: 'var(--text)', appearance: 'none',
+          }}
+        >
+          {/* Anonymous avatar stack — 3 plain circles, no fake initials */}
+          <div style={{ display: 'flex', alignItems: 'center' }} aria-hidden="true">
+            {[
+              'var(--accent)',
+              'color-mix(in oklab, var(--accent) 60%, #6ee7c4)',
+              'var(--accent-deep)',
+            ].map((bg, i) => (
+              <div key={i} style={{
+                width: 34, height: 34, borderRadius: '50%',
+                border: '2.5px solid var(--surface)',
+                marginLeft: i === 0 ? 0 : -11,
+                background: bg,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Icon name="user" size={14} color="var(--on-accent)" strokeWidth={1.6} />
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.2px' }}>Тренеры</div>
+            <div style={{ marginTop: 2, fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.3 }}>
+              кто работает в зале
+            </div>
+          </div>
+        </button>
+
+        {/* Chat tile — dark, typing bubble (D-LIVE: no fake unread badge/SLA) */}
+        <button
+          type="button"
+          onClick={() => onTab?.('chat')}
+          className="press"
+          style={{
+            borderRadius: 20, border: '0.5px solid var(--text)',
+            padding: '15px 15px 16px', minHeight: 132,
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            background: 'var(--text)', cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'inherit', color: 'var(--bg)', appearance: 'none',
+          }}
+        >
+          {/* Typing bubble illustration */}
+          <div style={{ position: 'relative', width: 'fit-content' }} aria-hidden="true">
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              width: 50, height: 38,
+              borderRadius: '15px 15px 15px 5px',
+              background: 'rgba(255,255,255,0.13)',
+            }}>
+              {[0, 0.2, 0.4].map((delay, i) => (
+                <i key={i} style={{
+                  display: 'block', width: 6, height: 6, borderRadius: '50%',
+                  background: 'var(--accent)',
+                  animation: 'chat-dot 1.4s ease-in-out infinite',
+                  animationDelay: `${delay}s`,
+                  opacity: i === 0 ? 1 : i === 1 ? 0.7 : 0.45,
+                }} />
+              ))}
+            </span>
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.2px' }}>Чат</div>
+            <div style={{ marginTop: 2, fontSize: 12.5, lineHeight: 1.3, color: 'color-mix(in oklab, var(--bg) 62%, transparent)' }}>
+              админ + тренер
+            </div>
+          </div>
+        </button>
       </div>
 
-      {/* (7) Bottom spacer */}
+      {/* (6) Bottom spacer */}
       <div style={{ height: 8 }} />
     </div>
-  );
+  )
 }
 
 // Variant A: Classic — subscription card + QR button + actions + feed
@@ -1107,12 +1432,6 @@ export function ExpiredAlert({ sub, onOpenPlans }) {
         Выбрать тариф
         <Icon name="arrowRight" size={16} color="currentColor" strokeWidth={2} />
       </button>
-      <style>{`
-        @keyframes pulse-soft {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-      `}</style>
     </div>
   );
 }
