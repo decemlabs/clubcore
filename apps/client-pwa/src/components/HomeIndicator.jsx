@@ -1,11 +1,7 @@
+// The faux iOS home-indicator pill was prototype chrome and has been removed.
+// On a real device the OS draws its own home indicator; bottom safe-area spacing
+// is handled by the TabBar / page padding. Kept as a named export (returns null)
+// so the single call site in App.jsx needs no change.
 export function HomeIndicator() {
-  return (
-    <div style={{
-      position: 'absolute', bottom: 0, left: 0, right: 0, height: 22,
-      display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-      paddingBottom: 7, pointerEvents: 'none', zIndex: 50,
-    }}>
-      <div style={{ width: 134, height: 5, borderRadius: 999, background: 'var(--text)', opacity: 0.85 }} />
-    </div>
-  );
+  return null;
 }
