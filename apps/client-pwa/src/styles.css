@@ -914,6 +914,12 @@ textarea:focus-visible {
   background: var(--surface);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--text) 7%, transparent);
 }
+/* Dark theme: the next-step border uses var(--text), which inverts to a harsh
+   near-white edge in dark mode — soften to an accent tint (mirrors mockup). */
+[data-theme="dark"] .step.next {
+  border-color: color-mix(in oklab, var(--accent) 36%, var(--border-strong));
+  box-shadow: none;
+}
 
 /* Dismiss-collapse keyframe (360ms, mirrors fade-up block style) */
 @keyframes onboard-collapse {

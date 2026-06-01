@@ -219,6 +219,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
             bookings={bookings}
             userName={userName}
             greeting={greeting}
+            isDark={tweaks.theme === 'dark'}
             onOpenPlans={onOpenPlans}
             onOpenGymInfo={onOpenGymInfo}
             onOpenNotifications={onOpenNotifications}
@@ -258,7 +259,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
 // ─── Newbie components — Plan 999.3-02 ──────────────────────────────────────
 
 // Premium plan-card for newbie state — v2 mockup (Plan 260601-oan)
-export function HeroNewbie({ onOpenPlans }) {
+export function HeroNewbie({ onOpenPlans, isDark }) {
   const [sel, setSel] = React.useState(1) // default «Полгода» (index 1)
   const tariffs = [
     { label: 'Месяц', pop: false },
@@ -441,7 +442,10 @@ export function HeroNewbie({ onOpenPlans }) {
                 )}
                 <div style={{
                   fontSize: 11, fontWeight: 600, letterSpacing: '-0.1px',
-                  color: isPopSel ? 'var(--accent-deep)' : 'var(--text-3)',
+                  // accent-deep blends into the accent-tinted bg in dark — brighten (mirrors mockup).
+                  color: isPopSel
+                    ? (isDark ? 'color-mix(in oklab, var(--accent) 55%, #ffffff)' : 'var(--accent-deep)')
+                    : 'var(--text-3)',
                 }}>{t.label}</div>
               </button>
             )
@@ -482,7 +486,7 @@ export function HeroNewbie({ onOpenPlans }) {
 }
 
 // Dismissible onboarding strip — v2 circular ring + step chips (Plan 260601-oan)
-export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, onTab, onOpenOnboarding }) {
+export function OnboardingStrip({ steps, doneCount, title, badge, isDark, onOpenPlans, onTab, onOpenOnboarding }) {
   const [dismissed, setDismissed] = React.useState(false)
   const [dismissing, setDismissing] = React.useState(false)
 
@@ -593,13 +597,16 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
               className={`step${isDone ? ' done' : isNext ? ' next' : ''}`}
               style={!clickable ? { cursor: 'default' } : undefined}
             >
-              {/* Icon ring */}
+              {/* Icon ring. Next-step uses var(--text) in light; in dark that
+                  inverts to near-white, so use the accent (mirrors mockup). */}
               <span style={{
                 width: 26, height: 26, borderRadius: '50%',
-                background: isDone ? 'var(--accent)' : isNext ? 'var(--text)' : 'var(--surface)',
-                border: isDone ? '1.5px solid var(--accent)' : isNext ? '1.5px solid var(--text)' : '1.5px solid var(--border-strong)',
+                background: isDone ? 'var(--accent)' : isNext ? (isDark ? 'var(--accent)' : 'var(--text)') : 'var(--surface)',
+                border: isDone
+                  ? '1.5px solid var(--accent)'
+                  : isNext ? `1.5px solid ${isDark ? 'var(--accent)' : 'var(--text)'}` : '1.5px solid var(--border-strong)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                color: isDone ? 'var(--on-accent)' : isNext ? 'var(--bg)' : 'var(--text-2)',
+                color: isDone ? 'var(--on-accent)' : isNext ? (isDark ? 'var(--on-accent)' : 'var(--bg)') : 'var(--text-2)',
                 flexShrink: 0,
               }}>
                 {isDone
@@ -734,7 +741,7 @@ export function QrPlaceholder() {
 }
 
 // Top-level newbie variant — composes all newbie sub-components with stagger (v2 mockup)
-export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOpenGymInfo, onOpenNotifications, onTab, onOpenOnboarding }) {
+export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPlans, onOpenGymInfo, onOpenNotifications, onTab, onOpenOnboarding }) {
   const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings)
 
   // Derive real initials from me.firstName (API-backed)
@@ -836,7 +843,7 @@ export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOp
       </div>
 
       {/* (2) HeroNewbie plan-card (stagger child 2) */}
-      <HeroNewbie onOpenPlans={onOpenPlans} />
+      <HeroNewbie onOpenPlans={onOpenPlans} isDark={isDark} />
 
       {/* (3) OnboardingStrip (stagger child 3) */}
       <OnboardingStrip
@@ -844,6 +851,7 @@ export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOp
         doneCount={doneCount}
         title={title}
         badge={badge}
+        isDark={isDark}
         onOpenPlans={onOpenPlans}
         onTab={onTab}
         onOpenOnboarding={onOpenOnboarding}
@@ -897,17 +905,20 @@ export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOp
           </div>
         </button>
 
-        {/* Chat tile — dark, typing bubble (D-LIVE: no fake unread badge/SLA) */}
+        {/* Chat tile — near-black in light. In dark, var(--text) bg inverts to
+            near-white, so re-skin as the accent tile (mirrors mockup dark override). */}
         <button
           type="button"
           onClick={() => onTab?.('chat')}
           className="press"
           style={{
-            borderRadius: 20, border: '0.5px solid var(--text)',
+            borderRadius: 20,
+            border: `0.5px solid ${isDark ? 'var(--accent)' : 'var(--text)'}`,
             padding: '15px 15px 16px', minHeight: 132,
             display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-            background: 'var(--text)', cursor: 'pointer', textAlign: 'left',
-            fontFamily: 'inherit', color: 'var(--bg)', appearance: 'none',
+            background: isDark ? 'var(--accent)' : 'var(--text)',
+            cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'inherit', color: isDark ? 'var(--on-accent)' : 'var(--bg)', appearance: 'none',
           }}
         >
           {/* Typing bubble illustration */}
@@ -916,12 +927,12 @@ export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOp
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
               width: 50, height: 38,
               borderRadius: '15px 15px 15px 5px',
-              background: 'rgba(255,255,255,0.13)',
+              background: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.13)',
             }}>
               {[0, 0.2, 0.4].map((delay, i) => (
                 <i key={i} style={{
                   display: 'block', width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--accent)',
+                  background: isDark ? 'var(--on-accent)' : 'var(--accent)',
                   animation: 'chat-dot 1.4s ease-in-out infinite',
                   animationDelay: `${delay}s`,
                   opacity: i === 0 ? 1 : i === 1 ? 0.7 : 0.45,
@@ -931,7 +942,12 @@ export function HomeNewbie({ me, homeData, bookings, userName, onOpenPlans, onOp
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.2px' }}>Чат</div>
-            <div style={{ marginTop: 2, fontSize: 12.5, lineHeight: 1.3, color: 'color-mix(in oklab, var(--bg) 62%, transparent)' }}>
+            <div style={{
+              marginTop: 2, fontSize: 12.5, lineHeight: 1.3,
+              color: isDark
+                ? 'color-mix(in oklab, var(--on-accent) 68%, transparent)'
+                : 'color-mix(in oklab, var(--bg) 62%, transparent)',
+            }}>
               админ + тренер
             </div>
           </div>
