@@ -4,12 +4,12 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 73 context gathered
-last_updated: "2026-06-01T21:23:33.810Z"
-last_activity: "2026-06-02 -- Completed quick task 260601-vxr: "Plan Activated" payment-success screen restyle (real membership card via existing endpoint; browser-verified)"
+last_updated: "2026-06-01T21:38:43.549Z"
+last_activity: 2026-06-01 -- Phase 73 execution started
 progress:
   total_phases: 11
   completed_phases: 8
-  total_plans: 43
+  total_plans: 44
   completed_plans: 43
   percent: 73
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.5 — client-pwa-onboarding-and-receipt-email
+**Current focus:** Phase 73 — downloads-home-html
 
 ## Current Position
 
-Phase: 999.5 (client-pwa-onboarding-and-receipt-email) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 999.5
-Last activity: 2026-06-02 -- Completed quick task 260601-vxr: "Plan Activated" payment-success screen restyle (real membership card via existing endpoint; browser-verified)
+Phase: 73 (downloads-home-html) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 73
+Last activity: 2026-06-01 -- Phase 73 execution started
 
 Progress: [██████████] 100%
 

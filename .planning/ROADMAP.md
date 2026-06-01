@@ -200,10 +200,10 @@ Plans:
 **Goal:** The active-subscription branch of `apps/client-pwa` `HomeScreen.jsx` renders the new `Home.html` mockup visual (HomeHeroCard with static «Свободно» occupancy widget + GymStatusPill, canonical SubCardSpot card across active/warn/danger tones, BookSpot «Запишись» CTA, large QR button, BookTile/ChatTile, FeedSection) using real API data and no new endpoints; the newbie branch (999.3/999.5), the `App.jsx` mount contract, and the co-located adapters/identity tests are unchanged and still green.
 **Requirements**: Decision-driven (CONTEXT D-01..D-11) — no formal REQUIREMENTS.md IDs; this is a visual restyle phase
 **Depends on:** Phase 72
-**Plans:** 1 plan (1 wave)
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 73-01-PLAN.md — Restyle active-subscription Home to the Home.html mockup: HomeHeroCard (static «Свободно» occupancy + GymStatusPill), canonical SubCardSpot across active/warn/danger, BookSpot «Запишись» CTA, big QR, BookTile/ChatTile, FeedSection; flip default subCardStyle 'eyebrow'→'spot'; newbie branch + App.jsx contract + adapters/identity tests preserved
+- [x] 73-01-PLAN.md — Restyle active-subscription Home to the Home.html mockup: HomeHeroCard (static «Свободно» occupancy + GymStatusPill), canonical SubCardSpot across active/warn/danger, BookSpot «Запишись» CTA, big QR, BookTile/ChatTile, FeedSection; flip default subCardStyle 'eyebrow'→'spot'; newbie branch + App.jsx contract + adapters/identity tests preserved
 
 ---
 
