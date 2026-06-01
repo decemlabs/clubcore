@@ -21,12 +21,18 @@ import type { paths } from '@clubcore/api-client'
 const CLIENT_CSRF_COOKIE = 'clubcore_client_csrf'
 
 // Client-side refresh-exempt paths (mirror staff AUTH_EXEMPT_PATHS shape — D-A3 equivalent)
+// Only the truly pre-auth / refresh-flow endpoints are exempt. /client/me is
+// deliberately NOT exempt: it is the boot auth-probe, so a 401 (expired 15-min
+// access token) MUST trigger the single-flight refresh and retry. Listing /me
+// here previously logged users out on every reload >15 min after login even
+// though their 30-day refresh token was still valid (the refresh was never
+// attempted on the probe). Anonymous boot still ends at login: the refresh also
+// 401s → session_expired.
 export const CLIENT_AUTH_EXEMPT_PATHS: readonly string[] = [
   '/api/v1/client/otp/request',
   '/api/v1/client/otp/verify',
   '/api/v1/client/session/refresh',
   '/api/v1/client/session/logout',
-  '/api/v1/client/me',
 ]
 
 function isClientAuthExempt(path: string): boolean {
