@@ -1,6 +1,5 @@
 import React from 'react';
 import { Icon } from '@/components/Icon.jsx';
-import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { useClientPlans, useClientPtPackages } from '@/data';
 
@@ -57,7 +56,6 @@ export const PlansSheet = ({ onClose, onPick, currentPlanId }) => {
   }, [membershipPlans, ptPackages]);
 
   const [picked, setPicked] = React.useState(null);
-  const [confirming, setConfirming] = React.useState(false);
 
   // Set default selection once data loads
   React.useEffect(() => {
@@ -89,15 +87,6 @@ export const PlansSheet = ({ onClose, onPick, currentPlanId }) => {
         </button>
       </div>
     );
-  }
-
-  if (confirming && plan) {
-    return <PlanConfirm
-      plan={plan}
-      onBack={() => setConfirming(false)}
-      onClose={onClose}
-      onPaid={() => { onPick && onPick(plan); onClose(); }}
-    />;
   }
 
   // Separate membership plans from PT packages for display
@@ -175,7 +164,7 @@ export const PlansSheet = ({ onClose, onPick, currentPlanId }) => {
         <button
           className="btn btn-accent"
           style={{ width: '100%', height: 54 }}
-          onClick={() => setConfirming(true)}
+          onClick={() => { if (plan) onPick?.(plan); }}
           disabled={!plan}
         >
           {plan?.id === currentPlanId
@@ -284,59 +273,6 @@ function PlanCard({ plan, selected, isCurrent, onSelect }) {
         </div>
       </div>
     </button>
-  );
-}
-
-// PlanConfirm shows checkout details and delegates actual payment to CheckoutSheet
-// via onPaid which opens CheckoutSheet with the selected planId+kind.
-function PlanConfirm({ plan, onBack, onClose, onPaid }) {
-  // Redirect to checkout — pass planId + kind to the checkout flow
-  const handleCheckout = () => {
-    // onPaid triggers App.jsx → ui.setCheckoutCtx({ kind, planId, ... })
-    onPaid();
-  };
-
-  return (
-    <div className="sheet" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <StatusBar />
-      <SheetTopBar title="Оплата" onBack={onBack} />
-
-      <div className="scroller" style={{ paddingTop: 0 }}>
-        <div style={{ padding: '8px 20px 16px' }}>
-          <div className="t-mini" style={{ color: 'var(--text-3)' }}>К оплате</div>
-          <div className="t-display" style={{ marginTop: 4, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
-            {plan.priceTotal.toLocaleString('ru-RU')} ₽
-          </div>
-          <div className="t-small" style={{ marginTop: 4 }}>
-            {plan.name} · {plan.period} · {plan.priceMonth.toLocaleString('ru-RU')} ₽/{plan.kind === 'pt' ? 'занятие' : 'мес'}
-          </div>
-        </div>
-
-        <div style={{ padding: '0 16px' }}>
-          <div className="card" style={{ padding: 4 }}>
-            <RowItem icon="card" label="Карта" value="Visa •••• 4821" sub="Привязанная по умолчанию" />
-            <Divider />
-            <RowItem icon="info" label="Возврат" value="14 дней" sub="Полный, если ни разу не приходил" />
-          </div>
-        </div>
-
-        <div style={{ height: 140 }} />
-      </div>
-
-      <div style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0,
-        padding: '12px 16px 20px',
-        background: 'linear-gradient(to top, var(--bg) 70%, transparent)',
-      }}>
-        <button
-          onClick={handleCheckout}
-          className="btn btn-accent"
-          style={{ width: '100%', height: 54 }}
-        >
-          Перейти к оплате · {plan.priceTotal.toLocaleString('ru-RU')} ₽
-        </button>
-      </div>
-    </div>
   );
 }
 
