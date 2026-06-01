@@ -79,14 +79,13 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
     setPromoCode('');
   };
 
-  const startPay = async () => {
-    // D-02/D-03: if email absent, show receipt-email gate before proceeding.
-    // Skip check when already in email-gate (gate calls startPay after saving).
-    if (!clientMe?.email && stage !== 'email-gate') {
-      setStage('email-gate');
-      return;
-    }
-
+  // WR-02 (Phase 999.5): single checkout-launch helper. Previously the
+  // mutateAsync(...)-then-redirect block (plus the forceOutcome / !ctx.planId demo
+  // guards) was copy-pasted across startPay, onSaved, and onSkip — and the gate
+  // copies omitted the demo guards, so a falsy ctx.planId on the gate path called
+  // mutateAsync({ planId: undefined }) instead of falling back. Centralizing here
+  // gives all three call sites identical guards + error handling.
+  const launchCheckout = async () => {
     // Demo mode override: if forceOutcome is set, use mock behavior.
     if (forceOutcome && forceOutcome !== 'ok') {
       setStage('paying');
@@ -138,6 +137,17 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
     }
   };
 
+  const startPay = async () => {
+    // D-02/D-03: if email absent, show receipt-email gate before proceeding.
+    // Skip check when already in email-gate (gate calls startPay after saving).
+    if (!clientMe?.email && stage !== 'email-gate') {
+      setStage('email-gate');
+      return;
+    }
+
+    await launchCheckout();
+  };
+
   if (stage === 'error') {
     return (
       <CheckoutError
@@ -154,57 +164,13 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
       <ReceiptEmailGate
         onSaved={() => {
           // Email saved — invalidation already fired by useUpdateClientEmail onSettled.
-          // Proceed directly to paying (startPay will skip gate since email now in cache).
-          setStage('paying');
-          // Call the actual pay logic directly (bypass gate re-check since we just set paying).
-          void (async () => {
-            try {
-              let result;
-              const appliedPromoCode = promoResult ? promoResult._validatedCode : undefined;
-              if (ctx.kind === 'sub') {
-                result = await checkoutMembership.mutateAsync({ planId: ctx.planId, promoCode: appliedPromoCode });
-                window.location.href = result.confirmationUrl;
-              } else {
-                const idemKey = idempotencyKey.current;
-                result = await checkoutPtPackage.mutateAsync({
-                  planId: ctx.planId,
-                  idempotencyKey: idemKey,
-                  promoCode: appliedPromoCode,
-                });
-                window.location.href = result.confirmationUrl;
-              }
-            } catch (err) {
-              const code = err?.code ?? err?.message ?? 'payment';
-              setErrorKind(mapApiErrorToKind(code));
-              setStage('error');
-            }
-          })();
+          // WR-02: launchCheckout owns the demo guards + redirect + error handling.
+          void launchCheckout();
         }}
         onSkip={() => {
           // D-10: no email collected; receipt goes to phone. Proceed to pay.
-          setStage('paying');
-          void (async () => {
-            try {
-              let result;
-              const appliedPromoCode = promoResult ? promoResult._validatedCode : undefined;
-              if (ctx.kind === 'sub') {
-                result = await checkoutMembership.mutateAsync({ planId: ctx.planId, promoCode: appliedPromoCode });
-                window.location.href = result.confirmationUrl;
-              } else {
-                const idemKey = idempotencyKey.current;
-                result = await checkoutPtPackage.mutateAsync({
-                  planId: ctx.planId,
-                  idempotencyKey: idemKey,
-                  promoCode: appliedPromoCode,
-                });
-                window.location.href = result.confirmationUrl;
-              }
-            } catch (err) {
-              const code = err?.code ?? err?.message ?? 'payment';
-              setErrorKind(mapApiErrorToKind(code));
-              setStage('error');
-            }
-          })();
+          // WR-02: launchCheckout owns the demo guards + redirect + error handling.
+          void launchCheckout();
         }}
         onBack={() => setStage('review')}
       />
