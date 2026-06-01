@@ -5,7 +5,7 @@ milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 999.5 UI-SPEC approved
 last_updated: "2026-06-01T13:51:32.653Z"
-last_activity: 2026-06-01 -- Phase 999.5 execution started
+last_activity: 2026-06-01 -- Completed quick task 260601-oan: newbie Home v2 restyle (auto tasks; human-verify pending)
 progress:
   total_phases: 10
   completed_phases: 7
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 Phase: 999.5 (client-pwa-onboarding-and-receipt-email) — EXECUTING
 Plan: 1 of 3
 Status: Executing Phase 999.5
-Last activity: 2026-06-01 -- Phase 999.5 execution started
+Last activity: 2026-06-01 -- Completed quick task 260601-oan: newbie Home v2 restyle (auto tasks; human-verify pending)
 
 Progress: [██████████] 100%
 
@@ -136,6 +136,7 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 | ID | Task | Date | Status |
 |----|------|------|--------|
 | 260601-luw | Remove client-pwa desktop device-frame wrapper — render full-bleed | 2026-06-01 | complete ✓ |
+| 260601-oan | Apply v2 visual design to client-pwa newbie Home (live-bind + graceful fallback) | 2026-06-01 | auto ✓ · human-verify pending |
 
 ## Session Continuity
 
