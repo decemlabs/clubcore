@@ -29,6 +29,75 @@ const PROMO_ERROR_MESSAGES = {
   inactive:       'Промокод неактивен',
 };
 
+// ─── Barbell SVG watermark (inline, accent-colored, aria-hidden) ─────────
+function BarbellMark() {
+  return (
+    <svg
+      className="co-pass-mark"
+      viewBox="0 0 200 120"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <rect x="40" y="54" width="120" height="12" rx="6" />
+      <rect x="52" y="44" width="9" height="32" rx="4" />
+      <rect x="139" y="44" width="9" height="32" rx="4" />
+      <rect x="30" y="38" width="14" height="44" rx="6" />
+      <rect x="156" y="38" width="14" height="44" rx="6" />
+      <rect x="18" y="48" width="11" height="24" rx="5" />
+      <rect x="171" y="48" width="11" height="24" rx="5" />
+    </svg>
+  );
+}
+
+// ─── Count-up hook — animates a kopeck value to a formatted money string ──
+// Respects prefers-reduced-motion: skips tween and snaps immediately.
+function useCountUp(targetKopecks, deps) {
+  const [display, setDisplay] = React.useState(() => formatMoney(targetKopecks));
+  const rafRef = React.useRef(null);
+  const prevRef = React.useRef(targetKopecks);
+
+  React.useEffect(() => {
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReduced) {
+      setDisplay(formatMoney(targetKopecks));
+      prevRef.current = targetKopecks;
+      return;
+    }
+
+    const from = prevRef.current;
+    const to = targetKopecks;
+    const dur = 440;
+    let start = null;
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
+    function step(t) {
+      if (start === null) start = t;
+      const pr = Math.min(1, (t - start) / dur);
+      const v = from + (to - from) * (1 - Math.pow(1 - pr, 3));
+      setDisplay(formatMoney(Math.round(v)));
+      if (pr < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        setDisplay(formatMoney(to));
+        prevRef.current = to;
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return display;
+}
+
 export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   const [stage, setStage] = React.useState('review'); // 'review' | 'email-gate' | 'paying' | 'error'
   const [errorKind, setErrorKind] = React.useState(null); // 'payment' | 'slot-busy' | 'offline' | 'email-required'
@@ -36,6 +105,10 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   const [promoLoading, setPromoLoading] = React.useState(false);
   const [promoError, setPromoError] = React.useState(null); // error code string | null
   const [promoResult, setPromoResult] = React.useState(null); // { discountKopecks, newAmountKopecks, discountType } | null
+
+  // Local in-sheet toast state
+  const [toast, setToast] = React.useState(null); // { message: string } | null
+  const toastTimerRef = React.useRef(null);
 
   // D-71-04: generate idempotency key once per checkout intent (for PT packages).
   const idempotencyKey = React.useRef(
@@ -54,6 +127,13 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   const total = promoResult ? promoResult.newAmountKopecks : ctx.amount;
   const discount = promoResult ? promoResult.discountKopecks : 0;
 
+  // ─── Toast helper ───────────────────────────────────────────────────────
+  const showToast = (message) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message });
+    toastTimerRef.current = setTimeout(() => setToast(null), 2600);
+  };
+
   // ─── Promo "Применить" handler ──────────────────────────────────────────
   const handlePromoApply = async () => {
     if (!promoCode || promoLoading) return;
@@ -65,6 +145,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
       // appliedPromoCode at checkout time uses the validated code, not the live
       // input state (which is disabled after validation but fragile as a correctness invariant).
       setPromoResult({ ...result, _validatedCode: promoCode });
+      showToast(`Промокод ${promoCode} применён`);
     } catch (err) {
       setPromoError(err?.code ?? 'not_found');
     } finally {
@@ -77,6 +158,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
     setPromoResult(null);
     setPromoError(null);
     setPromoCode('');
+    showToast('Промокод удалён');
   };
 
   // WR-02 (Phase 999.5): single checkout-launch helper. Previously the
@@ -199,6 +281,59 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   }
 
   return (
+    <ReviewStage
+      ctx={ctx}
+      total={total}
+      discount={discount}
+      promoCode={promoCode}
+      setPromoCode={setPromoCode}
+      promoLoading={promoLoading}
+      promoError={promoError}
+      setPromoError={setPromoError}
+      promoResult={promoResult}
+      handlePromoApply={handlePromoApply}
+      handlePromoRemove={handlePromoRemove}
+      startPay={startPay}
+      onClose={onClose}
+      forceOutcome={forceOutcome}
+      toast={toast}
+      showToast={showToast}
+    />
+  );
+};
+
+// ─── Review stage — v2 layout ───────────────────────────────────────────────
+function ReviewStage({
+  ctx,
+  total,
+  discount,
+  promoCode,
+  setPromoCode,
+  promoLoading,
+  promoError,
+  setPromoError,
+  promoResult,
+  handlePromoApply,
+  handlePromoRemove,
+  startPay,
+  onClose,
+  forceOutcome,
+  toast,
+  showToast,
+}) {
+  // Count-up for pay-bar total — animates whenever `total` changes
+  const totalDisplay = useCountUp(total, [total]);
+
+  // Savings bar widths
+  const savePct = total < ctx.amount
+    ? Math.round(discount / ctx.amount * 100)
+    : 0;
+  const payPct = 100 - savePct;
+
+  // Eyebrow label from ctx.kind
+  const eyebrow = ctx.kind === 'pt' ? 'Тренировки' : 'Абонемент';
+
+  return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 240,
       background: 'var(--bg)', display: 'flex', flexDirection: 'column',
@@ -226,150 +361,155 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
         <div style={{ width: 36 }} />
       </div>
 
-      <div className="scroller" style={{ paddingTop: 0 }}>
-        {/* Amount header */}
-        <div style={{ padding: '8px 20px 20px', textAlign: 'center' }}>
-          <div className="t-mini" style={{ color: 'var(--text-3)', marginTop: 8 }}>К ОПЛАТЕ</div>
-          <div style={{
-            fontSize: 44, fontWeight: 700, letterSpacing: -1.4,
-            fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-            marginTop: 4,
-          }}>
-            {formatMoney(total)}
-          </div>
-          {discount > 0 && (
-            <>
-              <div className="t-small" style={{ marginTop: 4, color: 'var(--accent-deep)', fontWeight: 600 }}>
-                Скидка −{formatMoney(discount)} применена
-              </div>
-              <div className="t-small" style={{ marginTop: 2, color: 'var(--text-3)', textDecoration: 'line-through' }}>
-                {formatMoney(ctx.amount)}
-              </div>
-            </>
-          )}
-        </div>
+      {/* Scrollable body */}
+      <div className="scroller" style={{ padding: '4px 18px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {/* Order summary */}
-        <div style={{ padding: '0 16px 12px' }}>
-          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>ЗАКАЗ</div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 10,
-                background: 'var(--surface-2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                <Icon name={ctx.kind === 'sub' ? 'card' : ctx.kind === 'pt' ? 'user' : 'tag'}
-                      size={20} color="var(--text)" />
+        {/* ── 1. Membership-pass hero ── */}
+        <div className="co-pass">
+          <BarbellMark />
+
+          <div className="co-pass-row">
+            <div className="co-brand">
+              <span className="co-brand-mark" aria-hidden="true">МЗ</span>
+              <span className="co-brand-name">
+                Мой зал
+                <span>Клубная карта</span>
+              </span>
+            </div>
+            {/* Duration pill — only render if ctx.subtitle is non-empty */}
+            {ctx.subtitle ? (
+              <span className="co-pass-pill">
+                <span className="co-pill-dot" aria-hidden="true" />
+                {ctx.subtitle}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="co-pass-body">
+            <div className="co-pass-eyebrow">{eyebrow}</div>
+            <div className="co-pass-name">{ctx.title}</div>
+            {ctx.subtitle && (
+              <div className="co-pass-meta">
+                <span>{ctx.subtitle}</span>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 650, letterSpacing: -0.1 }}>{ctx.title}</div>
-                <div className="t-small" style={{ marginTop: 2, color: 'var(--text-2)' }}>{ctx.subtitle}</div>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
+            )}
+          </div>
+
+          <div className="co-pass-foot">
+            <div>
+              <div className="co-pass-price-lbl">Стоимость</div>
+              {/* Base price — never discounted total (D-06) */}
+              <div className="co-pass-price">
                 {formatMoney(ctx.amount)}
               </div>
             </div>
-            {discount > 0 && (
-              <>
-                <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 16 }} />
-                <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span className="t-small" style={{ color: 'var(--accent-deep)' }}>Промокод {promoCode}</span>
-                  <span className="t-small" style={{ color: 'var(--accent-deep)', fontVariantNumeric: 'tabular-nums' }}>
-                    −{formatMoney(discount)}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Method info plate (D-01 — no in-app card picker) */}
-        <div style={{ padding: '0 16px 12px' }}>
-          <div className="card" style={{
-            padding: '12px 16px', borderRadius: 'var(--r-lg)',
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <Icon name="lock" size={16} color="var(--text-2)" />
-            <span className="t-small" style={{ color: 'var(--text-2)' }}>
-              Оплата на защищённой странице ЮKassa · Карта, СБП, Мир
+            <span className="co-pass-secure">
+              {/* Shield icon inline SVG — no Icon component name for "shield-check" */}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
+                <path d="M9.5 12l1.7 1.7 3.3-3.4" />
+              </svg>
+              Гарантия возврата
             </span>
           </div>
         </div>
 
-        {/* Promo code */}
-        <div style={{ padding: '0 16px 12px' }}>
-          <div className="card" style={{ padding: '4px 0', borderRadius: 'var(--r-lg)' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '0 16px',
-              borderRadius: promoError ? 'var(--r-lg)' : undefined,
-              boxShadow: promoResult ? '0 0 0 3px var(--accent-soft)' : undefined,
-            }}>
-              <Icon name="tag" size={16} color="var(--text-3)" />
-              <input
-                value={promoCode}
-                onChange={e => {
-                  setPromoCode(e.target.value.toUpperCase());
-                  if (promoError) setPromoError(null);
-                }}
-                placeholder="Промокод"
-                disabled={!!promoResult}
-                style={{
-                  flex: 1, minWidth: 0, width: '100%',
-                  border: 0, outline: 0, background: 'transparent',
-                  color: 'var(--text)', fontFamily: 'inherit', fontSize: 15,
-                  padding: '8px 0',
-                  borderColor: promoError ? 'var(--danger)' : undefined,
-                }}
-              />
-              {promoResult ? (
-                <button
-                  onClick={handlePromoRemove}
-                  style={{
-                    background: 'transparent', border: 0, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: 13, color: 'var(--text-2)',
-                    fontWeight: 400, padding: '8px 0', whiteSpace: 'nowrap',
-                    minHeight: 44,
-                  }}
-                >Убрать</button>
-              ) : (
-                <button
-                  onClick={handlePromoApply}
-                  disabled={!promoCode || promoLoading}
-                  style={{
-                    background: 'transparent', border: 0,
-                    cursor: promoCode && !promoLoading ? 'pointer' : 'default',
-                    fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
-                    color: promoCode && !promoLoading ? 'var(--accent-deep)' : 'var(--text-3)',
-                    padding: '8px 0', whiteSpace: 'nowrap',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    minHeight: 44,
-                  }}
-                >
-                  {promoLoading ? (
-                    <span className="ptr-spin" style={{ width: 13, height: 13 }} />
-                  ) : 'Применить'}
-                </button>
-              )}
+        {/* ── 2. Promo coupon ── */}
+        <div className="co-sec-label">Промокод<span className="co-ln" /></div>
+        <PromoSection
+          promoCode={promoCode}
+          setPromoCode={setPromoCode}
+          promoLoading={promoLoading}
+          promoError={promoError}
+          setPromoError={setPromoError}
+          promoResult={promoResult}
+          discount={discount}
+          handlePromoApply={handlePromoApply}
+          handlePromoRemove={handlePromoRemove}
+        />
+
+        {/* ── 3. Summary card ── */}
+        <div className="co-sec-label">Итог<span className="co-ln" /></div>
+        <div className="co-sum">
+          {/* Base row */}
+          <div className="co-sum-row">
+            <span>{ctx.title}</span>
+            <span className="co-sv">{formatMoney(ctx.amount)}</span>
+          </div>
+
+          {/* Discount row — only when promo applied */}
+          {discount > 0 && (
+            <div className="co-sum-row discount">
+              <span className="co-sl-tag">
+                Промокод{' '}
+                <span className="co-mini">{promoResult?._validatedCode ?? promoCode}</span>
+              </span>
+              <span className="co-sv">−{formatMoney(discount)}</span>
             </div>
-            {promoError && (
-              <div
-                role="alert"
-                className="t-small"
-                style={{ color: 'var(--danger)', padding: '4px 16px 8px' }}
-              >
-                {PROMO_ERROR_MESSAGES[promoError] ?? 'Промокод не найден'}
+          )}
+
+          {/* Total row */}
+          <div className="co-sum-total">
+            <div className="co-tt">
+              <span className="co-tl">
+                К оплате
+                <small>Все включено</small>
+              </span>
+              <span className="co-amount">{totalDisplay}</span>
+            </div>
+
+            {/* Savings bar — only when there is a real discount */}
+            <div className={`co-save-wrap${total < ctx.amount ? ' show' : ''}`}>
+              <div className="co-save-bar">
+                <span
+                  className="co-pay-seg"
+                  style={{ width: `${payPct}%` }}
+                />
+                <span
+                  className="co-save-seg"
+                  style={{ width: `${savePct}%` }}
+                />
               </div>
-            )}
+              <div className="co-save-legend">
+                <span className="co-sl">
+                  <span className="co-dotm" aria-hidden="true" />
+                  Ваша выгода
+                </span>
+                <span className="co-sl">
+                  <b>{formatMoney(discount)}</b>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* ── 4. Method plate ── */}
+        <div className="co-sec-label">Способ оплаты<span className="co-ln" /></div>
+        {/* D-01: static ЮKassa plate — no wallet/picker (cursor: default) */}
+        <div
+          className="co-method"
+          role="button"
+          tabIndex={0}
+          aria-label="Способ оплаты: ЮKassa"
+          onClick={() => showToast('ЮKassa · Способ оплаты подтверждён')}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') showToast('ЮKassa · Способ оплаты подтверждён'); }}
+          style={{ cursor: 'default' }}
+        >
+          <span className="co-method-logo" aria-hidden="true">Ю</span>
+          <div className="co-method-text">
+            <div className="co-method-name">ЮKassa</div>
+            <div className="co-method-sub">Карта, СБП, Мир</div>
+          </div>
+          <span className="co-method-lock" aria-hidden="true">
+            <Icon name="lock" size={18} color="var(--text-3)" strokeWidth={2} />
+          </span>
+        </div>
+
+        {/* Spacer for sticky paybar */}
         <div style={{ height: 110 }} />
       </div>
 
-      {/* Sticky pay bar */}
+      {/* ── Sticky pay bar ── */}
       <div style={{
         position: 'absolute', left: 0, right: 0, bottom: 0,
         padding: '16px 16px 24px',
@@ -388,7 +528,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
             cursor: (!ctx.planId && !forceOutcome) ? 'not-allowed' : 'pointer',
           }}
         >
-          Оплатить · {formatMoney(total)}
+          Оплатить · {totalDisplay}
         </button>
         <div className="t-mini" style={{
           textAlign: 'center', marginTop: 8, color: 'var(--text-3)',
@@ -398,9 +538,134 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
           Защищено · ЮKassa
         </div>
       </div>
+
+      {/* ── In-sheet toast ── */}
+      <div
+        className={`co-toast${toast ? ' show' : ''}`}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span className="co-toast-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12l5 5L20 7" />
+          </svg>
+        </span>
+        <span className="co-toast-tx">{toast?.message}</span>
+      </div>
     </div>
   );
-};
+}
+
+// ─── Promo section — coupon ticket with idle/applied/error states ────────────
+function PromoSection({
+  promoCode,
+  setPromoCode,
+  promoLoading,
+  promoError,
+  setPromoError,
+  promoResult,
+  discount,
+  handlePromoApply,
+  handlePromoRemove,
+}) {
+  const isApplied = !!promoResult;
+  const hasInput = promoCode.trim().length > 0;
+
+  const couponClass = [
+    'co-coupon',
+    promoError ? 'error' : '',
+    isApplied ? 'applied' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className={couponClass}>
+      <span className="co-coupon-glow" aria-hidden="true" />
+
+      {/* Idle / error input view */}
+      {!isApplied && (
+        <>
+          <div className="co-field">
+            <span className="co-tag-ic" aria-hidden="true">
+              {/* Tag icon SVG */}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-6.2-6.2A2 2 0 0 1 4 13V5a1 1 0 0 1 1-1h8a2 2 0 0 1 1.4.6l6.2 6.2a2 2 0 0 1 0 2.6z" />
+                <circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none" />
+              </svg>
+            </span>
+            <div className="co-input-wrap">
+              <div className="co-input-lbl">Есть промокод?</div>
+              <input
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="Промокод"
+                maxLength={16}
+                value={promoCode}
+                onChange={e => {
+                  setPromoCode(e.target.value.toUpperCase());
+                  if (promoError) setPromoError(null);
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') handlePromoApply(); }}
+                aria-label="Поле промокода"
+              />
+            </div>
+            <button
+              type="button"
+              className={`co-promo-apply${hasInput && !promoLoading ? ' ready' : ''}`}
+              onClick={handlePromoApply}
+              disabled={!promoCode || promoLoading}
+              aria-label="Применить промокод"
+            >
+              {promoLoading
+                ? <span className="ptr-spin" style={{ width: 14, height: 14 }} />
+                : 'Применить'
+              }
+            </button>
+          </div>
+
+          {/* Per-reason error (D-09) */}
+          {promoError && (
+            <div
+              role="alert"
+              className="co-promo-hint err"
+            >
+              {PROMO_ERROR_MESSAGES[promoError] ?? 'Промокод не найден'}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Applied view */}
+      {isApplied && (
+        <div className="co-applied-view">
+          <span className="co-av-check" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12l5 5L20 7" />
+            </svg>
+          </span>
+          <div className="co-av-text">
+            <div className="co-av-code">{promoResult._validatedCode}</div>
+            <div className="co-av-desc">
+              Скидка −{formatMoney(discount)} применена
+            </div>
+          </div>
+          <button
+            type="button"
+            className="co-av-remove"
+            onClick={handlePromoRemove}
+            aria-label="Удалить промокод"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Inline error states (D-12 — exactly 4 reachable kinds)
 function CheckoutError({ kind, onRetry, onClose }) {
