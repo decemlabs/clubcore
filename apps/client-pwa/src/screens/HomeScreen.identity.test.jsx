@@ -14,6 +14,7 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 // Mock the swap-seam data hooks so the render reflects controlled API truth.
 const useClientMe = vi.fn()
@@ -40,6 +41,14 @@ const baseProps = {
   setTweak: noop,
 }
 
+// HomeScreen calls useNavigate() (the newbie → /onboarding redirect, Phase 999.5),
+// so it must render inside a Router.
+const renderHome = () => render(
+  <MemoryRouter>
+    <HomeScreen {...baseProps} />
+  </MemoryRouter>,
+)
+
 beforeEach(() => {
   useClientMe.mockReset()
   useClientHome.mockReset()
@@ -58,7 +67,7 @@ describe('HomeScreen identity + empty-membership (real /client/me)', () => {
       refetch: noop,
     })
 
-    render(<HomeScreen {...baseProps} />)
+    renderHome()
     expect(screen.getByText('Иван')).toBeInTheDocument()
     expect(screen.queryByText('Саша')).not.toBeInTheDocument()
   })
@@ -72,7 +81,7 @@ describe('HomeScreen identity + empty-membership (real /client/me)', () => {
       refetch: noop,
     })
 
-    render(<HomeScreen {...baseProps} />)
+    renderHome()
     expect(screen.getByText('Нет абонемента')).toBeInTheDocument()
     expect(screen.getByText('Выбрать тариф')).toBeInTheDocument()
     expect(screen.queryByText('Годовой')).not.toBeInTheDocument()
@@ -91,11 +100,11 @@ describe('HomeScreen render gate (membershipState newbie vs lapsed vs active)', 
     })
     useClientBookings.mockReturnValue({ data: { items: [], total: 0 } })
 
-    render(<HomeScreen {...baseProps} />)
+    renderHome()
 
-    // Newbie copy must be present
-    expect(screen.getByText('Остался один шаг до зала')).toBeInTheDocument()
-    expect(screen.getByText('Выбрать абонемент')).toBeInTheDocument()
+    // Newbie copy must be present (v2 plan-card title + CTA)
+    expect(screen.getByText('Выбери свой абонемент')).toBeInTheDocument()
+    expect(screen.getByText('Оформить абонемент')).toBeInTheDocument()
     // Non-newbie copy must NOT be present
     expect(screen.queryByText('Нет абонемента')).not.toBeInTheDocument()
     expect(screen.queryByText('Годовой')).not.toBeInTheDocument()
@@ -111,10 +120,10 @@ describe('HomeScreen render gate (membershipState newbie vs lapsed vs active)', 
     })
     useClientBookings.mockReturnValue({ data: { items: [], total: 0 } })
 
-    render(<HomeScreen {...baseProps} />)
+    renderHome()
 
     // Newbie onboarding hero must NOT appear for lapsed members
-    expect(screen.queryByText('Остался один шаг до зала')).not.toBeInTheDocument()
+    expect(screen.queryByText('Выбери свой абонемент')).not.toBeInTheDocument()
   })
 
   it('does NOT render newbie CTA when membershipState === "active"', () => {
@@ -134,9 +143,9 @@ describe('HomeScreen render gate (membershipState newbie vs lapsed vs active)', 
     })
     useClientBookings.mockReturnValue({ data: { items: [], total: 0 } })
 
-    render(<HomeScreen {...baseProps} />)
+    renderHome()
 
     // Newbie CTA must NOT appear for active members
-    expect(screen.queryByText('Выбрать абонемент')).not.toBeInTheDocument()
+    expect(screen.queryByText('Оформить абонемент')).not.toBeInTheDocument()
   })
 })
