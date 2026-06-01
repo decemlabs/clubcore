@@ -92,6 +92,9 @@ class SeededDispatchScenario:
     customer_email: str
     audit_correlation_id: UUID
     amount_kopecks: int
+    # Phase 999.5 Plan 08: a phone-only fiscal_receipts row (email NULL) carries
+    # the 54-ФЗ fallback contact here; email-bearing scenarios leave it None.
+    customer_phone: str | None = None
 
 
 @pytest_asyncio.fixture
@@ -310,6 +313,90 @@ async def seeded_dispatch_scenario(
         customer_email=client.email or "",
         audit_correlation_id=corr,
         amount_kopecks=100_000,
+    )
+
+
+@pytest_asyncio.fixture
+async def seeded_dispatch_scenario_phone_only(
+    fiscal_db_session: AsyncSession,
+) -> SeededDispatchScenario:
+    """Phone-only variant: FiscalReceipt with customer_email NULL + customer_phone set.
+
+    Mirrors the Plan 08 webhook post-state for a «Чек не нужен» payment — the
+    fiscal_receipts row carries only the client's phone. The dispatch task must
+    forward ``customer_phone`` (not ``customer_email``) to ``create_receipt``.
+    """
+    session = fiscal_db_session
+
+    _owner_id, client, plan = await _seed_owner_client_plan(session)
+
+    yk_payment_id = f"yk-{uuid4().hex[:24]}"
+    corr = uuid4()
+    op = OnlinePayment(
+        client_id=client.id,
+        membership_plan_id=plan.id,
+        pt_package_plan_id=None,
+        yookassa_payment_id=yk_payment_id,
+        idempotency_key=uuid4().hex,
+        amount_kopecks=100_000,
+        status=STATUS_SUCCEEDED,
+        confirmation_url="https://example.com/confirm",
+        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+        audit_correlation_id=corr,
+    )
+    session.add(op)
+    await session.flush()
+
+    payment = Payment(
+        subject_kind="membership",
+        subject_id=plan.id,
+        amount_kopecks=100_000,
+        method="online",
+        received_by_user_id=None,
+    )
+    session.add(payment)
+    await session.flush()
+
+    audit_row = AuditLog(
+        actor_user_id=None,
+        actor_email_snapshot=None,
+        action="online_payment_succeeded",
+        resource_type="online_payment",
+        resource_id=op.id,
+        payload={
+            "audit_correlation_id": str(corr),
+            "online_payment_id": str(op.id),
+            "yookassa_payment_id": yk_payment_id,
+            "amount_kopecks": 100_000,
+            "payment_id": str(payment.id),
+        },
+    )
+    session.add(audit_row)
+    await session.flush()
+
+    fr = FiscalReceipt(
+        payment_id=payment.id,
+        kind=KIND_PAYMENT,
+        status=STATUS_SENT,
+        customer_email=None,
+        customer_phone=client.phone,
+        yookassa_receipt_id=None,
+        audit_correlation_id=corr,
+        sent_at=None,
+    )
+    session.add(fr)
+    await session.flush()
+    await session.commit()
+
+    return SeededDispatchScenario(
+        fiscal_receipt_id=fr.id,
+        payment_id=payment.id,
+        online_payment_id=op.id,
+        yookassa_payment_id=yk_payment_id,
+        customer_email="",
+        audit_correlation_id=corr,
+        amount_kopecks=100_000,
+        customer_phone=client.phone,
     )
 
 

@@ -317,6 +317,108 @@ async def test_dispatch_fiscal_receipt_does_not_leak_customer_email_to_structlog
                 )
 
 
+async def test_dispatch_fiscal_receipt_phone_only_forwards_phone_to_create_receipt(
+    arq_ctx: dict[str, Any],
+    fiscal_session_factory: async_sessionmaker[AsyncSession],
+    seeded_dispatch_scenario_phone_only: SeededDispatchScenario,
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """Phase 999.5 Plan 08 — phone-only row → create_receipt gets customer.phone.
+
+    A fiscal_receipts row with customer_email NULL + customer_phone set must
+    fiscalize to the phone: the POST /receipts body carries
+    ``receipt.customer.phone`` (NOT email), and on ok the receipt_id is stashed
+    without flipping status (webhook owns succeeded, D-51-13).
+    """
+    scenario = seeded_dispatch_scenario_phone_only
+    result = await dispatch_fiscal_receipt(arq_ctx, str(scenario.fiscal_receipt_id))
+    assert result == "sent"
+
+    routes = list(yookassa_create_receipt_ok.routes)
+    receipts_route = next(r for r in routes if "receipts" in str(r.pattern))
+    assert receipts_route.call_count == 1
+    import json as _json
+
+    body = _json.loads(receipts_route.calls.last.request.content)
+    customer = body["customer"]
+    assert customer == {"phone": scenario.customer_phone}, customer
+
+    fr = await _reload_fiscal_receipt(fiscal_session_factory, scenario.fiscal_receipt_id)
+    assert fr is not None
+    assert fr.yookassa_receipt_id == "rcpt_test_001"
+    assert fr.status == STATUS_SENT
+
+
+async def test_dispatch_fiscal_receipt_email_path_forwards_email_regression(
+    arq_ctx: dict[str, Any],
+    seeded_dispatch_scenario: SeededDispatchScenario,
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """Regression — an email-bearing row still posts receipt.customer.email only."""
+    scenario = seeded_dispatch_scenario
+    await dispatch_fiscal_receipt(arq_ctx, str(scenario.fiscal_receipt_id))
+
+    routes = list(yookassa_create_receipt_ok.routes)
+    receipts_route = next(r for r in routes if "receipts" in str(r.pattern))
+    assert receipts_route.call_count == 1
+    import json as _json
+
+    body = _json.loads(receipts_route.calls.last.request.content)
+    customer = body["customer"]
+    assert customer == {"email": scenario.customer_email}, customer
+
+
+async def test_dispatch_fiscal_receipt_phone_only_audit_records_phone(
+    arq_ctx: dict[str, Any],
+    fiscal_session_factory: async_sessionmaker[AsyncSession],
+    seeded_dispatch_scenario_phone_only: SeededDispatchScenario,
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """The fiscal_receipt_dispatched audit row records customer_phone (PII-OK in DB)."""
+    scenario = seeded_dispatch_scenario_phone_only
+    await dispatch_fiscal_receipt(arq_ctx, str(scenario.fiscal_receipt_id))
+
+    async with fiscal_session_factory() as session:
+        audit_row = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "fiscal_receipt_dispatched",
+                AuditLog.resource_id == scenario.fiscal_receipt_id,
+            )
+        )
+    assert audit_row is not None
+    assert audit_row.payload.get("customer_phone") == scenario.customer_phone
+    assert audit_row.payload.get("customer_email") is None
+
+
+async def test_dispatch_fiscal_receipt_phone_only_does_not_leak_phone_to_structlog(
+    arq_ctx: dict[str, Any],
+    seeded_dispatch_scenario_phone_only: SeededDispatchScenario,
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """T-999.5-12 — customer_phone never appears as a free-form structlog kwarg.
+
+    The audit.emit propagates its structured payload (incl. customer_phone) to a
+    structlog INFO under the ``customer_phone`` key; that key is allowed (it is
+    the audit payload, not a leak). Any OTHER kwarg carrying the phone value is a
+    leak and fails the test.
+    """
+    scenario = seeded_dispatch_scenario_phone_only
+    phone = scenario.customer_phone
+    assert phone
+
+    with structlog.testing.capture_logs() as cap:
+        await dispatch_fiscal_receipt(arq_ctx, str(scenario.fiscal_receipt_id))
+
+    for entry in cap:
+        for key, value in entry.items():
+            if key == "customer_phone":
+                continue
+            if isinstance(value, str):
+                assert phone not in value, (
+                    f"customer_phone leaked into structlog kwarg {key!r}={value!r}"
+                )
+
+
 # Compile-time assertion: re module is imported intentionally even though not
 # used dynamically in this test file (keeps future regex-based assertions
 # trivial to add without re-import churn).

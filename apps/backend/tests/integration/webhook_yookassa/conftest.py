@@ -364,23 +364,32 @@ class SeededOnlinePayment:
     yookassa_payment_id: str
     client_id: UUID
     client_email: str
+    client_phone: str
     membership_plan_id: UUID | None
     pt_package_plan_id: UUID | None
     audit_correlation_id: UUID
     amount_kopecks: int
 
 
-async def _seed_client(session: AsyncSession, *, email: str | None = None) -> Client:
-    """Insert a Client with a non-NULL email (PAY-06 precondition). The
-    OnlinePayment factory wires ``client_id`` to this row; the webhook UoW
-    narrow-SELECTs ``Client.email`` (Blocker #4) inside ``_read_customer_email``.
+async def _seed_client(
+    session: AsyncSession, *, email: str | None = None, phone_only: bool = False
+) -> Client:
+    """Insert a Client; the OnlinePayment factory wires ``client_id`` to this
+    row and the webhook UoW reads the receipt contact (email OR phone) via
+    ``_read_client_receipt_contact``.
+
+    D-10 (Phase 999.5) retired the PAY-06 email-NOT-NULL invariant: a phone-only
+    «Чек не нужен» client (email NULL, phone set) is valid. When
+    ``phone_only=True`` the email is persisted as NULL (NOT coerced to a default)
+    so the phone-only webhook path can be exercised end-to-end. Otherwise email
+    defaults to a generated address (back-compat with the email-bearing tests).
 
     Phase 49 sell-flow normally creates Clients via the cookie-jar'd API;
     Plan 50-06 webhook tests skip that scaffolding and INSERT directly via
     the SAVEPOINT-wrapped session.
     """
     nonce = uuid4().hex[:8]
-    resolved_email = email or f"phase50-webhook-{nonce}@example.com"
+    resolved_email = None if phone_only else email or f"phase50-webhook-{nonce}@example.com"
     # Clients table requires ``created_by_user_id`` (FK NOT NULL); seed an
     # owner first so the FK satisfies.
     from app.core.models import User
@@ -467,6 +476,7 @@ async def seeded_online_payment_pending(
         yookassa_payment_id=yk_id,
         client_id=client.id,
         client_email=client.email or "",
+        client_phone=client.phone,
         membership_plan_id=plan.id,
         pt_package_plan_id=None,
         audit_correlation_id=corr,
@@ -477,6 +487,50 @@ async def seeded_online_payment_pending(
 # Legacy alias kept for back-compat with revision 1 of this plan and any
 # external callsites that reference the older name.
 seed_online_payment_pending = seeded_online_payment_pending
+
+
+@pytest_asyncio.fixture
+async def seeded_online_payment_pending_phone_only(
+    webhook_db_session: AsyncSession,
+) -> SeededOnlinePayment:
+    """Phone-only «Чек не нужен» seed: Client with email NULL + phone set.
+
+    Mirror of ``seeded_online_payment_pending`` but the client is seeded with
+    ``phone_only=True`` so ``clients.email IS NULL`` actually persists. Drives
+    the Plan 08 phone-only payment.succeeded path: the webhook must read the
+    phone (not raise on the NULL email) and persist a phone-carrying
+    fiscal_receipts row. ``client_email`` is the empty string (no email).
+    """
+    client = await _seed_client(webhook_db_session, phone_only=True)
+    plan = await _seed_membership_plan(webhook_db_session)
+    yk_id = f"yk-{uuid4().hex[:24]}"
+    corr = uuid4()
+    op = OnlinePayment(
+        client_id=client.id,
+        membership_plan_id=plan.id,
+        pt_package_plan_id=None,
+        yookassa_payment_id=yk_id,
+        idempotency_key=uuid4().hex,
+        amount_kopecks=100_000,
+        status=STATUS_PENDING,
+        confirmation_url="https://example.com/confirm",
+        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+        audit_correlation_id=corr,
+    )
+    webhook_db_session.add(op)
+    await webhook_db_session.flush()
+    await webhook_db_session.commit()
+    return SeededOnlinePayment(
+        online_payment_id=op.id,
+        yookassa_payment_id=yk_id,
+        client_id=client.id,
+        client_email="",
+        client_phone=client.phone,
+        membership_plan_id=plan.id,
+        pt_package_plan_id=None,
+        audit_correlation_id=corr,
+        amount_kopecks=100_000,
+    )
 
 
 @pytest_asyncio.fixture
@@ -508,6 +562,7 @@ async def seeded_online_payment_pending_pt_package(
         yookassa_payment_id=yk_id,
         client_id=client.id,
         client_email=client.email or "",
+        client_phone=client.phone,
         membership_plan_id=None,
         pt_package_plan_id=plan.id,
         audit_correlation_id=corr,
