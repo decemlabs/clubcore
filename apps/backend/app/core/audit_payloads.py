@@ -930,10 +930,12 @@ class FiscalReceiptDispatchedPayload(BaseModel):
 
     Emitted when the ARQ fiscal-dispatch task posts the receipt to the
     ЮKassa 54-ФЗ endpoint. `kind` discriminates sale vs refund receipts
-    (drives parameter selection at the dispatch callsite). `customer_email`
-    is the recipient email captured at sale time (RF requirement: every
-    fiscal receipt MUST be delivered to the customer). `audit_correlation_id`
-    carries the originating online-payment chain UUID.
+    (drives parameter selection at the dispatch callsite). The receipt is
+    delivered to ONE contact (RF requirement: every fiscal receipt MUST be
+    delivered to the customer): `customer_email` when present, else
+    `customer_phone` (D-10 Phase 999.5 — «Чек не нужен» phone-only fallback).
+    Exactly one is non-None; audit-DB rows are PII-acceptable.
+    `audit_correlation_id` carries the originating online-payment chain UUID.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -942,7 +944,8 @@ class FiscalReceiptDispatchedPayload(BaseModel):
     fiscal_receipt_id: UUID
     payment_id: UUID
     kind: Literal["payment", "refund"]
-    customer_email: str
+    customer_email: str | None = None
+    customer_phone: str | None = None
 
 
 class FiscalReceiptSucceededPayload(BaseModel):

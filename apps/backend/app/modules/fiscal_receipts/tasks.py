@@ -294,6 +294,11 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
 
         kind = fr_row.kind
         customer_email = fr_row.customer_email
+        # D-10 (Phase 999.5): snapshot the phone too (inside the session block,
+        # before it closes for the HTTP call) so a phone-only «Чек не нужен»
+        # receipt fiscalizes to the phone. create_receipt routes to whichever
+        # contact is present (email preferred), so forward both verbatim.
+        customer_phone = fr_row.customer_phone
         yookassa_object_id = await _resolve_yookassa_object_id(session, fr_row)
         amount_kopecks = await _resolve_amount_kopecks(session, fr_row)
 
@@ -331,6 +336,7 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
     result = await yookassa_client.create_receipt(
         payment_id=yookassa_object_id,
         customer_email=customer_email,
+        customer_phone=customer_phone,
         items=items,
         tax_system_code=tax_system_code,
         idempotency_key=receipt_uuid.hex,  # deterministic per D-51-20
@@ -401,6 +407,9 @@ async def dispatch_fiscal_receipt(ctx: dict[str, Any], fiscal_receipt_id: str) -
             payment_id=str(fr_row.payment_id),
             kind=fr_row.kind,
             customer_email=fr_row.customer_email,
+            # D-10 (Phase 999.5): forensic completeness — audit-DB rows are
+            # PII-acceptable. NOT a structlog kwarg (T-999.5-12).
+            customer_phone=fr_row.customer_phone,
         )
         await session.commit()
 
