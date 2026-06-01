@@ -24,6 +24,13 @@ vi.mock('@/data', () => ({
   useClientMe: (...args) => useClientMe(...args),
   useClientHome: (...args) => useClientHome(...args),
   useClientBookings: (...args) => useClientBookings(...args),
+  // Newbie trainers tile reads TRAINERS (mock catalog) for the avatar stack.
+  TRAINERS: [
+    { id: 't1', name: 'Аня Соколова' },
+    { id: 't2', name: 'Марк Левин' },
+    { id: 't3', name: 'Лиза Орлова' },
+    { id: 't4', name: 'Денис Кравцов' },
+  ],
 }))
 
 import { HomeScreen } from './HomeScreen.jsx'

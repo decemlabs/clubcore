@@ -907,6 +907,12 @@ textarea:focus-visible {
   background: color-mix(in oklab, var(--accent-soft) 70%, var(--surface));
   border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
 }
+/* Dark theme: --accent-soft is a low-alpha hex, so the mixed tint nearly
+   vanishes over the dark surface — use a solid accent mix for a visible tint
+   (mirrors the mockup's dark --accent-soft = color-mix(accent 22%, surface)). */
+[data-theme="dark"] .step.done {
+  background: color-mix(in oklab, var(--accent) 16%, var(--surface));
+}
 
 /* Next step — dark border + icon ring */
 .step.next {

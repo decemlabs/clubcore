@@ -8,7 +8,7 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
-import { useClientHome, useClientMe, useClientBookings } from '@/data';
+import { useClientHome, useClientMe, useClientBookings, TRAINERS } from '@/data';
 import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 
 // ─── In-file adapter: API membership shape → existing subInfo render shape ───
@@ -878,24 +878,35 @@ export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPla
             fontFamily: 'inherit', color: 'var(--text)', appearance: 'none',
           }}
         >
-          {/* Anonymous avatar stack — 3 plain circles, no fake initials */}
+          {/* Avatar stack — initials + overflow count from TRAINERS (mock-sourced:
+              no live trainers endpoint on this screen yet) */}
           <div style={{ display: 'flex', alignItems: 'center' }} aria-hidden="true">
-            {[
-              'var(--accent)',
-              'color-mix(in oklab, var(--accent) 60%, #6ee7c4)',
-              'var(--accent-deep)',
-            ].map((bg, i) => (
-              <div key={i} style={{
+            {TRAINERS.slice(0, 3).map((tr, i) => (
+              <span key={tr.id} style={{
                 width: 34, height: 34, borderRadius: '50%',
                 border: '2.5px solid var(--surface)',
                 marginLeft: i === 0 ? 0 : -11,
-                background: bg,
+                background: i === 0
+                  ? 'var(--accent)'
+                  : i === 1 ? 'color-mix(in oklab, var(--accent) 60%, #6ee7c4)' : 'var(--accent-deep)',
+                color: i === 2 ? '#ffffff' : 'var(--on-accent)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
+                fontSize: 12, fontWeight: 700, flexShrink: 0,
               }}>
-                <Icon name="user" size={14} color="var(--on-accent)" strokeWidth={1.6} />
-              </div>
+                {[...tr.name.trim()][0]}
+              </span>
             ))}
+            {TRAINERS.length > 3 && (
+              <span style={{
+                width: 34, height: 34, borderRadius: '50%',
+                border: '2.5px solid var(--surface)', marginLeft: -11,
+                background: 'var(--surface-2)', color: 'var(--text-2)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700, flexShrink: 0,
+              }}>
+                +{TRAINERS.length - 3}
+              </span>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.2px' }}>Тренеры</div>
