@@ -359,7 +359,8 @@ export function HeroNewbie({ onOpenPlans, isDark }) {
             animation: 'pass-in 0.55s cubic-bezier(0.32,1.5,0.36,1) both',
           }}
         >
-          {/* Star badge */}
+          {/* Star badge — filled star (Icon's star is stroke-only; render inline
+              filled SVG so it shows, matching the mockup pp-star) */}
           <div style={{
             position: 'absolute', right: -9, top: -9,
             width: 30, height: 30, borderRadius: '50%',
@@ -367,7 +368,9 @@ export function HeroNewbie({ onOpenPlans, isDark }) {
             border: '3px solid var(--accent)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Icon name="star" size={15} color="currentColor" strokeWidth={0} />
+            <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor" aria-hidden="true">
+              <path d="M12 2.6l2.7 5.5 6 .9-4.35 4.24 1.03 6L12 20.4 6.62 19.24l1.03-6L3.3 9l6-.9z" />
+            </svg>
           </div>
           {/* Pass header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
