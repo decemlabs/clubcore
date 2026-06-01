@@ -2243,7 +2243,10 @@ textarea:focus-visible {
 
 /* Plan card */
 .pa-card {
-  margin-top: 14px;
+  /* margin-top: auto pushes the card (and the CTA below it) to the bottom of
+     the screen so the card sits right above the buttons; the flexible slack
+     lands above the card instead of between the card and the CTA. */
+  margin-top: auto;
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--r-lg);
@@ -2487,7 +2490,9 @@ textarea:focus-visible {
 
 /* CTA stack at bottom */
 .pa-actions {
-  margin-top: auto;
+  /* No margin-top:auto here — .pa-card owns the flexible push so the buttons
+     sit directly under the card (a small padding gap only). */
+  margin-top: 14px;
   padding-top: 12px;
   display: flex;
   flex-direction: column;
