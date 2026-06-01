@@ -157,7 +157,7 @@ export function HomeHeroCard({ userName, unread, onOpenGymInfo, onOpenNotificati
   };
 
   const bellBtn = (
-    <button onClick={onOpenNotifications} className="press" aria-label="Уведомления" style={{
+    <button type="button" onClick={onOpenNotifications} className="press" aria-label="Уведомления" style={{
       position: 'relative', width: 38, height: 38, borderRadius: 12,
       border: '0.5px solid var(--border)', background: 'var(--surface)', boxShadow: 'var(--sh-1)',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
@@ -204,7 +204,7 @@ export function HomeHeroCard({ userName, unread, onOpenGymInfo, onOpenNotificati
   );
 
   const gymTitle = (
-    <button onClick={onOpenGymInfo} className="press" style={{
+    <button type="button" onClick={onOpenGymInfo} className="press" style={{
       appearance: 'none', border: 0, background: 'transparent', padding: 0,
       textAlign: 'left', cursor: 'pointer', minWidth: 0, fontFamily: 'inherit', color: 'var(--text)',
     }}>
@@ -281,14 +281,6 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   const unread = 0;
   const [showToast, setShowToast] = React.useState(false);
 
-  const greeting = (() => {
-    const h = 9; // demo time
-    if (h < 5) return 'Доброй ночи';
-    if (h < 12) return 'Доброе утро';
-    if (h < 18) return 'Привет';
-    return 'Добрый вечер';
-  })();
-
   if (isLoading) {
     return (
       <div className="page" style={{ background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -330,7 +322,6 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
             homeData={homeData}
             bookings={bookings}
             userName={userName}
-            greeting={greeting}
             isDark={tweaks.theme === 'dark'}
             onOpenPlans={onOpenPlans}
             onOpenGymInfo={onOpenGymInfo}
@@ -1308,9 +1299,10 @@ export function ChatTile({ onClick, badge = 0 }) {
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
           {[0, 1, 2].map(i => (
-            <span key={i} className="chat-dot" style={{
+            <span key={i} style={{
               width: 6, height: 6, borderRadius: 999, background: 'var(--accent)',
-              opacity: 1 - i * 0.28, animationDelay: (i * 0.2) + 's',
+              opacity: 1 - i * 0.28,
+              animation: 'chat-dot 1.4s ease-in-out infinite', animationDelay: (i * 0.2) + 's',
             }} />
           ))}
         </span>
@@ -1351,9 +1343,7 @@ export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, userName, on
 
       {/* Subscription card — canonical SubCardSpot dark club-card (D-05/D-06) */}
       <div style={{ padding: '0 16px 12px' }}>
-        {subCardStyle === 'ring'
-          ? <SubCardPremium sub={sub} pct={pct} onOpenPlans={onOpenPlans} />
-          : <SubCardSpot sub={sub} pct={pct} userName={userName} onOpenPlans={onOpenPlans} />}
+        <SubCardSpot sub={sub} pct={pct} userName={userName} onOpenPlans={onOpenPlans} />
       </div>
 
       {/* Upcoming booking — tappable to manage; BookSpot CTA when no booking (D-09) */}
