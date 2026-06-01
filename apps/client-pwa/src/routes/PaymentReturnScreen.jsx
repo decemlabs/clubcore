@@ -18,9 +18,10 @@
  */
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useClientPaymentStatus } from '@/data';
+import { useClientPaymentStatus, useClientMe, useClientMembership } from '@/data';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
+import { formatRuDate } from '@/utils/format.js';
 
 // WR-02: after this many ms still pending, surface a manual exit so an
 // abandoned-payment user is never stranded on the spinner indefinitely.
@@ -144,7 +145,8 @@ export function PaymentReturnScreen() {
 
 /**
  * D-10: Success view — rendered ONLY when data.status === 'succeeded' (confirmed server truth).
- * Never shown while loading or pending. No card digits. Receipt link conditional on D-11.
+ * Never shown while loading or pending. Plan card fed by real membership endpoint, gated by D-10.
+ * Receipt link conditional on D-11. a11y: focus CTA on mount, aria-live region, aria-labels.
  */
 function PaymentSucceededView({ data, onDone }) {
   const primaryBtnRef = React.useRef(null);
@@ -154,29 +156,79 @@ function PaymentSucceededView({ data, onDone }) {
     primaryBtnRef.current?.focus();
   }, []);
 
+  // Personalized greeting — firstName from /client/me; fallback when absent.
+  const { data: meData } = useClientMe();
+  const firstName = meData?.firstName ?? '';
+
+  // D-10 anti-oracle gate: membership is ONLY fetched when status === 'succeeded'.
+  // data.status is already confirmed 'succeeded' here (caller branch guard), so
+  // passing true is safe — but wire it explicitly for clarity and future-proofing.
+  const { data: membership } = useClientMembership(data?.status === 'succeeded');
+
   return (
     <div className="page" style={{ background: 'var(--bg)' }}>
       <StatusBar />
-      <div className="state" aria-live="polite">
-        {/* State icon — ok tone: var(--accent) bg, check icon, color #06120c */}
-        <div className="state-icon ok">
-          <Icon name="check" size={44} strokeWidth={2.6} color="#06120c" />
+      {/* aria-live="polite" so screen readers announce the success state on mount */}
+      <div className="pa-screen" aria-live="polite" role="region" aria-label="Оплата подтверждена">
+
+        {/* ── Animated check medallion + confetti ── */}
+        <div
+          className="pa-check-hero"
+          aria-label="Анимированный знак подтверждения"
+          role="img"
+        >
+          {/* Confetti dots — decorative; hidden from assistive technology */}
+          <div className="pa-confetti" aria-hidden="true">
+            <i /><i /><i /><i /><i /><i /><i /><i />
+          </div>
+          {/* Check SVG — aria-hidden; region label covers the meaning */}
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            width={50}
+            height={50}
+            aria-hidden="true"
+          >
+            <path d="M5 12l5 5L20 6" />
+          </svg>
         </div>
 
-        <div className="state-title">Готово!</div>
-        <div className="state-desc">Оплата подтверждена.</div>
+        {/* ── Personalized headline ── */}
+        <div className="pa-title">
+          {firstName ? `Ты в команде, ${firstName}` : 'Ты в команде!'}
+        </div>
 
-        {/* D-09: receipt destination — info-only, no editing (anti-oracle: rendered
-            ONLY here inside the succeeded branch; never in loading/pending/canceled) */}
+        {/* ── Truthful sub copy — no hardcoded plan duration ── */}
+        <div className="pa-sub">
+          Оплата подтверждена. Доступ активен.
+        </div>
+
+        {/* ── Real plan card — rendered ONLY when membership is non-null ── */}
+        {membership && (
+          <div className="pa-card" aria-label="Активный абонемент">
+            <div className="pa-card-head">
+              <span className="pa-card-name">{membership.planNameSnapshot}</span>
+              {membership.status === 'active' && (
+                <span className="pa-badge">Активен</span>
+              )}
+            </div>
+            <div className="pa-card-meta">
+              Действует до {formatRuDate(membership.endDate)}
+            </div>
+            <div className="pa-days">
+              Впереди {membership.daysUntilEnd} дней
+            </div>
+          </div>
+        )}
+
+        {/* ── Receipt destination chip (anti-oracle: only in succeeded branch) ── */}
         {(data?.receiptEmail || data?.receiptPhone) && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, marginTop: 16,
-            padding: '10px 14px',
-            background: 'var(--surface)',
-            border: '0.5px solid var(--border)',
-            borderRadius: 'var(--r-md)',
-          }}>
-            <Icon name="mail" size={20} color="var(--text-2)" />
+          <div className="pa-receipt-chip">
+            <Icon name="mail" size={20} color="var(--text-2)" aria-hidden="true" />
             <div>
               <div style={{
                 fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
@@ -194,17 +246,9 @@ function PaymentSucceededView({ data, onDone }) {
           </div>
         )}
 
-        {/* state-actions at bottom */}
-        <div
-          className="state-actions"
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-          }}
-        >
-          {/* D-11: "Открыть чек" shown only when receiptUrl is non-null */}
+        {/* ── CTA stack ── */}
+        <div className="pa-actions">
+          {/* D-11: "Открыть чек" shown ONLY when receiptUrl is non-null */}
           {data?.receiptUrl && (
             <a
               href={data.receiptUrl}
@@ -212,10 +256,12 @@ function PaymentSucceededView({ data, onDone }) {
               rel="noreferrer"
               className="btn btn-ghost"
               style={{ height: 54, width: '100%', textDecoration: 'none' }}
+              aria-label="Открыть чек оплаты (новая вкладка)"
             >
               Открыть чек
             </a>
           )}
+          {/* Single primary CTA — focuses on mount via primaryBtnRef */}
           <button
             ref={primaryBtnRef}
             onClick={onDone}
