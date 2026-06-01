@@ -5,6 +5,8 @@
 :root {
   /* Accent (default jade) — overridden via Tweaks */
   --accent: #2dd4a4;
+  /* on-accent: text color to use on top of --accent backgrounds */
+  --on-accent: #06120c;
   --accent-deep: #0f9b76;
   --accent-soft: #d6f5ea;
 
