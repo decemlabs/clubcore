@@ -841,8 +841,20 @@
         "type": "object"
       },
       "ClientCheckoutRequest": {
-        "description": "Request body for client-initiated checkout (CPAY-01/02).\n\nNo fields for membership (plan_id in path); for PT the idempotency_key is\nsupplied via Idempotency-Key header (D-71-04), not body.",
-        "properties": {},
+        "description": "Request body for client-initiated checkout (CPAY-01/02).\n\nNo fields required for membership (plan_id in path); for PT the\nidempotency_key is supplied via Idempotency-Key header (D-71-04), not body.\nPhase 999.4 D-06: optional promo_code field (wire: promoCode).",
+        "properties": {
+          "promoCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promocode"
+          }
+        },
         "title": "ClientCheckoutRequest",
         "type": "object"
       },
@@ -1026,6 +1038,10 @@
               }
             ]
           },
+          "membershipState": {
+            "title": "Membershipstate",
+            "type": "string"
+          },
           "nextBooking": {
             "anyOf": [
               {
@@ -1040,47 +1056,15 @@
         "required": [
           "membership",
           "nextBooking",
-          "expiringSoon"
+          "expiringSoon",
+          "membershipState"
         ],
         "title": "ClientHomeResponse",
         "type": "object"
       },
-      "ClientMePatchRequest": {
-        "additionalProperties": false,
-        "description": "PATCH /client/me — email-only self-edit (D-04).\n\nName, birthday, phone, tags, and notes are staff-owned and read-only via\nthis endpoint; broader self-edit is deferred to a future phase.",
-        "properties": {
-          "email": {
-            "anyOf": [
-              {
-                "format": "email",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          }
-        },
-        "title": "ClientMePatchRequest",
-        "type": "object"
-      },
       "ClientMeResponse": {
-        "additionalProperties": false,
-        "description": "GET /client/me — core identity only (D-05).\n\nExcludes staff-internal fields (notes, tags, created_by_user_id,\nemergency_contact) and all membership data — membership status is\nPhase 69 scope (GET /client/membership).",
+        "description": "GET /client/me profile payload — includes onboarding + body-metrics fields (Phase 999.5).\n\ncamelCase wire via alias_generator=to_camel on ResponseData base:\n  first_name → firstName, last_name → lastName, height_cm → heightCm,\n  weight_kg → weightKg, onboarding_completed_at → onboardingCompletedAt.",
         "properties": {
-          "birthday": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Birthday"
-          },
           "email": {
             "anyOf": [
               {
@@ -1096,7 +1080,7 @@
             "title": "Firstname",
             "type": "string"
           },
-          "gender": {
+          "goal": {
             "anyOf": [
               {
                 "type": "string"
@@ -1105,7 +1089,18 @@
                 "type": "null"
               }
             ],
-            "title": "Gender"
+            "title": "Goal"
+          },
+          "heightCm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heightcm"
           },
           "id": {
             "format": "uuid",
@@ -1116,31 +1111,39 @@
             "title": "Lastname",
             "type": "string"
           },
-          "middleName": {
+          "onboardingCompletedAt": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Middlename"
+            "title": "Onboardingcompletedat"
           },
           "phone": {
             "title": "Phone",
             "type": "string"
+          },
+          "weightKg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weightkg"
           }
         },
         "required": [
           "id",
-          "phone",
-          "email",
           "firstName",
           "lastName",
-          "middleName",
-          "birthday",
-          "gender"
+          "phone"
         ],
         "title": "ClientMeResponse",
         "type": "object"
@@ -1297,12 +1300,45 @@
         "type": "object"
       },
       "ClientPaymentStatusResponse": {
-        "description": "Coarse payment status (CPAY-03 anti-oracle).\n\nOnly 'pending' | 'succeeded' | 'canceled' — never activation or membership details.",
+        "description": "Coarse payment status (CPAY-03 anti-oracle).\n\nOnly 'pending' | 'succeeded' | 'canceled' — never activation or membership details.\nPhase 999.4 D-11: receipt_url exposed when a ЮKassa fiscal receipt exists and succeeded.\nPhase 999.5 D-09/D-10: receipt_email and receipt_phone for post-payment receipt display.",
         "properties": {
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "receiptEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receiptemail"
+          },
+          "receiptPhone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receiptphone"
+          },
+          "receiptUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipturl"
           },
           "status": {
             "title": "Status",
@@ -1314,6 +1350,128 @@
           "status"
         ],
         "title": "ClientPaymentStatusResponse",
+        "type": "object"
+      },
+      "ClientProfileUpdateRequest": {
+        "description": "PATCH /client/me body — onboarding profile write (Phase 999.5 D-08).\n\nAll fields optional (partial update). camelCase wire via alias_generator.\nfirst_name writes to clients.first_name (wire: firstName — D-06).\ngoal, height_cm, weight_kg, onboarding_completed: new fields (Phase 999.5).\nemail: separate write path for receipt gate (D-02/D-10).\n\nNO server-side validation logic here — clamping/enum/email-format enforced\nin Plan 02 service layer. Wire-shape schema only.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "firstName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstname"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "heightCm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heightcm"
+          },
+          "onboardingCompleted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboardingcompleted"
+          },
+          "weightKg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weightkg"
+          }
+        },
+        "title": "ClientProfileUpdateRequest",
+        "type": "object"
+      },
+      "ClientPromoValidateRequest": {
+        "description": "POST /client/promo/validate request body (D-06).\n\ncamelCase wire: code, kind, planId (via alias_generator=to_camel on ResponseData).\nClient passes ONLY the code + product kind + planId — never a price (T-999.4-04).\nServer reads plan price and computes authoritative discounted amount.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "kind",
+          "planId"
+        ],
+        "title": "ClientPromoValidateRequest",
+        "type": "object"
+      },
+      "ClientPromoValidateResponse": {
+        "description": "Promo code validate response — server-authoritative discounted amounts (D-06).\n\ncamelCase wire: discountKopecks, newAmountKopecks, discountType.\nAll amounts in integer kopecks (BigInteger discipline — no float, no Decimal).",
+        "properties": {
+          "discountKopecks": {
+            "title": "Discountkopecks",
+            "type": "integer"
+          },
+          "discountType": {
+            "title": "Discounttype",
+            "type": "string"
+          },
+          "newAmountKopecks": {
+            "title": "Newamountkopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "discountKopecks",
+          "newAmountKopecks",
+          "discountType"
+        ],
+        "title": "ClientPromoValidateResponse",
         "type": "object"
       },
       "ClientPtSessionItem": {
@@ -4230,6 +4388,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[ClientPaymentStatusResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientPromoValidateResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientPromoValidateResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientPromoValidateResponse]",
         "type": "object"
       },
       "ResponseEnvelope_ClientQrTokenResponse_": {
@@ -7571,7 +7741,7 @@
     },
     "/api/v1/client/me": {
       "get": {
-        "description": "Return the authenticated client's core identity (D-05, T-68-27).\n\nNo CSRF check — GET is safe (D-09). Response excludes staff-internal fields\n(notes, tags, created_by_user_id, emergency_contact) and all membership data.",
+        "description": "GET /client/me — own profile read (Phase 999.5 D-08).\n\nD-20-IDOR: write is scoped to client.id from require_client() — never reads\na client_id from the request. Soft-deleted client → 404-collapse (D-20-IDOR).\nNo CSRF dep — GET is a safe method (RBAC-04).\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
         "operationId": "client_get_me",
         "responses": {
           "200": {
@@ -7585,19 +7755,20 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Get Client Me",
+        "summary": "Profile for the authenticated client including onboarding fields (Phase 999.5 D-08); name, goal, heightCm, weightKg, email, onboardingCompletedAt",
         "tags": [
+          "Client-Portal",
           "Client-Portal"
         ]
       },
       "patch": {
-        "description": "Update the authenticated client's email (D-04).\n\nReturns 409 with code 'email_unavailable' on duplicate email (D-06).\nNon-enumerating: no indication of which account holds the address.",
-        "operationId": "client_patch_me",
+        "description": "PATCH /client/me — partial own-profile write (Phase 999.5 D-08).\n\nIDOR (T-999.5-04): write is scoped to client.id from require_client() principal.\nThe client_id is NEVER accepted from the request body — a client can only write\ntheir own row; cross-client writes are structurally impossible.\n\nRBAC-04 ordering: require_client() -> verify_client_csrf -> get_db.\nT-999.5-08: verify_client_csrf dep on PATCH (state-changing method).\nD-05: onboarding_completed=True -> onboarding_completed_at stamped server-side.\nD-07: goal allow-list enforced in service (service.update_client_profile).\nD-10: email format validated server-side before write.\nD-08: height/weight clamped 140-210/40-150; first_name max 24 chars.\nNo try/except — AppError bubbles to _app_error_handler.\nCommit owner: caller-owns-txn (D-32-10/D-49-19); service never commits.",
+        "operationId": "client_update_me",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ClientMePatchRequest"
+                "$ref": "#/components/schemas/ClientProfileUpdateRequest"
               }
             }
           },
@@ -7618,8 +7789,9 @@
             "$ref": "#/components/responses/422_ValidationError"
           }
         },
-        "summary": "Patch Client Me",
+        "summary": "Partial profile update for the authenticated client (Phase 999.5 D-08); writes firstName, goal, heightCm, weightKg, onboardingCompletedAt, email. 422 with stable error code on validation failure (D-07/D-08/D-10).",
         "tags": [
+          "Client-Portal",
           "Client-Portal"
         ]
       }
@@ -7720,7 +7892,7 @@
     },
     "/api/v1/client/payments/{payment_id}/status": {
       "get": {
-        "description": "CPAY-03. Coarse payment status (Phase 71).\n\nAnti-oracle: returns only 'pending' | 'succeeded' | 'canceled' — never exposes\nmembership activation details or plan internals (T-71-05).\nD-20-IDOR: mandatory client_id filter in repository layer; None → NotFoundError → 404.\nA non-owned payment_id is indistinguishable from a non-existent one (404-collapse).\nNo CSRF dep — GET is safe (T-71-09: CSRF only on state-changing POST).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "description": "CPAY-03. Coarse payment status (Phase 71).\n\nAnti-oracle: returns only 'pending' | 'succeeded' | 'canceled' — never exposes\nmembership activation details or plan internals (T-71-05).\nD-20-IDOR: mandatory client_id filter in repository layer; None → NotFoundError → 404.\nA non-owned payment_id is indistinguishable from a non-existent one (404-collapse).\nNo CSRF dep — GET is safe (T-71-09: CSRF only on state-changing POST).\nNo try/except — AppError bubbles to _app_error_handler.\nPhase 999.4 D-11: receiptUrl populated from fiscal_receipts (succeeded only).",
         "operationId": "client_get_payment_status",
         "parameters": [
           {
@@ -7772,6 +7944,41 @@
           }
         },
         "summary": "Active membership plans catalog for the authenticated client (CPLAN-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/promo/validate": {
+      "post": {
+        "description": "D-06: validate promo code server-side, return authoritative discounted amount.\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nNo try/except — AppError bubbles to _app_error_handler.\nRead-only path — no session.commit() (D-32-10/D-49-19 caller-owns-txn).\nD-09: distinct error codes per failure reason (not_found / expired /\nnot_yet_active / used_up / not_applicable / inactive).\nT-999.4-04: client passes only code + kind + planId — never a price.\nT-999.4-06: require_client() gate first; validate logic unreachable unauthenticated.\nT-999.4-07: verify_client_csrf dep on this POST (RBAC-04).",
+        "operationId": "client_validate_promo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientPromoValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientPromoValidateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Validate a promo code and return the authoritative discounted amount (D-06); 422 with per-reason error code if invalid (D-09)",
         "tags": [
           "Client-Portal"
         ]
