@@ -28,7 +28,15 @@ export function TweaksProvider({ children }) {
     const a = deriveAccent(t.accent);
     r.style.setProperty('--accent', t.accent);
     r.style.setProperty('--accent-deep', a.deep);
-    r.style.setProperty('--accent-soft', a.soft);
+    // --accent-soft is theme-aware (mockup parity): light uses the hand-tuned
+    // pale preset; dark uses an opaque surface-blended tint so accent fills
+    // don't over-brighten. Inline so it tracks the active accent.
+    r.style.setProperty(
+      '--accent-soft',
+      t.theme === 'dark'
+        ? 'color-mix(in oklab, var(--accent) 22%, var(--surface))'
+        : a.soft,
+    );
   }, [t.theme, t.accent]);
 
   const value = useMemo(() => ({ t, setTweak }), [t, setTweak]);

@@ -50,25 +50,27 @@
 }
 
 [data-theme="dark"] {
-  /* Warm dark — deep espresso base, cream text. Hues lean ~30° (warm browns)
-     instead of neutral grays — reads more inviting than a straight inversion. */
-  --bg: #1a1511;
-  --surface: #221d17;
-  --surface-2: #2c2620;
-  --border: #3a3128;
-  --border-strong: #4a4035;
-  --text: #f4ebde;
-  --text-2: #c2b39d;
-  --text-3: #8a7c69;
-  --accent-soft: rgba(45, 212, 164, 0.18);
-  --warn-soft: rgba(233, 162, 59, 0.20);
+  /* Warm stone — aligned to the v2 mockup dark palette (neutral taupe, not the
+     old espresso/orange base). Tokens mirror Home (newbie) v2.html exactly. */
+  --bg: #1a1715;
+  --surface: #221f1d;
+  --surface-2: #2a2624;
+  --border: #34302d;
+  --border-strong: #46413d;
+  --text: #f5f2ef;
+  --text-2: #b5ada6;
+  --text-3: #7e756d;
+  /* Opaque surface-blended tint (mockup) — NOT a light-pale alpha. Also set
+     inline per-theme by TweaksContext so it tracks the active accent. */
+  --accent-soft: color-mix(in oklab, var(--accent) 22%, var(--surface));
+  --warn-soft: #3a2c18;
   --danger-soft: rgba(220, 38, 38, 0.18);
 
-  /* Avatar flips — cream avatar with espresso initials in dark */
-  --avatar-bg: #f4ebde;
-  --avatar-fg: #1a1511;
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sh-2: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 14px rgba(0, 0, 0, 0.3);
+  /* Avatar flips — cream avatar with stone initials in dark */
+  --avatar-bg: #f5f2ef;
+  --avatar-fg: #1a1715;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --sh-2: 0 1px 3px rgba(0, 0, 0, 0.45), 0 6px 18px rgba(0, 0, 0, 0.4);
   --sh-3: 0 8px 30px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
@@ -87,7 +89,7 @@ html, body {
   overscroll-behavior: none;
 }
 
-[data-theme="dark"] body { background: #0e0a07; }
+[data-theme="dark"] body { background: #0d0c0b; }
 
 button { font-family: inherit; }
 
