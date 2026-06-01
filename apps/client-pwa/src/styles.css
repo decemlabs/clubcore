@@ -2158,8 +2158,9 @@ textarea:focus-visible {
 .pa-check-hero {
   /* margin-top: auto + the card's margin-top: auto split the free vertical
      space evenly, so the header block (check/title/sub/chip) sits around the
-     middle while the plan card + CTA stay pinned to the bottom. */
-  margin: auto auto 18px;
+     middle while the plan card + CTA stay pinned to the bottom.
+     Bottom margin doubled (18->36) to widen the gap to the title. */
+  margin: auto auto 36px;
   width: 104px;
   height: 104px;
   flex-shrink: 0;
@@ -2224,7 +2225,7 @@ textarea:focus-visible {
 
 /* Headline — margin-top adds breathing room below the medallion */
 .pa-title {
-  margin-top: 14px;
+  margin-top: 28px;
   text-align: center;
   font-size: 28px;
   font-weight: 700;
