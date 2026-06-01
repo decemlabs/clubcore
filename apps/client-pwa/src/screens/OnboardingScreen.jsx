@@ -243,6 +243,7 @@ export function OnboardingScreen() {
   const [returnToReview, setReturnToReview] = React.useState(false)
   const [nameFocused, setNameFocused] = React.useState(false)
   const [submitError, setSubmitError] = React.useState(null)
+  const [skipError, setSkipError] = React.useState(null)
 
   const navigate = useNavigate()
   const updateProfile = useUpdateClientProfile()
@@ -304,13 +305,17 @@ export function OnboardingScreen() {
   }
 
   // ── Skip (D-05/D-08): ONLY the flag, no profile data ──────────────────────
+  // WR-05 (Phase 999.5): navigate ONLY on success. If the PATCH that stamps
+  // onboarding_completed_at fails, navigating to /home re-fires the auto-redirect
+  // gate (still !onboardingCompletedAt) and bounces the user back here — an
+  // unobservable loop. Surface a visible error and keep the user on the screen to retry.
   async function handleSkip() {
+    setSkipError(null)
     try {
       await completeOnboarding.mutateAsync()
       navigate('/home', { replace: true })
     } catch (_e) {
-      // If skip fails, still navigate — worst case the redirect fires again next login
-      navigate('/home', { replace: true })
+      setSkipError('Не удалось пропустить. Попробуйте снова.')
     }
   }
 
@@ -382,6 +387,13 @@ export function OnboardingScreen() {
           {idx === LAST ? 'Заполню позже' : 'Пропустить'}
         </button>
       </div>
+
+      {/* WR-05: skip-failure error — keeps the user on screen with a retry */}
+      {skipError && (
+        <div style={{ fontSize: 12.5, color: 'var(--danger)', textAlign: 'center', padding: '0 16px 4px' }}>
+          {skipError}
+        </div>
+      )}
 
       {/* ── Slides ───────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
