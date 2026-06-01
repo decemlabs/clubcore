@@ -1295,7 +1295,7 @@ export function ChatTile({ onClick, badge = 0 }) {
       <div style={{ position: 'relative', width: 'fit-content' }}>
         <span style={{
           width: 50, height: 38, borderRadius: '15px 15px 15px 5px',
-          background: 'rgba(255,255,255,0.13)',
+          background: 'color-mix(in oklab, var(--bg) 13%, transparent)',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
           {[0, 1, 2].map(i => (

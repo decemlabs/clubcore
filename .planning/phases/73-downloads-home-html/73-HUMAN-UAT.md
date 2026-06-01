@@ -46,3 +46,12 @@ skipped: 0
 blocked: 0
 
 ## Gaps
+
+### G1. ChatTile illustration blended into background on dark theme — RESOLVED
+found: human UAT (2026-06-02)
+detail: The inverted ChatTile (bg=var(--text), fg=var(--bg)) used a hardcoded
+  `rgba(255,255,255,0.13)` chat-bubble background. On dark theme the card bg flips
+  to light (var(--text)=#f5f2ef), so the white bubble blended in.
+fix: Bubble background now uses `color-mix(in oklab, var(--bg) 13%, transparent)`
+  — theme-symmetric (semantic token, no hardcoded color), visible in both themes.
+status: resolved
