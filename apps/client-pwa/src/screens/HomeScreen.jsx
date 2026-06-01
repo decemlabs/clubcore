@@ -481,40 +481,71 @@ export function HeroNewbie({ onOpenPlans }) {
   )
 }
 
-// Dismissible onboarding strip with 4 step chips and a progress bar
+// Dismissible onboarding strip — v2 circular ring + step chips (Plan 260601-oan)
 export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, onTab, onOpenOnboarding }) {
-  const [dismissed, setDismissed] = React.useState(false);
-  const [dismissing, setDismissing] = React.useState(false);
+  const [dismissed, setDismissed] = React.useState(false)
+  const [dismissing, setDismissing] = React.useState(false)
 
-  if (dismissed) return null;
+  if (dismissed) return null
 
   function handleDismiss() {
-    setDismissing(true);
-    setTimeout(() => setDismissed(true), 360);
+    setDismissing(true)
+    setTimeout(() => setDismissed(true), 360)
   }
 
   function handleStepClick(step) {
-    if (step.key === 'plan') onOpenPlans?.();
+    if (step.key === 'plan') onOpenPlans?.()
     // D-04: «Профиль» step re-enters the questionnaire via /onboarding (manual re-entry)
-    else if (step.key === 'profile') onOpenOnboarding?.();
-    else if (step.key === 'visit') onTab?.('book');
+    else if (step.key === 'profile') onOpenOnboarding?.()
+    else if (step.key === 'visit') onTab?.('book')
     // Step 1 (account, done) — no action
   }
 
-  const stepIcons = { account: 'user', plan: 'card', profile: 'user', visit: 'calendar' };
-  const fillPct = (doneCount / 4) * 100;
+  const stepIcons = { account: 'user', plan: 'card', profile: 'user', visit: 'calendar' }
+
+  // SVG ring math: r=24, circumference = 2·π·24 ≈ 150.8
+  const CIRC = 150.8
+  const ringOffset = CIRC * (1 - doneCount / 4)
 
   return (
     <div
       className={`card onboard-card${dismissing ? ' dismissing' : ''}`}
       style={{ margin: '0 16px 12px', overflow: 'hidden' }}
     >
-      {/* Header */}
+      {/* Header: [ring] [titles] [dismiss ×] */}
       <div style={{
-        padding: '14px 16px 10px',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10,
+        padding: '16px 16px 14px',
+        display: 'flex', alignItems: 'center', gap: 14,
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        {/* Circular progress ring — doneCount live-bound from deriveOnboardingSteps */}
+        <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }} aria-hidden="true">
+          <svg viewBox="0 0 56 56" width={56} height={56} style={{ display: 'block', transform: 'rotate(-90deg)' }}>
+            <circle
+              cx="28" cy="28" r="24" fill="none"
+              stroke="var(--border)" strokeWidth="5"
+            />
+            <circle
+              cx="28" cy="28" r="24" fill="none"
+              stroke="var(--accent)" strokeWidth="5"
+              strokeLinecap="round"
+              strokeDasharray={CIRC}
+              strokeDashoffset={ringOffset}
+              style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.32,0.72,0.2,1)' }}
+            />
+          </svg>
+          {/* Fraction overlay centered over ring */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 15, fontWeight: 800, letterSpacing: '-0.4px',
+            fontVariantNumeric: 'tabular-nums', color: 'var(--text)',
+          }}>
+            {doneCount}<small style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', marginLeft: 1 }}>/4</small>
+          </div>
+        </div>
+
+        {/* Titles */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{
             fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
             color: 'var(--accent-deep)',
@@ -523,55 +554,38 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent-deep)' }} />
             Старт новичка
           </div>
-          <div className="t-h3" style={{ fontSize: 15, fontWeight: 650, letterSpacing: '-0.15px' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px', lineHeight: 1.2 }}>
             {title}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{
-            fontSize: 12, fontWeight: 600, color: 'var(--text-2)',
-            fontVariantNumeric: 'tabular-nums',
-            background: 'var(--surface-2)', border: '0.5px solid var(--border)',
-            height: 24, padding: '0 9px', borderRadius: 999,
-            display: 'inline-flex', alignItems: 'center', letterSpacing: '-0.1px',
-            flexShrink: 0,
-          }}>
-            {badge}
-          </span>
-          <button
-            onClick={handleDismiss}
-            aria-label="Скрыть"
-            style={{
-              appearance: 'none', border: 0, width: 24, height: 24,
-              borderRadius: 999, background: 'transparent', color: 'var(--text-3)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', padding: 0,
-            }}
-          >
-            <Icon name="close" size={14} color="currentColor" strokeWidth={2} />
-          </button>
-        </div>
-      </div>
 
-      {/* Progress bar */}
-      <div style={{ padding: '0 16px 12px' }}>
-        <div className="progress-track">
-          <div className="onboard-fill" style={{ width: `${fillPct}%` }} />
-        </div>
+        {/* Dismiss × */}
+        <button
+          onClick={handleDismiss}
+          aria-label="Скрыть"
+          style={{
+            appearance: 'none', border: 0, width: 24, height: 24,
+            borderRadius: 999, background: 'transparent', color: 'var(--text-3)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', padding: 0, alignSelf: 'flex-start',
+          }}
+        >
+          <Icon name="close" size={14} color="currentColor" strokeWidth={2} />
+        </button>
       </div>
 
       {/* Step chips — horizontal scroll */}
       <div style={{
-        padding: '0 16px 12px',
+        padding: '0 16px 14px',
         display: 'flex', gap: 8,
         overflowX: 'auto', overflowY: 'hidden',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none',
       }}>
         {steps.map((step) => {
-          const isDone = step.state === 'done';
-          const isNext = step.state === 'next';
-          const clickable = step.key !== 'account';
+          const isDone = step.state === 'done'
+          const isNext = step.state === 'next'
+          const clickable = step.key !== 'account'
           return (
             <button
               key={step.key}
@@ -585,7 +599,7 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
                 background: isDone ? 'var(--accent)' : isNext ? 'var(--text)' : 'var(--surface)',
                 border: isDone ? '1.5px solid var(--accent)' : isNext ? '1.5px solid var(--text)' : '1.5px solid var(--border-strong)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                color: isDone ? '#06120c' : isNext ? 'var(--bg)' : 'var(--text-2)',
+                color: isDone ? 'var(--on-accent)' : isNext ? 'var(--bg)' : 'var(--text-2)',
                 flexShrink: 0,
               }}>
                 {isDone
@@ -605,51 +619,85 @@ export function OnboardingStrip({ steps, doneCount, title, badge, onOpenPlans, o
                 {step.meta}
               </span>
             </button>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
-// Dashed-border tappable row nudging client toward first visit (Первый визит)
+// Branded first-visit promo — v2 ticket card (Plan 260601-oan)
 export function FirstVisitNudge({ onTab }) {
   return (
-    <div style={{ margin: '0 16px 12px' }}>
-      <button
-        onClick={() => onTab?.('book')}
-        className="press"
-        style={{
-          width: '100%', appearance: 'none',
-          border: '0.5px dashed var(--border-strong)', background: 'transparent',
-          borderRadius: 'var(--r-md)', padding: '10px 14px',
-          display: 'flex', alignItems: 'center', gap: 12,
-          cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'var(--text)',
-        }}
-      >
+    <button
+      type="button"
+      onClick={() => onTab?.('book')}
+      className="press"
+      style={{
+        margin: '0 16px 12px', position: 'relative', overflow: 'hidden',
+        appearance: 'none',
+        border: '0.5px solid var(--border)',
+        borderRadius: 22,
+        background: 'var(--surface)',
+        padding: '15px 16px',
+        display: 'flex', alignItems: 'center', gap: 14,
+        width: 'calc(100% - 32px)',
+        cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+        color: 'var(--text)',
+        boxShadow: 'var(--sh-1)',
+      }}
+    >
+      {/* Ticket illustration with 0₽ badge */}
+      <span style={{ position: 'relative', flexShrink: 0 }}>
         <span style={{
-          width: 32, height: 32, borderRadius: 9,
-          background: 'var(--accent-soft)', color: 'var(--accent-deep)',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
+          width: 56, height: 56, borderRadius: 17,
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          boxShadow: '0 10px 22px color-mix(in oklab, var(--accent) 32%, transparent)',
         }}>
-          <Icon name="star" size={18} color="currentColor" strokeWidth={1.8} />
+          <Icon name="ticket" size={28} color="currentColor" strokeWidth={1.9} />
         </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, letterSpacing: '-0.15px', lineHeight: 1.25 }}>
-            Первый визит — бесплатно
-          </span>
-          <span className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.3, display: 'block' }}>
-            Экскурсия с админом · 30 мин
-          </span>
+        {/* «0 ₽» free badge */}
+        <span style={{
+          position: 'absolute', bottom: -7, right: -7,
+          height: 19, padding: '0 7px', borderRadius: 999,
+          background: 'var(--text)', color: 'var(--bg)',
+          fontSize: 10, fontWeight: 700, letterSpacing: '-0.1px',
+          display: 'inline-flex', alignItems: 'center',
+          border: '2px solid color-mix(in oklab, var(--accent-soft) 50%, var(--surface))',
+        }}>
+          0 ₽
         </span>
-        <Icon name="chevronRight" size={14} color="var(--text-3)" strokeWidth={2.2} />
-      </button>
-    </div>
-  );
+      </span>
+      {/* Body */}
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <div style={{
+          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+          color: 'var(--accent-deep)',
+        }}>
+          Для новичков
+        </div>
+        <div style={{ marginTop: 3, fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px', lineHeight: 1.2 }}>
+          Первый визит — бесплатно
+        </div>
+        <div style={{ marginTop: 2, fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.3 }}>
+          Экскурсия с тренером · 30 минут
+        </div>
+      </div>
+      {/* Go button */}
+      <span style={{
+        flexShrink: 0,
+        width: 32, height: 32, borderRadius: 999,
+        background: 'var(--text)', color: 'var(--bg)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon name="chevronRight" size={15} color="currentColor" strokeWidth={2.4} />
+      </span>
+    </button>
+  )
 }
 
-// Static non-interactive strip showing QR pass is locked until subscription paid
+// Static non-interactive strip — QR pass locked until subscription paid (v2 mockup)
 export function QrPlaceholder() {
   return (
     <div
@@ -670,21 +718,19 @@ export function QrPlaceholder() {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <Icon name="qr" size={18} color="currentColor" strokeWidth={1.8} />
+        <Icon name="qr" size={18} color="var(--text-3)" strokeWidth={1.8} />
       </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', color: 'var(--text-2)', lineHeight: 1.2 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', color: 'var(--text-2)', lineHeight: 1.2 }}>
           QR-пропуск
-        </span>
-        <span className="t-small" style={{ marginTop: 1, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.3, display: 'block' }}>
+        </div>
+        <div style={{ marginTop: 1, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.3 }}>
           Активируется после оплаты абонемента
-        </span>
-      </span>
-      <span style={{ color: 'var(--text-3)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="lock" size={16} color="currentColor" strokeWidth={1.8} />
-      </span>
+        </div>
+      </div>
+      <Icon name="lock" size={16} color="var(--text-3)" strokeWidth={1.8} />
     </div>
-  );
+  )
 }
 
 // Top-level newbie variant — composes all newbie sub-components with stagger (v2 mockup)
