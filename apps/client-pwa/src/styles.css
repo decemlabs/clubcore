@@ -2145,6 +2145,9 @@ textarea:focus-visible {
   scrollbar-width: none;
   display: flex;
   flex-direction: column;
+  /* Center the header column (check, title, sub, chip). The plan card and CTA
+     opt back into full width via width:100% so only the text block is centered. */
+  align-items: center;
   padding: 14px 22px 10px;
   position: relative;
   z-index: 1;
@@ -2247,6 +2250,8 @@ textarea:focus-visible {
      the screen so the card sits right above the buttons; the flexible slack
      lands above the card instead of between the card and the CTA. */
   margin-top: auto;
+  /* parent .pa-screen is align-items:center — stay full width */
+  width: 100%;
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--r-lg);
@@ -2493,6 +2498,8 @@ textarea:focus-visible {
   /* No margin-top:auto here — .pa-card owns the flexible push so the buttons
      sit directly under the card (a small padding gap only). */
   margin-top: 14px;
+  /* parent .pa-screen is align-items:center — stay full width */
+  width: 100%;
   padding-top: 12px;
   display: flex;
   flex-direction: column;
