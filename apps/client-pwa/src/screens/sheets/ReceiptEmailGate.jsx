@@ -103,92 +103,101 @@ export function ReceiptEmailGate({ onSaved, onSkip, onBack }) {
       {/* ── Scrollable body ─────────────────────────────────────────────────── */}
       <div className="scroller" style={{ padding: '4px 28px 0', flex: 1 }}>
 
-        {/* Spot illustration — aria-hidden (decorative) */}
+        {/* Spot illustration: fiscal receipt → email (aria-hidden, decorative).
+            Full-width, mirrors Email-for-Receipt mockup .illus 1:1. */}
         <div aria-hidden="true" style={{
-          position: 'relative',
-          width: 188, height: 188,
-          margin: '8px auto 0',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
+          position: 'relative', width: '100%', height: 166,
+          margin: '2px 0 4px', flexShrink: 0,
         }}>
-          {/* Halo */}
+          {/* Branded halo */}
           <div style={{
-            position: 'absolute', inset: 0, borderRadius: '50%',
-            background: 'radial-gradient(circle at 52% 52%, color-mix(in oklab, var(--accent) 22%, transparent) 0%, transparent 68%)',
+            position: 'absolute', left: '50%', top: '52%', transform: 'translate(-50%, -50%)',
+            width: 188, height: 188, borderRadius: '50%',
+            background: 'radial-gradient(circle, color-mix(in oklab, var(--accent) 18%, transparent) 0%, transparent 62%)',
           }} />
           {/* Outer dashed ring */}
           <div style={{
-            position: 'absolute', width: 198, height: 198,
-            borderRadius: '50%',
-            border: '1.5px dashed color-mix(in oklab, var(--accent) 24%, transparent)',
-            top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            position: 'absolute', left: '50%', top: '52%', transform: 'translate(-50%, -50%)',
+            width: 198, height: 198, borderRadius: '50%',
+            border: '1.5px dashed color-mix(in oklab, var(--accent) 45%, transparent)', opacity: 0.28,
           }} />
           {/* Inner dashed ring */}
           <div style={{
-            position: 'absolute', width: 150, height: 150,
-            borderRadius: '50%',
-            border: '1.5px dashed color-mix(in oklab, var(--accent) 42%, transparent)',
-            top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            position: 'absolute', left: '50%', top: '52%', transform: 'translate(-50%, -50%)',
+            width: 150, height: 150, borderRadius: '50%',
+            border: '1.5px dashed color-mix(in oklab, var(--accent) 45%, transparent)', opacity: 0.5,
           }} />
-          {/* Receipt card */}
-          <div style={{
-            width: 116, height: 136,
-            background: 'var(--surface)',
-            border: '0.5px solid var(--border)',
-            borderRadius: '8px 8px 0 0',
-            transform: 'rotate(-5deg)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            padding: '12px 10px',
-            display: 'flex', flexDirection: 'column', gap: 6,
-            flexShrink: 0,
-            animation: 'scene-in 0.46s cubic-bezier(0.32, 1.6, 0.32, 1)',
-          }}>
-            {/* Receipt line-items skeleton */}
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{
-                height: 8, borderRadius: 4,
-                background: i === 1 ? 'var(--border-strong)' : 'var(--border)',
-                width: i === 1 ? '80%' : i === 2 ? '60%' : '70%',
-              }} />
-            ))}
-            <div style={{ flex: 1 }} />
-            <div style={{ height: 1, background: 'var(--border)', marginBottom: 4 }} />
-            <div style={{
-              height: 10, borderRadius: 4,
-              background: 'color-mix(in oklab, var(--accent) 40%, var(--border))',
-              width: '90%',
-            }} />
-          </div>
-          {/* @ badge */}
-          <div style={{
-            position: 'absolute',
-            bottom: 16, right: 18,
-            width: 48, height: 48,
-            borderRadius: '50%',
-            background: 'var(--accent)',
-            border: '4px solid var(--bg)',
-            boxShadow: '0 12px 26px rgba(15,155,118,0.4)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            animation: 'pop 0.5s 0.1s cubic-bezier(0.32, 1.6, 0.32, 1) both',
-          }}>
-            <Icon name="mail" size={22} color="#06120c" strokeWidth={2.2} />
-          </div>
-          {/* Floating sparks */}
+
+          {/* Floating sparks — small accent squares + dots */}
           {[
-            { top: 14, left: 10, delay: '0s', size: 20 },
-            { top: 20, right: 14, delay: '0.6s', size: 16 },
-            { bottom: 30, left: 20, delay: '1.1s', size: 14 },
-            { bottom: 14, right: 32, delay: '0.3s', size: 18 },
+            { pos: { left: 30, top: 18 }, w: 9, h: 9, rot: '18deg', round: 3, bg: 'var(--accent-deep)', delay: '0s' },
+            { pos: { right: 36, top: 30 }, w: 7, h: 7, rot: '0deg', round: '50%', bg: 'var(--accent)', delay: '0.6s' },
+            { pos: { right: 58, bottom: 22 }, w: 6, h: 6, rot: '-12deg', round: 3, bg: 'var(--accent-deep)', delay: '1.1s' },
+            { pos: { left: 46, bottom: 26 }, w: 8, h: 8, rot: '0deg', round: '50%', bg: 'var(--accent)', delay: '0.3s' },
           ].map((sp, i) => (
-            <div key={i} style={{
-              position: 'absolute',
-              top: sp.top, left: sp.left, right: sp.right, bottom: sp.bottom,
-              width: sp.size, height: sp.size,
-              borderRadius: '50%',
-              background: 'color-mix(in oklab, var(--accent) 30%, var(--border))',
+            <span key={i} style={{
+              position: 'absolute', ...sp.pos,
+              width: sp.w, height: sp.h, borderRadius: sp.round,
+              background: sp.bg, transform: `rotate(${sp.rot})`,
               animation: `float 3.4s ${sp.delay} ease-in-out infinite`,
             }} />
           ))}
+
+          {/* Receipt slip — barbell mark, dashed separators, torn perforated edge, total row */}
+          <div style={{
+            position: 'absolute', left: '50%', top: '50%',
+            transform: 'translate(-50%, -50%) rotate(-5deg)',
+            width: 116, background: 'var(--surface)',
+            border: '0.5px solid var(--border)',
+            boxShadow: '0 14px 30px rgba(28,25,23,0.12), 0 2px 6px rgba(28,25,23,0.05)',
+            borderRadius: '10px 10px 0 0',
+            padding: '16px 15px 18px',
+            display: 'flex', flexDirection: 'column', gap: 8, zIndex: 2,
+            WebkitMask: 'linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat, radial-gradient(circle 5px at 50% 100%, #0000 96%, #000) bottom left / 14px 14px repeat-x',
+            mask: 'linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat, radial-gradient(circle 5px at 50% 100%, #0000 96%, #000) bottom left / 14px 14px repeat-x',
+            animation: 'scene-in 0.46s cubic-bezier(0.32, 1.6, 0.32, 1)',
+          }}>
+            {/* Header: barbell mark + title bar, dashed underline */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              paddingBottom: 8, borderBottom: '1.5px dashed var(--border-strong)',
+            }}>
+              <span style={{
+                width: 18, height: 18, borderRadius: 6,
+                background: 'var(--text)', color: 'var(--bg)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <Icon name="barbell" size={11} color="var(--bg)" strokeWidth={2.2} />
+              </span>
+              <span style={{ height: 5, width: 46, borderRadius: 999, background: 'var(--border-strong)' }} />
+            </div>
+            {/* Line items (w1 / w3 / w2) */}
+            <span style={{ height: 4, width: '100%', borderRadius: 999, background: 'var(--border)' }} />
+            <span style={{ height: 4, width: '86%', borderRadius: 999, background: 'var(--border)' }} />
+            <span style={{ height: 4, width: '72%', borderRadius: 999, background: 'var(--border)' }} />
+            {/* Total: dashed top, label + accent amount */}
+            <div style={{
+              marginTop: 3, paddingTop: 8,
+              borderTop: '1.5px dashed var(--border-strong)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <span style={{ height: 5, width: 26, borderRadius: 999, background: 'var(--border-strong)' }} />
+              <span style={{ height: 7, width: 38, borderRadius: 999, background: 'var(--accent)' }} />
+            </div>
+          </div>
+
+          {/* @ envelope badge — clipped to receipt's lower-right corner */}
+          <div style={{
+            position: 'absolute', right: 40, bottom: 30,
+            width: 58, height: 58, borderRadius: '50%',
+            background: 'var(--accent)', color: '#06120c',
+            border: '4px solid var(--bg)',
+            boxShadow: '0 12px 26px rgba(15,155,118,0.4)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', zIndex: 3,
+            animation: 'pop 0.5s 0.1s cubic-bezier(0.32, 1.6, 0.32, 1) both',
+          }}>
+            <Icon name="mail" size={30} color="#06120c" strokeWidth={2} />
+          </div>
         </div>
 
         {/* Heading + subtitle */}
