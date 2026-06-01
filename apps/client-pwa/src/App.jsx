@@ -219,11 +219,12 @@ export default function App() {
     }
   };
 
-  // Hide tab bar on sheets, login screen, onboarding, or while loading auth
+  // Hide tab bar on sheets, login screen, onboarding, payment return, or while loading auth
   const isLoginRoute = pathname === '/login';
   const isOnboardingRoute = pathname === '/onboarding';
+  const isPaymentReturnRoute = pathname === '/payment/return';
   const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen
-    || isLoginRoute || isOnboardingRoute || status === 'unknown' || status === 'anon';
+    || isLoginRoute || isOnboardingRoute || isPaymentReturnRoute || status === 'unknown' || status === 'anon';
 
   return (
     <div className="app-viewport">

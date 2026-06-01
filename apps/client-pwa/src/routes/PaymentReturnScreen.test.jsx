@@ -304,6 +304,32 @@ describe('PaymentReturnScreen anti-oracle gate', () => {
     expect(screen.queryByRole('button', { name: /Открыть QR-пропуск/ })).not.toBeInTheDocument()
   })
 
+  it('succeeded state with membership but no payment history: shows fallback receipt label', () => {
+    useClientPaymentStatus.mockReturnValue({
+      data: { id: 'test-id', status: 'succeeded', receiptUrl: null },
+      isLoading: false,
+    })
+    useClientMe.mockReturnValue({ data: { firstName: '' } })
+    useClientMembership.mockReturnValue({
+      data: {
+        id: 'mem-1',
+        planNameSnapshot: 'Базовый',
+        startDate: '2026-06-01',
+        endDate: '2026-09-01',
+        status: 'active',
+        daysUntilEnd: 92,
+        expiringSoon: false,
+      },
+    })
+    useClientPaymentHistory.mockReturnValue({ data: undefined })
+
+    render(<PaymentReturnScreen />)
+
+    // Fallback label shown when amount unavailable; no empty "Списано · "
+    expect(screen.getByText(/Оплата · картой/)).toBeInTheDocument()
+    expect(screen.queryByText(/Списано/)).not.toBeInTheDocument()
+  })
+
   it('succeeded state with payment history: shows paid amount in receipt-link row', () => {
     useClientPaymentStatus.mockReturnValue({
       data: { id: 'test-id', status: 'succeeded', receiptUrl: 'https://yookassa.ru/receipt/x' },

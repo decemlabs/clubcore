@@ -21,6 +21,13 @@
  * (static hardcoded copy), receipt-link row inside card (real amount from payment
  * history), two CTA buttons (QR-pass + home). QR button signals App shell via
  * navigate state { openQr: true } — App.jsx reads it once on HomeRoute mount.
+ *
+ * REVISION 2 (260601-vxr): User-feedback corrections.
+ * - Removed "ЧЕК ОТПРАВЛЕН НА" receipt-destination chip (not in mockup).
+ * - Receipt-link row now always renders inside the card (was gated on paidAmount/receiptUrl);
+ *   fallback label "Оплата · картой" shown when amount unavailable.
+ * - TabBar hidden on /payment/return via App.jsx hideTabBar (navigation not needed here).
+ * - Increased spacing between check medallion and headline (pa-title margin-top: 14px).
  */
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -309,52 +316,32 @@ function PaymentSucceededView({ data }) {
               </div>
             </div>
 
-            {/* Receipt-link row — amount (real from payment history) + "Открыть чек" (D-11) */}
-            {/* Show row when we have amount OR receiptUrl; hide if neither */}
-            {(paidAmount !== null || data?.receiptUrl) && (
-              <div className="pa-receipt-link">
-                <span className="pa-receipt-lbl">
-                  {paidAmount !== null ? (
-                    <>Списано · <b style={{ fontWeight: 600, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(paidAmount)}</b></>
-                  ) : null}
-                </span>
-                {/* D-11: "Открыть чек" only when receiptUrl is non-null */}
-                {data?.receiptUrl ? (
-                  <a
-                    href={data.receiptUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="pa-receipt-val"
-                    aria-label="Открыть чек оплаты (новая вкладка)"
-                  >
-                    Открыть чек
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" width={12} height={12} aria-hidden="true">
-                      <path d="M9 6l6 6-6 6" />
-                    </svg>
-                  </a>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Receipt destination chip (anti-oracle: only in succeeded branch) ── */}
-        {(data?.receiptEmail || data?.receiptPhone) && (
-          <div className="pa-receipt-chip">
-            <Icon name="mail" size={20} color="var(--text-2)" aria-hidden="true" />
-            <div>
-              <div style={{
-                fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
-                color: 'var(--text-3)', textTransform: 'uppercase',
-              }}>
-                ЧЕК ОТПРАВЛЕН НА
-              </div>
-              <div style={{
-                fontSize: 15, fontWeight: 650, letterSpacing: -0.2,
-                color: 'var(--text)',
-              }}>
-                {data.receiptEmail ?? data.receiptPhone}
-              </div>
+            {/* Receipt-link row — always shown inside the card (mockup footer).
+                Left: real paid amount when available; fallback neutral label if not.
+                Right: "Открыть чек" link only when receiptUrl is non-null (D-11). */}
+            <div className="pa-receipt-link">
+              <span className="pa-receipt-lbl">
+                {paidAmount !== null ? (
+                  <>Списано · <b style={{ fontWeight: 600, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(paidAmount)}</b></>
+                ) : (
+                  <>Оплата · картой</>
+                )}
+              </span>
+              {/* D-11: "Открыть чек" only when receiptUrl is non-null */}
+              {data?.receiptUrl ? (
+                <a
+                  href={data.receiptUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="pa-receipt-val"
+                  aria-label="Открыть чек оплаты (новая вкладка)"
+                >
+                  Открыть чек
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" width={12} height={12} aria-hidden="true">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </a>
+              ) : null}
             </div>
           </div>
         )}

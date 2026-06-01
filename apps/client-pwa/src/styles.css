@@ -2214,8 +2214,9 @@ textarea:focus-visible {
 .pa-confetti i:nth-child(7) { background: #fbbf24;            top: 50%; left: 50%; --tx: -100px; --ty:  100px; --rot:  30deg; }
 .pa-confetti i:nth-child(8) { background: #f87171;            top: 50%; left: 50%; --tx:  110px; --ty:  110px; --rot: -20deg; }
 
-/* Headline */
+/* Headline — margin-top adds breathing room below the medallion */
 .pa-title {
+  margin-top: 14px;
   text-align: center;
   font-size: 28px;
   font-weight: 700;
@@ -2480,18 +2481,6 @@ textarea:focus-visible {
   font-size: 12.5px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
-}
-
-/* Receipt destination chip — preserved from old succeeded view */
-.pa-receipt-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-  padding: 10px 14px;
-  background: var(--surface);
-  border: 0.5px solid var(--border);
-  border-radius: var(--r-md);
 }
 
 /* CTA stack at bottom */
