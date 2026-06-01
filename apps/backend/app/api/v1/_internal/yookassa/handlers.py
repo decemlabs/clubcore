@@ -246,25 +246,39 @@ def _assert_can_transition_receipt(row: FiscalReceipt, *, target: str) -> None:
         )
 
 
-async def _read_customer_email(session: AsyncSession, client_id: UUID) -> str:
-    """Fetch the client's email via a narrow scalar SELECT (Blocker #4).
+async def _read_client_receipt_contact(
+    session: AsyncSession, client_id: UUID
+) -> tuple[str | None, str]:
+    """Fetch the client's receipt contact (email OR phone) via a narrow SELECT.
 
-    NOT a relationship traversal: OnlinePayment does not declare a
-    ``client`` relationship, and even if it did the eager-load shape
-    would be the wrong contract here (we want a single column, not the
-    whole Client row inflated into the session identity map). Mirrors
-    ``online_payments/service.py:102-113`` (_read_client_email_or_raise).
+    Returns ``(email_or_None, phone)``. NOT a relationship traversal:
+    OnlinePayment declares no ``client`` relationship, and even if it did the
+    eager-load shape would be the wrong contract here (we want two columns, not
+    the whole Client row inflated into the session identity map). Local twin of
+    ``online_payments/service.py::_read_client_receipt_contact_or_raise`` — the
+    cross-module import is deliberately NOT taken (D-54-08; same reason the old
+    ``_read_customer_email`` was a local SELECT).
 
-    Phase 49 sell flow asserts ``clients.email IS NOT NULL`` before
-    creating the OnlinePayment row (PAY-06). Reaching here with a NULL
-    email means the email was scrubbed post-sale — an operational
-    anomaly. Raises ``RuntimeError`` so the webhook UoW rolls back and
-    ЮKassa retries (operator gets time to restore the email).
+    D-10 (Phase 999.5) RETIRED the obsolete Phase-49 PAY-06 invariant that
+    required ``clients.email IS NOT NULL`` before creating the OnlinePayment row.
+    A «Чек не нужен» phone-only client (email NULL, phone set) is valid: the
+    54-ФЗ receipt is fiscalized to the phone. So a NULL email is NO LONGER an
+    error here — only a genuinely orphaned ``client_id`` (no matching alive row)
+    rolls the webhook UoW back so ЮKassa retries (``RuntimeError`` preserved for
+    that case). Phone is DB NOT NULL via the OTP-auth invariant.
     """
-    email = await session.scalar(select(Client.email).where(Client.id == client_id))
-    if email is None:
-        raise RuntimeError(f"Client {client_id} has no email at webhook time")
-    return email
+    row = (
+        await session.execute(
+            select(Client.email, Client.phone).where(
+                Client.id == client_id, Client.deleted_at.is_(None)
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        raise RuntimeError(f"Client {client_id} not found at webhook time")
+    email: str | None = row.email
+    phone: str = row.phone  # NOT NULL — OTP-auth invariant
+    return email, phone
 
 
 async def _post_commit_enqueue(
@@ -407,9 +421,13 @@ async def handle_payment_succeeded(
         row.status = STATUS_SUCCEEDED
         row.succeeded_at = datetime.now(UTC)
 
-        # Blocker #4 — narrow scalar SELECT of clients.email, NOT relationship
-        # traversal. OnlinePayment has no client relationship wired.
-        customer_email = await _read_customer_email(session, row.client_id)
+        # Blocker #4 — narrow SELECT of clients.(email, phone), NOT relationship
+        # traversal. OnlinePayment has no client relationship wired. D-10
+        # (Phase 999.5): email-OR-phone — a phone-only client is valid, so a NULL
+        # email no longer raises (only a genuinely orphaned client_id does).
+        customer_email, customer_phone = await _read_client_receipt_contact(
+            session, row.client_id
+        )
 
         # Subject-kind dispatch. The 0034 CHECK constraint
         # `(membership_plan_id IS NOT NULL) <> (pt_package_plan_id IS NOT NULL)`
@@ -459,12 +477,16 @@ async def handle_payment_succeeded(
         # Phase 51 D-51-15: capture the inserted row + flush so ``fr_row.id``
         # is populated (server_default=gen_random_uuid()), so the post-commit
         # hook can enqueue dispatch_fiscal_receipt against the new UUID.
+        # D-10 (Phase 999.5): email-preferred-else-phone, never both — mirrors the
+        # create_payment contact routing (online_payments/service.py). The phone
+        # is the 54-ФЗ fallback when the client has no email («Чек не нужен»).
         fr_row = await insert_fiscal_receipt(
             session,
             payment_id=ledger_payment_id,
             kind=KIND_PAYMENT,
             status=STATUS_SENT,
             customer_email=customer_email,
+            customer_phone=(customer_phone if customer_email is None else None),
             audit_correlation_id=webhook_intake_corr,
             sent_at=datetime.now(UTC),
         )
