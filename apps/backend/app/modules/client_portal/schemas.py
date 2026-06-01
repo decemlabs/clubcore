@@ -302,6 +302,7 @@ class ClientMeResponse(ResponseData):
       weight_kg → weightKg, onboarding_completed_at → onboardingCompletedAt.
     """
 
+    id: UUID
     first_name: str
     last_name: str
     phone: str

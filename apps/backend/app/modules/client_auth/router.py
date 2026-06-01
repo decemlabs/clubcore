@@ -1,11 +1,16 @@
-"""Client auth router — /otp/request, /otp/verify, /session/refresh, /session/logout, /me.
+"""Client auth router — /otp/request, /otp/verify, /session/refresh, /session/logout.
+
+GET/PATCH /me live in client_portal/router.py (Phase 999.5 route consolidation):
+the duplicate /me pair here shadowed the onboarding-profile handlers under the
+shared /api/v1/client prefix (first-registered-wins). client_portal now owns /me,
+including the email round-trip + duplicate-email 409 this router used to serve.
 
 Phase 68 — isolated client principal (D-08/D-09).
 
 All handlers return ResponseEnvelope[X] per Phase 4 D-14 — no middleware wrapping.
 
 Dependency ordering (RBAC-04 / D-22):
-  - /session/logout and PATCH /me declare require_client() FIRST so an unauthenticated
+  - /session/logout declares require_client() FIRST so an unauthenticated
     caller 401s before any CSRF branch fires (401 before 403 invariant).
 
 Public endpoints (no auth dep):
@@ -20,8 +25,7 @@ Security decisions implemented:
   T-68-22  — /otp/request always returns 202 ResponseEnvelope[None] (no oracle)
   T-68-23  — PHONE_REGEX validated in schema (422 before any lookup)
   T-68-24  — require_client() decodes via decode_client_token (aud assertion — 401 on staff token)
-  T-68-25  — /session/logout + PATCH /me: auth dep before CSRF dep (RBAC-04)
-  T-68-27  — /me response is ClientMeResponse (core identity only)
+  T-68-25  — /session/logout: auth dep before CSRF dep (RBAC-04)
 """
 
 from typing import Annotated
@@ -42,8 +46,6 @@ from app.core.security import (
 )
 from app.modules.client_auth import service
 from app.modules.client_auth.schemas import (
-    ClientMePatchRequest,
-    ClientMeResponse,
     ClientOtpRequestBody,
     ClientOtpVerifyBody,
 )
@@ -166,40 +168,3 @@ async def client_session_logout(
         await service.revoke_client_session(session, redis, presented)
     clear_client_session_cookies(response, secure=settings.cookie_secure)
     return envelope(None)
-
-
-@router.get(
-    "/me",
-    response_model=ResponseEnvelope[ClientMeResponse],
-    operation_id="client_get_me",
-)
-async def get_client_me(
-    client: Annotated[ClientPrincipal, Depends(require_client())],
-) -> ResponseEnvelope[ClientMeResponse]:
-    """Return the authenticated client's core identity (D-05, T-68-27).
-
-    No CSRF check — GET is safe (D-09). Response excludes staff-internal fields
-    (notes, tags, created_by_user_id, emergency_contact) and all membership data.
-    """
-    return envelope(ClientMeResponse.model_validate(client, from_attributes=True))
-
-
-@router.patch(
-    "/me",
-    response_model=ResponseEnvelope[ClientMeResponse],
-    operation_id="client_patch_me",
-)
-async def patch_client_me(
-    payload: ClientMePatchRequest,
-    # RBAC-04 ordering: auth dep FIRST (T-68-25).
-    client: Annotated[ClientPrincipal, Depends(require_client())],
-    _csrf: Annotated[None, Depends(verify_client_csrf)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> ResponseEnvelope[ClientMeResponse]:
-    """Update the authenticated client's email (D-04).
-
-    Returns 409 with code 'email_unavailable' on duplicate email (D-06).
-    Non-enumerating: no indication of which account holds the address.
-    """
-    updated = await service.update_client_me(session, client.id, payload.email)
-    return envelope(ClientMeResponse.model_validate(updated, from_attributes=True))

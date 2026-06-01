@@ -28,12 +28,11 @@ from uuid import UUID, uuid4
 import structlog
 from redis.asyncio import Redis
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.config import get_settings
-from app.core.exceptions import ConflictError, InvalidAccessToken, InvalidSession
+from app.core.exceptions import InvalidAccessToken, InvalidSession
 from app.core.security import (
     encode_client_token,
     generate_csrf_token,
@@ -594,51 +593,3 @@ async def revoke_client_session(
     pipe.srem(f"auth:client:user_sessions:{client_id}", str(family_id))
     await pipe.execute()
 
-
-# ---------------------------------------------------------------------------
-# update_client_me — PATCH /client/me email-only (D-04/D-06)
-# ---------------------------------------------------------------------------
-
-
-async def update_client_me(
-    session: AsyncSession,
-    client_id: UUID,
-    email: str | None,
-) -> Client:
-    """Update authenticated client's email only (D-04).
-
-    Maps the partial-unique IntegrityError on lower(email) WHERE deleted_at IS NULL
-    to a generic domain error — 409 with code 'email_unavailable' (D-06).
-    Non-enumerating: no indication of which account holds it.
-    """
-    client = await session.scalar(
-        select(Client).where(
-            Client.id == client_id,
-            Client.deleted_at.is_(None),
-        )
-    )
-    if client is None:
-        raise InvalidSession("invalid_session")
-
-    client.email = email
-
-    # Pitfall 2: audit.emit BEFORE commit.
-    await audit.emit(
-        session,
-        "client_me_updated",
-        actor_user_id=None,
-        resource_type="client",
-        resource_id=client_id,
-        client_id=str(client_id),
-        fields_updated=["email"],
-    )
-
-    try:
-        await session.flush()
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        # D-06: generic non-enumerating 409 — do not reveal which account holds the email.
-        raise ConflictError("email_unavailable") from exc
-
-    return client

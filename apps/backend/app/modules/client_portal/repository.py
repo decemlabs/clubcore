@@ -22,9 +22,10 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.pagination import PaginatedData
 
 __all__ = (
@@ -543,7 +544,7 @@ async def fetch_client_me(
 
     CROSS-MODULE READ — raw SQL only (D-54-08/D-20-MODULE).
     Verified columns: clients (apps/backend/app/modules/clients/models.py):
-      first_name, last_name, phone, email, goal,
+      id, first_name, last_name, phone, email, goal,
       height_cm, weight_kg, onboarding_completed_at.
 
     IDOR: mandatory :client_id bind param + deleted_at IS NULL guard.
@@ -552,7 +553,7 @@ async def fetch_client_me(
     row = (
         await session.execute(
             text(
-                "SELECT first_name, last_name, phone, email, goal, "
+                "SELECT id, first_name, last_name, phone, email, goal, "
                 "  height_cm, weight_kg, onboarding_completed_at "
                 "FROM clients WHERE id = :client_id AND deleted_at IS NULL"
             ),
@@ -603,12 +604,22 @@ async def update_client_profile(
     if not sets:
         return  # no-op: nothing to write
 
-    await session.execute(
-        text(  # noqa: S608 — SET fragments are fixed literal strings, never user-supplied SQL
-            f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"
-        ),
-        bind,
-    )
+    # D-06 / route-consolidation: the partial-unique index on lower(email)
+    # WHERE deleted_at IS NULL raises IntegrityError on a duplicate email. Map it
+    # to a generic non-enumerating 409 (email_unavailable) — preserves the behavior
+    # the removed client_auth PATCH /me used to provide. flush() (not commit) so the
+    # constraint fires here while the caller still owns the txn (D-32-10/D-49-19).
+    try:
+        await session.execute(
+            text(  # noqa: S608 — SET fragments are fixed literal strings, never user-supplied SQL
+                f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"
+            ),
+            bind,
+        )
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ConflictError("email_unavailable") from exc
 
 
 async def fetch_client_payment_status(

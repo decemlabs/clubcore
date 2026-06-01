@@ -133,6 +133,7 @@ async def get_client_me(
     row = await repository.fetch_client_me(session, client_id)
     r: dict[str, Any] = row
     return ClientMeResponse(
+        id=cast(UUID, r["id"]),
         first_name=str(r["first_name"]),
         last_name=str(r["last_name"]),
         phone=str(r["phone"]),
