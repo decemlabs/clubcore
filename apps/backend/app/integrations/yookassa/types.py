@@ -67,6 +67,11 @@ class YooKassaPaymentResult:
 
     Failure variants carry ``error_code`` + ``http_status`` for forensic
     audit; the ``error`` string preserves the upstream message.
+    ``error_parameter`` (Plan 999.5-06) carries the ЮKassa error-envelope
+    ``parameter`` field (e.g. ``"Idempotence-Key"`` on a 400
+    ``invalid_request`` day-key collision) so the service core can make a
+    narrowly-gated single-retry decision; it defaults ``None`` on success and
+    on envelopes that omit the key (non-PII metadata).
 
     ``qr_payload`` (Phase 49 PAY-05 + BLOCKER #1) is populated only when
     ``confirmation_type='qr'`` was requested at ``create_payment`` time,
@@ -89,6 +94,7 @@ class YooKassaPaymentResult:
     http_status: int | None = None
     error: str | None = None
     qr_payload: str | None = None
+    error_parameter: str | None = None
 
 
 @dataclass(frozen=True)

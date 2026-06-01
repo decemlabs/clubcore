@@ -107,33 +107,48 @@ class YooKassaClient:
     def _classify_http_status_error(
         self,
         exc: httpx.HTTPStatusError,
-    ) -> tuple[Literal["validation_error", "transient_error", "permanent_error"], int, str | None]:
+    ) -> tuple[
+        Literal["validation_error", "transient_error", "permanent_error"],
+        int,
+        str | None,
+        str | None,
+    ]:
         """Map an httpx HTTPStatusError to the closed classification taxonomy.
 
-        Extracts ``error_code`` from the ЮKassa error envelope
-        (``{"type":"error","code":"...","description":"..."}``) when the body
-        parses; otherwise leaves it ``None``. The mapping itself is the
-        canonical D-48-10 split:
+        Extracts ``error_code`` AND ``error_parameter`` from the ЮKassa error
+        envelope (``{"type":"error","code":"...","parameter":"...",
+        "description":"..."}``) when the body parses; otherwise leaves them
+        ``None``. The mapping itself is the canonical D-48-10 split:
 
         - 422 → ``classification="validation_error"``
         - 5xx → ``classification="transient_error"``
         - all other 4xx → ``classification="permanent_error"``
+
+        ``error_parameter`` (Plan 999.5-06) is the envelope ``parameter`` field
+        (e.g. ``"Idempotence-Key"`` on a 400 ``invalid_request`` day-key
+        collision). The classification taxonomy is NOT widened — a 400
+        collision stays ``permanent_error`` here; the retry decision belongs to
+        the service core (separation of concerns).
         """
         status = exc.response.status_code
         error_code: str | None = None
+        error_parameter: str | None = None
         try:
             body = exc.response.json()
             if isinstance(body, dict):
                 raw = body.get("code")
                 if isinstance(raw, str):
                     error_code = raw
+                raw_param = body.get("parameter")
+                if isinstance(raw_param, str):
+                    error_parameter = raw_param
         except (json.JSONDecodeError, ValueError):
             error_code = None
         if status == 422:
-            return ("validation_error", status, error_code)
+            return ("validation_error", status, error_code, error_parameter)
         if status >= 500:
-            return ("transient_error", status, error_code)
-        return ("permanent_error", status, error_code)
+            return ("transient_error", status, error_code, error_parameter)
+        return ("permanent_error", status, error_code, error_parameter)
 
     async def create_payment(
         self,
@@ -248,17 +263,21 @@ class YooKassaClient:
                 qr_payload=qr_payload,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code = self._classify_http_status_error(exc)
+            classification, status, error_code, error_parameter = (
+                self._classify_http_status_error(exc)
+            )
             _log.warning(
                 f"yookassa_create_payment_{classification}",
                 http_status=status,
                 error_code=error_code,
+                error_parameter=error_parameter,
             )
             return YooKassaPaymentResult(
                 ok=False,
                 classification=classification,
                 http_status=status,
                 error_code=error_code,
+                error_parameter=error_parameter,
                 idempotency_key=result_idempotency_key,
                 error=str(exc),
             )
@@ -332,7 +351,9 @@ class YooKassaClient:
                 qr_payload=qr_payload,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code = self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = (
+                self._classify_http_status_error(exc)
+            )
             _log.warning(
                 f"yookassa_get_payment_{classification}",
                 http_status=status,
@@ -427,7 +448,9 @@ class YooKassaClient:
                 idempotency_key=idempotency_key,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code = self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = (
+                self._classify_http_status_error(exc)
+            )
             _log.warning(
                 f"yookassa_create_refund_{classification}",
                 http_status=status,
@@ -547,7 +570,9 @@ class YooKassaClient:
                 receipt_id=payload["id"],
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code = self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = (
+                self._classify_http_status_error(exc)
+            )
             _log.warning(
                 f"yookassa_create_receipt_{classification}",
                 http_status=status,
@@ -621,7 +646,9 @@ class YooKassaClient:
                 idempotency_key=None,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code = self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = (
+                self._classify_http_status_error(exc)
+            )
             _log.warning(
                 f"yookassa_get_refund_{classification}",
                 http_status=status,

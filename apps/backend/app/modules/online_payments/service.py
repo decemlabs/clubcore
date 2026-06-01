@@ -350,6 +350,44 @@ async def _sell_subject_core(
         return_url=return_url_override,  # CR-01/CR-02: None for staff (uses settings default)
     )
 
+    # 6b. Idempotence-Key collision single-retry (Plan 999.5-06 / UAT-10 fix).
+    #     The deterministic per-(subject_kind, plan_id, client_id, UTC-date) key
+    #     excludes the receipt contact. Phase 999.5's email-OR-phone gate makes
+    #     the SAME client+plan+day produce different receipt bodies (phone-only
+    #     «Чек не нужен» vs the email gate). Reusing the burned day-key with a
+    #     changed body → ЮKassa 400 invalid_request, parameter=Idempotence-Key →
+    #     permanent_error. A ЮKassa-rejected attempt INSERTs no row, so the
+    #     existing-row retry-key fallback (above) never fires and the burned key
+    #     locks the client out for ~24h. Retry ONCE with a fresh key, gated
+    #     narrowly on the ЮKassa envelope parameter so unrelated 400s are NOT
+    #     retried. Bounded to a single `if` (not a loop): a second collision
+    #     falls through to the permanent_error → BadGatewayAppError path
+    #     (T-999.5-G1-02 — no unbounded key churn). The replay short-circuit
+    #     above runs FIRST, so genuine same-body double-taps still replay.
+    if (
+        result.classification == "permanent_error"
+        and result.error_code == "invalid_request"
+        and result.error_parameter == "Idempotence-Key"
+    ):
+        # PII discipline (T-999.5-12 / T-999.5-G1-03): log only subject_kind +
+        # client_id — NEVER the idempotency key value or any receipt contact.
+        _log.warning(
+            "online_payment_idempotency_key_collision_retry",
+            subject_kind=subject_kind,
+            client_id=str(client_id),
+        )
+        idem_key = f"{idem_key}:retry-{uuid4().hex}"
+        result = await yookassa_client.create_payment(
+            amount_kopecks=price_kopecks,
+            description=description,
+            receipt_items=receipt_items,
+            customer_email=email,
+            customer_phone=(phone if email is None else None),
+            idempotency_key=idem_key,
+            confirmation_type=confirmation_type,
+            return_url=return_url_override,
+        )
+
     # 7. Switch on classification.
     if result.classification == "ok":
         assert result.payment_id is not None
