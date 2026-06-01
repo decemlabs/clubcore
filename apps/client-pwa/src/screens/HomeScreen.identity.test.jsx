@@ -4,7 +4,8 @@
  *
  * Asserts the wired Home screen reflects the real /client/me principal and the
  * genuine empty-membership state — not the mock 'Саша' / demo active card:
- *  (a) /client/me { firstName: 'Иван' } → header greeting shows "Иван".
+ *  (a) /client/me { firstName: 'Иван' } → header avatar initial shows "И"
+ *      (Phase 73: classic HomeHeroCard is a gym card, not a greeting line).
  *  (b) /client/home membership=null → "Нет абонемента" empty state + "Выбрать тариф"
  *      CTA renders (toSubInfo(null) danger path), NOT a fake active card.
  *  (c) membershipState==='newbie' → newbie onboarding renders (D-01/D-02).
@@ -65,7 +66,11 @@ beforeEach(() => {
 })
 
 describe('HomeScreen identity + empty-membership (real /client/me)', () => {
-  it('shows the real first name from /client/me in the greeting', () => {
+  it('reflects the real /client/me principal in the header avatar initial', () => {
+    // Phase 73 restyle: the classic HomeHeroCard header is a gym card (title +
+    // status + occupancy), not a greeting line — the real principal now surfaces
+    // via the avatar initial derived from me.firstName, not full-name text.
+    // The mock 'Саша' (initial 'С') still fails this, guarding the same regression.
     useClientMe.mockReturnValue({ data: { firstName: 'Иван', lastName: 'Петров' } })
     useClientHome.mockReturnValue({
       data: { membership: null, nextBooking: null },
@@ -75,7 +80,7 @@ describe('HomeScreen identity + empty-membership (real /client/me)', () => {
     })
 
     renderHome()
-    expect(screen.getByText('Иван')).toBeInTheDocument()
+    expect(screen.getByText('И')).toBeInTheDocument()
     expect(screen.queryByText('Саша')).not.toBeInTheDocument()
   })
 
