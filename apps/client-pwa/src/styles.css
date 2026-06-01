@@ -2156,7 +2156,10 @@ textarea:focus-visible {
 
 /* Animated check medallion — 104px round, accent bg */
 .pa-check-hero {
-  margin: 38px auto 18px;
+  /* margin-top: auto + the card's margin-top: auto split the free vertical
+     space evenly, so the header block (check/title/sub/chip) sits around the
+     middle while the plan card + CTA stay pinned to the bottom. */
+  margin: auto auto 18px;
   width: 104px;
   height: 104px;
   flex-shrink: 0;
