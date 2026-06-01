@@ -2285,7 +2285,196 @@ textarea:focus-visible {
   line-height: 1.35;
 }
 
-/* "Впереди N дней" line */
+/* Achievement chip — gamified welcome badge (star medallion + label) */
+@keyframes pa-achv-pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes pa-star-twinkle {
+  0%, 88%, 100% { transform: scale(1) rotate(0); }
+  93%           { transform: scale(1.22) rotate(18deg); }
+}
+.pa-achv {
+  align-self: center;
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 15px 0 7px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  box-shadow: var(--sh-1);
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+  cursor: default;
+  transform: scale(0.6);
+  opacity: 0;
+  animation: pa-achv-pop 0.55s 0.95s cubic-bezier(0.32, 1.6, 0.32, 1) forwards;
+}
+.pa-achv-star {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #06120c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pa-achv-star svg {
+  animation: pa-star-twinkle 4.8s 1.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Validity progress block — shown inside plan card at activation */
+.pa-validity {
+  margin-top: 12px;
+}
+.pa-validity-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.pa-validity-lbl {
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.pa-validity-lbl b {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pa-validity-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-deep);
+  font-variant-numeric: tabular-nums;
+}
+.pa-validity-track {
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 0.5px solid var(--border);
+  overflow: hidden;
+}
+.pa-validity-fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transition: width 1.15s cubic-bezier(0.32, 0.72, 0.2, 1) 0.7s;
+}
+
+/* Perks list — check-dot rows */
+.pa-perks {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pa-perk {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--text);
+  letter-spacing: -0.1px;
+}
+.pa-perk-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Receipt-link row inside plan card — "Списано · amount" + "Открыть чек ›" */
+.pa-receipt-link {
+  margin-top: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--border);
+  gap: 12px;
+}
+.pa-receipt-lbl {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.pa-receipt-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+@media (hover: hover) {
+  .pa-receipt-val:hover { color: var(--accent-deep); }
+}
+
+/* Live "Активен" badge — with pulse dot */
+.pa-badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--accent-deep);
+}
+@keyframes pa-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.18); }
+}
+.pa-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+  animation: pa-badge-pulse 2.1s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* Light-sweep shimmer on plan card (ambient animation) */
+@keyframes pa-card-sweep {
+  0%, 72%, 100% { left: -60%; }
+  86%            { left: 130%; }
+}
+.pa-card {
+  position: relative;
+  overflow: hidden;
+}
+.pa-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 50%;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent, color-mix(in oklab, var(--text) 7%, transparent), transparent);
+  transform: skewX(-18deg);
+  animation: pa-card-sweep 7s 1.4s ease-in-out infinite;
+}
+
+/* "Впереди N дней" line — legacy, kept for backward compat if any consumers reference it */
 .pa-days {
   margin-top: 6px;
   font-size: 12.5px;
@@ -2348,5 +2537,19 @@ textarea:focus-visible {
     opacity: 1;
     transform: translateY(0);
   }
+  /* Achievement chip — show at rest immediately */
+  .pa-achv {
+    animation: none;
+    opacity: 1;
+    transform: scale(1);
+  }
+  /* Star twinkle — stop */
+  .pa-achv-star svg { animation: none; }
+  /* Card sweep shimmer — hide */
+  .pa-card::after { animation: none; display: none; }
+  /* Live badge dot pulse — stop */
+  .pa-badge-dot { animation: none; }
+  /* Validity bar fill — show immediately without transition */
+  .pa-validity-fill { transition: none; }
 }
 

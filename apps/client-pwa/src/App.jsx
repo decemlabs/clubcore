@@ -96,6 +96,21 @@ function HomeRoute() {
   const { t, setTweak } = useTweaksCtx();
   const ui = useUI();
   const navigate = useNavigate();
+  const { state } = useLocation();
+
+  // One-shot QR open signal from PaymentSucceededView — navigate('/', { state: { openQr: true } }).
+  // Read once on mount and clear via replace so it doesn't re-open on back navigation.
+  const handledQrSignal = React.useRef(false);
+  React.useEffect(() => {
+    if (state?.openQr && !handledQrSignal.current) {
+      handledQrSignal.current = true;
+      ui.setQrOpen(true);
+      // Clear the state so navigating back/forward doesn't re-trigger.
+      navigate('/home', { replace: true, state: {} });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.openQr]);
+
   return (
     <HomeScreen
       tweaks={t}

@@ -360,8 +360,10 @@ export function useClientPtHistory(page = 1) {
   })
 }
 
-/** GET /api/v1/client/history/payments — payment history tab (CHIST-03) */
-export function useClientPaymentHistory(page = 1) {
+/** GET /api/v1/client/history/payments — payment history tab (CHIST-03).
+ *  `enabled` defaults to true for the profile history tab usage; pass false
+ *  to suppress the query (used on PaymentSucceededView for anti-oracle gating). */
+export function useClientPaymentHistory(page = 1, enabled = true) {
   return useQuery({
     queryKey: clientPortalKeys.paymentHistory(page),
     queryFn: async () => {
@@ -371,6 +373,7 @@ export function useClientPaymentHistory(page = 1) {
       return (res as { data: PaginatedResult<unknown> }).data
     },
     staleTime: 30_000,
+    enabled,
   })
 }
 
