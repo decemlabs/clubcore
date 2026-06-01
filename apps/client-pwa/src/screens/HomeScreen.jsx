@@ -51,13 +51,16 @@ export function toSubInfo(membership) {
 // Each step.state: 'done' | 'next' | 'pending'
 //   Step 1 Аккаунт  — always 'done'
 //   Step 2 Абонемент — always 'next' (the single actionable step; D-06)
-//   Step 3 Профиль   — 'done' iff me.birthday AND me.gender are truthy
+//   Step 3 Профиль   — 'done' iff onboarding is complete OR goal+height+weight are set
 //   Step 4 Визит     — 'done' iff client has any booking
 //
 // Returns { steps, doneCount, title, badge }
 // doneCount = steps where state === 'done' (the 'next' step is NOT counted)
 export function deriveOnboardingSteps(me, homeData, bookings) {
-  const profileDone = !!(me?.birthday && me?.gender)
+  // WR-01 (Phase 999.5): /client/me exposes goal/heightCm/weightKg/onboardingCompletedAt,
+  // NOT birthday/gender. Read the fields the questionnaire actually collects so the step
+  // can reach 'done' from live data.
+  const profileDone = !!(me?.onboardingCompletedAt || (me?.goal && me?.heightCm && me?.weightKg))
   const visitDone = !!(
     (bookings?.total ?? 0) > 0 ||
     (bookings?.items?.length ?? 0) > 0 ||
@@ -67,7 +70,7 @@ export function deriveOnboardingSteps(me, homeData, bookings) {
   const steps = [
     { key: 'account', label: 'Аккаунт',      meta: 'Создан',              state: 'done'               },
     { key: 'plan',    label: 'Абонемент',     meta: 'Не выбран',           state: 'next'               },
-    { key: 'profile', label: 'Профиль',       meta: 'Дата рождения, пол',  state: profileDone ? 'done' : 'pending' },
+    { key: 'profile', label: 'Профиль',       meta: 'Цель, рост, вес',     state: profileDone ? 'done' : 'pending' },
     { key: 'visit',   label: 'Первый визит',  meta: '30 мин экскурсия',    state: visitDone   ? 'done' : 'pending' },
   ]
 
