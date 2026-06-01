@@ -502,7 +502,8 @@ class YooKassaClient:
         self,
         *,
         payment_id: str,
-        customer_email: str,
+        customer_email: str | None = None,
+        customer_phone: str | None = None,
         items: list[dict[str, Any]],
         tax_system_code: int,
         idempotency_key: str,
@@ -532,19 +533,38 @@ class YooKassaClient:
         ``fiscal_receipts.yookassa_receipt_id`` and let the webhook FSM
         transition the row.
 
+        Receipt contact (D-10 Phase 999.5, mirrors ``create_payment``):
+        ``customer_email`` maps to ЮKassa ``receipt.customer.email`` key.
+        ``customer_phone`` maps to ЮKassa ``receipt.customer.phone`` key.
+        Exactly one must be supplied — email is preferred when present
+        (staff + email-gate paths); phone is the 54-ФЗ fallback when email
+        is absent («Чек не нужен» path). Both None is an invariant violation.
+
         PII discipline (Threat T-51-03-01): structlog events log only
         ``receipt_id`` / ``status`` / ``classification`` / ``http_status``.
-        ``customer_email`` NEVER appears in any ``_log.info`` /
-        ``_log.warning`` kwarg — audit-DB rows are PII-acceptable; structlog
-        is not.
+        ``customer_email`` / ``customer_phone`` NEVER appear in any
+        ``_log.info`` / ``_log.warning`` kwarg — audit-DB rows are
+        PII-acceptable; structlog is not.
 
         Returns ``YooKassaReceiptResult`` — never re-raises (SC1).
         """
+        # D-10 / T-999.5-G2-12: build customer object with the correct key —
+        # email maps to "email", phone maps to "phone", never crossed.
+        # Both None is an invariant violation (mirrors create_payment).
+        if customer_email is not None:
+            customer_obj: dict[str, str] = {"email": customer_email}
+        elif customer_phone is not None:
+            customer_obj = {"phone": customer_phone}
+        else:
+            raise ValueError(
+                "create_receipt requires either customer_email or customer_phone; "
+                "neither was provided (invariant violation)"
+            )
         link_field = "payment_id" if kind == "payment" else "refund_id"
         body: dict[str, Any] = {
             "type": kind,
             link_field: payment_id,
-            "customer": {"email": customer_email},
+            "customer": customer_obj,
             "items": items,
             "tax_system_code": int(tax_system_code),
             "send": True,

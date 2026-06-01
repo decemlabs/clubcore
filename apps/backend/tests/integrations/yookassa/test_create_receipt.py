@@ -213,6 +213,74 @@ async def test_create_receipt_kind_payment_uses_payment_id_field_name(
     assert body["send"] is True
 
 
+# ---------- email-OR-phone contact (Phase 999.5 Plan 07 / D-10) -------------
+
+
+@pytest.mark.asyncio
+async def test_create_receipt_email_path_posts_customer_email_only(
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """email present, phone None → body.customer == {"email": ...} (byte-identical to today)."""
+    route = yookassa_create_receipt_ok.routes[0]
+    async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+        client = YooKassaClient(http=http, settings=_test_settings())
+        await client.create_receipt(
+            **_receipt_kwargs(customer_email="a@b.ru", customer_phone=None)
+        )
+    body = json.loads(route.calls.last.request.content)
+    assert body["customer"] == {"email": "a@b.ru"}
+
+
+@pytest.mark.asyncio
+async def test_create_receipt_phone_path_posts_customer_phone_only(
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """phone present, email None → body.customer == {"phone": ...} — never {"email": "+7..."}."""
+    route = yookassa_create_receipt_ok.routes[0]
+    async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+        client = YooKassaClient(http=http, settings=_test_settings())
+        await client.create_receipt(
+            **_receipt_kwargs(customer_email=None, customer_phone="+79991234567")
+        )
+    body = json.loads(route.calls.last.request.content)
+    assert body["customer"] == {"phone": "+79991234567"}
+    assert "email" not in body["customer"]
+
+
+@pytest.mark.asyncio
+async def test_create_receipt_neither_contact_raises_value_error() -> None:
+    """Neither email nor phone → ValueError (neither-present invariant, mirrors create_payment)."""
+    async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+        client = YooKassaClient(http=http, settings=_test_settings())
+        with pytest.raises(ValueError, match="customer_email or customer_phone"):
+            await client.create_receipt(
+                **_receipt_kwargs(customer_email=None, customer_phone=None)
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_receipt_does_not_leak_customer_phone_to_structlog(
+    yookassa_create_receipt_ok: respx.MockRouter,
+) -> None:
+    """customer_phone MUST NOT appear in any structlog event kwarg (T-51-03-01)."""
+    leaky_phone = "+79990001122"
+    with structlog.testing.capture_logs() as logs:
+        async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+            client = YooKassaClient(http=http, settings=_test_settings())
+            await client.create_receipt(
+                **_receipt_kwargs(customer_email=None, customer_phone=leaky_phone)
+            )
+    for entry in logs:
+        for key, value in entry.items():
+            assert value != leaky_phone, (
+                f"PII leak: customer_phone {leaky_phone!r} appeared in log entry "
+                f"{entry!r} under key {key!r}"
+            )
+        assert "customer_phone" not in entry, (
+            f"PII leak: structlog event {entry!r} carries a 'customer_phone' kwarg"
+        )
+
+
 # ---------- PII discipline (Threat T-51-03-01) ------------------------------
 
 

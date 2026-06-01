@@ -27,17 +27,25 @@ async def insert_fiscal_receipt(  # noqa: SVC001 caller-owns-txn — webhook UoW
     payment_id: UUID,
     kind: str,
     status: str,
-    customer_email: str,
+    customer_email: str | None = None,
+    customer_phone: str | None = None,
     yookassa_receipt_id: str | None = None,
     audit_correlation_id: UUID | None = None,
     sent_at: datetime | None = None,
 ) -> FiscalReceipt:
-    """Insert FiscalReceipt row; caller owns flush + commit (D-50-28)."""
+    """Insert FiscalReceipt row; caller owns flush + commit (D-50-28).
+
+    Email-OR-phone contact (Phase 999.5 Plan 07 / D-10): supply ``customer_email``
+    (preferred) or ``customer_phone`` (54-ФЗ fallback for «Чек не нужен» phone-only
+    payments). The ck_fiscal_receipts_contact_present CHECK (DB + model) forbids a
+    both-NULL row.
+    """
     row = FiscalReceipt(
         payment_id=payment_id,
         kind=kind,
         status=status,
         customer_email=customer_email,
+        customer_phone=customer_phone,
         yookassa_receipt_id=yookassa_receipt_id,
         audit_correlation_id=audit_correlation_id,
         sent_at=sent_at,
