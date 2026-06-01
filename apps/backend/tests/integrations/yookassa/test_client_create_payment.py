@@ -171,6 +171,72 @@ async def test_create_payment_qr_422_classifies_validation_error(
     assert result.idempotency_key is None
 
 
+# ---------- error_parameter surfacing (Plan 999.5-06 Task 1) -------------------
+
+
+@pytest.mark.asyncio
+async def test_create_payment_400_idempotence_key_collision_surfaces_parameter() -> None:
+    """Plan 999.5-06 — a 400 invalid_request/Idempotence-Key surfaces error_parameter.
+
+    This is the exact ЮKassa envelope returned (PROVEN live in UAT-10) when a
+    deterministic day-key is reused with a changed receipt body. The client
+    keeps the classification at ``permanent_error`` (the retry decision belongs
+    to the service core) but MUST now thread the envelope ``parameter`` through.
+    """
+    with respx.mock(base_url=_BASE_URL, assert_all_called=False) as router:
+        router.post("payments").mock(
+            return_value=httpx.Response(
+                400,
+                json={
+                    "type": "error",
+                    "code": "invalid_request",
+                    "parameter": "Idempotence-Key",
+                    "description": (
+                        "You've already used this idempotence key for another "
+                        "request within the past 24 hours."
+                    ),
+                },
+            )
+        )
+        async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+            client = YooKassaClient(http=http, settings=_test_settings())
+            result = await client.create_payment(**_payment_kwargs())
+    assert result.classification == "permanent_error"
+    assert result.http_status == 400
+    assert result.error_code == "invalid_request"
+    assert result.error_parameter == "Idempotence-Key"
+
+
+@pytest.mark.asyncio
+async def test_create_payment_400_without_parameter_yields_none() -> None:
+    """Back-compat — a 400 with NO 'parameter' key leaves error_parameter None."""
+    with respx.mock(base_url=_BASE_URL, assert_all_called=False) as router:
+        router.post("payments").mock(
+            return_value=httpx.Response(
+                400,
+                json={"type": "error", "code": "invalid_request", "description": "bad"},
+            )
+        )
+        async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+            client = YooKassaClient(http=http, settings=_test_settings())
+            result = await client.create_payment(**_payment_kwargs())
+    assert result.classification == "permanent_error"
+    assert result.error_code == "invalid_request"
+    assert result.error_parameter is None
+
+
+@pytest.mark.asyncio
+async def test_create_payment_ok_leaves_error_parameter_none(
+    yookassa_create_payment_success: respx.MockRouter,
+) -> None:
+    """A successful create_payment defaults error_parameter to None."""
+    async with httpx.AsyncClient(base_url=_BASE_URL) as http:
+        client = YooKassaClient(http=http, settings=_test_settings())
+        result = await client.create_payment(**_payment_kwargs())
+    assert result.classification == "ok"
+    assert result.error_parameter is None
+
+
 # ---------- get_payment QR re-fetch (BLOCKER #1) -------------------------------
 
 
