@@ -169,7 +169,10 @@ export function useClientMe(enabled = true) {
  * Atomic single-submit on «Перейти в "Мой зал"» — steps held in local state until finish.
  * MUST include onboardingCompleted: true on the finish call (D-08) — omitting it causes
  * the auto-redirect loop to re-fire after completion (SUPERSEDED-PATTERN note in PLAN.md).
- * onSettled invalidates /client/me + /client/home so the onboarding gate reruns correctly.
+ * onSuccess seeds the /client/me cache with the authoritative PATCH response so a caller
+ * that navigates immediately (e.g. skip path) reads the updated onboardingCompletedAt and
+ * does NOT bounce back through the auto-redirect gate before the refetch lands (GAP-2).
+ * onSettled then invalidates /client/me + /client/home so the gate reruns on fresh data.
  */
 export function useUpdateClientProfile() {
   const qc = useQueryClient()
@@ -185,6 +188,9 @@ export function useUpdateClientProfile() {
       const res = await clientRequest('patch', '/api/v1/client/me', { body: payload })
       return (res as { data: ClientMeData }).data
     },
+    onSuccess: (data) => {
+      qc.setQueryData(clientPortalKeys.me(), data)
+    },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientPortalKeys.me() })
       void qc.invalidateQueries({ queryKey: clientPortalKeys.home() })
@@ -198,7 +204,10 @@ export function useUpdateClientProfile() {
  * «Пропустить»/«Заполью позже» sends body { onboardingCompleted: true } with NO profile
  * fields. This is a distinct hook to enforce the D-08 invariant at the call site — callers
  * cannot accidentally include profile fields in the skip path.
- * onSettled invalidates /client/me + /client/home.
+ * onSuccess seeds the /client/me cache with the PATCH response so handleSkip's immediate
+ * navigate('/home') reads the now-set onboardingCompletedAt and does NOT bounce back to
+ * /onboarding before the invalidation refetch resolves (GAP-2).
+ * onSettled then invalidates /client/me + /client/home.
  */
 export function useCompleteOnboarding() {
   const qc = useQueryClient()
@@ -208,6 +217,9 @@ export function useCompleteOnboarding() {
         body: { onboardingCompleted: true },
       })
       return (res as { data: ClientMeData }).data
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(clientPortalKeys.me(), data)
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientPortalKeys.me() })
