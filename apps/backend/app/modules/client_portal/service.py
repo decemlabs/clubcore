@@ -844,10 +844,15 @@ async def get_client_payment_status(
         ).mappings().one_or_none()
 
         if contact_row is not None:
-            client_email = contact_row["email"]
+            # CR-01 (Phase 999.5): normalize empty-string email to None ONCE so both
+            # branches share identical emptiness semantics. Previously receipt_email used
+            # a truthiness check while receipt_phone used `is None`, so a row with
+            # email == "" produced receipt_email=None AND receipt_phone=None — a 54-ФЗ
+            # receipt with no destination at all on a real-money path.
+            client_email = contact_row["email"] or None
             client_phone = contact_row["phone"]
             # D-10: email-preferred-else-phone; phone is not None (OTP invariant).
-            receipt_email = client_email if client_email else None
+            receipt_email = client_email
             receipt_phone = client_phone if client_email is None else None
 
     return ClientPaymentStatusResponse(
