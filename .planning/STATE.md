@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
-status: executing
-stopped_at: Phase 73 context gathered
-last_updated: "2026-06-01T21:38:43.549Z"
+status: ready_to_plan
+stopped_at: Phase 73 complete (1/1) — ready to discuss Phase 999.1
+last_updated: 2026-06-01T22:09:35.049Z
 last_activity: 2026-06-01 -- Phase 73 execution started
 progress:
   total_phases: 11
   completed_phases: 8
   total_plans: 44
-  completed_plans: 43
+  completed_plans: 44
   percent: 73
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 73 — downloads-home-html
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
 
 ## Current Position
 
-Phase: 73 (downloads-home-html) — EXECUTING
-Plan: 1 of 1
-Status: Executing Phase 73
-Last activity: 2026-06-01 -- Phase 73 execution started
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-01
 
 Progress: [██████████] 100%
 
@@ -48,7 +48,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 22
+- Total plans completed: 23
 - Average duration: ~6m
 - Total execution time: ~18m
 
