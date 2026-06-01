@@ -9,6 +9,7 @@ import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
 import { useClientHome, useClientMe, useClientBookings, TRAINERS } from '@/data';
+import { GYM_INFO } from '@/data/gym.js';
 import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 
 // ─── In-file adapter: API membership shape → existing subInfo render shape ───
@@ -98,9 +99,12 @@ const DEMO_TRAINER_CANCEL = {
   refund: 2200,
 };
 
-// Open/closed status chip — shown in home header, opens GymInfoSheet
+// Open/closed status chip — reads GYM_INFO.status; opens GymInfoSheet (D-11)
 export function GymStatusPill({ onClick }) {
-  // Gym status is not returned by the home API; show a neutral pill as placeholder.
+  const open = GYM_INFO.status.open;
+  const label = open
+    ? `Открыто до ${GYM_INFO.status.until}`
+    : `Закрыто · откроемся в ${GYM_INFO.hours[(GYM_INFO.todayIdx + 1) % 7].open}`;
   return (
     <button
       onClick={onClick}
@@ -116,7 +120,9 @@ export function GymStatusPill({ onClick }) {
     >
       <span style={{
         width: 7, height: 7, borderRadius: 999,
-        background: 'var(--text-3)',
+        background: open ? '#10b981' : 'var(--text-3)',
+        boxShadow: open ? '0 0 0 3px rgba(16,185,129,0.18)' : 'none',
+        animation: open ? 'pulse-soft 2.4s ease-in-out infinite' : 'none',
         flexShrink: 0,
       }} />
       <span style={{
@@ -124,10 +130,116 @@ export function GymStatusPill({ onClick }) {
         color: 'var(--text-2)', whiteSpace: 'nowrap',
         overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
-        О зале
+        {label}
       </span>
       <Icon name="chevronRight" size={12} color="var(--text-3)" strokeWidth={2.2} />
     </button>
+  );
+}
+
+// Unified hero header card — classic variant (D-03/D-04/D-10/D-11)
+// Occupancy is fixed to «Свободно»; no interval timer, no randomness (D-04)
+export function HomeHeroCard({ userName, unread, onOpenGymInfo, onOpenNotifications }) {
+  const open = GYM_INFO.status.open;
+  const openLabel = open ? `Открыт до ${GYM_INFO.status.until}` : 'Закрыт';
+  const initial = (userName || 'Г').trim().charAt(0).toUpperCase();
+
+  // Fixed occupancy — static «Свободно» level (D-03; no rotation, no randomness)
+  const L = { h: [42, 60, 30, 38], t: 'Свободно', c: 'var(--accent)' };
+
+  const labelStyle = {
+    fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+    textTransform: 'uppercase', color: 'var(--text-3)', lineHeight: 1,
+  };
+  const valueStyle = {
+    display: 'flex', alignItems: 'center', gap: 7,
+    fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: -0.2, lineHeight: 1,
+  };
+
+  const bellBtn = (
+    <button onClick={onOpenNotifications} className="press" aria-label="Уведомления" style={{
+      position: 'relative', width: 38, height: 38, borderRadius: 12,
+      border: '0.5px solid var(--border)', background: 'var(--surface)', boxShadow: 'var(--sh-1)',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+    }}>
+      <Icon name="bell" size={19} color="var(--text)" />
+      {unread > 0 && (
+        <span style={{
+          position: 'absolute', top: 8, right: 9, width: 7, height: 7, borderRadius: 999,
+          background: '#f43f5e', border: '2px solid var(--surface)',
+        }} />
+      )}
+    </button>
+  );
+
+  const avatarEl = (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <Avatar initials={initial} bg="var(--accent)" color="#053a2b" size={38} />
+      <span style={{
+        position: 'absolute', right: -2, bottom: -2, width: 11, height: 11, borderRadius: 999,
+        background: '#10b981', border: '2.5px solid var(--surface)',
+      }} />
+    </div>
+  );
+
+  const openDot = (
+    <span style={{
+      width: 9, height: 9, borderRadius: 999, flexShrink: 0,
+      background: open ? '#10b981' : 'var(--text-3)',
+      boxShadow: open ? '0 0 0 3px rgba(16,185,129,0.2)' : 'none',
+      animation: open ? 'pulse-soft 2.4s ease-in-out infinite' : 'none',
+    }} />
+  );
+
+  const bars = (
+    <span style={{ display: 'flex', alignItems: 'flex-end', gap: 2.5, height: 15 }}>
+      {L.h.map((bh, i) => (
+        <span key={i} style={{
+          width: 3, borderRadius: 2, height: bh + '%',
+          background: i < 2 ? L.c : 'var(--border-strong)',
+          transition: 'height 0.55s cubic-bezier(0.32,0.72,0.2,1), background 0.45s',
+        }} />
+      ))}
+    </span>
+  );
+
+  const gymTitle = (
+    <button onClick={onOpenGymInfo} className="press" style={{
+      appearance: 'none', border: 0, background: 'transparent', padding: 0,
+      textAlign: 'left', cursor: 'pointer', minWidth: 0, fontFamily: 'inherit', color: 'var(--text)',
+    }}>
+      <div style={{ fontSize: 18, fontWeight: 750, letterSpacing: -0.4, lineHeight: 1.05 }}>Мой зал</div>
+      <div style={{ marginTop: 2, fontSize: 12, color: 'var(--text-2)' }}>Тверская</div>
+    </button>
+  );
+
+  const cardStyle = {
+    position: 'relative', background: 'var(--surface)',
+    border: '0.5px solid var(--border)', borderRadius: 20, boxShadow: 'var(--sh-2)',
+  };
+
+  return (
+    <div style={{ padding: '4px 16px 16px' }}>
+      <div className="fade-up" style={{ ...cardStyle, padding: '11px 14px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          {gymTitle}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+            {bellBtn}
+            {avatarEl}
+          </div>
+        </div>
+        <div style={{ marginTop: 9, paddingTop: 9, borderTop: '0.5px solid var(--border)', display: 'flex' }}>
+          <div style={{ flex: 1, paddingRight: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={labelStyle}>Зал</span>
+            <span style={{ ...valueStyle, height: 16, whiteSpace: 'nowrap' }}>{openDot}{openLabel}</span>
+          </div>
+          <div style={{ flex: 1, paddingLeft: 14, borderLeft: '0.5px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={labelStyle}>Наполненность</span>
+            <span style={{ ...valueStyle, height: 16, whiteSpace: 'nowrap' }}>{bars}<span style={{ color: L.c }}>{L.t}</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -228,23 +340,14 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
           />
         ) : (
           <>
-            {/* Header — shared across non-newbie variants */}
-            <div style={{
-              padding: '4px 16px 18px',
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="t-small" style={{
-                  color: 'var(--text-3)', fontWeight: 500, fontSize: 12,
-                }}>{greeting}</div>
-                <div className="t-h2" style={{
-                  marginTop: 1, fontSize: 22, letterSpacing: -0.3,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>{userName}</div>
-              </div>
-              <GymStatusPill onClick={onOpenGymInfo} />
-            </div>
-            {variant === 'classic' && <HomeClassic isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} subCardStyle={tweaks.subCardStyle || 'eyebrow'} nextBooking={nextBooking} />}
+            {/* Header — HomeHeroCard for the canonical classic path (D-03/D-04/D-10/D-11) */}
+            <HomeHeroCard
+              userName={userName}
+              unread={unread}
+              onOpenGymInfo={onOpenGymInfo}
+              onOpenNotifications={onOpenNotifications}
+            />
+            {variant === 'classic' && <HomeClassic isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} userName={userName} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} subCardStyle={tweaks.subCardStyle || 'spot'} nextBooking={nextBooking} />}
             {variant === 'qr-hero' && <HomeQrHero isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
             {variant === 'minimal' && <HomeMinimal isEmpty={isEmpty} trainerCancelled={trainerCancelled} sub={sub} subTone={subTone} fillTone={fillTone} pct={pct} onOpenQR={onOpenQR} onOpenPlans={onOpenPlans} onOpenManage={onOpenManage} onOpenNotifications={onOpenNotifications} onTab={onTab} unread={unread} nextBooking={nextBooking} />}
           </>
@@ -977,8 +1080,259 @@ export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPla
   )
 }
 
+// Compact branded spot illustration for the «Запишись» prompt (D-09)
+// Inline <style> removed — keyframes live in styles.css (Task 1)
+function BookSpot() {
+  return (
+    <div style={{ position: 'relative', width: 56, height: 52, flexShrink: 0 }}>
+      {/* halo */}
+      <div style={{
+        position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
+        width: 50, height: 50, borderRadius: '50%',
+        background: 'radial-gradient(circle, color-mix(in oklab, var(--accent) 22%, transparent) 0%, transparent 66%)',
+      }} />
+      {/* dashed ring */}
+      <div style={{
+        position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
+        width: 50, height: 50, borderRadius: '50%',
+        border: '1px dashed color-mix(in oklab, var(--text) 55%, transparent)', opacity: 0.55,
+      }} />
+      {/* white scene card with a dumbbell glyph */}
+      <div style={{
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-50%,-50%) rotate(-5deg)', transformOrigin: 'center',
+        width: 38, height: 32, borderRadius: 10, background: 'var(--surface)',
+        border: '0.5px solid var(--border)',
+        boxShadow: '0 6px 14px rgba(28,25,23,0.14), 0 1px 3px rgba(28,25,23,0.06)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
+        animation: 'book-scene-in 0.46s cubic-bezier(0.32,1.6,0.32,1) both',
+      }}>
+        <svg width={22} height={22} viewBox="0 0 24 24" fill="none"
+             stroke="var(--accent-deep)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 9v6M8 7v10M16 7v10M19 9v6M8 12h8" />
+        </svg>
+      </div>
+      {/* floating accent chips */}
+      <span style={{
+        position: 'absolute', right: 3, top: 3, width: 7, height: 7, borderRadius: 2,
+        background: 'var(--accent-deep)', zIndex: 1,
+        animation: 'book-float 3.4s ease-in-out infinite',
+      }} />
+      <span style={{
+        position: 'absolute', left: 2, bottom: 7, width: 5, height: 5, borderRadius: '50%',
+        background: 'var(--accent)', zIndex: 1,
+        animation: 'book-float 3.4s ease-in-out infinite', animationDelay: '0.8s',
+      }} />
+    </div>
+  );
+}
+
+// Minimalist brand spot illustration — a dumbbell built from simple primitives (D-05)
+function DumbbellMark({ color, style, sw = 3.4 }) {
+  return (
+    <svg viewBox="0 0 140 100" fill="none" stroke={color} strokeWidth={sw}
+      strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">
+      {/* bar */}
+      <rect x="46" y="44" width="48" height="12" rx="6" />
+      {/* left plates */}
+      <rect x="30" y="34" width="11" height="32" rx="5.5" />
+      <rect x="16" y="40" width="9" height="20" rx="4.5" />
+      {/* right plates */}
+      <rect x="99" y="34" width="11" height="32" rx="5.5" />
+      <rect x="115" y="40" width="9" height="20" rx="4.5" />
+    </svg>
+  );
+}
+
+// Brand emblem — dumbbell glyph inside a ringed seal (D-05)
+function BrandSeal({ color, style }) {
+  return (
+    <svg viewBox="0 0 100 100" fill="none" stroke={color} style={style} aria-hidden="true">
+      <circle cx="50" cy="50" r="46" strokeWidth="2.4" />
+      <circle cx="50" cy="50" r="38" strokeWidth="1" opacity="0.6" />
+      <g transform="translate(50 50) scale(0.42) translate(-70 -50)">
+        <DumbbellMark color={color} sw={6} />
+      </g>
+    </svg>
+  );
+}
+
+// Canonical dark club-card — brand emblem, embossed name, tone-driven accent (D-05/D-06)
+export function SubCardSpot({ sub, pct, userName = '', onOpenPlans }) {
+  const tone = sub.tone;
+  const accentC = tone === 'ok' ? 'var(--accent)' : tone === 'warn' ? 'var(--warn)' : 'var(--danger)';
+  const statusText = tone === 'ok' ? 'активен' : tone === 'warn' ? 'истекает' : 'истёк';
+  const unit = sub.daysLeft === 1 ? 'день' : (sub.daysLeft > 1 && sub.daysLeft < 5) ? 'дня' : 'дней';
+
+  return (
+    <div className="card fade-up" style={{
+      position: 'relative', overflow: 'hidden', padding: '20px 22px 18px',
+      minHeight: 206, display: 'flex', flexDirection: 'column',
+      borderRadius: 'var(--r-xl)', color: '#f3f1ea', isolation: 'isolate',
+      background: 'linear-gradient(155deg, #262a22 0%, #181b16 54%, #0f120e 100%)',
+      border: '0.5px solid rgba(255,255,255,0.10)',
+      boxShadow: '0 20px 44px -18px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.07)',
+    }}>
+      {/* geometric brand pattern — concentric rings */}
+      <svg viewBox="0 0 200 200" aria-hidden="true" style={{
+        position: 'absolute', right: -56, top: -46, width: 250, height: 250, pointerEvents: 'none',
+      }}>
+        {[92, 74, 56, 38].map((r, i) => (
+          <circle key={r} cx="100" cy="100" r={r} fill="none"
+            stroke="rgba(255,255,255,0.05)" strokeWidth={i === 0 ? 1.2 : 0.8} />
+        ))}
+      </svg>
+      {/* fine engraved guilloché texture */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.5,
+        backgroundImage: 'repeating-linear-gradient(122deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 9px)',
+      }} />
+      {/* soft top sheen */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.05), transparent 32%)',
+      }} />
+      {/* large embossed emblem */}
+      <div style={{ position: 'absolute', right: -22, bottom: -34, width: 168, height: 168, pointerEvents: 'none' }}>
+        <BrandSeal color="rgba(0,0,0,0.4)" style={{ position: 'absolute', inset: 0, transform: 'translate(1px,1.4px)' }} />
+        <BrandSeal color="rgba(255,255,255,0.07)" style={{ position: 'absolute', inset: 0, transform: 'translate(-1px,-1px)' }} />
+      </div>
+
+      {/* Header — wordmark / status */}
+      <div className="row-between" style={{ position: 'relative' }}>
+        <div className="col">
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: 1.5, color: '#f3f1ea' }}>МОЙ ЗАЛ</div>
+          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 2, color: 'color-mix(in oklab, ' + accentC + ' 42%, #b8c0b8)', marginTop: 2 }}>PREMIUM CLUB</div>
+        </div>
+        <span style={{
+          height: 24, padding: '0 11px', borderRadius: 999, fontSize: 10.5, fontWeight: 600,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.14)',
+          color: 'rgba(255,255,255,0.9)',
+        }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: 999, background: accentC,
+            boxShadow: '0 0 0 3px color-mix(in oklab, ' + accentC + ' 22%, transparent)',
+          }} />
+          {statusText}
+        </span>
+      </div>
+
+      {/* Primary metric */}
+      <div style={{ position: 'relative', marginTop: 'auto', paddingTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+          <span className="t-num" style={{
+            fontFamily: 'var(--font-display)', fontSize: 78, fontWeight: 700,
+            lineHeight: 0.76, letterSpacing: -3.5, color: '#f4f2ec', textShadow: '0 1px 0 rgba(0,0,0,0.35)',
+          }}>{sub.daysLeft}</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.74)', paddingBottom: 9, lineHeight: 1.15, letterSpacing: -0.1 }}>
+            {unit}<br />осталось
+          </span>
+        </div>
+      </div>
+
+      {/* Progress — plan + valid-thru */}
+      <div style={{ position: 'relative', marginTop: 14 }}>
+        <div className="row-between" style={{ marginBottom: 7 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(255,255,255,0.82)', letterSpacing: 0.1 }}>{sub.label}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 500, color: 'rgba(255,255,255,0.5)', letterSpacing: 0.2, fontVariantNumeric: 'tabular-nums' }}>
+            {tone === 'danger' ? `истёк ${sub.until}` : `до ${sub.until}`}
+          </span>
+        </div>
+        <div style={{ height: 5, borderRadius: 999, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: pct + '%', borderRadius: 999, background: accentC, transition: 'width 0.85s cubic-bezier(0.32,0.72,0.2,1)' }} />
+        </div>
+      </div>
+
+      {tone !== 'ok' && (
+        <button onClick={onOpenPlans} className="btn btn-accent" style={{ width: '100%', marginTop: 16, position: 'relative' }}>
+          Продлить{tone === 'warn' ? ' со скидкой 15%' : ''}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// BookTile — "Записаться" quick-action tile with trainer avatar stack (D-09)
+export function BookTile({ onClick }) {
+  const avs = [
+    { t: 'А', bg: 'var(--accent)', c: '#06231a' },
+    { t: 'М', bg: 'color-mix(in oklab, var(--accent) 58%, #6ee7c4)', c: '#06231a' },
+    { t: 'К', bg: 'var(--accent-deep)', c: '#eafaf3' },
+  ];
+  return (
+    <button onClick={onClick} className="press" style={{
+      background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--r-lg)',
+      padding: 15, textAlign: 'left', cursor: 'pointer', color: 'var(--text)', fontFamily: 'inherit',
+      minHeight: 132, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ display: 'flex' }}>
+        {avs.map((a, i) => (
+          <span key={i} style={{
+            width: 34, height: 34, borderRadius: 999, border: '2.5px solid var(--surface)',
+            marginLeft: i ? -11 : 0, background: a.bg, color: a.c,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 700,
+          }}>{a.t}</span>
+        ))}
+        <span style={{
+          width: 34, height: 34, borderRadius: 999, border: '2.5px solid var(--surface)', marginLeft: -11,
+          background: 'var(--surface-2)', color: 'var(--text-2)',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, fontWeight: 700,
+        }}>+9</span>
+      </div>
+      <div>
+        <div className="t-h3" style={{ fontSize: 16 }}>Записаться</div>
+        <div className="t-small">12 тренеров в зале</div>
+      </div>
+    </button>
+  );
+}
+
+// ChatTile — chat quick-action tile; badge=0 by default (D-10: no real badge from API)
+// Inline <style> removed — chat-dot keyframe already in styles.css
+export function ChatTile({ onClick, badge = 0 }) {
+  return (
+    <button onClick={onClick} className="press" style={{
+      background: 'var(--text)', border: 0, borderRadius: 'var(--r-lg)',
+      padding: 15, textAlign: 'left', cursor: 'pointer', color: 'var(--bg)', fontFamily: 'inherit',
+      minHeight: 132, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'relative', width: 'fit-content' }}>
+        <span style={{
+          width: 50, height: 38, borderRadius: '15px 15px 15px 5px',
+          background: 'rgba(255,255,255,0.13)',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+        }}>
+          {[0, 1, 2].map(i => (
+            <span key={i} className="chat-dot" style={{
+              width: 6, height: 6, borderRadius: 999, background: 'var(--accent)',
+              opacity: 1 - i * 0.28, animationDelay: (i * 0.2) + 's',
+            }} />
+          ))}
+        </span>
+        {badge > 0 && (
+          <span style={{
+            position: 'absolute', top: -7, right: -7, minWidth: 21, height: 21, padding: '0 5px',
+            borderRadius: 999, background: 'var(--accent)', color: '#06231a',
+            border: '2.5px solid var(--text)', fontSize: 11, fontWeight: 800,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>{badge}</span>
+        )}
+      </div>
+      <div>
+        <div className="t-h3" style={{ fontSize: 16, color: 'var(--bg)' }}>Чат</div>
+        <div className="t-small" style={{ color: 'color-mix(in oklab, var(--bg) 62%, transparent)' }}>Ответят за ~5 мин</div>
+      </div>
+    </button>
+  );
+}
+
 // Variant A: Classic — subscription card + QR button + actions + feed
-export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, subCardStyle, nextBooking }) {
+export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, userName, onOpenQR, onOpenPlans, onOpenManage, onOpenNotifications, onTab, unread, trainerCancelled, subCardStyle, nextBooking }) {
   return (
     <>
       {/* Trainer cancelled — strong alert (demo-only, tweaks-driven) */}
@@ -988,117 +1342,49 @@ export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
         </div>
       )}
 
-      {/* Expired sub — strong banner */}
+      {/* Expired sub — strong banner (D-07) */}
       {sub.tone === 'danger' && (
         <div style={{ padding: '0 16px 12px' }}>
           <ExpiredAlert sub={sub} onOpenPlans={onOpenPlans} />
         </div>
       )}
 
-      {/* Subscription card */}
+      {/* Subscription card — canonical SubCardSpot dark club-card (D-05/D-06) */}
       <div style={{ padding: '0 16px 12px' }}>
-        <div className="card fade-up" style={{
-          padding: 18,
-          position: 'relative', overflow: 'hidden',
-          ...(subCardStyle === 'stripe' ? {
-            borderLeft: '4px solid ' + (sub.tone === 'ok' ? 'var(--accent)' : sub.tone === 'warn' ? 'var(--warn)' : 'var(--danger)'),
-          } : {}),
-        }}>
-          {subCardStyle === 'eyebrow' && (
-            <div className="row-between" style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-                <div className="t-mini" style={{ color: 'var(--text-3)' }}>Абонемент</div>
-                <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                  <SubDot tone={sub.tone} />
-                  <span className="t-h3" style={{ fontSize: 17 }}>{sub.label}</span>
-                </div>
-              </div>
-              <Icon name="card" size={20} color="var(--text-3)" />
-            </div>
-          )}
-          {subCardStyle === 'split' && (
-            <div className="row-between" style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-                <div className="t-mini" style={{ color: 'var(--text-3)' }}>Абонемент</div>
-                <span className="t-h2" style={{ fontSize: 19 }}>{sub.label}</span>
-              </div>
-              <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-                <SubDot tone={sub.tone} />
-                <span className="t-small" style={{
-                  fontWeight: 600,
-                  color: sub.tone === 'ok' ? 'var(--accent-deep)' : sub.tone === 'warn' ? '#a36a16' : 'var(--danger)',
-                }}>
-                  {sub.tone === 'ok' ? 'активен' : sub.tone === 'warn' ? 'истекает' : 'истёк'}
-                </span>
-              </div>
-            </div>
-          )}
-          {subCardStyle === 'stripe' && (
-            <div className="row-between" style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span className="t-h2" style={{ fontSize: 19 }}>{sub.label} абонемент</span>
-                <span className="t-small" style={{
-                  fontWeight: 500,
-                  color: sub.tone === 'ok' ? 'var(--accent-deep)' : sub.tone === 'warn' ? '#a36a16' : 'var(--danger)',
-                }}>
-                  {sub.tone === 'ok' ? 'активен · в строю' : sub.tone === 'warn' ? 'истекает скоро' : 'истёк'}
-                </span>
-              </div>
-              <Icon name="card" size={20} color="var(--text-3)" />
-            </div>
-          )}
-          <div className="row" style={{ alignItems: 'baseline', gap: 6 }}>
-            <span className="t-display t-num">{sub.daysLeft}</span>
-            <span className="t-h3" style={{ color: 'var(--text-2)', fontWeight: 500 }}>
-              {sub.daysLeft === 0 ? 'дней — истёк' : sub.daysLeft === 1 ? 'день' : sub.daysLeft < 5 ? 'дня' : 'дней'}
-            </span>
-          </div>
-          <div className="t-small" style={{ marginTop: 2 }}>
-            {sub.tone === 'danger' ? `Истёк ${sub.until}` : `до ${sub.until}`}
-          </div>
-          <div className="progress-track" style={{ marginTop: 14 }}>
-            <div className={`progress-fill ${fillTone}`} style={{ width: `${pct}%` }} />
-          </div>
-          {sub.tone !== 'ok' && (
-            <button onClick={onOpenPlans} className="btn btn-accent" style={{ width: '100%', marginTop: 14 }}>
-              Продлить{sub.tone === 'warn' ? ' со скидкой 15%' : ''}
-            </button>
-          )}
-        </div>
+        {subCardStyle === 'ring'
+          ? <SubCardPremium sub={sub} pct={pct} onOpenPlans={onOpenPlans} />
+          : <SubCardSpot sub={sub} pct={pct} userName={userName} onOpenPlans={onOpenPlans} />}
       </div>
 
-      {/* Upcoming booking — tappable to manage */}
+      {/* Upcoming booking — tappable to manage; BookSpot CTA when no booking (D-09) */}
       {!isEmpty && nextBooking ? (
         <UpcomingCard booking={nextBooking} onClick={onOpenManage} onCancel={onOpenManage} />
       ) : (
         <div style={{ padding: '0 16px 12px' }}>
           <button
             onClick={() => onTab('book')}
-            className="card press"
+            className="press card"
             style={{
-              width: '100%', appearance: 'none', cursor: 'pointer', textAlign: 'left',
-              padding: 16, display: 'flex', alignItems: 'center', gap: 12,
-              border: '0.5px dashed var(--border-strong)', background: 'transparent',
+              appearance: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
+              display: 'flex', alignItems: 'stretch', gap: 0, padding: 0, overflow: 'hidden',
               color: 'var(--text)',
             }}
           >
-            <div style={{
-              width: 48, height: 48, borderRadius: 12,
-              background: 'var(--accent-soft)', color: 'var(--accent-deep)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <Icon name="calendar" size={22} color="currentColor" strokeWidth={1.8} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="t-mini" style={{ color: 'var(--text-3)' }}>Записей пока нет</div>
-              <div className="t-h3" style={{ marginTop: 2, fontSize: 15 }}>
-                Запишись на первую тренировку
+            <div style={{ width: 4, background: 'var(--accent)', flexShrink: 0 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 13, flex: 1, minWidth: 0 }}>
+              <BookSpot />
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span className="t-h3" style={{ fontSize: 15.5, letterSpacing: -0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Запишись на тренировку
+                </span>
+                <span className="t-small" style={{ color: 'var(--text-2)' }}>
+                  Первая — со скидкой <b style={{ color: 'var(--accent-deep)', fontWeight: 700 }}>−30%</b>
+                </span>
               </div>
-              <div className="t-small" style={{ marginTop: 1 }}>
-                В первый раз — со скидкой 30%
-              </div>
+              <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+                <Icon name="chevronRight" size={18} color="var(--text-3)" strokeWidth={2.2} />
+              </span>
             </div>
-            <Icon name="chevronRight" size={16} color="var(--text-3)" />
           </button>
         </div>
       )}
@@ -1125,10 +1411,10 @@ export function HomeClassic({ isEmpty, sub, subTone, fillTone, pct, onOpenQR, on
         </button>
       </div>
 
-      {/* Quick actions */}
+      {/* Quick actions — BookTile + ChatTile (D-09/D-10; chat shows no badge) */}
       <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <QuickTile icon="calendar" title="Записаться" sub="к тренеру" onClick={() => onTab('book')} />
-        <QuickTile icon="chat" title="Чат" sub="админ + тренер" onClick={() => onTab('chat')} badge={unread > 0 ? unread : null} />
+        <BookTile onClick={() => onTab('book')} />
+        <ChatTile onClick={() => onTab('chat')} />
       </div>
 
       {/* Feed */}

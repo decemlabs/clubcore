@@ -872,6 +872,19 @@ textarea:focus-visible {
   50%      { opacity: 0.5; }
 }
 
+/* book-scene-in: BookSpot scene card entrance — scale+opacity from mockup inline style */
+@keyframes book-scene-in {
+  0%   { transform: translate(-50%,-50%) rotate(-5deg) scale(0.5); opacity: 0; }
+  60%  { transform: translate(-50%,-50%) rotate(-5deg) scale(1.06); }
+  100% { transform: translate(-50%,-50%) rotate(-5deg) scale(1); opacity: 1; }
+}
+
+/* book-float: BookSpot accent chips levitation */
+@keyframes book-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50%      { transform: translateY(-5px) rotate(10deg); }
+}
+
 /* ── Newbie onboarding strip — Plan 999.3-02 ──────────────────────────────── */
 
 /* Onboarding progress fill (separate class from .progress-fill to avoid
