@@ -117,7 +117,9 @@ async def _read_client_receipt_contact_or_raise(
     """
     row = (
         await session.execute(
-            select(Client.email, Client.phone).where(Client.id == client_id)
+            select(Client.email, Client.phone).where(
+                Client.id == client_id, Client.deleted_at.is_(None)
+            )
         )
     ).one_or_none()
     if row is None:
