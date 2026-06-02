@@ -26,6 +26,7 @@ export const clientPortalKeys = {
   home: () => [...clientPortalKeys.all, 'home'] as const,
   membership: () => [...clientPortalKeys.all, 'membership'] as const,
   plans: () => [...clientPortalKeys.all, 'plans'] as const,
+  trainers: () => [...clientPortalKeys.all, 'trainers'] as const,
   ptPackages: () => [...clientPortalKeys.all, 'pt-packages'] as const,
   bookings: () => [...clientPortalKeys.all, 'bookings'] as const,
   availableSlots: (filter?: string) => [...clientPortalKeys.all, 'available-slots', filter ?? ''] as const,
@@ -310,6 +311,18 @@ export function useClientPlans() {
     queryKey: clientPortalKeys.plans(),
     queryFn: async () => {
       const res = await clientRequest('get', '/api/v1/client/plans')
+      return (res as { data: unknown[] }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/** GET /api/v1/client/trainers — trainer catalog for the newbie Home avatar strip (D-76-01, NHOME-01) */
+export function useClientTrainers() {
+  return useQuery({
+    queryKey: clientPortalKeys.trainers(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/trainers')
       return (res as { data: unknown[] }).data
     },
     staleTime: 30_000,

@@ -26,6 +26,7 @@ export {
   useClientHome,
   useClientMembership,
   useClientPlans,
+  useClientTrainers,
   useClientPtPackages,
   useClientVisitHistory,
   useClientPtHistory,
