@@ -115,6 +115,10 @@ Last activity: 2026-06-02 — Milestone v2.1 roadmap created (Phases 75-77)
 
 None.
 
+### Pending Todos
+
+- **Future milestones sequence (post-v2.1)** (planning) — durable снимок плана дальнейших milestone'ов (Group-B домены + production + staff-side gate). См. `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`; канонический дом — PROJECT.md `## Next Milestone Goals`.
+
 ## Deferred Items
 
 Items from v2.0 close that are **resolved by v2.1** (tracked here until phase closes):
