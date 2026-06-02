@@ -92,6 +92,54 @@ export function ProfileSkeleton() {
   );
 }
 
+// ─── Settings screen skeleton ────────────────────────────────────
+// Back-button header + identity strip + section placeholders.
+// Modelled on ProfileSkeleton; shown while SettingsScreen chunk loads.
+export function SettingsSkeleton() {
+  return (
+    <div className="page">
+      {/* Header row: back button circle + centered title line + spacer */}
+      <div
+        style={{
+          padding: '0 12px',
+          height: 52,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div className="sk sk-circle" style={{ width: 36, height: 36 }} />
+        <SkLine w={80} h={14} />
+        <div style={{ width: 36 }} />
+      </div>
+      {/* Identity strip */}
+      <div
+        style={{
+          padding: '8px 20px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+        }}
+      >
+        <SkCircle size={62} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <SkLine w="50%" h={16} />
+          <SkLine w="30%" h={11} />
+        </div>
+      </div>
+      {/* Section placeholders */}
+      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <SkLine w={80} h={10} style={{ marginBottom: 4 }} />
+        <SkBlock h={52} r={16} />
+        <SkLine w={100} h={10} style={{ marginTop: 6, marginBottom: 4 }} />
+        <SkBlock h={180} r={16} />
+        <SkLine w={60} h={10} style={{ marginTop: 6, marginBottom: 4 }} />
+        <SkBlock h={160} r={16} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Sheet skeleton ──────────────────────────────────────────────
 // Generic skeleton matching the sheet chrome (status bar + close + title)
 // + a flexible body shape. Used to bridge sheet-open with brief loading.

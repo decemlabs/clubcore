@@ -7,7 +7,7 @@ import { HomeIndicator } from '@/components/HomeIndicator.jsx';
 import { TabBar } from '@/components/TabBar.jsx';
 import { SheetGate } from '@/components/SheetGate.jsx';
 import { PushToast } from '@/components/PushToast.jsx';
-import { HomeSkeleton, ListSkeleton, ProfileSkeleton } from '@/components/skeletons.jsx';
+import { HomeSkeleton, ListSkeleton, ProfileSkeleton, SettingsSkeleton } from '@/components/skeletons.jsx';
 
 import { useTweaksCtx } from '@/context/TweaksContext.jsx';
 import { useUI } from '@/context/UIContext.jsx';
@@ -38,6 +38,7 @@ const HomeScreen     = lazy(() => import('@/screens/HomeScreen.jsx').then(m => (
 const BookScreen     = lazy(() => import('@/screens/BookScreen.jsx').then(m => ({ default: m.BookScreen })));
 const ChatScreen     = lazy(() => import('@/screens/ChatScreen.jsx').then(m => ({ default: m.ChatScreen })));
 const ProfileScreen  = lazy(() => import('@/screens/ProfileScreen.jsx').then(m => ({ default: m.ProfileScreen })));
+const SettingsScreen = lazy(() => import('@/screens/SettingsScreen.jsx').then(m => ({ default: m.SettingsScreen })));
 
 // ── Lazy sheets ────────────────────────────────────────────────────────────
 const QRSheet              = lazy(() => import('@/screens/sheets/QRSheet.jsx').then(m => ({ default: m.QRSheet })));
@@ -173,6 +174,21 @@ function ProfileRoute() {
   );
 }
 
+function SettingsRoute() {
+  const { t, setTweak } = useTweaksCtx();
+  const ui = useUI();
+  return (
+    <SettingsScreen
+      tweaks={t}
+      setTweak={setTweak}
+      onOpenPlans={() => ui.setPlansOpen(true)}
+      onOpenPersonalData={() => ui.setPersonalOpen(true)}
+      onOpenCard={() => ui.setCardOpen(true)}
+      onOpenFAQ={() => ui.setFaqOpen(true)}
+    />
+  );
+}
+
 // Lazy-routed fallback per tab — matches original skeleton variants.
 function TabFallback({ tab }) {
   if (tab === 'home') return <HomeSkeleton />;
@@ -219,12 +235,14 @@ export default function App() {
     }
   };
 
-  // Hide tab bar on sheets, login screen, onboarding, payment return, or while loading auth
+  // Hide tab bar on sheets, login screen, onboarding, payment return, settings, or while loading auth
   const isLoginRoute = pathname === '/login';
   const isOnboardingRoute = pathname === '/onboarding';
   const isPaymentReturnRoute = pathname === '/payment/return';
+  const isSettingsRoute = pathname === '/settings';
   const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen
-    || isLoginRoute || isOnboardingRoute || isPaymentReturnRoute || status === 'unknown' || status === 'anon';
+    || isLoginRoute || isOnboardingRoute || isPaymentReturnRoute || isSettingsRoute
+    || status === 'unknown' || status === 'anon';
 
   return (
     <div className="app-viewport">
@@ -243,6 +261,13 @@ export default function App() {
                 <Route path="/book"    element={<RequireAuth><BookRoute /></RequireAuth>} />
                 <Route path="/chat"    element={<RequireAuth><ChatRoute /></RequireAuth>} />
                 <Route path="/profile" element={<RequireAuth><ProfileRoute /></RequireAuth>} />
+                <Route path="/settings" element={
+                  <RequireAuth>
+                    <Suspense fallback={<SettingsSkeleton />}>
+                      <SettingsRoute />
+                    </Suspense>
+                  </RequireAuth>
+                } />
                 <Route path="/payment/return" element={<RequireAuth><PaymentReturnScreen /></RequireAuth>} />
                 {/* Onboarding questionnaire — D-04: newbie first-login + manual re-entry */}
                 <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
