@@ -116,7 +116,7 @@ function HomeRoute() {
       setTweak={setTweak}
       onOpenQR={() => ui.setQrOpen(true)}
       onOpenPlans={() => ui.setPlansOpen(true)}
-      onOpenManage={() => ui.setManageOpen(true)}
+      onOpenManage={(booking) => { ui.setManageBooking(booking ?? null); ui.setManageOpen(true); }}
       onOpenReferral={() => ui.setReferralOpen(true)}
       onOpenGymInfo={() => ui.setGymInfoOpen(true)}
       onOpenNotifications={() => ui.setNotifsOpen(true)}
@@ -131,7 +131,7 @@ function BookRoute() {
   return (
     <BookScreen
       onTab={(id) => navigate(PATH_BY_TAB[id] || '/home')}
-      onOpenManage={() => ui.setManageOpen(true)}
+      onOpenManage={(booking) => { ui.setManageBooking(booking ?? null); ui.setManageOpen(true); }}
       onOpenTrainer={(tr) => ui.setTrainerDetail(tr)}
       onCheckout={(ctx) => ui.setCheckoutCtx(ctx)}
       onConfirmFlow={ui.setBookConfirmOpen}
@@ -304,8 +304,9 @@ export default function App() {
             </SheetGate>
             <SheetGate open={ui.manageOpen} variant="detail">
               <BookingManageSheet
-                onClose={() => ui.setManageOpen(false)}
-                onCancelled={() => { ui.setManageOpen(false); handleTab('home'); }}
+                booking={ui.manageBooking}
+                onClose={() => { ui.setManageOpen(false); ui.setManageBooking(null); }}
+                onCancelled={() => { ui.setManageOpen(false); ui.setManageBooking(null); handleTab('home'); }}
                 onRescheduled={() => { ui.setManageOpen(false); handleTab('home'); }}
                 onChat={() => { ui.setManageOpen(false); handleTab('chat'); setTimeout(() => ui.setPendingChat('c2'), 360); }}
                 onRules={() => { ui.setManageOpen(false); ui.setFaqOpen(true); }}

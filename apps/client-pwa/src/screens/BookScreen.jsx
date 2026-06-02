@@ -91,6 +91,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
   const [trainerFilter, setTrainerFilter] = React.useState('all');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState(null);
+  const [createdBooking, setCreatedBooking] = React.useState(null); // real booking from create — threaded to Manage so cancel uses a real id
   const scrollerRef = React.useRef(null);
   const timeStepRef = React.useRef(null);
 
@@ -197,10 +198,11 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
       // package exists, the server returns 422 no_active_pt_package which routes here
       // to onOpenPlans() (CBOOK-04). Do NOT send an empty string (causes 422 UUID parse
       // error before the service runs); omit the field and let the server resolve it.
-      await createBookingMutation.mutateAsync({
+      const created = await createBookingMutation.mutateAsync({
         slotId: selectedSlot,
         idempotencyKey,
       });
+      setCreatedBooking(created);
       setStep('done');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -236,7 +238,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
         setSelectedSlot(null);
         setSelectedSlotMeta(null);
       }}
-      onManage={onOpenManage}
+      onManage={() => onOpenManage(createdBooking)}
     />;
   }
 

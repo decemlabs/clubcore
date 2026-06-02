@@ -1665,7 +1665,7 @@ export function UpcomingCard({ booking, onClick, compact, onCancel }) {
 
   const cardInner = (
     <button
-      onClick={onClick}
+      onClick={() => onClick?.(booking)}
       className="press card"
       style={{
         appearance: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
@@ -1708,7 +1708,7 @@ export function UpcomingCard({ booking, onClick, compact, onCancel }) {
   );
   return (
     <div style={{ padding: '0 16px 12px' }}>
-      <SwipeRow onAction={() => onCancel?.()} actionLabel="Отменить" actionIcon="close">
+      <SwipeRow onAction={() => onCancel?.(booking)} actionLabel="Отменить" actionIcon="close">
         {cardInner}
       </SwipeRow>
     </div>

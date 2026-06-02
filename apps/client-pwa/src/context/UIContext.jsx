@@ -11,6 +11,7 @@ export function UIProvider({ children }) {
   const [qrOpen, setQrOpen] = useState(false);
   const [plansOpen, setPlansOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [manageBooking, setManageBooking] = useState(null);  // booking being managed (real API booking or null)
   const [referralOpen, setReferralOpen] = useState(false);
   const [gymInfoOpen, setGymInfoOpen] = useState(false);
   const [notifsOpen, setNotifsOpen] = useState(false);
@@ -72,6 +73,7 @@ export function UIProvider({ children }) {
     qrOpen, setQrOpen,
     plansOpen, setPlansOpen,
     manageOpen, setManageOpen,
+    manageBooking, setManageBooking,
     referralOpen, setReferralOpen,
     gymInfoOpen, setGymInfoOpen,
     notifsOpen, setNotifsOpen,
@@ -105,7 +107,7 @@ export function UIProvider({ children }) {
 
     anySheetOpen,
   }), [
-    qrOpen, plansOpen, manageOpen, referralOpen, gymInfoOpen, notifsOpen,
+    qrOpen, plansOpen, manageOpen, manageBooking, referralOpen, gymInfoOpen, notifsOpen,
     trainerDetail, checkoutCtx, personalOpen, cardOpen, faqOpen,
     visitHistOpen, trainHistOpen, pendingChat, chatThreadOpen, bookConfirmOpen,
     pushKind, cancelBookingOpen, subManageMode, paymentMethodsOpen,
