@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: Awaiting next milestone
-stopped_at: Phase 74 context gathered
+stopped_at: v2.0 shipped + archived + tagged (2026-06-02)
 last_updated: "2026-06-02T14:46:35.539Z"
 last_activity: 2026-06-02 — Milestone v2.0 completed and archived
 progress:
@@ -18,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
+See: .planning/PROJECT.md (updated 2026-06-02 — v2.0 Frontend Integration — Client PWA SHIPPED)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel
+**Current focus:** Between milestones — v2.0 shipped 2026-06-02. Next not yet opened (candidates: production deploy/launch, v2.0 deferred warnings + `/gsd:secure-phase 70`, admin-web client wiring + promo admin). Run `/gsd:new-milestone` to open the next.
 
 ## Current Position
 
