@@ -20,6 +20,7 @@ const emptyList = { data: { items: [], total: 0 }, isLoading: false, isError: fa
 vi.mock('@/data', () => ({
   useClientMe: (...args) => useClientMe(...args),
   useClientHome: (...args) => useClientHome(...args),
+  useClientMembership: () => ({ data: null }),
   useClientVisitHistory: () => emptyList,
   useClientPtHistory: () => emptyList,
   useClientPaymentHistory: () => emptyList,

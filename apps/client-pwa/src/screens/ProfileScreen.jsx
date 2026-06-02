@@ -9,6 +9,7 @@ import { toSubInfo } from '@/lib/membership.js';
 import {
   useClientHome,
   useClientMe,
+  useClientMembership,
   useClientVisitHistory,
   useClientPtHistory,
   useClientPaymentHistory,
@@ -72,6 +73,7 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
 
   const { data: homeData } = useClientHome();
   const { data: me } = useClientMe();
+  const { data: membership } = useClientMembership();
   const { data: visitData } = useClientVisitHistory(1);
   const { data: ptData } = useClientPtHistory(1);
 
@@ -134,8 +136,7 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
         </div>
 
         {/* Membership hero — pass-style contrast-flip via .membership-hero CSS class (D-74-03) */}
-        {/* Shows ONLY API-backed fields: daysLeft, elapsedDays, total, until, label */}
-        {/* Price/auto-renew block deliberately omitted — not in /client/membership API */}
+        {/* Shows API-backed fields: daysLeft, elapsedDays, total, until, label, priceKopecks, autoRenew */}
         <div style={{ padding: '0 16px 18px' }}>
           <div className="card fade-up membership-hero" style={{ position: 'relative', overflow: 'hidden', padding: 16, isolation: 'isolate' }}>
             {/* Header row: label dot + plan name chip */}
@@ -183,6 +184,31 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
                 </span>
               </div>
             </div>
+
+            {/* Price row — renders only when useClientMembership returns a real priceKopecks (D-78-03) */}
+            {membership != null && typeof membership.priceKopecks === 'number' && membership.priceKopecks > 0 && (
+              <div style={{ position: 'relative', marginTop: 13 }}>
+                <div className="row-between" style={{ alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--mh-text-3)', fontWeight: 500 }}>Стоимость</span>
+                  <span className="t-num" style={{ fontSize: 15, fontWeight: 700, color: 'var(--mh-text)' }}>
+                    {formatMoney(membership.priceKopecks)}
+                  </span>
+                </div>
+                {/* Auto-renew row — hidden entirely when autoRenew is null (D-78-02, D-75-01) */}
+                {membership.autoRenew !== null && membership.autoRenew !== undefined && (
+                  <div
+                    className="row-between"
+                    style={{ alignItems: 'center', marginTop: 6 }}
+                    aria-label="auto-renew-indicator"
+                  >
+                    <span style={{ fontSize: 12, color: 'var(--mh-text-3)', fontWeight: 500 }}>Автопродление</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: membership.autoRenew ? 'var(--mh-accent)' : 'var(--mh-text-2)' }}>
+                      {membership.autoRenew ? 'Включено' : 'Выключено'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Action buttons: Freeze (active only) + Change/Extend */}
             <div style={{ position: 'relative', marginTop: 14, display: 'flex', gap: 8 }}>
