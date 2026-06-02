@@ -3,13 +3,15 @@ import { Avatar } from '@/components/Avatar.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { BUSY_SLOTS, CALENDAR, TIME_SLOTS, UPCOMING_BOOKING } from '@/data';
+import { BUSY_SLOTS, CALENDAR, TIME_SLOTS, UPCOMING_BOOKING, useCancelBooking } from '@/data';
 import { monthName } from '@/utils/format.js';
 
 export const BookingManageSheet = ({ booking, onClose, onCancelled, onRescheduled, onChat, onRules }) => {
   const [view, setView] = React.useState('overview'); // overview | cancel | reschedule | done-cancel | done-reschedule
   const [newDay, setNewDay] = React.useState(null);
   const [newSlot, setNewSlot] = React.useState(null);
+  const [cancelError, setCancelError] = React.useState(null);
+  const cancelMutation = useCancelBooking();
 
   const b = booking || UPCOMING_BOOKING;
   const freeCancel = b.hoursTo >= 6;
@@ -97,6 +99,38 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
           <div style={{ height: 140 }} />
         </div>
 
+        {cancelError && (
+          <div
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              position: 'absolute', left: 16, right: 16, bottom: 102,
+              zIndex: 10,
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
+              border: '1px solid var(--danger)',
+              borderRadius: 14,
+              padding: '11px 13px',
+              display: 'flex', alignItems: 'center', gap: 11,
+              boxShadow: '0 8px 24px rgba(28, 25, 23, 0.12)',
+            }}
+          >
+            <span style={{
+              width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+              background: 'var(--danger)', color: '#fff',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }} aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}
+                   strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 650, lineHeight: 1.25 }}>
+              {cancelError}
+            </span>
+          </div>
+        )}
+
         <div style={{
           position: 'absolute', left: 0, right: 0, bottom: 0,
           padding: '12px 16px 20px',
@@ -113,14 +147,29 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
             </button>
           )}
           <button
-            onClick={() => setView('done-cancel')}
+            disabled={cancelMutation.isPending}
+            onClick={async () => {
+              setCancelError(null);
+              try {
+                await cancelMutation.mutateAsync({ bookingId: b.id });
+                setView('done-cancel');
+              } catch (err) {
+                const code = err && typeof err === 'object' && 'code' in err ? err.code : null;
+                if (code === 'cancel_window_expired') {
+                  setCancelError('Окно отмены истекло — обратитесь на ресепшн');
+                } else {
+                  setCancelError('Не удалось отменить запись. Попробуйте ещё раз.');
+                }
+              }
+            }}
             className="btn"
             style={{
               width: '100%', height: 54,
               background: 'var(--danger)', color: '#fff',
+              opacity: cancelMutation.isPending ? 0.7 : 1,
             }}
           >
-            Отменить запись
+            {cancelMutation.isPending ? 'Отмена…' : 'Отменить запись'}
           </button>
         </div>
       </div>
