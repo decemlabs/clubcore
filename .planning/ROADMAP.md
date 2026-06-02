@@ -205,6 +205,20 @@ Plans:
 Plans:
 - [x] 73-01-PLAN.md — Restyle active-subscription Home to the Home.html mockup: HomeHeroCard (static «Свободно» occupancy + GymStatusPill), canonical SubCardSpot across active/warn/danger, BookSpot «Запишись» CTA, big QR, BookTile/ChatTile, FeedSection; flip default subCardStyle 'eyebrow'→'spot'; newbie branch + App.jsx contract + adapters/identity tests preserved
 
+### Phase 74: Обновить экраны «Профиль» и «Настройки» по новым макетам (Downloads/Profile.html, Downloads/Settings.html)
+
+**Goal:** Рестайл client-pwa: экран «Профиль» приведён к Profile.html (pass-style membership-hero только с подкреплёнными API-полями, stat-полоска, шестерёнка → /settings, 3 таба истории), «Настройки» выделены в отдельный экран SettingsScreen + защищённый /settings без TabBar по Settings.html; локальные тумблеры уведомлений; неподкреплённый декор скрыт за code-флагами (BUILT, HIDDEN). Чисто фронт, без новых backend-эндпоинтов.
+**Requirements**: TBD
+**Depends on:** Phase 73
+**Design input:** `.planning/design-inputs/client-pwa-profile-settings/Profile.html`, `.planning/design-inputs/client-pwa-profile-settings/Settings.html` (preserved from Downloads; transient source)
+**UI hint:** yes
+**Plans:** 3 plans
+
+Plans:
+- [ ] 74-01-PLAN.md — Standalone SettingsScreen + protected /settings route (TabBar hidden, local notif persistence, flags)
+- [ ] 74-02-PLAN.md — Restyle ProfileScreen to Profile.html (pass-hero, stat strip, gear→/settings, 3 tabs, PROFILE_FEATURE_FLAGS)
+- [ ] 74-03-PLAN.md — Mandatory browser verification of Profile + Settings
+
 ---
 
 *Roadmap last updated: 2026-05-29 — v2.0 Frontend Integration — Client PWA roadmap created (5 phases 68-72, 47 requirements mapped, zero orphans; v1.11 shipped and archived).*
