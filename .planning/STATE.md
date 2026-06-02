@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Client PWA — Fill the Gaps
-status: planning
+status: executing
 stopped_at: Phase 75 context gathered
-last_updated: "2026-06-02T16:06:03.493Z"
-last_activity: 2026-06-02 — Milestone v2.1 roadmap created (Phases 75-77)
+last_updated: "2026-06-02T16:20:07.712Z"
+last_activity: 2026-06-02 -- Phase 75 execution started
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — v2.1 Client PWA — Fill the Gaps opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v2.1 Client PWA — Fill the Gaps (opened 2026-06-02) — roadmap defined, ready to plan Phase 75. Включение скрытого/замоканного функционала PWA (флаги + мелкие поля backend + фронт-проводка) + фолд-ин 2 долгов v2.0. Net-new домены (Группа B) отложены.
+**Current focus:** Phase 75 — backend-field-additions
 
 ## Current Position
 
-Phase: 75 (Not started)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-06-02 — Milestone v2.1 roadmap created (Phases 75-77)
+Phase: 75 (backend-field-additions) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 75
+Last activity: 2026-06-02 -- Phase 75 execution started
 
 **Progress:** [░░░░░░░░░░] 0% (0/3 phases complete)
 

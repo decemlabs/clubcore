@@ -82,7 +82,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 75-01-PLAN.md — Membership price/auto_renew fields + notif_prefs JSONB persistence on /client/me (PMEM-01, NOTIF-01)
+- [x] 75-01-PLAN.md — Membership price/auto_renew fields + notif_prefs JSONB persistence on /client/me (PMEM-01, NOTIF-01)
 - [ ] 75-02-PLAN.md — FIT15 idempotent seed migration + validate-endpoint test (PROMO-01)
 
 ### Phase 76: PWA Wiring + Cleanup
@@ -113,7 +113,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 75. Backend Field Additions | 0/2 | Not started | - |
+| 75. Backend Field Additions | 1/2 | In Progress|  |
 | 76. PWA Wiring + Cleanup | 0/TBD | Not started | - |
 | 77. v2.0 Debt Closures | 0/TBD | Not started | - |
 
