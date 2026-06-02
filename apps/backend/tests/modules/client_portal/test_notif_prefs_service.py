@@ -24,13 +24,6 @@ from app.modules.clients.models import Client
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
 
-# ── Helper to build a payload ────────────────────────────────────────────────
-
-
-def _payload(**kwargs: object) -> ClientProfileUpdateRequest:
-    return ClientProfileUpdateRequest(**kwargs)
-
-
 # ── get_client_me — notif_prefs defaults when column is NULL ─────────────────
 
 
@@ -62,7 +55,7 @@ async def test_update_client_profile_persists_notif_prefs(
     result = await service.update_client_profile(
         db_session,
         client_id=client.id,
-        payload=_payload(notif_prefs=prefs),
+        payload=ClientProfileUpdateRequest(notif_prefs=prefs),
     )
     assert result.notif_prefs is not None
     assert result.notif_prefs.promo is False
@@ -81,7 +74,7 @@ async def test_update_client_profile_notif_prefs_reflected_on_get(
     await service.update_client_profile(
         db_session,
         client_id=client.id,
-        payload=_payload(notif_prefs=prefs),
+        payload=ClientProfileUpdateRequest(notif_prefs=prefs),
     )
     # Fetch again to confirm persistence
     result = await service.get_client_me(db_session, client.id)
@@ -102,13 +95,13 @@ async def test_update_client_profile_notif_prefs_none_leaves_untouched(
     await service.update_client_profile(
         db_session,
         client_id=client.id,
-        payload=_payload(notif_prefs=prefs),
+        payload=ClientProfileUpdateRequest(notif_prefs=prefs),
     )
     # Now update with notif_prefs=None — should not overwrite
     await service.update_client_profile(
         db_session,
         client_id=client.id,
-        payload=_payload(first_name="Тест"),
+        payload=ClientProfileUpdateRequest(first_name="Тест"),
     )
     result = await service.get_client_me(db_session, client.id)
     # Prefs must still reflect the first write, not defaults
@@ -128,7 +121,7 @@ async def test_update_client_profile_notif_prefs_full_replace(
     await service.update_client_profile(
         db_session,
         client_id=client.id,
-        payload=_payload(
+        payload=ClientProfileUpdateRequest(
             notif_prefs=NotifPrefs(promo=True, schedule=True, trainer=True, sound=True)
         ),
     )
@@ -136,7 +129,7 @@ async def test_update_client_profile_notif_prefs_full_replace(
     result = await service.update_client_profile(
         db_session,
         client_id=client.id,
-        payload=_payload(
+        payload=ClientProfileUpdateRequest(
             notif_prefs=NotifPrefs(promo=False, schedule=False, trainer=False, sound=False)
         ),
     )
