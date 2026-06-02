@@ -4,14 +4,14 @@ milestone: v2.1
 milestone_name: Client PWA — Fill the Gaps
 status: executing
 stopped_at: Phase 75 context gathered
-last_updated: "2026-06-02T19:11:01.424Z"
-last_activity: 2026-06-02 -- Phase 77 execution started
+last_updated: "2026-06-02T19:58:28.979Z"
+last_activity: 2026-06-02 -- Phase 78 execution started
 progress:
-  total_phases: 8
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 5
-  percent: 25
+  total_phases: 9
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 7
+  percent: 33
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — v2.1 Client PWA — Fill the Gaps opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 77 — v2-0-debt-closures
+**Current focus:** Phase 78 — pmem-notif-promo-frontend-surfacing
 
 ## Current Position
 
-Phase: 77 (v2-0-debt-closures) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 77
-Last activity: 2026-06-02 -- Phase 77 execution started
+Phase: 78 (pmem-notif-promo-frontend-surfacing) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 78
+Last activity: 2026-06-02 -- Phase 78 execution started
 
 **Progress:** [░░░░░░░░░░] 0% (0/3 phases complete)
 

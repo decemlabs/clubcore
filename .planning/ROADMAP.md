@@ -125,7 +125,7 @@ Plans:
 | 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
 | 76. PWA Wiring + Cleanup | 3/3 | Complete   | 2026-06-02 |
 | 77. v2.0 Debt Closures | 2/2 | Complete   | 2026-06-02 |
-| 78. PMEM/NOTIF/PROMO Frontend Surfacing | 0/TBD | Not started | - |
+| 78. PMEM/NOTIF/PROMO Frontend Surfacing | 3/3 | Complete   | 2026-06-02 |
 
 ### Phase 78: PMEM/NOTIF/PROMO Frontend Surfacing
 **Goal**: The backend-complete v2.1 fields are surfaced in the PWA UI: the client sees their membership price and auto-renewal indicator on the Profile screen; the Settings notification toggles persist to the backend (not just localStorage); and the recommended FIT15 promo code is applied one-tap from a chip in checkout. Closes the v2.1 audit's frontend-surfacing tech debt for PMEM-01 / NOTIF-01 / PROMO-01.
@@ -138,9 +138,9 @@ Plans:
 **Plans**: 3 plans (Wave 1 — all parallel; zero file overlap)
 
 Plans:
-- [ ] 78-01-PLAN.md — PMEM-01: surface membership price + null-driven auto-renew on Profile (useClientMembership → membership hero)
-- [ ] 78-02-PLAN.md — NOTIF-01: Settings toggles server-backed (hydrate from /client/me, PATCH full 4-key notifPrefs, drop localStorage)
-- [ ] 78-03-PLAN.md — PROMO-01: flip recommendedPromo flag → surface one-tap FIT15 checkout chip
+- [x] 78-01-PLAN.md — PMEM-01: surface membership price + null-driven auto-renew on Profile (useClientMembership → membership hero)
+- [x] 78-02-PLAN.md — NOTIF-01: Settings toggles server-backed (hydrate from /client/me, PATCH full 4-key notifPrefs, drop localStorage)
+- [x] 78-03-PLAN.md — PROMO-01: flip recommendedPromo flag → surface one-tap FIT15 checkout chip
 
 **UI hint**: yes
 
