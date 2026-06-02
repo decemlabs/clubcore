@@ -242,12 +242,18 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   //   2. me is loaded AND !me.onboardingCompletedAt (flag is server-owned; once set, never re-fires)
   //   3. profile is empty: no goal, no heightCm, no weightKg, no non-trivial firstName
   // T-999.5-15 mitigation: precise condition + replace:true prevents redirect loop.
+  // WR-76-01: a ref guard enforces the documented "fires once" semantics — Phase 76's
+  // profile mutations invalidate clientPortalKeys.home()/.me(), minting new object refs
+  // that would otherwise re-run this effect (and re-navigate) on every refetch.
+  const hasRedirectedToOnboarding = React.useRef(false);
   React.useEffect(() => {
+    if (hasRedirectedToOnboarding.current) return;
     if (
       homeData?.membershipState === 'newbie' &&
       me && !me.onboardingCompletedAt &&
       !me.goal && !me.heightCm && !me.weightKg
     ) {
+      hasRedirectedToOnboarding.current = true;
       navigate('/onboarding', { replace: true });
     }
   }, [homeData, me, navigate]);
@@ -538,16 +544,22 @@ export function HeroNewbie({ onOpenPlans, isDark }) {
           })}
         </div>
 
-        {/* Plan info chip — live count + min monthly price (NHOME-02 / D-76-06..09) */}
-        {plans && plans.length > 0 ? (
-          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
-            <span className="chip">
-              {plans.length} {pluralPlan(plans.length)} · от {formatMoney(
-                Math.min(...plans.map(p => Math.round(p.price_kopecks / (p.duration_days / 30))))
-              )}/мес
-            </span>
-          </div>
-        ) : null /* loading / error / empty: existing hardcoded layout renders as-is (D-76-09) */}
+        {/* Plan info chip — live count + min monthly price (NHOME-02 / D-76-06..09).
+            Wire is camelCase (priceKopecks/durationDays per ClientCatalogPlanResponse).
+            Filter out non-positive durations / non-finite prices so Math.min never
+            sees Infinity or NaN; render nothing if no valid monthly price remains. */}
+        {(() => {
+          const monthly = (plans ?? [])
+            .filter(p => p.durationDays > 0 && Number.isFinite(p.priceKopecks))
+            .map(p => Math.round(p.priceKopecks / (p.durationDays / 30)))
+          return plans && plans.length > 0 && monthly.length > 0 ? (
+            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
+              <span className="chip">
+                {plans.length} {pluralPlan(plans.length)} · от {formatMoney(Math.min(...monthly))}/мес
+              </span>
+            </div>
+          ) : null /* loading / error / empty: existing hardcoded layout renders as-is (D-76-09) */
+        })()}
 
         {/* CTA */}
         <button
@@ -1006,7 +1018,9 @@ export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPla
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 12, fontWeight: 700, flexShrink: 0,
                     }}>
-                      {[...(tr.full_name ?? tr.name ?? '').trim()][0]}
+                      {/* live trainers expose camelCase `fullName` (ClientCatalogTrainerResponse);
+                          the static fallback uses `name` */}
+                      {[...(tr.fullName ?? tr.name ?? '').trim()][0]}
                     </span>
                   ))}
                   {count > 3 && (

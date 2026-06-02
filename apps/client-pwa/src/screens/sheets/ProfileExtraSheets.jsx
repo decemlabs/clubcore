@@ -67,9 +67,15 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
   const [toastMsg, setToastMsg] = React.useState(null);
   const toastTimer = React.useRef(null);
 
-  // Hydrate from API on first data arrival (PDATA-01 / D-76-10)
+  // Hydrate from API once per client load (PDATA-01 / D-76-10). Guarding on a
+  // ref keyed by client id means a later background refetch / cache invalidation
+  // (which mints a new meData object identity) does NOT clobber unsaved edits.
+  const hydratedForId = React.useRef(null);
   React.useEffect(() => {
     if (!meData) return;
+    const key = meData.id ?? '__me__';
+    if (hydratedForId.current === key) return;
+    hydratedForId.current = key;
     setName(meData.firstName ?? '');
     setEmail(meData.email ?? '');
     setGoal(meData.goal ?? '');
@@ -93,18 +99,26 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
   };
 
   const onSave = async () => {
-    // Phone changes still delegate to SMS verify flow (unchanged from original)
+    // Phone changes delegate to the SMS-verify flow. NOTE (WR-76-04): phone is
+    // currently read-only in this sheet, so this branch is unreachable today —
+    // retained for when phone editing is wired here.
     if (phone !== initialPhone.current) {
       window.__openSmsVerify?.('phone', phone);
       return;
     }
+    // heightCm/weightKg are integer columns server-side — coerce to a positive
+    // integer and drop anything non-numeric/≤0 so we never PATCH NaN or a float.
+    const toPosInt = (s) => {
+      const n = Math.round(Number(s));
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
     try {
       await updateProfile.mutateAsync({
         firstName: name,
         email: email || undefined,
         goal: goal || undefined,
-        heightCm: heightCm ? Number(heightCm) : undefined,
-        weightKg: weightKg ? Number(weightKg) : undefined,
+        heightCm: heightCm ? toPosInt(heightCm) : undefined,
+        weightKg: weightKg ? toPosInt(weightKg) : undefined,
       });
       if (setTweak) setTweak('userName', name);
       setSaved(true);

@@ -196,11 +196,12 @@ describe('HomeScreen newbie live data wiring', () => {
 
   it('NHOME-01: avatar strip shows initials from live useClientTrainers data, not static fallback', () => {
     newbieBase()
-    // Live trainers with full_name different from the static TRAINERS mock (which has 'Аня' → 'А')
+    // Live trainers with fullName (camelCase wire — ClientCatalogTrainerResponse)
+    // different from the static TRAINERS mock (which has 'Аня' → 'А')
     useClientTrainers.mockReturnValue({
       data: [
-        { id: 'lt1', full_name: 'Олег Борисов' },
-        { id: 'lt2', full_name: 'Нина Козлова' },
+        { id: 'lt1', fullName: 'Олег Борисов' },
+        { id: 'lt2', fullName: 'Нина Козлова' },
       ],
       isLoading: false,
     })
@@ -215,12 +216,13 @@ describe('HomeScreen newbie live data wiring', () => {
 
   it('NHOME-02: plan chip text is derived from live useClientPlans data', () => {
     newbieBase()
-    // Two plans: 30-day at 150000 kopecks (5000/мес), 180-day at 600000 kopecks (≈3333/мес)
-    // minMonthlyKopecks = Math.round(600000 / (180/30)) = Math.round(100000) = 100000 → "1000"
+    // camelCase wire (priceKopecks/durationDays per ClientCatalogPlanResponse).
+    // Two plans: 30-day @150000 kopecks (1500₽/мес), 180-day @600000 kopecks (100000 kopecks = 1000₽/мес).
+    // minMonthlyKopecks = Math.round(600000 / (180/30)) = 100000 → formatMoney → "1 000 ₽" (NBSP).
     useClientPlans.mockReturnValue({
       data: [
-        { id: 'p1', name: 'Месяц', price_kopecks: 150000, duration_days: 30 },
-        { id: 'p2', name: 'Полгода', price_kopecks: 600000, duration_days: 180 },
+        { id: 'p1', name: 'Месяц', priceKopecks: 150000, durationDays: 30 },
+        { id: 'p2', name: 'Полгода', priceKopecks: 600000, durationDays: 180 },
       ],
     })
 
@@ -231,6 +233,11 @@ describe('HomeScreen newbie live data wiring', () => {
     expect(chipEl).toBeInTheDocument()
     // Must include the count "2" and the word "тарифа" (plural for 2)
     expect(chipEl.textContent).toMatch(/2 тарифа/)
-    expect(chipEl.textContent).toMatch(/\/мес/)
+    // Regression guard (CR-76-01): a snake_case misread → NaN → formatMoney prints
+    // the ru-RU literal "не число". Assert a real formatted price (a digit before ₽)
+    // and explicitly reject the NaN sentinel so the test cannot pass against the bug.
+    expect(chipEl.textContent).not.toMatch(/не число/)
+    expect(chipEl.textContent).toMatch(/от\s*\d[\d\s ]*\/мес/)
+    expect(chipEl.textContent).toMatch(/1[\s ]?000/) // min monthly = 1 000 ₽
   })
 })
