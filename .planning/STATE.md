@@ -139,6 +139,8 @@ Items carried forward (not addressed in v2.1):
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit bucket, QR post-decode existence, cancel idempotency) | deferred → `/gsd:secure-phase 70` |
 | backlog | Promo-code admin CRUD UI (999.4 — only seeded codes exist) | deferred (admin-web frozen) |
 | production | RUN-01 live ЮKassa credentialed checkout leg (D-72-06) | OPERATOR-PENDING by design |
+| tech-debt | Pre-existing `ruff I001` (import sort) in `client_portal/router.py` — present at v2.1 base `0f6b8927`, NOT introduced by Phase 75 (zero diff). Auto-fixable via `ruff check --fix`. | noted Phase 75 review — quick task or fold into Phase 77 |
+| correctness | WR-75-02: receipt-lookup join in `get_client_payment_status` matches by `(plan_id, client_id)` + `ORDER BY created_at DESC LIMIT 1` — repeat same-plan purchases can surface wrong receipt (IDOR-safe). Pre-existing. | deferred — out of Phase 75 scope |
 
 ## Quick Tasks Completed
 
