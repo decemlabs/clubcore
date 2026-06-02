@@ -18,6 +18,7 @@ INVARIANTS:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import UUID
 
@@ -189,6 +190,7 @@ async def fetch_client_membership(
         await session.execute(
             text(
                 "SELECT id, plan_name_snapshot, start_date, end_date, status, "
+                "price_kopecks_snapshot, "
                 "(end_date - (now() AT TIME ZONE 'Europe/Moscow')::date) AS days_until_end "
                 "FROM memberships "
                 "WHERE client_id = :client_id AND status = 'active' "
@@ -554,7 +556,7 @@ async def fetch_client_me(
         await session.execute(
             text(
                 "SELECT id, first_name, last_name, phone, email, goal, "
-                "  height_cm, weight_kg, onboarding_completed_at "
+                "  height_cm, weight_kg, onboarding_completed_at, notif_prefs "
                 "FROM clients WHERE id = :client_id AND deleted_at IS NULL"
             ),
             {"client_id": str(client_id)},
@@ -598,6 +600,12 @@ async def update_client_profile(
     if payload.email is not None:
         sets.append("email = :email")
         bind["email"] = payload.email
+    if payload.notif_prefs is not None:
+        # D-05: full replace — write all four keys atomically.
+        # Fixed SET literal fragment (S608 discipline); value bound as JSONB via
+        # json.dumps + ::jsonb cast so asyncpg can serialize it correctly.
+        sets.append("notif_prefs = :notif_prefs::jsonb")
+        bind["notif_prefs"] = json.dumps(payload.notif_prefs.model_dump())
     if payload.onboarding_completed:
         sets.append("onboarding_completed_at = now()")
 
