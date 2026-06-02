@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/EmptyState.jsx';
 import { LoadError } from '@/components/LoadError.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
+import { formatMoney } from '@/utils/format.js';
 import {
   useClientHome,
   useClientMe,
@@ -626,8 +627,6 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
     .filter(p => p.amountKopecks > 0)
     .reduce((s, p) => s + p.amountKopecks, 0);
 
-  const total = totalKopecks / 100;
-
   return (
     <div style={{ padding: '8px 16px' }}>
       {/* Summary card */}
@@ -638,7 +637,7 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
             <div className="t-display t-num" style={{
               marginTop: 6, fontSize: 30, letterSpacing: -0.6, lineHeight: 1,
             }}>
-              {total.toLocaleString('ru-RU')} ₽
+              {formatMoney(totalKopecks)}
             </div>
           </div>
           <button onClick={onOpenPlans} style={{
@@ -677,7 +676,6 @@ function PurchasesList({ onOpenPlans, isEmpty }) {
 // API: { id, subjectKind, amountKopecks (signed), method, receivedAt }
 function PurchaseRow({ p }) {
   const isRefund = p.amountKopecks < 0;
-  const amountRub = Math.abs(p.amountKopecks) / 100;
   const iconName = p.subjectKind === 'membership' ? 'card'
     : p.subjectKind === 'pt_package' ? 'user'
     : isRefund ? 'tag'
@@ -713,7 +711,7 @@ function PurchaseRow({ p }) {
           fontSize: 14,
           color: isRefund ? '#a36a16' : 'var(--text)',
         }}>
-          {isRefund ? '+' : '−'}{amountRub.toLocaleString('ru-RU')} ₽
+          {isRefund ? '+' : '−'}{formatMoney(Math.abs(p.amountKopecks))}
         </div>
         <div className="t-mini" style={{ fontSize: 9.5, color: 'var(--text-3)' }}>
           {isRefund ? 'возврат' : 'оплачено'}
