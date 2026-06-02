@@ -66,7 +66,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Milestone Goal:** Turn on already-built-but-hidden client PWA functionality via feature-flag flips, small backend field additions to existing schemas, and pure-frontend wiring. Fold in the two deferred v2.0 warnings. No new backend domains; payment/activation path untouched.
 
 - [x] **Phase 75: Backend Field Additions** - Add `price_kopecks`/`auto_renew` to membership response, `notif_prefs` to `/client/me`, seed FIT15 promo (completed 2026-06-02)
-- [ ] **Phase 76: PWA Wiring + Cleanup** - Wire trainers/plans catalog to newbie-Home, bind PersonalDataSheet to `/client/me`, remove mock chat badge
+- [x] **Phase 76: PWA Wiring + Cleanup** - Wire trainers/plans catalog to newbie-Home, bind PersonalDataSheet to `/client/me`, remove mock chat badge (completed 2026-06-02)
 - [ ] **Phase 77: v2.0 Debt Closures** - Wire `useCancelBooking()` in BookingManageSheet (WARNING-1), reconcile receipt-destination display (WARNING-2)
 
 ## Phase Details
@@ -99,9 +99,9 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 76-01-PLAN.md — Wire newbie-Home trainer avatar strip + plan info chip to live catalogs (NHOME-01, NHOME-02)
-- [ ] 76-02-PLAN.md — Bind PersonalDataSheet read/save to /client/me with editable goal/height/weight (PDATA-01, PDATA-02)
-- [ ] 76-03-PLAN.md — Remove mock chat-badge CONVERSATIONS dependency + delete orphaned mock (CLEAN-01)
+- [x] 76-01-PLAN.md — Wire newbie-Home trainer avatar strip + plan info chip to live catalogs (NHOME-01, NHOME-02)
+- [x] 76-02-PLAN.md — Bind PersonalDataSheet read/save to /client/me with editable goal/height/weight (PDATA-01, PDATA-02)
+- [x] 76-03-PLAN.md — Remove mock chat-badge CONVERSATIONS dependency + delete orphaned mock (CLEAN-01)
 
 ### Phase 77: v2.0 Debt Closures
 **Goal**: The two v2.0 integration warnings are resolved: booking cancellation reaches the backend, and the post-payment receipt-destination display is consistent with the agreed UI spec.
@@ -119,7 +119,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
-| 76. PWA Wiring + Cleanup | 0/3 | Not started | - |
+| 76. PWA Wiring + Cleanup | 3/3 | Complete   | 2026-06-02 |
 | 77. v2.0 Debt Closures | 0/TBD | Not started | - |
 
 ---
