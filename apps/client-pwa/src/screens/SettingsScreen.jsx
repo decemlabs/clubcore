@@ -314,6 +314,9 @@ function SettingRow({ label, value, onChange }) {
         {label}
       </div>
       <button
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
         onClick={() => onChange(!value)}
         style={{
           width: 44,
