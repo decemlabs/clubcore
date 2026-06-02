@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Профиль — Мой зал</title>
+<style>
+  :root {
+    --accent: #2dd4a4;
+    --accent-deep: #0f9b76;
+    --accent-soft: #d6f5ea;
+
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #a8a29e;
+
+    --warn: #e9a23b;
+    --warn-soft: #fef3e2;
+    --danger: #e1483b;
+
+    --avatar-bg: #1c1917;
+    --avatar-fg: #f5f5f4;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "Inter Variable", "Inter", system-ui, sans-serif;
+
+    --r-pill: 999px;
+    --r-lg: 20px;
+
+    --sh-1: 0 1px 2px rgba(28, 25, 23, 0.04);
+    --sh-2: 0 1px 3px rgba(28, 25, 23, 0.05), 0 4px 14px rgba(28, 25, 23, 0.04);
+
+    --page: #e7e5e4;
+  }
+
+  body.dark {
+    --accent: #2dd4a4;
+    --accent-deep: #34e0b0;
+    --accent-soft: rgba(45, 212, 164, 0.18);
+
+    --bg: #14110e;
+    --surface: #211c18;
+    --surface-2: #1b1714;
+    --border: #2e2823;
+    --border-strong: #3d362f;
+    --text: #f5f1ea;
+    --text-2: #b8b0a6;
+    --text-3: #7c736a;
+
+    --warn: #e9a23b;
+    --warn-soft: rgba(233, 162, 59, 0.20);
+    --danger: #f47168;
+
+    --avatar-bg: #f4ebde;
+    --avatar-fg: #1a1511;
+
+    --sh-1: 0 1px 2px rgba(0,0,0,0.4);
+    --sh-2: 0 1px 3px rgba(0,0,0,0.5), 0 4px 14px rgba(0,0,0,0.3);
+
+    --page: #0a0a0a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--page);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.3s ease;
+  }
+  button { font-family: inherit; }
+  .t-num { font-variant-numeric: tabular-nums; }
+  .t-mini { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); }
+  .t-small { font-size: 13px; font-weight: 400; line-height: 1.4; color: var(--text-2); }
+  .t-h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; line-height: 1.25; color: var(--text); }
+  .t-display { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.05; color: var(--text); }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+  .stage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+
+  /* Device */
+  .device {
+    width: 390px; height: 844px; position: relative;
+    border-radius: 54px; background: #0a0a0a; padding: 12px;
+    box-shadow: 0 50px 100px rgba(28, 25, 23, 0.25), 0 0 0 1px rgba(28, 25, 23, 0.15);
+  }
+  .device-inner {
+    position: absolute; inset: 12px;
+    border-radius: 44px; overflow: hidden;
+    background: var(--bg);
+    transition: background 0.3s ease;
+  }
+  .island {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px; border-radius: 999px;
+    background: #000; z-index: 300; pointer-events: none;
+  }
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 10px; height: 44px;
+    color: var(--text); font-size: 15px; font-weight: 600;
+    pointer-events: none;
+  }
+  .status-bar span { font-variant-numeric: tabular-nums; }
+  .status-bar .glyphs { display: flex; gap: 6px; align-items: center; }
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; background: var(--text);
+    opacity: 0.85; border-radius: 3px; z-index: 10;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    transition: background 0.3s ease;
+  }
+
+  /* Scroll body */
+  .scroller {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-top: 54px;
+  }
+  .scroller::-webkit-scrollbar { display: none; }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-2);
+  }
+
+  .press { transition: transform 0.1s ease, background 0.15s ease; cursor: pointer; }
+  .press:active { transform: scale(0.985); }
+  [data-stat] { transition: background 0.15s ease, transform 0.1s ease; }
+  [data-stat]:hover { background: var(--surface-2) !important; }
+  .visit-row { transition: background 0.15s ease, transform 0.1s ease; }
+  .visit-row:hover { background: var(--surface-2); }
+  .tap-row { transition: background 0.15s ease, transform 0.1s ease; }
+  .tap-row:hover { background: var(--surface-2); }
+  .train-card { transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease; }
+  .train-card:hover { border-color: var(--border-strong); }
+
+  .fade-up { animation: fade-up 0.32s cubic-bezier(0.32,0.72,0.2,1) both; }
+  @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .scale-in { animation: scale-in 0.2s ease-out both; }
+  @keyframes scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+  /* Avatar */
+  .ava {
+    width: 62px; height: 62px; border-radius: 999px;
+    background: var(--avatar-bg); color: var(--avatar-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 700; letter-spacing: -0.5px; flex-shrink: 0;
+  }
+
+  /* Segmented control */
+  .seg {
+    display: flex; gap: 2px; padding: 3px;
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+  }
+  .seg-item {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    height: 32px; border-radius: 999px;
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    color: var(--text-2);
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .seg-item.active {
+    background: var(--text); color: var(--bg);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  }
+
+  /* Toggle switch */
+  .toggle {
+    width: 44px; height: 26px; border-radius: 999px; border: 0; padding: 0;
+    background: var(--border-strong); cursor: pointer; position: relative;
+    transition: background 0.18s ease; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+
+  /* Membership hero — flips to contrast with the active theme */
+  .membership-hero {
+    /* LIGHT theme → dark graphite "pass" (as it was before the beige) */
+    --mh-text: #f3f1ea;
+    --mh-text-2: rgba(255,255,255,0.62);
+    --mh-text-3: rgba(255,255,255,0.45);
+    --mh-track: rgba(255,255,255,0.10);
+    --mh-divider: rgba(255,255,255,0.12);
+    --mh-accent: var(--accent);
+    --mh-watermark: rgba(255,255,255,0.05);
+    --mh-chip-bg: color-mix(in oklab, var(--accent) 22%, transparent);
+    --mh-chip-fg: var(--accent);
+    --mh-chip-border: color-mix(in oklab, var(--accent) 32%, transparent);
+    --mh-ghost-bg: rgba(255,255,255,0.08);
+    --mh-ghost-border: rgba(255,255,255,0.16);
+    --mh-cta-bg: var(--accent);
+    --mh-cta-fg: #06120c;
+    --mh-cta-shadow: 0 10px 22px -10px color-mix(in oklab, var(--accent) 75%, transparent);
+    background: #0e0e0e !important;
+    border-color: rgba(255,255,255,0.14) !important;
+    box-shadow: 0 22px 50px -20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+    color: var(--mh-text);
+  }
+  body.dark .membership-hero {
+    /* DARK theme → light beige pass */
+    --mh-text: #1a1511;
+    --mh-text-2: #6f6453;
+    --mh-text-3: #9c8c72;
+    --mh-track: rgba(26,21,17,0.09);
+    --mh-divider: rgba(26,21,17,0.12);
+    --mh-accent: #0f9b76;
+    --mh-watermark: rgba(15,155,118,0.14);
+    --mh-chip-bg: rgba(15,155,118,0.12);
+    --mh-chip-fg: #0f9b76;
+    --mh-chip-border: rgba(15,155,118,0.30);
+    --mh-ghost-bg: rgba(255,255,255,0.55);
+    --mh-ghost-border: #ddccb2;
+    --mh-cta-bg: #0f9b76;
+    --mh-cta-fg: #ffffff;
+    --mh-cta-shadow: 0 10px 22px -10px rgba(15,155,118,0.55);
+    background: #ece0cd !important;
+    border-color: #ddccb2 !important;
+    box-shadow: var(--sh-2) !important;
+  }
+  .toggle .knob {
+    position: absolute; top: 2px; left: 2px;
+    width: 22px; height: 22px; border-radius: 999px; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    transition: left 0.18s ease;
+  }
+  .toggle.on .knob { left: 20px; }
+
+  /* Activity bars */
+  .act-bar {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    padding: 0; font-family: inherit;
+  }
+  .act-fill {
+    transition: height 0.6s cubic-bezier(0.32,0.72,0.2,1), background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .act-bar.sel .act-fill { transform: scaleX(1.06); }
+
+  .progress-track { background: var(--border); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+
+  /* Live "today" dot */
+  .live-dot { position: relative; }
+  .live-dot::after {
+    content: ""; position: absolute; inset: 0; border-radius: 999px;
+    background: var(--accent); animation: ping 1.8s cubic-bezier(0,0,0.2,1) infinite;
+  }
+  @keyframes ping { 70%, 100% { transform: scale(2.6); opacity: 0; } }
+
+  /* Bottom tab bar */
+  .tabbar {
+    height: 80px; padding: 8px 16px 22px;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    background: color-mix(in oklab, var(--surface) 85%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 0.5px solid var(--border);
+    flex-shrink: 0; position: relative; z-index: 5;
+  }
+  .tabbar-item {
+    appearance: none; border: 0; background: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; color: var(--text-3); font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.1px; cursor: pointer; padding: 0; position: relative;
+  }
+  .tabbar-item.active { color: var(--text); }
+  .tabbar-item .tab-badge {
+    position: absolute; top: 4px; right: calc(50% - 18px);
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+    background: var(--accent); color: #06120c; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid var(--surface);
+  }
+
+  /* Toast */
+  .toast {
+    position: absolute; left: 50%; bottom: 96px; transform: translate(-50%, 16px);
+    z-index: 60; background: var(--text); color: var(--bg);
+    font-size: 13.5px; font-weight: 600; padding: 11px 18px; border-radius: 999px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.32,0.72,0.2,1);
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="device" data-screen-label="Профиль">
+      <div class="device-inner">
+        <div class="island"></div>
+
+        <div class="status-bar" aria-hidden="true">
+          <span>9:41</span>
+          <div class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="0.5" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="0.5" fill="currentColor"/><rect x="9" y="2.5" width="3" height="8.5" rx="0.5" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="0.5" fill="currentColor"/></svg>
+            <svg width="24" height="11" viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="3" stroke="currentColor" stroke-opacity="0.4" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5" fill="currentColor"/><rect x="21" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor" fill-opacity="0.4"/></svg>
+          </div>
+        </div>
+
+        <div class="screen">
+          <div class="scroller" id="scroller">
+
+            <!-- Identity header -->
+            <div class="fade-up" style="padding:4px 16px 16px">
+              <div class="card" style="padding:16px">
+                <div class="row" style="gap:14px;align-items:center">
+                  <div style="position:relative;flex-shrink:0">
+                    <span class="ava">С</span>
+                    <span style="position:absolute;right:1px;bottom:1px;width:15px;height:15px;border-radius:999px;background:#34d399;border:3px solid var(--surface)"></span>
+                  </div>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+                    <div style="font-size:22px;font-weight:750;letter-spacing:-0.5px;line-height:1.05">Саша Морозов</div>
+                    <span style="align-self:flex-start;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px 0 8px;border-radius:999px;background:color-mix(in oklab, var(--accent) 18%, transparent);color:var(--accent-deep);font-size:10.5px;font-weight:700;letter-spacing:0.5px">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--accent-deep)"><path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1L3.2 9.4l6.1-.9L12 3z"/></svg>
+                      PREMIUM · 2 ГОДА
+                    </span>
+                  </div>
+                  <button id="gear" aria-label="Настройки" data-go="Settings.html" class="press" style="flex-shrink:0;width:38px;height:38px;border-radius:999px;padding:0;cursor:pointer;background:var(--surface-2);border:0.5px solid var(--border-strong);display:inline-flex;align-items:center;justify-content:center">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="18" r="2"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Membership hero -->
+            <div style="padding:0 16px 18px">
+              <div class="card fade-up membership-hero" style="position:relative;overflow:hidden;padding:16px;isolation:isolate">
+                <div class="row-between" style="position:relative;align-items:center">
+                  <span style="display:inline-flex;align-items:center;gap:7px">
+                    <span style="width:7px;height:7px;border-radius:2px;background:var(--mh-accent)"></span>
+                    <span class="t-mini" style="color:var(--mh-text-3);letter-spacing:1px">Абонемент</span>
+                  </span>
+                  <span style="display:inline-flex;align-items:center;height:23px;padding:0 11px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.3px;background:var(--mh-chip-bg);color:var(--mh-chip-fg);border:0.5px solid var(--mh-chip-border)">Годовой</span>
+                </div>
+
+                <div style="position:relative;margin-top:13px;display:flex;align-items:flex-end;gap:10px">
+                  <span class="t-num" style="font-size:46px;font-weight:800;letter-spacing:-2.5px;line-height:0.8;color:var(--mh-text)">47</span>
+                  <span style="font-size:13px;font-weight:600;color:var(--mh-text-2);padding-bottom:5px;line-height:1.2">дней до<br>продления</span>
+                </div>
+
+                <div style="position:relative;margin-top:13px">
+                  <div style="height:6px;border-radius:999px;background:var(--mh-track);overflow:hidden">
+                    <div id="memBar" style="height:100%;width:0;border-radius:999px;background:var(--mh-accent);transition:width 0.9s cubic-bezier(0.32,0.72,0.2,1)"></div>
+                  </div>
+                  <div class="row-between" style="margin-top:7px">
+                    <span style="font-size:11px;color:var(--mh-text-3)">Пройдено 43 дня</span>
+                    <span style="font-size:11px;font-weight:600;color:var(--mh-accent)">До 16 июня 2026</span>
+                  </div>
+                </div>
+
+                <div style="position:relative;margin-top:13px;padding-top:12px;border-top:0.5px solid var(--mh-divider);display:flex;align-items:center">
+                  <div style="flex:1;min-width:0">
+                    <div class="t-mini" style="color:var(--mh-text-3);letter-spacing:0.6px">Стоимость</div>
+                    <div style="margin-top:4px;font-size:15px;font-weight:700;color:var(--mh-text)">42 000 ₽<span style="font-size:11px;font-weight:500;color:var(--mh-text-3)"> / год</span></div>
+                  </div>
+                  <div style="width:0.5px;align-self:stretch;background:var(--mh-divider);margin:0 16px"></div>
+                  <div style="flex:1;min-width:0">
+                    <div class="t-mini" style="color:var(--mh-text-3);letter-spacing:0.6px">Продление</div>
+                    <div style="margin-top:4px;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--mh-accent)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+                      Автоматически
+                    </div>
+                  </div>
+                </div>
+
+                <div style="position:relative;margin-top:14px;display:flex;gap:8px">
+                  <button class="press" data-toast="Заморозка абонемента" style="flex:1;height:40px;border-radius:999px;cursor:pointer;background:var(--mh-ghost-bg);color:var(--mh-text);border:0.5px solid var(--mh-ghost-border);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 3v18M3 12h18M6 6l12 12M18 6L6 18" opacity="0.8"/></svg>
+                    Заморозить
+                  </button>
+                  <button class="press" data-go="К оплате v2.html" style="flex:1;height:40px;border-radius:999px;cursor:pointer;background:var(--mh-cta-bg);color:var(--mh-cta-fg);border:0;font-size:13.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:var(--mh-cta-shadow)">Сменить тариф</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stats strip -->
+            <div style="padding:0 16px 18px">
+              <div class="card" style="padding:4px;display:flex;overflow:hidden">
+                <button class="press" data-stat="visits" style="flex:1;min-width:0;padding:9px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:transparent;cursor:pointer;border-radius:14px">
+                  <span class="t-num cu" data-to="14" style="font-size:24px;font-weight:750;letter-spacing:-1px;line-height:1;color:var(--text)">0</span>
+                  <span style="font-size:11px;font-weight:500;color:var(--text-3);white-space:nowrap">визитов</span>
+                </button>
+                <div style="width:0.5px;align-self:stretch;margin:11px 0;background:var(--border)"></div>
+                <button class="press" data-stat="trainings" style="flex:1;min-width:0;padding:9px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:transparent;cursor:pointer;border-radius:14px">
+                  <span class="t-num cu" data-to="4" style="font-size:24px;font-weight:750;letter-spacing:-1px;line-height:1;color:var(--text)">0</span>
+                  <span style="font-size:11px;font-weight:500;color:var(--text-3);white-space:nowrap">тренировки</span>
+                </button>
+                <div style="width:0.5px;align-self:stretch;margin:11px 0;background:var(--border)"></div>
+                <div style="flex:1;min-width:0;padding:9px 8px;display:flex;flex-direction:column;align-items:center;gap:3px">
+                  <span class="t-num cu" data-to="6" style="font-size:24px;font-weight:750;letter-spacing:-1px;line-height:1;color:var(--text)">0</span>
+                  <span style="font-size:11px;font-weight:500;color:var(--text-3);white-space:nowrap">недель</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Activity card -->
+            <div style="padding:0 16px 18px">
+              <div class="card fade-up" style="padding:14px">
+                <div class="row-between" style="align-items:center">
+                  <span class="t-mini" style="color:var(--text-3)">Активность за неделю</span>
+                  <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px 0 7px;border-radius:999px;background:color-mix(in oklab, var(--warn) 16%, transparent);color:#b9791f;font-size:11px;font-weight:700;letter-spacing:0.2px">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e0852a" stroke-width="2" stroke-linejoin="round"><path d="M12 3c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4-1 4 4 4 3-1 0-2 0-3 0-5z"/></svg>
+                    6 недель
+                  </span>
+                </div>
+
+                <div class="row" style="align-items:baseline;gap:5px;margin-top:8px">
+                  <span class="t-num cu" data-to="271" style="font-size:23px;font-weight:800;letter-spacing:-0.8px;line-height:1;color:var(--text)">0</span>
+                  <span class="t-small" style="font-size:12px;color:var(--text-3);font-weight:500">минута · 5 тренировок</span>
+                </div>
+
+                <div id="act-bars" style="display:flex;align-items:flex-end;gap:7px;margin-top:12px"></div>
+
+                <div id="act-footer" style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)"></div>
+              </div>
+            </div>
+
+            <!-- Quick action tiles -->
+            <div style="padding:0 16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <button class="press" data-toast="Приведи друга — −1 000 ₽" style="border:0;cursor:pointer;background:var(--accent);border-radius:var(--r-lg);padding:12px;text-align:left;color:#06120c;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden">
+                <span style="position:absolute;top:-7px;left:44px;width:14px;height:14px;border-radius:999px;background:var(--bg);pointer-events:none"></span>
+                <span style="position:absolute;bottom:-7px;left:44px;width:14px;height:14px;border-radius:999px;background:var(--bg);pointer-events:none"></span>
+                <span style="position:absolute;top:6px;bottom:6px;left:51px;width:0;border-left:2px dashed rgba(6,18,12,0.22);pointer-events:none"></span>
+                <span style="width:32px;height:32px;border-radius:10px;flex-shrink:0;background:#06120c;display:inline-flex;align-items:center;justify-content:center">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3.5-6 7-6s7 2.5 7 6"/><circle cx="17" cy="6.5" r="3"/><path d="M16 14c3 0.3 6 2.4 6 5.5"/></svg>
+                </span>
+                <div style="min-width:0">
+                  <div class="t-num" style="font-size:18px;font-weight:800;letter-spacing:-0.6px;line-height:1.05;color:#06120c;white-space:nowrap">−1 000 ₽</div>
+                  <div style="font-size:11.5px;font-weight:600;color:#06120c;opacity:0.74;margin-top:2px;white-space:nowrap">Приведи друга</div>
+                </div>
+              </button>
+
+              <button class="press" data-toast="О зале — открыто до 23:00" style="cursor:pointer;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:11px;text-align:left;color:var(--text);display:flex;align-items:center;gap:8px;position:relative;overflow:hidden">
+                <span style="width:28px;height:28px;border-radius:9px;flex-shrink:0;background:var(--surface-2);border:0.5px solid var(--border);display:inline-flex;align-items:center;justify-content:center">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="2" stroke-linejoin="round"><path d="M12 22s7-7.6 7-13a7 7 0 10-14 0c0 5.4 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                </span>
+                <div style="min-width:0;flex:1">
+                  <div class="t-h3" style="font-size:15px">О зале</div>
+                  <div style="margin-top:2px;font-size:11px;font-weight:600;white-space:nowrap"><span style="color:var(--accent-deep)">Открыто</span><span style="color:var(--text-3);font-weight:500"> до 23:00</span></div>
+                </div>
+              </button>
+            </div>
+
+            <!-- Tab segment / settings header -->
+            <div id="seg-wrap" style="padding:4px 16px 14px"></div>
+
+            <!-- Panels -->
+            <div id="panel-visits" class="panel"></div>
+            <div id="panel-trainings" class="panel hidden"></div>
+            <div id="panel-purchases" class="panel hidden"></div>
+
+            <div style="height:24px"></div>
+          </div>
+
+          <!-- Bottom tab bar -->
+          <div class="tabbar" role="tablist" aria-label="Основная навигация">
+            <button class="tabbar-item" data-go="Home.html" type="button">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1v-9z"/></svg>
+              <span>Главная</span>
+            </button>
+            <button class="tabbar-item" data-toast="Запись на тренировку" type="button">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+              <span>Запись</span>
+            </button>
+            <button class="tabbar-item" data-toast="Чат с залом" type="button">
+              <div style="position:relative">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 5a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4 4v-4H6a2 2 0 01-2-2V5z"/></svg>
+                <span class="tab-badge">2</span>
+              </div>
+              <span>Чат</span>
+            </button>
+            <button class="tabbar-item active" type="button" aria-selected="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+              <span>Профиль</span>
+            </button>
+          </div>
+
+          <div class="toast" id="toast"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const body = document.body;
+
+  // ── Theme (shared key with Settings.html) ──
+  applyTheme(localStorage.getItem('myzal_theme') || 'light');
+  function applyTheme(t) { body.classList.toggle('dark', t === 'dark'); }
+  window.addEventListener('storage', e => { if (e.key === 'myzal_theme') applyTheme(e.newValue || 'light'); });
+
+  // ── Toast ──
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1700);
+  }
+
+  // ── Icons ──
+  const ICON = {
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',
+    check: '<path d="M5 12l5 5L20 6"/>',
+    flame: '<path d="M12 3c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4-1 4 4 4 3-1 0-2 0-3 0-5z"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    card: '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 11h18"/>',
+    tag: '<path d="M3 12V4a1 1 0 011-1h8l9 9-9 9-9-9z"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>',
+    chevronRight: '<path d="M9 6l6 6-6 6"/>',
+    arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    logout: '<path d="M16 17l5-5-5-5M21 12H9M12 21H5a2 2 0 01-2-2V5a2 2 0 012-2h7"/>',
+  };
+  const ico = (name, size, color, sw) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color||'currentColor'}" stroke-width="${sw||2}" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
+
+  // ── Data ──
+  const VISITS = [
+    { date: '29 апр, Ср', time: '19:14', duration: '1ч 12м', kind: 'Самостоятельно' },
+    { date: '27 апр, Пн', time: '08:42', duration: '1ч 04м', kind: 'С Аней Соколовой', trainer: true },
+    { date: '24 апр, Пт', time: '20:01', duration: '0ч 48м', kind: 'Самостоятельно' },
+    { date: '22 апр, Ср', time: '08:30', duration: '1ч 10м', kind: 'С Аней Соколовой', trainer: true },
+    { date: '20 апр, Пн', time: '19:36', duration: '1ч 22м', kind: 'Самостоятельно' },
+    { date: '17 апр, Пт', time: '18:55', duration: '0ч 55м', kind: 'Самостоятельно' },
+  ];
+  const TRAININGS = [
+    { date: '27 апр', trainer: 'Аня Соколова', initials: 'АС', color: '#f59e0b', bg: '#fef3c7', focus: 'Ноги + спина', notes: 'Хорошо потянули становую, добавили вес' },
+    { date: '22 апр', trainer: 'Аня Соколова', initials: 'АС', color: '#f59e0b', bg: '#fef3c7', focus: 'Грудь + руки', notes: 'Жим лёжа: 3×8 на 60 кг' },
+    { date: '15 апр', trainer: 'Лиза Орлова', initials: 'ЛО', color: '#a855f7', bg: '#f3e8ff', focus: 'Йога — раскрытие бёдер', notes: 'Пробовали голубя, нужно больше работы' },
+    { date: '8 апр', trainer: 'Аня Соколова', initials: 'АС', color: '#f59e0b', bg: '#fef3c7', focus: 'Функционал', notes: 'Круговая, 4 круга' },
+  ];
+  const PURCHASES = [
+    { date: '28 апр', kind: 'sub', title: 'Продление абонемента', sub: 'Месячный · 30 дней', amount: 4900, status: 'ok' },
+    { date: '27 апр', kind: 'training', title: 'Персональная тренировка', sub: 'Аня Соколова · 27 апр, 08:30', amount: 2200, status: 'ok' },
+    { date: '22 апр', kind: 'training', title: 'Персональная тренировка', sub: 'Аня Соколова · 22 апр, 08:30', amount: 2200, status: 'ok' },
+    { date: '20 апр', kind: 'shop', title: 'Шейкер · бутылка 700 мл', sub: 'Магазин на ресепшене', amount: 690, status: 'ok' },
+    { date: '15 апр', kind: 'training', title: 'Йога — раскрытие бёдер', sub: 'Лиза Орлова · 15 апр, 19:00', amount: 2000, status: 'ok' },
+    { date: '10 апр', kind: 'training', title: 'Персональная тренировка', sub: 'Не пришёл · возврат 50%', amount: -1100, status: 'refund' },
+    { date: '28 мар', kind: 'sub', title: 'Продление абонемента', sub: 'Месячный · 30 дней', amount: 4900, status: 'ok' },
+  ];
+  const fmt = n => Math.abs(n).toLocaleString('ru-RU');
+
+  // ── Membership progress bar (elapsed of period) ──
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const total = 90, daysLeft = 47;
+    const elapsed = Math.max(0, Math.min(1, (total - daysLeft) / total));
+    const bar = document.getElementById('memBar');
+    if (bar) bar.style.width = (elapsed * 100) + '%';
+  }));
+
+  // ── Count-up ──
+  function countUp(el) {
+    const to = parseInt(el.dataset.to, 10) || 0;
+    const dur = 1000, start = performance.now();
+    function tick(t) {
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(to * eased);
+      if (p < 1) requestAnimationFrame(tick);
+      else el.textContent = to;
+    }
+    requestAnimationFrame(tick);
+  }
+  document.querySelectorAll('.cu').forEach(countUp);
+
+  // ── Activity bars ──
+  const days = [
+    { d: 'Пн', full: 'Понедельник', v: 62, min: 48, type: 'Силовая' },
+    { d: 'Вт', full: 'Вторник',     v: 0,  min: 0,  type: null },
+    { d: 'Ср', full: 'Среда',       v: 88, min: 65, type: 'Кардио + ноги' },
+    { d: 'Чт', full: 'Четверг',     v: 44, min: 32, type: 'Растяжка' },
+    { d: 'Пт', full: 'Пятница',     v: 96, min: 72, type: 'Силовая' },
+    { d: 'Сб', full: 'Суббота',     v: 70, min: 54, type: 'Функционалка', today: true },
+    { d: 'Вс', full: 'Воскресенье', v: 0,  min: 0,  type: null },
+  ];
+  const activeDays = days.filter(d => d.v > 0).length;
+  const goal = 6, remaining = Math.max(0, goal - activeDays);
+  const goalPct = Math.min(100, (activeDays / goal) * 100);
+  let sel = null;
+
+  const barsEl = document.getElementById('act-bars');
+  days.forEach((day, i) => {
+    const active = day.v > 0;
+    const btn = document.createElement('button');
+    btn.className = 'act-bar press';
+    btn.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;gap:7px';
+    btn.innerHTML = `
+      <div style="width:100%;height:42px;display:flex;align-items:flex-end">
+        <div class="act-fill" style="width:100%;height:0%;border-radius:6px;
+          background:${active ? 'var(--accent)' : 'var(--border-strong)'};
+          border:${active ? '0' : '0.5px solid var(--border-strong)'}"></div>
+      </div>
+      <span style="position:relative;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;
+        font-weight:${day.today ? 700 : 500};color:${day.today ? 'var(--accent-deep)' : 'var(--text-3)'}">
+        ${day.d}${day.today ? '<span class="live-dot" style="width:5px;height:5px;border-radius:999px;background:var(--accent)"></span>' : ''}
+      </span>`;
+    btn.addEventListener('click', () => { sel = (sel === i) ? null : i; renderBars(); renderFooter(); });
+    barsEl.appendChild(btn);
+  });
+
+  function renderBars() {
+    [...barsEl.children].forEach((btn, i) => {
+      const day = days[i], active = day.v > 0, isSel = sel === i;
+      btn.classList.toggle('sel', isSel);
+      const fill = btn.querySelector('.act-fill');
+      fill.style.height = Math.max(active ? 8 : 5, day.v) + '%';
+      fill.style.transitionDelay = (i * 55) + 'ms';
+      fill.style.background = active ? (isSel ? 'var(--accent-deep)' : 'var(--accent)') : 'var(--border-strong)';
+      fill.style.boxShadow = isSel ? '0 4px 12px color-mix(in oklab, var(--accent) 45%, transparent)' : 'none';
+      const lbl = btn.querySelector('span');
+      lbl.style.color = day.today ? 'var(--accent-deep)' : (isSel ? 'var(--text)' : 'var(--text-3)');
+      lbl.style.fontWeight = (day.today || isSel) ? 700 : 500;
+    });
+  }
+
+  function renderFooter() {
+    const f = document.getElementById('act-footer');
+    if (sel != null) {
+      const s = days[sel];
+      f.className = 'scale-in';
+      f.style.cssText = 'margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:10px';
+      f.innerHTML = `
+        <div style="width:30px;height:30px;border-radius:9px;flex-shrink:0;background:${s.v>0?'var(--accent-soft)':'var(--surface-2)'};display:flex;align-items:center;justify-content:center">
+          ${ico(s.v>0?'flame':'clock', 17, s.v>0?'var(--accent-deep)':'var(--text-3)', 2)}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="t-h3" style="font-size:14px">${s.full}${s.today?' · сегодня':''}</div>
+          <div class="t-small" style="font-size:12px;margin-top:1px">${s.v>0?s.type:'День отдыха'}</div>
+        </div>
+        ${s.v>0
+          ? `<div style="text-align:right"><span class="t-num" style="font-size:18px;font-weight:750;letter-spacing:-0.5px;color:var(--text)">${s.min}</span><span class="t-mini" style="font-size:9.5px;color:var(--text-3);margin-left:3px">мин</span></div>`
+          : `<span class="t-small" style="color:var(--text-3)">—</span>`}`;
+    } else {
+      f.className = '';
+      f.style.cssText = 'margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)';
+      const reached = activeDays >= goal;
+      f.innerHTML = `
+        <div class="row-between" style="align-items:center;margin-bottom:7px">
+          <span class="t-small" style="display:inline-flex;align-items:center;gap:5px;color:var(--text-2);font-weight:600">
+            ${reached ? ico('check',13,'var(--accent-deep)',2.4) : ''}
+            ${reached ? 'Цель недели достигнута' : 'Ещё '+remaining+' '+(remaining===1?'тренировка':'тренировки')+' до цели'}
+          </span>
+          <span class="t-num t-small" style="color:var(--text);font-weight:700">${activeDays}/${goal}</span>
+        </div>
+        <div class="progress-track" style="height:7px">
+          <div class="progress-fill" style="width:0%;transition:width 0.85s cubic-bezier(0.32,0.72,0.2,1) 0.15s"></div>
+        </div>`;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const pf = f.querySelector('.progress-fill'); if (pf) pf.style.width = goalPct + '%';
+      }));
+    }
+  }
+  requestAnimationFrame(() => requestAnimationFrame(renderBars));
+  renderFooter();
+
+  // ── Tab segment + panels ──
+  const TABS = [
+    { id: 'visits', label: 'Визиты' },
+    { id: 'trainings', label: 'Тренировки' },
+    { id: 'purchases', label: 'Покупки' },
+  ];
+  let tab = 'visits';
+  const segWrap = document.getElementById('seg-wrap');
+  const scroller = document.getElementById('scroller');
+  const segRefTop = () => segWrap;
+
+  function renderSeg() {
+    segWrap.innerHTML = `<div class="seg" style="width:100%">${
+      TABS.map(t => `<button class="seg-item ${tab===t.id?'active':''}" data-tab="${t.id}" style="flex:1;padding:0 4px">${t.label}</button>`).join('')
+    }</div>`;
+    segWrap.querySelectorAll('.seg-item').forEach(b =>
+      b.addEventListener('click', () => setTab(b.dataset.tab)));
+  }
+
+  function setTab(id) {
+    tab = id;
+    renderSeg();
+    ['visits','trainings','purchases'].forEach(p =>
+      document.getElementById('panel-'+p).classList.toggle('hidden', p !== id));
+  }
+
+  // Visits panel
+  const TOTAL_VISITS = 14;
+  function buildVisits() {
+    const rows = VISITS.slice(0, 4).map((v, i) => {
+      const name = v.trainer ? v.kind.replace(/^С\s+/, '') : '';
+      return `
+      ${i>0?'<div style="height:0.5px;background:var(--border);margin-left:58px"></div>':''}
+      <button class="press visit-row" data-toast="${v.date} · ${v.kind} · ${v.duration}" style="width:100%;border:0;background:transparent;cursor:pointer;text-align:left;padding:12px 14px;display:flex;gap:12px;align-items:center">
+        <div style="width:34px;height:34px;border-radius:999px;flex-shrink:0;background:${v.trainer?'var(--accent-soft)':'var(--surface-2)'};display:flex;align-items:center;justify-content:center">
+          ${ico(v.trainer?'user':'check', 16, v.trainer?'var(--accent-deep)':'var(--text-2)', 2.2)}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="t-h3" style="font-size:15px">${v.date}</div>
+          <div style="margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">
+            ${v.trainer
+              ? `<span style="flex-shrink:0;display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:0.2px;background:var(--accent-soft);color:var(--accent-deep)">с тренером</span>
+                 <span class="t-small" style="font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>`
+              : `<span class="t-small" style="font-size:12px;color:var(--text-3)">Самостоятельно</span>`}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="t-num" style="font-size:13.5px;font-weight:600;color:var(--text);line-height:1">${v.time}</div>
+          <div class="t-num" style="font-size:11px;color:var(--text-3);margin-top:3px;line-height:1">${v.duration}</div>
+        </div>
+        ${ico('chevronRight', 15, 'var(--text-3)', 2)}
+      </button>`;
+    }).join('');
+    return `<div style="padding:8px 16px">
+      <div class="row-between" style="padding:4px 4px 12px">
+        <div class="t-mini" style="color:var(--text-3)">Этот месяц</div>
+        <div class="t-small"><b style="color:var(--text)">${TOTAL_VISITS}</b> посещений</div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">${rows}</div>
+      <button class="press" data-toast="Все посещения · ${TOTAL_VISITS}" style="width:100%;margin-top:10px;border:0;background:transparent;color:var(--accent-deep);font-size:14px;font-weight:600;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        Все посещения · ${TOTAL_VISITS} ${ico('arrowRight',14,'var(--accent-deep)',2)}
+      </button>
+    </div>`;
+  }
+
+  // Trainings panel
+  function buildTrainings() {
+    const cards = TRAININGS.slice(0, 3).map(t => `
+      <button class="press train-card card" data-toast="${t.focus} · ${t.date} · ${t.trainer}" style="width:100%;text-align:left;cursor:pointer;padding:14px;display:flex;gap:12px;align-items:flex-start">
+        <span style="width:40px;height:40px;border-radius:999px;background:${t.bg};color:${t.color};display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${t.initials}</span>
+        <div style="flex:1;min-width:0">
+          <div class="row-between" style="align-items:flex-start;gap:10px">
+            <div class="t-h3" style="font-size:15px">${t.focus}</div>
+            <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
+              <span class="t-small" style="color:var(--text-3)">${t.date}</span>
+              ${ico('chevronRight',14,'var(--text-3)',2)}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:4px">
+            ${ico('user',12,'var(--text-3)',2)}
+            <span class="t-small" style="font-size:12px;color:var(--text-2)">${t.trainer}</span>
+          </div>
+          <div style="margin-top:9px;padding:9px 11px;background:var(--surface-2);border-radius:11px">
+            <span class="t-small" style="font-size:12.5px;color:var(--text-2);line-height:1.4">${t.notes}</span>
+          </div>
+        </div>
+      </button>`).join('');
+    return `<div style="padding:8px 16px">
+      <div class="row-between" style="padding:4px 4px 12px">
+        <div class="t-mini" style="color:var(--text-3)">Всего тренировок</div>
+        <div class="t-small"><b style="color:var(--text)">${TRAININGS.length}</b> с тренерами</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">${cards}</div>
+      <button class="press" data-toast="Все тренировки · ${TRAININGS.length}" style="width:100%;margin-top:10px;border:0;background:transparent;color:var(--accent-deep);font-size:14px;font-weight:600;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        Все тренировки · ${TRAININGS.length} ${ico('arrowRight',14,'var(--accent-deep)',2)}
+      </button>
+    </div>`;
+  }
+
+  // Purchases panel
+  function buildPurchases() {
+    const ok = PURCHASES.filter(p => p.status === 'ok');
+    const total = ok.reduce((s, p) => s + p.amount, 0);
+    const sum = k => PURCHASES.filter(p => p.kind === k && p.status === 'ok').reduce((s, p) => s + p.amount, 0);
+    const subT = sum('sub'), trT = sum('training'), shT = sum('shop');
+    const pct = a => total > 0 ? Math.round((a/total)*100) : 0;
+    const C_SUB = 'var(--accent)';
+    const C_TR  = 'color-mix(in oklab, var(--accent) 52%, var(--surface-2))';
+    const C_SH  = 'color-mix(in oklab, var(--accent) 26%, var(--surface-2))';
+    const col = (label, amount, color) => `
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="width:7px;height:7px;border-radius:2px;background:${color};flex-shrink:0"></span>
+          <div class="t-mini" style="color:var(--text-3);font-size:10px;letter-spacing:0.4px">${label}</div>
+        </div>
+        <div class="t-num" style="font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(amount)} ₽</div>
+        <div class="t-mini" style="color:var(--text-3);font-size:10px;text-transform:none;letter-spacing:0;font-weight:500">${pct(amount)}%</div>
+      </div>`;
+
+    const monthMap = { апр: 'Апрель', мар: 'Март' };
+    const groups = [];
+    PURCHASES.forEach(p => {
+      const m = p.date.split(' ')[1] || 'апр';
+      let g = groups.find(x => x.m === m);
+      if (!g) { g = { m, items: [] }; groups.push(g); }
+      g.items.push(p);
+    });
+    const purRow = p => {
+      const iconName = p.kind === 'sub' ? 'card' : p.kind === 'training' ? 'user' : p.kind === 'shop' ? 'tag' : 'card';
+      const refund = p.status === 'refund' || p.amount < 0;
+      return `<button class="press tap-row" data-toast="${p.title} · ${p.date} · ${refund?'возврат':'оплачено'} ${fmt(p.amount)} ₽" style="width:100%;border:0;background:transparent;cursor:pointer;text-align:left;padding:12px 14px;display:flex;gap:12px;align-items:center">
+        <div style="width:34px;height:34px;border-radius:9px;background:${refund?'var(--warn-soft)':'var(--surface-2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          ${ico(iconName, 16, refund?'#a36a16':'var(--text-2)', 2)}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="t-h3" style="font-size:14px">${p.title}</div>
+          <div class="t-small" style="margin-top:1px;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.date} · ${p.sub}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="t-h3 t-num" style="font-size:14px;color:${refund?'#a36a16':'var(--text)'}">${refund?'+':'−'}${fmt(p.amount)} ₽</div>
+          <div class="t-mini" style="font-size:9.5px;color:var(--text-3)">${refund?'возврат':'оплачено'}</div>
+        </div>
+        ${ico('chevronRight', 15, 'var(--text-3)', 2)}
+      </button>`;
+    };
+    const groupHtml = groups.map(g => `
+      <div style="margin-bottom:12px">
+        <div class="t-mini" style="color:var(--text-3);padding:8px 4px">${monthMap[g.m] || g.m} 2026</div>
+        <div class="card" style="padding:0;overflow:hidden">${
+          g.items.map((p, i) => (i>0?'<div style="height:0.5px;background:var(--border);margin-left:58px"></div>':'') + purRow(p)).join('')
+        }</div>
+      </div>`).join('');
+
+    return `<div style="padding:8px 16px">
+      <div class="card" style="padding:18px;margin-bottom:12px">
+        <div class="row-between" style="align-items:flex-start">
+          <div>
+            <div class="t-mini" style="color:var(--text-3)">Потрачено всего</div>
+            <div class="t-display t-num" style="margin-top:6px;font-size:30px;letter-spacing:-0.6px;line-height:1">${fmt(total)} ₽</div>
+          </div>
+          <button data-go="К оплате v2.html" style="background:transparent;border:0;color:var(--accent-deep);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:2px;padding:6px 0;margin-top:2px">Тарифы ${ico('chevronRight',14,'var(--accent-deep)',2.2)}</button>
+        </div>
+        <div style="margin-top:16px;height:8px;border-radius:999px;overflow:hidden;display:flex;gap:2px;background:var(--surface-2)">
+          <div style="width:${pct(subT)}%;background:${C_SUB}"></div>
+          <div style="width:${pct(trT)}%;background:${C_TR}"></div>
+          <div style="width:${pct(shT)}%;background:${C_SH}"></div>
+        </div>
+        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          ${col('Подписка', subT, C_SUB)}
+          ${col('Тренеры', trT, C_TR)}
+          ${col('Магазин', shT, C_SH)}
+        </div>
+      </div>
+      ${groupHtml}
+    </div>`;
+  }
+
+  // Render panels once
+  document.getElementById('panel-visits').innerHTML = buildVisits();
+  document.getElementById('panel-trainings').innerHTML = buildTrainings();
+  document.getElementById('panel-purchases').innerHTML = buildPurchases();
+
+  // ── Gear → open settings page ──
+  // (navigation handled by the global data-go click delegate)
+
+  // ── Stat tiles → jump to matching tab ──
+  document.querySelectorAll('[data-stat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setTab(btn.dataset.stat);
+      requestAnimationFrame(() => {
+        const top = scroller.scrollTop + (segWrap.getBoundingClientRect().top - scroller.getBoundingClientRect().top) - 58;
+        scroller.scrollTo({ top, behavior: 'smooth' });
+      });
+    });
+  });
+
+  // ── Global delegated clicks: navigation + toasts ──
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-go], [data-toast]');
+    if (!el) return;
+    if (el.dataset.logout) {
+      toast('Выход из аккаунта…');
+      setTimeout(() => { window.location.href = 'Login.html'; }, 1100);
+      return;
+    }
+    if (el.dataset.go) { window.location.href = el.dataset.go; return; }
+    if (el.dataset.toast) toast(el.dataset.toast);
+  });
+
+  // Init
+  renderSeg();
+})();
+</script>
+</body>
+</html>

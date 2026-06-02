@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
-status: ready_to_plan
-stopped_at: Phase 74 complete (3/3) — ready to discuss Phase 999.1
-last_updated: 2026-06-02T13:01:47.731Z
-last_activity: 2026-06-02
+status: Awaiting next milestone
+stopped_at: Phase 74 context gathered
+last_updated: "2026-06-02T14:46:35.539Z"
+last_activity: 2026-06-02 — Milestone v2.0 completed and archived
 progress:
   total_phases: 12
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 47
   completed_plans: 47
-  percent: 75
+  percent: 83
 ---
 
 # Project State
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — 
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-02
-
-Progress: [██████████] 98%
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-02 — Milestone v2.0 completed and archived
 
 ## v2.0 Roadmap Summary
 
@@ -134,6 +132,28 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 | v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 scope — plan in Phase 72 |
 | v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 — deferred |
 
+Items acknowledged and deferred at **v2.0 milestone close (2026-06-02)** — user elected "acknowledge all as deferred"; none block the milestone (audit `tech_debt`, 0 blockers):
+
+| Category | Item | Status |
+|----------|------|--------|
+| integration | WARNING-1: cancel-booking not E2E-wired in PWA — BookingManageSheet fires only a local callback, never `useCancelBooking()`; backend + hook exist & tested (CBOOK-05 frontend gap) | deferred |
+| integration | WARNING-2: receipt-destination chip removed from PaymentReturnScreen success state per user feedback (commit b17cd86a) — contradicts 999.5-UI-SPEC §Screen 2 D-09 | deferred (reconcile spec vs UI) |
+| verification | Phase 999.3 999.3-VERIFICATION.md | human_needed (12/12 automated; 999.3-HUMAN-UAT complete) |
+| verification | Phase 999.4 999.4-VERIFICATION.md | human_needed (14/14 automated; 999.4-UAT complete) |
+| verification | Phase 999.5 999.5-VERIFICATION.md | human_needed (20/20 automated; 999.5-UAT + HUMAN-UAT complete) |
+| uat | Phase 73 73-HUMAN-UAT.md | passed (0 pending scenarios) |
+| uat | Phase 999.4 999.4-HUMAN-UAT.md | diagnosed (0 pending scenarios) |
+| quick_task | 260529-ll9-purge-sportzal-cookies-domain | status marker missing (work shipped) |
+| quick_task | 260529-ny2-restore-pt-credit-owner-cancel (= Phase 999.1) | status marker missing (✅ DONE) |
+| quick_task | 260529-olc-wire-online-payment-emails (= Phase 999.2) | status marker missing (✅ DONE) |
+| quick_task | 260601-luw-remove-client-pwa-desktop-device-frame-w | status marker missing (✅ complete, see Quick Tasks Completed) |
+| quick_task | 260601-oan-client-pwa-newbie-home-v2-restyle | status marker missing (✅ complete) |
+| quick_task | 260601-sxf-v2-checkout | status marker missing (✅ complete) |
+| quick_task | 260601-vxr-plan-activated-client-pwa-paymentsucceed | status marker missing (✅ complete) |
+| security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit bucket, QR post-decode existence, cancel idempotency) | deferred → `/gsd:secure-phase 70` |
+| backlog | Promo-code admin CRUD UI (999.4 — only seeded codes exist) | deferred (admin-web frozen) |
+| production | RUN-01 live ЮKassa credentialed checkout leg (D-72-06) | OPERATOR-PENDING by design |
+
 ## Quick Tasks Completed
 
 | ID | Task | Date | Status |
@@ -148,3 +168,7 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 Last session: 2026-06-02T11:28:43.628Z
 Stopped at: Phase 74 context gathered
 Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

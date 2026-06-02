@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Настройки — Мой зал</title>
+<style>
+  :root {
+    --accent: #2dd4a4;
+    --accent-deep: #0f9b76;
+    --accent-soft: #d6f5ea;
+
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #a8a29e;
+    --danger: #e1483b;
+
+    --avatar-bg: #1c1917;
+    --avatar-fg: #f5f5f4;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "Inter Variable", "Inter", system-ui, sans-serif;
+
+    --r-pill: 999px;
+    --r-lg: 20px;
+
+    --sh-1: 0 1px 2px rgba(28, 25, 23, 0.04);
+    --sh-2: 0 1px 3px rgba(28, 25, 23, 0.05), 0 4px 14px rgba(28, 25, 23, 0.04);
+
+    --page: #e7e5e4;
+  }
+
+  body.dark {
+    --accent: #2dd4a4;
+    --accent-deep: #34e0b0;
+    --accent-soft: #16302a;
+
+    --bg: #14110e;
+    --surface: #211c18;
+    --surface-2: #1b1714;
+    --border: #2e2823;
+    --border-strong: #3d362f;
+    --text: #f5f1ea;
+    --text-2: #b8b0a6;
+    --text-3: #7c736a;
+    --danger: #f47168;
+
+    --avatar-bg: #f5f1ea;
+    --avatar-fg: #14110e;
+
+    --sh-1: 0 1px 2px rgba(0,0,0,0.3);
+    --sh-2: 0 1px 3px rgba(0,0,0,0.35), 0 6px 18px rgba(0,0,0,0.35);
+
+    --page: #0a0a0a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--page);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.3s ease;
+  }
+  button { font-family: inherit; }
+
+  .stage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+
+  /* Device */
+  .device {
+    width: 390px; height: 844px; position: relative;
+    border-radius: 54px; background: #0a0a0a; padding: 12px;
+    box-shadow: 0 50px 100px rgba(28, 25, 23, 0.25), 0 0 0 1px rgba(28, 25, 23, 0.15);
+  }
+  .device-inner {
+    position: absolute; inset: 12px;
+    border-radius: 44px; overflow: hidden;
+    background: var(--bg);
+    transition: background 0.3s ease;
+  }
+  .island {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px; border-radius: 999px;
+    background: #000; z-index: 300; pointer-events: none;
+  }
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 10px; height: 44px;
+    color: var(--text); font-size: 15px; font-weight: 600;
+    pointer-events: none;
+  }
+  .status-bar span { font-variant-numeric: tabular-nums; }
+  .status-bar .glyphs { display: flex; gap: 6px; align-items: center; }
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; background: var(--text);
+    opacity: 0.85; border-radius: 3px; z-index: 10;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    padding-top: 44px;
+    transition: background 0.3s ease;
+  }
+
+  /* Header */
+  .header {
+    position: relative; flex-shrink: 0;
+    height: 52px; padding: 0 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+  }
+  .hbtn {
+    width: 36px; height: 36px; border-radius: 999px;
+    border: 0.5px solid var(--border); background: var(--surface);
+    box-shadow: var(--sh-1);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text); cursor: pointer; padding: 0; flex: 0 0 auto;
+    transition: transform 0.12s ease, background 0.15s;
+  }
+  .hbtn:active { transform: scale(0.92); background: var(--surface-2); }
+  .htitle {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 17px; font-weight: 700; letter-spacing: -0.3px;
+    pointer-events: none; white-space: nowrap;
+  }
+  .header .spacer { width: 36px; flex: 0 0 auto; }
+
+  /* Scroll body */
+  .scroller {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 6px 16px 28px;
+  }
+  .scroller::-webkit-scrollbar { display: none; }
+
+  /* Identity header */
+  .ident {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 4px 18px;
+  }
+  .ident .ava-wrap { position: relative; flex-shrink: 0; }
+  .ident .ava {
+    width: 62px; height: 62px; border-radius: 999px;
+    background: var(--avatar-bg); color: var(--avatar-fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 700; letter-spacing: -0.5px;
+  }
+  .ident .dot {
+    position: absolute; right: 1px; bottom: 1px;
+    width: 15px; height: 15px; border-radius: 999px;
+    background: #34d399; border: 3px solid var(--bg);
+  }
+  .ident .name { font-size: 22px; font-weight: 750; letter-spacing: -0.5px; line-height: 1.1; }
+  .ident .badge {
+    margin-top: 6px; display: inline-flex; align-items: center; gap: 5px;
+    height: 22px; padding: 0 9px 0 8px; border-radius: 999px;
+    background: color-mix(in oklab, var(--accent) 18%, transparent);
+    color: var(--accent-deep); font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .ident .badge svg { width: 11px; height: 11px; }
+
+  /* Section */
+  .sect-label {
+    padding: 18px 4px 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .sect-label:first-child { padding-top: 4px; }
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-2);
+    overflow: hidden;
+  }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+  }
+  .row + .row { border-top: 0.5px solid var(--border); }
+  .row .label { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .row .val { font-size: 14px; color: var(--text-2); font-weight: 500; }
+  .row.nav { cursor: pointer; transition: background 0.15s; }
+  .row.nav:active { background: var(--surface-2); }
+  .row .chev { color: var(--text-3); display: inline-flex; flex-shrink: 0; }
+  .row .chev svg { width: 16px; height: 16px; }
+
+  /* Segmented control */
+  .seg {
+    display: inline-flex; gap: 2px; padding: 3px;
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+  }
+  .seg-item {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    height: 30px; padding: 0 14px; border-radius: 999px;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    color: var(--text-2);
+    transition: background 0.15s, color 0.15s;
+  }
+  .seg-item.active {
+    background: var(--surface); color: var(--text);
+    box-shadow: var(--sh-1);
+  }
+
+  /* Toggle switch */
+  .toggle {
+    width: 44px; height: 26px; border-radius: 999px; border: 0; padding: 0;
+    background: var(--border-strong); cursor: pointer; position: relative;
+    transition: background 0.18s ease; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle .knob {
+    position: absolute; top: 2px; left: 2px;
+    width: 22px; height: 22px; border-radius: 999px; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    transition: left 0.18s ease;
+  }
+  .toggle.on .knob { left: 20px; }
+
+  /* Logout */
+  .logout {
+    margin-top: 22px; width: 100%; height: 50px;
+    border-radius: var(--r-pill);
+    background: transparent; color: var(--danger);
+    border: 0.5px solid var(--border-strong);
+    font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform 0.12s ease, background 0.15s;
+  }
+  .logout svg { width: 18px; height: 18px; }
+  .logout:active { transform: scale(0.98); background: color-mix(in oklab, var(--danger) 8%, transparent); }
+
+  .version { text-align: center; color: var(--text-3); font-size: 13px; margin-top: 16px; }
+
+  /* Toast */
+  .toast {
+    position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, 16px);
+    z-index: 60; background: var(--text); color: var(--bg);
+    font-size: 13.5px; font-weight: 600;
+    padding: 11px 18px; border-radius: 999px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.32,0.72,0.2,1);
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="device" data-screen-label="Настройки">
+      <div class="device-inner">
+        <div class="island"></div>
+
+        <div class="status-bar" aria-hidden="true">
+          <span>9:41</span>
+          <div class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="0.5" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="0.5" fill="currentColor"/><rect x="9" y="2.5" width="3" height="8.5" rx="0.5" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="0.5" fill="currentColor"/></svg>
+            <svg width="24" height="11" viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="3" stroke="currentColor" stroke-opacity="0.4" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5" fill="currentColor"/><rect x="21" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor" fill-opacity="0.4"/></svg>
+          </div>
+        </div>
+
+        <div class="screen">
+          <!-- Header -->
+          <div class="header">
+            <a class="hbtn" id="back" href="javascript:void(0)" aria-label="Назад">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+            </a>
+            <div class="htitle">Настройки</div>
+            <div class="spacer"></div>
+          </div>
+
+          <!-- Body -->
+          <div class="scroller">
+
+            <!-- Identity -->
+            <div class="ident">
+              <div class="ava-wrap">
+                <span class="ava">С</span>
+                <span class="dot"></span>
+              </div>
+              <div>
+                <div class="name">Саша Морозов</div>
+                <span class="badge">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.2 6.8.8-5 4.6 1.3 6.7L12 17.9 5.9 20.3 7.2 13.6l-5-4.6 6.8-.8z"></path></svg>
+                  PREMIUM · 2 ГОДА
+                </span>
+              </div>
+            </div>
+
+            <!-- Appearance -->
+            <div class="sect-label">Внешний вид</div>
+            <div class="card">
+              <div class="row">
+                <span class="label">Тема</span>
+                <div class="seg" id="theme-seg">
+                  <button class="seg-item active" data-theme="light" type="button">Светлая</button>
+                  <button class="seg-item" data-theme="dark" type="button">Тёмная</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="sect-label">Уведомления</div>
+            <div class="card" id="notif-card">
+              <div class="row">
+                <span class="label">Акции и скидки</span>
+                <button class="toggle on" data-key="promo" type="button" aria-label="Акции и скидки"><span class="knob"></span></button>
+              </div>
+              <div class="row">
+                <span class="label">Изменения расписания</span>
+                <button class="toggle on" data-key="schedule" type="button" aria-label="Изменения расписания"><span class="knob"></span></button>
+              </div>
+              <div class="row">
+                <span class="label">Сообщения от тренера</span>
+                <button class="toggle on" data-key="trainer" type="button" aria-label="Сообщения от тренера"><span class="knob"></span></button>
+              </div>
+              <div class="row">
+                <span class="label">Звук уведомлений</span>
+                <button class="toggle" data-key="sound" type="button" aria-label="Звук уведомлений"><span class="knob"></span></button>
+              </div>
+            </div>
+
+            <!-- Account -->
+            <div class="sect-label">Аккаунт</div>
+            <div class="card">
+              <div class="row nav" data-go="К оплате v2.html">
+                <span class="label">Тариф и подписка</span>
+                <span class="val">Изменить</span>
+                <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+              </div>
+              <div class="row nav" data-toast="Откроется управление картой">
+                <span class="label">Привязанная карта</span>
+                <span class="val">•••• 4821</span>
+                <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+              </div>
+              <div class="row nav" data-toast="Откроются личные данные">
+                <span class="label">Личные данные</span>
+                <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+              </div>
+              <div class="row nav" data-toast="Откроется помощь и FAQ">
+                <span class="label">Помощь и FAQ</span>
+                <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+              </div>
+            </div>
+
+            <!-- Logout -->
+            <button class="logout" id="logout" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+              Выйти из аккаунта
+            </button>
+
+            <div class="version">Версия 2.4.1 · Мой зал</div>
+          </div>
+
+          <div class="toast" id="toast"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const body = document.body;
+
+  // ── Toast ──
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1700);
+  }
+
+  // ── Theme (persisted, with live switch) ──
+  const THEME_KEY = 'myzal_theme';
+  const seg = document.getElementById('theme-seg');
+  function applyTheme(theme) {
+    body.classList.toggle('dark', theme === 'dark');
+    seg.querySelectorAll('.seg-item').forEach(b =>
+      b.classList.toggle('active', b.dataset.theme === theme));
+  }
+  applyTheme(localStorage.getItem(THEME_KEY) || 'light');
+  seg.querySelectorAll('.seg-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const theme = btn.dataset.theme;
+      localStorage.setItem(THEME_KEY, theme);
+      applyTheme(theme);
+    });
+  });
+
+  // ── Notification toggles (persisted) ──
+  const NOTIF_KEY = 'myzal_notif';
+  const defaults = { promo: true, schedule: true, trainer: true, sound: false };
+  const notif = Object.assign({}, defaults, JSON.parse(localStorage.getItem(NOTIF_KEY) || '{}'));
+  document.querySelectorAll('#notif-card .toggle').forEach(t => {
+    const key = t.dataset.key;
+    t.classList.toggle('on', !!notif[key]);
+    t.addEventListener('click', () => {
+      notif[key] = !notif[key];
+      t.classList.toggle('on', notif[key]);
+      localStorage.setItem(NOTIF_KEY, JSON.stringify(notif));
+    });
+  });
+
+  // ── Account nav rows ──
+  document.querySelectorAll('.row.nav').forEach(row => {
+    row.addEventListener('click', () => {
+      if (row.dataset.go) window.location.href = row.dataset.go;
+      else if (row.dataset.toast) toast(row.dataset.toast);
+    });
+  });
+
+  // ── Back ──
+  document.getElementById('back').addEventListener('click', () => {
+    if (history.length > 1) history.back();
+    else window.location.href = 'Home.html';
+  });
+
+  // ── Logout ──
+  document.getElementById('logout').addEventListener('click', () => {
+    toast('Выход из аккаунта…');
+    setTimeout(() => { window.location.href = 'Login.html'; }, 1100);
+  });
+})();
+</script>
+</body>
+</html>

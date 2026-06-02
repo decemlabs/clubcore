@@ -456,6 +456,44 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 
 ---
 
+## Milestone: v2.0 — Frontend Integration — Client PWA
+
+**Shipped:** 2026-06-02
+**Phases:** 10 (68–74 + 999.3/999.4/999.5) + 2 quick tasks | **Plans:** 47 | **Tasks:** 63 | **Tag:** `v2.0`
+
+### What Was Built
+First full-stack milestone after a long backend-only run. A parallel client auth stack (`ClientPrincipal`, `aud="client"`, `cc_client_*` cookies, `auth:client:*` Redis namespace) fully isolated from the frozen staff contract; a client-scoped IDOR-safe `/api/v1/client` API over all existing domains (reads + self-booking + signed-QR check-in + ЮKassa checkout with real promo codes); and the `apps/client-pwa` wired to it end-to-end (auth → home active/newbie → book → checkout → QR → history → onboarding → receipt-email), restyled to the approved mockups. Staff paths stayed byte-identical to `contract-freeze-v1.11.0`; the `Client-Portal` surface was added to `openapi.json` additively with `_v20Checks` forward-guards.
+
+### What Worked
+- **Two-principal isolation by construction, not by convention.** Choosing a separate `ClientPrincipal` with `aud="client"` and banning `Role.CLIENT` from `permissions.py` — enforced by a CISO-01 byte-parity guard — meant the frozen admin contract literally could not drift. The drift gate stayed green the whole milestone.
+- **Protocol-slot reuse over forking.** Actor-agnostic cores (`_sell_subject_core`, booking/cancel core) exposed via composition-root Protocol slots let client flows reuse the v1.7 ЮKassa path and v1.5 booking races without duplicating logic or importing module internals (D-20-MODULE).
+- **Raw-SQL read discipline (D-54-08) paid off again** for `client_portal` — zero ORM cross-imports, zero new import-linter ignores, client-safe field projection by hand.
+- **The IDOR parametrized sweep** (12 cases, both attacker/victim orderings) caught the class of bug that matters most for a client-facing surface, cheaply and repeatably.
+
+### What Was Inefficient
+- **Live-UAT-only bugs slipped past automated verification.** The missing checkout `session.commit()` (would have silently failed every CPAY flow) and the `/client/me` route collision were only caught in live UAT, not by the per-phase verifiers — because the verifiers lacked a running stack. The fix landed as gap-closure plans (71-07..10, 999.5-06..08) rather than in-phase.
+- **"Visual restyle" phases kept absorbing backend scope.** 999.4 (promo codes) and 999.5 (profile fields + fiscal-gate rewrite) were nominally UI phases that grew real backend additions + migrations. The pattern worked but made the phases harder to scope and verify than their titles implied.
+- **Verification status hygiene.** Three phases shipped with `human_needed` VERIFICATION status never flipped to `passed` even after HUMAN-UAT completed — which surfaced as false "open gaps" at milestone-close audit time.
+- **Backlog/quick-task bookkeeping drift.** 7 quick-task status markers read as "missing" at close despite the work shipping; the 999.x backlog entries stayed "PENDING" after shipping.
+
+### Patterns Established
+- **Parallel-principal pattern**: distinct audience claim + cookie namespace + Redis namespace + a byte-parity guard on the frozen principal's RBAC files. Reusable for any future third principal.
+- **Anti-oracle return screen** for async payment: redirect-back shows only "ожидаем подтверждение"; activation is webhook-only. Now applied on both staff (v1.7) and client (v2.0) sides.
+- **Server-authoritative discounts**: client sends only `code+kind+planId`; price + discount computed server-side; redemption recorded race-safe (`FOR UPDATE`) on the succeeded webhook.
+- **Feature-flag unbacked decor**: BUILT-but-HIDDEN module-level flags for UI elements without backing data (PROFILE/SETTINGS/CHECKOUT_FEATURE_FLAGS) — ship the layout, gate the fiction.
+
+### Key Lessons
+- A per-phase verifier without a live stack will miss integration- and wiring-class bugs by construction. For full-stack milestones, budget a live E2E gate (Phase 72 RUN-00 did this for the read path) **per risky write flow**, not just once at the end.
+- When a "UI" phase quietly adds a migration + endpoint, treat it as a backend phase for verification purposes (tests + IDOR + idempotency), regardless of its title.
+- Flip VERIFICATION status the moment HUMAN-UAT closes — stale `human_needed` reads as a gap at audit time and costs reconciliation effort.
+
+### Cost Observations
+- Model mix: Opus on orchestration + audit + this close + the two integration triages; Sonnet on executor/verifier/integration-checker waves. Roughly 30% opus / 65% sonnet / 5% haiku, consistent with prior milestones.
+- Sessions: ~5 days wall-clock, 437 commits / 107 feat across 10 phases + 2 quick tasks — the largest milestone by diff (+99K/−10K LOC) because it added an entire frontend app's source plus the client backend.
+- Notable: gap-closure plans (live-UAT bugs) and the promo-codes backend addition dominated the back half; the restyle phases were cheap per-plan but numerous.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -490,6 +528,7 @@ The last incomplete business domain — Trainers — moves from catalog-only (v1
 | v1.8 | ~37.7K LOC backend (new read-only `app/modules/reports/`; Alembic at 0040, +3 audit-log indexes) | unchanged (frozen mock reference) | 30/30 (VER-01 live runbook operator-pending per D-12) | 2181-ish backend + 68 reports tests + 8 `_v18Checks` AssertNonNever forward-guards + `toHaveLength(8)` runtime + DST golden test |
 | v1.9 | new `app/modules/payroll/` + extended `app/modules/schedule/` (recurring + time-off) + new `reports/trainers` endpoint; Alembic at 0042 (0041 payroll + 0042 recurring/time-off) | unchanged (frozen mock reference) | 15/15 (D-61-12 live runbook operator-pending) | 2181 backend passed, 6 skipped + 121 reception-403 + 4 RBAC parity + 3 route-introspection + 14 `_v19Checks` forward-guards + `toHaveLength(14)` runtime; lint-imports 3 kept / 0 broken; drift gates clean |
 | v1.11 | no new business modules / no new ORM entities (Alembic stays at 0042); tree made lint-clean (ruff/format/mypy strict all exit 0); `openapi.json` curated + frozen as `contract-freeze-v1.11.0`; new repo-root private `package.json` + `tools/newman/` + `.planning/handoff/` Postman/runbook/doc-site tooling | unchanged (frozen mock reference) | 34/34 (RUN-01/02 `N/A-until-production`; RUN-05 accrual scenario deferred per D-67-03) | backend suite green incl. 48 new idempotency double-submit/cross-user/exception-lifecycle tests; 7th CI gate (Redocly lint) added; byte-stable spec + `schema.d.ts` regen with drift gate clean; Phase 65 verified 14/14 automated (3 live-stack checks deferred) |
+| v2.0 | new `app/modules/client_auth/` + `app/modules/client_portal/` + `app/modules/promo_codes/`; Alembic 0043→0049; staff paths frozen, `Client-Portal` tag added additively (+99K/−10K LOC incl. the entire new `apps/client-pwa` frontend) | `apps/admin-web` unchanged (frozen); **`apps/client-pwa` joined the workspace + wired to the real backend** (Vite 6, TS strict+allowJs, react-router v6) | 47/47 (audit `tech_debt`, 0 blockers, 45/47 integration wired; WARNING-1 cancel-booking + WARNING-2 receipt-chip deferred) | backend suite green incl. 12-case IDOR sweep + two-principal isolation + 7 checkout integration tests + 16 promo-validate tests; parallel client-pwa CI gate (typecheck/lint/test/build); 23-op `_v20Checks` forward-guards; staff drift gate byte-identical; 999.3/999.4/999.5 verified 12/12, 14/14, 20/20 automated + HUMAN-UAT complete |
 
 ### Top Lessons (Verified Across Milestones)
 
