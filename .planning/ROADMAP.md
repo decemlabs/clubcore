@@ -95,8 +95,13 @@ Plans:
   3. Opening the Personal Data sheet shows the client's real name, phone, and email from `GET /client/me` — no placeholder/hardcoded values
   4. Editing and saving a profile field (name, email, goal, height, or weight) in the Personal Data sheet calls `PATCH /client/me` and the change persists after a full page reload
   5. The chat unread-messages badge shows 0 or is hidden; the `CONVERSATIONS` mock import is absent from `App.jsx`
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 76-01-PLAN.md — Wire newbie-Home trainer avatar strip + plan info chip to live catalogs (NHOME-01, NHOME-02)
+- [ ] 76-02-PLAN.md — Bind PersonalDataSheet read/save to /client/me with editable goal/height/weight (PDATA-01, PDATA-02)
+- [ ] 76-03-PLAN.md — Remove mock chat-badge CONVERSATIONS dependency + delete orphaned mock (CLEAN-01)
 
 ### Phase 77: v2.0 Debt Closures
 **Goal**: The two v2.0 integration warnings are resolved: booking cancellation reaches the backend, and the post-payment receipt-destination display is consistent with the agreed UI spec.
@@ -114,7 +119,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
-| 76. PWA Wiring + Cleanup | 0/TBD | Not started | - |
+| 76. PWA Wiring + Cleanup | 0/3 | Not started | - |
 | 77. v2.0 Debt Closures | 0/TBD | Not started | - |
 
 ---
