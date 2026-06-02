@@ -180,6 +180,18 @@ async def test_fit15_seed_insert_is_idempotent(
     db_session: AsyncSession,
 ) -> None:
     """Re-executing the 0051 upgrade INSERT leaves exactly one alive FIT15 row (T-75-05)."""
+    # WR-75-04: establish the baseline so the post-reinsert count proves ON CONFLICT
+    # actually suppressed a duplicate — not merely that no prior row existed.
+    baseline = await db_session.scalar(
+        text(
+            "SELECT count(*) FROM promo_codes "
+            "WHERE upper(code) = 'FIT15' AND deleted_at IS NULL"
+        )
+    )
+    assert baseline == 1, (
+        f"Expected exactly 1 alive FIT15 row from migration 0051 before re-run, got {baseline}"
+    )
+
     # Re-run the exact SQL from migration 0051 upgrade()
     await db_session.execute(
         text(

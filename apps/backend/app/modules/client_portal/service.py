@@ -30,6 +30,7 @@ from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.modules.promo_codes.service as _promo_service
@@ -146,7 +147,19 @@ async def get_client_me(
     row = await repository.fetch_client_me(session, client_id)
     r: dict[str, Any] = row
     raw_prefs = r.get("notif_prefs")
-    notif = NotifPrefs(**raw_prefs) if raw_prefs is not None else NotifPrefs(**_NOTIF_DEFAULTS)
+    # WR-75-01: tolerate legacy/partial/extra-key JSONB on the READ path so stored
+    # drift (future flag added, manual edit, backup restore) degrades to D-06 defaults
+    # instead of surfacing a non-AppError ValidationError as an unhandled 500. The
+    # inbound PATCH stays strict (D-04) — NotifPrefs(extra="forbid") still rejects
+    # unknown keys from clients via ClientProfileUpdateRequest.
+    if raw_prefs is None:
+        notif = NotifPrefs(**_NOTIF_DEFAULTS)
+    else:
+        try:
+            notif = NotifPrefs(**raw_prefs)
+        except ValidationError:
+            merged = {**_NOTIF_DEFAULTS, **raw_prefs}
+            notif = NotifPrefs(**{k: merged[k] for k in _NOTIF_DEFAULTS})
     return ClientMeResponse(
         id=cast(UUID, r["id"]),
         first_name=str(r["first_name"]),
