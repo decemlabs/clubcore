@@ -1,7 +1,7 @@
 ---
 phase: 76
 slug: pwa-wiring-cleanup
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-02
@@ -100,29 +100,32 @@ Source: observed spacing in existing HomeScreen.jsx and ProfileExtraSheets.jsx c
 
 ## Typography
 
-Source: `src/styles.css` type scale classes. Phase 76 does not add new type sizes.
+> Phase 76 adds no new type sizes or weights — all values are pre-existing locked tokens
+> in `apps/client-pwa/src/styles.css`. The full 7-size scale (`.t-display` through
+> `.t-mini`) and all weight variants are defined there; do not enumerate them here.
+>
+> This section declares ONLY the sizes and weights Phase 76 directly touches.
 
-| Role | Class | Size | Weight | Line Height |
-|------|-------|------|--------|-------------|
-| Display | `.t-display` | 34px | 700 | 1.05 |
-| Heading 1 | `.t-h1` | 26px | 700 | 1.15 |
-| Heading 2 | `.t-h2` | 20px | 650 | 1.2 |
-| Heading 3 / label | `.t-h3` | 17px | 600 | 1.25 |
-| Body | `.t-body` | 15px | 400 | 1.4 |
-| Small / secondary | `.t-small` | 13px | 400 | 1.4 |
-| Mini / section header | `.t-mini` | 11px | 600 | — (uppercase, letter-spacing 0.5px) |
+### Declared sizes (phase touch points only — ≤4)
 
-**Phase 76 usage:**
+| Touch point | Size | Class / source |
+|-------------|------|---------------|
+| PersonalDataSheet section headers; local-only label; overflow counter chip | 11px | `.t-mini` |
+| Trainer avatar initials (inline style — keep exact value) | 12px | inline `font-size: 12px` |
+| PersonalDataSheet form labels; plan chip text; save button | 13px | `.t-small` / inline `font-size: 13px` |
 
-- Trainer avatar initials: `font-size: 12px; font-weight: 700` (existing inline style —
-  keep exact values)
-- Trainer tile title "Тренеры": `font-size: 16px; font-weight: 650; letter-spacing: -0.2px`
-  (keep exact)
-- Trainer tile subtitle: `font-size: 12.5px; color: var(--text-2); line-height: 1.3` (keep exact)
-- Plan chip text: `.t-small` (13px / 400) for the chip label
-- PersonalDataSheet form labels: `.t-small` at `color: var(--text-2)`, width 110px (keep exact)
-- PersonalDataSheet section headers: `.t-mini` at `color: var(--text-3)` (keep exact)
-- Save button text: `font-size: 13px; font-weight: 600` (keep exact header action style)
+For the complete locked scale reference `src/styles.css` (`.t-display` 34px → `.t-mini` 11px).
+
+### Declared weights (phase touch points only — ≤2)
+
+| Weight | Touch points |
+|--------|-------------|
+| 700 | Trainer avatar initials; overflow counter chip (`+N`) |
+| 600 | Save button ("Сохранить" / "Сохранено"); PersonalDataSheet section headers (`.t-mini`) |
+
+Form label weight (`.t-small` / 400) and chip label weight (`.chip` / 500) are consumed
+via their respective CSS classes — no explicit weight override needed in Phase 76 code.
+Reference `src/styles.css` for those values.
 
 ---
 
@@ -266,7 +269,7 @@ Output examples: `"1 500 ₽"`, `"490 ₽"` (with NBSP thousands separator).
 | Goal | Цель | `goal` from `GET /client/me` | Yes — free text `<input>` | Yes via `PATCH /client/me` |
 
 **Local-only indicator (D-76-11):** DOB and Gender rows display a small `[местные данные]`
-label (or equivalent muted text in `var(--text-3)`, `t-mini` sizing) to signal they are
+label (or equivalent muted text in `var(--text-3)`, `.t-mini` sizing) to signal they are
 not synced to the server. This matches the accepted "keep local-only" option from CONTEXT.md.
 The segmented control and date input remain interactive (local state only).
 
