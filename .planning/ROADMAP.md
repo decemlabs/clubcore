@@ -203,6 +203,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
+
 - [x] 73-01-PLAN.md — Restyle active-subscription Home to the Home.html mockup: HomeHeroCard (static «Свободно» occupancy + GymStatusPill), canonical SubCardSpot across active/warn/danger, BookSpot «Запишись» CTA, big QR, BookTile/ChatTile, FeedSection; flip default subCardStyle 'eyebrow'→'spot'; newbie branch + App.jsx contract + adapters/identity tests preserved
 
 ### Phase 74: Обновить экраны «Профиль» и «Настройки» по новым макетам (Downloads/Profile.html, Downloads/Settings.html)
@@ -215,8 +216,16 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 74-01-PLAN.md — Standalone SettingsScreen + protected /settings route (TabBar hidden, local notif persistence, flags)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 74-02-PLAN.md — Restyle ProfileScreen to Profile.html (pass-hero, stat strip, gear→/settings, 3 tabs, PROFILE_FEATURE_FLAGS)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 74-03-PLAN.md — Mandatory browser verification of Profile + Settings
 
 ---
@@ -246,6 +255,7 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
+
 - [x] 999.3-01-PLAN.md — Backend: add server-derived `membershipState` enum to `/client/home` (newbie/lapsed/active) + integration tests
 - [x] 999.3-02-PLAN.md — Frontend: newbie Home render gate + 5 components + live onboarding-step derivation + tests
 
@@ -262,6 +272,7 @@ Plans:
 **Plans:** 6/6 plans complete
 
 Plans:
+
 - [x] 999.4-01-PLAN.md — Backend: promo_codes + promo_redemptions models, migration 0046, idempotent seeds, import-linter registration
 - [x] 999.4-02-PLAN.md — Backend: server-authoritative /client/promo/validate endpoint with per-reason errors (D-06/D-09)
 - [x] 999.4-03-PLAN.md — Backend: discounted amount through checkout core + redemption recording on succeeded webhook (D-05/D-06/D-07)
@@ -282,6 +293,7 @@ Plans:
 **Plans:** 8/8 plans complete
 
 Plans:
+
 - [x] 999.5-01-PLAN.md — Backend data layer: clients goal/height/weight/onboarding columns + 0048 migration + client_portal schemas
 - [x] 999.5-02-PLAN.md — Backend client_portal endpoints: GET/PATCH /client/me (server-validated, IDOR-safe) + receiptEmail/Phone on payment-status
 - [x] 999.5-03-PLAN.md — Backend gate rewrite: email-OR-phone online-payment gate + ЮKassa customer.phone receipt fallback (inspect-first)
