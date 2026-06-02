@@ -213,12 +213,12 @@ Plans:
 **Depends on:** Phase 73
 **Design input:** `.planning/design-inputs/client-pwa-profile-settings/Profile.html`, `.planning/design-inputs/client-pwa-profile-settings/Settings.html` (preserved from Downloads; transient source)
 **UI hint:** yes
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 74-01-PLAN.md — Standalone SettingsScreen + protected /settings route (TabBar hidden, local notif persistence, flags)
+- [x] 74-01-PLAN.md — Standalone SettingsScreen + protected /settings route (TabBar hidden, local notif persistence, flags)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

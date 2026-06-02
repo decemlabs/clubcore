@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Frontend Integration — Client PWA
 status: executing
 stopped_at: Phase 74 context gathered
-last_updated: "2026-06-02T11:13:40.930Z"
-last_activity: 2026-06-02 -- Phase 74 planning complete
+last_updated: "2026-06-02T11:21:59.784Z"
+last_activity: 2026-06-02
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 47
-  completed_plans: 44
+  completed_plans: 45
   percent: 75
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-29 — v2.0 Frontend Integration — Client PWA opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.3 — client-pwa Home newbie (no-subscription) state
+**Current focus:** Phase 74 — downloads-profile-html-downloads-settings-html
 
 ## Current Position
 
-Phase: 999.3
-Plan: Not started
+Phase: 74 (downloads-profile-html-downloads-settings-html) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-02 -- Phase 74 planning complete
+Last activity: 2026-06-02
 
-Progress: [██████████] 100%
+Progress: [██████████] 96%
 
 ## v2.0 Roadmap Summary
 
@@ -144,6 +144,6 @@ Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.
 
 ## Session Continuity
 
-Last session: 2026-06-02T10:59:30.189Z
+Last session: 2026-06-02T11:21:59.779Z
 Stopped at: Phase 74 context gathered
 Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
