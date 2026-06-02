@@ -141,6 +141,7 @@ Items carried forward (not addressed in v2.1):
 | production | RUN-01 live ЮKassa credentialed checkout leg (D-72-06) | OPERATOR-PENDING by design |
 | tech-debt | Pre-existing `ruff I001` (import sort) in `client_portal/router.py` — present at v2.1 base `0f6b8927`, NOT introduced by Phase 75 (zero diff). Auto-fixable via `ruff check --fix`. | noted Phase 75 review — quick task or fold into Phase 77 |
 | correctness | WR-75-02: receipt-lookup join in `get_client_payment_status` matches by `(plan_id, client_id)` + `ORDER BY created_at DESC LIMIT 1` — repeat same-plan purchases can surface wrong receipt (IDOR-safe). Pre-existing. | deferred — out of Phase 75 scope |
+| human-verify | Phase 76 PDATA-02 live check (deferred by user 2026-06-02): start PWA+backend, edit profile in «Личные данные» → Сохранить → full reload → confirm persistence; and stop-backend → save → confirm error toast + field retained. 4/5 criteria code-verified; gates green. | deferred — validate before milestone ship |
 
 ## Quick Tasks Completed
 
