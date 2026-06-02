@@ -15,7 +15,7 @@
 - ✅ **v1.10 clubcore Rebrand** — Phases 62 + 62.1 (shipped 2026-05-26) — see [milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 - ✅ **v1.11 API Handoff + Production Hardening** — Phases 63-67 (shipped 2026-05-29) — see [milestones/v1.11-ROADMAP.md](milestones/v1.11-ROADMAP.md)
 - ✅ **v2.0 Frontend Integration — Client PWA** — Phases 68-74 + 999.3/999.4/999.5 (shipped 2026-06-02) — see [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
-- 🚧 **v2.1 Client PWA — Fill the Gaps** — Phases 75-77 (opened 2026-06-02) — in progress
+- 🚧 **v2.1 Client PWA — Fill the Gaps** — Phases 75-78 (opened 2026-06-02; Phase 78 added 2026-06-02 to close audit frontend-surfacing debt) — in progress
 
 ## Phases
 
@@ -61,7 +61,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
-### v2.1 Client PWA — Fill the Gaps (Phases 75-77) — IN PROGRESS
+### v2.1 Client PWA — Fill the Gaps (Phases 75-78) — IN PROGRESS
 
 **Milestone Goal:** Turn on already-built-but-hidden client PWA functionality via feature-flag flips, small backend field additions to existing schemas, and pure-frontend wiring. Fold in the two deferred v2.0 warnings. No new backend domains; payment/activation path untouched.
 
@@ -125,6 +125,18 @@ Plans:
 | 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
 | 76. PWA Wiring + Cleanup | 3/3 | Complete   | 2026-06-02 |
 | 77. v2.0 Debt Closures | 2/2 | Complete   | 2026-06-02 |
+| 78. PMEM/NOTIF/PROMO Frontend Surfacing | 0/TBD | Not started | - |
+
+### Phase 78: PMEM/NOTIF/PROMO Frontend Surfacing
+**Goal**: The backend-complete v2.1 fields are surfaced in the PWA UI: the client sees their membership price and auto-renewal indicator on the Profile screen; the Settings notification toggles persist to the backend (not just localStorage); and the recommended FIT15 promo code is applied one-tap from a chip in checkout. Closes the v2.1 audit's frontend-surfacing tech debt for PMEM-01 / NOTIF-01 / PROMO-01.
+**Depends on**: Phase 75 (backend fields), Phase 76 (PWA wiring patterns)
+**Requirements**: PMEM-01 (frontend), NOTIF-01 (frontend), PROMO-01 (frontend)
+**Success Criteria** (what must be TRUE):
+  1. The Profile screen displays the client's membership `priceKopecks` (formatted ₽) and an auto-renewal indicator driven by `autoRenew` (hidden / "—" when `autoRenew` is null, per D-75-01), sourced from the real membership read (not hardcoded).
+  2. Toggling a notification category in Settings (промо / расписание / тренер / звук) calls `PATCH /client/me` with `notifPrefs` and the choice persists after a full reload / fresh session (server-backed, not localStorage-only); Settings hydrates from `GET /client/me` `notifPrefs`.
+  3. A recommended-promo chip in the checkout surface applies `FIT15` in one tap (calls the existing `POST /client/promo/validate`), showing the discounted amount; manual entry still works.
+**Plans**: TBD
+**UI hint**: yes
 
 ---
 
