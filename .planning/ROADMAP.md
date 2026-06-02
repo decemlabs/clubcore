@@ -65,7 +65,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 **Milestone Goal:** Turn on already-built-but-hidden client PWA functionality via feature-flag flips, small backend field additions to existing schemas, and pure-frontend wiring. Fold in the two deferred v2.0 warnings. No new backend domains; payment/activation path untouched.
 
-- [ ] **Phase 75: Backend Field Additions** - Add `price_kopecks`/`auto_renew` to membership response, `notif_prefs` to `/client/me`, seed FIT15 promo
+- [x] **Phase 75: Backend Field Additions** - Add `price_kopecks`/`auto_renew` to membership response, `notif_prefs` to `/client/me`, seed FIT15 promo (completed 2026-06-02)
 - [ ] **Phase 76: PWA Wiring + Cleanup** - Wire trainers/plans catalog to newbie-Home, bind PersonalDataSheet to `/client/me`, remove mock chat badge
 - [ ] **Phase 77: v2.0 Debt Closures** - Wire `useCancelBooking()` in BookingManageSheet (WARNING-1), reconcile receipt-destination display (WARNING-2)
 
@@ -83,7 +83,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 Plans:
 - [x] 75-01-PLAN.md — Membership price/auto_renew fields + notif_prefs JSONB persistence on /client/me (PMEM-01, NOTIF-01)
-- [ ] 75-02-PLAN.md — FIT15 idempotent seed migration + validate-endpoint test (PROMO-01)
+- [x] 75-02-PLAN.md — FIT15 idempotent seed migration + validate-endpoint test (PROMO-01)
 
 ### Phase 76: PWA Wiring + Cleanup
 **Goal**: The newbie-Home screen displays real trainer avatars and live plan-catalog chips; the Personal Data sheet reads from and saves to the backend; the mock chat-badge is gone.
@@ -113,7 +113,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 75. Backend Field Additions | 1/2 | In Progress|  |
+| 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
 | 76. PWA Wiring + Cleanup | 0/TBD | Not started | - |
 | 77. v2.0 Debt Closures | 0/TBD | Not started | - |
 
