@@ -18,6 +18,7 @@ INVARIANTS:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import UUID
 
@@ -189,6 +190,7 @@ async def fetch_client_membership(
         await session.execute(
             text(
                 "SELECT id, plan_name_snapshot, start_date, end_date, status, "
+                "price_kopecks_snapshot, "
                 "(end_date - (now() AT TIME ZONE 'Europe/Moscow')::date) AS days_until_end "
                 "FROM memberships "
                 "WHERE client_id = :client_id AND status = 'active' "
@@ -554,7 +556,7 @@ async def fetch_client_me(
         await session.execute(
             text(
                 "SELECT id, first_name, last_name, phone, email, goal, "
-                "  height_cm, weight_kg, onboarding_completed_at "
+                "  height_cm, weight_kg, onboarding_completed_at, notif_prefs "
                 "FROM clients WHERE id = :client_id AND deleted_at IS NULL"
             ),
             {"client_id": str(client_id)},
@@ -598,6 +600,13 @@ async def update_client_profile(
     if payload.email is not None:
         sets.append("email = :email")
         bind["email"] = payload.email
+    if payload.notif_prefs is not None:
+        # D-05: full replace — write all four keys atomically.
+        # Fixed SET literal fragment (S608 discipline); value bound as a JSON
+        # string and cast to JSONB using CAST syntax (not ::jsonb, which would
+        # conflict with SQLAlchemy's :name→$N param substitution in asyncpg).
+        sets.append("notif_prefs = CAST(:notif_prefs AS jsonb)")
+        bind["notif_prefs"] = json.dumps(payload.notif_prefs.model_dump())
     if payload.onboarding_completed:
         sets.append("onboarding_completed_at = now()")
 
@@ -611,8 +620,8 @@ async def update_client_profile(
     # constraint fires here while the caller still owns the txn (D-32-10/D-49-19).
     try:
         await session.execute(
-            text(  # noqa: S608 — SET fragments are fixed literal strings, never user-supplied SQL
-                f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"
+            text(
+                f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"  # noqa: S608
             ),
             bind,
         )

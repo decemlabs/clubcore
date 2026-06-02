@@ -32,6 +32,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.modules.promo_codes.service as _promo_service
 from app.core.config import get_settings
 from app.core.dependencies import (
     ClientPrincipal,
@@ -62,8 +63,8 @@ from app.modules.client_portal.schemas import (
     ClientCheckInResponse,
     ClientCheckoutResponse,
     ClientHomeResponse,
-    ClientMeResponse,
     ClientMembershipResponse,
+    ClientMeResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
@@ -72,8 +73,8 @@ from app.modules.client_portal.schemas import (
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientVisitItem,
+    NotifPrefs,
 )
-import app.modules.promo_codes.service as _promo_service
 
 _EXPIRING_SOON_DAYS = 7  # days threshold for expiring_soon flag (D-69-02)
 
@@ -116,6 +117,18 @@ class _InvalidFirstNameError(ValidationAppError):
 
 
 # ---------------------------------------------------------------------------
+# Phase 75 NOTIF-01 — server-side defaults applied when notif_prefs column is NULL
+# ---------------------------------------------------------------------------
+
+_NOTIF_DEFAULTS: dict[str, bool] = {
+    "promo": True,
+    "schedule": True,
+    "trainer": True,
+    "sound": False,
+}
+
+
+# ---------------------------------------------------------------------------
 # Phase 999.5 Plan 02 — get_client_me + update_client_profile
 # ---------------------------------------------------------------------------
 
@@ -132,6 +145,8 @@ async def get_client_me(
     """
     row = await repository.fetch_client_me(session, client_id)
     r: dict[str, Any] = row
+    raw_prefs = r.get("notif_prefs")
+    notif = NotifPrefs(**raw_prefs) if raw_prefs is not None else NotifPrefs(**_NOTIF_DEFAULTS)
     return ClientMeResponse(
         id=cast(UUID, r["id"]),
         first_name=str(r["first_name"]),
@@ -142,6 +157,7 @@ async def get_client_me(
         height_cm=r.get("height_cm"),
         weight_kg=r.get("weight_kg"),
         onboarding_completed_at=r.get("onboarding_completed_at"),
+        notif_prefs=notif,
     )
 
 
@@ -217,6 +233,8 @@ async def get_client_membership(
         status=str(r["status"]),
         days_until_end=days_until_end,
         expiring_soon=0 <= days_until_end <= _EXPIRING_SOON_DAYS,
+        price_kopecks=int(r["price_kopecks_snapshot"]),  # PMEM-01 / D-02
+        auto_renew=None,  # PMEM-01 / D-01: no auto-renewal domain flag in v2.1
     )
 
 
@@ -771,7 +789,7 @@ async def get_client_payment_status(
     fiscal receipt exists — honest, never fabricated.
     No session.commit() — read path.
     """
-    from sqlalchemy import text as _text  # noqa: PLC0415
+    from sqlalchemy import text as _text
 
     row = await repository.fetch_client_payment_status(session, payment_id, client_id)
     if row is None:
