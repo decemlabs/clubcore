@@ -68,6 +68,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 75: Backend Field Additions** - Add `price_kopecks`/`auto_renew` to membership response, `notif_prefs` to `/client/me`, seed FIT15 promo (completed 2026-06-02)
 - [x] **Phase 76: PWA Wiring + Cleanup** - Wire trainers/plans catalog to newbie-Home, bind PersonalDataSheet to `/client/me`, remove mock chat badge (completed 2026-06-02)
 - [x] **Phase 77: v2.0 Debt Closures** - Wire `useCancelBooking()` in BookingManageSheet (WARNING-1), reconcile receipt-destination display (WARNING-2) (completed 2026-06-02)
+- [x] **Phase 78: PMEM/NOTIF/PROMO Frontend Surfacing** - Surface membership price/auto-renew on Profile, server-back the Settings notif toggles, surface the FIT15 checkout chip — closes the v2.1 audit frontend-surfacing debt (completed 2026-06-02; live checkout/reload checks deferred)
 
 ## Phase Details
 
