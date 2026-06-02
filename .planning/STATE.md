@@ -150,6 +150,7 @@ Items carried forward (not addressed in v2.1):
 | 260601-oan | Apply v2 visual design to client-pwa newbie Home (live-bind + graceful fallback) | 2026-06-01 | complete ✓ (browser-verified) |
 | 260601-sxf | Integrate "К оплате v2" checkout restyle into client-pwa (drop redundant PlanConfirm; hidden promo-chip + bonus scaffolding behind flags) | 2026-06-01 | complete ✓ (browser-verified) |
 | 260601-vxr | "Plan Activated" success screen — restyle PaymentSucceededView 1:1 (real membership card via useClientMembership; achievement chip, validity bar, perks, receipt row; hide TabBar; layout/centering polish) | 2026-06-02 | complete ✓ (browser-verified) |
+| 260602-xb2 | client-pwa v2.1 UI polish — newbie-Home tariff buttons data-driven from useClientPlans (name+price; dropped dummy 3-button selector + floating chip); CheckoutSheet scroller bottom padding clears the floating pay footer; suppress applied-coupon ticket-notch (fixes right-edge overflow) | 2026-06-03 | complete ✓ (browser-verified) |
 
 ## Session Continuity
 
