@@ -110,7 +110,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Tapping "Отменить бронь" in `BookingManageSheet` calls `POST /client/booking/{id}/cancel` via `useCancelBooking().mutateAsync`; the booking is cancelled server-side and the booking list updates without a page reload
   2. After a successful payment, the success screen either shows the receipt-destination chip ("чек отправлен на …" with `receiptEmail` or `receiptPhone`) in line with 999.5-UI-SPEC §Screen 2 D-09, or the UI-SPEC is explicitly amended with a rationale and the current state is declared the accepted behavior
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 77-01-PLAN.md — Wire cancel-confirm button in BookingManageSheet to useCancelBooking (loading + inline error + 409 mapping) + Vitest (FIX-01)
+- [ ] 77-02-PLAN.md — Amend 999.5-UI-SPEC D-09 to accept the no-chip PaymentSucceededView + non-behavioral cross-ref comment (FIX-02)
 
 ---
 
@@ -120,7 +124,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
 | 76. PWA Wiring + Cleanup | 3/3 | Complete   | 2026-06-02 |
-| 77. v2.0 Debt Closures | 0/TBD | Not started | - |
+| 77. v2.0 Debt Closures | 0/2 | Not started | - |
 
 ---
 
