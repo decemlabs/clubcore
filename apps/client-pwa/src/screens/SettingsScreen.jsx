@@ -347,7 +347,8 @@ function SettingRow({ label, value, onChange }) {
 
 function NavRow({ label, value, onClick }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
       style={{
         padding: '14px 14px',
@@ -355,6 +356,11 @@ function NavRow({ label, value, onClick }) {
         alignItems: 'center',
         gap: 12,
         cursor: 'pointer',
+        width: '100%',
+        background: 'transparent',
+        border: 0,
+        fontFamily: 'inherit',
+        textAlign: 'left',
       }}
     >
       <div style={{ flex: 1 }} className="t-h3">
@@ -366,7 +372,7 @@ function NavRow({ label, value, onClick }) {
         </div>
       )}
       <Icon name="chevronRight" size={16} color="var(--text-3)" />
-    </div>
+    </button>
   );
 }
 
