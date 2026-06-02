@@ -67,7 +67,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 - [x] **Phase 75: Backend Field Additions** - Add `price_kopecks`/`auto_renew` to membership response, `notif_prefs` to `/client/me`, seed FIT15 promo (completed 2026-06-02)
 - [x] **Phase 76: PWA Wiring + Cleanup** - Wire trainers/plans catalog to newbie-Home, bind PersonalDataSheet to `/client/me`, remove mock chat badge (completed 2026-06-02)
-- [ ] **Phase 77: v2.0 Debt Closures** - Wire `useCancelBooking()` in BookingManageSheet (WARNING-1), reconcile receipt-destination display (WARNING-2)
+- [x] **Phase 77: v2.0 Debt Closures** - Wire `useCancelBooking()` in BookingManageSheet (WARNING-1), reconcile receipt-destination display (WARNING-2) (completed 2026-06-02)
 
 ## Phase Details
 
@@ -113,8 +113,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 77-01-PLAN.md — Wire cancel-confirm button in BookingManageSheet to useCancelBooking (loading + inline error + 409 mapping) + Vitest (FIX-01)
-- [ ] 77-02-PLAN.md — Amend 999.5-UI-SPEC D-09 to accept the no-chip PaymentSucceededView + non-behavioral cross-ref comment (FIX-02)
+- [x] 77-01-PLAN.md — Wire cancel-confirm button in BookingManageSheet to useCancelBooking (loading + inline error + 409 mapping) + Vitest (FIX-01)
+- [x] 77-02-PLAN.md — Amend 999.5-UI-SPEC D-09 to accept the no-chip PaymentSucceededView + non-behavioral cross-ref comment (FIX-02)
 
 ---
 
@@ -124,7 +124,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 75. Backend Field Additions | 2/2 | Complete   | 2026-06-02 |
 | 76. PWA Wiring + Cleanup | 3/3 | Complete   | 2026-06-02 |
-| 77. v2.0 Debt Closures | 0/2 | Not started | - |
+| 77. v2.0 Debt Closures | 2/2 | Complete   | 2026-06-02 |
 
 ---
 
