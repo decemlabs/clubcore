@@ -213,7 +213,7 @@ Plans:
 **Depends on:** Phase 73
 **Design input:** `.planning/design-inputs/client-pwa-profile-settings/Profile.html`, `.planning/design-inputs/client-pwa-profile-settings/Settings.html` (preserved from Downloads; transient source)
 **UI hint:** yes
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -226,7 +226,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 74-03-PLAN.md — Mandatory browser verification of Profile + Settings
+- [x] 74-03-PLAN.md — Mandatory browser verification of Profile + Settings
 
 ---
 
