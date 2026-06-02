@@ -214,11 +214,11 @@ describe('HomeScreen newbie live data wiring', () => {
     expect(screen.queryByText('А')).not.toBeInTheDocument()
   })
 
-  it('NHOME-02: plan chip text is derived from live useClientPlans data', () => {
+  it('NHOME-02: plan buttons render from live useClientPlans data with prices', () => {
     newbieBase()
-    // camelCase wire (priceKopecks/durationDays per ClientCatalogPlanResponse).
-    // Two plans: 30-day @150000 kopecks (1500₽/мес), 180-day @600000 kopecks (100000 kopecks = 1000₽/мес).
-    // minMonthlyKopecks = Math.round(600000 / (180/30)) = 100000 → formatMoney → "1 000 ₽" (NBSP).
+    // camelCase wire (priceKopecks per ClientCatalogPlanResponse).
+    // formatMoney is mocked: (kopecks) => String(kopecks / 100)
+    // So 150000 kopecks → "1500", 600000 kopecks → "6000".
     useClientPlans.mockReturnValue({
       data: [
         { id: 'p1', name: 'Месяц', priceKopecks: 150000, durationDays: 30 },
@@ -228,16 +228,15 @@ describe('HomeScreen newbie live data wiring', () => {
 
     renderHome()
 
-    // Chip must contain тариф (any plural form) and /мес suffix
-    const chipEl = screen.getByText(/тариф\S* · от .+\/мес/)
-    expect(chipEl).toBeInTheDocument()
-    // Must include the count "2" and the word "тарифа" (plural for 2)
-    expect(chipEl.textContent).toMatch(/2 тарифа/)
-    // Regression guard (CR-76-01): a snake_case misread → NaN → formatMoney prints
-    // the ru-RU literal "не число". Assert a real formatted price (a digit before ₽)
-    // and explicitly reject the NaN sentinel so the test cannot pass against the bug.
-    expect(chipEl.textContent).not.toMatch(/не число/)
-    expect(chipEl.textContent).toMatch(/от\s*\d[\d\s ]*\/мес/)
-    expect(chipEl.textContent).toMatch(/1[\s ]?000/) // min monthly = 1 000 ₽
+    // Both plan names must appear as tariff buttons.
+    expect(screen.getByText('Месяц')).toBeInTheDocument()
+    expect(screen.getByText('Полгода')).toBeInTheDocument()
+    // Prices must appear via formatMoney (mocked to kopecks/100 string).
+    expect(screen.getByText('1500')).toBeInTheDocument()
+    expect(screen.getByText('6000')).toBeInTheDocument()
+    // Regression guard (CR-76-01): snake_case misread → NaN → formatMoney prints NaN sentinel.
+    expect(screen.queryByText(/не число/)).not.toBeInTheDocument()
+    // The old plan-info chip must NOT appear (replaced by per-button prices).
+    expect(screen.queryByText(/тариф\S* · от .+\/мес/)).not.toBeInTheDocument()
   })
 })

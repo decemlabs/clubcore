@@ -20,15 +20,6 @@ import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 import { toSubInfo } from '@/lib/membership.js';
 export { toSubInfo };
 
-// ─── pluralPlan — Russian plural for "тариф" (D-76-06, UI-SPEC §Copywriting) ─
-function pluralPlan(n) {
-  const abs = Math.abs(n) % 100
-  const mod10 = abs % 10
-  if (abs >= 11 && abs <= 14) return 'тарифов'
-  if (mod10 === 1) return 'тариф'
-  if (mod10 >= 2 && mod10 <= 4) return 'тарифа'
-  return 'тарифов'
-}
 
 // ─── deriveOnboardingSteps — Plan 999.3-02 (D-05/D-06) ──────────────────────
 // Pure helper — exported for unit tests (HomeScreen.adapters.test.jsx).
@@ -344,14 +335,22 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
 // ─── Newbie components — Plan 999.3-02 ──────────────────────────────────────
 
 // Premium plan-card for newbie state — v2 mockup (Plan 260601-oan)
+// Static fallback buttons when plans data is loading or empty (fail-open, mirrors D-76-04/09).
+const STATIC_TARIFF_LABELS = ['Месяц', 'Полгода', 'Год']
+
 export function HeroNewbie({ onOpenPlans, isDark }) {
-  const [sel, setSel] = React.useState(1) // default «Полгода» (index 1)
+  const [sel, setSel] = React.useState(0)
   const { data: plans } = useClientPlans()
-  const tariffs = [
-    { label: 'Месяц', pop: false },
-    { label: 'Полгода', pop: true },
-    { label: 'Год', pop: false },
-  ]
+  // Build button list from live catalog; fall back to static labels (no price) if empty/loading.
+  const liveButtons = Array.isArray(plans) && plans.length > 0
+    ? plans.map(p => ({
+        id: p.id ?? p.name,
+        label: p.name,
+        price: Number.isFinite(p.priceKopecks) && p.priceKopecks > 0
+          ? formatMoney(p.priceKopecks)
+          : null,
+      }))
+    : STATIC_TARIFF_LABELS.map((label, i) => ({ id: String(i), label, price: null }))
   return (
     <div style={{
       margin: '0 16px 14px',
@@ -495,71 +494,42 @@ export function HeroNewbie({ onOpenPlans, isDark }) {
           QR-пропуск активируется сразу после оплаты. Заморозка и смена тарифа — в любой момент.
         </div>
 
-        {/* Tariff selector — visual only, no prices (D-LIVE) */}
+        {/* Tariff selector — data-driven from live catalog (D-LIVE / #2) */}
         <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-          {tariffs.map((t, i) => {
+          {liveButtons.map((btn, i) => {
             const isSel = sel === i
-            const isPopSel = t.pop && isSel
             return (
               <button
-                key={t.label}
+                key={btn.id}
                 type="button"
                 onClick={() => { setSel(i); onOpenPlans?.() }}
                 style={{
                   flex: 1, position: 'relative',
-                  border: isSel
-                    ? `1px solid ${isPopSel ? 'color-mix(in oklab, var(--accent) 55%, var(--border))' : 'var(--accent)'}`
-                    : '1px solid var(--border)',
+                  border: isSel ? '1px solid var(--accent)' : '1px solid var(--border)',
                   borderRadius: 15,
                   padding: '11px 11px 12px',
-                  // --accent-soft is a fixed light value (#d6f5ea), so in dark it
-                  // over-brightens; use a surface-based accent mix in dark (mockup parity).
-                  // Popular-selected uses a lighter 60% mix than plain 70% (mockup).
                   background: isSel
-                    ? `color-mix(in oklab, ${isDark ? 'color-mix(in oklab, var(--accent) 22%, var(--surface))' : 'var(--accent-soft)'} ${isPopSel ? '60%' : '70%'}, var(--surface))`
+                    ? `color-mix(in oklab, ${isDark ? 'color-mix(in oklab, var(--accent) 22%, var(--surface))' : 'var(--accent-soft)'} 70%, var(--surface))`
                     : 'var(--surface-2)',
                   textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
                   boxShadow: isSel ? '0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent)' : 'none',
                   transition: 'transform 0.14s ease, border-color 0.16s, background 0.16s, box-shadow 0.16s',
                 }}
               >
-                {t.pop && (
-                  <span style={{
-                    position: 'absolute', top: -8, right: 9,
-                    height: 17, padding: '0 7px', borderRadius: 999,
-                    background: 'var(--accent)', color: 'var(--on-accent)',
-                    fontSize: 9.5, fontWeight: 700, letterSpacing: '0.2px',
-                    display: 'inline-flex', alignItems: 'center',
-                  }}>ХИТ</span>
-                )}
                 <div style={{
                   fontSize: 11, fontWeight: 600, letterSpacing: '-0.1px',
-                  // accent-deep blends into the accent-tinted bg in dark — brighten (mirrors mockup).
-                  color: isPopSel
-                    ? (isDark ? 'color-mix(in oklab, var(--accent) 55%, #ffffff)' : 'var(--accent-deep)')
-                    : 'var(--text-3)',
-                }}>{t.label}</div>
+                  color: isSel ? 'var(--accent-deep)' : 'var(--text-3)',
+                }}>{btn.label}</div>
+                {btn.price && (
+                  <div style={{
+                    marginTop: 4, fontSize: 12, fontWeight: 700, letterSpacing: '-0.2px',
+                    color: isSel ? 'var(--text)' : 'var(--text-2)',
+                  }}>{btn.price}</div>
+                )}
               </button>
             )
           })}
         </div>
-
-        {/* Plan info chip — live count + min monthly price (NHOME-02 / D-76-06..09).
-            Wire is camelCase (priceKopecks/durationDays per ClientCatalogPlanResponse).
-            Filter out non-positive durations / non-finite prices so Math.min never
-            sees Infinity or NaN; render nothing if no valid monthly price remains. */}
-        {(() => {
-          const monthly = (plans ?? [])
-            .filter(p => p.durationDays > 0 && Number.isFinite(p.priceKopecks))
-            .map(p => Math.round(p.priceKopecks / (p.durationDays / 30)))
-          return plans && plans.length > 0 && monthly.length > 0 ? (
-            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
-              <span className="chip">
-                {plans.length} {pluralPlan(plans.length)} · от {formatMoney(Math.min(...monthly))}/мес
-              </span>
-            </div>
-          ) : null /* loading / error / empty: existing hardcoded layout renders as-is (D-76-09) */
-        })()}
 
         {/* CTA */}
         <button
