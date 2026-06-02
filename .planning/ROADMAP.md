@@ -135,7 +135,13 @@ Plans:
   1. The Profile screen displays the client's membership `priceKopecks` (formatted ₽) and an auto-renewal indicator driven by `autoRenew` (hidden / "—" when `autoRenew` is null, per D-75-01), sourced from the real membership read (not hardcoded).
   2. Toggling a notification category in Settings (промо / расписание / тренер / звук) calls `PATCH /client/me` with `notifPrefs` and the choice persists after a full reload / fresh session (server-backed, not localStorage-only); Settings hydrates from `GET /client/me` `notifPrefs`.
   3. A recommended-promo chip in the checkout surface applies `FIT15` in one tap (calls the existing `POST /client/promo/validate`), showing the discounted amount; manual entry still works.
-**Plans**: TBD
+**Plans**: 3 plans (Wave 1 — all parallel; zero file overlap)
+
+Plans:
+- [ ] 78-01-PLAN.md — PMEM-01: surface membership price + null-driven auto-renew on Profile (useClientMembership → membership hero)
+- [ ] 78-02-PLAN.md — NOTIF-01: Settings toggles server-backed (hydrate from /client/me, PATCH full 4-key notifPrefs, drop localStorage)
+- [ ] 78-03-PLAN.md — PROMO-01: flip recommendedPromo flag → surface one-tap FIT15 checkout chip
+
 **UI hint**: yes
 
 ---
