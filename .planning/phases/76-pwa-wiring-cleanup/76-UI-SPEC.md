@@ -266,7 +266,7 @@ Output examples: `"1 500 ₽"`, `"490 ₽"` (with NBSP thousands separator).
 | Gender | Пол | — (no API field) | Local only (segmented control) | No — `[местные данные]` label shown |
 | Height | Рост | `heightCm` from `GET /client/me` | Yes — numeric `<input>` with "см" suffix | Yes via `PATCH /client/me` |
 | Weight | Вес | `weightKg` from `GET /client/me` | Yes — numeric `<input>` with "кг" suffix | Yes via `PATCH /client/me` |
-| Goal | Цель | `goal` from `GET /client/me` | Yes — free text `<input>` | Yes via `PATCH /client/me` |
+| Goal | Цель | `goal` from `GET /client/me` | Yes — **4-pill segmented control** (server enum `{lose_weight, gain_mass, tone, maintain}` → Russian labels; NOT free text — backend rejects other values with 400 `invalid_goal`) | Yes via `PATCH /client/me` |
 
 **Local-only indicator (D-76-11):** DOB and Gender rows display a small `[местные данные]`
 label (or equivalent muted text in `var(--text-3)`, `.t-mini` sizing) to signal they are
