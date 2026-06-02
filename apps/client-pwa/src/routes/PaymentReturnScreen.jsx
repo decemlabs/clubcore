@@ -28,6 +28,7 @@
  *   fallback label "Оплата · картой" shown when amount unavailable.
  * - TabBar hidden on /payment/return via App.jsx hideTabBar (navigation not needed here).
  * - Increased spacing between check medallion and headline (pa-title margin-top: 14px).
+ * Chip omission accepted per amended 999.5-UI-SPEC §Screen 2 D-09 (Phase 77 / FIX-02).
  */
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
