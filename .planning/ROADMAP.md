@@ -79,7 +79,11 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   1. `GET /client/membership` response includes `price_kopecks` (integer) and `auto_renew` (boolean or null if the domain has no such flag — open question resolution applies here)
   2. `PATCH /client/me` accepts a `notif_prefs` JSONB field and the value is retrievable on subsequent `GET /client/me` calls (persists across PWA reinstall / device change)
   3. `POST /client/promo/validate` with code `"FIT15"` returns a valid discount response on a clean demo DB (seed migration executed idempotently)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 75-01-PLAN.md — Membership price/auto_renew fields + notif_prefs JSONB persistence on /client/me (PMEM-01, NOTIF-01)
+- [ ] 75-02-PLAN.md — FIT15 idempotent seed migration + validate-endpoint test (PROMO-01)
 
 ### Phase 76: PWA Wiring + Cleanup
 **Goal**: The newbie-Home screen displays real trainer avatars and live plan-catalog chips; the Personal Data sheet reads from and saves to the backend; the mock chat-badge is gone.
@@ -109,7 +113,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 75. Backend Field Additions | 0/TBD | Not started | - |
+| 75. Backend Field Additions | 0/2 | Not started | - |
 | 76. PWA Wiring + Cleanup | 0/TBD | Not started | - |
 | 77. v2.0 Debt Closures | 0/TBD | Not started | - |
 
