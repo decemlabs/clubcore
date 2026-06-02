@@ -87,6 +87,7 @@ interface HomeData {
 
 /** GET /client/me response shape — Phase 999.5 profile fields (camelCase wire, D-91). */
 interface ClientMeData {
+  id: string
   firstName: string
   lastName: string
   phone: string
@@ -95,6 +96,9 @@ interface ClientMeData {
   heightCm: number | null
   weightKg: number | null
   onboardingCompletedAt: string | null
+  // Phase 75 NOTIF-01: server-persisted notification prefs (strict 4-key object).
+  // Backend always returns this (defaults applied when the column is NULL).
+  notifPrefs: { promo: boolean; schedule: boolean; trainer: boolean; sound: boolean } | null
 }
 
 interface PaymentStatusData {
@@ -144,6 +148,11 @@ interface ClientMembershipData {
   status: string
   daysUntilEnd: number
   expiringSoon: boolean
+  // Phase 75 PMEM-01: client-visible own-membership economics (camelCase wire).
+  // priceKopecks = price_kopecks_snapshot (what the client paid); autoRenew always
+  // null today (no autopay concept — D-75-01).
+  priceKopecks: number
+  autoRenew: boolean | null
 }
 
 /**
