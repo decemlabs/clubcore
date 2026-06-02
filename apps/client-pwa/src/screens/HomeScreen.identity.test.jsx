@@ -1,6 +1,7 @@
 /**
  * HomeScreen identity binding tests (Plan 71-10, Task 1).
  * Extended in Plan 999.3-02 Task 3: shared mock + 3 render-gate tests.
+ * Extended in Plan 76-01 Task 3: mock useClientTrainers/useClientPlans + NHOME-01/02 assertions.
  *
  * Asserts the wired Home screen reflects the real /client/me principal and the
  * genuine empty-membership state — not the mock 'Саша' / demo active card:
@@ -11,6 +12,8 @@
  *  (c) membershipState==='newbie' → newbie onboarding renders (D-01/D-02).
  *  (d) membershipState==='lapsed' → existing flow, no newbie copy.
  *  (e) membershipState==='active' → existing flow, no newbie CTA.
+ *  (f) NHOME-01: avatar strip renders initials from live useClientTrainers data (D-76-01).
+ *  (g) NHOME-02: plan chip text derived from live useClientPlans data (D-76-06).
  */
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -21,17 +24,28 @@ import { MemoryRouter } from 'react-router-dom'
 const useClientMe = vi.fn()
 const useClientHome = vi.fn()
 const useClientBookings = vi.fn()
+const useClientTrainers = vi.fn()
+const useClientPlans = vi.fn()
 vi.mock('@/data', () => ({
   useClientMe: (...args) => useClientMe(...args),
   useClientHome: (...args) => useClientHome(...args),
   useClientBookings: (...args) => useClientBookings(...args),
-  // Newbie trainers tile reads TRAINERS (mock catalog) for the avatar stack.
+  useClientTrainers: (...args) => useClientTrainers(...args),
+  useClientPlans: (...args) => useClientPlans(...args),
+}))
+
+// Mock the direct @/data/trainers.js import used for STATIC_TRAINERS_FALLBACK (D-76-05)
+vi.mock('@/data/trainers.js', () => ({
   TRAINERS: [
-    { id: 't1', name: 'Аня Соколова' },
-    { id: 't2', name: 'Марк Левин' },
-    { id: 't3', name: 'Лиза Орлова' },
-    { id: 't4', name: 'Денис Кравцов' },
+    { id: 's1', name: 'Аня Соколова' },
+    { id: 's2', name: 'Марк Левин' },
+    { id: 's3', name: 'Лиза Орлова' },
   ],
+}))
+
+// Mock formatMoney so plan chip assertions are deterministic (no NBSP locale surprises)
+vi.mock('@/utils/format.js', () => ({
+  formatMoney: (kopecks) => String(kopecks / 100),
 }))
 
 import { HomeScreen } from './HomeScreen.jsx'
@@ -61,8 +75,13 @@ beforeEach(() => {
   useClientMe.mockReset()
   useClientHome.mockReset()
   useClientBookings.mockReset()
+  useClientTrainers.mockReset()
+  useClientPlans.mockReset()
   // Safe default so pre-existing tests (which never set bookings) keep passing
   useClientBookings.mockReturnValue({ data: { items: [], total: 0 } })
+  // Safe defaults: empty/no-loading so HomeNewbie renders without crashing
+  useClientTrainers.mockReturnValue({ data: [], isLoading: false })
+  useClientPlans.mockReturnValue({ data: [] })
 })
 
 describe('HomeScreen identity + empty-membership (real /client/me)', () => {
@@ -159,5 +178,59 @@ describe('HomeScreen render gate (membershipState newbie vs lapsed vs active)', 
 
     // Newbie CTA must NOT appear for active members
     expect(screen.queryByText('Оформить абонемент')).not.toBeInTheDocument()
+  })
+})
+
+// ─── Live wiring assertions — Plan 76-01 (NHOME-01 / NHOME-02) ───────────────
+describe('HomeScreen newbie live data wiring', () => {
+  const newbieBase = () => {
+    useClientMe.mockReturnValue({ data: { firstName: 'Иван', lastName: 'Петров' } })
+    useClientHome.mockReturnValue({
+      data: { membershipState: 'newbie', membership: null, nextBooking: null },
+      isLoading: false,
+      isError: false,
+      refetch: noop,
+    })
+    useClientBookings.mockReturnValue({ data: { items: [], total: 0 } })
+  }
+
+  it('NHOME-01: avatar strip shows initials from live useClientTrainers data, not static fallback', () => {
+    newbieBase()
+    // Live trainers with full_name different from the static TRAINERS mock (which has 'Аня' → 'А')
+    useClientTrainers.mockReturnValue({
+      data: [
+        { id: 'lt1', full_name: 'Олег Борисов' },
+        { id: 'lt2', full_name: 'Нина Козлова' },
+      ],
+      isLoading: false,
+    })
+
+    renderHome()
+
+    // Live trainer initials must appear
+    expect(screen.getByText('О')).toBeInTheDocument()
+    // Static fallback initial 'А' (Аня) must NOT appear — confirms live data wins
+    expect(screen.queryByText('А')).not.toBeInTheDocument()
+  })
+
+  it('NHOME-02: plan chip text is derived from live useClientPlans data', () => {
+    newbieBase()
+    // Two plans: 30-day at 150000 kopecks (5000/мес), 180-day at 600000 kopecks (≈3333/мес)
+    // minMonthlyKopecks = Math.round(600000 / (180/30)) = Math.round(100000) = 100000 → "1000"
+    useClientPlans.mockReturnValue({
+      data: [
+        { id: 'p1', name: 'Месяц', price_kopecks: 150000, duration_days: 30 },
+        { id: 'p2', name: 'Полгода', price_kopecks: 600000, duration_days: 180 },
+      ],
+    })
+
+    renderHome()
+
+    // Chip must contain тариф (any plural form) and /мес suffix
+    const chipEl = screen.getByText(/тариф\S* · от .+\/мес/)
+    expect(chipEl).toBeInTheDocument()
+    // Must include the count "2" and the word "тарифа" (plural for 2)
+    expect(chipEl.textContent).toMatch(/2 тарифа/)
+    expect(chipEl.textContent).toMatch(/\/мес/)
   })
 })

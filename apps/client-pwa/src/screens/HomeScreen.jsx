@@ -8,8 +8,10 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
-import { useClientHome, useClientMe, useClientBookings, TRAINERS } from '@/data';
+import { useClientHome, useClientMe, useClientBookings, useClientTrainers, useClientPlans } from '@/data';
+import { TRAINERS as STATIC_TRAINERS_FALLBACK } from '@/data/trainers.js';
 import { GYM_INFO } from '@/data/gym.js';
+import { formatMoney } from '@/utils/format.js';
 import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 
 // ─── Membership adapter — shared single source of truth (WR-05) ────────────
@@ -17,6 +19,16 @@ import { formatCountdown, useCountdown } from '@/hooks/useCountdown.js';
 // imports (`HomeScreen.adapters.test.jsx`) keep resolving toSubInfo.
 import { toSubInfo } from '@/lib/membership.js';
 export { toSubInfo };
+
+// ─── pluralPlan — Russian plural for "тариф" (D-76-06, UI-SPEC §Copywriting) ─
+function pluralPlan(n) {
+  const abs = Math.abs(n) % 100
+  const mod10 = abs % 10
+  if (abs >= 11 && abs <= 14) return 'тарифов'
+  if (mod10 === 1) return 'тариф'
+  if (mod10 >= 2 && mod10 <= 4) return 'тарифа'
+  return 'тарифов'
+}
 
 // ─── deriveOnboardingSteps — Plan 999.3-02 (D-05/D-06) ──────────────────────
 // Pure helper — exported for unit tests (HomeScreen.adapters.test.jsx).
@@ -328,6 +340,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
 // Premium plan-card for newbie state — v2 mockup (Plan 260601-oan)
 export function HeroNewbie({ onOpenPlans, isDark }) {
   const [sel, setSel] = React.useState(1) // default «Полгода» (index 1)
+  const { data: plans } = useClientPlans()
   const tariffs = [
     { label: 'Месяц', pop: false },
     { label: 'Полгода', pop: true },
@@ -524,6 +537,17 @@ export function HeroNewbie({ onOpenPlans, isDark }) {
             )
           })}
         </div>
+
+        {/* Plan info chip — live count + min monthly price (NHOME-02 / D-76-06..09) */}
+        {plans && plans.length > 0 ? (
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
+            <span className="chip">
+              {plans.length} {pluralPlan(plans.length)} · от {formatMoney(
+                Math.min(...plans.map(p => Math.round(p.price_kopecks / (p.duration_days / 30))))
+              )}/мес
+            </span>
+          </div>
+        ) : null /* loading / error / empty: existing hardcoded layout renders as-is (D-76-09) */}
 
         {/* CTA */}
         <button
@@ -816,6 +840,7 @@ export function QrPlaceholder() {
 // Top-level newbie variant — composes all newbie sub-components with stagger (v2 mockup)
 export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPlans, onOpenGymInfo, onOpenNotifications, onTab, onOpenOnboarding }) {
   const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings)
+  const { data: liveTrainers, isLoading: trainersLoading } = useClientTrainers()
 
   // Derive real initials from me.firstName (API-backed)
   const initial = userName ? [...userName.trim()][0]?.toUpperCase() : null
@@ -951,35 +976,53 @@ export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPla
             fontFamily: 'inherit', color: 'var(--text)', appearance: 'none',
           }}
         >
-          {/* Avatar stack — initials + overflow count from TRAINERS (mock-sourced:
-              no live trainers endpoint on this screen yet) */}
+          {/* Avatar stack — live data from useClientTrainers() (D-76-01, NHOME-01)
+              On loading: 3 grey skeleton circles (D-76-04, no pulse)
+              On error/empty: static STATIC_TRAINERS_FALLBACK placeholders (D-76-04/05) */}
           <div style={{ display: 'flex', alignItems: 'center' }} aria-hidden="true">
-            {TRAINERS.slice(0, 3).map((tr, i) => (
-              <span key={tr.id} style={{
-                width: 34, height: 34, borderRadius: '50%',
-                border: '2.5px solid var(--surface)',
-                marginLeft: i === 0 ? 0 : -11,
-                background: i === 0
-                  ? 'var(--accent)'
-                  : i === 1 ? 'color-mix(in oklab, var(--accent) 60%, #6ee7c4)' : 'var(--accent-deep)',
-                color: i === 2 ? '#ffffff' : 'var(--on-accent)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, flexShrink: 0,
-              }}>
-                {[...tr.name.trim()][0]}
-              </span>
-            ))}
-            {TRAINERS.length > 3 && (
-              <span style={{
-                width: 34, height: 34, borderRadius: '50%',
-                border: '2.5px solid var(--surface)', marginLeft: -11,
-                background: 'var(--surface-2)', color: 'var(--text-2)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700, flexShrink: 0,
-              }}>
-                +{TRAINERS.length - 3}
-              </span>
-            )}
+            {trainersLoading ? (
+              [0, 1, 2].map((i) => (
+                <span key={i} style={{
+                  width: 34, height: 34, borderRadius: '50%',
+                  border: '2.5px solid var(--surface)',
+                  marginLeft: i === 0 ? 0 : -11,
+                  background: 'var(--surface-2)', flexShrink: 0,
+                }} />
+              ))
+            ) : (() => {
+              const display = (liveTrainers && liveTrainers.length > 0) ? liveTrainers : STATIC_TRAINERS_FALLBACK
+              const count = (liveTrainers && liveTrainers.length > 0) ? liveTrainers.length : display.length
+              return (
+                <>
+                  {display.slice(0, 3).map((tr, i) => (
+                    <span key={tr.id ?? i} style={{
+                      width: 34, height: 34, borderRadius: '50%',
+                      border: '2.5px solid var(--surface)',
+                      marginLeft: i === 0 ? 0 : -11,
+                      background: i === 0
+                        ? 'var(--accent)'
+                        : i === 1 ? 'color-mix(in oklab, var(--accent) 60%, #6ee7c4)' : 'var(--accent-deep)',
+                      color: i === 2 ? '#ffffff' : 'var(--on-accent)',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 700, flexShrink: 0,
+                    }}>
+                      {[...(tr.full_name ?? tr.name ?? '').trim()][0]}
+                    </span>
+                  ))}
+                  {count > 3 && (
+                    <span style={{
+                      width: 34, height: 34, borderRadius: '50%',
+                      border: '2.5px solid var(--surface)', marginLeft: -11,
+                      background: 'var(--surface-2)', color: 'var(--text-2)',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                    }}>
+                      +{count - 3}
+                    </span>
+                  )}
+                </>
+              )
+            })()}
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.2px' }}>Тренеры</div>
