@@ -38,14 +38,21 @@ export const SettingsScreen = ({
 
   // Notification toggles — hydrate from server (D-78-04); NOTIF_DEFAULTS as render fallback only.
   const [notif, setNotif] = React.useState(NOTIF_DEFAULTS);
+  // Synchronous source of truth for the intended toggle state. Reading/writing this
+  // (not the render-closure `notif`) makes two rapid toggles compose correctly — the
+  // second toggle's full-replace payload includes the first's change (WR-78-01/03).
+  const notifRef = React.useRef(notif);
 
-  // Re-sync from authoritative server value whenever notifPrefs arrives/changes (D-78-08).
-  // This ensures a full reload rehydrates from the server round-trip.
+  // Re-sync from authoritative server value whenever notifPrefs arrives/changes (D-78-08),
+  // EXCEPT while a toggle PATCH is in flight — a mid-flight `me` invalidation must not
+  // clobber the optimistic state (WR-78-02). After the PATCH settles, isPending flips
+  // false and this re-syncs to the (now-consistent) server value.
   React.useEffect(() => {
-    if (me?.notifPrefs) {
+    if (me?.notifPrefs && !updateProfile.isPending) {
+      notifRef.current = me.notifPrefs;
       setNotif(me.notifPrefs);
     }
-  }, [me?.notifPrefs]);
+  }, [me?.notifPrefs, updateProfile.isPending]);
 
   // Local in-sheet toast state (mirror ProfileExtraSheets pattern — no global Sonner in PWA)
   const [toastMsg, setToastMsg] = React.useState(null);
@@ -58,14 +65,20 @@ export const SettingsScreen = ({
   };
 
   // Optimistic toggle: flip → PATCH full 4-key notifPrefs → revert on failure (D-78-06).
+  // Built from notifRef (synchronous source of truth), not the render closure, so rapid
+  // toggles compose (WR-78-01). On failure revert ONLY this key via a functional update
+  // so a concurrent successful toggle of another key isn't clobbered (WR-78-03).
   const setNotifKey = async (key, val) => {
-    const prior = notif;
-    const next = { promo: notif.promo, schedule: notif.schedule, trainer: notif.trainer, sound: notif.sound, [key]: val };
+    const priorVal = notifRef.current[key];
+    const next = { ...notifRef.current, [key]: val };
+    notifRef.current = next;
     setNotif(next);
     try {
       await updateProfile.mutateAsync({ notifPrefs: next });
     } catch {
-      setNotif(prior);
+      const reverted = { ...notifRef.current, [key]: priorVal };
+      notifRef.current = reverted;
+      setNotif(reverted);
       showToast('Не удалось сохранить настройки. Попробуйте ещё раз.');
     }
   };
