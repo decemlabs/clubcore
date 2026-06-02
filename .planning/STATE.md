@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Client PWA — Fill the Gaps
-status: executing
+status: Awaiting next milestone
 stopped_at: Phase 75 context gathered
-last_updated: "2026-06-02T19:58:28.979Z"
-last_activity: 2026-06-02 -- Phase 78 execution started
+last_updated: "2026-06-02T20:27:27.288Z"
+last_activity: 2026-06-02 — Milestone v2.1 completed and archived
 progress:
   total_phases: 9
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 7
-  percent: 33
+  completed_plans: 10
+  percent: 44
 ---
 
 # Project State
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-02 — v2.1 Client PWA — Fill the G
 
 ## Current Position
 
-Phase: 78 (pmem-notif-promo-frontend-surfacing) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 78
-Last activity: 2026-06-02 -- Phase 78 execution started
-
-**Progress:** [░░░░░░░░░░] 0% (0/3 phases complete)
+Phase: Milestone v2.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-02 — Milestone v2.1 completed and archived
 
 ## v2.1 Roadmap Summary
 
@@ -158,3 +156,7 @@ Items carried forward (not addressed in v2.1):
 Last session: 2026-06-02T16:06:03.489Z
 Stopped at: Phase 75 context gathered
 Resume: Run `/gsd:plan-phase 75` to begin planning the backend field additions phase
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

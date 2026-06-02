@@ -91,7 +91,9 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Current Milestone: v2.1 Client PWA — Fill the Gaps
+## Last Shipped Milestone: v2.1 Client PWA — Fill the Gaps
+
+**✅ SHIPPED 2026-06-02** (Phases 75-78, 10 plans; tag `v2.1`; audit `tech_debt`, 0 blockers, 10/10 requirements delivered). Turned on the already-built-but-hidden client-PWA functionality: backend field additions (membership `priceKopecks`/`autoRenew`, `notif_prefs` JSONB, seeded FIT15) → newbie-Home live trainers/plan-chip + PersonalDataSheet read/save + chat-badge cleanup → two v2.0 debt closures (cancel-booking E2E wiring, receipt-destination reconciliation) → frontend surfacing of the membership price/auto-renew on Profile, server-backed Settings notif toggles, and the FIT15 checkout chip (Phase 78, added mid-milestone to close the audit's frontend-surfacing debt). **Deferred at close (acknowledged):** Phase 76 PDATA-02 + Phase 78 live human-verify checks; pre-existing `router.py` ruff I001; WR-75-02 receipt heuristic — see STATE.md `## Deferred Items`. Original scope below for reference.
 
 **Goal:** Включить уже построенный, но скрытый функционал клиентского PWA — через flip фич-флагов, мелкие добавления полей в существующие backend-схемы и чистую фронт-проводку. Никаких новых доменов; платёжный путь не трогаем.
 
@@ -108,9 +110,9 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 - `auto_renew` — есть ли признак автопродления в домене абонементов, или показывать только цену (строку «Продление» убрать)?
 - FAQ — оставить статикой в коде или вынести в config-эндпоинт?
 
-**Status:** Opened 2026-06-02. Research skipped (включение существующих паттернов, новых доменов нет). `REQUIREMENTS.md` recreated fresh; v2.0 snapshot archived в `.planning/milestones/v2.0-REQUIREMENTS.md`.
+**Status:** ✅ Shipped 2026-06-02 (Phases 75-78). Research skipped (включение существующих паттернов, новых доменов нет). `REQUIREMENTS.md` archived to `.planning/milestones/v2.1-REQUIREMENTS.md`; recreated fresh at next `/gsd:new-milestone`.
 
-## Last Shipped Milestone: v2.0 Frontend Integration — Client PWA
+## Prior Milestone: v2.0 Frontend Integration — Client PWA
 
 **✅ SHIPPED 2026-06-02** (Phases 68–74 + 999.3/999.4/999.5; tag `v2.0`; audit `tech_debt`, 0 blockers). See **Current State** above for what was delivered. Original milestone scope below for reference.
 
@@ -313,6 +315,19 @@ Target features (all delivered):
 ## Requirements
 
 ### Validated
+
+<!-- v2.1 Client PWA — Fill the Gaps (shipped 2026-06-02): -->
+
+- ✓ PMEM-01 — membership `priceKopecks` + `autoRenew` on `ClientMembershipResponse`, surfaced on the Profile screen — v2.1 (backend Phase 75, frontend Phase 78)
+- ✓ NOTIF-01 — server-persisted `notif_prefs` (JSONB) via GET/PATCH `/client/me`; Settings toggles server-backed (localStorage dropped) — v2.1 (Phase 75 + 78)
+- ✓ PROMO-01 — FIT15 promo seeded (migration 0051) + validates via `POST /client/promo/validate`; one-tap recommended-promo chip surfaced in checkout — v2.1 (Phase 75 + 78)
+- ✓ NHOME-01 — newbie-Home trainer avatars/initials + overflow from live `GET /client/trainers` — v2.1 (Phase 76)
+- ✓ NHOME-02 — newbie-Home plan info chip (count + min monthly price) from live `GET /client/plans` — v2.1 (Phase 76)
+- ✓ PDATA-01 — Personal Data sheet reads real profile from `GET /client/me` — v2.1 (Phase 76)
+- ✓ PDATA-02 — Personal Data edits persist via `PATCH /client/me` — v2.1 (Phase 76; live reload check deferred)
+- ✓ CLEAN-01 — mock chat-badge (`CONVERSATIONS`) removed from App.jsx — v2.1 (Phase 76)
+- ✓ FIX-01 — cancel-booking reaches the backend via `useCancelBooking()` (real booking threaded) — v2.1 (Phase 77, closes v2.0 WARNING-1)
+- ✓ FIX-02 — receipt-destination reconciled (999.5-UI-SPEC D-09 amended; no-chip declared accepted) — v2.1 (Phase 77, closes v2.0 WARNING-2)
 
 <!-- Frontend (унаследовано до v1.0): -->
 
@@ -559,6 +574,8 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
+*Last updated: 2026-06-02 — **v2.1 Client PWA — Fill the Gaps SHIPPED** (Phases 75-78, 10 plans, 10/10 requirements; tag `v2.1`; audit `tech_debt`, 0 blockers). Turned on the hidden client-PWA functionality: Phase 75 backend field additions (membership `priceKopecks`/`autoRenew`; `notif_prefs` JSONB migration 0050; FIT15 seed migration 0051) → Phase 76 PWA wiring (newbie-Home live trainers + plan chip, PersonalDataSheet read/save, mock chat-badge removed) → Phase 77 v2.0 debt closures (cancel-booking E2E wired with real-booking threading — closes WARNING-1; receipt-destination reconciled via 999.5-UI-SPEC D-09 amendment — closes WARNING-2) → Phase 78 (added mid-milestone after the audit flagged frontend-surfacing debt) surfacing membership price/auto-renew on Profile, server-backing the Settings notif toggles (localStorage dropped), and the FIT15 checkout chip. Code review caught + fixed real bugs in-flight: Phase 76 two camelCase contract BLOCKERS (frontend read snake_case vs camelCase wire) + the bug-masking test fixtures; Phase 77 the cancel real-id threading BLOCKER (sheet opened with no booking → always cancelled the mock id); Phase 78 three NOTIF optimistic-toggle races. Backend gates green (ruff/mypy-strict/import-linter on all touched files); PWA lint/tsc/build + 92/92 Vitest green. **Acknowledged deferred at close** (per user): Phase 76 PDATA-02 live persistence check; Phase 78 live checks (FIT15 chip sub+PT, notif toggle reload); pre-existing `router.py` ruff I001 (predates v2.1); WR-75-02 receipt-lookup heuristic. REQUIREMENTS.md archived to `.planning/milestones/v2.1-REQUIREMENTS.md`, recreated fresh at next `/gsd:new-milestone`. Next candidate: production deploy story, Group-B net-new domains (chat/referrals/reviews/notifications/gym-info), staff-side client-domain wiring, or autopay/card-on-file.*
+
 *Last updated: 2026-06-02 — **started milestone v2.1 Client PWA — Fill the Gaps**. Follow-on to v2.0: turn on already-built-but-hidden PWA functionality via feature-flag flips + small backend field additions (no new domains) + pure-frontend wiring — Groups A+C from the client-pwa inventory. In scope (10 reqs): membership price + auto-renew (`ClientMembershipResponse`), server-persisted notification prefs (`notif_prefs` on PATCH /client/me), recommended promo chip (seed `FIT15`), real trainer avatars + plan-price chips on newbie Home, PersonalDataSheet bound to `/client/me`, drop mock chat badge — plus fold-in of the two deferred v2.0 warnings (WARNING-1 cancel-booking E2E wiring, WARNING-2 receipt-destination chip vs 999.5-UI-SPEC D-09). Tenure badge + «weeks» stat + `tier`/«PREMIUM» **dropped by user** (flags stay OFF; no `tier`/`member_since_at` fields). Explicitly OUT (Group B, future milestones): chat, referrals, trainer reviews/detail, notification inbox, gym-info/CMS + occupancy, card-on-file + autopay (`linkedCard` stays OFF), loyalty/bonuses, booking reschedule, weekly-activity analytics, phone-change OTP. Research skipped (existing patterns, no new domains). Open questions deferred to discuss-phase: `auto_renew` source, FAQ static-vs-config. Phase numbering continues from v2.0. REQUIREMENTS.md recreated fresh; v2.0 snapshot archived to `.planning/milestones/v2.0-REQUIREMENTS.md`.*
 
 *Last updated: 2026-06-02 — **v2.0 Frontend Integration — Client PWA SHIPPED** (Phases 68–74 + backlog 999.3/999.4/999.5, 47 plans, 47/47 requirements; quick tasks 999.1/999.2 shipped separately; tag `v2.0`; audit `tech_debt` — 0 blockers, 45/47 integration wired). First full-stack milestone after the backend-only series: built a NEW client-facing backend (parallel `ClientPrincipal` phone+OTP auth fully isolated from staff, client-scoped IDOR-safe reads/writes over memberships/bookings/visits/pt_sessions/payments/catalogs, signed-QR self-check-in, client-initiated ЮKassa checkout with webhook-only activation + 54-ФЗ email-OR-phone fiscal gate, real promo codes) and wired `apps/client-pwa` to it — Home (active + newbie states), Profile, Settings, Book, Plans, Checkout, QR, onboarding questionnaire, post-payment receipt-email — all on the real backend through the `clientFetcher`/`clientQueries` swap seam. Two-principal isolation verified (no `Role.CLIENT` in staff `permissions.py`/`can.ts`; `aud="client"`; `cc_client_*` cookie + `auth:client:*` Redis namespaces; 12-case IDOR sweep green); staff contract byte-identical to `contract-freeze-v1.11.0` (drift gate green); `Client-Portal` tag added to `openapi.json` additively with `_v20Checks` forward-guards; SW never caches `/api/*` (gym-v3). The most dangerous latent bug — a missing `session.commit()` on the checkout `online_payments` row that would have silently failed all CPAY flows — was caught in live UAT and fixed (commit `f122b52c`). **Acknowledged deferred at close** (per user): cancel-booking not yet E2E-wired in the PWA (backend + hook exist; UI fires only a local callback — CBOOK-05 frontend gap, WARNING-1); receipt-destination chip removed from the success screen per user feedback, contradicting 999.5-UI-SPEC D-09 (WARNING-2); ~16 minor tech-debt items including 3 Phase-70 security-deferred items for `/gsd:secure-phase`; live ЮKassa credentialed leg OPERATOR-PENDING by design (D-72-06); 7 quick-task status markers + 3 stale `human_needed` VERIFICATION statuses (HUMAN-UAT complete for all three). REQUIREMENTS.md archived to `.planning/milestones/v2.0-REQUIREMENTS.md` and recreated fresh at next `/gsd:new-milestone`. Next: production deploy story (Kubernetes/Terraform), admin-web client-domain wiring, promo-code admin CRUD UI, or the deferred warnings.*

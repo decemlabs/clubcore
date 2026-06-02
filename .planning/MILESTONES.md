@@ -1,5 +1,23 @@
 # Milestones
 
+## v2.1 Client PWA — Fill the Gaps (Shipped: 2026-06-02)
+
+**Phases completed:** 4 phases, 10 plans, 13 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- One-liner:
+- HomeNewbie (NHOME-01):
+- One-liner:
+- One-liner:
+- One-liner:
+- Profile membership hero now renders priceKopecks as formatted ₽ (via formatMoney) from useClientMembership(); auto-renew row hidden when null per D-78-02; 4 new vitest tests covering all render branches
+- Settings notification toggles made server-backed: hydrate from GET /client/me notifPrefs, persist via PATCH /client/me full 4-key replace, localStorage dropped as persistence store
+- FIT15 recommended-promo chip surfaced in checkout by flipping CHECKOUT_FEATURE_FLAGS.recommendedPromo false→true; one-tap apply via existing server-authoritative usePromoValidate flow now visible in both sub + PT contexts
+
+---
+
 ## v2.0 Frontend Integration — Client PWA (Shipped: 2026-06-02)
 
 **Phases completed:** 10 phases (68–74 + backlog 999.3/999.4/999.5) + 2 quick tasks (999.1/999.2), 47 plans, 63 tasks
