@@ -58,6 +58,19 @@ function subTotalDays(startDate, endDate) {
   return Math.max(0, Math.round((end - start) / 86_400_000));
 }
 
+// ─── Russian plural for day counts (WR-02) ────────────────────────────────
+// Correct for all integers, including 11–14 (always "дней") and the 21/22…
+// tens boundary that the previous simplified ternary got wrong.
+function pluralDays(n) {
+  const abs = Math.abs(n);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'дней';
+  if (mod10 === 1) return 'день';
+  if (mod10 >= 2 && mod10 <= 4) return 'дня';
+  return 'дней';
+}
+
 // ─── Count-up animation hook ───────────────────────────────────────────────
 function useCountUp(target) {
   const [value, setValue] = React.useState(0);
@@ -172,7 +185,7 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
                 {sub.daysLeft}
               </span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mh-text-2)', paddingBottom: 5, lineHeight: 1.2 }}>
-                {sub.daysLeft === 1 ? 'день до' : sub.daysLeft < 5 && sub.daysLeft > 0 ? 'дня до' : 'дней до'}
+                {pluralDays(sub.daysLeft)} до
                 <br />продления
               </span>
             </div>
@@ -188,7 +201,7 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
               </div>
               <div className="row-between" style={{ marginTop: 7 }}>
                 <span style={{ fontSize: 11, color: 'var(--mh-text-3)' }}>
-                  {sub.total > 0 ? `Пройдено ${elapsedDays} ${elapsedDays === 1 ? 'день' : elapsedDays < 5 ? 'дня' : 'дней'}` : 'Нет абонемента'}
+                  {sub.total > 0 ? `Пройдено ${elapsedDays} ${pluralDays(elapsedDays)}` : 'Нет абонемента'}
                 </span>
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mh-accent)' }}>
                   {sub.total > 0 ? `До ${sub.until}` : ''}
