@@ -43,7 +43,7 @@ const PROMO_ERROR_MESSAGES = {
 //    the toggle renders, but it MUST NOT mutate `total`/`discount` client-side (D-06)
 //    until that backend lands — flipping it true here only reveals the UI.
 const CHECKOUT_FEATURE_FLAGS = {
-  recommendedPromo: false,
+  recommendedPromo: true,
   clubBonuses:      false,
 };
 // Placeholder until a real "recommended promo" source exists on the backend.
