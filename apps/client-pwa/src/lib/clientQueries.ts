@@ -224,6 +224,7 @@ export function useUpdateClientProfile() {
       weightKg?: number
       onboardingCompleted?: boolean
       email?: string
+      notifPrefs?: { promo: boolean; schedule: boolean; trainer: boolean; sound: boolean }
     }) => {
       const res = await clientRequest('patch', '/api/v1/client/me', { body: payload })
       return (res as { data: ClientMeData }).data
