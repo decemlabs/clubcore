@@ -87,22 +87,22 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PMEM-01 | TBD | Pending |
-| NOTIF-01 | TBD | Pending |
-| PROMO-01 | TBD | Pending |
-| NHOME-01 | TBD | Pending |
-| NHOME-02 | TBD | Pending |
-| PDATA-01 | TBD | Pending |
-| PDATA-02 | TBD | Pending |
-| FIX-01 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| CLEAN-01 | TBD | Pending |
+| PMEM-01 | Phase 75 | Pending |
+| NOTIF-01 | Phase 75 | Pending |
+| PROMO-01 | Phase 75 | Pending |
+| NHOME-01 | Phase 76 | Pending |
+| NHOME-02 | Phase 76 | Pending |
+| PDATA-01 | Phase 76 | Pending |
+| PDATA-02 | Phase 76 | Pending |
+| CLEAN-01 | Phase 76 | Pending |
+| FIX-01 | Phase 77 | Pending |
+| FIX-02 | Phase 77 | Pending |
 
 **Coverage:**
 - v1 requirements: 10 total
-- Mapped to phases: 0 (filled by roadmapper)
-- Unmapped: 10 ⚠️ (until roadmap)
+- Mapped to phases: 10 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 — v2.1 Client PWA — Fill the Gaps requirements defined*
+*Last updated: 2026-06-02 — v2.1 roadmap created; traceability filled (Phases 75-77)*

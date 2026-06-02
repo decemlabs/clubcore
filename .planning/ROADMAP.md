@@ -15,6 +15,7 @@
 - ✅ **v1.10 clubcore Rebrand** — Phases 62 + 62.1 (shipped 2026-05-26) — see [milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 - ✅ **v1.11 API Handoff + Production Hardening** — Phases 63-67 (shipped 2026-05-29) — see [milestones/v1.11-ROADMAP.md](milestones/v1.11-ROADMAP.md)
 - ✅ **v2.0 Frontend Integration — Client PWA** — Phases 68-74 + 999.3/999.4/999.5 (shipped 2026-06-02) — see [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
+- 🚧 **v2.1 Client PWA — Fill the Gaps** — Phases 75-77 (opened 2026-06-02) — in progress
 
 ## Phases
 
@@ -60,9 +61,61 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
+### v2.1 Client PWA — Fill the Gaps (Phases 75-77) — IN PROGRESS
+
+**Milestone Goal:** Turn on already-built-but-hidden client PWA functionality via feature-flag flips, small backend field additions to existing schemas, and pure-frontend wiring. Fold in the two deferred v2.0 warnings. No new backend domains; payment/activation path untouched.
+
+- [ ] **Phase 75: Backend Field Additions** - Add `price_kopecks`/`auto_renew` to membership response, `notif_prefs` to `/client/me`, seed FIT15 promo
+- [ ] **Phase 76: PWA Wiring + Cleanup** - Wire trainers/plans catalog to newbie-Home, bind PersonalDataSheet to `/client/me`, remove mock chat badge
+- [ ] **Phase 77: v2.0 Debt Closures** - Wire `useCancelBooking()` in BookingManageSheet (WARNING-1), reconcile receipt-destination display (WARNING-2)
+
+## Phase Details
+
+### Phase 75: Backend Field Additions
+**Goal**: The client membership response exposes price and auto-renewal status; `/client/me` accepts and persists notification preferences; the FIT15 promo code is seeded and validates via the existing endpoint.
+**Depends on**: Phase 74 (v2.0 shipped — client portal baseline)
+**Requirements**: PMEM-01, NOTIF-01, PROMO-01
+**Success Criteria** (what must be TRUE):
+  1. `GET /client/membership` response includes `price_kopecks` (integer) and `auto_renew` (boolean or null if the domain has no such flag — open question resolution applies here)
+  2. `PATCH /client/me` accepts a `notif_prefs` JSONB field and the value is retrievable on subsequent `GET /client/me` calls (persists across PWA reinstall / device change)
+  3. `POST /client/promo/validate` with code `"FIT15"` returns a valid discount response on a clean demo DB (seed migration executed idempotently)
+**Plans**: TBD
+
+### Phase 76: PWA Wiring + Cleanup
+**Goal**: The newbie-Home screen displays real trainer avatars and live plan-catalog chips; the Personal Data sheet reads from and saves to the backend; the mock chat-badge is gone.
+**Depends on**: Phase 75
+**Requirements**: NHOME-01, NHOME-02, PDATA-01, PDATA-02, CLEAN-01
+**Success Criteria** (what must be TRUE):
+  1. A logged-in newbie client opening the Home screen sees trainer avatars/initials sourced from `GET /client/trainers` (not the static `TRAINERS` array); overflow counter reflects live trainer count
+  2. The plan info chip on newbie-Home shows the count and minimum monthly price computed from `GET /client/plans` (not the hardcoded string)
+  3. Opening the Personal Data sheet shows the client's real name, phone, and email from `GET /client/me` — no placeholder/hardcoded values
+  4. Editing and saving a profile field (name, email, goal, height, or weight) in the Personal Data sheet calls `PATCH /client/me` and the change persists after a full page reload
+  5. The chat unread-messages badge shows 0 or is hidden; the `CONVERSATIONS` mock import is absent from `App.jsx`
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 77: v2.0 Debt Closures
+**Goal**: The two v2.0 integration warnings are resolved: booking cancellation reaches the backend, and the post-payment receipt-destination display is consistent with the agreed UI spec.
+**Depends on**: Phase 74 (v2.0 baseline; independent of Phase 75/76)
+**Requirements**: FIX-01, FIX-02
+**Success Criteria** (what must be TRUE):
+  1. Tapping "Отменить бронь" in `BookingManageSheet` calls `POST /client/booking/{id}/cancel` via `useCancelBooking().mutateAsync`; the booking is cancelled server-side and the booking list updates without a page reload
+  2. After a successful payment, the success screen either shows the receipt-destination chip ("чек отправлен на …" with `receiptEmail` or `receiptPhone`) in line with 999.5-UI-SPEC §Screen 2 D-09, or the UI-SPEC is explicitly amended with a rationale and the current state is declared the accepted behavior
+**Plans**: TBD
+
 ---
 
-*Roadmap last updated: 2026-06-02 — v2.0 Frontend Integration — Client PWA SHIPPED (10 phases 68-74 + 999.3/999.4/999.5, 47 plans, 47/47 requirements; tag `v2.0`; audit `tech_debt`, 0 blockers). ROADMAP archived to milestones/v2.0-ROADMAP.md; REQUIREMENTS.md archived + recreated fresh at next milestone.*
+## Progress Table
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 75. Backend Field Additions | 0/TBD | Not started | - |
+| 76. PWA Wiring + Cleanup | 0/TBD | Not started | - |
+| 77. v2.0 Debt Closures | 0/TBD | Not started | - |
+
+---
+
+*Roadmap last updated: 2026-06-02 — v2.1 Client PWA — Fill the Gaps opened (Phases 75-77, 3 phases, 10/10 requirements mapped). ROADMAP updated in-place; milestone list entry added as 🚧 in progress.*
 
 ## Backlog
 

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Client PWA — Fill the Gaps
 status: planning
-last_updated: "2026-06-02T15:33:51.493Z"
+last_updated: "2026-06-02T00:00:00.000Z"
 last_activity: 2026-06-02
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — v2.1 Client PWA — Fill the Gaps opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v2.1 Client PWA — Fill the Gaps (opened 2026-06-02) — defining requirements. Включение скрытого/замоканного функционала PWA (флаги + мелкие поля backend + фронт-проводка) + фолд-ин 2 долгов v2.0. Net-new домены (Группа B) отложены.
+**Current focus:** v2.1 Client PWA — Fill the Gaps (opened 2026-06-02) — roadmap defined, ready to plan Phase 75. Включение скрытого/замоканного функционала PWA (флаги + мелкие поля backend + фронт-проводка) + фолд-ин 2 долгов v2.0. Net-new домены (Группа B) отложены.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 75 (Not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-02 — Milestone v2.1 started
+Status: Ready to plan
+Last activity: 2026-06-02 — Milestone v2.1 roadmap created (Phases 75-77)
 
-## v2.0 Roadmap Summary
+**Progress:** [░░░░░░░░░░] 0% (0/3 phases complete)
+
+## v2.1 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 75. Backend Field Additions | `price_kopecks`/`auto_renew` in membership response; `notif_prefs` on `/client/me`; FIT15 seeded | PMEM-01, NOTIF-01, PROMO-01 |
+| 76. PWA Wiring + Cleanup | Trainers/plans wired to newbie-Home; PersonalDataSheet on real API; mock chat badge removed | NHOME-01, NHOME-02, PDATA-01, PDATA-02, CLEAN-01 |
+| 77. v2.0 Debt Closures | Cancel-booking E2E wired (WARNING-1); receipt-destination display reconciled (WARNING-2) | FIX-01, FIX-02 |
+
+**Coverage:** 10/10 v2.1 requirements mapped (zero orphans, zero duplicates).
+
+## v2.0 Roadmap Summary (archived for reference)
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -38,8 +50,6 @@ Last activity: 2026-06-02 — Milestone v2.1 started
 | 70. Client Bookings + QR Self Check-In | Self-booking + cancellation + signed QR + anti-replay check-in | CBOOK-01..05, CCHK-01..03 |
 | 71. Client Checkout + Full PWA Wiring | ЮKassa checkout (webhook-only activation) + all PWA screens on real backend | CPAY-01..05, PWA-05 |
 | 72. OpenAPI Handoff + CI + E2E Verification | Client-Portal tag in spec, _v20Checks, PWA CI gates, drift gate green, live runbook gate | HND-01..03, VER-01..04 |
-
-**Coverage:** 47/47 v2.0 requirements mapped (zero orphans, zero duplicates).
 
 ## Performance Metrics
 
@@ -84,36 +94,22 @@ Last activity: 2026-06-02 — Milestone v2.1 started
 
 ## Accumulated Context
 
-### Roadmap Evolution
+### v2.1 Scope Decisions
 
-- Phase 999.3 added: client-pwa Home newbie (no-subscription) state — UI, frontend-only
-- Phase 999.4 added: client-pwa Checkout visual restyle — UI, ЮKassa redirect unchanged (D-71-04), no in-app card form
-- Phase 999.5 added: client-pwa onboarding questionnaire + post-payment receipt-email — UI + backend (client profile fields name/goal/height_cm/weight_kg + endpoint, client.email write for 54-ФЗ receipt). Open question: email-timing vs `client_email_required_for_online_payment` gate (collect email "после оплаты" conflicts with email-required-before-pay; resolve in discuss/spec)
-- Phase 73 added: Обновить экран «Главная» по новому макету без изменений в интерфейсе и дизайне
-- Phase 74 added: Обновить экраны «Профиль» и «Настройки» по новым макетам (Downloads/Profile.html, Downloads/Settings.html) — visual restyle, mirrors Phase 73
+- No new backend domains — all Phase 75 additions are additive fields/seeds on existing tables/schemas (`ClientMembershipResponse`, `/client/me`)
+- `auto_renew` open question: whether the memberships domain has an auto-renewal concept — Phase 75 discuss-phase resolves this; if no domain flag exists, show price only and drop the renewal line from the Profile UI
+- `notif_prefs` storage: JSONB column on the `clients` table (or equivalent) — schema migration needed; client-portal `PATCH /client/me` accepts the new field; migration must be additive (nullable, no default constraint change)
+- FIT15 seed: idempotent via `INSERT ... ON CONFLICT DO NOTHING`; mirrors the existing promo_codes seed discipline from Phase 999.4
+- Phase 76 is pure frontend (flag-flips + query hook wiring) — depends on Phase 75 only for the new `notif_prefs` and membership fields being available
+- Phase 77 (FIX-01/FIX-02) is independent of Phase 75/76 — both fixes touch existing hooks and UI files only; can run after Phase 74 baseline
 
-### Key v2.0 Decisions (pre-locked from research)
+### Key v2.0 Decisions (carry-forward, still locked)
 
-- **D-20-PRINCIPAL**: Separate `ClientPrincipal` + `require_client()` + `aud:"client"` + distinct `cc_client_*` cookies — `Role.CLIENT` is BANNED in `permissions.py` (breaks staff byte-parity with frozen admin-web)
-- **D-20-COOKIES**: Client cookies: `cc_client_access` + `cc_client_refresh`, `Path=/api/v1/client`; staff cookies unchanged; no mutual overwrite on same origin
+- **D-20-PRINCIPAL**: Separate `ClientPrincipal` + `require_client()` + `aud:"client"` + distinct `cc_client_*` cookies — `Role.CLIENT` is BANNED
 - **D-20-MODULE**: `app/modules/client_portal/` aggregator; raw-SQL reads (D-54-08 precedent); Protocol-slot writes; zero new `ignore_imports`
-- **D-20-OTP**: Telegram-OTP-only for v2.0; SMS (SMS Aero / SMSC.ru / МТС Exolve) deferred to SMS-01 future req
-- **D-20-OPENAPI**: Single `openapi.json` extended additively — `Client-Portal` tag + `client_` operationId prefix; staff paths byte-identical to `contract-freeze-v1.11.0`
-- **D-20-PWA-ROUTER**: react-router v6 is KEPT in `client-pwa` — no TanStack Router migration
-- **D-20-IDOR**: Every client-scoped endpoint MUST carry mandatory `client_id` repo param + `assert_owns()` on get-by-ID → 404-collapse (anti-oracle); IDOR parametrized sweep covers all owned resource types
-
-- **D-68-04-SENDER**: `register_client_otp_sender` composition-root slot — bot sender None until plan 05 wires it; service silently skips DM in test mode
-- **D-999.4-02-A**: fiscal_receipts D-11 join goes via memberships.plan_id/pt_packages.plan_id (2-hop JOIN through memberships/pt_packages→payments→fiscal_receipts) — no direct online_payments→fiscal_receipts link exists
-- **D-999.4-02-B**: PromoNotFoundError etc. are local ValidationAppError subclasses in promo_codes/service.py with stable code= attributes (bounded to promo domain, not in app.core.exceptions)
-- **D-999.4-02-C**: validate_promo_code uses integer floor division only (no float); percentage discount_value=percent*100; fixed caps at plan price; 6 D-09 error codes
-- **D-999.4-03-A**: price_override_kopecks replaces plan price after server-side read — description still from plan row; ЮKassa receipt shows plan name at discounted amount
-- **D-999.4-03-B**: applied_promo_code_id persisted at INSERT time so succeeded-webhook is self-contained (reads row.promo_code_id, no extra state via webhook body)
-- **D-999.4-03-C**: webhook handler uses raw SQL text() for plan_price lookup — no cross-module ORM import in handlers.py (D-54-08 pattern); discount_kopecks = max(0, plan_price - row.amount_kopecks)
-- **D-999.4-03-D**: webhook redemption tests verify via direct record_promo_redemption calls (SAVEPOINT-mode db_session incompatible with session.begin() in webhook handler)
-- **D-999.4-05-A**: formatMoney added to src/utils/format.js (client-pwa has no src/shared/lib/money.ts — that path is admin-web only)
-- **D-999.4-05-B**: Icon.jsx extended with mail/wifiOff/alertCircle/x icons required by UI-SPEC error table (D-12)
-- **D-999.5-03-A**: create_payment two-kwarg receipt contact: customer_email→JSON "email" key, customer_phone→JSON "phone" key — never crossed (T-999.5-11); phone is E.164 in DB, no normalization needed
-- **D-999.5-03-B**: _read_client_email_or_raise (D-49-12) replaced by _read_client_receipt_contact_or_raise returning (email|None, phone); gate relaxed from email-required to email-OR-phone (D-10); phone is NOT NULL (OTP invariant), so gate never blocks
+- **D-20-OPENAPI**: Single `openapi.json` extended additively — `Client-Portal` tag; staff paths byte-identical to `contract-freeze-v1.11.0`
+- **D-20-IDOR**: Every client-scoped endpoint MUST carry mandatory `client_id` repo param + `assert_owns()` on get-by-ID → 404-collapse (anti-oracle)
+- **D-999.5-03-B**: `_read_client_receipt_contact_or_raise` returns (email|None, phone); gate relaxed from email-required to email-OR-phone (D-10); phone is NOT NULL (OTP invariant), so gate never blocks
 
 ### Blockers/Concerns
 
@@ -121,34 +117,20 @@ None.
 
 ## Deferred Items
 
-Items carried forward from v1.11 close (2026-05-29) — all non-blocking for v2.0 execution:
+Items from v2.0 close that are **resolved by v2.1** (tracked here until phase closes):
+
+| Category | Item | Status |
+|----------|------|--------|
+| integration | WARNING-1: cancel-booking not E2E-wired (BookingManageSheet → useCancelBooking) | Assigned Phase 77 / FIX-01 |
+| integration | WARNING-2: receipt-destination chip removed vs 999.5-UI-SPEC D-09 | Assigned Phase 77 / FIX-02 |
+
+Items carried forward (not addressed in v2.1):
 
 | Category | Item | Status |
 |----------|------|--------|
 | production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production |
 | production | RUN-02 RU email deliverability probe | N/A-until-production |
 | backlog | RUN-05 trainer accrual scenario (D-67-03) | Phase 999.x / future |
-| v2.0 | Newman as blocking CI gate (D-11-NEWMAN-LOCAL) | v2.0 scope — plan in Phase 72 |
-| v2.0 | SMTP adapter for Mailpit (aiosmtplib) | INFRA-02 — deferred |
-
-Items acknowledged and deferred at **v2.0 milestone close (2026-06-02)** — user elected "acknowledge all as deferred"; none block the milestone (audit `tech_debt`, 0 blockers):
-
-| Category | Item | Status |
-|----------|------|--------|
-| integration | WARNING-1: cancel-booking not E2E-wired in PWA — BookingManageSheet fires only a local callback, never `useCancelBooking()`; backend + hook exist & tested (CBOOK-05 frontend gap) | deferred |
-| integration | WARNING-2: receipt-destination chip removed from PaymentReturnScreen success state per user feedback (commit b17cd86a) — contradicts 999.5-UI-SPEC §Screen 2 D-09 | deferred (reconcile spec vs UI) |
-| verification | Phase 999.3 999.3-VERIFICATION.md | human_needed (12/12 automated; 999.3-HUMAN-UAT complete) |
-| verification | Phase 999.4 999.4-VERIFICATION.md | human_needed (14/14 automated; 999.4-UAT complete) |
-| verification | Phase 999.5 999.5-VERIFICATION.md | human_needed (20/20 automated; 999.5-UAT + HUMAN-UAT complete) |
-| uat | Phase 73 73-HUMAN-UAT.md | passed (0 pending scenarios) |
-| uat | Phase 999.4 999.4-HUMAN-UAT.md | diagnosed (0 pending scenarios) |
-| quick_task | 260529-ll9-purge-sportzal-cookies-domain | status marker missing (work shipped) |
-| quick_task | 260529-ny2-restore-pt-credit-owner-cancel (= Phase 999.1) | status marker missing (✅ DONE) |
-| quick_task | 260529-olc-wire-online-payment-emails (= Phase 999.2) | status marker missing (✅ DONE) |
-| quick_task | 260601-luw-remove-client-pwa-desktop-device-frame-w | status marker missing (✅ complete, see Quick Tasks Completed) |
-| quick_task | 260601-oan-client-pwa-newbie-home-v2-restyle | status marker missing (✅ complete) |
-| quick_task | 260601-sxf-v2-checkout | status marker missing (✅ complete) |
-| quick_task | 260601-vxr-plan-activated-client-pwa-paymentsucceed | status marker missing (✅ complete) |
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit bucket, QR post-decode existence, cancel idempotency) | deferred → `/gsd:secure-phase 70` |
 | backlog | Promo-code admin CRUD UI (999.4 — only seeded codes exist) | deferred (admin-web frozen) |
 | production | RUN-01 live ЮKassa credentialed checkout leg (D-72-06) | OPERATOR-PENDING by design |
@@ -164,10 +146,6 @@ Items acknowledged and deferred at **v2.0 milestone close (2026-06-02)** — use
 
 ## Session Continuity
 
-Last session: 2026-06-02T11:28:43.628Z
-Stopped at: Phase 74 context gathered
-Resume: Phase 999.4 complete. Run HUMAN-UAT on checkout + promo flow (visual verification deferred from plans 04/05).
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+Last session: 2026-06-02 — Roadmap created
+Stopped at: v2.1 roadmap written; Phases 75-77 defined; REQUIREMENTS.md traceability updated
+Resume: Run `/gsd:plan-phase 75` to begin planning the backend field additions phase
