@@ -213,7 +213,7 @@ Plans:
 **Depends on:** Phase 73
 **Design input:** `.planning/design-inputs/client-pwa-profile-settings/Profile.html`, `.planning/design-inputs/client-pwa-profile-settings/Settings.html` (preserved from Downloads; transient source)
 **UI hint:** yes
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -222,7 +222,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 74-02-PLAN.md — Restyle ProfileScreen to Profile.html (pass-hero, stat strip, gear→/settings, 3 tabs, PROFILE_FEATURE_FLAGS)
+- [x] 74-02-PLAN.md — Restyle ProfileScreen to Profile.html (pass-hero, stat strip, gear→/settings, 3 tabs, PROFILE_FEATURE_FLAGS)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
