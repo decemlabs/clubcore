@@ -126,6 +126,10 @@ class Client(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
+    notif_prefs: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint(

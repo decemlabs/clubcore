@@ -5,8 +5,12 @@ NEVER include:
   - freeze_days_limit internals (freeze_days_limit_snapshot)
   - created_by / audit fields (created_at, updated_at, received_by_user_id)
   - soft-delete flags (deleted_at)
-  - owner-only economics (price_kopecks_snapshot, duration_days_snapshot)
+  - owner-only economics (duration_days_snapshot, other clients' prices)
   - is_active flags
+
+Note on own-membership price (D-75-03): price_kopecks_snapshot IS client-visible
+when scoped to the caller's own membership (GET /client/membership). It reveals the
+caller's own paid amount, not another client's pricing. It is NOT owner-only.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from app.core.schemas import ResponseData
+from app.core.schemas import BackendSchemaBase, ResponseData
 
 
 class ClientMembershipResponse(ResponseData):
@@ -31,6 +35,8 @@ class ClientMembershipResponse(ResponseData):
     status: str
     days_until_end: int  # server-computed (D-69-02)
     expiring_soon: bool  # server-computed (D-69-02): True if 0 <= days_until_end <= 7
+    price_kopecks: int  # caller's own paid price (D-75-03, PMEM-01); wire: priceKopecks
+    auto_renew: bool | None  # always None in v2.1 (D-75-01, PMEM-01); wire: autoRenew
 
 
 class ClientNextBookingResponse(ResponseData):
@@ -274,6 +280,24 @@ class ClientPaymentStatusResponse(ResponseData):
 # ---------------------------------------------------------------------------
 
 
+class NotifPrefs(BackendSchemaBase):
+    """Notification preference flags (Phase 75 NOTIF-01 / D-04).
+
+    Strict schema: inherits BackendSchemaBase (extra='forbid') so unknown keys
+    are rejected at the wire layer with a 422 ValidationError.
+    All four fields are required (no defaults here — defaults applied server-side
+    when the clients.notif_prefs column is NULL, per D-06).
+
+    Wire names (single-word keys are unchanged by to_camel alias_generator):
+      promo / schedule / trainer / sound
+    """
+
+    promo: bool
+    schedule: bool
+    trainer: bool
+    sound: bool
+
+
 class ClientProfileUpdateRequest(ResponseData):
     """PATCH /client/me body — onboarding profile write (Phase 999.5 D-08).
 
@@ -292,6 +316,7 @@ class ClientProfileUpdateRequest(ResponseData):
     weight_kg: int | None = None             # wire: weightKg
     onboarding_completed: bool | None = None  # wire: onboardingCompleted — D-05
     email: str | None = None                 # wire: email — D-02/D-10 receipt-email gate
+    notif_prefs: NotifPrefs | None = None    # wire: notifPrefs — D-05 full replace (NOTIF-01)
 
 
 class ClientMeResponse(ResponseData):
@@ -311,6 +336,7 @@ class ClientMeResponse(ResponseData):
     height_cm: int | None = None                     # wire: heightCm
     weight_kg: int | None = None                     # wire: weightKg
     onboarding_completed_at: datetime | None = None  # wire: onboardingCompletedAt (D-05)
+    notif_prefs: NotifPrefs  # wire: notifPrefs — D-06 defaults applied server-side (NOTIF-01)
 
 
 # ---------------------------------------------------------------------------
