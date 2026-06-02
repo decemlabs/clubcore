@@ -126,8 +126,8 @@ Items from v2.0 close that are **resolved by v2.1** (tracked here until phase cl
 
 | Category | Item | Status |
 |----------|------|--------|
-| integration | WARNING-1: cancel-booking not E2E-wired (BookingManageSheet → useCancelBooking) | Assigned Phase 77 / FIX-01 |
-| integration | WARNING-2: receipt-destination chip removed vs 999.5-UI-SPEC D-09 | Assigned Phase 77 / FIX-02 |
+| integration | WARNING-1: cancel-booking not E2E-wired (BookingManageSheet → useCancelBooking) | ✅ RESOLVED Phase 77 / FIX-01 (wired + real booking threaded; CR-77-01 fixed) |
+| integration | WARNING-2: receipt-destination chip removed vs 999.5-UI-SPEC D-09 | ✅ RESOLVED Phase 77 / FIX-02 (spec amended → no-chip declared accepted behavior) |
 
 Items carried forward (not addressed in v2.1):
 
