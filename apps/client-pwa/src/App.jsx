@@ -70,7 +70,7 @@ const Flows = {
 };
 
 // ── Tab → route mapping ────────────────────────────────────────────────────
-const TAB_BY_PATH = { '/home': 'home', '/book': 'book', '/chat': 'chat', '/profile': 'profile' };
+const TAB_BY_PATH = { '/home': 'home', '/book': 'book', '/chat': 'chat', '/profile': 'profile', '/settings': 'settings' };
 const PATH_BY_TAB = { home: '/home', book: '/book', chat: '/chat', profile: '/profile' };
 
 function useTabFromRoute() {
@@ -195,6 +195,7 @@ function SettingsRoute() {
 function TabFallback({ tab }) {
   if (tab === 'home') return <HomeSkeleton />;
   if (tab === 'profile') return <ProfileSkeleton />;
+  if (tab === 'settings') return <SettingsSkeleton />;
   return <ListSkeleton rows={5} withHero />;
 }
 
