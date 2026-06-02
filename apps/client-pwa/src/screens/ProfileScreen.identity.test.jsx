@@ -3,8 +3,10 @@
  *
  * Asserts the identity header + membership block reflect the real /client/me
  * principal — not the mock "Саша Морозов / sasha@example.com" / "42 000 ₽":
- *  (a) /client/me { firstName, lastName, phone, email: null } → header shows the real
- *      name + phone + graceful em-dash email (NOT sasha@example.com / the mock phone).
+ *  (a) /client/me { firstName, lastName } → header shows the real name and never the
+ *      mock principal. (Phase 74 / Profile.html restyle: the identity header is
+ *      name-only — phone/email moved to Settings → Личные данные — so we assert the
+ *      real-name binding + absence of mock identity values, not phone presence.)
  *  (b) membership=null → "Нет абонемента" state; no "42 000 ₽" / "4 900 ₽" literal.
  */
 import React from 'react'
@@ -48,15 +50,17 @@ beforeEach(() => {
 })
 
 describe('ProfileScreen identity header (real /client/me)', () => {
-  it('renders the real name, phone, and a graceful em-dash for a missing email', () => {
+  it('binds the real principal name from /client/me (no mock identity)', () => {
     useClientMe.mockReturnValue({
       data: { firstName: 'Иван', lastName: 'Петров', phone: '+79991234567', email: null },
     })
     useClientHome.mockReturnValue({ data: { membership: null } })
 
     render(<ProfileScreen {...baseProps} />)
+    // Profile.html restyle: name-only identity header (phone/email live in
+    // Settings → Личные данные). Assert real-name binding + no mock fabrication.
     expect(screen.getByText('Иван Петров')).toBeInTheDocument()
-    expect(screen.getByText('+79991234567')).toBeInTheDocument()
+    expect(screen.queryByText('Саша Морозов')).not.toBeInTheDocument()
     expect(screen.queryByText('sasha@example.com')).not.toBeInTheDocument()
     expect(screen.queryByText('+7 (916) 482-09-14')).not.toBeInTheDocument()
   })
@@ -68,7 +72,9 @@ describe('ProfileScreen identity header (real /client/me)', () => {
     useClientHome.mockReturnValue({ data: { membership: null } })
 
     render(<ProfileScreen {...baseProps} />)
-    expect(screen.getByText('Нет абонемента')).toBeInTheDocument()
+    // Profile.html restyle: the empty membership state shows in the hero chip AND the
+    // progress caption — both legitimate. Assert presence + no fabricated amount.
+    expect(screen.getAllByText('Нет абонемента').length).toBeGreaterThan(0)
     expect(screen.queryByText(/42 000 ₽/)).not.toBeInTheDocument()
     expect(screen.queryByText(/4 900 ₽/)).not.toBeInTheDocument()
   })

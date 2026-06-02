@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/Avatar.jsx';
 import { EmptyState } from '@/components/EmptyState.jsx';
 import { LoadError } from '@/components/LoadError.jsx';
@@ -80,9 +79,8 @@ function useCountUp(target) {
   return value;
 }
 
-export const ProfileScreen = ({ tweaks, onOpenPlans, onOpenReferral, onOpenGymInfo, onOpenVisitHistory, onOpenTrainingHistory }) => {
+export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenReferral, onOpenGymInfo, onOpenVisitHistory, onOpenTrainingHistory }) => {
   const [tab, setTab] = React.useState('visits');
-  const navigate = useNavigate();
 
   const { data: homeData } = useClientHome();
   const { data: me } = useClientMe();
@@ -131,7 +129,7 @@ export const ProfileScreen = ({ tweaks, onOpenPlans, onOpenReferral, onOpenGymIn
               </div>
               {/* Gear button → /settings (D-74-01) */}
               <button
-                onClick={() => navigate('/settings')}
+                onClick={onOpenSettings}
                 aria-label="Настройки"
                 className="press"
                 style={{

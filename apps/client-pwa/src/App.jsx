@@ -158,10 +158,12 @@ function ChatRoute() {
 function ProfileRoute() {
   const { t, setTweak } = useTweaksCtx();
   const ui = useUI();
+  const navigate = useNavigate();
   return (
     <ProfileScreen
       tweaks={t}
       setTweak={setTweak}
+      onOpenSettings={() => navigate('/settings')}
       onOpenPlans={() => ui.setPlansOpen(true)}
       onOpenReferral={() => ui.setReferralOpen(true)}
       onOpenGymInfo={() => ui.setGymInfoOpen(true)}
