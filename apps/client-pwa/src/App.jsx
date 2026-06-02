@@ -14,8 +14,6 @@ import { useUI } from '@/context/UIContext.jsx';
 import { useAuth } from '@/context/AuthContext.jsx';
 import { RequireAuth } from '@/context/RequireAuth.jsx';
 
-import { CONVERSATIONS, TRAINERS } from '@/data';
-
 import { TweaksRoot } from '@/components/Tweaks/TweaksRoot.jsx';
 
 // ── Payment return route (ЮKassa return_url target) ───────────────────────
@@ -219,8 +217,6 @@ export default function App() {
     if (id === 'chat') ui.setPendingChat(null);
     navigate(PATH_BY_TAB[id] || '/home');
   };
-
-  const unreadChat = CONVERSATIONS.reduce((s, c) => s + (c.unread || 0), 0);
 
   // Push tap routing
   const handlePushTap = () => {
@@ -454,7 +450,7 @@ export default function App() {
           <TabBar
             active={tab}
             onChange={handleTab}
-            unreadChat={unreadChat}
+            unreadChat={0}
           />
         )}
       </div>

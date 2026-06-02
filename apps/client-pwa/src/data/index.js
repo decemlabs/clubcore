@@ -4,7 +4,6 @@
 // GymInfoSheet) must NOT import from this file — ESLint boundary enforced (D-71-09).
 //
 // RETAINED MOCKS (post Plan 06 wiring):
-//   - CONVERSATIONS → App.jsx (net-new scope; retained for App.jsx tab badge only)
 //   - UPCOMING_BOOKING → BookingManageSheet.jsx (manage sheet; read-only display)
 //   - VISIT_HISTORY, TRAINING_HISTORY → HistorySheets.jsx (detail sheet from ProfileScreen)
 //
@@ -48,7 +47,6 @@ export {
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────
-export { CONVERSATIONS } from './conversations.js'
 export { UPCOMING_BOOKING } from './booking.js'
 // Retained for HistorySheets.jsx (detail sheet opened from ProfileScreen)
 export { VISIT_HISTORY, TRAINING_HISTORY } from './history.js'
