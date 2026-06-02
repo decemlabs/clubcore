@@ -262,16 +262,22 @@ v1.8 Reports + Audit Log read API shipped 2026-05-24 (tag `v1.8`, 30/30 requirem
 
 ## Next Milestone Goals
 
-**v2.0 Frontend Integration — Client PWA shipped 2026-06-02** — the gym member is now a first-class second principal: a phone+OTP client auth stack fully isolated from staff, a client-scoped IDOR-safe API over all existing domains, self-service ЮKassa checkout with promo codes, signed-QR self-check-in, and a wired `apps/client-pwa` (Home/Profile/Settings/Book/Plans/Checkout/QR/onboarding/receipt-email). The staff contract stayed byte-identical to `contract-freeze-v1.11.0`. Candidate next directions (not yet opened):
+**v2.1 Client PWA — Fill the Gaps in progress (opened 2026-06-02)** — turning on hidden/mocked PWA functionality (flag-flips + small backend fields + wiring) and folding in the two deferred v2.0 warnings (cancel-booking E2E, receipt-destination chip). After v2.1, the remaining work is the **Group B net-new domains** from the client-pwa inventory + production. Candidate sequence below (versions/order are a guide, not a contract; production may jump ahead). Durable snapshot mirrored in `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`.
 
-| Milestone | Focus |
-|---|---|
-| **Production deploy / launch** (strong candidate) | Kubernetes/Terraform deploy story (INFRA-01); the `sportzal_csrf` → `clubcore_csrf` cookie rename (NAME-01, still deferred per D-11-CSRF-DEFER); live ЮKassa credentialed checkout leg (RUN-01, OPERATOR-PENDING per D-72-06) + RU email/SMS deliverability; production env + secrets + monitoring. |
-| **Close v2.0 deferred warnings + secure-phase** | WARNING-1: wire BookingManageSheet to call `useCancelBooking()` (CBOOK-05 frontend gap). WARNING-2: reconcile the receipt-destination chip vs 999.5-UI-SPEC D-09. `/gsd:secure-phase 70` for the 3 deferred security items (proxy rate-limit bucket, QR post-decode existence, cancel idempotency). |
-| **admin-web client-domain wiring + promo admin** | Surface the new client domains in the (currently frozen) admin app; promo-code admin CRUD UI (deferred from 999.4 — only seeded codes exist now). |
-| **Backlog (promote via `/gsd:review-backlog`)** | Remaining 999.x UI polish items + any new captures. |
+**⚠️ Decision gate before content/communication domains:** several Group-B domains are meaningless without an owner/staff side (chat = reply, reviews = moderate, gym-info/FAQ = edit, notification inbox = send), but `apps/admin-web` is a frozen mock-reference. Before planning v2.4/v2.5/v2.6, decide: (1) unfreeze/extend admin-web (large, was out-of-scope), (2) owner manages via API/seeds only (no UI), or (3) some features stay client-read-only over owner-entered data.
 
-v2.0 закрыл первый full-stack milestone. Следующий — вероятнее всего production deploy / launch против замороженного staff-контракта + нового client-контракта.
+| Milestone (candidate) | Focus | Staff side? |
+|---|---|---|
+| **v2.2 — Membership self-service depth** | Card-on-file + autopay (YooKassa saved methods, `GET /client/payment-method` → flag `linkedCard`); booking reschedule (`POST /client/booking/{id}/reschedule`); weekly-activity analytics (`GET /client/activity/weekly` → flag `weeklyActivity`). | No |
+| **v2.3 — Loyalty / club bonuses** | Bonus balance + Gold tier + server-authoritative `price_override` + webhook redemption → flag `clubBonuses`. Payment-path-adjacent / security-sensitive (keep discount server-side, D-06). | No |
+| **v2.4 — Content & communication** | Gym-info/CMS + occupancy (`GET /client/gym`); in-app notification inbox + push tokens; trainer reviews + detail/bio (`trainer_profile` + `trainer_review`). | **Yes** (gated) |
+| **v2.5 — Chat / messaging** | Full `messaging` domain (conversations, unread, ws/polling). Heaviest; ChatScreen currently ComingSoon. | **Yes** (gated) |
+| **v2.6 — Referral program** | `referral` domain: codes, rewards, history (ReferralSheet ComingSoon). | Partial |
+| **v3.0 — Production deploy / launch** (may jump ahead) | Kubernetes/Terraform (INFRA-01); `sportzal_csrf → clubcore_csrf` rename (NAME-01, D-11-CSRF-DEFER); live ЮKassa credentialed leg (RUN-01, OPERATOR-PENDING per D-72-06) + RU email/SMS deliverability; secrets + monitoring; `/gsd:secure-phase 70` (3 deferred security items). | — |
+
+**Other deferred (outside explicit milestones):** promo-code admin CRUD UI (999.4 — depends on staff side); phone-change via OTP (new endpoint); FAQ static → config endpoint (cosmetic).
+
+**Slicing principle:** cheap / no-new-domain / no-staff-side first (v2.2/v2.3); content & communication after the staff-side decision; production whenever creds/infra land (can precede the rest).
 
 <details>
 <summary>Previous milestone scope (v1.4 — shipped 2026-05-16)</summary>
