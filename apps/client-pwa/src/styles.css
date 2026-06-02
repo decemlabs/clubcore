@@ -371,6 +371,47 @@ textarea:focus-visible {
   border-radius: 2px 2px 0 0;
 }
 
+/* Membership hero — contrast-flip "pass" style */
+/* LIGHT theme → dark graphite pass */
+.membership-hero {
+  --mh-text: #f3f1ea;
+  --mh-text-2: rgba(255,255,255,0.62);
+  --mh-text-3: rgba(255,255,255,0.45);
+  --mh-track: rgba(255,255,255,0.10);
+  --mh-divider: rgba(255,255,255,0.12);
+  --mh-accent: var(--accent);
+  --mh-chip-bg: color-mix(in oklab, var(--accent) 22%, transparent);
+  --mh-chip-fg: var(--accent);
+  --mh-chip-border: color-mix(in oklab, var(--accent) 32%, transparent);
+  --mh-ghost-bg: rgba(255,255,255,0.08);
+  --mh-ghost-border: rgba(255,255,255,0.16);
+  --mh-cta-bg: var(--accent);
+  --mh-cta-fg: #06120c;
+  background: #0e0e0e !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  box-shadow: 0 22px 50px -20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+  color: var(--mh-text);
+}
+/* DARK theme → light beige pass — selector uses data-theme per TweaksContext convention */
+[data-theme="dark"] .membership-hero {
+  --mh-text: #1a1511;
+  --mh-text-2: #6f6453;
+  --mh-text-3: #9c8c72;
+  --mh-track: rgba(26,21,17,0.09);
+  --mh-divider: rgba(26,21,17,0.12);
+  --mh-accent: #0f9b76;
+  --mh-chip-bg: rgba(15,155,118,0.12);
+  --mh-chip-fg: #0f9b76;
+  --mh-chip-border: rgba(15,155,118,0.30);
+  --mh-ghost-bg: rgba(255,255,255,0.55);
+  --mh-ghost-border: #ddccb2;
+  --mh-cta-bg: #0f9b76;
+  --mh-cta-fg: #ffffff;
+  background: #ece0cd !important;
+  border-color: #ddccb2 !important;
+  box-shadow: var(--sh-2) !important;
+}
+
 /* Avatar */
 .avatar {
   display: inline-flex;
