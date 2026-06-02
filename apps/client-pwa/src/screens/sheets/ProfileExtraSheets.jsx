@@ -2,6 +2,7 @@ import React from 'react';
 import { Avatar } from '@/components/Avatar.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
+import { useClientMe, useUpdateClientProfile } from '@/data';
 
 // ─── Generic sheet header ──────────────────────────────────────
 export function SubSheetHeader({ title, onClose, action }) {
@@ -35,30 +36,82 @@ export function SubSheetHeader({ title, onClose, action }) {
   );
 }
 
+// Goal enum → Russian display label (PDATA-02 / T-76-05)
+const GOAL_LABELS = {
+  lose_weight: 'Похудение',
+  gain_mass: 'Набор массы',
+  tone: 'Тонус',
+  maintain: 'Поддержание формы',
+};
+const GOAL_OPTIONS = ['lose_weight', 'gain_mass', 'tone', 'maintain'];
+
 // ─── Personal data ────────────────────────────────────────────
 export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
-  const [name, setName] = React.useState(userName || 'Саша');
-  const [phone, setPhone] = React.useState('+7 916 555-12-34');
-  const [email, setEmail] = React.useState('sasha@example.com');
+  const { data: meData } = useClientMe();
+  const updateProfile = useUpdateClientProfile();
+
+  // Editable local state — initialized from API data via useEffect (PDATA-01)
+  const [name, setName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [goal, setGoal] = React.useState('');
+  const [heightCm, setHeightCm] = React.useState('');
+  const [weightKg, setWeightKg] = React.useState('');
+
+  // Local-only fields (no backend column — D-76-11)
   const [dob, setDob] = React.useState('14.03.1996');
   const [gender, setGender] = React.useState('f');
-  const [saved, setSaved] = React.useState(false);
-  const initialPhone = React.useRef('+7 916 555-12-34');
-  const initialEmail = React.useRef('sasha@example.com');
 
-  const onSave = () => {
-    // Phone/email changes require SMS / email verification
+  const [saved, setSaved] = React.useState(false);
+
+  // Local in-sheet toast state (mirror CheckoutSheet pattern — no global Sonner in PWA)
+  const [toastMsg, setToastMsg] = React.useState(null);
+  const toastTimer = React.useRef(null);
+
+  // Hydrate from API on first data arrival (PDATA-01 / D-76-10)
+  React.useEffect(() => {
+    if (!meData) return;
+    setName(meData.firstName ?? '');
+    setEmail(meData.email ?? '');
+    setGoal(meData.goal ?? '');
+    setHeightCm(meData.heightCm != null ? String(meData.heightCm) : '');
+    setWeightKg(meData.weightKg != null ? String(meData.weightKg) : '');
+  }, [meData]);
+
+  // Phone: read-only from API; ref tracks initial value for SMS-verify guard (unchanged)
+  const phone = meData?.phone ?? '';
+  const initialPhone = React.useRef(phone);
+  React.useEffect(() => {
+    if (phone) initialPhone.current = phone;
+  }, [phone]);
+
+  const isSaving = updateProfile.isPending;
+
+  const showToast = (msg) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMsg(msg);
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2600);
+  };
+
+  const onSave = async () => {
+    // Phone changes still delegate to SMS verify flow (unchanged from original)
     if (phone !== initialPhone.current) {
       window.__openSmsVerify?.('phone', phone);
       return;
     }
-    if (email !== initialEmail.current) {
-      window.__openSmsVerify?.('email', email);
-      return;
+    try {
+      await updateProfile.mutateAsync({
+        firstName: name,
+        email: email || undefined,
+        goal: goal || undefined,
+        heightCm: heightCm ? Number(heightCm) : undefined,
+        weightKg: weightKg ? Number(weightKg) : undefined,
+      });
+      if (setTweak) setTweak('userName', name);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1400);
+    } catch {
+      showToast('Не удалось сохранить данные. Попробуйте ещё раз.');
     }
-    if (setTweak) setTweak('userName', name);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1400);
   };
 
   return (
@@ -69,12 +122,14 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
     }}>
       <StatusBar />
       <SubSheetHeader title="Личные данные" onClose={onClose} action={
-        <button onClick={onSave} style={{
+        <button onClick={onSave} disabled={isSaving} style={{
           border: 0, background: 'transparent',
-          color: saved ? 'var(--accent-deep)' : 'var(--text)',
+          color: saved ? 'var(--accent-deep)' : isSaving ? 'var(--text-3)' : 'var(--text)',
           fontSize: 13, fontWeight: 600, padding: '6px 10px',
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>{saved ? 'Сохранено' : 'Сохранить'}</button>
+          cursor: isSaving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+        }}>
+          {saved ? 'Сохранено' : isSaving ? 'Сохранение…' : 'Сохранить'}
+        </button>
       } />
 
       <div className="scroller" style={{ paddingTop: 0 }}>
@@ -84,7 +139,12 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
           alignItems: 'center',
         }}>
           <div style={{ position: 'relative' }}>
-            <Avatar initials={name.slice(0, 1).toUpperCase()} bg="var(--avatar-bg)" color="var(--avatar-fg)" size={88} />
+            <Avatar
+              initials={(name || meData?.firstName || '?').slice(0, 1).toUpperCase()}
+              bg="var(--avatar-bg)"
+              color="var(--avatar-fg)"
+              size={88}
+            />
             <button style={{
               position: 'absolute', right: -4, bottom: -4,
               width: 32, height: 32, borderRadius: 999, border: '2px solid var(--bg)',
@@ -100,20 +160,26 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
           </div>
         </div>
 
-        {/* Form */}
+        {/* Основное — API-backed fields */}
         <div style={{ padding: '0 16px 12px' }}>
           <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Основное</div>
           <div className="card" style={{ padding: 0 }}>
             <FormRow label="Имя" value={name} onChange={setName} />
             <Divider3 />
-            <FormRow label="Телефон" value={phone} onChange={setPhone} type="tel" />
+            <FormRow label="Телефон" value={phone} onChange={() => {}} type="tel" />
             <Divider3 />
             <FormRow label="Email" value={email} onChange={setEmail} type="email" />
           </div>
         </div>
 
+        {/* О себе — local-only fields (D-76-11); labelled "Только на устройстве" */}
         <div style={{ padding: '0 16px 12px' }}>
-          <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>О себе</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px 8px' }}>
+            <div className="t-mini" style={{ color: 'var(--text-3)' }}>О себе</div>
+            <div className="t-mini" style={{ color: 'var(--text-3)', marginLeft: 'auto', fontSize: 11 }}>
+              Только на устройстве
+            </div>
+          </div>
           <div className="card" style={{ padding: 0 }}>
             <FormRow label="Дата рождения" value={dob} onChange={setDob} />
             <Divider3 />
@@ -129,14 +195,40 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
           </div>
         </div>
 
+        {/* Здоровье — API-backed; height/weight editable, goal = segmented enum control */}
         <div style={{ padding: '0 16px 12px' }}>
           <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Здоровье</div>
           <div className="card" style={{ padding: 0 }}>
-            <FormRow label="Рост" value="168 см" onChange={() => {}} />
+            <FormRow label="Рост" value={heightCm} onChange={setHeightCm} type="number" placeholder="см" />
             <Divider3 />
-            <FormRow label="Вес" value="58 кг" onChange={() => {}} />
+            <FormRow label="Вес" value={weightKg} onChange={setWeightKg} type="number" placeholder="кг" />
             <Divider3 />
-            <FormRow label="Цель" value="Поддержание формы" onChange={() => {}} />
+            {/* Goal — server-enforced 4-value enum (T-76-05); segmented control prevents invalid values */}
+            <div style={{ padding: '12px 14px' }}>
+              <div className="t-small" style={{ color: 'var(--text-2)', marginBottom: 8 }}>Цель</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {GOAL_OPTIONS.map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setGoal(key === goal ? '' : key)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 999,
+                      border: `1px solid ${goal === key ? 'var(--accent)' : 'var(--border)'}`,
+                      background: goal === key ? 'var(--accent-soft)' : 'transparent',
+                      color: goal === key ? 'var(--accent-deep)' : 'var(--text-2)',
+                      fontSize: 13,
+                      fontWeight: goal === key ? 600 : 400,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {GOAL_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -148,6 +240,45 @@ export const PersonalDataSheet = ({ onClose, userName, setTweak }) => {
           }}>
             Удалить аккаунт
           </button>
+        </div>
+
+        {/* In-sheet error toast — local state pattern (no global Sonner in PWA) */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 32,
+            zIndex: 200,
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            border: '1px solid var(--danger)',
+            borderRadius: 14,
+            padding: '11px 13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 11,
+            boxShadow: '0 16px 40px rgba(28, 25, 23, 0.18)',
+            transform: toastMsg ? 'translateY(0)' : 'translateY(180%)',
+            opacity: toastMsg ? 1 : 0,
+            transition: 'transform 0.42s cubic-bezier(0.32, 0.72, 0.2, 1), opacity 0.3s',
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{
+            width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+            background: 'var(--danger)', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }} aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" style={{ width: 17, height: 17 }}>
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 650, letterSpacing: '-0.1px', lineHeight: 1.25 }}>
+            {toastMsg}
+          </span>
         </div>
       </div>
     </div>
@@ -465,11 +596,10 @@ export const FAQSheet = ({ onClose, onOpenChat }) => {
 function ContactTile({ icon, big, sub, onClick }) {
   return (
     <button onClick={onClick} className="press" style={{
-      border: 0, background: 'var(--surface)',
       borderRadius: 'var(--r-lg)', padding: 14,
       display: 'flex', flexDirection: 'column', gap: 8,
       cursor: 'pointer', textAlign: 'left', color: 'var(--text)',
-      border: '0.5px solid var(--border)',
+      background: 'var(--surface)', border: '0.5px solid var(--border)',
     }}>
       <div style={{
         width: 32, height: 32, borderRadius: 8,
@@ -514,4 +644,3 @@ function FaqRow({ q, a, open, onToggle }) {
     </div>
   );
 }
-
