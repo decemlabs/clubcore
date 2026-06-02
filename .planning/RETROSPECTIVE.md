@@ -494,6 +494,38 @@ First full-stack milestone after a long backend-only run. A parallel client auth
 
 ---
 
+## Milestone: v2.1 — Client PWA — Fill the Gaps
+
+**Shipped:** 2026-06-02
+**Phases:** 4 (75-78) | **Plans:** 10
+
+### What Was Built
+Turned on already-built-but-hidden client-PWA functionality. Phase 75 (backend): membership `priceKopecks`/`autoRenew`, `notif_prefs` JSONB (migration 0050), FIT15 seed (migration 0051). Phase 76 (frontend wiring): newbie-Home live trainers + plan chip, PersonalDataSheet read/save, mock chat-badge removed. Phase 77 (debt closures): cancel-booking E2E wired (real booking threaded), receipt-destination reconciled via UI-SPEC amendment. Phase 78 (added mid-milestone): surfaced membership price/auto-renew on Profile, server-backed Settings notif toggles (localStorage dropped), FIT15 checkout chip.
+
+### What Worked
+- **Code review caught every real bug.** Each frontend phase shipped green unit tests + build, yet review found genuine BLOCKERS the tests missed: Phase 76's snake_case-vs-camelCase contract reads (and the fixtures that validated the bug against itself), Phase 77's cancel firing the mock booking id (sheet opened with no booking prop), Phase 78's optimistic-toggle races. The OpenAPI-cross-check + "be skeptical of green tests" review posture was the milestone's highest-leverage gate.
+- **Smart-discuss grounded in a codebase scout** produced tight, accurate CONTEXT — the scouts surfaced that the milestone's "feature-flag flip" framing was partly wrong (no flag mechanism existed; wiring was direct) before planning committed to it.
+- **The milestone audit earned its keep:** it surfaced that PMEM-01/NOTIF-01/PROMO-01 frontend *consumption* was never assigned to a phase (a roadmap traceability gap), which became Phase 78.
+
+### What Was Inefficient
+- **Requirement texts described user-facing behavior, but the roadmap mapped them to backend-only phases.** PMEM-01/NOTIF-01/PROMO-01 read "client sees/toggles/applies …" yet were assigned only to Phase 75 (backend). The frontend halves fell through a scope gap discovered at audit, forcing the Phase 78 add. Mapping requirement→phase at the *deliverable* granularity (backend vs frontend) up front would have caught it during roadmap.
+- **Test fixtures encoded the wrong wire contract** (snake_case) and passed, masking a shipped bug — a reminder that frontend fixtures must be cross-checked against the authoritative OpenAPI shape, not hand-fabricated.
+- One transient planner API socket-close mid-run required a re-spawn (no output lost).
+
+### Patterns Established
+- **camelCase wire is the contract** for `client_portal` (alias_generator=to_camel); frontend reads + test fixtures must use it. Declare backend-served fields in the TS interfaces even before a UI consumes them (avoids the latent `meData.id ?? '__me__'`-style guard no-ops).
+- **Optimistic toggles need a synchronous ref source-of-truth + per-key functional revert + `!isPending` re-sync guard** to survive double-tap and mid-flight invalidation (NOTIF-01).
+- **Doc-only debt closure is a valid resolution** (FIX-02 amended the UI-SPEC + declared the current state accepted, rather than forcing code to a stale contract).
+
+### Key Lessons
+1. **Green unit tests are not verification** — adversarial code review against the authoritative contract (OpenAPI) caught 3 BLOCKERS that full test suites passed over. Keep the skeptical review gate on every frontend phase.
+2. **Map requirements to phases at deliverable granularity** — a requirement whose text spans backend + frontend must be split across the phases that actually own each surface, or the audit will find the gap late.
+3. **Scout before discuss** — a cheap read-only codebase scout repeatedly corrected stale planning assumptions (no feature-flag mechanism; goal is a server enum not free text; sheet receives no booking prop) before they reached a plan.
+
+### Cost Observations
+- Model mix: opus (orchestrator + planners) + sonnet (executors/reviewers/verifiers/researchers).
+- Notable: 4 phases incl. one audit-driven add (78); 3 BLOCKERS + several warnings fixed inline by the orchestrator rather than re-planning; live human-verify checks deferred by user.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
