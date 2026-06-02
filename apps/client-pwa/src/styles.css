@@ -1675,6 +1675,13 @@ textarea:focus-visible {
   border-color: rgba(45, 212, 164, 0.5);
   box-shadow: 0 0 0 3px var(--accent-soft), var(--sh-2);
 }
+/* Suppress ticket-notch pseudo-elements in applied state (#4): the 3px glow ring
+   and the right-edge notch circle clash, producing a 9px scrollWidth overflow.
+   The notch look is preserved for non-applied (coupon-input/error) states. */
+.co-coupon.applied::before,
+.co-coupon.applied::after {
+  content: none;
+}
 
 /* Coupon field row */
 .co-field {

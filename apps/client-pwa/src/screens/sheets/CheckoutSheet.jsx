@@ -393,7 +393,7 @@ function ReviewStage({
       </div>
 
       {/* Scrollable body */}
-      <div className="scroller" style={{ padding: '4px 18px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="scroller" style={{ padding: '4px 18px calc(120px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* ── 1. Membership-pass hero ── */}
         <div className="co-pass">
