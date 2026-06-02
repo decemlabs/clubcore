@@ -602,9 +602,10 @@ async def update_client_profile(
         bind["email"] = payload.email
     if payload.notif_prefs is not None:
         # D-05: full replace — write all four keys atomically.
-        # Fixed SET literal fragment (S608 discipline); value bound as JSONB via
-        # json.dumps + ::jsonb cast so asyncpg can serialize it correctly.
-        sets.append("notif_prefs = :notif_prefs::jsonb")
+        # Fixed SET literal fragment (S608 discipline); value bound as a JSON
+        # string and cast to JSONB using CAST syntax (not ::jsonb, which would
+        # conflict with SQLAlchemy's :name→$N param substitution in asyncpg).
+        sets.append("notif_prefs = CAST(:notif_prefs AS jsonb)")
         bind["notif_prefs"] = json.dumps(payload.notif_prefs.model_dump())
     if payload.onboarding_completed:
         sets.append("onboarding_completed_at = now()")
@@ -619,8 +620,8 @@ async def update_client_profile(
     # constraint fires here while the caller still owns the txn (D-32-10/D-49-19).
     try:
         await session.execute(
-            text(  # noqa: S608 — SET fragments are fixed literal strings, never user-supplied SQL
-                f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"
+            text(
+                f"UPDATE clients SET {', '.join(sets)} WHERE id = :client_id AND deleted_at IS NULL"  # noqa: S608
             ),
             bind,
         )

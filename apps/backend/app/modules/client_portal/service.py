@@ -32,6 +32,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.modules.promo_codes.service as _promo_service
 from app.core.config import get_settings
 from app.core.dependencies import (
     ClientPrincipal,
@@ -62,8 +63,8 @@ from app.modules.client_portal.schemas import (
     ClientCheckInResponse,
     ClientCheckoutResponse,
     ClientHomeResponse,
-    ClientMeResponse,
     ClientMembershipResponse,
+    ClientMeResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
@@ -74,7 +75,6 @@ from app.modules.client_portal.schemas import (
     ClientVisitItem,
     NotifPrefs,
 )
-import app.modules.promo_codes.service as _promo_service
 
 _EXPIRING_SOON_DAYS = 7  # days threshold for expiring_soon flag (D-69-02)
 
@@ -789,7 +789,7 @@ async def get_client_payment_status(
     fiscal receipt exists — honest, never fabricated.
     No session.commit() — read path.
     """
-    from sqlalchemy import text as _text  # noqa: PLC0415
+    from sqlalchemy import text as _text
 
     row = await repository.fetch_client_payment_status(session, payment_id, client_id)
     if row is None:
