@@ -1,34 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Frontend Integration — Client PWA
-status: Awaiting next milestone
-stopped_at: v2.0 shipped + archived + tagged (2026-06-02)
-last_updated: "2026-06-02T14:46:35.539Z"
-last_activity: 2026-06-02 — Milestone v2.0 completed and archived
+milestone: v2.1
+milestone_name: Client PWA — Fill the Gaps
+status: planning
+last_updated: "2026-06-02T15:33:51.493Z"
+last_activity: 2026-06-02
 progress:
-  total_phases: 12
-  completed_phases: 10
-  total_plans: 47
-  completed_plans: 47
-  percent: 83
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-02 — v2.0 Frontend Integration — Client PWA SHIPPED)
+See: .planning/PROJECT.md (updated 2026-06-02 — v2.1 Client PWA — Fill the Gaps opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Between milestones — v2.0 shipped 2026-06-02. Next not yet opened (candidates: production deploy/launch, v2.0 deferred warnings + `/gsd:secure-phase 70`, admin-web client wiring + promo admin). Run `/gsd:new-milestone` to open the next.
+**Current focus:** v2.1 Client PWA — Fill the Gaps (opened 2026-06-02) — defining requirements. Включение скрытого/замоканного функционала PWA (флаги + мелкие поля backend + фронт-проводка) + фолд-ин 2 долгов v2.0. Net-new домены (Группа B) отложены.
 
 ## Current Position
 
-Phase: Milestone v2.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-02 — Milestone v2.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-02 — Milestone v2.1 started
 
 ## v2.0 Roadmap Summary
 
