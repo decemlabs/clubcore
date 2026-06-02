@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/Avatar.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { useClientMe } from '@/data';
+import { useClientMe, useUpdateClientProfile } from '@/data';
 import { useAuth } from '@/context/AuthContext.jsx';
 
 // ─── Deferred-feature scaffolding (BUILT, HIDDEN) ─────────────────────────
@@ -17,9 +17,9 @@ const SETTINGS_FEATURE_FLAGS = {
   tenureBadge: false,
 };
 
-// ─── Notification prefs persistence (D-74-04) ─────────────────────────────
-// Local-only: nothing sent to server. Survives reload via localStorage.
-const NOTIF_STORAGE_KEY = 'clubcore:notif:v1';
+// ─── Notification prefs defaults (render-only fallback before server data arrives) ──
+// Server is the source of truth (D-78-04/D-78-05). NOTIF_DEFAULTS used only as a
+// render placeholder until useClientMe().notifPrefs lands from GET /client/me.
 const NOTIF_DEFAULTS = { promo: true, schedule: true, trainer: true, sound: false };
 
 // ─── Settings screen ──────────────────────────────────────────────────────
@@ -34,23 +34,39 @@ export const SettingsScreen = ({
   const navigate = useNavigate();
   const { data: me } = useClientMe();
   const { logout } = useAuth();
+  const updateProfile = useUpdateClientProfile();
 
-  // Notification toggles — init from localStorage with graceful fallback (T-74-03)
-  const [notif, setNotif] = React.useState(() => {
-    try {
-      return { ...NOTIF_DEFAULTS, ...JSON.parse(localStorage.getItem(NOTIF_STORAGE_KEY) || '{}') };
-    } catch {
-      return NOTIF_DEFAULTS; /* noop */
+  // Notification toggles — hydrate from server (D-78-04); NOTIF_DEFAULTS as render fallback only.
+  const [notif, setNotif] = React.useState(NOTIF_DEFAULTS);
+
+  // Re-sync from authoritative server value whenever notifPrefs arrives/changes (D-78-08).
+  // This ensures a full reload rehydrates from the server round-trip.
+  React.useEffect(() => {
+    if (me?.notifPrefs) {
+      setNotif(me.notifPrefs);
     }
-  });
+  }, [me?.notifPrefs]);
 
-  const setNotifKey = (key, val) => {
-    const next = { ...notif, [key]: val };
+  // Local in-sheet toast state (mirror ProfileExtraSheets pattern — no global Sonner in PWA)
+  const [toastMsg, setToastMsg] = React.useState(null);
+  const toastTimer = React.useRef(null);
+
+  const showToast = (msg) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMsg(msg);
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2600);
+  };
+
+  // Optimistic toggle: flip → PATCH full 4-key notifPrefs → revert on failure (D-78-06).
+  const setNotifKey = async (key, val) => {
+    const prior = notif;
+    const next = { promo: notif.promo, schedule: notif.schedule, trainer: notif.trainer, sound: notif.sound, [key]: val };
     setNotif(next);
     try {
-      localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(next));
+      await updateProfile.mutateAsync({ notifPrefs: next });
     } catch {
-      /* noop */
+      setNotif(prior);
+      showToast('Не удалось сохранить настройки. Попробуйте ещё раз.');
     }
   };
 
@@ -301,6 +317,29 @@ export const SettingsScreen = ({
           Версия 2.4.1 · Мой зал
         </div>
       </div>
+
+      {/* ── In-sheet toast (notif save errors — mirror ProfileExtraSheets) ── */}
+      {toastMsg && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 32,
+            left: 16,
+            right: 16,
+            background: 'var(--surface)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 12,
+            padding: '12px 16px',
+            fontSize: 13,
+            color: 'var(--text)',
+            boxShadow: 'var(--sh-2)',
+            zIndex: 10,
+          }}
+          role="alert"
+        >
+          {toastMsg}
+        </div>
+      )}
     </div>
   );
 };
