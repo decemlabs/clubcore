@@ -380,3 +380,21 @@ class ClientPromoValidateResponse(ResponseData):
     discount_kopecks: int    # wire: discountKopecks — computed discount
     new_amount_kopecks: int  # wire: newAmountKopecks — authoritative final amount
     discount_type: str       # wire: discountType — 'percentage' | 'fixed'
+
+
+# ---------------------------------------------------------------------------
+# Phase 81 WACT-01 — weekly workout activity schema
+# ---------------------------------------------------------------------------
+
+
+class ClientWeeklyActivityItem(ResponseData):
+    """Single day's workout count for the weekly activity endpoint (WACT-01).
+
+    Ordered Mon→Sun (service constructs the list in day order).
+    minutes is always None — no duration column in schema (deferred to WACT-03).
+    date wire: ISO date string (date type serialises as YYYY-MM-DD via ResponseData).
+    """
+
+    date: date          # wire: date (ISO YYYY-MM-DD)
+    workouts: int       # count of visits on this day (0 for days with no visits)
+    minutes: int | None = None  # always None in v2.2 (no duration column — WACT-03)
