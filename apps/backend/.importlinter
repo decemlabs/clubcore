@@ -193,6 +193,14 @@ ignore_imports =
     app.modules.client_portal.service -> app.modules.promo_codes.service
     app.modules.online_payments.service -> app.modules.promo_codes.models
     app.modules.online_payments.service -> app.modules.promo_codes.service
+    # Phase 79 PAYM-02..04 — client_portal.service orchestrates payment method reads
+    # and writes by calling payment_methods.service + payment_methods.repository.
+    # Option B (direct ignore edges) mirrors the existing
+    # client_portal.service -> promo_codes.service precedent.
+    # Forward-declared now; unmatched_ignore_imports_alerting=warn keeps the build
+    # green until Plan 79-04 ships the router/service wiring bodies.
+    app.modules.client_portal.service -> app.modules.payment_methods.service
+    app.modules.client_portal.service -> app.modules.payment_methods.repository
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear
