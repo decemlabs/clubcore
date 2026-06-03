@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: verifying
-stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
-last_updated: "2026-06-03T14:54:46.204Z"
+status: in_progress
+stopped_at: Phase 80 complete (verified 4/4; CR-01/CR-02 fixed); autonomous advancing to Phase 81
+last_updated: "2026-06-03T16:10:00.000Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 80 — booking-reschedule
+**Current focus:** Phase 81 — Weekly Activity + PWA Flag Flips + OpenAPI Handoff (Phases 79-80 shipped)
 
 ## Current Position
 
-Phase: 80 (booking-reschedule) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 80 ✅ COMPLETE → advancing to Phase 81 (final v2.2 phase)
+Plan: 3 of 3 (80 complete)
+Status: Phase 80 verified 4/4 must-haves (2 live-infra checks deferred per standing decision); code-review CR-01 (post-commit fire-and-forget DM) + CR-02 (idempotency-envelope integrity) + 6 warnings fixed & merged
 Last activity: 2026-06-03
 
-Milestone progress (real v2.2 = 3 phases): [███░░░░░░░] 1/3 (33%)
+Milestone progress (real v2.2 = 3 phases): [███████░░░] 2/3 (67%)
 
 ## v2.2 Roadmap Summary
 
@@ -87,6 +87,8 @@ Items carried forward from v2.1 close:
 | human-verify | Phase 76 PDATA-02 live persistence check | deferred by user |
 | human-verify | Phase 78 live checks (FIT15 chip + notif toggle) | deferred by user |
 | human-verify | Phase 79 live ЮKassa sandbox card-save round-trip | deferred (OPERATOR-PENDING; user "defer & continue" 2026-06-03) |
+| human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | deferred (auto-defer per standing decision 2026-06-03) |
+| human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send) |
 | tech-debt | **Pre-existing (NOT Phase 79):** `alembic check` / `test_alembic_clean` fails — `app.modules.promo_codes.models` never registered in `alembic/env.py` since the `online_payments.promo_code_id` FK shipped in v2.0 (commit b61054f4). One-line env.py import fixes it. | noted — out of v2.2 scope |
 | tech-debt | **Pre-existing (NOT Phase 79):** whole-tree `ruff check` red (~44 errs) in `tests/test_client_promo_validate.py`, `test_client_checkout_promo.py`, `test_client_me_service.py`, `promo_codes/service.py` etc. (incl. F821 undefined names → those promo tests error on collection) | noted — out of v2.2 scope |
 | flaky-test | **Pre-existing (NOT Phase 79):** `test_freeze_race::test_concurrent_freeze_race_serialised_by_partial_unique_index` asserts exact 409 *reason-code* distribution under concurrency (timing-dependent: gets `invalid_transition` vs `already_frozen`) | noted — test-quality issue |
