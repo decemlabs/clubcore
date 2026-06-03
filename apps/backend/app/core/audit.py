@@ -361,6 +361,9 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("booking_created", "booking"),
         ("booking_cancelled", "booking"),
         ("booking_no_show", "booking"),
+        # v2.2 (Phase 80 RESCH-02 — single event for the reschedule operation).
+        # Links old→new booking; NOT a separate cancelled+created pair per CONTEXT.md.
+        ("booking_rescheduled", "booking"),
         # v1.6 (Phase 41 lock — emitted in Phases 42/43/44/45 per INFRA-34 / D-41-19)
         # Email transport (Phase 42 EMAIL-01 / EMAIL-04 / EMAIL-06):
         # resource_type is the eventual `email_send_log` table — table itself

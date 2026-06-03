@@ -491,6 +491,27 @@ class BookingNoShowPayload(BaseModel):
     no_show_at: str
 
 
+class BookingRescheduledPayload(BaseModel):
+    """Payload schema for ("booking_rescheduled", "booking") — Phase 80 RESCH-02.
+
+    Single event (not separate cancelled+created) per CONTEXT.md D-80.
+    Links old→new booking ids and slot ids for forensic chain.
+    actor_role is always 'client' — only the client self-service path
+    triggers a reschedule (no staff-initiated reschedule in v2.2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    old_booking_id: UUID
+    new_booking_id: UUID
+    old_slot_id: UUID
+    new_slot_id: UUID
+    old_start: str  # ISO-8601 with TZ
+    new_start: str  # ISO-8601 with TZ
+    client_id: UUID
+    actor_role: Literal["client"] = "client"
+
+
 # ---------------------------------------------------------------------------
 # v1.6 (Phase 41 lock — INFRA-35; emitted in Phases 42/43/44/45)
 #
@@ -1282,6 +1303,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("booking_created", "booking"): BookingCreatedPayload,
     ("booking_cancelled", "booking"): BookingCancelledPayload,
     ("booking_no_show", "booking"): BookingNoShowPayload,
+    # v2.2 (Phase 80 RESCH-02 — single reschedule event, not cancelled+created pair):
+    ("booking_rescheduled", "booking"): BookingRescheduledPayload,
     # v1.6 (Phase 41 lock — INFRA-35; emitted in Phases 42/43/44/45)
     # Email transport (Phase 42):
     ("email_sent", "email_send_log"): EmailSentPayload,
