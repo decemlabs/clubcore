@@ -84,21 +84,33 @@ Items carried forward from v2.1 close:
 | correctness | WR-75-02: receipt-lookup join heuristic (repeat same-plan purchases) | deferred — out of v2.2 scope |
 | human-verify | Phase 76 PDATA-02 live persistence check | deferred by user |
 | human-verify | Phase 78 live checks (FIT15 chip + notif toggle) | deferred by user |
-| human-verify | Phase 79/81.1 live ЮKassa card-save round-trip (PWA checkout opt-in → webhook → CardSheet) | deferred (OPERATOR-PENDING; UI+flag wired & mock-tested in 81.1; live leg needs sandbox) |
-| human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | deferred (auto-defer per standing decision 2026-06-03) |
-| human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send) |
-| human-verify | Phase 81 activity-bars visual rendering (heights/colors/zero-day baseline) | deferred (browser check; auto-defer per standing decision) |
-| human-verify | Phase 81 CardSheet with a real saved card | deferred (needs live YooKassa save_payment_method session) |
+| human-verify | Phase 79/81.1 live ЮKassa card-save round-trip (PWA checkout opt-in → webhook → CardSheet) | ✅ VERIFIED in browser 2026-06-03 — test card 5555…4477 → 3DS → success → webhook step-8.5 saved real 36-char token; `online_payments.save_payment_method=t`, status succeeded |
+| human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | ✅ VERIFIED in browser 2026-06-03 — same-trainer slot listed + reschedule executed (atomic cancel+create, slot flip, PT-credit preserved, booking_rescheduled audit) |
+| human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send; no live Telegram chat) |
+| human-verify | Phase 81 activity-bars visual rendering (heights/colors/zero-day baseline) | ✅ VERIFIED in browser 2026-06-03 — Пн/Ср/Пт filled, Вт/Чт/Сб/Вс flat, matches seeded visits |
+| human-verify | Phase 81 CardSheet with a real saved card | ✅ VERIFIED in browser 2026-06-03 — card •••• 4477 displayed; autopay+ФЗ-376 consent enable (consent_recorded_at set) + unlink (soft-delete, GET→null) all exercised |
 | compliance | Phase 81 ФЗ-376 consent disclosure shows generic "стоимость текущего тарифа" not a concrete ₽ amount (REVIEW IN-04) | **needs legal review** — interpolate concrete amount if required for compliance |
 | tech-debt | **Pre-existing (NOT Phase 79):** `alembic check` / `test_alembic_clean` fails — `app.modules.promo_codes.models` never registered in `alembic/env.py` since the `online_payments.promo_code_id` FK shipped in v2.0 (commit b61054f4). One-line env.py import fixes it. | noted — out of v2.2 scope |
 | tech-debt | **Pre-existing (NOT Phase 79):** whole-tree `ruff check` red (~44 errs) in `tests/test_client_promo_validate.py`, `test_client_checkout_promo.py`, `test_client_me_service.py`, `promo_codes/service.py` etc. (incl. F821 undefined names → those promo tests error on collection) | noted — out of v2.2 scope |
 | flaky-test | **Pre-existing (NOT Phase 79):** `test_freeze_race::test_concurrent_freeze_race_serialised_by_partial_unique_index` asserts exact 409 *reason-code* distribution under concurrency (timing-dependent: gets `invalid_transition` vs `already_frozen`) | noted — test-quality issue |
 
+## Post-Close Full Test + Browser Verification (2026-06-03)
+
+Ran the complete test suite + live browser verification of all v2.2 features after milestone close.
+
+**Automated:** PWA 131/131 Vitest; backend 2505 passed (full suite); mypy --strict app clean; lint-imports 3/0; openapi/schema.d.ts drift gates clean. Remaining backend failures all PRE-EXISTING (test_alembic_clean, flaky test_freeze_race, 7 promo-validate errors).
+
+**Browser (real PWA + live YooKassa test shop):** weekly-activity bars, CardSheet (display + ФЗ-376 autopay consent + unlink), booking reschedule (atomic + audit + PT-credit), and the full save-card checkout round-trip (test card → 3DS → webhook step-8.5 → real token in CardSheet) — all PASS.
+
+**Two bugs found & fixed during verification (committed):**
+1. `fix(v2.2)` — Phase 80 added `booking_rescheduled` to LOCKED_AUDIT_EVENTS but left the count-lock guard tests at 100; full-suite run caught it → bumped to 101 (`test_audit_taxonomy`, `test_phase51_audit_chain_invariants`).
+2. `fix(client-pwa)` — **BookingManageSheet white-screened on any real booking** (`b.price.toLocaleString()` on undefined; real `/client/home` nextBooking has no price/hoursTo) → made reschedule+cancel unreachable in the live PWA despite passing mock-based Vitest. Derived hoursTo/date/time from startTime, guarded price/refund, added a real-shape regression test.
+
 ## Session Continuity
 
-Last session: 2026-06-03T19:03:08.304Z
-Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
-Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually
+Last session: 2026-06-03 (autonomous v2.2 + post-close full test & browser verification)
+Stopped at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
+Resume: Start the next milestone with `/gsd:new-milestone`
 
 ## Operator Next Steps
 
