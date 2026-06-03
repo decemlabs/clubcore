@@ -136,7 +136,7 @@ Plans:
 
 Plans:
 - [x] 81-01-weekly-activity-endpoint-PLAN.md — GET /client/activity/weekly: ClientWeeklyActivityItem schema + raw-SQL fetch_weekly_activity over visits.gym_date + 7-day zero-fill service + endpoint + golden TZ unit test + integration/IDOR tests (WACT-01)
-- [ ] 81-02-pwa-flag-flips-cardsheet-PLAN.md — Four TanStack Query hooks + flip weeklyActivity/linkedCard flags + wire ProfileScreen bars & Settings card row + CardSheet to real endpoints + ФЗ-376 consent modal + remove «Авто-оплата тренировок» toggle (WACT-02, PAYM-05)
+- [x] 81-02-pwa-flag-flips-cardsheet-PLAN.md — Four TanStack Query hooks + flip weeklyActivity/linkedCard flags + wire ProfileScreen bars & Settings card row + CardSheet to real endpoints + ФЗ-376 consent modal + remove «Авто-оплата тренировок» toggle (WACT-02, PAYM-05)
 - [ ] 81-03-openapi-handoff-PLAN.md — Byte-stable regen of openapi.json + schema.d.ts with all v2.2 client-portal paths; staff-contract-byte-identical assertion; CI drift gates green + Redocly lint (HND-01)
 
 ## Backlog
@@ -186,4 +186,4 @@ Plans:
 |-------|----------------|--------|-----------|
 | 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
-| 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 1/3 | In Progress|  |
+| 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 2/3 | In Progress|  |

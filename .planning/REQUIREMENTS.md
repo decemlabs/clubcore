@@ -13,7 +13,7 @@ First of the staged v2.2→v2.6 sequence to bring the client PWA up to the mocku
 - [x] **PAYM-02**: Клиент видит привязанную карту («•••• 4821») через `GET /client/payment-method` — возвращает display-данные или 200/null если карты нет; `yookassa_method_id` токен клиенту никогда не возвращается.
 - [x] **PAYM-03**: Клиент может отвязать карту через `DELETE /client/payment-method` — локальный soft-delete (`unlinked_at`); YooKassa-вызова нет (DELETE API отсутствует), IDOR-safe.
 - [x] **PAYM-04**: Клиент может включить/выключить автопродление (toggle); включение требует явного согласия с раскрытием суммы + периодичности + способа отмены (ФЗ-376), фиксируется `consent_recorded_at`. Реальных списаний в v2.2 нет (preference хранится, cron — v2.3).
-- [ ] **PAYM-05**: PWA-флаг `linkedCard` включён; `CardSheet` подключён к реальным endpoint'ам (вместо mock); per-booking toggle «Авто-оплата тренировок» удалён.
+- [x] **PAYM-05**: PWA-флаг `linkedCard` включён; `CardSheet` подключён к реальным endpoint'ам (вместо mock); per-booking toggle «Авто-оплата тренировок» удалён.
 
 ### Booking reschedule (RESCH)
 
@@ -24,7 +24,7 @@ First of the staged v2.2→v2.6 sequence to bring the client PWA up to the mocku
 ### Weekly activity (WACT)
 
 - [x] **WACT-01**: `GET /client/activity/weekly` возвращает 7 объектов (Пн–Вс текущей недели, Europe/Moscow, zero-fill) с количеством тренировок за день; raw-SQL агрегат по `visits.gym_date` STORED-колонке (+ pt_sessions); `minutes` = null (отложено — нет duration-колонки).
-- [ ] **WACT-02**: PWA-флаг `weeklyActivity` включён; недельные бары на `ProfileScreen` подключены к реальному endpoint'у (вместо mock).
+- [x] **WACT-02**: PWA-флаг `weeklyActivity` включён; недельные бары на `ProfileScreen` подключены к реальному endpoint'у (вместо mock).
 
 ### Handoff & verification (HND)
 
@@ -69,12 +69,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PAYM-02 | Phase 79 | Complete |
 | PAYM-03 | Phase 79 | Complete |
 | PAYM-04 | Phase 79 | Complete |
-| PAYM-05 | Phase 81 | Pending |
+| PAYM-05 | Phase 81 | Complete |
 | RESCH-01 | Phase 80 | Complete |
 | RESCH-02 | Phase 80 | Complete |
 | RESCH-03 | Phase 80 | Complete |
 | WACT-01 | Phase 81 | Complete |
-| WACT-02 | Phase 81 | Pending |
+| WACT-02 | Phase 81 | Complete |
 | HND-01 | Phase 81 | Pending |
 
 **Coverage:**
