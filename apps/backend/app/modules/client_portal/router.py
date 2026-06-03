@@ -132,6 +132,7 @@ async def _enforce_check_in_rate_limit(redis: Redis, ip: str) -> None:
     if count > _CHECK_IN_IP_LIMIT:
         raise RateLimited("rate_limited")
 
+
 router = APIRouter(tags=["Client-Portal"])
 
 
@@ -477,6 +478,11 @@ async def client_reschedule_booking(
     """
     incoming_body = await request.body()
     client_id = client.id
+    # Phase 80 CR-01 / WR-02: hand the app sessionmaker to the service so the
+    # post-send reschedule-evidence INSERT runs on a FRESH session — the
+    # request's pooled connection must not be held across the Telegram HTTPS
+    # round-trip (mirrors _send_booking_reminders / D-39-06b).
+    session_factory = request.app.state.sessionmaker
 
     async def _runner() -> tuple[int, bytes]:
         booking = await service.reschedule_client_booking(
@@ -484,6 +490,7 @@ async def client_reschedule_booking(
             client_id=client_id,
             booking_id=booking_id,
             new_slot_id=payload.new_slot_id,
+            session_factory=session_factory,
         )
         body_bytes = json.dumps(
             envelope(booking).model_dump(mode="json", by_alias=True),
@@ -840,9 +847,7 @@ async def client_update_me(
     No try/except — AppError bubbles to _app_error_handler.
     Commit owner: caller-owns-txn (D-32-10/D-49-19); service never commits.
     """
-    result = await service.update_client_profile(
-        session, client_id=client.id, payload=payload
-    )
+    result = await service.update_client_profile(session, client_id=client.id, payload=payload)
     await session.commit()
     return envelope(result)
 

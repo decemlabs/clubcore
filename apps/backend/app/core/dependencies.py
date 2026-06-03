@@ -21,7 +21,7 @@ from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import audit
 from app.core.database import get_db
@@ -1741,12 +1741,17 @@ async def reschedule_booking_for_client(
     client_id: UUID,
     booking_id: UUID,
     new_slot_id: UUID,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> Any:
     """Consumer entry point — used by ``app.modules.client_portal`` (Phase 80 RESCH-01).
 
     Defensive-raise when the slot is not registered (mirrors cancel/create pattern).
     Return type is ``Any``; callers cast/type-narrow the result.
     Zero new ``ignore_imports``.
+
+    ``session_factory`` (Phase 80 CR-01 / WR-02) is forwarded so the slot
+    implementation can run its post-send reschedule-evidence INSERT on a fresh
+    session, freeing the request connection across the Telegram round-trip.
     """
     if _booking_for_client_rescheduler is None:
         raise RuntimeError(
@@ -1755,5 +1760,9 @@ async def reschedule_booking_for_client(
             "app/main.py:create_app() (HTTP-only single-wire; see Phase 80 D-20-MODULE)."
         )
     return await _booking_for_client_rescheduler(
-        session, client_id=client_id, booking_id=booking_id, new_slot_id=new_slot_id
+        session,
+        client_id=client_id,
+        booking_id=booking_id,
+        new_slot_id=new_slot_id,
+        session_factory=session_factory,
     )
