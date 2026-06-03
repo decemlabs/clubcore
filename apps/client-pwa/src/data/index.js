@@ -39,6 +39,7 @@ export {
   useClientAvailableSlots,
   useCreateBooking,
   useCancelBooking,
+  useRescheduleBooking,
   useClientQrToken,
   // Plan 999.5-04: onboarding profile mutations
   useUpdateClientProfile,

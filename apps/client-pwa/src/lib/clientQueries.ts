@@ -488,6 +488,42 @@ export function useCancelBooking() {
   })
 }
 
+/**
+ * POST /api/v1/client/booking/{booking_id}/reschedule — reschedule own booking (RESCH-01).
+ * Requires Idempotency-Key header (D-70-02).
+ * IDOR 404-collapse on non-owned booking.
+ * onSettled invalidates bookings + availableSlots cache.
+ */
+export function useRescheduleBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      bookingId,
+      newSlotId,
+      idempotencyKey,
+    }: {
+      bookingId: string
+      newSlotId: string
+      idempotencyKey: string
+    }) => {
+      const res = await clientRequest(
+        'post',
+        '/api/v1/client/booking/{booking_id}/reschedule',
+        {
+          params: { booking_id: bookingId },
+          body: { new_slot_id: newSlotId },
+          headers: { 'Idempotency-Key': idempotencyKey },
+        },
+      )
+      return (res as { data: BookingResponse }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.bookings() })
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.availableSlots() })
+    },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // QR token hook (Phase-70 CCHK-01 — QRSheet)
 // ---------------------------------------------------------------------------
