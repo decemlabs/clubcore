@@ -44,6 +44,12 @@ modules =
     # Read-only validation + redemption recording accessed by client_portal and
     # online_payments via ignore_imports edges declared below (Option B — direct,
     # mirrors app.modules.online_payments.service -> app.modules.clients.models precedent).
+    app.modules.payment_methods
+    # Phase 79 PAYM-01..04 — payment methods module registered per INFRA-15 discipline.
+    # Token upsert in handlers.py step 8.5 uses raw SQL (no ORM import from integrations
+    # layer). Router endpoints live in client_portal/router.py; service + repository
+    # under payment_methods/. unmatched_ignore_imports_alerting = warn keeps the build
+    # green for ignore edges registered before Phase 79 follow-on plans ship bodies.
     app.modules.client_auth
     # Phase 68 CAUTH-01..06 / CISO-01..05 — client auth module registered here.
     # Cross-module reads (auth.exceptions, auth.models for OtpCode, clients.models
