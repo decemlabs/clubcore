@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: verifying
-stopped_at: Roadmap created for v2.2 (Phases 79-81, 11/11 requirements mapped)
-last_updated: "2026-06-03T13:26:47.709Z"
+status: in_progress
+stopped_at: Phase 79 complete (verified 5/5, live-YooKassa leg deferred); autonomous advancing to Phase 80
+last_updated: "2026-06-03T14:00:00.000Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 79 — payment-methods-foundation-card-on-file
+**Current focus:** Phase 80 — Booking Reschedule (Phase 79 shipped)
 
 ## Current Position
 
-Phase: 79 (payment-methods-foundation-card-on-file) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 79 ✅ COMPLETE → advancing to Phase 80 (Booking Reschedule)
+Plan: 4 of 4 (79 complete)
+Status: Phase 79 verified 5/5 must-haves (human_needed live-YooKassa leg deferred OPERATOR-PENDING); CR-01 blocker + 6 review warnings fixed
 Last activity: 2026-06-03
 
-Progress: [██████████] 100%
+Milestone progress (real v2.2 = 3 phases): [███░░░░░░░] 1/3 (33%)
 
 ## v2.2 Roadmap Summary
 
@@ -82,13 +82,17 @@ Items carried forward from v2.1 close:
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit bucket, QR post-decode existence, cancel idempotency) | deferred → `/gsd:secure-phase 70` |
 | backlog | Promo-code admin CRUD UI (999.4 — only seeded codes exist) | deferred (admin-web frozen) |
 | production | RUN-01 live ЮKassa credentialed checkout leg (D-72-06) | OPERATOR-PENDING by design |
-| tech-debt | Pre-existing `ruff I001` in `client_portal/router.py` | noted — quick task or Phase 79 fold-in |
+| tech-debt | Pre-existing `ruff I001` in `client_portal/router.py` | ✅ closed — folded into Phase 79 (79-04) |
 | correctness | WR-75-02: receipt-lookup join heuristic (repeat same-plan purchases) | deferred — out of v2.2 scope |
 | human-verify | Phase 76 PDATA-02 live persistence check | deferred by user |
 | human-verify | Phase 78 live checks (FIT15 chip + notif toggle) | deferred by user |
+| human-verify | Phase 79 live ЮKassa sandbox card-save round-trip | deferred (OPERATOR-PENDING; user "defer & continue" 2026-06-03) |
+| tech-debt | **Pre-existing (NOT Phase 79):** `alembic check` / `test_alembic_clean` fails — `app.modules.promo_codes.models` never registered in `alembic/env.py` since the `online_payments.promo_code_id` FK shipped in v2.0 (commit b61054f4). One-line env.py import fixes it. | noted — out of v2.2 scope |
+| tech-debt | **Pre-existing (NOT Phase 79):** whole-tree `ruff check` red (~44 errs) in `tests/test_client_promo_validate.py`, `test_client_checkout_promo.py`, `test_client_me_service.py`, `promo_codes/service.py` etc. (incl. F821 undefined names → those promo tests error on collection) | noted — out of v2.2 scope |
+| flaky-test | **Pre-existing (NOT Phase 79):** `test_freeze_race::test_concurrent_freeze_race_serialised_by_partial_unique_index` asserts exact 409 *reason-code* distribution under concurrency (timing-dependent: gets `invalid_transition` vs `already_frozen`) | noted — test-quality issue |
 
 ## Session Continuity
 
-Last session: 2026-06-03T13:26:47.705Z
-Stopped at: Roadmap created for v2.2 (Phases 79-81, 11/11 requirements mapped)
-Resume: Run `/gsd:plan-phase 79` to begin planning Payment Methods Foundation
+Last session: 2026-06-03 (autonomous run)
+Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
+Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually
