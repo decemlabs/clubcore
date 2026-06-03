@@ -10,7 +10,7 @@ First of the staged v2.2→v2.6 sequence to bring the client PWA up to the mocku
 ### Card-on-file (PAYM)
 
 - [x] **PAYM-01**: Клиент при чекауте может явно согласиться сохранить карту; токен YooKassa захватывается из `payment.succeeded` webhook (не из синхронного ответа `create_payment`); в `client_payment_methods` хранятся только токен + display-поля (last4/brand/expiry) — никогда PAN/CVV.
-- [ ] **PAYM-02**: Клиент видит привязанную карту («•••• 4821») через `GET /client/payment-method` — возвращает display-данные или 200/null если карты нет; `yookassa_method_id` токен клиенту никогда не возвращается.
+- [x] **PAYM-02**: Клиент видит привязанную карту («•••• 4821») через `GET /client/payment-method` — возвращает display-данные или 200/null если карты нет; `yookassa_method_id` токен клиенту никогда не возвращается.
 - [x] **PAYM-03**: Клиент может отвязать карту через `DELETE /client/payment-method` — локальный soft-delete (`unlinked_at`); YooKassa-вызова нет (DELETE API отсутствует), IDOR-safe.
 - [x] **PAYM-04**: Клиент может включить/выключить автопродление (toggle); включение требует явного согласия с раскрытием суммы + периодичности + способа отмены (ФЗ-376), фиксируется `consent_recorded_at`. Реальных списаний в v2.2 нет (preference хранится, cron — v2.3).
 - [ ] **PAYM-05**: PWA-флаг `linkedCard` включён; `CardSheet` подключён к реальным endpoint'ам (вместо mock); per-booking toggle «Авто-оплата тренировок» удалён.
@@ -66,7 +66,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAYM-01 | Phase 79 | Complete |
-| PAYM-02 | Phase 79 | Pending |
+| PAYM-02 | Phase 79 | Complete |
 | PAYM-03 | Phase 79 | Complete |
 | PAYM-04 | Phase 79 | Complete |
 | PAYM-05 | Phase 81 | Pending |
