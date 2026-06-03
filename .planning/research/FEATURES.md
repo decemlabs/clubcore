@@ -1,491 +1,282 @@
-# Feature Landscape: v2.0 Client PWA — Client-Facing API
+# Feature Research
 
-**Domain:** Gym member self-service PWA + client-scoped REST API over existing gym CRM
-**Researched:** 2026-05-29
-**Confidence:** HIGH — based on direct codebase inspection of existing backend domains,
-PWA mock data shapes, screen implementations, and established backend patterns
+**Domain:** Gym member self-service PWA — v2.2 Membership self-service depth (card-on-file + autopay, booking reschedule, weekly activity)
+**Researched:** 2026-06-03
+**Confidence:** HIGH — based on YooKassa official docs, codebase inspection of existing PWA components (CardSheet, BookingManageSheet, weekly-activity card), and industry patterns for fitness app UX.
 
 ---
 
 ## Context
 
-This is a subsequent milestone. The backend (v1.11) exposes ONLY staff (owner/reception) endpoints.
-Gym members ("clients") are records managed BY staff. v2.0 adds:
-- A new client-facing authentication principal (phone + OTP, isolated from staff JWT)
-- Client-scoped REST endpoints over existing domains (memberships, bookings, visits, pt_sessions,
-  payments, plans, trainers, schedule)
-- PWA screen wiring (Home, Book, Profile, Plans, Checkout, QR) to the real backend
+This is a subsequent milestone (v2.2), following v2.1 which shipped flag-flips + small field additions. Three net-new backend capabilities are needed to unlock three existing-but-hidden PWA components:
 
-**Client data-scoping invariant:** Every client-scoped endpoint filters by `client_id` from the
-authenticated session. Cross-client data access is impossible — this is an ownership guard,
-not RBAC. Violations are anti-oracle (identical response regardless of reason).
+1. **Card-on-file + autopay** — `CardSheet` exists at `ProfileExtraSheets.jsx:324`, gated by `PROFILE_FEATURE_FLAGS.linkedCard = false`. The sheet already renders: card visual (•••• 4821), autopay toggles, unbind confirm dialog, and a footer note "Данные карты хранятся на стороне платёжного провайдера." Needs: real `payment_method_id` stored per client, `GET /client/payment-method`, `DELETE /client/payment-method`, `PATCH /client/membership/autopay` toggle.
 
-**Out-of-scope screens stay on mock data:** Chat, Referral, Trainer reviews/ratings,
-Notification inbox, Gym-info-from-backend. These are NOT researched as features below.
+2. **Booking reschedule** — `BookingManageSheet.jsx:179` has a full `reschedule` view wired to mock `CALENDAR` / `BUSY_SLOTS` / `TIME_SLOTS`. The cancel view already offers "Лучше перенесу" as an escape hatch to reschedule. Needs: real available-slots query scoped to the existing booking's trainer, and `POST /client/bookings/{id}/reschedule`.
+
+3. **Weekly activity** — `ProfileScreen.jsx:267-285` has a 7-bar placeholder card gated by `PROFILE_FEATURE_FLAGS.weeklyActivity = false`. It expects minutes/type per day for Mon–Sun. Needs: `GET /client/activity/weekly` returning per-day visit counts and minutes.
+
+**All three features are staff-free** — no changes to `apps/admin-web`, all routes under `require_client()` in `app/modules/client_portal/`.
 
 ---
 
-## 1. Client Identity and Onboarding
+## Feature Landscape
 
-**Backing domain:** `app/modules/auth/` (OTP infrastructure), `app/modules/clients/` (client records)
+### Table Stakes (Users Expect These)
 
-### Table Stakes
+#### Feature 1: Card-on-file + Autopay
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Phone + OTP login | Industry standard for RF/CIS gym apps (no email-only). Members expect SMS or Telegram. Staff auth already has Telegram OTP infra (`otp_codes` table). | Medium | New `POST /api/v1/client/auth/otp/request` + `POST /api/v1/client/auth/otp/verify`. Reuse existing `otp_codes` table schema. Phone normalization: E.164 `+7XXXXXXXXXX` strip spaces/dashes/parens. |
-| Client record matching by phone | The `clients` table has `phone` + partial-unique `WHERE deleted_at IS NULL`. Matching is the join between the OTP caller and an existing client record. | Medium | Match `clients.phone` to normalized phone from OTP request. If match found: issue client-scoped JWT. If no match: uniform 200 anti-oracle response (see below). |
-| Anti-oracle for unknown phone | Standard RF/CIS security baseline. Server must NOT reveal whether a given phone number belongs to a registered client. | Medium | `POST /api/v1/client/auth/otp/request` returns identical 200 `{"message": "Если номер зарегистрирован, OTP отправлен"}` for both known and unknown phones. `_constant_time_floor` discipline (already used in staff auth service). No `client_not_found` error code. |
-| Client `/me` endpoint | Every client-authenticated flow needs to know their own profile — name, phone, email, client_id. The PWA ProfileScreen displays `userName`, phone, email. | Low | `GET /api/v1/client/me` returns: `{id, first_name, last_name, phone, email, created_at}`. Staff fields (telegram_user_id, notes, deleted_at) are NOT returned to the client. |
-| Client JWT isolation from staff JWT | Staff access tokens (`sz_access` cookie) must not grant access to client endpoints, and vice versa. | Medium | Client session uses a separate JWT claim discriminator (e.g. `"principal": "client"` in payload) and a separate `cc:client:session:` Redis namespace. Staff `require_permission` guards reject client tokens. |
-| Refresh + logout | Session lifecycle. PWA settings has a "Выйти из аккаунта" button. | Low | `POST /api/v1/client/auth/refresh` + `POST /api/v1/client/auth/logout`. Reuse refresh-rotation family pattern from staff auth. |
+| Display saved card last-4 / type | Fitness app standard (FitBase, YClients, Mindbody all show «•••• 4821»). Users expect to see what card is on file without re-entering. | LOW | `GET /client/payment-method` returns `{payment_method_id, type, last4, card_type, expiry_month, expiry_year, saved_at}`. Data sourced from YooKassa `payment_method` object stored at checkout time. Clubcore never stores raw card data — only `payment_method_id` + display fields. |
+| Unbind card | Expected by users who switch cards or want to opt out. The CardSheet already has the UI with confirmation dialog. | LOW | `DELETE /client/payment-method` — removes the stored `payment_method_id` from clubcore DB. YooKassa has no delete endpoint; deletion is managing your own DB record only (confirmed per YooKassa docs). Returns 204. Requires confirmation step in UI (already built). |
+| Autopay toggle for membership renewal | Standard in any subscription-based fitness app. Users want the option, and it must be clearly disclosed before enabling. | MEDIUM | `PATCH /client/membership/autopay` body `{enabled: bool}`. Stores `autopay_enabled` flag on membership record (or new `client_payment_settings` table). When enabled + a card is on file + the ARQ `expire_memberships` cron runs → triggers an autopay attempt N days before expiry (see below). |
+| Card saved during checkout (implicit binding) | Industry standard: card is saved on the first successful payment, not via a separate "add card" flow. | MEDIUM | During `POST /client/checkout/membership` (or renewal), pass `save_payment_method: true` to YooKassa API. On `payment.succeeded` webhook, store `payment_method.id` + `last4` + `type` + `expiry` in a new `client_payment_methods` table keyed by `client_id`. The existing webhook handler must be extended to capture and persist this. |
+| Charge N days before membership expiry (if autopay on) | Core autopay behavior. Users should not be surprised by expiry — the system should renew proactively. | HIGH | The existing `expire_memberships` ARQ cron runs at 06:05 MSK. A new `run_autopay_renewals` cron (e.g. 06:10 MSK, after the expire cron) selects memberships with: `status='active'`, `end_date = today + N` (N = 3 days as shown in CardSheet mock "Спишется за 3 дня до конца"), `autopay_enabled = true`, and client has a `payment_method_id`. Triggers YooKassa autopayment via `payment_method_id` (no user interaction required — this is YooKassa's `безакцептное списание` / autopayment-without-consent flow). Activation still locked to `payment.succeeded` webhook (D-06 anti-oracle invariant preserved). |
+| Notification before autopay charge | Users must be informed before being charged. This is both UX expectation and a YooKassa merchant obligation. | MEDIUM | Send a Telegram/email DM 3 days before the auto-charge attempt (same time as the `send_expiring_notifications` cron). Template: "Через 3 дня спишем [amount] ₽ для продления абонемента. Если хочешь отменить — зайди в приложение." New `LOCKED_EMAIL_TEMPLATES` entry; new LOCKED audit event. |
+| Failure notification + autopay disable on hard failure | If the card declines (insufficient funds, revoked permission), the member must be notified and autopay must be disabled automatically. | MEDIUM | On `payment.canceled` webhook where `cancellation_details.reason` is `permission_revoked`, `insufficient_funds`, or `card_expired`: set `autopay_enabled = false`, send failure DM. On soft failures (issuer timeout, temporary unavailability): retry logic is application-side (YooKassa does not retry automatically). Industry standard: up to 2–3 retries over 24–48h, then disable. |
 
-### Differentiators
+**Complexity driver: autopay renewal chain is HIGH because it touches:** existing online_payments webhook handler, existing renewal FSM, existing ARQ cron infrastructure, new payment method storage table, new consent disclosure requirements, and failure/retry handling.
+
+#### Feature 2: Booking Reschedule
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Reschedule to a different slot (same trainer) | Standard gym app behavior. BookingManageSheet already shows the UX — date strip + time grid + confirm. The cancel view explicitly nudges toward reschedule ("Лучше перенесу" button). | MEDIUM | `POST /client/bookings/{id}/reschedule` body `{new_slot_id}`. Atomic operation: cancel old booking + create new booking in a single DB transaction. Race-safe: new slot must pass the `(slot_id) WHERE status='confirmed'` partial-UNIQUE check. Returns new `BookingResponse`. |
+| Available slots query scoped to booking's trainer | Reschedule view shows only that trainer's future slots (not all trainers). The existing `GET /client/schedule/available-slots` supports `?trainer_id=` but the rescheduling flow must pass the trainer from the original booking automatically. | LOW | `GET /client/schedule/available-slots?trainer_id={original_booking.trainer_id}&from={today}` — already supported in the existing available-slots endpoint. No new endpoint needed; PWA passes trainer_id. |
+| Time cutoff — cannot reschedule < 6h before session | Expected: industry standard is 12–24h for PT sessions; this project already uses 6h as the cancellation policy window. Reschedule should honor the same window. | LOW | Server-side check: `slot.start_time - now(UTC) >= 6h`. Return 422 `reschedule_window_expired` if too close. The existing cancel policy check in `POST /client/bookings/{id}/cancel` uses the same 6h window — reuse the helper. |
+| Slot availability re-check at confirm time | Between selecting a slot in the UI and tapping confirm, the slot may be taken by another client. | LOW | The atomic reschedule operation handles this via the DB partial-UNIQUE race guard. If new slot is already taken: return 409 `slot_no_longer_available`. PWA shows "Слот занят — выбери другое время." |
+| Cannot reschedule to the same slot | Edge case: client picks the same slot they're already booked into. | LOW | Server-side check: `new_slot_id != current_slot_id`. Return 422 `same_slot` if equal. |
+| Reschedule only confirmed bookings | Cancelled, no-show, completed bookings cannot be rescheduled. | LOW | FSM guard: `booking.status == 'confirmed'`. Otherwise 422 `booking_not_reschedulable`. |
+
+**Implementation note:** "Atomic move" (cancel + rebook in one transaction) is preferred over "cancel then rebook" because it avoids a race window where the client holds no booking between steps, and it avoids partial state if the rebook fails. One DB transaction: UPDATE old booking to `cancelled` (with `cancel_reason='rescheduled'`) + INSERT new booking into new slot. The partial-UNIQUE guard on the new slot fires within the same transaction.
+
+#### Feature 3: Weekly Activity
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| 7-bar chart, Mon–Sun, current week | Standard in every fitness app (Apple Fitness, Google Fit, Strava). The ProfileScreen card already renders placeholder bars for Mon–Sun. Members expect visual confirmation of their weekly rhythm. | LOW | `GET /client/activity/weekly` returns an array of 7 objects: `{date: "YYYY-MM-DD", dow: "Пн"…"Вс", visit_count: int, minutes: int \| null, has_workout: bool}`. Backend queries `visits` (for visit_count) and optionally `pt_sessions` (for minutes). Week = Mon–Sun in Europe/Moscow. |
+| Visit count per day | Each bar represents at least one gym visit. Table stakes — the `visits` table is the source. | LOW | Count of `visits WHERE client_id = ? AND gym_date BETWEEN monday AND sunday`. Simple aggregation, no joins needed for visit_count. |
+| Total weekly sessions count | Summary line above bars: "3 тренировки за неделю". Expected by anyone with a fitness tracker. | LOW | Sum of visit_counts across the 7 days. Can be computed client-side from the 7-item response, or returned as `total_visits: int` in the response envelope. |
+
+### Differentiators (Competitive Advantage)
+
+#### Card-on-file + Autopay
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Telegram OTP channel | Telegram already primary notification channel; clients with bound telegram can receive OTP there without SMS costs. `clients.telegram_user_id` already stored. | Medium | Optional channel field on request: `{"phone": "+79161234567", "channel": "telegram"}`. Fall back to SMS if no telegram_user_id. Requires sending OTP via Telegram bot (existing bot infra). |
-| OTP rate-limiting (anti-spam) | Prevents phone enumeration via OTP flood. Already in staff auth via `cc:otp:rate:`. | Low | Reuse existing pattern — per-phone 60s resend cooldown via `otp_codes` row, per-IP rate limit. |
+| Zero-amount card binding (without first payment) | Allows clients to bind a card without making a purchase first (YooKassa "Привязка на нулевую сумму"). Useful for new members who haven't paid yet or want to set up autopay before their membership expires. | HIGH | Requires a separate `POST /client/payment-method/bind` flow: create a 1-kopeck or 0-amount authorization to save the card, then discard the hold. YooKassa supports this via `save_payment_method: true` + `capture: false`. Adds a new UX flow (not currently in CardSheet mock). **Defer to v2.3+ — scope risk.** |
+| Card expiry warning notification | Notify members N days before their saved card expires so they can update it before autopay fails. | MEDIUM | Check `payment_methods.expiry_year/month` against current date in a cron. Send DM 30 days before expiry. **Nice-to-have — defer after autopay retry logic is working.** |
 
-### Anti-Features
-
-| Feature | Why Avoid | What to Do Instead |
-|---------|-----------|-------------------|
-| Client self-registration (creating a new client record) | Clients at a physical gym are enrolled by reception; self-registration bypasses the real-world onboarding flow and would create unvalidated client records. | Staff creates client record; client logs in after being enrolled. Unknown phone → anti-oracle. |
-| Email/password login for clients | Adds a credential management burden for both client and staff. RF gym members expect phone-based auth. | Phone + OTP only in v2.0. |
-| Returning `client_not_found` error | Reveals phone-number roster to potential adversaries. | Uniform 200 anti-oracle response always. |
-
-**Client identity read shape (GET /api/v1/client/me response):**
-```
-{
-  id: uuid,
-  first_name: string,
-  last_name: string | null,
-  phone: string,          // normalized E.164
-  email: string | null,   // required for checkout; may be null
-  created_at: iso_datetime
-}
-```
-
----
-
-## 2. "My Membership" — Home View
-
-**Backing domain:** `app/modules/memberships/` (Membership + MembershipPlan + MembershipFreezePeriod)
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Active membership card | The HomeScreen subscription card is the primary UI element — plan name, days remaining, end_date, progress bar, status (active/frozen/expiring/expired). Mock: `getSubInfo(tweaks.subState)`. | Low | `GET /api/v1/client/memberships/active` returns the resolver result: single active or frozen membership for this client. Status: `active`, `frozen`, `expired`, `cancelled`. |
-| Days remaining calculation | Client sees "14 дней до 15 мая" not raw timestamps. Calculation is `end_date - today (Europe/Moscow)`. | Low | Backend returns `end_date` (date, not datetime). PWA computes days_remaining client-side using date-fns + Europe/Moscow. Alternatively backend can return `days_remaining` as a derived field. |
-| Freeze status display | HomeScreen has warn tone for expiring, danger for expired, shows frozen state. MembershipFreezePeriod already tracked. | Low | Active membership response includes `freeze_status: {is_frozen: bool, frozen_since: date | null, freeze_days_remaining: int | null}`. Derived from open freeze period WHERE `ended_at IS NULL`. |
-| Expiring-soon banner | HomeScreen shows "Продлить со скидкой 15%" when `sub.tone === 'warn'`. Backend already sends push notifications at 7d/3d/1d. | Low | PWA shows warn banner if `days_remaining <= 7`. Client-side threshold, no separate endpoint. |
-| No active membership state | HomeScreen empty state: "Записей пока нет / Запишись на первую тренировку". | Low | `GET /api/v1/client/memberships/active` returns 404 or `{data: null}`. PWA handles empty state. |
-
-### Differentiators
+#### Booking Reschedule
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Membership history | ProfileScreen has no membership history tab in mock, but it is implied by the "С нами 2 года" display. | Medium | `GET /api/v1/client/memberships?status=expired` returns paginated list of past memberships via `previous_membership_id` chain. Low priority for v2.0. |
-| Freeze days remaining in card | Clients want to know how many freeze days they can still use. `freeze_days_limit_snapshot` is on Membership, open period is in MembershipFreezePeriod. | Low | Include in active membership response: `freeze_days_limit: int, freeze_days_used: int`. Computed from sum of closed freeze periods. |
+| Reschedule limit per booking (e.g. max 2 reschedules) | Prevents abuse — a member can't reschedule indefinitely. Some platforms allow only 1 free reschedule per booking. | LOW | Track `reschedule_count` on booking row (default 0, increment on reschedule). Return 422 `reschedule_limit_reached` at threshold. **The current mock doesn't show this limit — treat as v2.3+ differentiator.** |
+| Cross-trainer reschedule | Allow rescheduling to a different trainer if the original is unavailable. | HIGH | Requires presenting the full slot catalog (not trainer-scoped). Adds UX complexity. **Anti-feature for v2.2 — scope risk.** |
 
-### Anti-Features
-
-| Feature | Why Avoid | What to Do Instead |
-|---------|-----------|-------------------|
-| Client-initiated freeze/unfreeze | The PWA ProfileScreen has a "Заморозить" button, but the freeze FSM requires staff authorization (reception or owner). Allowing client self-freeze changes the business model. | Show freeze status; redirect to "позвони на ресепшен". Keep freeze as staff-only action in v2.0. |
-| Membership cancel via PWA | No cancel button in any screen mock. | Cancel stays staff-only. |
-
-**Active membership read shape (GET /api/v1/client/memberships/active):**
-```
-{
-  id: uuid,
-  plan_id: uuid,
-  plan_name: string,        // plan_name_snapshot
-  status: "active" | "frozen" | "expired" | "cancelled",
-  start_date: date,
-  end_date: date,           // inclusive
-  price_kopecks: int,       // price_kopecks_snapshot
-  duration_days: int,       // duration_days_snapshot
-  freeze_days_limit: int,   // freeze_days_limit_snapshot
-  freeze_days_used: int,    // computed from closed freeze periods
-  is_frozen: bool,
-  frozen_since: date | null
-}
-```
-
----
-
-## 3. Bookings — Self-Booking + View + Cancel
-
-**Backing domain:** `app/modules/bookings/`, `app/modules/schedule/`, `app/modules/pt_packages/`
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Available trainer slots (calendar) | BookScreen Step 1+2: date picker + trainer list with available slots. Mock uses `CALENDAR` (21-day window) + `BUSY_SLOTS` per trainer. | Medium | `GET /api/v1/client/schedule/available-slots?date=YYYY-MM-DD&trainer_id=<optional>` returns trainer availability slots WHERE `status='available'` AND no confirmed booking AND slot date >= today. Paginated by date, grouped by trainer. |
-| Trainer catalog for booking | BookScreen Step 2: trainer list with name, spec, price, experience. Shown only when selecting a slot. | Low | `GET /api/v1/client/trainers` returns active trainers with name, specialization, price_per_session_kopecks, experience_years. Staff-side trainers module, client-scoped view. |
-| Slot time display grouped by period | BookScreen Step 3: slots grouped into morning/day/evening. Mock: `TIME_SLOTS` + `BUSY_SLOTS`. | Low | Response includes `start_time`, `end_time` per slot. PWA groups client-side. Backend only needs to return available (not busy) slots. |
-| Book a slot using PT package credit | BookScreen confirm step: "К оплате: 2 200 ₽ · спишется с привязанной карты". The existing booking model requires a `pt_package_id` — every booking deducts one session. | High | `POST /api/v1/client/bookings` body: `{slot_id, pt_package_id}`. Service: (1) validate client owns pt_package, (2) package has sessions_remaining > 0, (3) slot is available, (4) insert booking with partial-UNIQUE race guard on `(slot_id) WHERE status='confirmed'`. Returns `BookingResponse` with slot details. |
-| My upcoming bookings | HomeScreen "Ближайшая запись" card: trainer name, date/time, focus. ProfileScreen has bookings list. Mock: `UPCOMING_BOOKING`. | Low | `GET /api/v1/client/bookings?status=confirmed&upcoming=true` returns paginated bookings for this client_id with slot join (trainer name, start_time, end_time). |
-| Cancel my booking within policy | HomeScreen swipe-to-cancel on upcoming card. BookingManageSheet. Policy: "Отменить бесплатно не позднее чем за 6 часов". | Medium | `POST /api/v1/client/bookings/{booking_id}/cancel` — validates: (1) booking belongs to this client (ownership guard), (2) status == 'confirmed', (3) policy window check (slot start - now > 6h → full cancel; else partial credit deduction). Returns updated booking. |
-| Booking history (past bookings) | ProfileScreen trainings/visits tabs. | Low | `GET /api/v1/client/bookings?status=completed,cancelled,no_show` with date range filter. |
-
-### Differentiators
+#### Weekly Activity
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Trainer search/filter in client API | BookScreen has search bar + FilterChips (All / Top / До 2200₽). | Low | `GET /api/v1/client/trainers?search=&min_rating=4.9&max_price=220000` — query params, server-side filter over trainers table. |
-| Slot availability dot on calendar days | BookScreen calendar: `hasSlot` per day. | Low | `GET /api/v1/client/schedule/available-days?from=YYYY-MM-DD&to=YYYY-MM-DD` returns array of dates with at least one available slot. Used to render dots on calendar. |
-| "In development" placeholder for trainer ratings | TRAINERS mock has `rating: 4.9, reviews: 128` but Trainers domain is catalog-only — no ratings/reviews backend. | None | Return `rating: null, review_count: null` in trainer response. PWA hides rating widget when null. Anti-feature: do NOT fabricate ratings or add a ratings domain in v2.0. |
+| PT session minutes per day | If a visit had a PT session, show duration (e.g. 60 min bar vs 0 for self-visit). Makes bars meaningful rather than binary. | MEDIUM | Join `visits` → `pt_sessions` (via `booking_id`) → get session duration. PT sessions don't currently store `duration_minutes` — only `performed_at`. **Would require adding a `duration_minutes` field to `pt_sessions` (Alembic migration) or computing from slot `end_time - start_time` via `bookings.slot_id`.** |
+| Streak indicator | "3 недели подряд" — motivational metric used by Apple Fitness, Strava, etc. | MEDIUM | Requires querying `visits` across multiple past weeks. Backend-computed. **Nice-to-have — not in the ProfileScreen mock card. Defer.** |
+| Comparison to previous week | "На 2 тренировки больше, чем на прошлой неделе." Used by Google Fit. | LOW-MEDIUM | Query two weeks instead of one; return `prev_week_total: int` alongside current. **Defer — not in mock.** |
 
-### Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Feature | Why Avoid | What to Do Instead |
-|---------|-----------|-------------------|
-| Client booking without a PT package | BookScreen implies PT package ownership is required. Existing booking model requires `pt_package_id NOT NULL`. Allowing "pay at the door" bookings requires a new payment path. | Require an active PT package. If none: surface "Нет доступных занятий — купи пакет" prompt leading to Checkout. |
-| Client-initiated no_show marking | No-show transitions are staff/cron-only (`mark_no_show_bookings` ARQ cron at 23:10). | Keep cron-managed. |
-| Cancellation credit as money refund | Cancellation outside policy window = no refund (or 50% deduction as shown in mock). | Return policy display string to client; refunds are staff-initiated in billing domain. |
-
-**Booking write shape (POST /api/v1/client/bookings request body):**
-```
-{
-  slot_id: uuid,
-  pt_package_id: uuid
-}
-```
-
-**Booking read shape (response item):**
-```
-{
-  id: uuid,
-  status: "confirmed" | "cancelled" | "no_show" | "completed",
-  slot: {
-    id: uuid,
-    start_time: iso_datetime,
-    end_time: iso_datetime,
-    trainer: { id: uuid, name: string, specialization: string }
-  },
-  pt_package_id: uuid,
-  cancelled_at: iso_datetime | null,
-  cancel_reason: string | null,
-  created_at: iso_datetime
-}
-```
-
----
-
-## 4. Self Check-In via QR
-
-**Backing domain:** `app/modules/visits/` (Visit model, UNIQUE(client_id, gym_date))
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| QR code generation for client | QRSheet shows a QR code. The existing Telegram bot check-in already proves the concept (`/checkin` command). Client needs a web-equivalent. | Medium | `GET /api/v1/client/visits/qr-token` returns a short-lived signed token (HMAC-SHA256 or JWT, 60-120s TTL) encoding `{client_id, issued_at}`. PWA renders this as a QR code client-side (e.g. `qrcode.js`). Token is NOT a static value — it rotates to prevent screenshot replay. |
-| QR token verification and check-in | The backend (or a turnstile reader) POSTs the scanned token to record the visit. Existing Telegram checkin uses `channel='telegram_bot'`. | Medium | `POST /api/v1/client/visits/self-checkin` body: `{token: "<signed_token>"}`. Service: (1) verify token signature + expiry, (2) extract client_id from token, (3) call existing visit creation logic with `channel='client_qr'` (new channel literal), (4) DB-level UNIQUE(client_id, gym_date) enforces 1/day. Returns visit row or 409 if already checked in today. |
-| 1-per-day enforcement | Visit model has `gym_date STORED GENERATED` column + `UNIQUE(client_id, gym_date)`. Already race-safe. | Low | Reuse existing DB constraint. Service catches `uq_visits_client_id_gym_date` IntegrityError — returns 409 `already_checked_in_today`. |
-| Cannot check in for another client | QR token must be client-scoped and tamper-proof. A screenshot of another client's QR must not work. | Medium | Token payload includes `client_id`. HMAC-SHA256 with server secret makes payload unforgeable. Token TTL 60-120s prevents screenshot replay. `POST .../self-checkin` verifies signature before any DB lookup. |
-| Active membership required | Cannot check in without an active membership (existing visit service validates this via `ActiveMembershipResolver`). | Low | Same guard already exists for staff check-in. Client gets 422 `no_active_membership` if they try to check in expired. |
-| Success UX (QRSuccess screen) | QRSheet has `QRSuccess` state: "Вход зафиксирован · Хорошей тренировки". Shows "14-й визит". | Low | `POST .../self-checkin` response includes `{visit_id, checked_in_at, visit_count_today_month}` to populate the success screen. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| QR auto-refresh before expiry | PWA refreshes the QR token silently before it expires (e.g. at 45s mark of a 60s TTL), so the client doesn't have to tap anything. | Low | Client-side timer polls `GET .../qr-token` before expiry. No server change required. |
-| "Screen brightness to max" prompt | QRSheet shows "Яркость на максимум" hint. | None | Client-side only. No backend dependency. |
-
-### Anti-Features
-
-| Feature | Why Avoid | What to Do Instead |
-|---------|-----------|-------------------|
-| Static QR code (permanent client ID in URL) | Easy to implement but allows screenshot sharing — one client can check in another client. | Short-lived HMAC-signed token with client_id bound inside. |
-| QR code that encodes the full client UUID | UUID alone has no tamper protection. | Signed token wrapping the UUID + issued_at. |
-| Multi-visit per day via QR | Business rule: 1 visit per gym_date. Already DB-enforced. | Return 409 `already_checked_in_today` with a friendly message. |
-| New `visits.channel` values requiring migration | Adding `'client_qr'` requires an Alembic migration to widen the CHECK constraint on `channel`. | Plan the Alembic migration as part of the visit check-in phase. The Check constraint currently has `IN ('reception', 'telegram_bot')` — needs to add `'client_qr'`. |
-
-**QR token endpoint shape:**
-```
-GET /api/v1/client/visits/qr-token
-Response: {
-  token: string,        // HMAC-signed JWT, 120s TTL
-  expires_at: iso_datetime,
-  client_id: uuid       // for display: "Клиент #4821"
-}
-
-POST /api/v1/client/visits/self-checkin
-Body: { token: string }
-Response: {
-  visit_id: uuid,
-  checked_in_at: iso_datetime,
-  gym_date: date,       // Europe/Moscow date
-  visit_number: int     // ordinal for "14-й визит" display
-}
-```
-
----
-
-## 5. Self-Service Checkout
-
-**Backing domain:** `app/modules/online_payments/`, `app/modules/memberships/`, `app/modules/pt_packages/`
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Membership plan purchase via ЮKassa | PlansSheet → CheckoutSheet. Client selects a plan and pays online. Existing `online_payments` module handles redirect-based ЮKassa flows. | High | `POST /api/v1/client/checkout/membership` body: `{plan_id, confirmation_type: 'redirect'}`. Orchestrates existing `online_payments` service. Returns `{payment_id, confirmation_url, status: 'pending'}`. PWA redirects client to ЮKassa. |
-| Membership renewal | HomeScreen "Продлить" button. PlansSheet → CheckoutSheet. Same flow as purchase but targets the existing membership's renewal chain (`previous_membership_id`). | High | Same endpoint or `POST /api/v1/client/checkout/membership/renew` with `{plan_id}`. Service resolves current active membership + creates renewal via existing `renew_membership` logic, triggered on `payment.succeeded` webhook. |
-| PT package purchase | BookScreen checkout: "Тренировка с Аней · 2 200 ₽". PT package plans catalog + buy flow. | High | `POST /api/v1/client/checkout/pt-package` body: `{pt_package_plan_id, confirmation_type: 'redirect'}`. Orchestrates existing `online_payments` pt_package path. |
-| Client email required for 54-ФЗ fiscal receipt | `online_payments` service already enforces `client_email_required_for_online_payment` 422 if `clients.email IS NULL`. The fiscal receipt path (ЮKassa "Чеки от ЮKassa") requires an email. | Medium | Checkout endpoint checks `client.email`. If null: return 422 `email_required` with `{field: "email", message: "Введи email для чека"}`. PWA surfaces an inline email input field before proceeding. Client can update their email at checkout time — `PATCH /api/v1/client/me` updates `clients.email`. |
-| Client email self-update | Client must be able to add/update their email at checkout to satisfy the fiscal receipt requirement. ProfileScreen has "Личные данные" entry. | Low | `PATCH /api/v1/client/me` body: `{email: string}`. Validates email format. Updates `clients.email`. |
-| ЮKassa redirect flow | After creating payment, client is redirected to ЮKassa hosted page. Backend activation happens on `payment.succeeded` webhook (existing flow). PWA shows "ожидаем подтверждение" on redirect-back. | Low | Existing webhook handler already processes this. Client-facing redirect-back URL can be `{pwa_base}/checkout/pending?payment_id={id}`. PWA polls `GET /api/v1/client/checkout/{payment_id}/status` until `status == 'succeeded'`. |
-| Payment status polling | Client needs to know when membership is activated after ЮKassa redirect. | Low | `GET /api/v1/client/checkout/{payment_id}/status` returns `{payment_id, status: 'pending' | 'succeeded' | 'canceled', membership_id: uuid | null}`. Anti-oracle: returns same response whether payment_id belongs to this client or not (ownership-guarded 404 on mismatch). |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| QR confirmation type | CheckoutSheet mock shows card/Apple Pay options. ЮKassa QR (`confirmation_type='qr'`) is already supported in existing `online_payments`. | Low | Accept `confirmation_type: 'qr'` in checkout request body. Return `qr_code_url` in addition to `confirmation_url`. |
-| Promo code field | CheckoutSheet has a promo code input. No promo code domain exists in the backend. | Medium | Anti-feature: do NOT add a promo code domain in v2.0. Show the promo code UI but wire to a placeholder 422 `promo_codes_not_supported` response. Or simply remove the field from the wired checkout. |
-
-### Anti-Features
-
-| Feature | Why Avoid | What to Do Instead |
-|---------|-----------|-------------------|
-| Cash payment from client PWA | Physical cash is handled by reception. No self-service cash path makes sense. | Online only (ЮKassa). |
-| Client-initiated refunds | CheckoutSheet error state shows "Деньги не списали" for slot-busy scenario. But actual refunds (`online_refunds`) are staff-initiated. | Keep refunds as staff-only. Surface "обратитесь на ресепшен" for refund requests. |
-| Storing card data in clubcore | CheckoutSheet shows "Visa •••• 4821 · Срок до 09/28" as a saved card. ЮKassa handles card storage on their side; clubcore never stores card data. | PWA saves the last-4 display from a ЮKassa payment response field for display only — no actual card storage. |
-| Promo code backend domain | No promo code table exists. Adding one is net-new business domain, out of scope. | Placeholder UI only, or remove from wired checkout. |
-
-**Checkout write shape (POST /api/v1/client/checkout/membership):**
-```
-Request: {
-  plan_id: uuid,
-  confirmation_type: "redirect" | "qr"
-}
-Response: {
-  payment_id: uuid,             // internal OnlinePayment.id
-  yookassa_payment_id: string,
-  status: "pending",
-  confirmation_url: string | null,  // redirect URL
-  qr_code_url: string | null        // ЮKassa QR
-}
-```
-
-**Email dependency note:** `clients.email` is nullable. Checkout MUST check it. The 54-ФЗ path in
-the existing `online_payments` service already enforces this via `FIS-05 email gate` returning
-422 `client_email_required_for_online_payment`. The client API should surface this as a pre-check
-with a field-level error so PWA can show an inline email input before the payment is attempted.
-
----
-
-## 6. History Views
-
-**Backing domain:** `app/modules/visits/`, `app/modules/pt_sessions/`, `app/modules/payments/` + `app/modules/online_payments/`
-
-### Table Stakes
-
-#### 6a. Visit History (ProfileScreen "Визиты" tab)
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| List of past visits | Mock: `VISIT_HISTORY` with date, time, duration, kind ("Самостоятельно" vs "С Аней Соколовой"). | Low | `GET /api/v1/client/visits?page=1&page_size=20` — client-scoped, ordered `checked_in_at DESC`. Returns: `{items: [{id, checked_in_at, gym_date, channel, has_pt_session: bool}], total, page, page_size}`. |
-| Month summary counter | ProfileScreen shows "14 посещений" for this month. | Low | Include `month_count` in response or separate `GET /api/v1/client/visits/summary` endpoint. |
-| Visit "kind" display | Mock distinguishes self-visit vs training visit. | Low | `has_pt_session: bool` in visit item. If true, PWA fetches trainer name from pt_sessions. Or backend joins and returns `trainer_name: string | null`. |
-
-**Visit history read shape:**
-```
-items: [{
-  id: uuid,
-  checked_in_at: iso_datetime,
-  gym_date: date,              // Europe/Moscow date
-  channel: "reception" | "telegram_bot" | "client_qr",
-  trainer_name: string | null  // null if no pt_session for this visit
-}]
-```
-
-#### 6b. Training History (ProfileScreen "Тренировки" tab)
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| List of recorded PT sessions | Mock: `TRAINING_HISTORY` with trainer, focus, notes. The `pt_sessions` table has `trainer_id`, `booking_id`, `notes`, `performed_at`. | Low | `GET /api/v1/client/pt-sessions?page=1&page_size=20` — client-scoped via `pt_packages.client_id` → `pt_sessions.pt_package_id`. Returns `{items: [{id, performed_at, trainer_name, focus_area, notes}], total, page, page_size}`. |
-| Trainer info per session | Mock shows trainer initials + colors. | Low | JOIN `trainers` on `trainer_id` in response. Return `trainer_name`, `trainer_specialization`. |
-| Session notes display | Mock: "Хорошо потянули становую, добавили вес". `pt_sessions.notes` is already stored. | Low | Include `notes` field (max 500 chars per CHECK constraint). |
-
-**Training history data-scoping note:** `pt_sessions` has `pt_package_id` FK. `pt_packages` has
-`client_id`. Client access is validated via `pt_packages.client_id = session_client_id`. NO direct
-`client_id` on `pt_sessions` — query joins through `pt_packages`.
-
-**Training history read shape:**
-```
-items: [{
-  id: uuid,
-  performed_at: iso_datetime,
-  trainer_name: string,
-  trainer_specialization: string,
-  focus_area: string | null,   // maps to pt_sessions focus/notes header
-  notes: string | null,
-  pt_package_id: uuid
-}]
-```
-
-#### 6c. Purchase History (ProfileScreen "Покупки" tab)
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Unified payment list | Mock: `PURCHASE_HISTORY` with kinds (sub/training/shop) and amounts. Includes refunds. The `payments` table is the append-only ledger: `payment_method`, `subject_kind`, `amount_kopecks` (positive = charge, negative = refund). | Medium | `GET /api/v1/client/payments?page=1&page_size=20` — client-scoped. Query `payments` WHERE `client_id = session_client_id`. No shop purchases in real backend (shop is out of scope). Returns: `{items: [{id, paid_at, subject_kind, description, amount_kopecks, payment_method}], total, page, page_size}`. |
-| Refund entries | Mock has `status: 'refund', amount: -1100`. Payments ledger stores refunds as negative `amount_kopecks` rows with `subject_kind` annotated. | Low | Include negative-amount rows. PWA detects `amount_kopecks < 0` as refund display. |
-| Monthly grouping + total spend | Mock shows month headers + "Потрачено всего" summary with sub/trainer/shop breakdown. | Low | Client-side aggregation from the paginated list, or backend `GET /api/v1/client/payments/summary` returning monthly totals by subject_kind. |
-
-**Purchase history data-scoping note:** `payments.client_id` is a direct FK. Client access is
-straightforward ownership guard on `client_id`. Note: `shop` kind exists in mock but has no backend
-domain. Response should not return shop-kind rows since none exist — or filter them client-side.
-
-**Money convention:** All amounts in integer kopecks. PWA formats with `formatMoney(kopecks)` →
-`ru-RU RUB` string with NBSPs. Server NEVER returns formatted strings, only integer kopecks.
-
-**Purchase history read shape:**
-```
-items: [{
-  id: uuid,
-  paid_at: iso_datetime,
-  subject_kind: "membership" | "pt_package" | "pt_session",
-  payment_method: "cash" | "online",
-  amount_kopecks: int,   // negative = refund
-  description: string,   // e.g. "Месячный абонемент · 30 дней"
-  yookassa_payment_id: string | null  // for receipt link
-}]
-```
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Receipt / fiscal receipt link | CheckoutDone shows "Посмотреть чек". `fiscal_receipts` table exists. | Medium | Include `receipt_url: string | null` in payment history item if `fiscal_receipts` row exists and `status = 'succeeded'`. Low priority for v2.0. |
-| Date range filter on history | Useful for longer history views. | Low | `?from=YYYY-MM-DD&to=YYYY-MM-DD` query params on all history endpoints. |
-
-### Anti-Features
-
-| Feature | Why Avoid | What to Do Instead |
-|---------|-----------|-------------------|
-| Shop purchase history | Shop items (`kind: 'shop'` in mock) have no backend domain. | Filter out shop rows. Return only membership + pt_package + pt_session payment rows. |
-| Exposing other clients' payment data | Ownership guard must be applied at query level, not application level. | WHERE clause: `payments.client_id = :session_client_id` — never fetch all then filter in Python. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Auto-renew with cash payment | Some members pay cash. They might expect the system to "remind and charge" for cash too. | Cash autopay is a contradiction — cash requires physical presence at reception. No technical path to charge cash remotely. | Cash memberships show standard expiry notifications (already built in v1.3). No autopay toggle shown when no card on file. |
+| Cross-trainer reschedule in v2.2 | Members sometimes want a different trainer when their preferred one is unavailable. | Adds a full trainer-selection UI inside the reschedule flow — doubles UX complexity, adds a new available-slots query pattern, and requires a different cancellation policy (trainer changed = different session type). Scope risk. | Same-trainer reschedule only in v2.2. Cross-trainer = book a new session via BookScreen. |
+| Partial refund on reschedule | If a member reschedules to a cheaper slot, they may expect a refund difference. | PT package credits don't have per-slot pricing — the package is the billing unit. Differential refunds require new ledger logic. | Reschedule is free within policy window; no price differential. |
+| "Add a card" as a standalone flow (zero-amount binding) | Members want to pre-bind a card before their first purchase. | Zero-amount binding via YooKassa is technically supported but requires a separate flow (`POST /client/payment-method/bind`), an additional YooKassa widget or redirect, and new fraud vectors (binding without any purchase intent). Adds a separate code path that needs its own testing. | Bind-on-first-purchase is the standard pattern. Card gets saved automatically during the first membership payment. Dedicated "add card" flow deferred to v2.3. |
+| Weekly activity as a full workout log | Members might expect to view every workout's details from the activity bars. | The activity card is a summary widget, not a workout log. Turning it into a detail view requires a drill-down screen, which is out of scope. | Activity bars show weekly summary only. Detailed workout history already exists in the training history tab (`GET /client/pt-sessions`). |
+| Autopay for PT session individual bookings | CardSheet mock shows "Авто-оплата тренировок · Сразу после записи." Charging immediately when a booking is made would bypass the user's active PT package and create a new payment flow. | PT sessions are already paid via PT packages. A separate per-booking autopay creates a double-billing risk and complicates the existing PT package credit model. | Remove the "Авто-оплата тренировок" toggle from the MVP. Show only "Авто-продление абонемента." The per-booking charge toggle requires a separate PT billing model that doesn't exist. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Client auth (phone OTP → client JWT)
-  └──required by──> all other client-scoped endpoints
+client_payment_methods table (Alembic migration)
+  └──required by──> GET /client/payment-method (display card)
+  └──required by──> DELETE /client/payment-method (unbind)
+  └──required by──> autopay_enabled flag (toggle)
+  └──required by──> run_autopay_renewals ARQ cron
 
-GET /api/v1/client/me
-  └──required by──> Checkout (email check before payment)
-  └──required by──> QR token (client_id binding)
+save_payment_method: true during checkout (webhook handler extension)
+  └──required by──> client_payment_methods table being populated
+  └──depends on──> existing payment.succeeded webhook handler (extend, not replace)
 
-Active membership
-  └──required by──> QR self-checkin (no membership → 422)
-  └──required by──> HomeScreen membership card
+Membership.autopay_enabled field (Alembic migration OR client_payment_settings)
+  └──required by──> PATCH /client/membership/autopay
+  └──required by──> run_autopay_renewals cron (eligibility filter)
 
-PT package ownership
-  └──required by──> self-booking (pt_package_id on booking)
-  └──required by──> training history (pt_sessions via pt_packages)
+run_autopay_renewals ARQ cron
+  └──requires──> client_payment_methods (card on file)
+  └──requires──> autopay_enabled flag
+  └──requires──> existing renew_membership service (D-06: activation locked to webhook)
+  └──requires──> existing online_payments.create_payment (autopay path via payment_method_id)
+  └──precedes execution of──> expire_memberships cron (charge before expiry date, not after)
 
-Checkout (ЮKassa redirect)
-  └──required by──> membership purchase/renewal flow
-  └──required by──> PT package purchase flow
-  └──depends on──> clients.email NOT NULL (54-ФЗ gate)
-  └──depends on──> existing webhook handler (no change needed)
+Booking reschedule (POST /client/bookings/{id}/reschedule)
+  └──requires──> existing available-slots endpoint (GET /client/schedule/available-slots)
+  └──requires──> existing booking FSM cancel logic (reuses cancel path)
+  └──requires──> existing partial-UNIQUE race guard on (slot_id) WHERE status='confirmed'
+  └──no new Alembic migration needed (add reschedule_count col is optional differentiator)
 
-PATCH /api/v1/client/me (email update)
-  └──required by──> checkout email gate unblock
-
-Alembic migration: visits.channel widened
-  └──required by──> QR self-checkin (new 'client_qr' channel)
+GET /client/activity/weekly
+  └──requires──> visits table (already exists, scoped by client_id)
+  └──optional join──> pt_sessions via bookings.slot_id (for session minutes — only if duration stored)
+  └──no new Alembic migration needed for visit_count-only response
 ```
 
----
+### Dependency Notes
 
-## MVP Recommendation
-
-Priority order for v2.0:
-
-**Phase 1 — Client auth foundation (blocker for everything):**
-- Phone OTP request + verify (with anti-oracle)
-- Client JWT (isolated from staff session)
-- GET /api/v1/client/me
-
-**Phase 2 — Home screen data (highest user-visible impact):**
-- GET /api/v1/client/memberships/active
-- GET /api/v1/client/trainers (for booking)
-- GET /api/v1/client/schedule/available-slots
-- GET /api/v1/client/bookings (upcoming + past)
-
-**Phase 3 — QR self check-in:**
-- GET /api/v1/client/visits/qr-token
-- POST /api/v1/client/visits/self-checkin
-- Alembic migration: visits.channel += 'client_qr'
-
-**Phase 4 — Checkout (ЮKassa):**
-- PATCH /api/v1/client/me (email update)
-- POST /api/v1/client/checkout/membership
-- POST /api/v1/client/checkout/pt-package
-- GET /api/v1/client/checkout/{payment_id}/status
-
-**Phase 5 — History + booking write:**
-- POST /api/v1/client/bookings (self-booking)
-- POST /api/v1/client/bookings/{id}/cancel
-- GET /api/v1/client/visits (history)
-- GET /api/v1/client/pt-sessions (training history)
-- GET /api/v1/client/payments (purchase history)
-
-**Defer from v2.0 MVP:**
-- Membership history (list of past memberships)
-- Receipt/fiscal receipt link in history
-- Date range filters on history
-- Telegram OTP channel (SMS first, Telegram as follow-on)
-- Promo code field (placeholder UI only)
+- **Autopay cron requires renewal FSM to be unchanged:** The existing `renew_membership` service (v1.3) handles date strategy and `previous_membership_id` chain. The autopay cron calls it via the existing online_payments path — it must NOT duplicate renewal logic.
+- **Card binding requires webhook extension, not a new webhook:** The `payment.succeeded` handler already processes membership activations. Adding `payment_method_id` storage extends one `if payment.save_payment_method is True` branch — it does not fork the webhook.
+- **Reschedule atomicity requires single-transaction cancel+insert:** The existing cancel path (`POST /client/bookings/{id}/cancel`) must NOT be called as a sub-step — it has its own audit events and session credits logic. The reschedule operation must implement its own single-transaction cancel+insert path that emits `booking_rescheduled` audit events (not `booking_cancelled_by_client`).
+- **Weekly activity has no external dependencies** — it is a read-only aggregate over `visits` (already owned by client_portal). If minutes are not stored, bars show binary (visited / not visited). This is table-stakes sufficient.
 
 ---
 
-## Out-of-Scope Screens (mock-data only, NOT researched as features)
+## MVP Definition
 
-These screens remain on mock data in v2.0. The PWA should show an "in development" placeholder:
+### v2.2 Launch With
 
-| Screen | Reason Out of Scope |
-|--------|---------------------|
-| Chat (messaging) | No backend domain; requires staff-side admin-web changes (frozen) |
-| Referral | No referral domain exists |
-| Trainer reviews/ratings | Trainers domain is catalog-only; ratings would be a new domain |
-| Notification inbox | Notifications are push-only (Telegram/email); no client-readable inbox exists |
-| Gym info from backend | Gym details are static content; no backend domain for hours/address/photos |
+- [x] **Card display:** `GET /client/payment-method` — show last4, type, expiry if card on file; show "нет привязанной карты" if not.
+- [x] **Bind-on-purchase:** Save `payment_method_id` from YooKassa `payment.succeeded` webhook when `save_payment_method: true` was passed at checkout.
+- [x] **Unbind:** `DELETE /client/payment-method` — removes from clubcore DB, no YooKassa call needed.
+- [x] **Autopay toggle:** `PATCH /client/membership/autopay` — `{enabled: bool}`. Only visible/enabled when a card is on file.
+- [x] **Autopay renewal cron:** `run_autopay_renewals` ARQ task — fires 3 days before expiry for eligible memberships, uses `payment_method_id` to charge without user interaction.
+- [x] **Autopay failure handling:** On `payment.canceled` with hard-fail reason → disable autopay + send DM notification.
+- [x] **Pre-charge notification:** DM 3 days before autopay charge.
+- [x] **Reschedule (same trainer):** `POST /client/bookings/{id}/reschedule` body `{new_slot_id}` — atomic cancel+rebook, 6h cutoff guard, slot availability re-check.
+- [x] **Weekly activity:** `GET /client/activity/weekly` — 7-item array with `date, dow, visit_count`. No minutes required for MVP (bar height = visit_count, binary 0/1 is sufficient for first version).
+
+### Add After Validation (v2.3+)
+
+- [ ] **PT session minutes on activity bars** — add `duration_minutes` to `pt_sessions` + extend weekly activity endpoint; trigger: user feedback that bars are too simple.
+- [ ] **Autopay retry logic** — retry failed autopay 2x over 48h before disabling; trigger: first real autopay failure reports from production.
+- [ ] **Card expiry warning** — notify 30 days before card expires; trigger: production launch.
+- [ ] **Reschedule count limit** — cap reschedules per booking at 2; trigger: abuse reports.
+
+### Future Consideration (v2.3+)
+
+- [ ] **Zero-amount card binding** — bind a card without a purchase (separate flow); requires additional YooKassa integration surface.
+- [ ] **Cross-trainer reschedule** — reschedule to a different trainer's slot.
+- [ ] **Weekly streak** — "N недель подряд"; requires multi-week history query.
+- [ ] **Weekly comparison to previous week** — "X тренировки больше, чем на прошлой неделе."
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| GET /client/payment-method (display card) | HIGH | LOW | P1 |
+| DELETE /client/payment-method (unbind) | HIGH | LOW | P1 |
+| PATCH /client/membership/autopay toggle | HIGH | LOW | P1 |
+| Save payment_method on checkout webhook | HIGH | MEDIUM | P1 |
+| POST /client/bookings/{id}/reschedule | HIGH | MEDIUM | P1 |
+| GET /client/activity/weekly (visit count only) | MEDIUM | LOW | P1 |
+| run_autopay_renewals ARQ cron | HIGH | HIGH | P1 |
+| Autopay failure notification + disable | HIGH | MEDIUM | P1 |
+| Pre-charge DM notification (3 days before) | HIGH | LOW | P1 |
+| PT session minutes on activity bars | MEDIUM | MEDIUM | P2 |
+| Reschedule count limit | LOW | LOW | P2 |
+| Card expiry warning notification | MEDIUM | MEDIUM | P2 |
+| Zero-amount card binding flow | LOW | HIGH | P3 |
+| Weekly streak / comparison | LOW | MEDIUM | P3 |
+
+---
+
+## РФ-Specific Considerations
+
+### YooKassa Saved Payment Methods — What's Available
+
+**Confirmed (HIGH confidence, official docs):**
+- YooKassa supports card-on-file via `save_payment_method: true` on any payment request.
+- The returned `payment_method` object contains: `type`, `id`, `saved: true`, `card.last4`, `card.first6`, `card.expiry_month`, `card.expiry_year`, `card_type`.
+- Autopayments use `payment_method_id` — no user interaction required (безакцептное списание).
+- **YooKassa has NO API endpoint to delete a saved payment method.** Unbinding is accomplished by deleting your own DB record of the `payment_method_id`. Once your app stops using an ID, the card is effectively unbound.
+- Payment methods that support saving: bank card (Visa, MC, Mir), YooMoney wallet, Mir Pay, SberPay, T-Pay, FPS.
+- YooKassa sends a `payment_method.active` webhook notification when a payment method is successfully saved.
+
+**Autopayment merchant requirements (РФ):**
+- You must present the user with an "оферта" (terms of service / offer agreement) that specifies: (1) the amount to be charged, (2) the charging frequency, and (3) how to disable autopayments.
+- You must obtain explicit user consent before enabling autopayments — the toggle is sufficient consent mechanism IF the UI states the amount and frequency clearly ("Спишется за 3 дня до конца · сумма = стоимость текущего тарифа").
+- The footer in `CardSheet` already says "Данные карты хранятся на стороне платёжного провайдера. Мы видим только последние 4 цифры." This is the right disclosure.
+- **No HMAC webhook verification for YooKassa** (unlike Stripe) — security model is IP allowlist (`YOOKASSA_TRUSTED_IPS`) + status re-fetch. The existing `verify_yookassa_ip` guard covers this.
+
+### Autopay Consent UI Requirements
+
+The `CardSheet` mock `ToggleRow` label "Авто-продление абонемента · Спишется за 3 дня до конца" satisfies the disclosure requirement IF the charge amount is also shown. The backend `PATCH /client/membership/autopay` response should return `{enabled, next_charge_date, next_charge_amount_kopecks}` so the PWA can display "Следующее списание: 15 мая · 2 500 ₽." This is table stakes for a legally compliant autopay UI in РФ.
+
+**Caveat:** Autopayments via YooKassa require the merchant to have autopayments enabled in their YooKassa account settings (this is not the default — it requires a manager request). This is an OPERATOR-PENDING item, not a code blocker.
+
+---
+
+## Complexity Assessment
+
+### Card-on-file + Autopay — OVERALL HIGH
+
+- **New DB table needed:** `client_payment_methods` (`id, client_id FK, payment_method_id VARCHAR, type, last4, first6, card_type, expiry_month, expiry_year, is_active, created_at`) — Alembic migration required.
+- **Webhook extension:** The `payment.succeeded` handler must optionally save the `payment_method` object when `payment.save_payment_method is True`. Single branch addition, no fork.
+- **New ARQ cron:** `run_autopay_renewals` — must run after `expire_memberships` (06:05) but before the membership is marked expired. Suggested time: 06:10 MSK. Uses `unique=True` for idempotency.
+- **Failure/retry logic:** First-pass MVP can disable-on-first-failure. Retry logic is a v2.3 improvement.
+- **Blocked by YooKassa account settings:** Autopayments must be enabled at the YooKassa account level. Mark as OPERATOR-PENDING at close.
+
+### Booking Reschedule — MEDIUM
+
+- **No new table or migration needed** (unless adding `reschedule_count` column — optional).
+- **New endpoint:** `POST /client/bookings/{id}/reschedule` — ~50-80 lines of service code.
+- **Reuses:** existing available-slots endpoint, existing partial-UNIQUE race guard, existing booking FSM.
+- **New audit event:** `booking_rescheduled` — must be added to `LOCKED_AUDIT_EVENTS` before first callsite (INFRA-15 discipline).
+- **Key risk:** Atomicity — must not call `cancel` as a sub-operation. Single transaction cancel+insert.
+
+### Weekly Activity — LOW
+
+- **No new table or migration needed.**
+- **New read endpoint:** `GET /client/activity/weekly` — ~20-30 lines of SQL aggregate over `visits`.
+- **No external dependencies.**
+- **Weeks in Europe/Moscow:** Monday = start of week (Russian locale convention). Use `date_trunc('week', current_date AT TIME ZONE 'Europe/Moscow')` for the Monday boundary.
+- **If adding minutes:** requires a join to `pt_sessions` via `bookings.slot_id`; `pt_sessions` does not currently store `duration_minutes`, so minutes must be derived from `trainer_availability_slots.end_time - start_time` if the visit has an associated booking. This adds a multi-join chain. MVP ships without minutes; binary visit_count per day is sufficient.
+
+---
+
+## Competitor Feature Analysis
+
+| Feature | YClients (РФ) | Mindbody (US) | Our Approach |
+|---------|--------------|---------------|--------------|
+| Saved card display | Shows last-4, delete option | Shows last-4, multiple cards | Single card (one active per client); same display format |
+| Autopay toggle | Per-service type | Global + per-service | Per-membership only (v2.2); PT bookings excluded |
+| Card binding flow | At first purchase | At first purchase OR dedicated add-card | At first purchase in v2.2; zero-amount binding deferred |
+| Reschedule cutoff | Configurable (typically 12-24h) | Configurable per class | Fixed 6h (matches existing cancel window, no new config) |
+| Reschedule: same vs any trainer | Typically same class type, any instructor | Any available slot | Same-trainer only in v2.2 |
+| Reschedule count limit | Typically 1-2 per booking | Varies | No limit in v2.2 MVP (add if abuse occurs) |
+| Weekly activity | Visit count bars + active minutes | Detailed workout log | Visit count bars (v2.2); minutes optional in v2.3 |
+| Activity granularity | Day-level | Day-level | Day-level (Mon–Sun, Europe/Moscow week) |
 
 ---
 
 ## Sources
 
-- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — v2.0 milestone scope, in/out-of-scope decisions
-- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/data/*.js` — mock data shapes for all PWA screens
-- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/HomeScreen.jsx` — subscription card, upcoming booking, QR button, notifications feed
-- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/BookScreen.jsx` — 3-step booking flow, cancellation policy display
-- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/ProfileScreen.jsx` — profile card, visits/trainings/purchases tabs, settings
-- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/sheets/QRSheet.jsx` — QR display, scan animation, success state
-- `/Users/andre/Workspace/Development/clubcore/apps/client-pwa/src/screens/sheets/CheckoutSheet.jsx` — payment flow, card picker, promo code, error states
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/memberships/models.py` — Membership, MembershipPlan, MembershipFreezePeriod ORM
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/visits/models.py` — Visit ORM, gym_date STORED, channel constraint
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/bookings/models.py` — Booking ORM, partial UNIQUE, FSM statuses
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/online_payments/models.py` — OnlinePayment ORM, confirmation_type, fiscal gate
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/clients/models.py` — Client.phone, Client.email nullable, Client.telegram_user_id
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/pt_packages/models.py` — PtPackage sessions_remaining, client_id
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/pt_sessions/models.py` — PtSession, booking_id, notes (max 500)
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/auth/` — OTP infrastructure, anti-oracle patterns, `_constant_time_floor`
-- CLAUDE.md conventions: money in kopecks, dates in Europe/Moscow, anti-oracle discipline, pagination `{items, total, page, pageSize}`
+- YooKassa official docs — Autopayments: https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/basics
+- YooKassa official docs — Pay with saved method: https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/pay-with-saved
+- YooKassa official docs — Save during payment: https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/save-payment-method/save-during-payment
+- YooKassa autopayment support page: https://yookassa.ru/docs/support/payments/extra/autopayment
+- BEAT81 cancellation policy (fitness class reschedule cutoff 12h): https://support.beat81.com/en/articles/431384-how-to-cancel-or-change-your-workout
+- Subscription billing best practices: https://www.subscriptionflow.com/2026/01/best-practices-for-recurring-billing-gym-memberships/
+- Apple Fitness weekly summary UX: https://support.apple.com/guide/iphone/see-your-activity-summary-iph4c34a8a95/ios
+- Codebase: `apps/client-pwa/src/screens/sheets/ProfileExtraSheets.jsx` — `CardSheet` implementation (line 324)
+- Codebase: `apps/client-pwa/src/screens/sheets/BookingManageSheet.jsx` — reschedule + cancel views
+- Codebase: `apps/client-pwa/src/screens/ProfileScreen.jsx` — `PROFILE_FEATURE_FLAGS`, weekly activity card (line 267)
+- Codebase: `apps/client-pwa/src/data/index.js` — mock shapes for CALENDAR, BUSY_SLOTS, TIME_SLOTS
+- `.planning/PROJECT.md` — v2.2 milestone scope, "Key context" section
 
 ---
 
-*Feature research for: v2.0 Frontend Integration — Client PWA (clubcore gym CRM)*
-*Researched: 2026-05-29*
+*Feature research for: v2.2 Membership self-service depth (card-on-file + autopay, booking reschedule, weekly activity)*
+*Researched: 2026-06-03*

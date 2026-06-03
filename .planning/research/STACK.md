@@ -1,408 +1,409 @@
 # Stack Research
 
-**Domain:** v2.0 Client PWA + Client-facing backend API additions to existing clubcore gym CRM
-**Researched:** 2026-05-29
-**Confidence:** HIGH (all recommendations verified against official docs, PyPI, or codebase inspection)
+**Domain:** Gym CRM — client self-service depth (v2.2: card-on-file + autopay, booking reschedule, weekly-activity analytics)
+**Researched:** 2026-06-03
+**Confidence:** HIGH for YooKassa saved-method flow; HIGH for reschedule (pure reuse); HIGH for weekly-activity (pure SQL)
 
 ---
 
-## Context: What Is Already Locked
+## Executive Summary
 
-The following are NOT research targets — they are settled and must not change:
-
-- Backend: Python 3.12 + uv + FastAPI 0.115+ + SQLAlchemy 2.0 async + Alembic async + Pydantic v2 + Postgres 16 + Redis 7 + ARQ + structlog
-- Admin-web: React 19 + Vite 6 + TanStack Router + TanStack Query + Tailwind v4 + shadcn + pnpm + TS strict (frozen, out of scope)
-- Auth primitives: JWT HS256 + Argon2id + cookie matrix (`sz_access` httpOnly + `cc_refresh` + `clubcore_csrf` CSRF double-submit) + refresh-rotation family with Redis-mirrored sessions — all reusable
-- Codegen pipeline: `openapi-typescript@^7.13.0` → `schema.d.ts` + drift gate CI
-
-This document covers only what must be ADDED or CHANGED for v2.0.
+v2.2 adds three features on top of a full-stack already shipped. The vast majority of stack work is **reuse** of existing patterns with no new dependencies. The one genuinely new area is YooKassa saved payment methods — and even that slots into the existing `app/integrations/yookassa/client.py` adapter pattern rather than requiring a new SDK or library.
 
 ---
 
-## 1. Client Auth Strategy — Phone + OTP
+## Feature (a): YooKassa Saved Payment Methods + Autopay
 
-### 1a. SMS vs Telegram: Use Telegram OTP Only for v1
+### What is new vs. existing
 
-**Recommendation: Telegram OTP only for client auth. Add SMS as a v2 fallback. Do not install an SMS provider in v2.0.**
+**Existing (do not re-implement):**
+- `app/integrations/yookassa/client.py` — `YooKassaClient` with httpx async adapter: `create_payment`, `get_payment`, `create_refund`, `get_refund`, `create_receipt`. The adapter is raw httpx, not the synchronous official `yookassa` SDK (which was explicitly wrapped out of the event loop at v1.7). The adapter pattern, boundary types, and classification taxonomy are all stable.
+- `app/integrations/yookassa/types.py` — `YooKassaPaymentResult`, `YooKassaWebhookEvent`, etc.
+- `app/modules/online_payments/` — one-off checkout flow, `payment.succeeded` / `payment.canceled` webhook FSM, 54-ФЗ receipts, IP-allowlist verification, Redis dedup.
+- `app/modules/client_portal/` — `require_client()`, `ClientPrincipal`, IDOR-safe raw-SQL reads, D-20-MODULE Protocol-slot write discipline.
 
-Rationale:
+**What is genuinely new for v2.2:**
 
-The existing codebase has a fully working OTP infrastructure: `OtpCode` table, `OtpChannel = Literal["telegram", "email"]` discriminator (in `app/modules/auth/models.py`), `otp_code_ttl_seconds`, `otp_max_attempts`, and the `request_otp_telegram` / `request_otp_email` service functions. Adding phone-based SMS is a third channel extension to this existing pattern — the table schema and service architecture already accommodate it.
+#### 1. YooKassa API calls not yet in the client
 
-Telegram Gateway API costs $0.01/code vs ~1-2 RUB for domestic SMS, has better delivery guarantees (no SS7 interception risk, no carrier routing delays), and RF/CIS gym users have near-universal Telegram penetration. The friction objection ("user needs Telegram") is bounded: any non-Telegram user is handled by SMS fallback in a later phase.
+The existing `YooKassaClient` covers `POST /v3/payments`, `GET /v3/payments/{id}`, `POST /v3/refunds`, `GET /v3/refunds/{id}`, `POST /v3/receipts`. For saved-method flow, two additional operations are needed — both as new methods on the existing adapter class:
 
-SMS provider onboarding in Russia requires regulatory friction: A2P SMS sender registration with the operator (MTS/Beeline/MegaFon), message template approval, and sandbox testing. This is non-trivial overhead for a pet-project with 1 gym.
+| New method | YooKassa endpoint | When used |
+|---|---|---|
+| `create_payment_with_save` | `POST /v3/payments` (same endpoint, but adds `save_payment_method: true` in body) | First payment to bind a card |
+| `create_autopayment` | `POST /v3/payments` (same endpoint, but passes `payment_method_id` instead of `confirmation`) | Autopay charge using saved token |
 
-**Explicit recommendation: Telegram Gateway Only for v2.0. SMS Aero as the additive fallback in a subsequent phase (v2.1 or later).**
+Both are POST `/v3/payments` — the same endpoint as `create_payment`. The difference is in the request body fields, not the endpoint URL. Options:
+- **Option A (recommended):** Extend `create_payment` with new optional parameters (`save_payment_method: bool = False`, `payment_method_id: str | None = None`). This keeps the adapter surface minimal. Autopayments set `payment_method_id` and omit `confirmation` entirely (no redirect needed — user-less flow).
+- **Option B:** Add two new methods `create_payment_save_method` and `create_autopayment`. More explicit but duplicates transport logic.
 
-### 1b. Telegram Gateway API Integration
+Option A is preferred because both flows return `YooKassaPaymentResult` and share the same classification taxonomy and error handling already implemented.
 
-The Telegram Gateway API (`https://core.telegram.org/gateway`) is distinct from the Telegram Bot API already in use. It takes a phone number in E.164 format and delivers a verification code to the user's Telegram account if they have Telegram registered with that phone number. It also offers `checkSendAbility` (free call) to verify reachability before dispatching.
+#### 2. GET /v3/payment_methods/{id} — new endpoint
 
-**Adapter approach: write a thin `app/integrations/telegram_gateway/` async adapter using `httpx.AsyncClient`.**
+To read a saved payment method (card last 4, expiry, type) for displaying «•••• 4821» in the PWA, the adapter needs:
 
-This follows the established `app/integrations/yookassa/` integration pattern: frozen dataclass boundary types, pure-async httpx adapter, never raises to the service layer (returns success/error result variants), non-fatal degraded mode on boot probe failure. No new pip dependency required — `httpx` is already installed.
+```python
+async def get_payment_method(self, payment_method_id: str) -> YooKassaPaymentMethodResult
+```
 
-The alternative (`telegram-gateway` PyPI package, v0.x, sync-only) would require `asyncio.to_thread` wrapping. The custom adapter is simpler, consistent with project discipline, and avoids an external dependency for a 4-method REST API.
+- **Endpoint:** `GET /v3/payment_methods/{payment_method_id}`
+- **Response structure (verified):**
+  ```json
+  {
+    "id": "pm_xxx",
+    "type": "bank_card",
+    "saved": true,
+    "status": "active",
+    "card": {
+      "first6": "427631",
+      "last4": "4821",
+      "expiry_month": "09",
+      "expiry_year": "2028",
+      "card_type": "Visa",
+      "issuer_name": "Sberbank"
+    },
+    "title": "Bank card *4821"
+  }
+  ```
+- A new frozen dataclass `YooKassaPaymentMethodResult` is needed in `types.py` with fields: `ok`, `classification`, `payment_method_id`, `saved`, `status` (`"pending" | "active" | "inactive"`), `card_last4`, `card_expiry_month`, `card_expiry_year`, `card_type`, `title`.
 
-| Thing to build | Where | Notes |
-|----------------|-------|-------|
-| `app/integrations/telegram_gateway/client.py` | `httpx.AsyncClient` wrapper | 4 methods: sendVerificationMessage, checkSendAbility, checkVerificationStatus, revokeVerificationMessage |
-| `app/integrations/telegram_gateway/__init__.py` | Boundary types (frozen dataclasses) | Mirrors yookassa boundary discipline |
-| New `OtpChannel` value `"sms"` | `app/modules/auth/models.py` | Deferred — not in v2.0 |
-| `TELEGRAM_GATEWAY_TOKEN` config | `app/core/config.py` | New `SecretStr` field, same placeholder-default discipline as `telegram_bot_token` |
+#### 3. New webhook event type
 
-### 1c. SMS Aero (Deferred Fallback)
+The existing `YooKassaWebhookEvent.event` literal is:
+```python
+event: Literal["payment.succeeded", "payment.canceled", "refund.succeeded"]
+```
 
-When the SMS fallback is eventually built:
+For zero-amount binding, the `payment_method.active` webhook fires after binding completes. For autopay triggered via `POST /v3/payments` with `payment_method_id`, the standard `payment.succeeded` webhook fires — no new event type needed for autopay itself.
 
-| Library | Version | Notes |
-|---------|---------|-------|
-| `smsaero-api` | 3.2.0 | Sync-only; wrap in `asyncio.to_thread`. Install: `uv add smsaero-api`. Email + API key auth. |
+**Decision:** Add `"payment_method.active"` to the Literal union only if zero-amount binding flow is used. If v2.2 uses binding-during-payment only (save on first real checkout), the existing `payment.succeeded` handler already carries `payment_method.saved == true` and `payment_method.id` in the response body — no new webhook event needed.
 
-SMSC.ru is the alternative (no Python SDK; use `httpx` directly with HTTP GET/POST + JSON via `fmt=3` parameter). SMS Aero is preferred due to the official Python SDK.
+**Recommended binding strategy for v2.2:** Use "save during payment" (binding-during-real-purchase). The client makes a real first checkout with `save_payment_method: true`. On `payment.succeeded` webhook, the `payment_method.id` and card last4 come back in the payment object's `payment_method` sub-object and are stored server-side. This avoids zero-amount binding entirely and the `payment_method.active` event.
 
-**Do NOT add SMS provider in v2.0.** This is explicitly out of scope.
+#### 4. New server-side storage
 
-### 1d. Phone Number Anchor
+A new table (or column on `clients`) to store the saved payment method:
 
-`clients.phone` column already exists (`Mapped[str]`, `Text NOT NULL`) with partial unique index `uq_clients_phone_alive WHERE deleted_at IS NULL`. Client OTP lookup is: `SELECT * FROM clients WHERE phone = $1 AND deleted_at IS NULL`. No new column needed.
+```
+client_saved_payment_methods (proposed new table)
+  id UUID PK
+  client_id UUID FK clients.id ON DELETE CASCADE
+  yookassa_payment_method_id TEXT NOT NULL UNIQUE  -- the token
+  card_last4 TEXT NOT NULL
+  card_expiry_month TEXT NOT NULL
+  card_expiry_year TEXT NOT NULL
+  card_type TEXT  -- "Visa", "Mastercard", etc.
+  title TEXT  -- "Bank card *4821" from YooKassa
+  autopay_enabled BOOLEAN NOT NULL DEFAULT false
+  linked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  unlinked_at TIMESTAMPTZ  -- soft-delete; NULL = active
+  created_at TIMESTAMPTZ (TimestampMixin)
+  updated_at TIMESTAMPTZ (TimestampMixin)
+  UNIQUE (client_id) WHERE unlinked_at IS NULL  -- one active card per client
+```
 
-The new OTP flow for client auth differs from staff auth: instead of looking up a `users` row by email, look up a `clients` row by phone. The `OtpCode` table should store `client_id` (new nullable FK column) alongside the existing nullable `user_id`, with a CHECK constraint ensuring exactly one of `user_id`/`client_id` is non-null per row. Alternatively, add a new `client_otp_codes` table (cleaner isolation, same schema shape). The latter is recommended.
+Alembic migration would be `0052_client_saved_payment_methods.py`.
+
+**"Unbind" semantics (verified from YooKassa docs):** YooKassa does NOT provide a DELETE endpoint for payment methods. "Unbinding" is entirely server-side — set `unlinked_at = now()` on the row. The `yookassa_payment_method_id` token is simply no longer used for future charges. No API call to YooKassa on unbind.
+
+#### 5. New client_portal endpoints
+
+Under `app/modules/client_portal/`:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/client/payment-method` | `GET` | Return linked card (last4, expiry, type, autopay flag) or null |
+| `/client/payment-method` | `DELETE` | Soft-unbind (set unlinked_at); no YooKassa API call |
+| `/client/payment-method/autopay` | `PATCH` | Toggle `autopay_enabled` |
+
+These follow the existing `require_client()` + IDOR-safe discipline. Write endpoints add `verify_client_csrf`. No `Idempotency-Key` required for unbind/toggle (state is idempotent at DB level via UNIQUE partial index).
+
+#### 6. Webhook handler extension
+
+The existing `handle_payment_succeeded` handler in `online_payments` (triggered by `POST /_internal/yookassa/webhook`) needs to be extended: when `payment_method.saved == true` in the payment object fetched from YooKassa, extract `payment_method.id` + card details and write the `client_saved_payment_methods` row. This happens in the same atomic UoW as the existing 8-step succeeded handler — add it as step 9.
+
+**Invariant preserved:** Activation is still LOCKED to the webhook path. The anti-oracle return screen discipline (D-06) is not affected — the card binding happens server-side, not on redirect.
+
+#### 7. Production gating requirement
+
+YooKassa **requires manager activation** before saved payment methods work in production (confirmed in docs). In sandbox it works by default. This is an operator task, not a code task, but it must be noted in the milestone requirements. The flag `linkedCard` in the PWA stays OFF until the operator confirms the feature is enabled in the YooKassa dashboard.
+
+#### 8. No new Python library
+
+The existing httpx-based `YooKassaClient` handles all new calls. The synchronous official `yookassa` Python SDK was deliberately excluded at v1.7 (D-47 / CLAUDE.md constraints). Do not introduce `yookassa` SDK. Do not introduce `aioyookassa` or any community async wrapper.
 
 ---
 
-## 2. Client Session Strategy — Reuse Staff Auth Machinery With Role Isolation
+## Feature (b): Booking Reschedule
 
-**Recommendation: Reuse `issue_tokens` / `rotate_refresh` / `revoke_family` as-is. Distinguish client tokens via a new `Role.CLIENT` value. Do NOT fork the token machinery or add `aud` claims.**
+### What is genuinely new vs. reuse
 
-### Why Reuse Works
+**Reuse (no new code needed in these areas):**
+- `app/modules/bookings/service.py` — existing `cancel_booking_for_client` and `create_booking_for_client` functions. Reschedule is cancel + re-book under a single transaction.
+- `app/modules/schedule/` — available-slots queries already exist.
+- `app/modules/client_portal/service.py` + `router.py` — existing `cancel_client_booking` and `create_booking_for_client_request` Protocol-slot delegates. Reschedule reuses these delegates.
+- Client CSRF, idempotency, IDOR checks — all inherited from existing patterns.
 
-`encode_access_token` is generic: it puts `{"sub": str(uuid), "role": role.value, "typ": "access", ...}` in the JWT. `decode_access_token` validates signature, expiry, and `typ` — it does not validate `role`. Adding `Role.CLIENT = "client"` to the existing `Role` StrEnum is a one-line change that flows through `AccessTokenClaims.role` correctly.
+**What is genuinely new:**
 
-The existing `can()` function short-circuits to `True` for `OWNER` and does a set-membership check for `RECEPTION` against `OWNER_ONLY`. A `CLIENT` value falls through both branches and is denied all `OWNER_ONLY` pairs — but that is insufficient for staff route protection. Staff routes currently use `require_authenticated()` (which accepts any authenticated user including hypothetical clients) — these need an explicit guard or a separate dependency.
+#### 1. Single new endpoint
 
-### Minimal Stack Delta (Backend)
+```
+POST /client/booking/{booking_id}/reschedule
+Body: { "new_slot_id": UUID }
+```
 
-| What | Where | Notes |
-|------|-------|-------|
-| `Role.CLIENT = "client"` | `app/core/permissions.py` | One line addition to `Role` StrEnum |
-| Update `users` CHECK constraint | Alembic migration | `CHECK ck_users_role IN ('owner', 'reception', 'client')` — OR keep `clients` table separate from `users` and never create `Role.CLIENT` users in the `users` table (preferred) |
-| `CurrentClient` Protocol | `app/core/dependencies.py` | Parallel to `CurrentUser`; has `id: UUID`, `phone: str` |
-| `require_client_authenticated()` | `app/core/dependencies.py` | Decodes access token, asserts `role == Role.CLIENT`, loads `clients` row |
-| `client_refresh_tokens` table | New Alembic migration | Mirror of `refresh_tokens` with FK to `clients.id` instead of `users.id`; same columns |
-| Client auth router | `app/modules/client_auth/router.py` | New module under `app/modules/`; phone OTP request + verify + refresh + logout + `/me` |
-| Client-scoped API router prefix | `app/api.py` or `app/main.py` | All client endpoints under `/api/v1/client/`; import-linter contract extended |
+This is a compound operation: cancel the existing booking + create a new one on the new slot, atomically, within the same DB transaction. The existing `cancel_booking_for_client` and `create_booking_for_client` are already composable within a single session.
 
-### Why NOT Add `aud` JWT Claim
+#### 2. Cancel-window enforcement for reschedule
 
-Adding audience validation requires changing `decode_access_token`'s PyJWT `options` block (currently `{"require": ["sub", "role", "typ", "iat", "exp"]}`). This changes the staff token decode path — a cross-cutting change with regression risk. The `role="client"` discriminator in the `require_client_authenticated()` dependency achieves the same isolation at the FastAPI dependency layer without touching the JWT decode primitives. Defer audience claim to a future security hardening phase.
+Reschedule has the same cancel-window guard as cancel. This is already enforced inside `cancel_booking_for_client` — no new logic needed.
 
-### Staff Route Protection Against Client Tokens
+#### 3. Slot restore during cancel
 
-Staff routes using `require_authenticated()` will currently accept a client-role token (since `require_authenticated` only checks that the token is valid, not the role value). Two options:
+The existing `cancel_booking_for_client` calls `restore_booking_slot` (Protocol slot that flips `trainer_availability_slots.status` from `booked` back to `active`). This runs automatically as part of the cancel step.
 
-1. Add `if current_user.role == Role.CLIENT: raise ForbiddenError("client_not_allowed")` inside `require_authenticated()` — makes the change at the dependency level, affects all staff routes at once.
-2. Use `require_client_authenticated()` exclusively on client routes; never share `require_authenticated()` between staff and client routes.
+#### 4. Audit events
 
-Option 2 is cleaner: separate dependencies, separate routes, no shared path. Recommended.
+Two audit events fire: `booking_cancelled` + `booking_created`. These are already registered in `LOCKED_AUDIT_EVENTS`. No new audit events needed for reschedule.
 
-### Redis Key Namespace
+#### 5. No new notifications needed for v2.2
 
-Client session keys use `client.id` (UUID) as `user_id` in the existing key pattern `cc:idem:{user_id}:...` and refresh-token family pattern. Since `clients.id` is UUIDv4 (different namespace from `users.id`), there is no practical collision — but the design relies on a statistical guarantee, not a structural one. Using `client_refresh_tokens` as a separate table (rather than a nullable `user_id` column on `refresh_tokens`) provides structural isolation. The Redis idempotency key pattern will need a `client:` prefix for client-scoped mutations to prevent cross-principal replay.
+The existing booking lifecycle notifications (`BOOKING_CANCELLED_BY_CLIENT_DM`, `BOOKING_CONFIRMED_DM`) fire as part of cancel and create respectively. No new template needed for v2.2 (a "reschedule" notification template could be added in a later milestone as a UX improvement).
+
+**Conclusion:** Reschedule is entirely reuse of existing patterns. The only new surface is the endpoint route in `client_portal/router.py` plus a thin service function `reschedule_client_booking` that orchestrates the cancel+create sequence.
 
 ---
 
-## 3. PWA Stack Alignment
+## Feature (c): Weekly-Activity Aggregation
 
-### 3a. Workspace Entry
+### What is genuinely new vs. reuse
 
-`pnpm-workspace.yaml` already declares `apps/*`. `apps/client-pwa` is automatically picked up — no `pnpm-workspace.yaml` change needed. Delete `apps/client-pwa/bun.lock` and run `pnpm install` from the monorepo root.
+**Reuse:**
+- `app/modules/visits` — `visits` table with `gym_date` STORED GENERATED column (already Europe/Moscow). `client_id` FK allows per-client filter.
+- `app/modules/pt_sessions` — `pt_sessions` table with `performed_at` TIMESTAMPTZ + `client_id` FK. No `duration_minutes` column exists on pt_sessions (confirmed by reading the ORM directly).
+- `app/modules/schedule` — `trainer_availability_slots` has `start_time` + `end_time` (both TIMESTAMPTZ). Slot duration = `EXTRACT(EPOCH FROM (end_time - start_time)) / 60` in minutes. `pt_sessions.booking_id` → `bookings.slot_id` → slot start/end times.
+- `app/modules/client_portal/repository.py` — raw-SQL `text()` cross-module reads already established by D-20-MODULE.
+- `app/modules/reports/` — weekly/daily SQL aggregate patterns already exist in `visits` report.
 
-### 3b. Bun.lock Removal
+**What is genuinely new:**
 
-Delete `apps/client-pwa/bun.lock`. There is no automated bun→pnpm migration tool. `package.json` is the source of truth; the lockfile is regenerated by pnpm from scratch. All declared dependencies (`react@18.3.1`, `react-router-dom@6.26.2`, `@vitejs/plugin-react@4.3.1`, `vite@5.4.8`) resolve correctly under pnpm.
+#### 1. New endpoint
 
-### 3c. React 18 and React 19 Coexistence
+```
+GET /client/activity/weekly
+Response: { days: [ { date: "2026-06-03", workouts: 1, minutes: 60 }, ... ] }
+```
 
-`apps/admin-web` uses `react@^19.2.5`; `apps/client-pwa` uses `react@18.3.1`. pnpm resolves each app's dependencies from its own `package.json` — the two apps get separate React instances through pnpm's symlink tree. This is standard pnpm workspace behavior.
+Always returns exactly 7 entries (rolling last 7 days in Europe/Moscow). If a day has no activity, `workouts: 0, minutes: 0`.
 
-Potential `@types/react` conflict: if any shared package's devDeps leak `@types/react` into the workspace root node_modules, TypeScript may resolve the wrong version. The `@clubcore/api-client` package has no React imports or `@types/react` devDependency, so no real conflict exists in this project. If LSP confusion appears, add to `apps/client-pwa/tsconfig.json`:
+#### 2. Minutes calculation
 
+Visit rows (reception/QR check-in) do NOT have a duration — they are a check-in timestamp only. PT sessions have `performed_at` but no `duration_minutes` column. Options:
+- **Option A:** Count visits as a fixed `VISIT_DURATION_MINUTES = 60` constant (configurable per environment). This is defensible: a membership check-in represents one gym session, duration approximated.
+- **Option B:** Join PT sessions via `pt_sessions.booking_id → bookings.slot_id → slots.end_time - slots.start_time`. Only works for PT sessions with a booking; walk-in PT sessions and standard visits have no slot link.
+
+**Recommended:** Aggregate separately — PT sessions get slot-derived minutes (via `booking_id → slot` join, fallback to constant when `booking_id IS NULL`), gym visits get a server-configured constant (e.g. `60` minutes). Sum both per day.
+
+SQL pattern (raw `text()`, follows D-20-MODULE raw-SQL cross-module discipline):
+
+```sql
+-- Gym visits: fixed duration constant
+SELECT
+  v.gym_date AS activity_date,
+  COUNT(*) AS workout_count,
+  COUNT(*) * :visit_minutes AS total_minutes
+FROM visits v
+WHERE v.client_id = :client_id
+  AND v.gym_date >= :week_start
+  AND v.gym_date <= :week_end
+GROUP BY v.gym_date
+
+UNION ALL
+
+-- PT sessions: slot-derived duration (booking_id -> slot), fallback to constant
+SELECT
+  (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date AS activity_date,
+  COUNT(*) AS workout_count,
+  COALESCE(SUM(
+    CASE
+      WHEN s.id IS NOT NULL
+        THEN EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60
+      ELSE :pt_session_fallback_minutes
+    END
+  ), 0)::int AS total_minutes
+FROM pt_sessions ps
+LEFT JOIN bookings b ON b.id = ps.booking_id
+LEFT JOIN trainer_availability_slots s ON s.id = b.slot_id
+WHERE ps.client_id = :client_id
+  AND ps.cancelled_at IS NULL
+  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date >= :week_start
+  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date <= :week_end
+GROUP BY activity_date
+```
+
+Then merge by date in Python and fill zeros for days without activity.
+
+#### 3. No new migration needed
+
+`visits`, `pt_sessions`, `bookings`, `trainer_availability_slots` are all existing tables with adequate columns. The query reads from existing indexes: `ix_visits_client_id_checked_in_at` (efficient for client_id filter on 7-day window), `ix_pt_sessions_pt_package_id_performed_at_desc` (suboptimal — not indexed on client_id — but the 7-day window is always small enough that a table scan on the client's own rows is acceptable).
+
+An optional minor improvement: add `ix_pt_sessions_client_id_performed_at` index in migration 0052 or a dedicated `0053`. This is very unlikely to matter for 7 days of data for one client.
+
+---
+
+## Stack Change Summary Table
+
+| Area | Change Type | What Changes | New Dependency? |
+|---|---|---|---|
+| `app/integrations/yookassa/types.py` | **New dataclass** | Add `YooKassaPaymentMethodResult` frozen dataclass | No |
+| `app/integrations/yookassa/client.py` | **Extend** | Add `get_payment_method(...)` method; extend `create_payment(...)` with `save_payment_method: bool` + `payment_method_id: str | None` params | No |
+| `alembic/versions/0052_*` | **New migration** | `client_saved_payment_methods` table | No |
+| `app/modules/client_portal/` | **Extend** | New ORM class, 4 new endpoints, 3 new service functions, new schemas, repository queries | No |
+| `app/modules/online_payments/service.py` | **Extend** | Step 9 in `handle_payment_succeeded`: persist `payment_method` data when `saved == true` | No |
+| `apps/client-pwa` | **Extend** | Wire `CardSheet` to real endpoints; wire `weeklyActivity` to `GET /client/activity/weekly`; wire `BookingManageSheet` reschedule to `POST /client/booking/{id}/reschedule` | No |
+| `openapi.json` + `schema.d.ts` | **Regen** | New paths added; drift gate runs | No |
+
+---
+
+## Core Technologies (unchanged — all reuse)
+
+| Technology | Version (existing) | Purpose | Why Still Correct |
+|---|---|---|---|
+| FastAPI | 0.115+ | API framework | No change |
+| SQLAlchemy 2.0 async | 2.0 | ORM + raw SQL | No change |
+| Alembic async | current | Migrations | One new migration `0052` |
+| Pydantic v2 | v2 | Schemas | New frozen dataclasses + response models |
+| httpx | current | YooKassa HTTP client | Extend existing `YooKassaClient` |
+| Postgres 16 | 16 | RDBMS | One new table |
+| Redis 7 | 7 | Session / dedup | No change |
+| ARQ | current | Background tasks | No new tasks for v2.2 |
+| structlog | current | Logging | No change |
+| Python 3.12 + uv | 3.12 | Runtime | No change |
+| React 18 + react-router v6 | as-is | Client PWA | Flag flips + query wiring |
+| `@clubcore/api-client` | current | Typed API client | New paths added via openapi regen |
+
+---
+
+## What NOT to Add
+
+| Avoid | Why | Use Instead |
+|---|---|---|
+| `yookassa` Python SDK | Synchronous SDK was deliberately wrapped out of event loop at v1.7; not async-safe | Existing httpx `YooKassaClient` |
+| `aioyookassa` community lib | Unvetted; the existing adapter already handles the two new endpoints cleanly | Extend `YooKassaClient.get_payment_method` + `create_payment` params |
+| Zero-amount binding flow | Requires `payment_method.active` webhook handler, extra infrastructure, and separate UX flow. Binding during first real payment reuses the existing `payment.succeeded` webhook path exactly. | `save_payment_method: true` on first real checkout |
+| Separate autopay-charges ARQ cron | v2.2 goal is card-on-file display + toggle; actual recurring auto-charges are a separate scope boundary | v2.2 stores token + toggle flag only; autopay execution deferred to v2.3 or later |
+| New report module for activity | activity endpoint belongs in `client_portal/` not `reports/` (it is per-client scoped data, not owner aggregate) | Extend `client_portal/repository.py` with raw-SQL |
+| New `duration_minutes` column on `pt_sessions` | Not needed — slot start/end times are available via `booking_id` join; migration cost exceeds benefit for this feature | SQL `EXTRACT(EPOCH FROM (end_time - start_time)) / 60` join |
+
+---
+
+## YooKassa API Reference (verified 2026-06-03)
+
+### Binding during payment (recommended strategy for v2.2)
+
+Request extension to existing `POST /v3/payments`:
 ```json
 {
-  "compilerOptions": {
-    "paths": {
-      "react": ["./node_modules/@types/react"]
+  "amount": { "value": "2500.00", "currency": "RUB" },
+  "capture": true,
+  "save_payment_method": true,
+  "confirmation": { "type": "redirect", "return_url": "..." },
+  "receipt": { "..." },
+  "description": "..."
+}
+```
+
+On `payment.succeeded` webhook, re-fetch `GET /v3/payments/{id}` (existing discipline — already done). The re-fetched payment object includes:
+```json
+{
+  "payment_method": {
+    "id": "pm_xxxxxx",
+    "type": "bank_card",
+    "saved": true,
+    "card": {
+      "first6": "427631",
+      "last4": "4821",
+      "expiry_month": "09",
+      "expiry_year": "2028",
+      "card_type": "Visa",
+      "issuer_name": "Sberbank"
     }
   }
 }
 ```
 
-React 18→19 upgrade for client-pwa is optional and not required for v2.0. Do not schedule it.
+Store `payment_method.id`, `card.last4`, `card.expiry_month`, `card.expiry_year`, `card.type` in `client_saved_payment_methods`.
 
-### 3d. Vite 5 → Vite 6 Alignment
+### Autopayment request (when auto-charge is triggered in future milestones)
 
-| Package | From | To | Action |
-|---------|------|----|--------|
-| `vite` | `5.4.8` | `^6.x` | Update `apps/client-pwa/package.json` |
-| `@vitejs/plugin-react` | `4.3.1` | `^5.0.0` | Required for Vite 6 — the v4 plugin does not support Vite 6 |
-
-Breaking changes that affect this specific app:
-
-- `commonjsOptions.strictRequires` defaults to `true` (was `'auto'`). React + react-router-dom are ESM; this change is unlikely to cause issues. Monitor build output. If CJS bundle errors appear: `build: { commonjsOptions: { strictRequires: false } }` in `vite.config.ts`.
-- `resolve.conditions` internal defaults changed — no practical impact for a React SPA using ESM modules.
-- The existing `vite.config.js` (`defineConfig` with `@vitejs/plugin-react`, `resolve.alias @/`, `build.target: 'es2020'`, `manualChunks`) requires no other changes for Vite 6.
-- `vite.config.js` is renamed `vite.config.ts` as part of TypeScript migration.
-
-### 3e. TypeScript: Incremental JS→TS Adoption
-
-**Strategy: `allowJs: true` + `strict: false` initially; rename files one folder at a time; tighten later.**
-
-The PWA is approximately 20 source files (4 screen JSX files, hooks, utils, context, services, App). Full manual rename is feasible in one phase with `allowJs: true` as a safety net.
-
-Target `apps/client-pwa/tsconfig.json`:
-
+Same `POST /v3/payments` endpoint, different body — `payment_method_id` replaces `confirmation`:
 ```json
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": false,
-    "allowJs": true,
-    "checkJs": false,
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@clubcore/api-client": ["../../packages/api-client/src/index.ts"]
-    }
-  },
-  "include": ["src", "vite.config.ts"]
+  "amount": { "value": "2500.00", "currency": "RUB" },
+  "capture": true,
+  "payment_method_id": "pm_xxxxxx",
+  "description": "...",
+  "receipt": { "..." }
 }
 ```
 
-Tighten to `strict: true` + remove `allowJs` in a follow-up phase after all `.jsx` → `.tsx` renames are done. Migration order: `utils/` → `hooks/` → `context/` → `components/` → `screens/` → `App.tsx` → `main.tsx`.
+No `confirmation` object needed — no user interaction. Fires standard `payment.succeeded` webhook. Existing webhook handler processes it normally.
 
-Do not use `ts-migrate` (Airbnb's tool) — the codebase is small enough for manual rename. The tool adds `@ts-ignore` comments liberally, which obscures type errors rather than resolving them.
+### GET /v3/payment_methods/{id}
 
-### 3f. Wiring `@clubcore/api-client` in a react-router-dom App
+Read a saved payment method. Useful for `GET /client/payment-method` as a freshness check or when local table data is stale. Returns the `status: "active" | "inactive"` field.
 
-`fetcher.ts` is framework-agnostic (D-A2 states explicitly: "NO router/window/redirect logic here"). It uses native `fetch` with `credentials: 'include'`. It can be imported from react-router-dom apps directly.
+### Webhook event set — no changes needed for v2.2
 
-**Required change to shared `fetcher.ts`:** The `AUTH_EXEMPT_PATHS` constant must include client auth endpoints. These are logically equivalent to staff auth endpoints (no refresh attempt on OTP/verify/refresh endpoints):
+| Event | When | Status for v2.2 |
+|---|---|---|
+| `payment.succeeded` | Payment confirmed (including first save-during-payment) | Already handled — extend to extract `payment_method` sub-object when `saved == true` |
+| `payment.canceled` | Payment canceled | Already handled |
+| `refund.succeeded` | Refund processed | Already handled |
+| `payment_method.active` | Zero-amount binding only | Not needed for v2.2 |
 
-```typescript
-// Add to AUTH_EXEMPT_PATHS in packages/api-client/src/fetcher.ts:
-'/api/v1/client/auth/otp/request',
-'/api/v1/client/auth/verify',
-'/api/v1/client/auth/refresh',
-'/api/v1/client/auth/logout',
-'/api/v1/client/me',
-```
+The existing `YooKassaWebhookEvent.event` Literal does not need `payment_method.active` for v2.2 if save-during-payment strategy is used.
 
-This change affects both admin-web and client-pwa since they share `fetcher.ts`. Admin-web is unaffected (it never calls client paths). The change is additive and safe.
+### Production activation (operator prerequisite)
 
-**Usage in react-router-dom v6 component (simplest pattern):**
-
-```typescript
-import { request, ApiError } from '@clubcore/api-client'
-
-// In a hook or component:
-const data = await request('GET', '/api/v1/client/me')
-```
-
-**Usage in react-router-dom v6.4+ loader (data API):**
-
-```typescript
-import { request, ApiError } from '@clubcore/api-client'
-import { redirect } from 'react-router-dom'
-
-export async function clientMeLoader() {
-  try {
-    return await request('GET', '/api/v1/client/me')
-  } catch (err) {
-    if (err instanceof ApiError && err.code === 'session_expired') {
-      return redirect('/login')
-    }
-    throw err
-  }
-}
-```
-
-No TanStack Query is needed for the client-pwa data layer in v2.0. React-router-dom's data API loaders or simple `useEffect`-based fetching are sufficient. TanStack Query can be added later if caching/prefetching becomes a priority.
-
-### 3g. OpenAPI Codegen: Single Spec, Additive Client Paths
-
-**Keep one `openapi.json`, one `schema.d.ts`.** Client-facing paths (`/api/v1/client/...`) are added to the same FastAPI app with a `tags=["Client"]` group. The existing `@clubcore/api-client` codegen script (`openapi-typescript ../../apps/backend/openapi.json --output src/schema.d.ts`) continues to work unchanged. The generated `schema.d.ts` grows to include client path types alongside staff path types.
-
-The existing drift gate (`git diff --exit-code apps/backend/openapi.json packages/api-client/src/schema.d.ts`) and `AssertNonNever` guards continue to work. New `AssertNonNever` entries for client paths are added per-phase per the established milestone discipline.
-
-The existing `redocly.yaml` (which lints the staff-only spec) will lint client paths automatically since they are in the same file — no `redocly.yaml` changes required.
-
-**Do not split into two OpenAPI specs.** The redocly.yaml multi-schema (`x-openapi-ts.output`) approach is available in `openapi-typescript@^7.13.0` but adds codegen complexity with no benefit for a single-backend project.
+"Autopayments work only in test shop by default. Contact your YooKassa manager to enable saved payment methods for bank cards, SberPay, T-Pay, СБП and YooMoney wallet." This is an operator-side task. The `linkedCard` PWA flag should stay OFF until the operator confirms the feature is live in the YooKassa dashboard.
 
 ---
 
-## 4. PWA Testing Tooling Alignment
+## Confidence Assessment
 
-**Add Vitest + jsdom + React Testing Library to `apps/client-pwa`, matching the admin-web pattern.**
-
-| Tool | Version | Why |
-|------|---------|-----|
-| `vitest` | `~2.1.8` | Match workspace version (admin-web pinned to `~2.1.8`) |
-| `jsdom` | `~25.0.1` | Match admin-web |
-| `@testing-library/react` | `^16.x` | React 18 compatible; co-located test pattern |
-| `@testing-library/jest-dom` | `^6.x` | Matchers |
-
-`vitest.config.ts` for client-pwa:
-
-```typescript
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
-  },
-})
-```
-
-Tests co-located as `*.test.ts(x)` siblings (matches admin-web convention).
-
-Do not add Playwright or Cypress for v2.0. E2E testing is not in the existing stack.
-
----
-
-## Recommended Stack Additions — Consolidated
-
-### Backend (new for v2.0)
-
-| Technology | Version | Purpose | Notes |
-|------------|---------|---------|-------|
-| `app/integrations/telegram_gateway/` | (custom code) | Telegram Gateway OTP delivery | `httpx.AsyncClient` adapter; no new pip dep |
-| `TELEGRAM_GATEWAY_TOKEN` env var | config only | Gateway API authentication | Add to `app/core/config.py` as `SecretStr` with placeholder default |
-| `Role.CLIENT = "client"` | Python StrEnum | Client principal discriminator | One-line addition to `app/core/permissions.py` |
-| `CurrentClient` Protocol | `app/core/dependencies.py` | Typed client identity for dependencies | Parallel to `CurrentUser` |
-| `require_client_authenticated()` | `app/core/dependencies.py` | Client-only dependency factory | Asserts `role == CLIENT`; no shared path with staff |
-| `client_refresh_tokens` table | Alembic migration | Client session token storage | FK to `clients.id`; mirrors `refresh_tokens` structure |
-| `client_otp_codes` table (or add `client_id` FK) | Alembic migration | Client OTP storage, phone-anchored | Prefer separate table for clean isolation |
-| `app/modules/client_auth/` | FastAPI router | Phone OTP request + verify + refresh + logout + `/me` | New module under `app/modules/` |
-| `app/modules/client_*/` | FastAPI routers | Client-scoped domain endpoints (memberships, bookings, etc.) | New modules; all under `/api/v1/client/` prefix |
-
-### Frontend (new for `apps/client-pwa`)
-
-| Technology | Version | Purpose | Notes |
-|------------|---------|---------|-------|
-| `typescript` | `~5.7.2` | Type safety | Match workspace version |
-| `vite` | `^6.x` | Build tool | Align with admin-web |
-| `@vitejs/plugin-react` | `^5.0.0` | Vite 6 compatibility | Required with Vite 6 |
-| `@clubcore/api-client` | `workspace:*` | Typed transport | Add to `dependencies` in package.json |
-| `vitest` | `~2.1.8` | Testing | Match admin-web |
-| `jsdom` | `~25.0.1` | Test DOM | Match admin-web |
-| `@testing-library/react` | `^16.x` | Component testing | React 18 compatible |
-| `@testing-library/jest-dom` | `^6.x` | Test matchers | Standard with Testing Library |
-
-### What NOT to Add or Change
-
-| Do NOT add/change | Reason |
-|-------------------|--------|
-| TanStack Router | User decision: react-router-dom v6 stays. Not migrating. |
-| TanStack Query | Not required for v2.0; react-router-dom loaders or `useEffect` suffice. Add later if needed. |
-| React 18→19 upgrade in client-pwa | Optional; no architectural blocker; defer. |
-| SMS provider (`smsaero-api`, SMSC.ru) | Defer to SMS fallback phase; Telegram Gateway covers v1. |
-| Twilio | Non-starter in RF/CIS; unreliable Russian SMS termination since 2022. |
-| `telegram-gateway` PyPI package | Use custom `httpx` adapter instead; fewer deps; follows project integration discipline. |
-| `aud` JWT claim | Not needed; `role="client"` discriminator in `require_client_authenticated()` is sufficient. |
-| Two OpenAPI specs or two `schema.d.ts` files | Unnecessary complexity; one backend, one spec, additive client paths. |
-| `@hey-api/openapi-ts` | Different package from `openapi-typescript`; incompatible model; do not introduce. |
-| `ts-migrate` | Codebase is small; manual file rename is correct approach. |
-| Playwright / Cypress | Not in existing stack; adds infra overhead; defer. |
-| Pre-commit hooks | Not in existing stack; CI gates are the enforcement layer. |
-| Kubernetes / production deploy | Out of scope per PROJECT.md. |
-
----
-
-## Installation Commands
-
-```bash
-# Step 1: Remove bun lockfile and let pnpm take over
-rm apps/client-pwa/bun.lock
-
-# Step 2: From monorepo root — installs all workspace members
-pnpm install
-
-# Step 3: Update client-pwa for Vite 6 + TypeScript + testing
-pnpm --filter gym-app add -D \
-  typescript@~5.7.2 \
-  vite@^6 \
-  @vitejs/plugin-react@^5.0.0 \
-  vitest@~2.1.8 \
-  jsdom@~25.0.1 \
-  "@testing-library/react@^16" \
-  "@testing-library/jest-dom@^6"
-
-# Step 4: Add @clubcore/api-client as a workspace dependency
-# In apps/client-pwa/package.json, add to "dependencies":
-# "@clubcore/api-client": "workspace:*"
-# Then:
-pnpm install
-
-# Step 5: Backend — no new pip packages for v2.0 client auth
-# (httpx already installed; Telegram Gateway adapter is custom code)
-# The only config addition is TELEGRAM_GATEWAY_TOKEN in .env
-
-# Deferred — NOT in v2.0:
-# uv add smsaero-api
-```
-
----
-
-## Version Compatibility
-
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `vite@^6` | `@vitejs/plugin-react@^5.0.0` | v4 plugin does not support Vite 6; upgrade together |
-| `react@18.3.1` | `@testing-library/react@^16.x` | RTL 16 supports React 18 |
-| `react@18.3.1` | `react-router-dom@6.26.2` | No change; RRD v6 works on React 18 |
-| `react@18.3.1` (client-pwa) | `react@^19.2.5` (admin-web) | pnpm resolves per-workspace; no conflict |
-| `openapi-typescript@^7.13.0` | Additive client paths in `schema.d.ts` | No version change; codegen script unchanged |
-| `typescript@~5.7.2` | `allowJs: true` | Standard TS feature; enables gradual migration |
+| Area | Confidence | Basis |
+|---|---|---|
+| YooKassa `save_payment_method` field and `payment_method` sub-object in payment response | HIGH | Official yookassa.ru developer docs, multiple pages cross-checked |
+| `payment_method_id` request field for autopayments, no `confirmation` needed | HIGH | Official docs on autopayments with saved method |
+| No DELETE endpoint for payment methods on YooKassa side | HIGH | Official docs explicitly state this: "YooMoney cannot delete a saved payment method — only on your side" |
+| `payment_method.active` webhook only fires for zero-amount binding | HIGH | Official webhooks documentation |
+| Reschedule is pure cancel+create reuse with no new infrastructure | HIGH | Codebase read of `cancel_booking_for_client` + `create_booking_for_client` — composable within a single session |
+| No `duration_minutes` column on `pt_sessions` | HIGH | Direct ORM read of `app/modules/pt_sessions/models.py` |
+| Slot duration derivable from `start_time`/`end_time` | HIGH | Direct ORM read of `app/modules/schedule/models.py` |
+| Production YooKassa manager-activation requirement | HIGH | Official docs on autopayment basics |
+| Last Alembic migration is 0051, next is 0052 | HIGH | Direct directory listing of `alembic/versions/` |
 
 ---
 
 ## Sources
 
-- `apps/client-pwa/package.json` — React 18.3.1, Vite 5.4.8, react-router-dom 6.26.2, bun.lock present
-- `apps/client-pwa/vite.config.js` — current config: react plugin, alias `@/`, port 5173, es2020 target
-- `apps/client-pwa/src/main.jsx` — BrowserRouter, TweaksProvider, UIContext, plain JSX entry point
-- `packages/api-client/src/fetcher.ts` — confirmed D-A2 framework-agnostic, `AUTH_EXEMPT_PATHS` hardcoded list, `credentials: 'include'`
-- `packages/api-client/src/index.ts` — public surface: `request`, `ApiError`, `paths`, `components`
-- `packages/api-client/package.json` — `openapi-typescript@^7.13.0` codegen script
-- `apps/backend/app/modules/auth/router.py` — confirmed OTP channel infrastructure and discriminator
-- `apps/backend/app/modules/auth/models.py` — confirmed `OtpChannel = Literal["telegram", "email"]`
-- `apps/backend/app/core/permissions.py` — confirmed `Role` StrEnum with only `OWNER` / `RECEPTION`
-- `apps/backend/app/core/security.py` — confirmed `AccessTokenClaims` shape: `sub, role, typ, iat, exp`
-- `apps/backend/app/core/dependencies.py` — confirmed `CurrentUser` Protocol, `require_authenticated()` factory structure
-- `apps/backend/app/modules/clients/models.py` — confirmed `clients.phone` column + partial unique index
-- `apps/backend/app/core/config.py` — confirmed `otp_code_ttl_seconds`, `otp_max_attempts`, placeholder-default discipline pattern
-- `pnpm-workspace.yaml` — confirmed `apps/*` glob; client-pwa auto-included
-- [Telegram Gateway API](https://core.telegram.org/gateway) — HIGH confidence: $0.01/code; `checkSendAbility` free for unreachable numbers; REST HTTP API; 4 methods
-- [smsaero-api on PyPI](https://pypi.org/project/smsaero-api/) — HIGH confidence: v3.2.0 (2026-04-01), sync-only, email+apikey auth
-- [SMSC.ru API](https://smsc.ru/api/) — MEDIUM confidence: HTTP GET/POST + JSON (fmt=3), no official Python SDK
-- [Vite 5→6 migration guide](https://v6.vite.dev/guide/migration) — HIGH confidence: `@vitejs/plugin-react@^5` required; React SPAs upgrade smoothly; `strictRequires` change documented
-- [openapi-typescript CLI](https://openapi-ts.dev/cli) — HIGH confidence: single-spec approach is standard; multi-schema via `redocly.yaml` available but not needed here
-- [TypeScript JS→TS migration handbook](https://www.typescriptlang.org/docs/handbook/migrating-from-javascript.html) — HIGH confidence: `allowJs: true`, incremental file rename
-- pnpm workspace React version coexistence — MEDIUM confidence (community + docs): per-workspace isolation; `paths` tsconfig override for `@types/react` if needed
-- [Vitest + jsdom + React Testing Library setup](https://dev.to/pacheco/configure-vitest-with-react-testing-library-5cbb) — HIGH confidence: standard pattern, matches admin-web config
+- [YooKassa: Binding during payment](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/save-payment-method/save-during-payment) — `save_payment_method`, payment_method response fields
+- [YooKassa: Autopayments with saved method](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/pay-with-saved) — `payment_method_id` request field, no confirmation object
+- [YooKassa: Autopayment basics](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/basics) — production manager-activation requirement
+- [YooKassa: Zero-amount binding](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/save-payment-method/save-without-payment) — `POST /v3/payment_methods`, `payment_method.active` event, status field values
+- [YooKassa: Webhooks](https://yookassa.ru/developers/using-api/webhooks) — full event list including `payment_method.active`
+- Codebase: `/apps/backend/app/integrations/yookassa/client.py` — confirmed raw httpx adapter, no SDK
+- Codebase: `/apps/backend/app/integrations/yookassa/types.py` — existing boundary types, `YooKassaWebhookEvent.event` Literal
+- Codebase: `/apps/backend/app/modules/online_payments/models.py` — `OnlinePayment` ORM, no saved-method columns
+- Codebase: `/apps/backend/app/modules/bookings/service.py` — `cancel_booking_for_client`, `create_booking_for_client` confirmed composable
+- Codebase: `/apps/backend/app/modules/schedule/models.py` — `start_time`/`end_time` TIMESTAMPTZ confirmed on `trainer_availability_slots`
+- Codebase: `/apps/backend/app/modules/pt_sessions/models.py` — no `duration_minutes` column confirmed
+- Codebase: `/apps/backend/alembic/versions/` — last migration is `0051_seed_fit15_promo.py`
+- Codebase: `/apps/client-pwa/src/screens/sheets/ProfileExtraSheets.jsx` — CardSheet mock confirmed, `linkedCard`/`weeklyActivity` flag locations
 
 ---
-
-*Stack research for: clubcore v2.0 Client PWA + Client-facing backend API*
-*Researched: 2026-05-29*
+*Stack research for: clubcore v2.2 Membership self-service depth*
+*Researched: 2026-06-03*

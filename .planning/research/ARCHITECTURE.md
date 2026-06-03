@@ -1,448 +1,498 @@
-# Architecture Patterns: v2.0 Client Portal Integration
+# Architecture Research: v2.2 Membership Self-Service Depth
 
-**Domain:** Client-facing API + PWA layered over an existing FastAPI modular monolith gym CRM
-**Researched:** 2026-05-29
-**Confidence:** HIGH — based on direct code inspection of all relevant source files
+**Domain:** Backend integration — modular monolith FastAPI + client PWA
+**Researched:** 2026-06-03
+**Confidence:** HIGH (all findings from live codebase inspection + YooKassa official docs)
 
 ---
 
-## Recommended Architecture
+## Established Architecture Constraints (DO NOT RE-RESEARCH)
 
-### Decision 1: Where Client Endpoints Live
+The following are locked decisions from v2.0–v2.1 and must be respected:
 
-**Recommendation: A new `app/modules/client_portal/` aggregator module exposing client-scoped views.**
+- **Modular monolith** `app/modules/<domain>/` with `import-linter` enforcing: `modules independent`, `core ⊥ modules`, `integrations ⊥ modules`.
+- **client_portal writes** go through Protocol-slot accessors in `app.core.dependencies` only — NO direct `from app.modules.bookings` / `app.modules.memberships` in `client_portal/`. Evidenced by: `cancel_booking_for_client`, `create_booking_for_client`, `create_visit_client_qr`, `invoke_client_checkout_core` slots.
+- **client_portal reads** use raw SQL `text()` cross-module SELECTs in `client_portal/repository.py` (D-54-08 precedent from reports), no ORM imports of foreign models.
+- **IDOR**: every owned-resource endpoint derives `client_id` from `require_client()` principal only, never from path/query/body. 404-collapse on non-owned resources (anti-oracle).
+- **Webhook-locked activation**: membership activation is LOCKED to `payment.succeeded` webhook — redirect-back screen shows only an anti-oracle "ожидаем подтверждение" message.
+- **SVC001** commit-gate: public mutating orchestrators commit their own UoW; `client_portal` router calls `await session.commit()` explicitly for write paths.
+- **Audit events**: all new events must be pre-registered in `LOCKED_AUDIT_EVENTS` frozenset BEFORE any callsite (INFRA-15 discipline).
+- **Money**: integer kopecks throughout; server-authoritative pricing (D-06).
+- **TZ**: Europe/Moscow for all user-facing dates; UTC for idempotency keys and wire-protocol invariants.
+- **Last migration**: `0051_seed_fit15_promo.py`. Next migration is `0052_*`.
 
-Do NOT add client-scoped routes inside each existing domain module. Do NOT use a standalone FastAPI app.
+---
 
-**Rationale:**
+## Feature A: Card-on-File + Autopay
 
-The `modules-independent` importlinter contract already has precedent for a read-only cross-module aggregator: `app/modules/reports/` uses raw-SQL `text()` reads across `payments`, `memberships`, `clients`, and `visits` tables with zero new `ignore_imports` edges (D-54-08). The `client_portal` module follows the same pattern for its read side.
+### A.1 YooKassa Saved-Method API (HIGH confidence — official docs verified)
 
-For writes (booking creation, checkout initiation), the client_portal router delegates to existing domain services through the composition-root Protocol slot pattern already established for cross-module callbacks (`PaymentRecorder`, `BookingCompleter`, `ActiveMembershipResolver`, etc.). No new importlinter edges are needed for the slot-mediated path.
-
-The URL space is a separate prefix: `/api/v1/client/*`. This is mounted as a new top-level entry in `app/api/v1/router.py` alongside existing staff routers. The frozen staff paths (`/api/v1/memberships`, `/api/v1/bookings`, etc.) are untouched.
-
-**New `app/modules/client_portal/` structure:**
+YooKassa supports saving payment methods during a regular redirect checkout by including `save_payment_method: true` in the payment create body. After `payment.succeeded`, the `payment_method` object in the webhook payload contains:
 
 ```
-app/modules/client_portal/
-  __init__.py
-  router.py          # FastAPI APIRouter(tags=["Client-Portal"])
-  service.py         # thin orchestration: calls domain services via Protocol slots
-  repository.py      # raw-SQL text() reads (D-54-08 discipline for reads)
-  schemas.py         # client-facing response/request shapes (no staff schemas reused)
-  permissions.py     # require_client() dependency + ownership guard
-  auth_router.py     # /client/auth/* (phone+OTP, refresh, logout, /me)
-  auth_service.py    # client-specific OTP logic wrapping existing OTP infrastructure
-  constants.py
+payment_method.id       — the saved method token (opaque string)
+payment_method.type     — "bank_card"
+payment_method.saved    — true
+payment_method.title    — display string e.g. "Карта *4821"
+payment_method.card.last4
+payment_method.card.expiry_month / expiry_year
+payment_method.card.card_type  — Visa / MasterCard / Mir / etc.
 ```
 
-**importlinter registration:**
+To charge with a saved method (autopay): `POST /v3/payments` with `payment_method_id: <token>`, `capture: true`, `amount`, `description`. **No user confirmation required** — this is a server-initiated charge.
 
-Add `app.modules.client_portal` to the `modules-independent` contract. Its read side uses raw SQL (zero `ignore_imports`). Its write side uses Protocol slots defined in `app.core.dependencies` (zero `ignore_imports`). The only needed `ignore_imports` edges are for narrow service-layer needs analogous to existing exceptions (e.g. `client_portal.auth_service -> app.modules.clients.models` for the phone lookup, `client_portal.auth_service -> app.modules.auth.models` for OtpCode, parallel to existing `online_payments.service -> clients.models`).
+Webhook events for autopay are the same as regular payments: `payment.succeeded` / `payment.canceled`. The activation discipline (webhook-locked, anti-oracle return screen) applies identically.
+
+YooKassa does NOT provide a DELETE endpoint for saved payment methods. "Unbind" means deleting the token from your own storage and stop using it. No API call to YooKassa is required for unbind.
+
+**Card type saving**: only `bank_card`, `yoo_money`, `sber_pay`, `t_pay`, `mir_pay`, `sbp` support saving. The PWA currently uses redirect checkout which supports all these.
+
+### A.2 New Table: `client_payment_methods`
+
+A new `client_payment_methods` table is needed to persist the token server-side. It does NOT belong in `online_payments` (that table is a per-payment ledger row, append-only, containing `yookassa_payment_id` — a different concept). It also should NOT be a column on `clients` — a client could have multiple saved methods in future, and token storage is a separate concern from identity.
+
+**Owner**: new `app/modules/payment_methods/` module (greenfield). Justified because:
+- The token is a durable client-owned credential, not a per-payment artifact.
+- `client_portal` reads and writes it via Protocol-slot (D-20-MODULE).
+- `online_payments` references it at autopay-charge time via raw SQL (same as plan-price reads with `text()` — no ORM import needed).
+- `import-linter`: add `app.modules.payment_methods` to the independence contract.
+
+**Schema** (Alembic `0052_client_payment_methods.py`):
+
+```
+client_payment_methods
+  id                UUID PK
+  client_id         UUID FK → clients.id ON DELETE RESTRICT NOT NULL
+  yookassa_method_id TEXT NOT NULL   — the token from payment_method.id
+  method_type       TEXT NOT NULL    — 'bank_card', 'yoo_money', etc.
+  card_last4        VARCHAR(4) NULL  — only for bank_card
+  card_expiry_month SMALLINT NULL
+  card_expiry_year  SMALLINT NULL
+  card_brand        TEXT NULL        — 'Visa', 'MasterCard', 'Mir', etc.
+  display_title     TEXT NOT NULL    — payment_method.title from YooKassa
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE
+  autopay_enabled   BOOLEAN NOT NULL DEFAULT FALSE
+  created_at        TIMESTAMPTZ server_default now()
+  updated_at        TIMESTAMPTZ
+  UNIQUE (client_id, yookassa_method_id)  — prevents double-save same token
+  INDEX (client_id) WHERE is_active=TRUE
+```
+
+**Why `is_active` not soft-delete mixin**: Tokens don't expire at DB layer. `is_active=FALSE` is an explicit unbind (client request or method expired). The `SoftDeleteMixin` pattern (timestamp-based) would add `deleted_at` semantics, which is overkill here and inconsistent with how the existing payment tables track lifecycle.
+
+### A.3 Save Flow — Modification to Checkout
+
+The save-during-payment path modifies the existing `POST /client/checkout/memberships/{plan_id}` handler. The client sends an optional `save_payment_method: bool` field in the checkout body (`ClientCheckoutRequest`). When `true`:
+
+1. `online_payments.service._sell_subject_core` includes `save_payment_method: true` in the YooKassa payment create body (new optional parameter to `YooKassaClient.create_payment`).
+2. On `payment.succeeded` webhook, the handler reads `payment_method.saved=true` and `payment_method.id` from the webhook payload.
+3. The webhook handler upserts a `client_payment_methods` row via raw SQL inside the same `handle_payment_succeeded` 8-step atomic UoW.
+
+**Critical invariant preserved**: membership activation is still webhook-locked. The method-save is a side-effect inside the same webhook UoW — the same `handle_payment_succeeded` 8-step atomic UoW gains a step 8.5: if `payload.payment_method.saved==true`, raw SQL upsert `client_payment_methods` within the same session before commit. This keeps it atomic.
+
+The `online_payments` row should record `save_payment_method_requested: bool` (a new column on `online_payments`) so the webhook handler knows whether to look for a saved method — but this adds migration complexity. A simpler alternative: always check `payload.payment_method.saved` in the webhook handler and upsert if true, regardless of whether the checkout requested it. YooKassa only sets `saved=true` when explicitly requested, so there's no over-upsert risk.
+
+### A.4 Autopay Flow — New ARQ Cron
+
+Autopay requires a new cron job: `charge_expiring_autopay` that runs once per day (suggested 06:30 MSK, after `expire_memberships` at 06:05 and `send_expiring_notifications` at 06:15).
+
+**Logic**:
+1. SELECT clients with `autopay_enabled=TRUE` on their `client_payment_methods` (is_active=TRUE), whose membership `end_date = today + N` (e.g. N=1 — charge 1 day before expiry).
+2. For each client, call `online_payments.service._sell_subject_core` with `payment_method_id=<token>` (not `save_payment_method=true` — that's only for binding).
+3. YooKassa accepts `payment_method_id` in the create-payment body — no `confirmation` object needed (no user redirect; server-initiated).
+4. Wait for `payment.succeeded` webhook — which triggers the normal `handle_payment_succeeded` 8-step UoW that activates the membership.
+
+**Webhook-locked activation preserved**: the autopay charge is just another `POST /v3/payments`. Activation still happens exclusively on `payment.succeeded` webhook — identical discipline to manual checkout.
+
+**Idempotency**: cron idempotency key = `sha256("autopay:{client_id}:{membership_id}:{today_utc}")`. If the cron fires twice or the worker restarts, the idempotency key prevents double-charge.
+
+**Failure handling**: if the charge fails (`payment.canceled` or `transient_error`), the membership expires normally — the `expire_memberships` cron picks it up. Optionally: send a Telegram/email DM "автоплатёж не прошёл". No retry within the same day (too complex for v2.2 scope).
+
+### A.5 Import-Linter: Where Does the Token-Save Live?
+
+Two options for webhook token-save:
+
+**Option A (preferred for webhook)**: `online_payments.service` (specifically the webhook handler) saves the token using raw SQL `INSERT INTO client_payment_methods ... ON CONFLICT DO UPDATE` inside the webhook UoW. This mirrors the D-49-03 / D-54-08 discipline: cross-module writes done via raw `text()` SQL, no ORM import needed. Zero new `ignore_imports` entries required.
+
+**Option B**: Protocol-slot `SavePaymentMethodSlot` registered in `app.core.dependencies`, pointing to `payment_methods.service.save_method`. `online_payments` calls the slot. Cleaner architecturally, but adds composition-root plumbing for a simple INSERT.
+
+**Recommendation**: Option A for the save-in-webhook path (pure raw SQL, zero new edges). For the autopay cron and `client_portal` endpoint writes, go through Protocol-slots (Option B pattern) since the cron and portal need richer business logic.
+
+### A.6 Client-Portal Endpoints (New)
+
+All under `/api/v1/client/` gated by `require_client()`:
+
+| Endpoint | Method | Description | Auth |
+|---|---|---|---|
+| `/client/payment-method` | GET | Return active saved method (last4 + brand + expiry) or null | require_client |
+| `/client/payment-method` | DELETE | Unbind: set `is_active=FALSE`, `autopay_enabled=FALSE` | require_client + verify_client_csrf |
+| `/client/payment-method/autopay` | PATCH | Toggle `autopay_enabled` boolean | require_client + verify_client_csrf |
+
+GET response shape (client-safe, no token exposure):
+```json
+{
+  "id": "<uuid>",
+  "type": "bank_card",
+  "last4": "4821",
+  "brand": "Visa",
+  "expiryMonth": 12,
+  "expiryYear": 2027,
+  "displayTitle": "Карта *4821",
+  "autopayEnabled": true
+}
+```
+
+**IDOR**: `client_id` from `require_client()` only. GET returns 200/null (not 404) when no method exists (D-69-03 precedent).
+
+**Token never exposed to client**: `yookassa_method_id` is never included in any response schema. The client cannot reconstruct the token.
+
+### A.7 Data Flow: Card-on-File
+
+```
+[PWA checkout with save_payment_method=true]
+    ↓
+POST /client/checkout/memberships/{plan_id}
+    ↓
+client_portal/service.client_checkout_membership
+    ↓
+invoke_client_checkout_core (Protocol slot)
+    ↓
+online_payments.service._sell_subject_core
+  → YooKassaClient.create_payment(save_payment_method=True)
+  → INSERT online_payments row (status=pending)
+    ↓
+[User completes payment at YooKassa redirect URL]
+    ↓
+POST /_internal/yookassa/webhook
+  → handle_payment_succeeded (8-step atomic UoW)
+  → step 5: activate membership (existing)
+  → step 8.5: if payment_method.saved: raw SQL upsert client_payment_methods
+    ↓
+GET /client/payment-method → shows "•••• 4821"
+```
+
+```
+[Autopay cron: charge_expiring_autopay 06:30 MSK]
+    ↓
+SELECT clients with autopay_enabled + membership end_date = tomorrow
+    ↓
+For each: online_payments.service._sell_subject_core(payment_method_id=<token>)
+  → no confirmation object (server-initiated)
+  → INSERT online_payments row (status=pending)
+    ↓
+POST /_internal/yookassa/webhook (payment.succeeded)
+  → handle_payment_succeeded: renew membership (same 8-step UoW)
+```
 
 ---
 
-### Decision 2: Client Principal and RBAC
+## Feature B: Booking Reschedule
 
-**Recommendation: A parallel, non-intersecting dependency `require_client` — NOT an extension of `Role`/`permissions.py`.**
+### B.1 Decision: Atomic Move vs. Cancel + Rebook
 
-**Rationale:**
+**Recommendation: atomic move inside the bookings domain.** Rationale:
 
-The existing `Role` StrEnum (`owner`, `reception`) + `OWNER_ONLY` matrix is byte-paritized with the frozen admin-web `can.ts` + `registry.ts`. Adding a `client` role there would require changes to the frozen admin-web or breaking the three-way parity test. Neither is acceptable.
+- Cancel + rebook would require two separate Protocol-slot calls and leave a window where the target slot could be taken between them — a race condition visible at the API level.
+- The bookings domain already has `update_slot_status_predicate_gated` (raw SQL cross-module UPDATE) for slot status flips. Reschedule adds a second flip: `old_slot: booked → active`, `new_slot: active → booked`, both within the same transaction.
+- A single `reschedule_booking` service function can do this atomically: SELECT FOR UPDATE the old booking, restore the old slot, flip the new slot, UPDATE the booking's `slot_id`.
+- This mirrors the `cancel_booking` + `create_booking` discipline but avoids credit deduction (no PT session consumed on reschedule).
 
-Instead, the client principal is entirely separate:
+**Existing cancel_booking** already does: `old_slot: booked → active` (via `restore_booking_slot` Protocol slot). Reschedule is `cancel_booking` steps 1-4 + `create_booking` steps 5-9, atomically in one UoW, without emitting `booking_cancelled` — emitting `booking_rescheduled` instead.
 
-1. **New `ClientPrincipal` Protocol** in `app/core/dependencies.py` (parallel to `CurrentUser`):
-   ```python
-   class ClientPrincipal(Protocol):
-       id: UUID          # Client.id (not User.id)
-       client_id: UUID   # same as id, aliased for clarity at call sites
-   ```
+### B.2 New Audit Events (pre-register before any callsite)
 
-2. **New `require_client()` dependency** in `app/core/dependencies.py` (parallel to `require_permission`/`require_authenticated`). It:
-   - Reads the `cc_client_access` cookie (distinct cookie name — see Decision 3)
-   - Decodes a client-flavored JWT (distinct `aud` claim: `"client"` vs no aud for staff)
-   - Looks up the `Client` row (via a new Protocol slot `register_client_loader`)
-   - Returns a `ClientPrincipal`
-   - Never touches `Role`, `OWNER_ONLY`, or `can()`
+Add to `LOCKED_AUDIT_EVENTS` frozenset:
+- `("booking_rescheduled", "booking")` — payload: `booking_id`, `old_slot_id`, `new_slot_id`, `client_id`
 
-3. **Ownership enforcement** is a function `assert_owns(client_principal, resource_client_id)` used at the service layer — raises `ForbiddenError('client_ownership_violation')` if `client_principal.client_id != resource_client_id`. This is the single chokepoint (see Decision 4).
+### B.3 IDOR + Ownership
 
-**Three-way parity test:** The client principal has NO parity mirror in admin-web because admin-web is staff-only and frozen. The parity test remains unchanged. Client-portal RBAC is its own orthogonal concern, enforced entirely server-side through `require_client` + ownership guards. A new independent test (`test_client_portal_rbac.py`) covers client access patterns separately, never touching the existing parity test.
+The `POST /client/booking/{id}/reschedule` endpoint:
+- `booking_id` from path.
+- `client_id` from `require_client()` only — never from body.
+- Service layer verifies `bookings.client_id == client_id` — 404-collapse on mismatch (anti-oracle, same as cancel).
+- New slot: from `slot_id` in request body (client-supplied). Must be an available active future slot.
+- The client's PT-package trainer-pin check still applies (cannot reschedule to a different trainer if the package pins one).
 
-**Route introspection test (TEST-07):** TEST-07 currently asserts every non-auth route uses `require_permission` or `require_authenticated`. It must be extended to recognize `require_client` as a third valid guard factory. The check is: `__qualname__.startswith('require_client.')`. Without this extension, TEST-07 fails for all client routes.
+### B.4 Cancel-Window Constraint
 
----
+The existing `CANCEL_WINDOW_HOURS_CLIENT = 24h` applies to reschedule too — cannot reschedule within 24h of the original slot's `start_time`. This is enforced by checking the OLD slot's `start_time`, mirroring cancel logic. Error code: `reschedule_window_expired` (409).
 
-### Decision 3: Auth Wiring — Client Login
+### B.5 New Protocol Slot
 
-**Recommendation: New endpoints `/api/v1/client/auth/*` with distinct cookie names and a separate JWT audience claim, fully reusing the refresh-rotation + CSRF machinery.**
-
-**Cookie separation:**
-
-| Cookie | Staff | Client |
-|--------|-------|--------|
-| Access token | `cc_access` | `cc_client_access` |
-| Refresh token | `cc_refresh` | `cc_client_refresh` |
-| CSRF | `clubcore_csrf` | `cc_client_csrf` |
-
-The cookie names are different to prevent cross-principal session confusion. The existing `verify_csrf` in `app/core/dependencies.py` reads `clubcore_csrf` and `X-CSRF-Token`. Client endpoints use a parallel `verify_client_csrf` that reads `cc_client_csrf` and the same `X-CSRF-Token` header (the header name is shared — it is the transport mechanism, not an identifier).
-
-**JWT audience claim:** Client JWTs carry `aud: "client"` claim; staff JWTs carry no `aud`. The `decode_access_token` function in `app/core/security.py` is extended with an optional `audience` parameter (default `None` for staff backward compatibility). A new `decode_client_access_token` wrapper validates `aud == "client"`. This is additive and does not break existing staff token decode paths.
-
-**OTP infrastructure reuse:**
-
-The existing `OtpCode` ORM model (`app/modules/auth/models.py`) already supports an `OtpChannel` discriminator (`"telegram"` | `"email"`). Client phone+OTP login introduces a new OTP purpose distinguishing client login from staff login. The `client_portal/auth_service.py` calls into the existing `OtpCode` insert/verify machinery via the composition root — it does NOT duplicate the code. The narrow `ignore_import` edge `client_portal.auth_service -> app.modules.auth.models` is the only edge needed (mirrors `online_payments.service -> app.modules.clients.models`).
-
-**`register_client_loader` — new composition-root slot:**
-
-A new composition-root slot `register_client_loader` is added to `app/core/dependencies.py`. It is filled in `create_app()` with `clients_service.load_client_by_id`. This is the same pattern as `register_user_loader` (Phase 5 D-15) — the 18th composition-root carve-out. The `get_current_client` dependency reads `cc_client_access`, decodes the client JWT, then calls through `_client_loader` to fetch the `Client` row.
-
-**Refresh rotation:** The client refresh endpoint (`POST /api/v1/client/auth/refresh`) reads `cc_client_refresh` and calls the same refresh-rotation logic. The existing `RefreshToken` table is reused with a new `purpose: Literal["staff", "client"]` column added in a new Alembic migration (with an index on `(token_hash, purpose)`). This is the simplest path: the `rotate_refresh` function accepts a `purpose` parameter. The `revoke_all_sessions` for a staff user filters by `user_id` (users.id) — client tokens store `client_id` (clients.id) in a separate column and are structurally invisible to the staff revocation sweep. Making this explicit with a `purpose` discriminator is the clean approach.
-
-**PUBLIC_ENDPOINT_OPERATION_IDS** in `app/main.py` is extended with the new client auth endpoints (client-login, client-refresh, client-otp-request, etc.) per the existing frozenset-literal pattern (visible in diff, auditable).
-
----
-
-### Decision 4: Data Isolation Enforcement Point
-
-**Recommendation: Service-layer ownership guard (`assert_owns`) called at every client-portal service function, backed by repository-layer `WHERE client_id = :client_id` parameter injection. NOT a middleware or ORM event.**
-
-**Single chokepoint design:**
+Add `reschedule_booking_for_client` to `app.core.dependencies`, wired to `bookings.service.reschedule_booking_for_client` in `app/main.py`. Shape:
 
 ```python
-# app/modules/client_portal/permissions.py
-
-def assert_owns(principal: ClientPrincipal, row_client_id: UUID) -> None:
-    """Raise NotFoundError (not ForbiddenError) if the row does not belong to this client.
-
-    404 collapse is intentional: returning 403 when the row exists but belongs to
-    another client leaks the existence of that row (anti-oracle violation, mirrors
-    bot self-checkin discipline). Only the owning client may know the row exists.
-
-    This is the ONLY place where client data-isolation is enforced for
-    the client portal for get-by-id endpoints. List endpoints enforce isolation
-    via mandatory client_id WHERE clause in the repository function signature.
-    """
-    if row_client_id != principal.client_id:
-        raise NotFoundError("not_found")
+async def reschedule_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    booking_id: UUID,
+    new_slot_id: UUID,
+) -> BookingResponse: ...
 ```
 
-Two patterns enforce isolation:
+The `client_portal/service.py` calls this slot — zero new `ignore_imports` needed (same pattern as `cancel_booking_for_client`).
 
-1. **List endpoints:** The repository function always accepts `client_id: UUID` and injects it as a mandatory WHERE clause parameter. The caller cannot omit it (it is not optional in the function signature). Example:
-   ```python
-   async def get_client_memberships(session: AsyncSession, client_id: UUID) -> list[...]: ...
-   # SQL: WHERE memberships.client_id = :client_id
-   ```
+### B.6 BookingManageSheet Backend — Available Slots Already Exist
 
-2. **Get-by-ID endpoints:** After fetching by primary key, `assert_owns(principal, row.client_id)` is called before returning. This collapses 404 and 403 into a single anti-oracle response (return 404 when the row exists but belongs to another client).
+`GET /client/slots` already returns bookable active future slots filtered by trainer-pin (`client_portal/router.py`). The BookingManageSheet calendar in the PWA needs to call this existing endpoint when the client selects a reschedule date — no new backend read endpoint needed. The PWA just needs to pass the selected `slot_id` to the new reschedule endpoint.
 
-**Why NOT middleware:** Middleware cannot know the `client_id` inside a fetched row without running the query twice. Service-layer enforcement is the correct DDD pattern.
+### B.7 Notification
 
-**Why NOT repository-layer-only:** The get-by-ID pattern inherently requires a fetch then a check. Enforcing only at the repository level would require passing both the pk AND the client_id to every repository function, which is error-prone for the id-lookup case. The two-pattern approach is cleaner.
+On successful reschedule, fire a `BOOKING_RESCHEDULED_DM` template (new locked constant in `bookings/notifications.py`) with the new slot time. This mirrors the create-booking `_dispatch_booking_lifecycle_notification` post-commit fire-and-forget pattern. Add `'rescheduled'` to the `booking_notifications.kind` CHECK (new migration needed to widen the CHECK constraint). Email-fallback follows the same Phase 45 D-45-05 pattern.
 
-**Test strategy for anti-oracle (cross-client leakage):**
+### B.8 Schema Change
 
-Every client-portal service function needs a test that:
-1. Creates two clients with separate data rows (e.g. two memberships owned by different clients)
-2. Authenticates as client A (via `require_client()` stub in test)
-3. Attempts to access client B's row by its UUID
-4. Asserts HTTP 404 (not 403, and never 200)
+Migration `0053_booking_notifications_reschedule_kind.py` widens `ck_booking_notifications_kind` CHECK to admit `'rescheduled'`.
 
-A parametrized `test_client_cannot_access_other_client_{resource}` sweep analogous to the existing `reception-403 enumeration` test (121 assertions) covers all client-owned resources. This sweep test fails the build if any new client endpoint is added without a corresponding anti-oracle test.
+No new columns on `bookings` table — `slot_id` is updated in-place. The audit trail is preserved via `booking_rescheduled` audit event.
 
----
+### B.9 Data Flow: Reschedule
 
-### Decision 5: Contract Handoff — Client Paths in OpenAPI
-
-**Recommendation: Separate OpenAPI tag group `"Client-Portal"` added to `OPENAPI_TAGS` in `app/main.py`. Client operationIds are prefixed `client_`. Staff `openapi.json` paths and operationIds are structurally unchanged. Parallel frozensets for client public endpoints and client category-A operations follow the existing discipline.**
-
-**Approach:**
-
-1. `OPENAPI_TAGS` in `app/main.py` gets a new entry inserted between `"Audit-log"` and `"Internal"`:
-   ```python
-   {"name": "Client-Portal", "description": "Client-facing self-service API — phone/OTP auth + owned-data reads + checkout."}
-   ```
-
-2. Client router uses `APIRouter(tags=["Client-Portal"])`. Because the tag name is distinct, Redocly renders client endpoints in a separate group. The existing 12-domain tag ordering for staff is unaffected.
-
-3. **operationId naming:** Client handler functions are named `client_get_my_memberships`, `client_create_booking`, etc. The `custom_unique_id` function in `app/main.py` strips the `_api_v1_*` suffix — client handler names already have the `client_` prefix so no additional collision guard is needed.
-
-4. **`PUBLIC_ENDPOINT_OPERATION_IDS`** grows to include client auth endpoints (frozenset literal, visible in diff).
-
-5. **`CATEGORY_A_OPERATION_IDS`** grows with client mutating endpoints that need idempotency keys (client booking creation, client booking cancellation, client checkout). New `CLIENT_CATEGORY_A_OPERATION_IDS` frozenset is added separately to keep the diff minimal and auditable, then merged into the per-operation walk in `_customize_openapi`.
-
-6. **`schema.d.ts` and drift gate:** The existing codegen drift gate (`pnpm --filter @clubcore/api-client codegen`) generates a new `schema.d.ts` covering both staff and client paths. The `schema.contract.test.ts` `AssertNonNever` tuple grows with a `_v20Checks` epic banner block for client operationIds. Staff guards (`_v19Checks`, `_v18Checks`, etc.) are untouched.
-
-7. **Staff contract preservation:** The staff operationIds under `/api/v1/auth/*`, `/api/v1/clients/*`, `/api/v1/memberships/*`, etc. are unchanged. The committed `openapi.json` after v2.0 contains the v1.11 staff paths exactly as frozen, plus the new client paths. The drift gate detects any regression in either group.
-
----
-
-### Decision 6: PWA Data Flow
-
-**Recommendation: Wrap the shared `fetcher.ts` in a PWA-local `clientFetcher.ts` that overrides the CSRF cookie name. Add TanStack Query v5 to the PWA. Use react-router v6 loaders with `queryClient.ensureQueryData` for route-level prefetch.**
-
-**`fetcher.ts` reuse — no change to the shared file:**
-
-The existing `fetcher.ts` reads `clubcore_csrf` for CSRF (hardcoded). Rather than adding a parameter to the shared fetcher (which would require touching a file admin-web depends on), the PWA creates its own thin wrapper:
-
-```typescript
-// apps/client-pwa/src/api/clientFetcher.ts
-// Wraps the shared fetcher with cc_client_csrf cookie name override.
-// The shared fetcher is not modified — admin-web freeze is preserved.
-import type { paths } from '@clubcore/api-client/schema'
-
-// Re-implemented CSRF reader for the client cookie name
-function readClientCsrfCookie(): string | undefined { ... }
-
-// Thin wrapper: same signature as request(), but reads cc_client_csrf
-export async function clientRequest<P extends keyof paths, M extends keyof paths[P] & string>(
-  method: M, path: P, init?: RequestInitWithBody
-): Promise<unknown> { ... }
 ```
-
-Client auth-exempt paths use `/api/v1/client/auth/*` prefix instead of `/api/v1/auth/*`. The single-flight refresh targets `/api/v1/client/auth/refresh`.
-
-**TanStack Query v5** is added to the PWA (`@tanstack/react-query@^5`). The same version already in admin-web is used. Per-screen hooks follow the `clientXxxKeys` factory pattern. A single `clientQueryClient` instance is created in the PWA's app root — separate from admin-web's `QueryClient`.
-
-**react-router v6 loaders:** Each route's `loader` function calls `clientQueryClient.ensureQueryData(clientMembershipsKeys.list(), fetchMyMemberships)` to prefetch data before render. This mirrors the TanStack Router `ensureQueryData` pattern used in admin-web but adapted for react-router v6's `loader` API.
-
-**Auth state in PWA:** A lightweight Zustand store (already in PWA or simple `useState` + context) tracks whether the client session is live. On `session_expired` ApiError from `clientFetcher`, the PWA redirects to `/login`. No redirect logic in the fetcher itself (mirrors admin-web D-A2).
-
----
-
-### Decision 7: Suggested Build Order
-
-**Phase 68 — Client Auth Foundations**
-- New `ClientPrincipal` Protocol + `register_client_loader` slot in `app/core/dependencies.py`
-- `require_client()` dependency + `verify_client_csrf` dependency in `app/core/dependencies.py`
-- `decode_client_access_token()` in `app/core/security.py` (additive, backward-compatible)
-- Client cookie name constants in `app/core/config.py`
-- Alembic migration: `purpose` column on `refresh_tokens` (or `client_refresh_tokens` table)
-- `app/modules/client_portal/auth_service.py` + `auth_router.py` — phone+OTP request/verify, refresh, logout, `/me`
-- `PUBLIC_ENDPOINT_OPERATION_IDS` extended; `OPENAPI_TAGS` extended with `"Client-Portal"` tag
-- Mount `client_portal_auth_router` at `/api/v1/client/auth` in `app/api/v1/router.py`
-- `register_client_loader` wired in `app/main.py:create_app()` (18th carve-out)
-- Route introspection test (TEST-07) extended to recognize `require_client` as valid guard
-- Tests: client login/refresh/logout + anti-oracle OTP (unknown phone → same 202)
-- OpenAPI: `schema.d.ts` regen with client auth operationIds; `_v20ClientAuthChecks` AssertNonNever
-
-**Phase 69 — Client-Scoped Read Endpoints (catalog + own data)**
-- `app/modules/client_portal/repository.py` with raw-SQL reads (D-54-08 discipline, zero ignore_imports)
-- `app/modules/client_portal/permissions.py` with `assert_owns()`
-- `app/modules/client_portal/router.py` — read endpoints:
-  - `GET /api/v1/client/me` (profile — own Client row)
-  - `GET /api/v1/client/memberships` + `GET /api/v1/client/memberships/{id}` (own memberships)
-  - `GET /api/v1/client/visits` (own visit history)
-  - `GET /api/v1/client/pt-sessions` (own PT session history)
-  - `GET /api/v1/client/payments` (own payment history)
-  - `GET /api/v1/client/membership-plans` (catalog — open, no ownership guard)
-  - `GET /api/v1/client/trainers` (catalog — open, no ownership guard)
-  - `GET /api/v1/client/schedule` (available slots — open read)
-- Anti-oracle cross-client sweep tests (one assertion per owned resource type)
-- `schema.d.ts` codegen, `_v20ClientReadChecks` AssertNonNever block
-
-**Phase 70 — Client Bookings Write + QR Check-In**
-- New `ClientBookingCreator` Protocol slot in `app/core/dependencies.py` (or reuse existing bookings service via raw-SQL validation in `client_portal/service.py`)
-- `POST /api/v1/client/bookings` (create booking for self — `client_id` locked to principal)
-- `DELETE /api/v1/client/bookings/{id}` or `POST /api/v1/client/bookings/{id}/cancel`
-- `POST /api/v1/client/visits/qr-checkin` (self check-in via QR token — reuses existing visit service slot)
-- Idempotency-Key on booking create + cancel (extend `CATEGORY_A_OPERATION_IDS`)
-- Tests: booking create + cancel + idempotency replay + cross-client guard
-- `schema.d.ts` update, `_v20ClientWriteChecks` additions
-
-**Phase 71 — Client Checkout (ЮKassa)**
-- `POST /api/v1/client/checkout/membership/{plan_id}` — self-initiated membership purchase
-- `POST /api/v1/client/checkout/pt-package/{plan_id}` — self-initiated PT package purchase
-- Both delegate to existing `online_payments` service logic via Protocol slots; `received_by_user_id = None` (client self-purchase)
-- Email gate enforced: client must have email set for fiscal receipt (FIS-05 discipline reused)
-- Idempotency-Key on both checkout endpoints (extend `CATEGORY_A_OPERATION_IDS`)
-- The ЮKassa webhook (`/_internal/yookassa/webhook`) already handles `payment.succeeded` — no change needed
-- Tests: checkout flow + email gate + idempotency + cross-client guard
-- `schema.d.ts` final staff+client regen
-
-**Phase 72 — PWA Wiring + OpenAPI Handoff**
-- PWA stack alignment: migrate `apps/client-pwa` to pnpm workspace, add TypeScript strict, `@clubcore/api-client` dependency, shared ESLint/Prettier config
-- `apps/client-pwa/src/api/clientFetcher.ts` (wraps shared fetcher with `cc_client_csrf`)
-- TanStack Query v5 added to PWA `package.json`
-- Screen wiring: Login/OTP, Home (memberships overview), Profile, Book (trainer slots), Schedule browser, Payments history, Checkout, QR check-in
-- All screens use `clientRequest` + TanStack Query hooks
-- `schema.d.ts` final codegen covering all v2.0 client paths
-- `_v20Checks` AssertNonNever tuple completed (all client operationIds in one epic banner)
-- Drift gate updated: committed `openapi.json` now includes client paths; staff subset verified identical to v1.11 baseline
-- CI: all 7 existing gates remain green; add `client-pwa typecheck`, `client-pwa lint`, `client-pwa test` gates
-
----
-
-## Component Boundaries
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `app/modules/client_portal/auth_router.py` | Phone+OTP login, refresh, logout, /me for clients | `client_portal/auth_service.py` |
-| `app/modules/client_portal/auth_service.py` | OTP issue/consume, client JWT mint, refresh rotation | `app/modules/auth/models.py` (OtpCode — via `ignore_import`), `app/modules/clients/models.py` (phone lookup — via `ignore_import`), `app/core/security.py` |
-| `app/modules/client_portal/router.py` | All client-scoped business endpoints | `client_portal/service.py`, `client_portal/permissions.py` |
-| `app/modules/client_portal/service.py` | Write orchestration via Protocol slots; read delegation to repository | Protocol slots in `app/core/dependencies.py` only |
-| `app/modules/client_portal/repository.py` | raw-SQL `text()` reads across existing domain tables | `AsyncSession` only — zero ORM model imports from other modules |
-| `app/modules/client_portal/permissions.py` | `require_client()` dep, `verify_client_csrf` dep, `assert_owns()` | `app/core/dependencies.py` (ClientPrincipal Protocol) |
-| `app/core/dependencies.py` (extended) | `ClientPrincipal`, `register_client_loader`, `get_current_client`, `require_client`, `verify_client_csrf` | No new module imports (Protocol boundary maintained) |
-| `app/core/security.py` (extended) | `decode_client_access_token`, client cookie name constants | No new module imports |
-| `app/main.py` (extended) | Wire `register_client_loader`; extend frozensets; extend `OPENAPI_TAGS` | `app/modules/clients.service.load_client_by_id` (18th carve-out) |
-| `packages/api-client` | Typed `schema.d.ts` covering both staff and client paths | Generated from `openapi.json` |
-| `apps/client-pwa` | React 18 + react-router v6 + TanStack Query + `clientFetcher.ts` | `packages/api-client` (typed schema) |
-
----
-
-## Data Flow Examples
-
-**Client login (phone+OTP):**
-```
-POST /api/v1/client/auth/otp/request
-  → client_portal/auth_router.py
-  → client_portal/auth_service.py → request_client_otp(phone)
-    → Client lookup by phone (ignore_import: client_portal.auth_service -> clients.models)
-    → OtpCode INSERT purpose='client_login' (ignore_import: -> auth.models)
-    → SMS/Telegram dispatch via existing notification infrastructure
-  → 202 anti-oracle response (identical shape for known/unknown phone)
-
-POST /api/v1/client/auth/otp/verify
-  → auth_service.consume_client_otp(phone, code)
-    → OtpCode SELECT + Argon2 verify + mark consumed
-    → Client row lookup by phone
-    → encode_client_access_token(client_id, aud="client")
-    → RefreshToken INSERT purpose="client" + family_id
-    → issue_client_session_cookies(cc_client_access, cc_client_refresh, cc_client_csrf)
-  → 200 + cookies set
-```
-
-**Client reads own memberships:**
-```
-GET /api/v1/client/memberships
-  → require_client() -> get_current_client()
-    → decode_client_access_token(cc_client_access cookie) — validates aud="client"
-    → _client_loader(session, client_id) -> Client row
-    -> returns ClientPrincipal
-  → client_portal/router.py → repository.get_client_memberships(session, client_id=principal.client_id)
-    → raw SQL: SELECT ... FROM memberships WHERE client_id = :client_id AND status != 'deleted'
-  → response
-```
-
-**Client gets one membership by ID (anti-oracle pattern):**
-```
-GET /api/v1/client/memberships/{id}
-  → require_client() -> ClientPrincipal
-  → repository.get_membership_by_id(session, membership_id=id)
-    → raw SQL: SELECT ... FROM memberships WHERE id = :id
-  → assert_owns(principal, row.client_id)
-    → if mismatch: raise NotFoundError("not_found")  # 404, not 403 (anti-oracle)
-  → response
-```
-
-**Client checkout (ЮKassa):**
-```
-POST /api/v1/client/checkout/membership/{plan_id}
-  → require_client() + verify_client_csrf
-  → Idempotency-Key header validated (verify_idempotency bound to client principal)
-  → client_portal/service.py -> initiate_client_checkout(session, principal, plan_id)
-    → validate: client has email (fiscal receipt gate, mirrors FIS-05)
-    → validate: plan exists + is_active (raw SQL read)
-    → get_payment_recorder() [existing Protocol slot] — method='online', client_id locked
-    → create ЮKassa payment (via existing get_yookassa_client_provider() slot)
-  → 200 with redirect_url / qr_url
+[PWA: BookingManageSheet user picks new slot]
+    ↓
+POST /client/booking/{id}/reschedule  { slotId: "<new_slot_uuid>" }
+    ↓
+client_portal/router  → require_client + verify_client_csrf
+    ↓
+client_portal/service.reschedule_client_booking
+  → reschedule_booking_for_client (Protocol slot)
+    ↓
+bookings/service.reschedule_booking_for_client
+  1. SELECT booking WHERE id=? AND client_id=? FOR UPDATE (IDOR + lock)
+  2. Assert booking.status == 'confirmed'  → 404/409
+  3. Assert old_slot.start_time > now + 24h  → 409 reschedule_window_expired
+  4. Resolve new slot (SlotById Protocol slot) → 404/409
+  5. Assert new_slot.status == 'active' AND future
+  6. Trainer-pin check (same as create_booking step 3)
+  7. UPDATE old_slot booked → active  (raw SQL restore)
+  8. UPDATE new_slot active → booked  (raw SQL flip)
+  9. UPDATE bookings SET slot_id = new_slot_id WHERE id = booking_id
+ 10. session.flush() → uq_bookings_slot_confirmed race guard
+ 11. audit.emit('booking_rescheduled', ...)
+ 12. session.commit()
+ 13. Post-commit: fire-and-forget DM notification (BOOKING_RESCHEDULED_DM)
+    ↓
+Returns updated ClientBookingResponse with new start_time + trainer_name
 ```
 
 ---
 
-## Anti-Patterns to Avoid
+## Feature C: Weekly Activity Analytics
 
-### Anti-Pattern 1: Extending `Role` with a `client` value
-**What:** Adding `Role.CLIENT = "client"` to `app/core/permissions.py` and using `require_permission` for client routes.
-**Why bad:** Breaks byte-parity with frozen admin-web `can.ts`. The three-way parity test (TEST-06) fails. Admin-web would need updates (frozen). Staff RBAC semantics (owner > reception) do not translate to client semantics (all clients are peers, distinguished only by `client_id` ownership predicate).
-**Instead:** Separate `ClientPrincipal` + `require_client` — fully orthogonal to staff RBAC.
+### C.1 Data Sources
 
-### Anti-Pattern 2: Adding client routes inside existing domain modules
-**What:** Adding `GET /memberships/my` inside `app/modules/memberships/router.py`.
-**Why bad:** Bleeds the modules-independent contract. Memberships router would need to import `ClientPrincipal` from `app/core/dependencies` — currently legal but semantically wrong; more critically it mixes staff and client RBAC in one file, making ownership guards easy to miss. The route introspection test (TEST-07) would need to be weakened.
-**Instead:** All client-scoped routes live in `app/modules/client_portal/`.
+- `visits` table: `client_id`, `gym_date` (STORED GENERATED column, Europe/Moscow), `checked_in_at`. One row per gym-day per client (UNIQUE constraint enforced).
+- `pt_sessions` table: `client_id`, `performed_at` (timestamptz), `cancelled_at` (null = active). Represents PT training sessions.
 
-### Anti-Pattern 3: Sharing staff JWT cookies with the client principal
-**What:** Reusing `cc_access` / `cc_refresh` / `clubcore_csrf` cookies for client sessions.
-**Why bad:** Without distinct cookie names AND a distinguishing JWT claim (`aud`), a client who obtained a staff token could call client endpoints with it, or vice versa. The `audience` claim is the cryptographic discriminator between principals. Sharing cookie names also means browser sends both staff and client tokens on every request, creating confusion.
-**Instead:** `cc_client_access` + `aud: "client"` claim enforced in `decode_client_access_token`.
+**Critical finding**: there is NO `duration_minutes` column on either `visits` or `pt_sessions`. A "minutes per day" metric cannot be derived from the current schema. The milestone description says "серверный агрегат минут/тренировок по дням" — this requires a decision:
 
-### Anti-Pattern 4: Client-portal repository importing other modules' ORM models
-**What:** `client_portal/repository.py` imports `from app.modules.memberships.models import Membership`.
-**Why bad:** Violates `modules-independent` contract. Requires a new `ignore_imports` edge. The reports module precedent (D-54-08) shows raw SQL `text()` with `.mappings().all()` is sufficient and requires zero ignore edges.
-**Instead:** Raw SQL with `:name` bind params + `.mappings()` for all cross-module reads in the repository layer.
+(a) Add a `duration_minutes` column to `visits` (defaulting to null or a configured gym-session average, e.g. 60 min), or
+(b) Limit the aggregate to "workouts per day" (visit count + PT session count) rather than minutes.
 
-### Anti-Pattern 5: Skipping the route introspection test update
-**What:** Adding client endpoints without extending TEST-07 to recognize `require_client` as a valid guard.
-**Why bad:** TEST-07 asserts that every non-auth route uses `require_permission` or `require_authenticated`. Client routes use `require_client` — a third factory. Without the extension, TEST-07 fails for all client routes (build-breaking).
-**Instead:** Extend TEST-07 to include `require_client` as an allowlisted dependency factory: check `__qualname__.startswith('require_client.')` alongside the existing two checks.
+**Recommendation for v2.2**: deliver "workouts per day" (count-based). The `minutes` field in the response schema is `null` until a `duration_minutes` column is added in a later milestone. The endpoint name `GET /client/activity/weekly` remains unchanged.
 
-### Anti-Pattern 6: Reusing staff idempotency key scope for client requests
-**What:** Using the existing `verify_idempotency` dependency (which scopes keys to staff `user_id`) on client endpoints.
-**Why bad:** `verify_idempotency` is currently bound to `Depends(get_current_user)` and produces keys scoped to `user_id` (a `users.id`). Client principals have `client_id` (a `clients.id`). Using the staff dependency on a client route would either fail (no `cc_access` cookie) or produce incorrectly scoped idempotency keys.
-**Instead:** A new `verify_client_idempotency` dependency (or extend `verify_idempotency` with an optional `principal` parameter) that scopes the Redis key to `client_id`. The key pattern becomes `cc:idem:{client_id}:{method}:{path}:{header}` with the same TTL and pattern validation.
+### C.2 Week Boundary Definition
+
+- **"Current week"**: Monday–Sunday in Europe/Moscow. ISO week convention.
+- Implementation: `date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')` in Postgres returns Monday 00:00 of the current ISO week. Filter `gym_date >= <monday>` AND `gym_date <= <monday + 6 days>`.
+- Always return 7 rows (one per day of the current week), filling zero-activity days with `workouts=0`.
+
+### C.3 Read Pattern: Raw SQL in client_portal/repository.py
+
+Follows D-54-08 / D-69 read discipline:
+- No `from app.modules.visits import models` in `client_portal`.
+- Raw SQL `text()` SELECT over `visits` and `pt_sessions` tables directly.
+- `client_id` always in the WHERE clause (IDOR-safe: derived from `require_client()` principal).
+
+```sql
+-- visits per day this week
+SELECT
+    v.gym_date,
+    COUNT(*) AS gym_visits
+FROM visits v
+WHERE v.client_id = :client_id
+  AND v.gym_date >= date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')::date
+  AND v.gym_date <= (date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')
+                     + interval '6 days')::date
+GROUP BY v.gym_date
+
+-- pt sessions per day this week
+SELECT
+    (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date AS session_date,
+    COUNT(*) AS pt_sessions
+FROM pt_sessions ps
+WHERE ps.client_id = :client_id
+  AND ps.cancelled_at IS NULL
+  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date
+      >= date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')::date
+  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date
+      <= (date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')
+          + interval '6 days')::date
+GROUP BY session_date
+```
+
+Merge both in Python: build a 7-element list (Mon–Sun), zero-fill missing days, combine `gym_visits + pt_sessions` into `workouts` per day.
+
+### C.4 Response Schema
+
+```python
+class DayActivity(BackendSchemaBase):
+    date: date          # ISO date of the day
+    workouts: int       # visits + pt_sessions count
+    minutes: int | None # null until duration tracking added
+
+class WeeklyActivityResponse(BackendSchemaBase):
+    week_start: date       # Monday of the current week (Europe/Moscow)
+    week_end: date         # Sunday
+    days: list[DayActivity]  # always 7 elements
+    total_workouts: int
+    total_minutes: int | None
+```
+
+### C.5 Endpoint
+
+```
+GET /api/v1/client/activity/weekly
+```
+
+- No path/query parameters — always returns the current week.
+- `require_client()` gate — no CSRF (safe GET).
+- `client_id` from principal only (IDOR-safe).
+- Empty week (no data) → 200 with 7 zero-workout days (D-69-03 precedent).
+- No session.commit() — read-only path.
+
+### C.6 No New Migration Required
+
+No schema changes needed for the count-based approach. The existing `visits.gym_date` STORED GENERATED column makes week-boundary filtering straightforward without TZ conversion. The existing `ix_visits_client_id_checked_in_at` index covers per-client queries. `pt_sessions` lacks a `(client_id, performed_at)` index but at single-gym scale this is not a problem. Deferred until profiling indicates a need.
+
+If minutes tracking is added later, that migration adds a nullable `duration_minutes INTEGER` column to `visits` + an app-layer default.
 
 ---
 
-## Scalability Considerations
+## New vs. Modified Components Summary
 
-| Concern | Current (1 gym, ~100 clients) | Future (multi-gym) |
-|---------|------------------------------|-------------------|
-| Client data isolation | `client_id` WHERE clause in every query | Same — no architectural change needed |
-| Client session Redis keys | `cc:client:sess:{client_id}:{family_id}` (new namespace, no collision with staff `cc:*` keys) | Same pattern |
-| OTP rate limiting | Per-phone counter in Redis (mirrors per-email `cc:rate:login:{email}`) | Same |
-| Client checkout concurrency | Idempotency-Key + DB UNIQUE constraints (Phase 66 machinery reused) | Same |
-| Ownership sweep test | Parametrized per-resource (N assertions) | Must grow as new resources are added — test-gated |
-
----
-
-## OpenAPI Contract Preservation
-
-### Staff contract frozen at v1.11.0
-
-The tag `contract-freeze-v1.11.0` anchors the staff paths. After v2.0, the committed `openapi.json` includes both staff (frozen) AND client paths. The CI drift gate detects any drift from the committed baseline across both groups.
-
-Staff operationIds (`login`, `get_client`, `create_membership`, etc.) are unchanged. Client operationIds (`client_login`, `client_get_my_memberships`, etc.) are additive. No collision is possible because of the `client_` prefix convention.
-
-### Staff `AssertNonNever` guards are untouched
-
-`schema.contract.test.ts` contains `_v15Checks` through `_v19Checks` tuples. These are not modified. The new `_v20Checks` tuple (or separate `_v20ClientChecks`) asserts the presence of client operationIds. The `toHaveLength(N)` assertion in the v20 block covers only v20 additions.
-
-### Redocly lint
-
-The new `"Client-Portal"` tag appears in `OPENAPI_TAGS` list between `"Audit-log"` and `"Internal"`. Redocly renders client operations under this heading, separated from staff operations. No changes to `redocly.yaml` rules are needed — client endpoints follow the same structural conventions.
+| Component | Status | Change |
+|---|---|---|
+| `app/modules/payment_methods/` | **NEW module** | `models.py` + `repository.py` + `service.py` (thin) |
+| Alembic `0052_client_payment_methods.py` | **NEW migration** | `client_payment_methods` table |
+| `app/integrations/yookassa/client.py` | **MODIFIED** | Add `save_payment_method` param to `create_payment`; add `payment_method_id` param for autopay charge |
+| `app/integrations/yookassa/types.py` | **MODIFIED** | Add `payment_method_id` + `payment_method_saved` + `payment_method_title` + `payment_method_card` fields to `YooKassaPaymentResult` |
+| `app/modules/online_payments/service.py` | **MODIFIED** | `_sell_subject_core`: accept optional `save_payment_method`, `payment_method_id` params |
+| `app/modules/online_payments/router.py` (webhook) | **MODIFIED** | `handle_payment_succeeded`: step 8.5 — raw SQL upsert `client_payment_methods` when `payment_method.saved=true` |
+| `app/core/dependencies.py` | **MODIFIED** | Add `reschedule_booking_for_client` Protocol slot; optionally `BindPaymentMethodSlot` |
+| `app/main.py` | **MODIFIED** | Wire new Protocol slots at composition root |
+| `app/modules/client_portal/router.py` | **MODIFIED** | New endpoints: GET/DELETE `/client/payment-method`, PATCH `/client/payment-method/autopay`, POST `/client/booking/{id}/reschedule`, GET `/client/activity/weekly` |
+| `app/modules/client_portal/service.py` | **MODIFIED** | New service functions for all 3 features |
+| `app/modules/client_portal/schemas.py` | **MODIFIED** | New request/response schemas for all 3 features |
+| `app/modules/client_portal/repository.py` | **MODIFIED** | New raw SQL reads: payment-method GET, weekly activity aggregate |
+| `app/modules/bookings/service.py` | **MODIFIED** | New `reschedule_booking_for_client` orchestrator |
+| `app/modules/bookings/notifications.py` | **MODIFIED** | Add `BOOKING_RESCHEDULED_DM` locked template constant |
+| Alembic `0053_booking_notifications_reschedule.py` | **NEW migration** | Widen `ck_booking_notifications_kind` CHECK to include `'rescheduled'` |
+| `app/workers/scheduled/charge_expiring_autopay.py` | **NEW worker** | ARQ cron job for autopay charging |
+| `app/core/audit.py` `LOCKED_AUDIT_EVENTS` | **MODIFIED** | Pre-register `("booking_rescheduled", "booking")` + payment-method audit events |
+| `app/core/audit_payloads.py` | **MODIFIED** | New payload schemas for new audit events |
+| `.importlinter` | **MODIFIED** | Add `app.modules.payment_methods` to `modules-independent` contract |
+| `apps/client-pwa/` | **MODIFIED** | Flip `linkedCard`/`weeklyActivity` feature flags; wire new endpoint hooks |
+| `apps/backend/openapi.json` + `schema.d.ts` | **MODIFIED** | Per-milestone byte-stable regen + `AssertNonNever` forward-guards |
 
 ---
 
-## Composition Root Summary (new carve-outs for v2.0)
+## Dependency-Aware Build Order
 
-All new slots follow the established pattern in `app/core/dependencies.py`:
+Dependencies chain as follows:
+- `client_payment_methods` table (migration 0052) must exist before webhook token-save and `client_portal` endpoints can reference it.
+- `charge_expiring_autopay` cron depends on both the table and the modified `_sell_subject_core` accepting `payment_method_id`.
+- `reschedule` depends on the `reschedule_booking_for_client` Protocol slot + migration 0053.
+- `weekly_activity` is independent — pure read, no new migrations needed.
 
-| Slot | Pattern | Wired from | Phase |
-|------|---------|-----------|-------|
-| `register_client_loader` | Defensive-raise (mirrors `_user_loader` at Phase 5 D-15) | `create_app()` only | 68 |
-| `register_client_booking_creator` | Silent-None or Defensive (TBD by planner based on booking service shape) | `create_app()` only | 70 |
+### Recommended Phase Order
 
-The `create_app()` function in `app/main.py` grows by 2-3 registration calls in `create_app()`. These follow the established ordering (import inside `create_app()` body for composition-root carve-out) and documentation pattern (numbered carve-out, cross-reference to Phase/D-* decision).
+**Phase 79 — Payment Methods Foundation + YooKassa Adapter**
+
+Scope:
+- New `app/modules/payment_methods/` (models + repo + thin service).
+- Alembic `0052_client_payment_methods.py`.
+- Extend `YooKassaClient.create_payment` with `save_payment_method` param and `payment_method_id` param (for autopay charges).
+- Extend `YooKassaPaymentResult` / `types.py` to surface `payment_method.*` fields from webhook payload.
+- Modify `_sell_subject_core` to pass `save_payment_method` to YooKassa when requested.
+- Modify `handle_payment_succeeded` webhook handler: step 8.5 — raw SQL upsert token.
+- New `GET /client/payment-method`, `DELETE /client/payment-method`, `PATCH /client/payment-method/autopay` endpoints in `client_portal`.
+- Pre-register new payment-method audit events.
+- Tests: checkout with save flag → webhook → token stored; GET returns masked card; unbind sets is_active=false; autopay_enabled toggle.
+- **No autopay cron yet** — foundation only.
+
+**Phase 80 — Autopay Cron**
+
+Scope:
+- `app/workers/scheduled/charge_expiring_autopay.py` ARQ cron (06:30 MSK).
+- Extend `_sell_subject_core` to accept `payment_method_id` param and omit `confirmation` object in the YooKassa body (server-initiated charge path).
+- Wire cron in docker-compose / ARQ settings.
+- Tests: autopay charge fires for qualifying clients; idempotency key prevents double-charge; failed charge leaves membership to expire normally via existing `expire_memberships` cron.
+- **Depends on Phase 79**.
+
+**Phase 81 — Booking Reschedule**
+
+Scope:
+- New `reschedule_booking_for_client` Protocol slot in `app.core.dependencies` + wired in `app/main.py`.
+- `bookings/service.reschedule_booking_for_client` (atomic move: restore old slot + flip new slot + update booking.slot_id in one UoW).
+- Add `BOOKING_RESCHEDULED_DM` locked template constant in `bookings/notifications.py`.
+- Alembic `0053_booking_notifications_reschedule.py` (widen `ck_booking_notifications_kind` CHECK).
+- Pre-register `("booking_rescheduled", "booking")` in `LOCKED_AUDIT_EVENTS`.
+- `POST /client/booking/{id}/reschedule` endpoint in `client_portal/router.py`.
+- Frontend: BookingManageSheet wired to real `GET /client/slots` + new reschedule endpoint.
+- Tests: successful reschedule (old slot → active, new slot → booked); IDOR (non-owned booking → 404); window-expired (< 24h to start) → 409; race (new slot taken between lookup and flip) → 409 slot_already_booked.
+- **Independent from Phases 79–80** in terms of logic; must come after 79 for migration numbering continuity.
+
+**Phase 82 — Weekly Activity + PWA Flag Flips + OpenAPI Handoff**
+
+Scope:
+- `GET /client/activity/weekly` endpoint in `client_portal/router.py`.
+- Raw SQL weekly aggregate in `client_portal/repository.py` (visits + pt_sessions, 7-day result, zero-fill missing days).
+- `WeeklyActivityResponse` + `DayActivity` schemas.
+- PWA: flip `weeklyActivity` flag ON, wire `useWeeklyActivity()` hook.
+- PWA: flip `linkedCard` flag ON (connects to Phase 79 endpoints).
+- Byte-stable `openapi.json` + `schema.d.ts` regen + new `AssertNonNever` forward-guards for all v2.2 paths.
+- Milestone verification gate (live `docker compose up` + `pytest` green + drift gates).
+- **Depends on all prior phases** (captures all new endpoints for OpenAPI handoff).
+
+---
+
+## Architecture Constraints Checklist (v2.2 specific)
+
+| Constraint | How Respected |
+|---|---|
+| `import-linter` modules independent | `payment_methods` added to independence contract; `client_portal` uses Protocol slots or raw SQL only; webhook uses raw SQL for token save — zero new `ignore_imports` needed for features B and C |
+| `core ⊥ modules` | New Protocol slots registered in `app.core.dependencies`; wired in composition root `main.py` |
+| Webhook-locked activation | Autopay: `payment_method_id` charge produces `payment.succeeded` → normal 8-step UoW activates membership; redirect screen invariant unchanged |
+| IDOR anti-oracle | All `client_portal` endpoints: `client_id` from `require_client()` only; non-owned resources → 404-collapse |
+| SVC001 commit-gate | `reschedule_booking_for_client` commits own UoW; `client_portal/router` calls `await session.commit()` for PATCH/DELETE payment-method endpoints |
+| INFRA-15 (audit events pre-registered) | `booking_rescheduled`, new payment-method events pre-registered in frozenset BEFORE any callsite |
+| Server-authoritative pricing (D-06) | Autopay: plan price read from `membership_plans.price_kopecks` via `_read_membership_plan_or_raise` inside `_sell_subject_core` — no price from caller |
+| Staff contract frozen | All new endpoints additive under `Client-Portal` tag; zero changes to staff paths; byte-parity drift guard remains green |
+| 54-ФЗ receipt on autopay | Autopay `_sell_subject_core` still builds `receipt_items` from plan name/price; `customer_phone` fallback always applies (phone is NOT NULL via OTP auth) |
+| D-69-03 empty states | GET payment-method returns 200/null (no method); GET weekly activity returns 200 with 7 zero-workout days |
+
+---
+
+## Open Questions for Phase Planning
+
+1. **Autopay notification on failure**: should `payment.canceled` from an autopay charge trigger a Telegram/email DM to the client? Not strictly required for v2.2, but affects test coverage scope.
+2. **`save_payment_method` in checkout body vs. always-save**: should the PWA always request method saving when the client checks a UI checkbox (conditional save), or should v2.2 always save when the client completes checkout (unconditional)? Affects whether `ClientCheckoutRequest` schema needs a new boolean field.
+3. **Autopay renewal strategy**: when autopay fires, should it use `renew_membership` (creating a new membership row) or `sell_membership` (creating a new sale from scratch)? Given the existing `renew_membership` Protocol slot in memberships module, the autopay cron should probably call `renew_membership` after the webhook confirms payment, not `sell_membership` + activation. This is the cleaner domain model but requires the webhook handler to distinguish "autopay-initiated renewal" from "fresh purchase". Decision affects audit event shape.
+4. **Weekly activity scope**: does "current week" mean the 7 days Mon–Sun of the current ISO week, or the last 7 rolling days? ISO week (Mon–Sun) is the recommended default but confirm with user.
 
 ---
 
 ## Sources
 
-All findings from direct code inspection (HIGH confidence):
+- Live codebase inspection: `apps/backend/app/modules/client_portal/`, `bookings/service.py`, `online_payments/service.py`, `online_payments/models.py`, `visits/models.py`, `pt_sessions/models.py`, `app/integrations/yookassa/client.py`, `app/integrations/yookassa/types.py`, `apps/backend/.importlinter`, `apps/backend/alembic/versions/` (migrations 0001–0051).
+- YooKassa saved payment methods: [Привязка во время платежа](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/save-payment-method/save-during-payment) (MEDIUM confidence — page returns structure, full field schema requires sandbox testing).
+- YooKassa autopayments: [Автоплатежи](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/pay-with-saved) (HIGH confidence — `payment_method_id` param + no-user-confirmation pattern confirmed).
+- YooKassa unbind: no DELETE API endpoint per [YooKassa API reference](https://yookassa.ru/developers/api) — unbind = remove from local storage only (HIGH confidence).
+- Project architecture decisions: `.planning/PROJECT.md` (v2.0–v2.1 Current State section).
 
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/main.py` — composition root, Protocol slots, `OPENAPI_TAGS`, `PUBLIC_ENDPOINT_OPERATION_IDS`, `CATEGORY_A_OPERATION_IDS`, `_customize_openapi`
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/dependencies.py` — all Protocol slot declarations (`CurrentUser`, `UserLoader`, `ActiveMembership`, `PaymentRecorder`, etc.), `require_permission`, `require_authenticated`, `get_current_user`, `verify_csrf`
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/permissions.py` — `Role`, `Action`, `Resource`, `OWNER_ONLY`, `can()`, parity test contract
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/core/security.py` — JWT encode/decode, `AccessTokenClaims`, cookie issuance pattern
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/auth/router.py` — auth endpoint patterns, CSRF exemptions, `require_authenticated` usage, OTP flow
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/auth/service.py` — `load_user_by_id`, `authenticate`, token rotation, anti-oracle sentinel hash pattern
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/modules/reports/repository.py` — raw-SQL cross-module read pattern (D-54-08), `text()` discipline, zero `ignore_imports`
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/app/api/v1/router.py` — current aggregator router, module mount pattern, `_internal` namespace precedent
-- `/Users/andre/Workspace/Development/clubcore/apps/backend/.importlinter` — `modules-independent` contract, `ignore_imports` precedents (all 30+ edges), `unmatched_ignore_imports_alerting`
-- `/Users/andre/Workspace/Development/clubcore/packages/api-client/src/fetcher.ts` — CSRF cookie reading (`clubcore_csrf`), single-flight refresh, `AUTH_EXEMPT_PATHS`, D-A1..D-A4 contracts
-- `/Users/andre/Workspace/Development/clubcore/.planning/PROJECT.md` — v2.0 milestone scope, target features, key constraints, out-of-scope list
+---
+*Architecture research for: clubcore v2.2 — Membership self-service depth*
+*Researched: 2026-06-03*
