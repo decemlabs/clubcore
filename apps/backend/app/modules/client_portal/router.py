@@ -58,8 +58,8 @@ from app.modules.client_portal.schemas import (
     ClientCheckoutResponse,
     ClientCreateBookingRequest,
     ClientHomeResponse,
-    ClientMeResponse,
     ClientMembershipResponse,
+    ClientMeResponse,
     ClientNextBookingResponse,
     ClientPaymentItem,
     ClientPaymentStatusResponse,
@@ -590,6 +590,7 @@ async def client_checkout_membership(
         client=client,
         yookassa_settings=yookassa_settings,
         promo_code=payload.promo_code,
+        save_payment_method=payload.save_payment_method,
     )
     await session.commit()
     return envelope(result)
@@ -633,6 +634,7 @@ async def client_checkout_pt_package(
         idempotency_key=idempotency_key,
         yookassa_settings=yookassa_settings,
         promo_code=payload.promo_code,
+        save_payment_method=payload.save_payment_method,
     )
     await session.commit()
     return envelope(result)

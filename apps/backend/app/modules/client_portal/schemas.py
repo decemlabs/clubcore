@@ -248,9 +248,11 @@ class ClientCheckoutRequest(ResponseData):
     No fields required for membership (plan_id in path); for PT the
     idempotency_key is supplied via Idempotency-Key header (D-71-04), not body.
     Phase 999.4 D-06: optional promo_code field (wire: promoCode).
+    Phase 79 PAYM-01: optional save_payment_method flag (wire: savePaymentMethod).
     """
 
     promo_code: str | None = None  # wire: promoCode (D-06); None = no promo applied
+    save_payment_method: bool = False  # wire: savePaymentMethod (PAYM-01); False = don't save
 
 
 class ClientCheckoutResponse(ResponseData):

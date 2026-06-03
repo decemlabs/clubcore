@@ -208,6 +208,7 @@ async def _sell_subject_core(
     return_url_override: str | None = None,
     price_override_kopecks: int | None = None,
     applied_promo_code_id: UUID | None = None,
+    save_payment_method: bool = False,
 ) -> SellResponse:
     """Actor-agnostic sell flow (Phase 71 D-71-01).
 
@@ -348,6 +349,7 @@ async def _sell_subject_core(
         idempotency_key=idem_key,
         confirmation_type=confirmation_type,
         return_url=return_url_override,  # CR-01/CR-02: None for staff (uses settings default)
+        save_payment_method=save_payment_method,
     )
 
     # 6b. Idempotence-Key collision single-retry (Plan 999.5-06 / UAT-10 fix).
@@ -386,6 +388,7 @@ async def _sell_subject_core(
             idempotency_key=idem_key,
             confirmation_type=confirmation_type,
             return_url=return_url_override,
+            save_payment_method=save_payment_method,
         )
 
     # 7. Switch on classification.
@@ -408,6 +411,7 @@ async def _sell_subject_core(
             audit_correlation_id=correlation_id,
             id_override=online_payment_id_override,  # CR-01/CR-02: None for staff path
             promo_code_id=applied_promo_code_id,  # Phase 999.4 D-06/D-07: None for non-promo
+            save_payment_method=save_payment_method,  # Phase 79 PAYM-01
         )
         # surface FK + CHECK + UNIQUE conflicts BEFORE audit emit (D-49-19)
         await session.flush()

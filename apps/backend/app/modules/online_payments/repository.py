@@ -42,6 +42,7 @@ async def insert_online_payment(
     audit_correlation_id: UUID,
     id_override: UUID | None = None,
     promo_code_id: UUID | None = None,
+    save_payment_method: bool = False,
 ) -> OnlinePayment:
     """Insert OnlinePayment row; caller owns flush + commit (D-49-07).
 
@@ -54,6 +55,10 @@ async def insert_online_payment(
     ``promo_code_id`` (Phase 999.4 D-06/D-07): when provided, persists the promo
     code FK on the row so the succeeded-webhook can record the redemption.
     Staff callers never pass this parameter (NULL for non-promo payments).
+
+    ``save_payment_method`` (Phase 79 PAYM-01): intent flag — when True the
+    webhook step 8.5 upserts the returned card token. Defaults False (server_default
+    also false); never client-writable post-checkout (T-79-02).
     """
     kwargs: dict[str, Any] = dict(
         client_id=client_id,
@@ -67,6 +72,7 @@ async def insert_online_payment(
         confirmation_type=confirmation_type,
         created_by_user_id=created_by_user_id,
         audit_correlation_id=audit_correlation_id,
+        save_payment_method=save_payment_method,
     )
     if id_override is not None:
         kwargs["id"] = id_override

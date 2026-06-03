@@ -527,6 +527,47 @@ async def handle_payment_succeeded(
                     discount_kopecks=discount_kopecks_for_redemption,
                 )
 
+        # PAYM-01 / Phase 79 step 8.5: upsert saved card token if save_payment_method=True.
+        # Token source: result.payment_method (YooKassaPaymentResult field added in phase 79).
+        # raw-SQL upsert — zero new ignore_imports (D-decision: no ORM import from integrations).
+        # Idempotent: ON CONFLICT DO UPDATE so webhook replay is safe (T-79-09).
+        # PII discipline (T-79-08): log emits client_id + online_payment_id only — no card fields.
+        if row.save_payment_method and result.payment_method is not None:
+            pm = result.payment_method  # YooKassaPaymentMethodInfo dataclass
+            await session.execute(
+                text(
+                    "INSERT INTO client_payment_methods "
+                    "(client_id, yookassa_method_id, last4, brand, "
+                    " expiry_month, expiry_year, autopay_enabled) "
+                    "VALUES (:client_id, :method_id, :last4, :brand, "
+                    "        :expiry_month, :expiry_year, false) "
+                    "ON CONFLICT ON CONSTRAINT uq_client_payment_methods_client_id_alive "
+                    "DO UPDATE SET "
+                    "  yookassa_method_id = EXCLUDED.yookassa_method_id, "
+                    "  last4 = EXCLUDED.last4, "
+                    "  brand = EXCLUDED.brand, "
+                    "  expiry_month = EXCLUDED.expiry_month, "
+                    "  expiry_year = EXCLUDED.expiry_year, "
+                    "  unlinked_at = NULL, "
+                    "  autopay_enabled = false, "
+                    "  consent_recorded_at = NULL, "
+                    "  updated_at = now()"
+                ),
+                {
+                    "client_id": str(row.client_id),
+                    "method_id": pm.id,
+                    "last4": pm.last4,
+                    "brand": pm.card_type,
+                    "expiry_month": pm.expiry_month,
+                    "expiry_year": pm.expiry_year,
+                },
+            )
+            _log.info(
+                "payment_method_saved",
+                client_id=str(row.client_id),
+                online_payment_id=str(row.id),
+            )
+
         # CHILD audit emit — online_payment_succeeded chained to
         # webhook_intake_corr (D-50-18 step 7). UUIDs are cast to str for
         # JSONB-serialisability (audit.emit writes payload kwargs directly

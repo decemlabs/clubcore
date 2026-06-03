@@ -648,6 +648,7 @@ async def client_checkout_membership(
     client: ClientPrincipal,
     yookassa_settings: YooKassaSettings,
     promo_code: str | None = None,
+    save_payment_method: bool = False,
 ) -> ClientCheckoutResponse:
     """Client-initiated membership checkout via ЮKassa redirect (CPAY-01).
 
@@ -708,6 +709,7 @@ async def client_checkout_membership(
         return_url_override=return_url,
         price_override_kopecks=price_override,
         applied_promo_code_id=applied_promo_code_id,
+        save_payment_method=save_payment_method,
     )
     r = cast(Any, result)
     # WR-02: confirmation_url must not be None for a redirect response.
@@ -727,6 +729,7 @@ async def client_checkout_pt_package(
     idempotency_key: str,
     yookassa_settings: YooKassaSettings,
     promo_code: str | None = None,
+    save_payment_method: bool = False,
 ) -> ClientCheckoutResponse:
     """Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02).
 
@@ -777,6 +780,7 @@ async def client_checkout_pt_package(
         return_url_override=return_url,
         price_override_kopecks=price_override,
         applied_promo_code_id=applied_promo_code_id,
+        save_payment_method=save_payment_method,
     )
     r = cast(Any, result)
     # WR-02: confirmation_url must not be None for a redirect response.
