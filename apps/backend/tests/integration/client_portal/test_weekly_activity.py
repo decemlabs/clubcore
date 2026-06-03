@@ -198,6 +198,43 @@ async def _seed_visit_on_monday(
     await db_session.flush()
 
 
+async def _seed_visit_at_utc(
+    db_session: AsyncSession,
+    client: Client,
+    checked_in_at_utc: datetime,
+) -> None:
+    """Insert a visit row at an EXACT UTC instant (no DST-safe rounding).
+
+    Unlike `_seed_visit_on_monday` (which deliberately picks noon to avoid the
+    midnight boundary), this helper writes the raw UTC timestamp so a test can
+    exercise the STORED `visits.gym_date` generated column
+    `(checked_in_at AT TIME ZONE 'Europe/Moscow')::date` across the 21:00-UTC
+    Moscow-midnight boundary.
+    """
+    row = (
+        await db_session.execute(
+            text("SELECT id FROM memberships WHERE client_id = :cid AND status = 'active' LIMIT 1"),
+            {"cid": str(client.id)},
+        )
+    ).mappings().one()
+    membership_id = row["id"]
+
+    await db_session.execute(
+        text(
+            "INSERT INTO visits (id, client_id, membership_id, checked_in_at, channel, "
+            "created_at, updated_at) VALUES "
+            "(gen_random_uuid(), :client_id, :membership_id, :checked_in_at, 'reception', "
+            "now(), now())"
+        ),
+        {
+            "client_id": str(client.id),
+            "membership_id": str(membership_id),
+            "checked_in_at": checked_in_at_utc,  # datetime object required by asyncpg
+        },
+    )
+    await db_session.flush()
+
+
 # ---------------------------------------------------------------------------
 # Behavior tests
 # ---------------------------------------------------------------------------
@@ -267,6 +304,58 @@ async def test_weekly_activity_monday_visit_appears_in_monday_bucket(
     assert items[0]["workouts"] == 1
     # All other days are zero
     for item in items[1:]:
+        assert item["workouts"] == 0
+
+
+async def test_weekly_activity_boundary_2130_utc_lands_next_moscow_day(
+    http_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Golden-TZ integration: a visit at Monday 21:30 UTC must bucket into TUESDAY.
+
+    21:30 UTC = 00:30 MSK on the NEXT calendar day (Moscow is UTC+3). The STORED
+    generated column `(checked_in_at AT TIME ZONE 'Europe/Moscow')::date` therefore
+    yields the Tuesday date, so the visit must land in bucket index 1 (Tuesday),
+    NOT index 0 (Monday).
+
+    This is the regression the contract forbids: if someone swaps the aggregation
+    to group on `DATE(checked_in_at)` (the UTC date), the visit would land in the
+    Monday bucket (index 0) and THIS test would fail — exactly as intended. It
+    exercises the real endpoint + Postgres STORED column end-to-end, unlike the
+    unit suite which only re-checks `datetime.astimezone` arithmetic.
+
+    Monday→Tuesday is chosen so both the UTC date and its Moscow successor stay
+    inside the current Moscow week regardless of which weekday "today" is.
+    """
+    staff = await _seed_staff(db_session)
+    client = await _seed_client(db_session, staff, "+79111000109")
+    await _seed_membership(db_session, client)
+
+    # Monday of the current Moscow week, at 21:30 UTC.
+    now_msk = datetime.now(_MSK)
+    monday = (now_msk - timedelta(days=now_msk.weekday())).date()
+    checked_in_at_utc = datetime(monday.year, monday.month, monday.day, 21, 30, tzinfo=UTC)
+    await _seed_visit_at_utc(db_session, client, checked_in_at_utc)
+    await db_session.commit()
+
+    await _auth_as_client(http_client, db_session, client)
+
+    resp = await http_client.get("/api/v1/client/activity/weekly")
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["data"]
+    assert len(items) == 7
+
+    # Tuesday bucket (index 1) gets the workout; Monday (index 0) stays zero.
+    assert items[1]["workouts"] == 1, (
+        "21:30 UTC visit must bucket into the NEXT Moscow day (Tuesday) via STORED "
+        f"gym_date — got Monday={items[0]['workouts']} Tuesday={items[1]['workouts']}"
+    )
+    assert items[0]["workouts"] == 0, (
+        "Monday bucket must be empty — a non-zero count here means the aggregation "
+        "grouped on DATE(checked_in_at) (UTC date) instead of the STORED gym_date"
+    )
+    # Every other day remains zero.
+    for item in items[2:]:
         assert item["workouts"] == 0
 
 
