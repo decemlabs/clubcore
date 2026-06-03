@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/Avatar.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { useClientMe, useUpdateClientProfile } from '@/data';
+import { useClientMe, useUpdateClientProfile, useClientPaymentMethod } from '@/data';
 import { useAuth } from '@/context/AuthContext.jsx';
 
 // ─── Deferred-feature scaffolding (BUILT, HIDDEN) ─────────────────────────
@@ -13,7 +13,7 @@ import { useAuth } from '@/context/AuthContext.jsx';
 //  • linkedCard   — "Привязанная карта •••• 4821" row (needs card-on-file API)
 //  • tenureBadge  — "PREMIUM · N ЛЕТ" identity badge (needs tier + tenure from API)
 const SETTINGS_FEATURE_FLAGS = {
-  linkedCard:  false,
+  linkedCard:  true,   // PAYM-05: wired to CardSheet + payment-method endpoints
   tenureBadge: false,
 };
 
@@ -35,6 +35,7 @@ export const SettingsScreen = ({
   const { data: me } = useClientMe();
   const { logout } = useAuth();
   const updateProfile = useUpdateClientProfile();
+  const { data: paymentMethod } = useClientPaymentMethod();
 
   // Notification toggles — hydrate from server (D-78-04); NOTIF_DEFAULTS as render fallback only.
   const [notif, setNotif] = React.useState(NOTIF_DEFAULTS);
@@ -290,11 +291,15 @@ export const SettingsScreen = ({
         </div>
         <div className="card" style={{ padding: 4 }}>
           <NavRow label="Тариф и подписка" value="Изменить" onClick={onOpenPlans} />
-          {/* Привязанная карта — BUILT, HIDDEN (needs card-on-file API) */}
+          {/* Привязанная карта — wired to GET /client/payment-method (PAYM-05) */}
           {SETTINGS_FEATURE_FLAGS.linkedCard && (
             <>
               <Divider2 />
-              <NavRow label="Привязанная карта" value="•••• 4821" onClick={onOpenCard} />
+              <NavRow
+                label="Привязанная карта"
+                value={paymentMethod ? `•••• ${paymentMethod.last4}` : 'Добавить'}
+                onClick={onOpenCard}
+              />
             </>
           )}
           <Divider2 />

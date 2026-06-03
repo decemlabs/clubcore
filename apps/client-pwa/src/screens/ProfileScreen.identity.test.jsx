@@ -24,6 +24,7 @@ vi.mock('@/data', () => ({
   useClientVisitHistory: () => emptyList,
   useClientPtHistory: () => emptyList,
   useClientPaymentHistory: () => emptyList,
+  useClientWeeklyActivity: () => ({ data: undefined }),
 }))
 vi.mock('@/context/AuthContext.jsx', () => ({
   useAuth: () => ({ logout: () => {} }),

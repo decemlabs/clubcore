@@ -17,6 +17,7 @@ const useUpdateClientProfile = vi.fn()
 vi.mock('@/data', () => ({
   useClientMe: (...args) => useClientMe(...args),
   useUpdateClientProfile: (...args) => useUpdateClientProfile(...args),
+  useClientPaymentMethod: () => ({ data: null }),
 }))
 
 // ─── Mock AuthContext ────────────────────────────────────────────────────────

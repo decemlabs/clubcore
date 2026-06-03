@@ -546,6 +546,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/activity/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Weekly workout activity (Mon-Sun, Europe/Moscow, zero-filled) for the authenticated client (WACT-01)
+         * @description WACT-01 — own-week activity read, IDOR-safe via client_id from principal.
+         *
+         *     No CSRF dep — GET is a safe method (RBAC-04).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     D-69-03: empty week → all 7 days workouts=0 (never []).
+         *     D-20-IDOR: client_id injected from cookie principal, not URL param.
+         */
+        get: operations["client_get_weekly_activity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/booking": {
         parameters: {
             query?: never;
@@ -611,6 +636,42 @@ export interface paths {
          *     No try/except — AppError bubbles to _app_error_handler.
          */
         post: operations["client_cancel_booking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/booking/{booking_id}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reschedule the authenticated client's own confirmed booking to a new slot of the same trainer (RESCH-01; requires Idempotency-Key — D-70-02; 409 slot_already_booked on race; 409 reschedule_window_expired if <24h; 409 slot_trainer_mismatch on cross-trainer; 404 on non-owned booking)
+         * @description Reschedule the authenticated client's own confirmed booking (Phase 80 RESCH-01).
+         *
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency
+         *     → get_db / get_redis.
+         *
+         *     client.id is the IDOR-safe source (T-80-05): NO client_id in the body
+         *     (ClientRescheduleBookingRequest has no client_id field — extra='forbid' rejects any
+         *     injected client_id).
+         *
+         *     RESCH-01: atomic same-trainer reschedule; window guard (<24h → 409); cross-trainer
+         *     guard (409 slot_trainer_mismatch); TOCTOU race → 409 slot_already_booked.
+         *     PT-session credit preserved (T-80-11): reschedule is a slot MOVE, not cancel+rebook.
+         *
+         *     Two-phase Redis idempotency (D-70-02 / D-66-LIFECYCLE-HELPER): mirrors
+         *     client_create_booking with verify_client_idempotency instead of verify_idempotency.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["client_reschedule_booking"];
         delete?: never;
         options?: never;
         head?: never;
@@ -943,6 +1004,63 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/payment-method": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active payment method for the authenticated client (PAYM-02; 200 null if none)
+         * @description D-69-03: no active card → 200 with null, not 404.
+         *     D-20-IDOR: client_id injected from cookie principal, not URL param.
+         *     No CSRF dep — GET is a safe method (RBAC-04).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     No session.commit() — read path.
+         */
+        get: operations["client_get_payment_method"];
+        put?: never;
+        post?: never;
+        /**
+         * Soft-delete the authenticated client's active payment method (PAYM-03); 204 No Content; idempotent no-op if no active card
+         * @description RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     D-20-IDOR: client_id from principal only — no URL param.
+         *     Idempotent: deleting absent/already-unlinked card is a 204 no-op.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     Commit owner: caller-owns-txn (D-32-10/D-49-19).
+         */
+        delete: operations["client_delete_payment_method"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/payment-method/autopay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Enable/disable autopay for the authenticated client's active card (PAYM-04); 409 no_active_payment_method if no card; 409 consent_required if enable without consent
+         * @description RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     D-20-IDOR: client_id from principal only — no URL param or body field.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     Commit owner: caller-owns-txn (D-32-10/D-49-19); service never commits.
+         *     409 no_active_payment_method when no active card.
+         *     409 consent_required when enabling without consent_acknowledged=True (ФЗ-376).
+         */
+        patch: operations["client_patch_payment_method_autopay"];
         trace?: never;
     };
     "/api/v1/client/payments/{payment_id}/status": {
@@ -3297,6 +3415,28 @@ export interface components {
          */
         BookingStatus: "confirmed" | "cancelled" | "no_show" | "completed";
         /**
+         * ClientAutopayPatchRequest
+         * @description PATCH /client/payment-method/autopay body (PAYM-04).
+         *
+         *     enabled=True requires consent_acknowledged=True (ФЗ-376 gate).
+         *     enabled=False is ungated — no consent needed.
+         *
+         *     Inbound request body → BackendSchemaBase (extra='forbid'): unknown keys are
+         *     REJECTED, not ignored. This is a consent-gated ФЗ-376 endpoint, so a client
+         *     typo (e.g. a misspelled ``consentAcknowleged``) must surface as a 422 rather
+         *     than silently defaulting ``consent_acknowledged`` to False and yielding a
+         *     confusing 409 (WR-79-01).
+         */
+        ClientAutopayPatchRequest: {
+            /**
+             * Consentacknowledged
+             * @default false
+             */
+            consentAcknowledged: boolean;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
          * ClientAvailableSlotItem
          * @description Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).
          *
@@ -3472,10 +3612,16 @@ export interface components {
          *     No fields required for membership (plan_id in path); for PT the
          *     idempotency_key is supplied via Idempotency-Key header (D-71-04), not body.
          *     Phase 999.4 D-06: optional promo_code field (wire: promoCode).
+         *     Phase 79 PAYM-01: optional save_payment_method flag (wire: savePaymentMethod).
          */
         ClientCheckoutRequest: {
             /** Promocode */
             promoCode?: string | null;
+            /**
+             * Savepaymentmethod
+             * @default false
+             */
+            savePaymentMethod: boolean;
         };
         /**
          * ClientCheckoutResponse
@@ -3580,6 +3726,7 @@ export interface components {
             id: string;
             /** Lastname */
             lastName: string;
+            notifPrefs: components["schemas"]["NotifPrefs"];
             /** Onboardingcompletedat */
             onboardingCompletedAt?: string | null;
             /** Phone */
@@ -3595,6 +3742,8 @@ export interface components {
          *     days_until_end and expiring_soon are server-computed; the PWA renders only (D-69-02).
          */
         ClientMembershipResponse: {
+            /** Autorenew */
+            autoRenew: boolean | null;
             /** Daysuntilend */
             daysUntilEnd: number;
             /**
@@ -3611,6 +3760,8 @@ export interface components {
             id: string;
             /** Plannamesnapshot */
             planNameSnapshot: string;
+            /** Pricekopecks */
+            priceKopecks: number;
             /**
              * Startdate
              * Format: date
@@ -3682,6 +3833,33 @@ export interface components {
             subjectKind: string;
         };
         /**
+         * ClientPaymentMethodResponse
+         * @description GET /client/payment-method payload — display fields only (PAYM-02).
+         *
+         *     yookassa_method_id is NEVER included (D-decision: token never wired to client, T-79-04).
+         *     expiry_month / expiry_year optional (may be absent for some card types).
+         *     consent_recorded_at: None means autopay has never been enabled.
+         */
+        ClientPaymentMethodResponse: {
+            /** Autopayenabled */
+            autopayEnabled: boolean;
+            /** Brand */
+            brand: string;
+            /** Consentrecordedat */
+            consentRecordedAt?: string | null;
+            /** Expirymonth */
+            expiryMonth?: number | null;
+            /** Expiryyear */
+            expiryYear?: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last4 */
+            last4: string;
+        };
+        /**
          * ClientPaymentStatusResponse
          * @description Coarse payment status (CPAY-03 anti-oracle).
          *
@@ -3725,6 +3903,7 @@ export interface components {
             goal?: string | null;
             /** Heightcm */
             heightCm?: number | null;
+            notifPrefs?: components["schemas"]["NotifPrefs"] | null;
             /** Onboardingcompleted */
             onboardingCompleted?: boolean | null;
             /** Weightkg */
@@ -3798,6 +3977,21 @@ export interface components {
             expiresIn: number;
             /** Token */
             token: string;
+        };
+        /**
+         * ClientRescheduleBookingRequest
+         * @description POST /client/booking/{id}/reschedule body (Phase 80 RESCH-01 / T-80-03).
+         *
+         *     NO client_id field — the principal from require_client() is the IDOR-safe
+         *     source (T-80-03 mitigated structurally; extra='forbid' from BackendSchemaBase
+         *     rejects any injected client_id from the body).
+         */
+        ClientRescheduleBookingRequest: {
+            /**
+             * Newslotid
+             * Format: uuid
+             */
+            newSlotId: string;
         };
         /**
          * ClientResponse
@@ -3905,6 +4099,25 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /**
+         * ClientWeeklyActivityItem
+         * @description Single day's workout count for the weekly activity endpoint (WACT-01).
+         *
+         *     Ordered Mon→Sun (service constructs the list in day order).
+         *     minutes is always None — no duration column in schema (deferred to WACT-03).
+         *     date wire: ISO date string (date type serialises as YYYY-MM-DD via ResponseData).
+         */
+        ClientWeeklyActivityItem: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Minutes */
+            minutes?: number | null;
+            /** Workouts */
+            workouts: number;
         };
         /**
          * ClientsReportResponse
@@ -4254,6 +4467,28 @@ export interface components {
          * @enum {string}
          */
         MembershipStatus: "active" | "expired" | "cancelled" | "frozen";
+        /**
+         * NotifPrefs
+         * @description Notification preference flags (Phase 75 NOTIF-01 / D-04).
+         *
+         *     Strict schema: inherits BackendSchemaBase (extra='forbid') so unknown keys
+         *     are rejected at the wire layer with a 422 ValidationError.
+         *     All four fields are required (no defaults here — defaults applied server-side
+         *     when the clients.notif_prefs column is NULL, per D-06).
+         *
+         *     Wire names (single-word keys are unchanged by to_camel alias_generator):
+         *       promo / schedule / trainer / sound
+         */
+        NotifPrefs: {
+            /** Promo */
+            promo: boolean;
+            /** Schedule */
+            schedule: boolean;
+            /** Sound */
+            sound: boolean;
+            /** Trainer */
+            trainer: boolean;
+        };
         /**
          * OnlineRefundRequest
          * @description POST /api/v1/online-payments/{id}/refund body (Phase 51 REFUND-01).
@@ -5137,6 +5372,10 @@ export interface components {
         ResponseEnvelope_ClientMeResponse_: {
             data: components["schemas"]["ClientMeResponse"];
         };
+        /** ResponseEnvelope[ClientPaymentMethodResponse] */
+        ResponseEnvelope_ClientPaymentMethodResponse_: {
+            data: components["schemas"]["ClientPaymentMethodResponse"];
+        };
         /** ResponseEnvelope[ClientPaymentStatusResponse] */
         ResponseEnvelope_ClientPaymentStatusResponse_: {
             data: components["schemas"]["ClientPaymentStatusResponse"];
@@ -5334,6 +5573,10 @@ export interface components {
         ResponseEnvelope_Union_ClientMembershipResponse__NoneType__: {
             data: components["schemas"]["ClientMembershipResponse"] | null;
         };
+        /** ResponseEnvelope[Union[ClientPaymentMethodResponse, NoneType]] */
+        ResponseEnvelope_Union_ClientPaymentMethodResponse__NoneType__: {
+            data: components["schemas"]["ClientPaymentMethodResponse"] | null;
+        };
         /** ResponseEnvelope[UserCreateResponse] */
         ResponseEnvelope_UserCreateResponse_: {
             data: components["schemas"]["UserCreateResponse"];
@@ -5364,6 +5607,11 @@ export interface components {
         ResponseEnvelope_list_ClientCatalogTrainerResponse__: {
             /** Data */
             data: components["schemas"]["ClientCatalogTrainerResponse"][];
+        };
+        /** ResponseEnvelope[list[ClientWeeklyActivityItem]] */
+        ResponseEnvelope_list_ClientWeeklyActivityItem__: {
+            /** Data */
+            data: components["schemas"]["ClientWeeklyActivityItem"][];
         };
         /**
          * RevenueBucket
@@ -6687,6 +6935,26 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    client_get_weekly_activity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_list_ClientWeeklyActivityItem__"];
+                };
+            };
+        };
+    };
     client_create_booking: {
         parameters: {
             query?: never;
@@ -6722,6 +6990,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientBookingResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_reschedule_booking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientRescheduleBookingRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -7042,6 +7337,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_get_payment_method: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_Union_ClientPaymentMethodResponse__NoneType__"];
+                };
+            };
+        };
+    };
+    client_delete_payment_method: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    client_patch_payment_method_autopay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientAutopayPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientPaymentMethodResponse_"];
                 };
             };
             422: components["responses"]["422_ValidationError"];

@@ -13,6 +13,7 @@ import {
   useClientVisitHistory,
   useClientPtHistory,
   useClientPaymentHistory,
+  useClientWeeklyActivity,
 } from '@/data';
 
 // ─── Deferred-feature scaffolding (BUILT, HIDDEN) ─────────────────────────
@@ -23,10 +24,10 @@ import {
 //  • weeksStat      — third stat strip cell "N недель" (needs tenure data)
 //  • linkedCard     — "Привязанная карта •••• 4821" row in Settings (needs card-on-file)
 const PROFILE_FEATURE_FLAGS = {
-  weeklyActivity: false,
+  weeklyActivity: true,   // WACT-02: wired to GET /client/activity/weekly
   tenureBadge:    false,
   weeksStat:      false,
-  linkedCard:     false,
+  linkedCard:     true,   // PAYM-05: wired to CardSheet + payment-method API
 };
 
 // ─── Membership adapter — shared single source of truth (WR-05) ────────────
@@ -76,6 +77,7 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
   const { data: membership } = useClientMembership();
   const { data: visitData } = useClientVisitHistory(1);
   const { data: ptData } = useClientPtHistory(1);
+  const { data: weeklyActivity } = useClientWeeklyActivity();
 
   // Real membership from /client/home; null → genuine "Нет абонемента" empty state.
   const sub = toSubInfo(homeData?.membership ?? null);
@@ -264,21 +266,35 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
           </div>
         </div>
 
-        {/* BUILT, HIDDEN: weekly activity card — needs workout minutes/type per day from API */}
+        {/* Weekly activity card — wired to GET /client/activity/weekly (WACT-02) */}
         {PROFILE_FEATURE_FLAGS.weeklyActivity && (
           <div style={{ padding: '0 16px 18px' }}>
             <div className="card fade-up" style={{ padding: 14 }}>
               <div className="row-between" style={{ alignItems: 'center' }}>
                 <span className="t-mini" style={{ color: 'var(--text-3)' }}>Активность за неделю</span>
               </div>
-              {/* Activity bars placeholder — wired when workout-minutes API lands */}
+              {/* Activity bars — heights derived from useClientWeeklyActivity workouts (WACT-02) */}
               <div style={{ height: 60, display: 'flex', alignItems: 'flex-end', gap: 7, marginTop: 12 }}>
-                {['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d => (
-                  <div key={d} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: '100%', height: 40, borderRadius: 6, background: 'var(--border-strong)' }} />
-                    <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-3)' }}>{d}</span>
-                  </div>
-                ))}
+                {(() => {
+                  const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+                  const items = weeklyActivity ?? [];
+                  const maxWorkouts = items.reduce((m, it) => Math.max(m, it.workouts ?? 0), 0);
+                  return days.map((d, i) => {
+                    const w = items[i]?.workouts ?? 0;
+                    // Min bar height 6px; max 40px. Guard divide-by-zero — flat bars when no data.
+                    const barH = maxWorkouts > 0 ? Math.max(6, Math.round((w / maxWorkouts) * 40)) : 6;
+                    const active = w > 0;
+                    return (
+                      <div key={d} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+                        <div style={{
+                          width: '100%', height: barH, borderRadius: 6,
+                          background: active ? 'var(--accent)' : 'var(--border-strong)',
+                        }} />
+                        <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-3)' }}>{d}</span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>

@@ -639,6 +639,26 @@
         "title": "BookingStatus",
         "type": "string"
       },
+      "ClientAutopayPatchRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /client/payment-method/autopay body (PAYM-04).\n\nenabled=True requires consent_acknowledged=True (ФЗ-376 gate).\nenabled=False is ungated — no consent needed.\n\nInbound request body → BackendSchemaBase (extra='forbid'): unknown keys are\nREJECTED, not ignored. This is a consent-gated ФЗ-376 endpoint, so a client\ntypo (e.g. a misspelled ``consentAcknowleged``) must surface as a 422 rather\nthan silently defaulting ``consent_acknowledged`` to False and yielding a\nconfusing 409 (WR-79-01).",
+        "properties": {
+          "consentAcknowledged": {
+            "default": false,
+            "title": "Consentacknowledged",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ClientAutopayPatchRequest",
+        "type": "object"
+      },
       "ClientAvailableSlotItem": {
         "description": "Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).\n\nNO owner-only economics. Verified column sources:\n  trainer_availability_slots (app/modules/schedule/models.py:64-152):\n    id           UUID PK\n    trainer_id   UUID FK trainers.id\n    start_time   DateTime(timezone=True)\n    end_time     DateTime(timezone=True)\n    status       String(16)\n  trainers (app/modules/trainers/models.py:23-43):\n    full_name    Text NOT NULL\nspecialization is NOT on the Trainer model in v1 (reserved for future);\nomitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).",
         "properties": {
@@ -841,7 +861,7 @@
         "type": "object"
       },
       "ClientCheckoutRequest": {
-        "description": "Request body for client-initiated checkout (CPAY-01/02).\n\nNo fields required for membership (plan_id in path); for PT the\nidempotency_key is supplied via Idempotency-Key header (D-71-04), not body.\nPhase 999.4 D-06: optional promo_code field (wire: promoCode).",
+        "description": "Request body for client-initiated checkout (CPAY-01/02).\n\nNo fields required for membership (plan_id in path); for PT the\nidempotency_key is supplied via Idempotency-Key header (D-71-04), not body.\nPhase 999.4 D-06: optional promo_code field (wire: promoCode).\nPhase 79 PAYM-01: optional save_payment_method flag (wire: savePaymentMethod).",
         "properties": {
           "promoCode": {
             "anyOf": [
@@ -853,6 +873,11 @@
               }
             ],
             "title": "Promocode"
+          },
+          "savePaymentMethod": {
+            "default": false,
+            "title": "Savepaymentmethod",
+            "type": "boolean"
           }
         },
         "title": "ClientCheckoutRequest",
@@ -1111,6 +1136,9 @@
             "title": "Lastname",
             "type": "string"
           },
+          "notifPrefs": {
+            "$ref": "#/components/schemas/NotifPrefs"
+          },
           "onboardingCompletedAt": {
             "anyOf": [
               {
@@ -1143,7 +1171,8 @@
           "id",
           "firstName",
           "lastName",
-          "phone"
+          "phone",
+          "notifPrefs"
         ],
         "title": "ClientMeResponse",
         "type": "object"
@@ -1151,6 +1180,17 @@
       "ClientMembershipResponse": {
         "description": "Active membership payload with server-derived temporal fields (D-69-02).\n\nExposed fields only (D-69-05): no freeze_days_limit_snapshot internals, no audit fields.\ndays_until_end and expiring_soon are server-computed; the PWA renders only (D-69-02).",
         "properties": {
+          "autoRenew": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autorenew"
+          },
           "daysUntilEnd": {
             "title": "Daysuntilend",
             "type": "integer"
@@ -1173,6 +1213,10 @@
             "title": "Plannamesnapshot",
             "type": "string"
           },
+          "priceKopecks": {
+            "title": "Pricekopecks",
+            "type": "integer"
+          },
           "startDate": {
             "format": "date",
             "title": "Startdate",
@@ -1190,7 +1234,9 @@
           "endDate",
           "status",
           "daysUntilEnd",
-          "expiringSoon"
+          "expiringSoon",
+          "priceKopecks",
+          "autoRenew"
         ],
         "title": "ClientMembershipResponse",
         "type": "object"
@@ -1299,6 +1345,70 @@
         "title": "ClientPaymentItem",
         "type": "object"
       },
+      "ClientPaymentMethodResponse": {
+        "description": "GET /client/payment-method payload — display fields only (PAYM-02).\n\nyookassa_method_id is NEVER included (D-decision: token never wired to client, T-79-04).\nexpiry_month / expiry_year optional (may be absent for some card types).\nconsent_recorded_at: None means autopay has never been enabled.",
+        "properties": {
+          "autopayEnabled": {
+            "title": "Autopayenabled",
+            "type": "boolean"
+          },
+          "brand": {
+            "title": "Brand",
+            "type": "string"
+          },
+          "consentRecordedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consentrecordedat"
+          },
+          "expiryMonth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expirymonth"
+          },
+          "expiryYear": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiryyear"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last4": {
+            "title": "Last4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "last4",
+          "brand",
+          "autopayEnabled"
+        ],
+        "title": "ClientPaymentMethodResponse",
+        "type": "object"
+      },
       "ClientPaymentStatusResponse": {
         "description": "Coarse payment status (CPAY-03 anti-oracle).\n\nOnly 'pending' | 'succeeded' | 'canceled' — never activation or membership details.\nPhase 999.4 D-11: receipt_url exposed when a ЮKassa fiscal receipt exists and succeeded.\nPhase 999.5 D-09/D-10: receipt_email and receipt_phone for post-payment receipt display.",
         "properties": {
@@ -1398,6 +1508,16 @@
               }
             ],
             "title": "Heightcm"
+          },
+          "notifPrefs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotifPrefs"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "onboardingCompleted": {
             "anyOf": [
@@ -1529,6 +1649,22 @@
           "expiresIn"
         ],
         "title": "ClientQrTokenResponse",
+        "type": "object"
+      },
+      "ClientRescheduleBookingRequest": {
+        "additionalProperties": false,
+        "description": "POST /client/booking/{id}/reschedule body (Phase 80 RESCH-01 / T-80-03).\n\nNO client_id field — the principal from require_client() is the IDOR-safe\nsource (T-80-03 mitigated structurally; extra='forbid' from BackendSchemaBase\nrejects any injected client_id from the body).",
+        "properties": {
+          "newSlotId": {
+            "format": "uuid",
+            "title": "Newslotid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "newSlotId"
+        ],
+        "title": "ClientRescheduleBookingRequest",
         "type": "object"
       },
       "ClientResponse": {
@@ -1836,6 +1972,37 @@
           "checkedInAt"
         ],
         "title": "ClientVisitItem",
+        "type": "object"
+      },
+      "ClientWeeklyActivityItem": {
+        "description": "Single day's workout count for the weekly activity endpoint (WACT-01).\n\nOrdered Mon→Sun (service constructs the list in day order).\nminutes is always None — no duration column in schema (deferred to WACT-03).\ndate wire: ISO date string (date type serialises as YYYY-MM-DD via ResponseData).",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes"
+          },
+          "workouts": {
+            "title": "Workouts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "workouts"
+        ],
+        "title": "ClientWeeklyActivityItem",
         "type": "object"
       },
       "ClientsReportResponse": {
@@ -2524,6 +2691,36 @@
         ],
         "title": "MembershipStatus",
         "type": "string"
+      },
+      "NotifPrefs": {
+        "additionalProperties": false,
+        "description": "Notification preference flags (Phase 75 NOTIF-01 / D-04).\n\nStrict schema: inherits BackendSchemaBase (extra='forbid') so unknown keys\nare rejected at the wire layer with a 422 ValidationError.\nAll four fields are required (no defaults here — defaults applied server-side\nwhen the clients.notif_prefs column is NULL, per D-06).\n\nWire names (single-word keys are unchanged by to_camel alias_generator):\n  promo / schedule / trainer / sound",
+        "properties": {
+          "promo": {
+            "title": "Promo",
+            "type": "boolean"
+          },
+          "schedule": {
+            "title": "Schedule",
+            "type": "boolean"
+          },
+          "sound": {
+            "title": "Sound",
+            "type": "boolean"
+          },
+          "trainer": {
+            "title": "Trainer",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "promo",
+          "schedule",
+          "trainer",
+          "sound"
+        ],
+        "title": "NotifPrefs",
+        "type": "object"
       },
       "OnlineRefundRequest": {
         "additionalProperties": false,
@@ -4378,6 +4575,18 @@
         "title": "ResponseEnvelope[ClientMeResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_ClientPaymentMethodResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientPaymentMethodResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientPaymentMethodResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientPaymentStatusResponse_": {
         "properties": {
           "data": {
@@ -4974,6 +5183,25 @@
         "title": "ResponseEnvelope[Union[ClientMembershipResponse, NoneType]]",
         "type": "object"
       },
+      "ResponseEnvelope_Union_ClientPaymentMethodResponse__NoneType__": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientPaymentMethodResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[Union[ClientPaymentMethodResponse, NoneType]]",
+        "type": "object"
+      },
       "ResponseEnvelope_UserCreateResponse_": {
         "properties": {
           "data": {
@@ -5068,6 +5296,22 @@
           "data"
         ],
         "title": "ResponseEnvelope[list[ClientCatalogTrainerResponse]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_list_ClientWeeklyActivityItem__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ClientWeeklyActivityItem"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[list[ClientWeeklyActivityItem]]",
         "type": "object"
       },
       "RevenueBucket": {
@@ -7307,6 +7551,28 @@
         ]
       }
     },
+    "/api/v1/client/activity/weekly": {
+      "get": {
+        "description": "WACT-01 — own-week activity read, IDOR-safe via client_id from principal.\n\nNo CSRF dep — GET is a safe method (RBAC-04).\nNo try/except — AppError bubbles to _app_error_handler.\nD-69-03: empty week → all 7 days workouts=0 (never []).\nD-20-IDOR: client_id injected from cookie principal, not URL param.",
+        "operationId": "client_get_weekly_activity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_list_ClientWeeklyActivityItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Weekly workout activity (Mon-Sun, Europe/Moscow, zero-filled) for the authenticated client (WACT-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
     "/api/v1/client/booking": {
       "post": {
         "description": "Create a confirmed booking for the authenticated client (Phase 70 CBOOK-03/04).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency\n→ get_db / get_redis.\n\nclient.id is the IDOR-safe source (T-70-11): NO client_id in the body\n(ClientCreateBookingRequest has no client_id field).\n\nCBOOK-04: PtPackageNotActiveError is mapped to 422 no_active_pt_package in the\nservice delegate (service.create_booking_for_client_request) so the PWA can\nroute the user to Plans/Checkout (D-70-03).\n\nCBOOK-03: SlotAlreadyBookedError from the partial-UNIQUE race bubbles as 409\nslot_already_booked. Two requests with DISTINCT Idempotency-Keys surface the\nrace at the DB partial UNIQUE (uq_bookings_slot_confirmed); same key replays.\n\nTwo-phase Redis idempotency (D-70-02 / D-66-LIFECYCLE-HELPER): mirrors staff\nPOST /bookings (bookings/router.py:116-128) with verify_client_idempotency\ninstead of verify_idempotency.\n\nNo try/except — AppError bubbles to _app_error_handler.",
@@ -7374,6 +7640,53 @@
           }
         },
         "summary": "Cancel the authenticated client's own confirmed booking (CBOOK-05; 404 booking_not_found on non-owned booking — IDOR anti-oracle; 409 cancel_window_expired if outside client cancel window)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/booking/{booking_id}/reschedule": {
+      "post": {
+        "description": "Reschedule the authenticated client's own confirmed booking (Phase 80 RESCH-01).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency\n→ get_db / get_redis.\n\nclient.id is the IDOR-safe source (T-80-05): NO client_id in the body\n(ClientRescheduleBookingRequest has no client_id field — extra='forbid' rejects any\ninjected client_id).\n\nRESCH-01: atomic same-trainer reschedule; window guard (<24h → 409); cross-trainer\nguard (409 slot_trainer_mismatch); TOCTOU race → 409 slot_already_booked.\nPT-session credit preserved (T-80-11): reschedule is a slot MOVE, not cancel+rebook.\n\nTwo-phase Redis idempotency (D-70-02 / D-66-LIFECYCLE-HELPER): mirrors\nclient_create_booking with verify_client_idempotency instead of verify_idempotency.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_reschedule_booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientRescheduleBookingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientBookingResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Reschedule the authenticated client's own confirmed booking to a new slot of the same trainer (RESCH-01; requires Idempotency-Key — D-70-02; 409 slot_already_booked on race; 409 reschedule_window_expired if <24h; 409 slot_trainer_mismatch on cross-trainer; 404 on non-owned booking)",
         "tags": [
           "Client-Portal"
         ]
@@ -7885,6 +8198,76 @@
         },
         "security": [],
         "summary": "Client Otp Verify",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/payment-method": {
+      "delete": {
+        "description": "RBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nD-20-IDOR: client_id from principal only — no URL param.\nIdempotent: deleting absent/already-unlinked card is a 204 no-op.\nNo try/except — AppError bubbles to _app_error_handler.\nCommit owner: caller-owns-txn (D-32-10/D-49-19).",
+        "operationId": "client_delete_payment_method",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soft-delete the authenticated client's active payment method (PAYM-03); 204 No Content; idempotent no-op if no active card",
+        "tags": [
+          "Client-Portal"
+        ]
+      },
+      "get": {
+        "description": "D-69-03: no active card → 200 with null, not 404.\nD-20-IDOR: client_id injected from cookie principal, not URL param.\nNo CSRF dep — GET is a safe method (RBAC-04).\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
+        "operationId": "client_get_payment_method",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_Union_ClientPaymentMethodResponse__NoneType__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active payment method for the authenticated client (PAYM-02; 200 null if none)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/payment-method/autopay": {
+      "patch": {
+        "description": "RBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nD-20-IDOR: client_id from principal only — no URL param or body field.\nNo try/except — AppError bubbles to _app_error_handler.\nCommit owner: caller-owns-txn (D-32-10/D-49-19); service never commits.\n409 no_active_payment_method when no active card.\n409 consent_required when enabling without consent_acknowledged=True (ФЗ-376).",
+        "operationId": "client_patch_payment_method_autopay",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientAutopayPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientPaymentMethodResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Enable/disable autopay for the authenticated client's active card (PAYM-04); 409 no_active_payment_method if no card; 409 consent_required if enable without consent",
         "tags": [
           "Client-Portal"
         ]
