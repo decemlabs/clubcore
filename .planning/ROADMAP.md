@@ -83,6 +83,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, новый модуль `payment_methods/`, webhook save-step, GET/DELETE/PATCH endpoints, ФЗ-376 consent capture (PAYM-01, PAYM-02, PAYM-03, PAYM-04) (completed 2026-06-03)
 - [x] **Phase 80: Booking Reschedule** — атомарный cancel+create, `reschedule_booking_for_client` Protocol slot, migration 0053, `booking_rescheduled` audit event, DM-шаблон, PWA wiring (RESCH-01, RESCH-02, RESCH-03) (completed 2026-06-03)
 - [x] **Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff** — `GET /client/activity/weekly`, flip `linkedCard`/`weeklyActivity` ON, CardSheet wiring, byte-stable openapi.json regen, golden TZ test, milestone verification (WACT-01, WACT-02, PAYM-05, HND-01) (completed 2026-06-03)
+- [ ] **Phase 81.1: Checkout Save-Card Capture (audit gap closure)** — PWA-only: thread `savePaymentMethod` through checkout hooks + save-card opt-in in CheckoutSheet so a card can actually be linked through the UI; closes the PAYM-01 PWA-capture gap from the v2.2 milestone audit (PAYM-01)
 
 ## Phase Details
 
@@ -138,6 +139,18 @@ Plans:
 - [x] 81-01-weekly-activity-endpoint-PLAN.md — GET /client/activity/weekly: ClientWeeklyActivityItem schema + raw-SQL fetch_weekly_activity over visits.gym_date + 7-day zero-fill service + endpoint + golden TZ unit test + integration/IDOR tests (WACT-01)
 - [x] 81-02-pwa-flag-flips-cardsheet-PLAN.md — Four TanStack Query hooks + flip weeklyActivity/linkedCard flags + wire ProfileScreen bars & Settings card row + CardSheet to real endpoints + ФЗ-376 consent modal + remove «Авто-оплата тренировок» toggle (WACT-02, PAYM-05)
 - [x] 81-03-openapi-handoff-PLAN.md — Byte-stable regen of openapi.json + schema.d.ts with all v2.2 client-portal paths; staff-contract-byte-identical assertion; CI drift gates green + Redocly lint (HND-01)
+
+### Phase 81.1: Checkout Save-Card Capture (audit gap closure)
+**Goal**: Клиент может при чекауте явно согласиться сохранить карту через PWA — флаг `savePaymentMethod` доходит до backend, который уже умеет сохранять токен (Phase 79)
+**Depends on**: Phase 79 (backend save infra), Phase 81 (frozen contract already exposes `savePaymentMethod`)
+**Requirements**: PAYM-01 (PWA-capture leg)
+**Success Criteria** (what must be TRUE):
+  1. `CheckoutSheet` показывает opt-in «Сохранить карту для будущих оплат»; при включении checkout-мутация отправляет `savePaymentMethod: true` в теле запроса
+  2. `useClientCheckoutMembership` и `useClientCheckoutPtPackage` принимают `savePaymentMethod?: boolean` и кладут `save_payment_method` в body (default false — байт-идентично при выключенном)
+  3. openapi.json + schema.d.ts остаются byte-stable (поле уже в замороженном контракте с Phase 79); drift gates зелёные
+  4. Vitest покрывает: opt-in выключен → флаг не отправляется; opt-in включён → `savePaymentMethod:true` уходит в мутацию
+**Plans**: TBD
+**UI hint**: yes
 
 ## Backlog
 
