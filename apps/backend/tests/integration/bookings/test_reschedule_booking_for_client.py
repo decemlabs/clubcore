@@ -605,3 +605,88 @@ async def test_reschedule_booking_notification_row_inserted(
         f"Expected booking_notifications row kind='rescheduled', channel='telegram' "
         f"for new booking {response.id} — not found (RESCH-02 post-send evidence)"
     )
+
+
+# ---------------------------------------------------------------------------
+# 10. CR-01: post-commit DM failure does NOT fail the reschedule (fire-and-forget)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reschedule_booking_dm_failure_does_not_fail_reschedule(
+    db_session: AsyncSession,
+    make_active_trainer: Any,
+    make_linked_client: Any,
+    make_active_pt_package: Any,
+    make_future_slot: Any,
+    fake_bot: object,
+    sender_stub: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase 80 CR-01 / D-39-09: a post-commit DM-send failure (network exception
+    raised AFTER the authoritative Step 11 commit) MUST NOT propagate out of the
+    reschedule. The function still returns the 200 response and the reschedule is
+    durable (old booking cancelled, new booking confirmed)."""
+    sender_module, _sender_state = sender_stub
+
+    async def _raising_send_text_dm(bot: object, chat_id: int, text: str) -> Any:
+        # Simulate a transient Telegram/connection failure that raises instead of
+        # returning a typed SendResult — the worst case the fire-and-forget
+        # envelope must swallow.
+        raise RuntimeError("simulated telegram failure after commit")
+
+    sender_module.send_text_dm = _raising_send_text_dm
+    monkeypatch.setattr("app.modules.bookings.service.telegram_sender", sender_module)
+    monkeypatch.setattr("app.modules.bookings.service.build_bot", lambda *, token: fake_bot)
+
+    trainer = await make_active_trainer(full_name="Тренер Сбой")
+    client = await make_linked_client(telegram_user_id=881_001, first_name="Олег")
+    pkg = await make_active_pt_package(client=client, trainer=trainer, sessions_remaining=5)
+
+    booking, old_slot, _, _, _ = await _seed_confirmed_booking(
+        db_session,
+        make_active_trainer=make_active_trainer,
+        make_linked_client=make_linked_client,
+        make_active_pt_package=make_active_pt_package,
+        make_future_slot=make_future_slot,
+        trainer=trainer,
+        client=client,
+        pt_package=pkg,
+    )
+    new_slot = await make_future_slot(trainer=trainer, start_offset=timedelta(hours=120))
+
+    # MUST NOT raise — the DM failure is swallowed by the fire-and-forget envelope.
+    response = await bookings_service.reschedule_booking_for_client(
+        db_session,
+        client_id=client.id,
+        booking_id=booking.id,
+        new_slot_id=new_slot.id,
+    )
+
+    # Response reflects the durably-committed reschedule.
+    assert response.status == BookingStatus.CONFIRMED
+    assert response.slot_id == new_slot.id
+
+    # Reschedule is durable: old cancelled, new confirmed, slots flipped.
+    await db_session.refresh(booking)
+    assert booking.status == "cancelled"
+    await db_session.refresh(old_slot, attribute_names=["status"])
+    assert old_slot.status == "active"
+    await db_session.refresh(new_slot, attribute_names=["status"])
+    assert new_slot.status == "booked"
+
+    new_booking_row = await db_session.scalar(
+        select(Booking).where(Booking.id == response.id)
+    )
+    assert new_booking_row is not None
+    assert new_booking_row.status == "confirmed"
+
+    # No evidence row was written (the send raised before the INSERT) — and that
+    # is fine: the reschedule succeeded regardless.
+    notif_row = await db_session.scalar(
+        select(BookingNotification).where(
+            BookingNotification.booking_id == response.id,
+            BookingNotification.kind == "rescheduled",
+        )
+    )
+    assert notif_row is None
