@@ -24,11 +24,12 @@ D-20-MODULE: client_portal writes via Protocol slots only; zero new ignore_impor
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -76,6 +77,7 @@ from app.modules.client_portal.schemas import (
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientVisitItem,
+    ClientWeeklyActivityItem,
     NotifPrefs,
 )
 from app.modules.payment_methods.schemas import (
@@ -84,6 +86,7 @@ from app.modules.payment_methods.schemas import (
 )
 
 _EXPIRING_SOON_DAYS = 7  # days threshold for expiring_soon flag (D-69-02)
+_MSK = ZoneInfo("Europe/Moscow")  # Moscow timezone anchor for weekly activity
 
 # ---------------------------------------------------------------------------
 # Phase 999.5 Plan 02 — local validation errors for update_client_profile
@@ -1025,3 +1028,35 @@ async def patch_autopay(
     Raises ConflictError("no_active_payment_method") / ConflictError("consent_required").
     """
     return await _payment_methods_service.patch_autopay(session, client_id, payload)
+
+
+# ---------------------------------------------------------------------------
+# Phase 81 WACT-01 — weekly workout activity
+# ---------------------------------------------------------------------------
+
+
+async def get_client_weekly_activity(
+    session: AsyncSession,
+    client_id: UUID,
+) -> list[ClientWeeklyActivityItem]:
+    """Return 7 zero-filled daily workout counts for the current Moscow week (WACT-01).
+
+    Week anchor: Monday of the current week in Europe/Moscow (isoweekday 1).
+    Zero-fill: DB returns only days with visits; service fills all 7 days.
+    minutes: always None (no duration column in schema — deferred to v2.3 WACT-03).
+
+    IDOR: client_id comes ONLY from require_client() principal via the router.
+    D-69-03: empty week → all 7 days workouts=0 (never []).
+    """
+    now_msk = datetime.now(_MSK)
+    monday = (now_msk - timedelta(days=now_msk.weekday())).date()
+    sunday = monday + timedelta(days=6)
+    rows = await repository.fetch_weekly_activity(session, client_id, monday, sunday)
+    return [
+        ClientWeeklyActivityItem(
+            date=monday + timedelta(days=i),
+            workouts=rows.get(monday + timedelta(days=i), 0),
+            minutes=None,
+        )
+        for i in range(7)
+    ]

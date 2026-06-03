@@ -19,6 +19,7 @@ INVARIANTS:
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -42,6 +43,7 @@ __all__ = (
     "fetch_membership_plans_catalog",
     "fetch_pt_packages_catalog",
     "fetch_trainers_catalog",
+    "fetch_weekly_activity",
     "update_client_profile",
 )
 
@@ -629,6 +631,49 @@ async def update_client_profile(
     except IntegrityError as exc:
         await session.rollback()
         raise ConflictError("email_unavailable") from exc
+
+
+async def fetch_weekly_activity(
+    session: AsyncSession,
+    client_id: UUID,
+    monday: date,
+    sunday: date,
+) -> dict[date, int]:
+    """Aggregate visit counts per gym_date for the current Moscow week (WACT-01).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of Visit (D-54-08/D-20-MODULE).
+    Verified column source:
+      visits (apps/backend/app/modules/visits/models.py:43-113):
+        client_id  UUID FK to clients.id
+        gym_date   Date STORED GENERATED (checked_in_at AT TIME ZONE 'Europe/Moscow')::date
+
+    Groups on gym_date STORED column — NEVER DATE(checked_in_at) (D-81 TZ contract).
+    BETWEEN is inclusive on both ends (Mon..Sun).
+    IDOR: mandatory :client_id bind param.
+    Returns dict {date: count} — service layer zero-fills missing days.
+
+    NOTE: WACT-01 in REQUIREMENTS.md mentions "(+ pt_sessions)", but the locked
+    81-CONTEXT decision groups strictly on visits.gym_date for the golden-TZ contract;
+    pt_sessions are NOT joined (user-decision fidelity, CONTEXT overrides REQUIREMENTS).
+    """
+    rows = (
+        await session.execute(
+            text(
+                "SELECT gym_date, COUNT(*) AS cnt "
+                "FROM visits "
+                "WHERE client_id = :client_id "
+                "  AND gym_date BETWEEN :monday AND :sunday "
+                "GROUP BY gym_date "
+                "ORDER BY gym_date ASC"
+            ),
+            {
+                "client_id": str(client_id),
+                "monday": str(monday),
+                "sunday": str(sunday),
+            },
+        )
+    ).mappings().all()
+    return {row["gym_date"]: int(row["cnt"]) for row in rows}
 
 
 async def fetch_client_payment_status(
