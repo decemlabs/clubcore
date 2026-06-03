@@ -33,6 +33,7 @@ from uuid import UUID, uuid4
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.modules.payment_methods.service as _payment_methods_service
 import app.modules.promo_codes.service as _promo_service
 from app.core.config import get_settings
 from app.core.dependencies import (
@@ -75,6 +76,10 @@ from app.modules.client_portal.schemas import (
     ClientQrTokenResponse,
     ClientVisitItem,
     NotifPrefs,
+)
+from app.modules.payment_methods.schemas import (
+    ClientAutopayPatchRequest,
+    ClientPaymentMethodResponse,
 )
 
 _EXPIRING_SOON_DAYS = 7  # days threshold for expiring_soon flag (D-69-02)
@@ -929,3 +934,47 @@ async def validate_promo_code(
         new_amount_kopecks=new_amount_kopecks,
         discount_type=discount_type,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 79 PAYM-02..04 — payment method pass-throughs (client_portal.service
+# delegates to payment_methods.service; ignore edges in .importlinter Plan 02).
+# ---------------------------------------------------------------------------
+
+
+async def get_payment_method(
+    session: AsyncSession,
+    client_id: UUID,
+) -> ClientPaymentMethodResponse | None:
+    """Return active card for the client, or None when absent (200/null, D-69-03).
+
+    Thin pass-through to payment_methods.service; no session.commit() — read path.
+    IDOR: client_id always supplied from require_client() principal by the router.
+    """
+    return await _payment_methods_service.get_payment_method(session, client_id)
+
+
+async def unlink_payment_method(
+    session: AsyncSession,
+    client_id: UUID,
+) -> None:
+    """Soft-delete the active card (idempotent no-op when no active card exists).
+
+    Thin pass-through to payment_methods.service; no session.commit() — caller-owns-txn.
+    IDOR: client_id always supplied from require_client() principal by the router.
+    """
+    await _payment_methods_service.unlink_payment_method(session, client_id)
+
+
+async def patch_autopay(
+    session: AsyncSession,
+    client_id: UUID,
+    payload: ClientAutopayPatchRequest,
+) -> ClientPaymentMethodResponse:
+    """Enable/disable autopay for the client's active card (PAYM-04 / ФЗ-376).
+
+    Thin pass-through to payment_methods.service; no session.commit() — caller-owns-txn.
+    IDOR: client_id always supplied from require_client() principal by the router.
+    Raises ConflictError("no_active_payment_method") / ConflictError("consent_required").
+    """
+    return await _payment_methods_service.patch_autopay(session, client_id, payload)

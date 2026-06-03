@@ -70,6 +70,10 @@ from app.modules.client_portal.schemas import (
     ClientQrTokenResponse,
     ClientVisitItem,
 )
+from app.modules.payment_methods.schemas import (
+    ClientAutopayPatchRequest,
+    ClientPaymentMethodResponse,
+)
 
 # ---------------------------------------------------------------------------
 # Rate-limit constants for QR endpoints (T-70-18 — D-70-11 abuse control)
@@ -778,5 +782,83 @@ async def client_update_me(
     result = await service.update_client_profile(
         session, client_id=client.id, payload=payload
     )
+    await session.commit()
+    return envelope(result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 79 PAYM-02..04 — payment method endpoints (GET/DELETE/PATCH)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/payment-method",
+    response_model=ResponseEnvelope[ClientPaymentMethodResponse | None],
+    operation_id="client_get_payment_method",
+    summary="Active payment method for the authenticated client (PAYM-02; 200 null if none)",
+)
+async def client_get_payment_method(
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientPaymentMethodResponse | None]:
+    """D-69-03: no active card → 200 with null, not 404.
+    D-20-IDOR: client_id injected from cookie principal, not URL param.
+    No CSRF dep — GET is a safe method (RBAC-04).
+    No try/except — AppError bubbles to _app_error_handler.
+    No session.commit() — read path.
+    """
+    result = await service.get_payment_method(session, client.id)
+    return envelope(result)
+
+
+@router.delete(
+    "/payment-method",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="client_delete_payment_method",
+    summary=(
+        "Soft-delete the authenticated client's active payment method (PAYM-03); "
+        "204 No Content; idempotent no-op if no active card"
+    ),
+)
+async def client_delete_payment_method(
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+    D-20-IDOR: client_id from principal only — no URL param.
+    Idempotent: deleting absent/already-unlinked card is a 204 no-op.
+    No try/except — AppError bubbles to _app_error_handler.
+    Commit owner: caller-owns-txn (D-32-10/D-49-19).
+    """
+    await service.unlink_payment_method(session, client.id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch(
+    "/payment-method/autopay",
+    response_model=ResponseEnvelope[ClientPaymentMethodResponse],
+    status_code=status.HTTP_200_OK,
+    operation_id="client_patch_payment_method_autopay",
+    summary=(
+        "Enable/disable autopay for the authenticated client's active card (PAYM-04); "
+        "409 no_active_payment_method if no card; 409 consent_required if enable without consent"
+    ),
+)
+async def client_patch_payment_method_autopay(
+    payload: ClientAutopayPatchRequest,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientPaymentMethodResponse]:
+    """RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+    D-20-IDOR: client_id from principal only — no URL param or body field.
+    No try/except — AppError bubbles to _app_error_handler.
+    Commit owner: caller-owns-txn (D-32-10/D-49-19); service never commits.
+    409 no_active_payment_method when no active card.
+    409 consent_required when enabling without consent_acknowledged=True (ФЗ-376).
+    """
+    result = await service.patch_autopay(session, client.id, payload)
     await session.commit()
     return envelope(result)
