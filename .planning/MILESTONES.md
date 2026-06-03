@@ -1,5 +1,25 @@
 # Milestones
 
+## v2.2 Membership self-service depth (Shipped: 2026-06-03)
+
+**Phases completed:** 4 phases, 11 plans, 26 tasks
+
+**Key accomplishments:**
+
+- Migration 0052 creates client_payment_methods with partial-UNIQUE alive index; ClientPaymentMethod ORM model and save_payment_method intent column on OnlinePayment verified on local Postgres 16 stack
+- Token-free raw-SQL repository + ФЗ-376 consent-gated service with client-safe Pydantic schemas for the payment_methods module, with two forward-declared importlinter ignore edges
+- save_payment_method flag wired end-to-end (checkout body -> yookassa create_payment -> online_payments row -> webhook step 8.5 raw-SQL upsert into client_payment_methods); 3 integration tests pass including replay idempotency
+- Three IDOR-safe payment-method endpoints (GET/DELETE/PATCH) with ФЗ-376 consent gate, token-free responses, and full behavior + IDOR-sweep test coverage
+- Reschedule foundation: migration 0053 widens booking_notifications.kind CHECK for 'rescheduled' + booking_rescheduled audit event/payload + reschedule DM template + ClientRescheduleBookingRequest schema
+- Atomic client booking reschedule via cancel-old + create-new in one UoW; PT-credit preserved by move semantics; reschedule DM sent via send_text_dm; 9 integration tests prove all error paths, audit, credit, and DM delivery.
+- useRescheduleBooking TanStack mutation hook + real-slot BookingManageSheet reschedule view wired to POST /client/booking/{id}/reschedule with Idempotency-Key; mock CALENDAR/TIME_SLOTS/BUSY_SLOTS removed; 7-test vitest suite green.
+- GET /client/activity/weekly: 7 zero-filled Mon-Sun objects grouped on the visits.gym_date STORED column (minutes=null), IDOR-safe raw-SQL read + golden 21:30-UTC→next-Moscow-day integration test
+- PWA flag flips: weeklyActivity + linkedCard ON; ProfileScreen activity bars + Settings card row + CardSheet wired to real endpoints; ФЗ-376 consent modal on autopay enable; per-booking «Авто-оплата тренировок» toggle removed
+- v2.2 API contract frozen: openapi.json + schema.d.ts byte-stable with all 4 client-portal paths present, staff contract byte-identical, Redocly lint clean, CI drift gates proven green via dual idempotence pass.
+- Phase 81.1 (audit gap closure): save-card opt-in in CheckoutSheet threads savePaymentMethod through both checkout hooks (default OFF → byte-identical body), closing the PAYM-01 PWA-capture gap; contract byte-stable, 130/130 PWA tests green
+
+---
+
 ## v2.1 Client PWA — Fill the Gaps (Shipped: 2026-06-02)
 
 **Phases completed:** 4 phases, 10 plans, 13 tasks

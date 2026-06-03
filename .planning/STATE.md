@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: in_progress
-stopped_at: v2.2 audit gap closed (Phase 81.1 — save-card opt-in); milestone audit PASSED; completing milestone
-last_updated: "2026-06-03T19:10:00.000Z"
-last_activity: 2026-06-03
+status: Awaiting next milestone
+stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
+last_updated: "2026-06-03T19:05:55.181Z"
+last_activity: 2026-06-03 — Milestone v2.2 completed and archived
 progress:
   total_phases: 8
   completed_phases: 4
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 
 ## Current Position
 
-Phase: 81.1 ✅ COMPLETE (audit gap closed) — all v2.2 work done
-Plan: 1 of 1 (81.1 complete)
-Status: Milestone audit PASSED (PAYM-01 PWA-capture gap closed by Phase 81.1, 1/1 verified); proceeding to complete-milestone
-Last activity: 2026-06-03
-
-Milestone progress (real v2.2 = 3 phases): [██████████] 3/3 (100%)
+Phase: Milestone v2.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-03 — Milestone v2.2 completed and archived
 
 ## v2.2 Roadmap Summary
 
@@ -101,3 +99,7 @@ Items carried forward from v2.1 close:
 Last session: 2026-06-03T19:03:08.304Z
 Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
 Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
