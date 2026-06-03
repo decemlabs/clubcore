@@ -25,9 +25,9 @@ class TestClientWeeklyActivityItemSchema:
 
     def test_schema_importable(self) -> None:
         """ClientWeeklyActivityItem is importable from client_portal.schemas."""
-        from app.modules.client_portal.schemas import ClientWeeklyActivityItem as _cls
+        from app.modules.client_portal.schemas import ClientWeeklyActivityItem
 
-        assert _cls is not None
+        assert ClientWeeklyActivityItem is not None
 
     def test_schema_fields(self) -> None:
         """Schema accepts date, workouts int, minutes=None."""
@@ -113,7 +113,7 @@ class TestWeekAnchorHelper:
     def test_week_anchor_starts_on_monday(self) -> None:
         """First date in the week window is a Monday (isoweekday=1)."""
         now_msk = datetime(2026, 6, 3, 8, 0, tzinfo=_MSK)  # Wednesday
-        monday, _sunday, week_dates = self._compute_week(now_msk)
+        monday, _sunday, _week_dates = self._compute_week(now_msk)
         assert monday.isoweekday() == 1  # Monday
 
     def test_week_anchor_ends_on_sunday(self) -> None:

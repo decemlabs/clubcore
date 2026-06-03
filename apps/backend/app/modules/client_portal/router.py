@@ -70,6 +70,7 @@ from app.modules.client_portal.schemas import (
     ClientQrTokenResponse,
     ClientRescheduleBookingRequest,
     ClientVisitItem,
+    ClientWeeklyActivityItem,
 )
 from app.modules.payment_methods.schemas import (
     ClientAutopayPatchRequest,
@@ -927,4 +928,33 @@ async def client_patch_payment_method_autopay(
     """
     result = await service.patch_autopay(session, client.id, payload)
     await session.commit()
+    return envelope(result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 81 WACT-01 -- weekly workout activity (Mon-Sun, Europe/Moscow, zero-filled)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/activity/weekly",
+    response_model=ResponseEnvelope[list[ClientWeeklyActivityItem]],
+    operation_id="client_get_weekly_activity",
+    summary=(
+        "Weekly workout activity (Mon-Sun, Europe/Moscow, zero-filled) "
+        "for the authenticated client (WACT-01)"
+    ),
+)
+async def client_get_weekly_activity(
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[list[ClientWeeklyActivityItem]]:
+    """WACT-01 — own-week activity read, IDOR-safe via client_id from principal.
+
+    No CSRF dep — GET is a safe method (RBAC-04).
+    No try/except — AppError bubbles to _app_error_handler.
+    D-69-03: empty week → all 7 days workouts=0 (never []).
+    D-20-IDOR: client_id injected from cookie principal, not URL param.
+    """
+    result = await service.get_client_weekly_activity(session, client.id)
     return envelope(result)

@@ -668,8 +668,8 @@ async def fetch_weekly_activity(
             ),
             {
                 "client_id": str(client_id),
-                "monday": str(monday),
-                "sunday": str(sunday),
+                "monday": monday,  # pass date objects directly — asyncpg requires native types
+                "sunday": sunday,
             },
         )
     ).mappings().all()
