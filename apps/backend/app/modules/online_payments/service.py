@@ -260,6 +260,26 @@ async def _sell_subject_core(
     #    does not block replay of an already-created redirect row — CPAY-05).
     existing = await repository.get_online_payment_by_idempotency_key(session, idem_key)
     if existing is not None and existing.status != "canceled":
+        # WR-79-06: a same-day replay (server-derived per-day membership key)
+        # may carry an UPGRADED save_payment_method intent — the client first
+        # checked out with save=false, then re-checked-out with save=true. The
+        # replay returns the existing row, so the only way the upgraded intent
+        # reaches the webhook step-8.5 upsert is to persist it onto the existing
+        # row here. ``existing`` is a tracked ORM instance; the assignment
+        # flushes within the caller's UoW (caller-owns-txn). Monotonic upgrade
+        # only (false→true): we never silently DROP a prior save=true intent on
+        # a later save=false replay, since the first save-intent already
+        # captured the card and downgrading would be surprising. The row is not
+        # yet succeeded (status != canceled and a succeeded row's token is
+        # already captured), so flipping the flag still affects the eventual
+        # webhook upsert.
+        if save_payment_method and not existing.save_payment_method:
+            existing.save_payment_method = True
+            _log.info(
+                "online_payment_save_intent_upgraded_on_replay",
+                online_payment_id=str(existing.id),
+                subject_kind=subject_kind,
+            )
         provider = get_yookassa_client_provider()
         yookassa_client = await provider()
         if existing.confirmation_type == CONFIRMATION_TYPE_QR:
