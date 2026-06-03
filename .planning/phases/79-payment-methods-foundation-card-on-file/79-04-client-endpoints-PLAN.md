@@ -16,7 +16,7 @@ must_haves:
     - "GET /client/payment-method returns 200 + display data, or 200 + null when no card; token never present"
     - "DELETE /client/payment-method returns 204, soft-deletes, disables autopay, and is idempotent"
     - "PATCH /client/payment-method/autopay enables only with consent (409 otherwise) and disables ungated"
-    - "All four endpoints are IDOR-safe: client_id from principal only; non-owned card -> null/404 (anti-oracle)"
+    - "All four endpoints are IDOR-safe (client_id from principal only): GET -> 200/null; DELETE -> 204 no-op (idempotent); PATCH -> 409 no_active_payment_method. In no case is there a 404 — anti-oracle is achieved through 200/null and 204 no-op, not 404."
     - "Pre-existing ruff I001 in client_portal/router.py is resolved"
   artifacts:
     - path: "apps/backend/app/modules/client_portal/router.py"
@@ -177,7 +177,7 @@ session, factories). test_idor_sweep.py is the existing multi-endpoint IDOR matr
   <files>apps/backend/tests/integration/client_portal/test_idor_sweep.py</files>
   <read_first>
     - apps/backend/tests/integration/client_portal/test_idor_sweep.py (the existing IDOR matrix — add the new endpoints in the same style)
-    - apps/backend/tests/integration/client_portal/test_client_booking_idor.py (anti-oracle 404-collapse assertion idiom)
+    - apps/backend/tests/integration/client_portal/test_client_booking_idor.py (anti-oracle response-collapse assertion idiom)
     - .planning/phases/79-payment-methods-foundation-card-on-file/79-PATTERNS.md (require_client IDOR discipline lines 648-666)
   </read_first>
   <behavior>
@@ -185,13 +185,15 @@ session, factories). test_idor_sweep.py is the existing multi-endpoint IDOR matr
       B's card; client_id is bound to A's principal, not a param).
     - Client A calls DELETE -> 204 no-op; B's card remains active (verified by B's GET still returning it).
     - Client A calls PATCH autopay enable -> 409 no_active_payment_method (A has no card; B's card untouched).
-    - No endpoint accepts a client_id param/body that could target B's row (anti-oracle: same response
-      whether B's row exists or not — no existence leak).
+    - Anti-oracle: A's responses are identical whether or not B's row exists — no 404 existence leak. The
+      isolation is proven via 200/null (GET) and 204 no-op (DELETE) and 409 no_active_payment_method (PATCH),
+      NOT via 404.
   </behavior>
   <action>
     Extend test_idor_sweep.py with cases for GET/DELETE/PATCH payment-method asserting cross-client
     isolation per the existing sweep idiom: client A's calls operate only on A's (absent) card and never
     touch or reveal client B's card. Verify B's card is still active after A's DELETE/PATCH attempts.
+    Assert A never receives a 404 (the anti-oracle collapse is 200/null + 204 no-op + 409, not 404).
     Reuse the two-client fixtures already used by the booking IDOR cases.
   </action>
   <verify>
@@ -200,9 +202,10 @@ session, factories). test_idor_sweep.py is the existing multi-endpoint IDOR matr
   <acceptance_criteria>
     - The IDOR sweep passes including the new payment-method cases (exit 0).
     - A test asserts client B's card remains active after client A's DELETE/PATCH attempts.
+    - A test asserts client A never gets a 404 on any payment-method endpoint (anti-oracle = 200/null, 204 no-op, 409 — never 404).
     - No new endpoint exposes a client_id param (assertion that A's calls cannot target B's row).
   </acceptance_criteria>
-  <done>Payment-method endpoints proven IDOR-safe (anti-oracle isolation) in the cross-client sweep.</done>
+  <done>Payment-method endpoints proven IDOR-safe (anti-oracle isolation via 200/null + 204 + 409, never 404) in the cross-client sweep.</done>
 </task>
 
 </tasks>
@@ -218,7 +221,7 @@ session, factories). test_idor_sweep.py is the existing multi-endpoint IDOR matr
 
 | Threat ID | Category | Component | Disposition | Mitigation Plan |
 |-----------|----------|-----------|-------------|-----------------|
-| T-79-11 | Elevation of Privilege (BOLA/IDOR) | GET/DELETE/PATCH payment-method | mitigate | client_id sourced from require_client() principal only; no client_id param/body; non-owned -> 200/null or 204 no-op (anti-oracle, no existence leak) — proven by test_idor_sweep additions |
+| T-79-11 | Elevation of Privilege (BOLA/IDOR) | GET/DELETE/PATCH payment-method | mitigate | client_id sourced from require_client() principal only; no client_id param/body; non-owned -> 200/null (GET) or 204 no-op (DELETE) or 409 no_active_payment_method (PATCH) — never 404, so no existence leak (anti-oracle) — proven by test_idor_sweep additions |
 | T-79-12 | Spoofing / CSRF | DELETE + PATCH (state-changing) | mitigate | verify_client_csrf dep in RBAC-04 order (require_client -> verify_client_csrf -> get_db), mirroring client_cancel_booking |
 | T-79-13 | Information Disclosure | GET response token leak | mitigate | response_model uses token-free ClientPaymentMethodResponse; Task 2 asserts the token string is absent from response bodies |
 | T-79-14 | Elevation of Privilege | Autopay enable without ФЗ-376 consent | mitigate | patch_autopay 409 consent_required (Plan 02) surfaced as a 409 at the endpoint; Task 2 asserts the gate |
@@ -234,9 +237,10 @@ session, factories). test_idor_sweep.py is the existing multi-endpoint IDOR matr
 <success_criteria>
 - GET returns 200/null token-free; DELETE 204 idempotent soft-delete (no YooKassa call); PATCH
   consent-gated enable / ungated disable.
-- All four endpoints IDOR-safe (anti-oracle); pre-existing ruff I001 resolved.
+- All four endpoints IDOR-safe (anti-oracle via 200/null + 204 no-op + 409, never 404); pre-existing ruff I001 resolved.
 </success_criteria>
 
 <output>
 Create `.planning/phases/79-payment-methods-foundation-card-on-file/79-04-SUMMARY.md` when done.
 </output>
+</content>

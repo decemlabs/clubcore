@@ -8,6 +8,8 @@ files_modified:
   - apps/backend/app/integrations/yookassa/types.py
   - apps/backend/app/integrations/yookassa/client.py
   - apps/backend/app/modules/client_portal/schemas.py
+  - apps/backend/app/modules/client_portal/router.py
+  - apps/backend/app/modules/client_portal/service.py
   - apps/backend/app/modules/online_payments/service.py
   - apps/backend/app/api/v1/_internal/yookassa/handlers.py
   - apps/backend/tests/integration/client_portal/test_payment_method_webhook_save.py
@@ -16,6 +18,7 @@ requirements: [PAYM-01]
 must_haves:
   truths:
     - "save_payment_method=true in checkout body is persisted to the online_payments row"
+    - "The flag propagates request body -> client_portal router -> client_portal service -> invoke_client_checkout_core -> _sell_subject_core -> online_payments row (no broken link)"
     - "YooKassa create_payment forwards save_payment_method so the token returns in payment.succeeded"
     - "get_payment parses payment_method.type=='bank_card' into YooKassaPaymentMethodInfo (id/last4/card_type/expiry)"
     - "Webhook step 8.5 upserts the saved card token when save_payment_method is true, idempotent on replay"
@@ -24,6 +27,9 @@ must_haves:
     - path: "apps/backend/app/integrations/yookassa/types.py"
       provides: "YooKassaPaymentMethodInfo dataclass + payment_method field on YooKassaPaymentResult"
       contains: "class YooKassaPaymentMethodInfo"
+    - path: "apps/backend/app/modules/client_portal/service.py"
+      provides: "save_payment_method kwarg threaded through both checkout functions into invoke_client_checkout_core"
+      contains: "save_payment_method"
     - path: "apps/backend/app/api/v1/_internal/yookassa/handlers.py"
       provides: "Step 8.5 raw-SQL card upsert in handle_payment_succeeded"
       contains: "client_payment_methods"
@@ -31,6 +37,14 @@ must_haves:
       provides: "Webhook token-save integration test"
       contains: "save_payment_method"
   key_links:
+    - from: "apps/backend/app/modules/client_portal/router.py"
+      to: "client_portal.service checkout functions"
+      via: "pass save_payment_method=payload.save_payment_method"
+      pattern: "save_payment_method=payload\\.save_payment_method"
+    - from: "apps/backend/app/modules/client_portal/service.py"
+      to: "invoke_client_checkout_core"
+      via: "forward save_payment_method kwarg"
+      pattern: "save_payment_method=save_payment_method"
     - from: "apps/backend/app/api/v1/_internal/yookassa/handlers.py"
       to: "client_payment_methods (raw SQL upsert)"
       via: "ON CONFLICT ON CONSTRAINT uq_client_payment_methods_client_id_alive"
@@ -43,14 +57,18 @@ must_haves:
 
 <objective>
 Wire the save-during-payment path: add an optional `save_payment_method` flag to the client checkout
-body and persist it on the `online_payments` row; forward the flag to YooKassa `create_payment`; parse
-the returned card token in `get_payment` into a new `YooKassaPaymentMethodInfo`; and add step 8.5 to
-`handle_payment_succeeded` that raw-SQL-upserts the saved card token (zero new ignore_imports). Cover it
-with a webhook integration test.
+body and persist it on the `online_payments` row; thread the flag through the full intermediate layer
+(`client_portal` router handlers -> `client_portal` service checkout functions -> `invoke_client_checkout_core`)
+so it reaches `_sell_subject_core` and the online_payments INSERT; forward the flag to YooKassa
+`create_payment`; parse the returned card token in `get_payment` into a new `YooKassaPaymentMethodInfo`;
+and add step 8.5 to `handle_payment_succeeded` that raw-SQL-upserts the saved card token (zero new
+ignore_imports). Cover it with a webhook integration test.
 
 Purpose: This is the only legitimate token-capture path (PAYM-01 — token from `payment.succeeded`, NEVER
-from the sync create response; PAN/CVV never stored).
-Output: extended YooKassa types + client parse, checkout-flag persistence, webhook step 8.5, webhook test.
+from the sync create response; PAN/CVV never stored). The flag is worthless unless it propagates end-to-end
+from the request body to `_sell_subject_core`, so the client_portal middle layer MUST be edited too.
+Output: extended YooKassa types + client parse, checkout-flag persistence threaded through the full
+client_portal -> core path, webhook step 8.5, webhook test.
 </objective>
 
 <execution_context>
@@ -83,9 +101,22 @@ Step 8.5 lands AFTER the promo block (after line 528), BEFORE the CHILD audit. `
 online_payments ORM row (has client_id and, after Plan 01, save_payment_method).
 
 ClientCheckoutRequest lives in app/modules/client_portal/schemas.py (has promo_code field per 999.4).
-online_payments record-write happens via the checkout service in app/modules/online_payments/service.py
-(create_payment called at lines 342 and 380); the online_payments row insert must set
-save_payment_method from the request flag.
+Add an optional `save_payment_method: bool = False` field (mirror the promo_code addition).
+
+The intermediate propagation chain (THE BROKEN LINK the flag must travel — confirmed in codebase):
+  - client_portal/router.py: `client_checkout_membership` handler (call site ~lines 587-593) passes
+    `promo_code=payload.promo_code` into `service.client_checkout_membership`; `client_checkout_pt_package`
+    handler (call site ~lines 629-636) passes `promo_code=payload.promo_code` into
+    `service.client_checkout_pt_package`. Both must ALSO pass `save_payment_method=payload.save_payment_method`.
+  - client_portal/service.py: `client_checkout_membership` (def line 644, signature lines 644-651;
+    `invoke_client_checkout_core` call lines 698-711) and `client_checkout_pt_package` (def line 722,
+    signature lines 722-730; `invoke_client_checkout_core` call lines 767+). Both are kwargs-only (`*,`).
+    Add `save_payment_method: bool = False` to each signature and forward
+    `save_payment_method=save_payment_method` in each `invoke_client_checkout_core(...)` call.
+  - invoke_client_checkout_core (app/core/dependencies.py line 1687) is `(session, **kwargs)` and passes
+    kwargs straight through to the registered core — no edit needed; the new kwarg flows transparently.
+  - _sell_subject_core (online_payments/service.py line 197) gains `save_payment_method` (Task 2 below)
+    and writes it onto the online_payments INSERT. create_payment is called at lines 342 + 380.
 
 Test infra: tests/integration/client_portal/conftest.py + factories; webhook/payment fakes exist under
 tests/integration (mirror test_checkout.py + existing webhook tests). httpx ASGITransport + pytest-asyncio.
@@ -138,18 +169,27 @@ tests/integration (mirror test_checkout.py + existing webhook tests). httpx ASGI
 </task>
 
 <task type="auto" tdd="true">
-  <name>Task 2: Checkout flag persistence + webhook step 8.5 card upsert</name>
-  <files>apps/backend/app/modules/client_portal/schemas.py, apps/backend/app/modules/online_payments/service.py, apps/backend/app/api/v1/_internal/yookassa/handlers.py</files>
+  <name>Task 2: Thread save_payment_method body->row through the full client_portal->core path + webhook step 8.5 card upsert</name>
+  <files>apps/backend/app/modules/client_portal/schemas.py, apps/backend/app/modules/client_portal/router.py, apps/backend/app/modules/client_portal/service.py, apps/backend/app/modules/online_payments/service.py, apps/backend/app/api/v1/_internal/yookassa/handlers.py</files>
   <read_first>
     - apps/backend/app/modules/client_portal/schemas.py (ClientCheckoutRequest — promo_code field as the addition analog)
-    - apps/backend/app/modules/online_payments/service.py (create_payment calls lines 342 + 380; the online_payments row insert that must set save_payment_method)
+    - apps/backend/app/modules/client_portal/router.py (client_checkout_membership handler call site ~587-593; client_checkout_pt_package handler call site ~629-636 — both pass promo_code=payload.promo_code; mirror for save_payment_method)
+    - apps/backend/app/modules/client_portal/service.py (client_checkout_membership def 644, invoke_client_checkout_core call 698-711; client_checkout_pt_package def 722, invoke_client_checkout_core call 767+ — both kwargs-only; promo_code is the threading analog)
+    - apps/backend/app/core/dependencies.py (invoke_client_checkout_core line 1687 — (session, **kwargs) pass-through; confirms the new kwarg flows transparently, no edit)
+    - apps/backend/app/modules/online_payments/service.py (_sell_subject_core line 197; create_payment calls lines 342 + 380; the online_payments row insert that must set save_payment_method)
     - apps/backend/app/api/v1/_internal/yookassa/handlers.py (promo redemption block lines 496-528; CHILD audit at 530; re-fetched result at 367; UoW at 388)
     - .planning/phases/79-payment-methods-foundation-card-on-file/79-PATTERNS.md (handlers step 8.5 section lines 519-575)
   </read_first>
   <behavior>
     - ClientCheckoutRequest accepts optional save_payment_method: bool = False (wire savePaymentMethod).
-    - The checkout service writes save_payment_method onto the online_payments row and passes
-      save_payment_method=request.save_payment_method to create_payment (both membership + PT call sites).
+    - PROPAGATION (the previously-missing intermediate link): the router checkout handlers pass
+      save_payment_method=payload.save_payment_method into their service calls; the two
+      client_portal.service checkout functions accept save_payment_method: bool = False and forward it as a
+      kwarg into invoke_client_checkout_core; invoke_client_checkout_core (already **kwargs) relays it to
+      _sell_subject_core unchanged.
+    - _sell_subject_core accepts save_payment_method: bool = False, writes it onto the online_payments row
+      INSERT, and passes save_payment_method=save_payment_method to create_payment (both membership + PT
+      call sites). End state: row.save_payment_method == the request flag (no longer stuck at False).
     - In handle_payment_succeeded, when row.save_payment_method is true AND result.payment_method is not
       None, a raw-SQL INSERT ... ON CONFLICT ON CONSTRAINT uq_client_payment_methods_client_id_alive
       DO UPDATE upserts the card (resetting unlinked_at=NULL, autopay_enabled=false, consent_recorded_at=
@@ -158,31 +198,44 @@ tests/integration (mirror test_checkout.py + existing webhook tests). httpx ASGI
     - When save_payment_method is false OR result.payment_method is None, no card row is written.
   </behavior>
   <action>
-    Add `save_payment_method: bool = False` to ClientCheckoutRequest (both membership + PT bodies if
-    separate; mirror the promo_code field). In online_payments/service.py thread the flag: set the column on
-    the online_payments insert and pass save_payment_method to BOTH create_payment call sites (lines 342 +
-    380). In handlers.py, after the promo redemption block (after line 528) and before the CHILD audit emit
-    (line 530), add the step 8.5 block per 79-PATTERNS.md lines 526-566: guard on
-    `if row.save_payment_method and result.payment_method is not None:`; raw-SQL INSERT into
+    Add `save_payment_method: bool = False` to ClientCheckoutRequest (mirror the promo_code field; alias
+    savePaymentMethod if the schema uses camelCase aliases). In client_portal/router.py thread the flag at
+    BOTH checkout handler call sites: add `save_payment_method=payload.save_payment_method` to the
+    `service.client_checkout_membership(...)` call (~lines 587-593, beside `promo_code=payload.promo_code`)
+    and to the `service.client_checkout_pt_package(...)` call (~lines 629-636). In client_portal/service.py
+    add `save_payment_method: bool = False` to the kwargs-only signatures of BOTH `client_checkout_membership`
+    (def line 644) and `client_checkout_pt_package` (def line 722), and forward
+    `save_payment_method=save_payment_method` inside each `invoke_client_checkout_core(...)` call
+    (lines ~698-711 and ~767+, beside the existing applied_promo_code_id kwarg). In
+    online_payments/service.py add `save_payment_method: bool = False` to `_sell_subject_core` (def line
+    197), set the column on the online_payments INSERT, and pass save_payment_method to BOTH create_payment
+    call sites (lines 342 + 380). In handlers.py, after the promo redemption block (after line 528) and
+    before the CHILD audit emit (line 530), add the step 8.5 block per 79-PATTERNS.md lines 526-566: guard
+    on `if row.save_payment_method and result.payment_method is not None:`; raw-SQL INSERT into
     client_payment_methods (client_id, yookassa_method_id, last4, brand, expiry_month, expiry_year,
     autopay_enabled=false) VALUES (...) ON CONFLICT ON CONSTRAINT
     uq_client_payment_methods_client_id_alive DO UPDATE SET token/last4/brand/expiry, unlinked_at=NULL,
     autopay_enabled=false, consent_recorded_at=NULL, updated_at=now(); bind client_id from str(row.client_id),
     method_id from pm.id, brand from pm.card_type. Emit a `payment_method_saved` structlog event with
     client_id + online_payment_id ONLY (no card fields). Use text() raw SQL — no ORM import from the
-    integrations layer (zero new ignore_imports per the locked D-decision).
+    integrations layer (zero new ignore_imports per the locked D-decision). NOTE on wave safety: this plan is
+    wave 2; the other wave-2 plan 79-02 touches payment_methods/* + .importlinter only (no overlap with these
+    client_portal/online_payments/handlers files). 79-04 also edits client_portal/router.py but is wave 3
+    (sequential after this plan), so no same-wave file conflict.
   </action>
   <verify>
-    <automated>cd apps/backend && uv run ruff check app/modules/client_portal/schemas.py app/modules/online_payments/service.py app/api/v1/_internal/yookassa/handlers.py && uv run mypy app/modules/client_portal/schemas.py app/modules/online_payments/service.py app/api/v1/_internal/yookassa/handlers.py && uv run lint-imports</automated>
+    <automated>cd apps/backend && uv run ruff check app/modules/client_portal/schemas.py app/modules/client_portal/router.py app/modules/client_portal/service.py app/modules/online_payments/service.py app/api/v1/_internal/yookassa/handlers.py && uv run mypy app/modules/client_portal/schemas.py app/modules/client_portal/router.py app/modules/client_portal/service.py app/modules/online_payments/service.py app/api/v1/_internal/yookassa/handlers.py && uv run lint-imports</automated>
   </verify>
   <acceptance_criteria>
     - ruff + mypy + lint-imports all exit 0 (lint-imports proves zero new integrations-layer edge).
-    - grep confirms `save_payment_method` in ClientCheckoutRequest and `uq_client_payment_methods_client_id_alive`
-      in handlers.py.
-    - grep confirms the step 8.5 guard `row.save_payment_method and result.payment_method is not None` in handlers.py.
+    - grep confirms `save_payment_method` in ClientCheckoutRequest.
+    - grep confirms `save_payment_method=payload.save_payment_method` at BOTH checkout call sites in client_portal/router.py.
+    - grep confirms `save_payment_method=save_payment_method` forwarded into BOTH invoke_client_checkout_core calls in client_portal/service.py.
+    - grep confirms `save_payment_method` accepted by `_sell_subject_core` and set on the online_payments INSERT in online_payments/service.py.
+    - grep confirms `uq_client_payment_methods_client_id_alive` and the step 8.5 guard `row.save_payment_method and result.payment_method is not None` in handlers.py.
     - `payment_method_saved` log event carries no card-detail kwargs (grep — only client_id/online_payment_id).
   </acceptance_criteria>
-  <done>Checkout flag persisted + forwarded; webhook step 8.5 upserts the token idempotently; ruff/mypy/imports clean.</done>
+  <done>Flag persisted + propagated end-to-end (body -> router -> service -> core -> row); webhook step 8.5 upserts the token idempotently; ruff/mypy/imports clean.</done>
 </task>
 
 <task type="auto" tdd="true">
@@ -205,11 +258,13 @@ tests/integration (mirror test_checkout.py + existing webhook tests). httpx ASGI
   </behavior>
   <action>
     Create `tests/integration/client_portal/test_payment_method_webhook_save.py` mirroring the
-    test_checkout.py webhook-fake pattern. Stub get_payment to return a YooKassaPaymentResult with a
-    populated YooKassaPaymentMethodInfo. Write three tests: (1) save=true -> row saved with token+display
-    fields, autopay off, consent null; (2) save=false / no payment_method -> zero rows; (3) duplicate
-    webhook delivery -> exactly one active row. Assert yookassa_method_id holds the token (this is the only
-    place the test reads it — the client API never does). Use httpx ASGITransport + pytest-asyncio; no real
+    test_checkout.py webhook-fake pattern. The checkout request MUST set save_payment_method=true so the
+    flag travels the full router->service->core->row path exercised in Task 2 (this is the end-to-end
+    propagation assertion). Stub get_payment to return a YooKassaPaymentResult with a populated
+    YooKassaPaymentMethodInfo. Write three tests: (1) save=true -> row saved with token+display fields,
+    autopay off, consent null; (2) save=false / no payment_method -> zero rows; (3) duplicate webhook
+    delivery -> exactly one active row. Assert yookassa_method_id holds the token (this is the only place
+    the test reads it — the client API never does). Use httpx ASGITransport + pytest-asyncio; no real
     network.
   </action>
   <verify>
@@ -251,7 +306,9 @@ tests/integration (mirror test_checkout.py + existing webhook tests). httpx ASGI
 </verification>
 
 <success_criteria>
-- save_payment_method intent flows checkout body -> online_payments row -> create_payment -> webhook.
+- save_payment_method intent flows checkout body -> client_portal router -> client_portal service ->
+  invoke_client_checkout_core -> _sell_subject_core -> online_payments row -> create_payment -> webhook
+  (no broken link; row.save_payment_method reflects the request).
 - Token captured from get_payment re-fetch (bank_card) and upserted idempotently in step 8.5.
 - PAN/CVV never stored; card fields never logged.
 </success_criteria>
@@ -259,3 +316,5 @@ tests/integration (mirror test_checkout.py + existing webhook tests). httpx ASGI
 <output>
 Create `.planning/phases/79-payment-methods-foundation-card-on-file/79-03-SUMMARY.md` when done.
 </output>
+</content>
+</invoke>

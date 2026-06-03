@@ -69,6 +69,11 @@ ORM base mixins (apps/backend/app/core/database.py):
 OnlinePayment (apps/backend/app/modules/online_payments/models.py) — existing columns include
 client_id, membership_plan_id, pt_package_plan_id, promo_code_id, yookassa_payment_id,
 idempotency_key, amount_kopecks, status, confirmation_url, confirmation_type. No SoftDeleteMixin.
+
+Local DB DSN (apps/backend/.env): DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/clubcore
+(async asyncpg driver). Introspection must use an async path consistent with this DSN — prefer a
+`uv run python` asyncpg/SQLAlchemy snippet over psql (psql is not guaranteed on PATH and the DSN is
+asyncpg-flavored). settings.database_url is read in app/core/database.py line 121.
 </interfaces>
 </context>
 
@@ -162,27 +167,48 @@ idempotency_key, amount_kopecks, status, confirmation_url, confirmation_type. No
   <files>apps/backend/alembic/versions/0052_client_payment_methods.py</files>
   <read_first>
     - apps/backend/alembic.ini (env / db url wiring)
+    - apps/backend/app/core/database.py (line 121 — settings.database_url; the async engine the introspection snippet should mirror)
     - .claude memory: backend local stack gotchas (docker compose env reload; stale-image migrate can mask new migrations — rebuild if migration is not detected)
   </read_first>
   <action>
     Run `alembic upgrade head` against the local stack (docker compose). If the new revision is not
     detected, the running container image is stale — rebuild/restart the backend service so the new
-    migration file is in the image, then re-run. After upgrade, verify via psql/SQL: the
-    `client_payment_methods` table exists with all columns; the partial unique index
-    `uq_client_payment_methods_client_id_alive` exists with predicate `unlinked_at IS NULL`; and
-    `online_payments` has the `save_payment_method` column. This is a verification-only task — no schema
-    is invented here beyond what migration 0052 declares.
+    migration file is in the image, then re-run. After upgrade, verify the schema via SQL introspection
+    (async, consistent with the asyncpg DSN — see the verify command): the `client_payment_methods` table
+    exists, the partial unique index `uq_client_payment_methods_client_id_alive` exists with predicate
+    `unlinked_at IS NULL`, and `online_payments` has the `save_payment_method` column. This is a
+    verification-only task — no schema is invented here beyond what migration 0052 declares.
   </action>
   <verify>
-    <automated>cd apps/backend && uv run alembic upgrade head && uv run alembic current | grep -q 0052_client_payment_methods && echo "MIGRATION_OK"</automated>
+    <automated>cd apps/backend && uv run alembic upgrade head && uv run alembic current | grep -q 0052_client_payment_methods && uv run python -c "
+import asyncio
+from sqlalchemy import text
+from app.core.config import settings
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    eng = create_async_engine(str(settings.database_url))
+    async with eng.connect() as conn:
+        table = (await conn.execute(text(\"SELECT to_regclass('public.client_payment_methods')\"))).scalar()
+        assert table is not None, 'client_payment_methods table missing'
+        idx = (await conn.execute(text(\"SELECT indexdef FROM pg_indexes WHERE indexname='uq_client_payment_methods_client_id_alive'\"))).scalar()
+        assert idx is not None, 'partial unique index missing'
+        assert 'unlinked_at IS NULL' in idx, f'index predicate wrong: {idx}'
+        assert 'UNIQUE' in idx.upper(), f'index not unique: {idx}'
+        col = (await conn.execute(text(\"SELECT 1 FROM information_schema.columns WHERE table_name='online_payments' AND column_name='save_payment_method'\"))).scalar()
+        assert col == 1, 'online_payments.save_payment_method column missing'
+    await eng.dispose()
+    print('SCHEMA_OK')
+
+asyncio.run(main())
+" && echo "MIGRATION_OK"</automated>
   </verify>
   <acceptance_criteria>
-    - `alembic current` reports `0052_client_payment_methods` as head (command prints MIGRATION_OK).
-    - Schema introspection confirms table `client_payment_methods`, the partial unique index with
-      `unlinked_at IS NULL` predicate, and `online_payments.save_payment_method`.
+    - `alembic current` reports `0052_client_payment_methods` as head, and the introspection snippet prints `SCHEMA_OK` then `MIGRATION_OK`.
+    - The snippet asserts (1) table `client_payment_methods` exists (to_regclass not null), (2) the index `uq_client_payment_methods_client_id_alive` exists, is UNIQUE, and carries the `unlinked_at IS NULL` predicate, (3) `online_payments.save_payment_method` column exists.
     - `alembic downgrade -1` then `alembic upgrade head` round-trips cleanly (no errors).
   </acceptance_criteria>
-  <done>Migration applied to head on the local stack; schema verified to match the model.</done>
+  <done>Migration applied to head on the local stack; schema verified column-by-column (table + partial unique index predicate + save_payment_method column) via async SQL introspection.</done>
 </task>
 
 </tasks>
@@ -207,6 +233,7 @@ idempotency_key, amount_kopecks, status, confirmation_url, confirmation_type. No
 <verification>
 - `uv run ruff check` and `uv run mypy` exit 0 on all new/modified files.
 - `alembic upgrade head` reaches `0052_client_payment_methods`; downgrade/upgrade round-trips.
+- Async SQL introspection asserts table + partial unique index (predicate) + save_payment_method column (prints SCHEMA_OK).
 - ClientPaymentMethod importable; OnlinePayment.save_payment_method present.
 </verification>
 
@@ -214,9 +241,10 @@ idempotency_key, amount_kopecks, status, confirmation_url, confirmation_type. No
 - Migration 0052 creates client_payment_methods (with partial unique alive-index) + adds
   save_payment_method to online_payments, and reverses cleanly.
 - ClientPaymentMethod ORM model maps the table 1:1 including the partial unique index.
-- Live schema verified against the model on the local stack.
+- Live schema verified column-by-column against the model on the local stack via SQL introspection.
 </success_criteria>
 
 <output>
 Create `.planning/phases/79-payment-methods-foundation-card-on-file/79-01-SUMMARY.md` when done.
 </output>
+</content>
