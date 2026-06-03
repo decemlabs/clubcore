@@ -70,7 +70,11 @@ async def patch_autopay(
 
     No session.commit() — caller-owns-txn.
     """
-    row = await repository.fetch_active_payment_method(session, client_id)
+    # WR-79-03: lock the active row for the whole read-decide-write sequence so
+    # a concurrent unlink / enable-disable cannot interleave and clobber
+    # consent_recorded_at (lost-update). Mirrors unlink_payment_method's
+    # SELECT ... FOR UPDATE.
+    row = await repository.fetch_active_payment_method(session, client_id, for_update=True)
     if row is None:
         raise ConflictError("no_active_payment_method")
     if payload.enabled and not payload.consent_acknowledged:

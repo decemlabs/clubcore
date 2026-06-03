@@ -25,23 +25,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 async def fetch_active_payment_method(
     session: AsyncSession,
     client_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> dict[str, Any] | None:
     """Fetch the active (unlinked_at IS NULL) card for a client.
 
     Returns a dict of display+autopay fields or None when no active card exists.
     NEVER returns yookassa_method_id — caller must never expose that column (T-79-04).
+
+    ``for_update=True`` appends ``FOR UPDATE`` so the read-decide-write autopay
+    path locks the row within the caller's transaction (WR-79-03 — closes the
+    lost-update race on ``consent_recorded_at`` between concurrent
+    enable-autopay / unlink-card requests on the same session). Read-only
+    callers (GET) leave it False.
     """
+    sql = (
+        "SELECT id, last4, brand, expiry_month, expiry_year, "
+        "autopay_enabled, consent_recorded_at, created_at "
+        "FROM client_payment_methods "
+        "WHERE client_id = :client_id AND unlinked_at IS NULL"
+    )
+    if for_update:
+        sql += " FOR UPDATE"
     row = (
-        await session.execute(
-            text(
-                "SELECT id, last4, brand, expiry_month, expiry_year, "
-                "autopay_enabled, consent_recorded_at, created_at "
-                "FROM client_payment_methods "
-                "WHERE client_id = :client_id AND unlinked_at IS NULL"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(sql),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     return dict[str, Any](row) if row is not None else None
 
 
@@ -57,15 +72,19 @@ async def unlink_payment_method(
     No session.commit() — caller-owns-txn.
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id FROM client_payment_methods "
-                "WHERE client_id = :client_id AND unlinked_at IS NULL "
-                "FOR UPDATE"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id FROM client_payment_methods "
+                    "WHERE client_id = :client_id AND unlinked_at IS NULL "
+                    "FOR UPDATE"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return False
     await session.execute(
