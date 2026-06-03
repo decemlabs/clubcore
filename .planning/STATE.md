@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: verifying
-stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
-last_updated: "2026-06-03T17:57:58.745Z"
+status: in_progress
+stopped_at: All v2.2 phases complete (79:5/5, 80:4/4, 81:5/5); entering milestone lifecycle (audit → complete → cleanup)
+last_updated: "2026-06-03T18:30:00.000Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 81 — weekly-activity-pwa-flags-openapi-handoff
+**Current focus:** v2.2 milestone lifecycle (audit → complete → cleanup)
 
 ## Current Position
 
-Phase: 81 (weekly-activity-pwa-flags-openapi-handoff) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 81 ✅ COMPLETE — all v2.2 phases shipped (79, 80, 81)
+Plan: 3 of 3 (81 complete)
+Status: v2.2 feature work done & verified (79:5/5, 80:4/4, 81:5/5); OpenAPI contract frozen byte-stable, staff contract unchanged; entering milestone audit
 Last activity: 2026-06-03
 
-Milestone progress (real v2.2 = 3 phases): [███████░░░] 2/3 (67%)
+Milestone progress (real v2.2 = 3 phases): [██████████] 3/3 (100%)
 
 ## v2.2 Roadmap Summary
 
@@ -89,6 +89,9 @@ Items carried forward from v2.1 close:
 | human-verify | Phase 79 live ЮKassa sandbox card-save round-trip | deferred (OPERATOR-PENDING; user "defer & continue" 2026-06-03) |
 | human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | deferred (auto-defer per standing decision 2026-06-03) |
 | human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send) |
+| human-verify | Phase 81 activity-bars visual rendering (heights/colors/zero-day baseline) | deferred (browser check; auto-defer per standing decision) |
+| human-verify | Phase 81 CardSheet with a real saved card | deferred (needs live YooKassa save_payment_method session) |
+| compliance | Phase 81 ФЗ-376 consent disclosure shows generic "стоимость текущего тарифа" not a concrete ₽ amount (REVIEW IN-04) | **needs legal review** — interpolate concrete amount if required for compliance |
 | tech-debt | **Pre-existing (NOT Phase 79):** `alembic check` / `test_alembic_clean` fails — `app.modules.promo_codes.models` never registered in `alembic/env.py` since the `online_payments.promo_code_id` FK shipped in v2.0 (commit b61054f4). One-line env.py import fixes it. | noted — out of v2.2 scope |
 | tech-debt | **Pre-existing (NOT Phase 79):** whole-tree `ruff check` red (~44 errs) in `tests/test_client_promo_validate.py`, `test_client_checkout_promo.py`, `test_client_me_service.py`, `promo_codes/service.py` etc. (incl. F821 undefined names → those promo tests error on collection) | noted — out of v2.2 scope |
 | flaky-test | **Pre-existing (NOT Phase 79):** `test_freeze_race::test_concurrent_freeze_race_serialised_by_partial_unique_index` asserts exact 409 *reason-code* distribution under concurrency (timing-dependent: gets `invalid_transition` vs `already_frozen`) | noted — test-quality issue |
