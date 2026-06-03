@@ -620,30 +620,6 @@ function AutopayToggleRow({ label, sub, enabled, isPending, onEnable, onDisable 
   );
 }
 
-function ToggleRow({ label, sub, defaultOn }) {
-  const [on, setOn] = React.useState(!!defaultOn);
-  return (
-    <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{ flex: 1 }}>
-        <div className="t-h3" style={{ fontSize: 14 }}>{label}</div>
-        {sub && <div className="t-small" style={{ marginTop: 2 }}>{sub}</div>}
-      </div>
-      <button onClick={() => setOn(!on)} style={{
-        width: 44, height: 26, borderRadius: 999, border: 0, padding: 0,
-        background: on ? 'var(--accent)' : 'var(--border-strong)',
-        cursor: 'pointer', position: 'relative', transition: 'background 0.15s',
-        flexShrink: 0,
-      }}>
-        <span style={{
-          position: 'absolute', top: 2, left: on ? 20 : 2,
-          width: 22, height: 22, borderRadius: 999, background: '#fff',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.25)', transition: 'left 0.18s ease',
-        }} />
-      </button>
-    </div>
-  );
-}
-
 function MiniActionRow({ icon, label, danger, onClick }) {
   return (
     <button
