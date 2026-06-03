@@ -41,7 +41,7 @@ _YOOKASSA_BASE_URL = "https://api.yookassa.ru/v3/"
 # Fake bank_card payment_method returned by get_payment when save=True
 # ---------------------------------------------------------------------------
 
-_FAKE_TOKEN = "fake-pm-token-0001-5000-a000-1d8b1d6e5c45"
+_FAKE_TOKEN = "fake-pm-token-0001-5000-a000-1d8b1d6e5c45"  # noqa: S105 — fake YooKassa method id, not a secret
 _FAKE_LAST4 = "4242"
 _FAKE_CARD_TYPE = "MasterCard"
 _FAKE_EXPIRY_MONTH = 11
@@ -182,16 +182,20 @@ async def _fetch_payment_method_rows(
     Returns a list of dicts for assertions. Uses raw SQL (D-54-08).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, yookassa_method_id, last4, brand, "
-                "expiry_month, expiry_year, autopay_enabled, consent_recorded_at, unlinked_at "
-                "FROM client_payment_methods "
-                "WHERE client_id = :client_id"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, yookassa_method_id, last4, brand, "
+                    "expiry_month, expiry_year, autopay_enabled, consent_recorded_at, unlinked_at "
+                    "FROM client_payment_methods "
+                    "WHERE client_id = :client_id"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(row) for row in rows]
 
 
@@ -217,9 +221,7 @@ async def test_webhook_save_true_upserts_card_token(
     body = webhook_payment_succeeded_body(seeded.yookassa_payment_id)
 
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
-        mock.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-        ).mock(
+        mock.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
                 json=_build_get_payment_with_bank_card(seeded.yookassa_payment_id),
@@ -282,9 +284,7 @@ async def test_webhook_save_false_no_card_row(
     # Provide a response WITH bank_card to confirm the guard is on save_payment_method, not
     # the response content.
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
-        mock.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-        ).mock(
+        mock.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
             return_value=httpx.Response(
                 200,
                 json=_build_get_payment_with_bank_card(seeded.yookassa_payment_id),
@@ -323,23 +323,21 @@ async def test_webhook_save_replay_idempotent(
     body = webhook_payment_succeeded_body(seeded.yookassa_payment_id)
 
     def _mock_get_payment(yk_id: str) -> httpx.Response:
-        return httpx.Response(
-            200, json=_build_get_payment_with_bank_card(yk_id)
-        )
+        return httpx.Response(200, json=_build_get_payment_with_bank_card(yk_id))
 
     # First delivery
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
-        mock.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-        ).mock(return_value=_mock_get_payment(seeded.yookassa_payment_id))
+        mock.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+            return_value=_mock_get_payment(seeded.yookassa_payment_id)
+        )
         r1 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert r1.status_code == 200, f"First webhook delivery failed: {r1.text}"
 
     # Second delivery — FSM guard prevents double-activation; step 8.5 upsert is idempotent
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock2:
-        mock2.get(
-            url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$"
-        ).mock(return_value=_mock_get_payment(seeded.yookassa_payment_id))
+        mock2.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+            return_value=_mock_get_payment(seeded.yookassa_payment_id)
+        )
         r2 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert r2.status_code == 200, f"Second webhook delivery failed: {r2.text}"
 
