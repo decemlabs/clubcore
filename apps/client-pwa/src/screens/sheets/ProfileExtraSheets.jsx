@@ -354,18 +354,18 @@ export const CardSheet = ({ onClose }) => {
     }
   };
 
-  // Wire: disable autopay — no consent needed (T-81-06)
+  // Wire: disable autopay — no consent needed (T-81-06).
+  // WR-03: disabling MUST NEVER route into the enable-consent modal. The
+  // backend's 409 consent_required only fires when ENABLING without
+  // consent_acknowledged=true, so any error on disable is an unexpected
+  // failure — surface a generic toast, never an enable-consent confirm whose
+  // "Подключить" button would ENABLE autopay (the opposite of user intent).
   const handleDisableAutopay = async () => {
     setAutopayError(null);
     try {
       await patchAutopay.mutateAsync({ enabled: false, consentAcknowledged: false });
-    } catch (err) {
-      const code = err && typeof err === 'object' && 'code' in err ? err.code : null;
-      if (code === 'consent_required') {
-        setAutopayConsentOpen(true);
-      } else {
-        setAutopayError('Не удалось изменить автопродление. Попробуйте ещё раз.');
-      }
+    } catch {
+      setAutopayError('Не удалось изменить автопродление. Попробуйте ещё раз.');
     }
   };
 
