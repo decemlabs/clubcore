@@ -46,9 +46,9 @@ BOOKING_REMINDER_24H_DM: Final[str] = (
 _BOT_BOOK_DENIED_DM: Final[str] = (
     "Сейчас бронирование недоступно. Пожалуйста, свяжитесь с администратором — он подскажет ближайшее свободное время."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md  # NOTIFY-02 anti-oracle: NO placeholders, NO failure-cause disclosure (C-12)
 )
-# Phase 80 RESCH-02 — reschedule notification DM (pending owner sign-off before merge).
+# Phase 80 RESCH-02 — reschedule notification DM (owner sign-off recorded).
 BOOKING_RESCHEDULED_DM: Final[str] = (
-    "Здравствуйте, {client_name}! Ваша запись к тренеру {trainer_name} перенесена. Новое время: {new_slot_start_msk} (МСК). Ждём вас в зале!"  # noqa: E501, RUF001  # OWNER-COPY-LOCK — requires owner sign-off before merge
+    "Здравствуйте, {client_name}! Ваша запись к тренеру {trainer_name} перенесена. Новое время: {new_slot_start_msk} (МСК). Ждём вас в зале!"  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-06-03 — see 80-01-reschedule-foundation-SUMMARY.md
 )
 
 
