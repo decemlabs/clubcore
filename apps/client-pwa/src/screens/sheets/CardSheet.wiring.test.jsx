@@ -75,36 +75,38 @@ beforeEach(() => {
 // Feature flags (read directly from the module)
 // ---------------------------------------------------------------------------
 describe('Feature flags (Phase 81-02 flip)', () => {
-  it('PROFILE_FEATURE_FLAGS.weeklyActivity is true', async () => {
-    const mod = await import('../ProfileScreen.jsx')
-    // The flag is a module-level const; we verify via render presence.
-    // When weeklyActivity=true, the "Активность за неделю" heading renders.
-    // We use the mock @/data to avoid real network calls.
-    const useClientHome = vi.fn().mockReturnValue({ data: null })
-    const useClientMembership = vi.fn().mockReturnValue({ data: null })
-    const useClientVisitHistory = vi.fn().mockReturnValue({ data: { items: [], total: 0 } })
-    const useClientPtHistory = vi.fn().mockReturnValue({ data: { items: [], total: 0 } })
-    const useClientPaymentHistoryFn = vi.fn().mockReturnValue({ data: { items: [], total: 0 } })
-    const useClientWeeklyActivity = vi.fn().mockReturnValue({ data: undefined })
-
-    // Dynamic re-mock for this test
+  it('weeklyActivity flag true → ProfileScreen renders the "Активность за неделю" card', async () => {
+    // The flag is a module-level const with no export; assert its observable
+    // consequence instead — when weeklyActivity=true the activity card heading
+    // renders. Stub every @/data hook ProfileScreen consumes so the render does
+    // no real network calls and needs no QueryClientProvider.
+    vi.resetModules()
     vi.doMock('@/data', () => ({
+      useClientHome: () => ({ data: null }),
       useClientMe: () => ({ data: null }),
-      useClientHome,
-      useClientMembership,
-      useClientVisitHistory,
-      useClientPtHistory,
-      useClientPaymentHistory: useClientPaymentHistoryFn,
-      useClientWeeklyActivity,
+      useClientMembership: () => ({ data: null }),
+      useClientVisitHistory: () => ({ data: { items: [], total: 0 } }),
+      useClientPtHistory: () => ({ data: { items: [], total: 0 } }),
+      useClientPaymentHistory: () => ({ data: { items: [], total: 0 } }),
+      useClientWeeklyActivity: () => ({ data: undefined }),
     }))
 
-    void mod // reference to satisfy noUnusedLocals
-    // Flag test via clientQueries directly
-    const { PROFILE_FEATURE_FLAGS } = await import('../ProfileScreen.jsx').catch(() => ({ PROFILE_FEATURE_FLAGS: null }))
-    void PROFILE_FEATURE_FLAGS
-    // Verify via exported constant indirectly:
-    // The test for flags is covered by build-time presence of useClientWeeklyActivity import
-    expect(true).toBe(true) // structural: if code compiled + hooked, flag is true
+    const { ProfileScreen } = await import('../ProfileScreen.jsx')
+    render(
+      <ProfileScreen
+        tweaks={{}}
+        onOpenSettings={noop}
+        onOpenPlans={noop}
+        onOpenReferral={noop}
+        onOpenGymInfo={noop}
+        onOpenVisitHistory={noop}
+        onOpenTrainingHistory={noop}
+      />,
+    )
+
+    // Observable consequence of weeklyActivity=true: the activity card heading
+    // is present. If a future edit flips the flag back to false this fails.
+    expect(screen.getByText('Активность за неделю')).toBeTruthy()
   })
 
   it('SETTINGS_FEATURE_FLAGS.linkedCard is true — card row renders with real last4', async () => {
