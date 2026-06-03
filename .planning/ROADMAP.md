@@ -80,7 +80,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 **Milestone Goal:** Углубить client-PWA self-service до соответствия макету — клиент сам управляет привязанной картой и автоплатежом (UI-only: токен + preference + ФЗ-376 consent, без реальных списаний), переносит брони и видит свою недельную активность. Три флага включаются: `linkedCard`, `weeklyActivity`. Staff-сторона заморожена; всё под `require_client()`. Autopay cron (`charge_expiring_autopay`) деферируется в v2.3.
 
-- [ ] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, новый модуль `payment_methods/`, webhook save-step, GET/DELETE/PATCH endpoints, ФЗ-376 consent capture (PAYM-01, PAYM-02, PAYM-03, PAYM-04)
+- [x] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, новый модуль `payment_methods/`, webhook save-step, GET/DELETE/PATCH endpoints, ФЗ-376 consent capture (PAYM-01, PAYM-02, PAYM-03, PAYM-04) (completed 2026-06-03)
 - [ ] **Phase 80: Booking Reschedule** — атомарный cancel+create, `reschedule_booking_for_client` Protocol slot, migration 0053, `booking_rescheduled` audit event, DM-шаблон, PWA wiring (RESCH-01, RESCH-02, RESCH-03)
 - [ ] **Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff** — `GET /client/activity/weekly`, flip `linkedCard`/`weeklyActivity` ON, CardSheet wiring, byte-stable openapi.json regen, golden TZ test, milestone verification (WACT-01, WACT-02, PAYM-05, HND-01)
 
@@ -174,6 +174,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 79. Payment Methods Foundation + Card-on-File | 3/4 | In Progress|  |
+| 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
 | 80. Booking Reschedule | 0/TBD | Not started | - |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 0/TBD | Not started | - |
