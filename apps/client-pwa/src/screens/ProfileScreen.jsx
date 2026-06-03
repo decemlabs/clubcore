@@ -238,7 +238,11 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                {sub.tone === 'ok' ? 'Сменить тариф' : 'Продлить'}
+                {sub.tone === 'ok'
+                  ? 'Сменить тариф'
+                  : homeData?.membershipState === 'newbie'
+                    ? 'Оформить'
+                    : 'Продлить'}
               </button>
             </div>
           </div>
