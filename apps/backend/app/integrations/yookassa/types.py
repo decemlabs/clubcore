@@ -19,6 +19,9 @@ transport boundary:
 - ``YooKassaWebhookEvent`` is the inbound webhook event parsed by the
   Phase 50 webhook handler. No classification — inbound events are not
   transport results.
+- ``YooKassaPaymentMethodInfo`` is the card display info extracted from
+  ``GET /v3/payments/{id}`` when ``payment_method.type == 'bank_card'``
+  (Phase 79 PAYM-01). Frozen, primitives-only, cloudpickle-safe.
 
 Shape mirrors ``app.integrations.email.types.EmailSendResult`` (D-42-13
 lineage) but expands the failure taxonomy to four named buckets:
@@ -95,6 +98,30 @@ class YooKassaPaymentResult:
     error: str | None = None
     qr_payload: str | None = None
     error_parameter: str | None = None
+    payment_method: YooKassaPaymentMethodInfo | None = None
+    # ^ Populated on ok classification when save_payment_method=True was requested
+    #   and the response includes payment_method.type='bank_card' (Phase 79 PAYM-01).
+    #   Forward reference string annotation avoids ordering dependency.
+    #   PAN/CVV are NEVER stored — only token + last4/brand/expiry display fields.
+
+
+@dataclass(frozen=True)
+class YooKassaPaymentMethodInfo:
+    """Card display info extracted from payment.succeeded webhook re-fetch (Phase 79 PAYM-01).
+
+    Populated when the ЮKassa ``GET /v3/payments/{id}`` response includes
+    ``payment_method.type == 'bank_card'``. ``None`` when the payment used a
+    non-card method or the response omits the field.
+
+    cloudpickle-safe: primitives only. Frozen for value-object semantics.
+    Layer invariant: integrations layer — MUST NOT import from app.modules.*.
+    """
+
+    id: str  # yookassa payment_method.id — the saved token
+    last4: str  # last 4 digits of the card
+    card_type: str  # e.g. 'MasterCard', 'Visa', 'Mir'
+    expiry_month: int | None = None
+    expiry_year: int | None = None
 
 
 @dataclass(frozen=True)

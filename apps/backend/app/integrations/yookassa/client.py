@@ -65,6 +65,7 @@ import structlog
 from app.integrations.yookassa._money import kopecks_to_yookassa, yookassa_to_kopecks
 from app.integrations.yookassa.settings import YooKassaSettings
 from app.integrations.yookassa.types import (
+    YooKassaPaymentMethodInfo,
     YooKassaPaymentResult,
     YooKassaReceiptResult,
     YooKassaRefundResult,
@@ -162,6 +163,7 @@ class YooKassaClient:
         confirmation_type: Literal["redirect", "qr"] = "redirect",
         return_url: str | None = None,
         metadata: dict[str, str] | None = None,
+        save_payment_method: bool = False,
     ) -> YooKassaPaymentResult:
         """POST /v3/payments — caller-owned idempotency_key (D-48-11 + D-49-08).
 
@@ -232,6 +234,10 @@ class YooKassaClient:
         }
         if metadata:
             body["metadata"] = metadata
+        # Phase 79 PAYM-01: opt-in card saving — only add the key when True so
+        # the request body is byte-identical to today when False (no sentinel key).
+        if save_payment_method:
+            body["save_payment_method"] = True
         try:
             # idempotency_key may be a UUID (Phase 48 callsite) or a sha256 hex
             # string (Phase 49 D-49-08 deterministic key). ЮKassa Idempotence-Key
@@ -335,6 +341,33 @@ class YooKassaClient:
             qr_payload: str | None = None
             if confirmation.get("type") == "qr":
                 qr_payload = confirmation.get("confirmation_data")
+            # Phase 79 PAYM-01: parse saved card token when bank_card type present.
+            # PII discipline (T-79-08): card fields NEVER logged in structlog events.
+            payment_method_info: YooKassaPaymentMethodInfo | None = None
+            pm = payload.get("payment_method") or {}
+            if isinstance(pm, dict) and pm.get("type") == "bank_card":
+                card = pm.get("card") or {}
+                expiry_month: int | None = None
+                expiry_year: int | None = None
+                raw_month = card.get("expiry_month")
+                raw_year = card.get("expiry_year")
+                if raw_month is not None:
+                    try:
+                        expiry_month = int(raw_month)
+                    except (TypeError, ValueError):
+                        expiry_month = None
+                if raw_year is not None:
+                    try:
+                        expiry_year = int(raw_year)
+                    except (TypeError, ValueError):
+                        expiry_year = None
+                payment_method_info = YooKassaPaymentMethodInfo(
+                    id=str(pm.get("id", "")),
+                    last4=str(card.get("last4", "")),
+                    card_type=str(card.get("card_type", "")),
+                    expiry_month=expiry_month,
+                    expiry_year=expiry_year,
+                )
             _log.info(
                 "yookassa_get_payment_ok",
                 payment_id=payload["id"],
@@ -349,6 +382,7 @@ class YooKassaClient:
                 amount_kopecks=yookassa_to_kopecks(payload["amount"]["value"]),
                 idempotency_key=None,
                 qr_payload=qr_payload,
+                payment_method=payment_method_info,
             )
         except httpx.HTTPStatusError as exc:
             classification, status, error_code, _error_parameter = (
