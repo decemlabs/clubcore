@@ -46,6 +46,10 @@ BOOKING_REMINDER_24H_DM: Final[str] = (
 _BOT_BOOK_DENIED_DM: Final[str] = (
     "Сейчас бронирование недоступно. Пожалуйста, свяжитесь с администратором — он подскажет ближайшее свободное время."  # noqa: E501, RUF001  # OWNER-COPY-LOCK signed-off 2026-05-17 — see 39-01-SUMMARY.md  # NOTIFY-02 anti-oracle: NO placeholders, NO failure-cause disclosure (C-12)
 )
+# Phase 80 RESCH-02 — reschedule notification DM (pending owner sign-off before merge).
+BOOKING_RESCHEDULED_DM: Final[str] = (
+    "Здравствуйте, {client_name}! Ваша запись к тренеру {trainer_name} перенесена. Новое время: {new_slot_start_msk} (МСК). Ждём вас в зале!"  # noqa: E501, RUF001  # OWNER-COPY-LOCK — requires owner sign-off before merge
+)
 
 
 def render_booking_confirmed_dm(
@@ -101,6 +105,25 @@ def render_booking_reminder_24h_dm(
         client_name=client_name,
         trainer_name=trainer_name,
         slot_start_msk=slot_start_msk,
+    )
+
+
+def render_booking_rescheduled_dm(
+    *,
+    client_name: str,
+    trainer_name: str,
+    new_slot_start_msk: str,
+) -> str:
+    """Render the locked reschedule DM via ``str.format`` (unknown keys raise KeyError).
+
+    ``new_slot_start_msk`` must be pre-formatted by the caller as
+    ``new_slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")``
+    per D-39-11 placeholder convention.
+    """
+    return BOOKING_RESCHEDULED_DM.format(
+        client_name=client_name,
+        trainer_name=trainer_name,
+        new_slot_start_msk=new_slot_start_msk,
     )
 
 

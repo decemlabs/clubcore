@@ -93,3 +93,45 @@ def test_bot_book_denied_dm_constant_has_no_placeholders() -> None:
     """
     assert "{" not in notifications._BOT_BOOK_DENIED_DM
     assert "}" not in notifications._BOT_BOOK_DENIED_DM
+
+
+# ---------------------------------------------------------------------------
+# Phase 80 RESCH-02 — render_booking_rescheduled_dm (OWNER-COPY-LOCK)
+# ---------------------------------------------------------------------------
+
+
+def test_render_booking_rescheduled_dm_substitutes_all_three_placeholders() -> None:
+    """Phase 80 RESCH-02: render_booking_rescheduled_dm fills client_name, trainer_name,
+    new_slot_start_msk and leaves no raw ``{...}`` in the output.
+    """
+    text = notifications.render_booking_rescheduled_dm(
+        client_name="Мария",
+        trainer_name="Алексей Петров",
+        new_slot_start_msk="10.06.2026 09:00",
+    )
+    assert "Мария" in text
+    assert "Алексей Петров" in text
+    assert "10.06.2026 09:00" in text
+    assert "{" not in text  # no unsubstituted placeholders
+    assert "}" not in text
+
+
+def test_render_booking_rescheduled_dm_raises_keyerror_on_missing_placeholder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D-39-04 regression sentinel: renderers MUST use ``str.format``, not f-strings.
+
+    Monkeypatching the constant with an unknown key verifies that the renderer
+    propagates KeyError rather than silently producing bad copy.
+    """
+    monkeypatch.setattr(
+        notifications,
+        "BOOKING_RESCHEDULED_DM",
+        "Привет, {client_name}! {unknown_key}",
+    )
+    with pytest.raises(KeyError):
+        notifications.render_booking_rescheduled_dm(
+            client_name="x",
+            trainer_name="y",
+            new_slot_start_msk="z",
+        )

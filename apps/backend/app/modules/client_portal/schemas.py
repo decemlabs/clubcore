@@ -145,6 +145,17 @@ class ClientCreateBookingRequest(ResponseData):
     pt_package_id: UUID | None = None
 
 
+class ClientRescheduleBookingRequest(BackendSchemaBase):
+    """POST /client/booking/{id}/reschedule body (Phase 80 RESCH-01 / T-80-03).
+
+    NO client_id field — the principal from require_client() is the IDOR-safe
+    source (T-80-03 mitigated structurally; extra='forbid' from BackendSchemaBase
+    rejects any injected client_id from the body).
+    """
+
+    new_slot_id: UUID
+
+
 class ClientBookingResponse(ResponseData):
     """Booking write response payload — client-safe projection (Phase 70 CBOOK-03/05).
 
