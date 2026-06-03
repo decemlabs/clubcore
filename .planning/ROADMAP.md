@@ -174,6 +174,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 79. Payment Methods Foundation + Card-on-File | 2/4 | In Progress|  |
+| 79. Payment Methods Foundation + Card-on-File | 3/4 | In Progress|  |
 | 80. Booking Reschedule | 0/TBD | Not started | - |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 0/TBD | Not started | - |
