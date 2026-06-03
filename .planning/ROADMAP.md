@@ -16,6 +16,7 @@
 - ✅ **v1.11 API Handoff + Production Hardening** — Phases 63-67 (shipped 2026-05-29) — see [milestones/v1.11-ROADMAP.md](milestones/v1.11-ROADMAP.md)
 - ✅ **v2.0 Frontend Integration — Client PWA** — Phases 68-74 + 999.3/999.4/999.5 (shipped 2026-06-02) — see [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 - ✅ **v2.1 Client PWA — Fill the Gaps** — Phases 75-78 (shipped 2026-06-02) — see [milestones/v2.1-ROADMAP.md](milestones/v2.1-ROADMAP.md)
+- 🚧 **v2.2 Membership self-service depth** — Phases 79-81 (in progress)
 
 ## Phases
 
@@ -75,6 +76,53 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
+### 🚧 v2.2 Membership self-service depth (Phases 79-81)
+
+**Milestone Goal:** Углубить client-PWA self-service до соответствия макету — клиент сам управляет привязанной картой и автоплатежом (UI-only: токен + preference + ФЗ-376 consent, без реальных списаний), переносит брони и видит свою недельную активность. Три флага включаются: `linkedCard`, `weeklyActivity`. Staff-сторона заморожена; всё под `require_client()`. Autopay cron (`charge_expiring_autopay`) деферируется в v2.3.
+
+- [ ] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, новый модуль `payment_methods/`, webhook save-step, GET/DELETE/PATCH endpoints, ФЗ-376 consent capture (PAYM-01, PAYM-02, PAYM-03, PAYM-04)
+- [ ] **Phase 80: Booking Reschedule** — атомарный cancel+create, `reschedule_booking_for_client` Protocol slot, migration 0053, `booking_rescheduled` audit event, DM-шаблон, PWA wiring (RESCH-01, RESCH-02, RESCH-03)
+- [ ] **Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff** — `GET /client/activity/weekly`, flip `linkedCard`/`weeklyActivity` ON, CardSheet wiring, byte-stable openapi.json regen, golden TZ test, milestone verification (WACT-01, WACT-02, PAYM-05, HND-01)
+
+## Phase Details
+
+### Phase 79: Payment Methods Foundation + Card-on-File
+**Goal**: Клиент может привязать карту через чекаут и управлять ею через новые client-portal endpoints
+**Depends on**: Phase 78 (v2.2 baseline — migration numbering continues from 0051)
+**Requirements**: PAYM-01, PAYM-02, PAYM-03, PAYM-04
+**Success Criteria** (what must be TRUE):
+  1. После успешного чекаута с `save_payment_method=true` в `client_payment_methods` появляется строка с токеном, last4 и brand — PAN/CVV не сохраняются никогда
+  2. `GET /client/payment-method` возвращает display-данные карты (•••• 4821) или null; `yookassa_method_id` в ответе отсутствует
+  3. `DELETE /client/payment-method` устанавливает `is_active=false` и `autopay_enabled=false`; YooKassa API не вызывается; повторный GET возвращает null
+  4. `PATCH /client/payment-method/autopay` включает `autopay_enabled=true` только при наличии `consent_recorded_at` (ФЗ-376 consent); выключение работает без consent
+  5. Все четыре endpoint'а IDOR-safe: клиент видит только свою карту; 404-collapse на чужом `client_id`
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 80: Booking Reschedule
+**Goal**: Клиент может перенести подтверждённую бронь на другой слот того же тренера
+**Depends on**: Phase 79 (migration numbering — 0053 follows 0052)
+**Requirements**: RESCH-01, RESCH-02, RESCH-03
+**Success Criteria** (what must be TRUE):
+  1. `POST /client/booking/{id}/reschedule` атомарно отменяет старый слот и создаёт новый в одной транзакции; гонка (новый слот занят в момент flip'а) возвращает 409 `slot_already_booked`
+  2. Перенос невозможен, если до начала исходного слота меньше 24 часов (409 `reschedule_window_expired`); чужая бронь → 404 (IDOR anti-oracle)
+  3. После переноса в audit_log появляется событие `booking_rescheduled`; клиент получает DM-уведомление с новым временем
+  4. `BookingManageSheet` в PWA показывает реальные доступные слоты и выполняет перенос через новый endpoint; mock-календарь удалён
+**Plans**: TBD
+
+### Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff
+**Goal**: Клиент видит недельную активность на ProfileScreen; CardSheet подключён к реальному backend; весь v2.2 API зафиксирован в openapi.json
+**Depends on**: Phase 80 (все v2.2 endpoint'ы должны существовать до финального openapi regen)
+**Requirements**: WACT-01, WACT-02, PAYM-05, HND-01
+**Success Criteria** (what must be TRUE):
+  1. `GET /client/activity/weekly` возвращает ровно 7 объектов (Пн–Вс текущей недели Europe/Moscow, zero-fill); дни без тренировок возвращают `workouts=0`; `minutes=null`; группировка по `visits.gym_date` STORED-колонке
+  2. Золотой TZ-тест: визит в 21:30 UTC попадает в следующий московский календарный день (паттерн v1.8 VER-02)
+  3. PWA-флаг `weeklyActivity` включён; бары активности на ProfileScreen загружают данные из `GET /client/activity/weekly`
+  4. PWA-флаг `linkedCard` включён; `CardSheet` работает с реальными GET/DELETE/PATCH endpoints; per-booking «Авто-оплата тренировок» toggle удалён
+  5. `openapi.json` и `schema.d.ts` регенерированы byte-stable со всеми v2.2 client-portal путями; staff-контракт байт-в-байт неизменён; CI drift gate зелёный
+**Plans**: TBD
+**UI hint**: yes
+
 ## Backlog
 
 ### Phase 999.1: WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -114,34 +162,12 @@ Plans:
 
 **Plans:** 6/6 plans complete
 
-Plans:
+## Progress
 
-- [x] 999.4-01-PLAN.md — Backend: promo_codes + promo_redemptions models, migration 0046, idempotent seeds, import-linter registration
-- [x] 999.4-02-PLAN.md — Backend: server-authoritative /client/promo/validate endpoint with per-reason errors (D-06/D-09)
-- [x] 999.4-03-PLAN.md — Backend: discounted amount through checkout core + redemption recording on succeeded webhook (D-05/D-06/D-07)
-- [x] 999.4-04-PLAN.md — Frontend: PaymentReturnScreen success/pending/canceled restyle + state CSS (D-10/D-11/D-12)
-- [x] 999.4-05-PLAN.md — Frontend: CheckoutSheet restyle + info plate + server promo wiring (D-01/D-02/D-09/D-12/D-13)
-- [x] 999.4-06-PLAN.md — GAP: fix checkout amount units — pass kopecks into checkoutCtx so CheckoutSheet shows real price (sub + pt), promo original >= discounted (CPAY-01/CPAY-02)
+**Execution Order:** 79 → 80 → 81
 
-### Phase 999.5: client-pwa onboarding questionnaire + post-payment receipt-email (✅ SHIPPED in v2.0 — 2026-06-01)
-
-**Goal:** Add two new `apps/client-pwa` screens matching the approved mockups, both persisted to the backend: (1) a newbie onboarding questionnaire (4 steps — имя → цель → рост/вес → проверка → «Готово!», progress segments + slide transitions) shown for new clients and finishing into newbie Home; (2) a post-payment receipt-email screen («Куда отправить чек?» — email field with validation + domain-suggestion chips, 54-ФЗ reassurance note, «Отправить чек»/«Чек не нужен», success flash) shown after a successful payment from the PaymentReturnScreen success flow.
-
-**Depends on:** Phase 72, Phase 999.3 (newbie Home — onboarding finishes into it), Phase 999.4 (PaymentReturnScreen success flow + the `client_email_required_for_online_payment` gate)
-**Scope:** Frontend + backend. Backend: new client-profile fields (`name`/`goal`/`height_cm`/`weight_kg`) with a client-portal write endpoint, and a write path for `client.email` (feeds the 54-ФЗ fiscal receipt). Frontend: reuse the existing `styles.css` token system + `.state`/`.btn` primitives — no hardcoded hex; map mockup colors to `var(--token)` (mockups share the 999.4 jade/stone palette). Onboarding profile + receipt email both persist server-side (decision: "оба на бэкенд").
-**Open question (resolve in discuss/spec):** the backend currently raises `client_email_required_for_online_payment` BEFORE online payment (verified live in 999.4 UAT — dev client has no email and checkout blocks), which conflicts with collecting the receipt email *after* payment under 54-ФЗ (fiscal receipt generated at payment time). Resolve the email-timing contract — likely onboarding collects email up-front so checkout never blocks, and the post-payment screen confirms/edits the receipt destination.
-**Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/onboarding.html`, `.planning/design-inputs/client-pwa-newbie-and-payment/receipt-email.html`
-**UI hint:** yes
-
-**Plans:** 8/8 plans complete
-
-Plans:
-
-- [x] 999.5-01-PLAN.md — Backend data layer: clients goal/height/weight/onboarding columns + 0048 migration + client_portal schemas
-- [x] 999.5-02-PLAN.md — Backend client_portal endpoints: GET/PATCH /client/me (server-validated, IDOR-safe) + receiptEmail/Phone on payment-status
-- [x] 999.5-03-PLAN.md — Backend gate rewrite: email-OR-phone online-payment gate + ЮKassa customer.phone receipt fallback (inspect-first)
-- [x] 999.5-04-PLAN.md — Frontend onboarding: 4-step questionnaire + «Готово!» overlay + /onboarding route + newbie auto-redirect + re-entry
-- [x] 999.5-05-PLAN.md — Frontend receipt-email gate (CheckoutSheet stage) + post-payment receipt-destination confirmation (anti-oracle) + human-verify checkpoint
-- [x] 999.5-06-PLAN.md — Gap (UAT 10, MAJOR): retry membership checkout once with a fresh key on ЮKassa Idempotence-Key collision (fixes 502 yookassa_permanent_error)
-- [x] 999.5-07-PLAN.md — Gap (UAT 12, BLOCKER) foundation: migration 0049 phone-aware fiscal_receipts + create_receipt email-OR-phone
-- [x] 999.5-08-PLAN.md — Gap (UAT 12, BLOCKER): phone-only payment.succeeded webhook + ARQ dispatch fiscalize-to-phone (fixes webhook 500)
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 79. Payment Methods Foundation + Card-on-File | 0/TBD | Not started | - |
+| 80. Booking Reschedule | 0/TBD | Not started | - |
+| 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 0/TBD | Not started | - |

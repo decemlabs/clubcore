@@ -65,23 +65,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAYM-01 | TBD | Pending |
-| PAYM-02 | TBD | Pending |
-| PAYM-03 | TBD | Pending |
-| PAYM-04 | TBD | Pending |
-| PAYM-05 | TBD | Pending |
-| RESCH-01 | TBD | Pending |
-| RESCH-02 | TBD | Pending |
-| RESCH-03 | TBD | Pending |
-| WACT-01 | TBD | Pending |
-| WACT-02 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| PAYM-01 | Phase 79 | Pending |
+| PAYM-02 | Phase 79 | Pending |
+| PAYM-03 | Phase 79 | Pending |
+| PAYM-04 | Phase 79 | Pending |
+| PAYM-05 | Phase 81 | Pending |
+| RESCH-01 | Phase 80 | Pending |
+| RESCH-02 | Phase 80 | Pending |
+| RESCH-03 | Phase 80 | Pending |
+| WACT-01 | Phase 81 | Pending |
+| WACT-02 | Phase 81 | Pending |
+| HND-01 | Phase 81 | Pending |
 
 **Coverage:**
 - v1 requirements: 11 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 11 ⚠️ (filled by roadmapper)
+- Mapped to phases: 11 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-03*
-*Last updated: 2026-06-03 after initial definition*
+*Last updated: 2026-06-03 — traceability filled by roadmapper (Phases 79-81)*
