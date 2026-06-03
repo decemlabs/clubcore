@@ -746,6 +746,13 @@ export function usePatchAutopay() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientPortalKeys.paymentMethod() })
+      // WR-04: the membership hero (ProfileScreen) and home screen surface an
+      // autopay/auto-renew row driven by useClientMembership/useClientHome, so
+      // invalidate them too — otherwise that row shows stale autopay state until
+      // the 30s staleTime lapses (mirrors the invalidation set of sibling
+      // membership-affecting mutations above).
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.membership() })
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.home() })
     },
   })
 }
