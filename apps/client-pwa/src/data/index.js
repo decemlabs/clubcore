@@ -45,6 +45,11 @@ export {
   useUpdateClientProfile,
   useCompleteOnboarding,
   useUpdateClientEmail,
+  // Phase-81 WACT-02 + PAYM-05: weekly activity + payment method hooks
+  useClientWeeklyActivity,
+  useClientPaymentMethod,
+  useUnlinkPaymentMethod,
+  usePatchAutopay,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────

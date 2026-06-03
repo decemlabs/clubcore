@@ -36,6 +36,8 @@ export const clientPortalKeys = {
   paymentHistory: (page: number) => [...clientPortalKeys.all, 'payments', page] as const,
   paymentStatus: (id: string) => [...clientPortalKeys.all, 'payment-status', id] as const,
   promoValidate: (code: string) => [...clientPortalKeys.all, 'promo-validate', code] as const,
+  weeklyActivity: () => [...clientPortalKeys.all, 'weekly-activity'] as const,
+  paymentMethod: () => [...clientPortalKeys.all, 'payment-method'] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -662,6 +664,88 @@ export function usePromoValidate() {
         body: { code, kind, planId },
       })
       return (res as { data: PromoValidateResult }).data
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-81 WACT-02 + PAYM-05: weekly activity + payment method hooks
+// ---------------------------------------------------------------------------
+
+interface WeeklyActivityItem {
+  date: string        // ISO date YYYY-MM-DD
+  workouts: number    // int, 0 for no-workout days
+  minutes: null       // always null in v2.2 (WACT-01)
+}
+
+/** GET /api/v1/client/activity/weekly — 7-item Mon→Sun array for current Moscow week (WACT-01) */
+export function useClientWeeklyActivity() {
+  return useQuery({
+    queryKey: clientPortalKeys.weeklyActivity(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/activity/weekly')
+      return (res as { data: WeeklyActivityItem[] }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+interface PaymentMethodData {
+  last4: string
+  brand: string
+  expiryMonth: number
+  expiryYear: number
+  autopayEnabled: boolean
+  consentRecordedAt: string | null
+}
+
+/** GET /api/v1/client/payment-method — active payment method or null (PAYM-02) */
+export function useClientPaymentMethod() {
+  return useQuery({
+    queryKey: clientPortalKeys.paymentMethod(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/payment-method')
+      return (res as { data: PaymentMethodData | null }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/** DELETE /api/v1/client/payment-method — soft-delete card (PAYM-03) */
+export function useUnlinkPaymentMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await clientRequest('delete', '/api/v1/client/payment-method')
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.paymentMethod() })
+    },
+  })
+}
+
+/** PATCH /api/v1/client/payment-method/autopay — enable/disable autopay (PAYM-04).
+ *
+ * consentAcknowledged MUST be true when enabled:true (ФЗ-376 gate).
+ * Backend returns 409 consent_required if enabled:true without consentAcknowledged:true.
+ */
+export function usePatchAutopay() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      enabled,
+      consentAcknowledged,
+    }: {
+      enabled: boolean
+      consentAcknowledged: boolean
+    }) => {
+      const res = await clientRequest('patch', '/api/v1/client/payment-method/autopay', {
+        body: { enabled, consentAcknowledged },
+      })
+      return (res as { data: PaymentMethodData }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: clientPortalKeys.paymentMethod() })
     },
   })
 }
