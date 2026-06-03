@@ -48,12 +48,14 @@ def test_locked_audit_events_count_after_phase_51_is_85() -> None:
         trainer_time_off_created/cancelled)
       - 100 after Phase 68 (+6 client auth: otp_requested/consumed, refresh_failed,
         family_reuse_detected, session_revoked, me_updated; +1 pre-P68 unaccounted)
+      - 101 after Phase 80 / v2.2 (+1 booking_rescheduled — client booking reschedule
+        atomic cancel+create audit event)
     If this fails with a higher count a new audit event was added without
     updating this test (intended behaviour). Update this assertion to lock the
     new baseline.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 100, (
-        f"Expected 100 LOCKED_AUDIT_EVENTS after Phase 68, got {len(LOCKED_AUDIT_EVENTS)}. "
+    assert len(LOCKED_AUDIT_EVENTS) == 101, (
+        f"Expected 101 LOCKED_AUDIT_EVENTS after Phase 80 (v2.2), got {len(LOCKED_AUDIT_EVENTS)}. "
         "Either a new event was added without updating this test, or an event was removed. "
         "Update this assertion to lock the new baseline."
     )

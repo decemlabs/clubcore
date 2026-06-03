@@ -234,10 +234,10 @@ def test_locked_audit_events_has_expected_count() -> None:
     webhook (Plan 51-09 / D-51-17). The v1.7 count grows 11 → 14 and the
     frozenset total becomes 82 + 3 = 85. See 51-02-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 100, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 100 "
+    assert len(LOCKED_AUDIT_EVENTS) == 101, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 101 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
-        "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68), "
+        "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v1.9 Phase 58 INFRA-15 / D-58-16: +4 payroll lifecycle pairs pre-registered
