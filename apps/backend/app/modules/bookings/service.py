@@ -77,6 +77,7 @@ from app.modules.bookings.notifications import (
     BOOKING_CANCELLED_BY_OWNER_DM,
     BOOKING_CONFIRMED_DM,
     enqueue_booking_email_fallback,
+    render_booking_rescheduled_dm,
 )
 from app.modules.bookings.schemas import (
     BookingCancelRequest,
@@ -200,6 +201,30 @@ class CancelWindowExpiredError(ConflictError):
     """
 
     code = "cancel_window_expired"
+    status_code = 409
+
+
+class RescheduleWindowExpiredError(ConflictError):
+    """Raised by reschedule_booking_for_client when the original slot starts
+    within CANCEL_WINDOW_HOURS_CLIENT (24h) of now (RESCH-01 / D-80-XX).
+
+    NOTE: status_code is **409** per parity with CancelWindowExpiredError
+    (same "slot too imminent" business rule applied to the reschedule path).
+    """
+
+    code = "reschedule_window_expired"
+    status_code = 409
+
+
+class SlotTrainerMismatchError(ConflictError):
+    """Raised by reschedule_booking_for_client when the new slot belongs to a
+    different trainer than the original slot (RESCH-01 / D-80-XX).
+
+    Reschedule is a slot MOVE within the same trainer — crossing trainers is
+    an upgrade path requiring a new booking, not a reschedule.
+    """
+
+    code = "slot_trainer_mismatch"
     status_code = 409
 
 
@@ -1651,6 +1676,216 @@ async def cancel_booking_for_client(
             "cancel_booking_for_client: just-cancelled booking disappeared on reload"
         )
     return _booking_response_from_orm(reloaded)
+
+
+# ---------------------------------------------------------------------------
+# Phase 80 RESCH-01 — reschedule_booking_for_client (atomic slot move).
+# ---------------------------------------------------------------------------
+
+
+async def reschedule_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    booking_id: UUID,
+    new_slot_id: UUID,
+) -> BookingResponse:
+    """Atomic reschedule: cancel-old-slot + create-new-booking in one UoW (RESCH-01).
+
+    PT-session credit PRESERVED (RESCH-01 / T-80-11): reschedule is a slot MOVE.
+    No sessions_remaining decrement, no restore. The new booking row reuses
+    ``pt_package_id`` from the cancelled booking (contrast with WR-06 owner-
+    force-cancel restore path that explicitly restores credit).
+
+    SVC001 caller-owns-txn: this function commits its own UoW.
+    """
+    now_utc = datetime.now(UTC)
+
+    # Step 1 — Load old booking with row lock + eager-loaded slot.
+    # Mirrors cancel_booking_for_client:1593.
+    booking = await repository.get_booking_by_id_for_update_with_slot(session, booking_id)
+
+    # IDOR 404-collapse (D-20-IDOR / T-80-05): non-owned or missing booking
+    # collapses to BookingNotFoundError("booking_not_found") — anti-oracle,
+    # never 403 or an existence signal.
+    if booking is None or booking.client_id != client_id:
+        raise BookingNotFoundError("booking_not_found")
+
+    # Step 2 — FSM guard (booking must be 'confirmed').
+    _assert_can_transition(booking, target="cancelled")
+
+    # Step 3 — Reschedule window: 24h against ORIGINAL slot start (RESCH-01 / T-80-07).
+    # Unlike the client cancel path, the window is measured against the original
+    # slot's start_time (NOT created_at or now).
+    if booking.slot.start_time - now_utc < timedelta(hours=CANCEL_WINDOW_HOURS_CLIENT):
+        raise RescheduleWindowExpiredError("reschedule_window_expired")
+
+    # Step 4 — Resolve new slot (mirror create_booking_for_client:1300-1306).
+    new_slot = await resolve_slot_by_id(session, new_slot_id)
+    if new_slot is None:
+        raise SlotNotFoundError("slot_not_found")
+    if new_slot.status != "active":
+        raise SlotNotAvailableError("slot_not_available")
+    if new_slot.start_time <= now_utc:
+        raise SlotNotAvailableError("slot_not_available")
+
+    # Step 5 — Same-trainer constraint (RESCH-01 / T-80-08).
+    if new_slot.trainer_id != booking.slot.trainer_id:
+        raise SlotTrainerMismatchError("slot_trainer_mismatch")
+
+    # Step 6 — Cancel old booking in-place (mirror cancel_booking_for_client:1612-1619).
+    old_slot_id = booking.slot_id
+    booking.status = "cancelled"
+    booking.cancelled_at = now_utc
+    booking.cancel_reason = "rescheduled"
+    await restore_booking_slot(session, old_slot_id)
+
+    # Step 7 — Flip new slot active→booked (mirror create_booking_for_client:1332-1344).
+    slot_flipped = await repository.update_slot_status_predicate_gated(
+        session,
+        new_slot_id,
+        from_status="active",
+        to_status="booked",
+    )
+    if not slot_flipped:
+        # Force a fresh read bypassing identity-map cache (mirror create_booking).
+        await session.refresh(new_slot, attribute_names=["status"])
+        if new_slot.status == "booked":
+            raise SlotAlreadyBookedError("slot_already_booked")
+        raise SlotNotAvailableError("slot_not_available")
+
+    # Step 8 — INSERT new booking row reusing pt_package_id (PT credit PRESERVED — T-80-11).
+    # NO sessions_remaining decrement, NO restore: reschedule is a slot MOVE, not
+    # cancel+rebook. The new booking inherits the same pt_package linkage.
+    new_booking = await repository.insert_booking(
+        session,
+        slot_id=new_slot_id,
+        client_id=client_id,
+        pt_package_id=booking.pt_package_id,
+        created_by_user_id=None,
+    )
+
+    # Step 9 — Flush + IntegrityError → SlotAlreadyBookedError (mirror create:1360-1366).
+    # The partial UNIQUE uq_bookings_slot_confirmed is the load-bearing race guard.
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_slot_confirmed_conflict(exc):
+            raise SlotAlreadyBookedError("slot_already_booked") from exc
+        raise
+
+    # Step 10 — Emit booking_rescheduled audit (LITERAL strings for INFRA-11 AST gate).
+    # Payload matches BookingRescheduledPayload (extra='forbid') verbatim.
+    await audit.emit(
+        session,
+        "booking_rescheduled",  # LITERAL — INFRA-11 AST gate
+        actor_user_id=None,  # RAW None — audit.emit signature is UUID | None
+        resource_type="booking",  # LITERAL — INFRA-11 AST gate
+        resource_id=new_booking.id,
+        old_booking_id=str(booking_id),
+        new_booking_id=str(new_booking.id),
+        old_slot_id=str(old_slot_id),
+        new_slot_id=str(new_slot_id),
+        old_start=booking.slot.start_time.isoformat(),
+        new_start=new_slot.start_time.isoformat(),
+        client_id=str(client_id),
+        actor_role="client",  # LITERAL — INFRA-11 AST gate / D-70-07 parity
+    )
+
+    # Step 11 — Commit (SVC001 gate). Slot implementation owns commit.
+    await session.commit()
+
+    # Step 12 — Reload new booking with client + slot.trainer joinedload
+    # (Phase 40 BLOCKER-2 / D-40-07) so the returned response + DM dispatch
+    # both see eager-loaded relationships. Mirrors _load_booking_with_relationships
+    # but uses the repository get_booking_by_id which already eager-loads slot +
+    # slot.trainer. Client join is needed for the DM; use _load_booking_with_relationships
+    # to get client too.
+    reloaded = await _load_booking_with_relationships(session, new_booking.id)
+    if reloaded is None:
+        raise RuntimeError(
+            "reschedule_booking_for_client: new booking disappeared on reload"
+        )
+
+    # Step 13 — Send the reschedule DM so the client RECEIVES the notification
+    # (ROADMAP success criterion 3 / T-80-14). Fire-and-forget semantics per D-39-09:
+    # NEVER let a send failure raise out of the endpoint.
+    #
+    # Cannot reuse _dispatch_booking_dm (renders via BOOKING_CONFIRMED_DM's
+    # slot_start_msk placeholder; render_booking_rescheduled_dm uses new_slot_start_msk).
+    # Cannot reuse _dispatch_booking_lifecycle_notification (its email-fallback branch
+    # has NO 'rescheduled' case — enqueue_booking_email_fallback's Literal kind set
+    # excludes 'rescheduled'; calling it would raise ValueError).
+    chat_id = None
+    if reloaded.client is not None:
+        chat_id = reloaded.client.telegram_user_id
+
+    if chat_id is None:
+        _log.info("booking_dm_skipped_unlinked", booking_id=str(new_booking.id))
+    else:
+        if reloaded.slot is None or reloaded.slot.trainer is None:
+            _log.error(
+                "booking_dm_missing_joinedload",
+                booking_id=str(new_booking.id),
+            )
+        else:
+            new_slot_start_msk = new_slot.start_time.astimezone(MOSCOW_TZ).strftime(
+                "%d.%m.%Y %H:%M"
+            )
+            client_name = reloaded.client.first_name
+            trainer_name = reloaded.slot.trainer.full_name
+            text_body = render_booking_rescheduled_dm(
+                client_name=client_name,
+                trainer_name=trainer_name,
+                new_slot_start_msk=new_slot_start_msk,
+            )
+            bot = build_bot(token=get_settings().telegram_bot_token.get_secret_value())
+            send_result = await telegram_sender.send_text_dm(bot, chat_id, text_body)
+
+            if send_result.ok:
+                # Step 14 — Insert send-evidence row (post-send) mirroring the
+                # reminder_24h cron Telegram-success branch (~lines 757-786).
+                # After the main commit the session is still open (asyncpg connection
+                # pooled). Reuse the same session for the evidence INSERT — simpler
+                # than spawning a fresh sessionmaker in the HTTP context, and correct
+                # because no DB I/O is in-flight between send and insert.
+                # IntegrityError on uq_booking_notifications_booking_kind_channel
+                # means idempotency collision — rollback + INFO-log.
+                try:
+                    session.add(
+                        BookingNotification(
+                            booking_id=new_booking.id,
+                            kind="rescheduled",
+                            channel="telegram",
+                        )
+                    )
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                    _log.info(
+                        "booking_reschedule_idempotency_collision",
+                        booking_id=str(new_booking.id),
+                        channel="telegram",
+                    )
+            else:
+                reason = "bot_blocked" if send_result.blocked else "transient"
+                _log.warning(
+                    "booking_dm_send_failed",
+                    reason=reason,
+                    booking_id=str(new_booking.id),
+                    telegram_chat_id=chat_id,
+                    error_msg=send_result.error,
+                )
+
+    # Step 15 — Reload once more with standard get_booking_by_id for the response
+    # (the response projection only needs slot + slot.trainer, not client).
+    response_booking = await repository.get_booking_by_id(session, new_booking.id)
+    if response_booking is None:
+        raise RuntimeError(
+            "reschedule_booking_for_client: new booking disappeared on response reload"
+        )
+    return _booking_response_from_orm(response_booking)
 
 
 # ---------------------------------------------------------------------------
