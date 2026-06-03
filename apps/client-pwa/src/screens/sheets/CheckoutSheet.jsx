@@ -127,6 +127,9 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   const [promoLoading, setPromoLoading] = React.useState(false);
   const [promoError, setPromoError] = React.useState(null); // error code string | null
   const [promoResult, setPromoResult] = React.useState(null); // { discountKopecks, newAmountKopecks, discountType } | null
+  // Save-card opt-in state lives here (NOT in ReviewStage) so it survives
+  // the email-gate → launchCheckout transition. Default OFF: body byte-identical.
+  const [savePaymentMethod, setSavePaymentMethod] = React.useState(false);
 
   // Local in-sheet toast state
   const [toast, setToast] = React.useState(null); // { message: string } | null
@@ -227,7 +230,11 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
 
       if (ctx.kind === 'sub') {
         // CPAY-01: membership checkout — server-derived idempotency key (D-71-04).
-        result = await checkoutMembership.mutateAsync({ planId: ctx.planId, promoCode: appliedPromoCode });
+        result = await checkoutMembership.mutateAsync({
+          planId: ctx.planId,
+          promoCode: appliedPromoCode,
+          ...(savePaymentMethod ? { savePaymentMethod: true } : {}),
+        });
         window.location.href = result.confirmationUrl;
       } else {
         // CPAY-02: PT-package checkout — client-supplied idempotency key (D-71-04).
@@ -236,6 +243,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
           planId: ctx.planId,
           idempotencyKey: idemKey,
           promoCode: appliedPromoCode,
+          ...(savePaymentMethod ? { savePaymentMethod: true } : {}),
         });
         window.location.href = result.confirmationUrl;
       }
@@ -325,6 +333,8 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
       forceOutcome={forceOutcome}
       toast={toast}
       showToast={showToast}
+      savePaymentMethod={savePaymentMethod}
+      setSavePaymentMethod={setSavePaymentMethod}
     />
   );
 };
@@ -347,6 +357,8 @@ function ReviewStage({
   forceOutcome,
   toast,
   showToast,
+  savePaymentMethod,
+  setSavePaymentMethod,
 }) {
   // Count-up for pay-bar total — animates whenever `total` changes
   const totalDisplay = useCountUp(total, [total]);
@@ -600,6 +612,29 @@ function ReviewStage({
           <span className="co-method-lock" aria-hidden="true">
             <Icon name="lock" size={18} color="var(--text-3)" strokeWidth={2} />
           </span>
+        </div>
+
+        {/* ── 5. Save-card opt-in ── */}
+        {/* Mere card storage is NOT a recurring charge — no ФЗ-376 consent here.
+            Autopay consent is the sole ФЗ-376 gate (handled in CardSheet). */}
+        <div className="co-sec-label">Карта<span className="co-ln" /></div>
+        <div className="co-bonus" style={{ alignItems: 'flex-start', padding: '14px 16px', gap: 14 }}>
+          <div className="co-bonus-text" style={{ flex: 1 }}>
+            <div className="co-bonus-title">Сохранить карту для будущих оплат</div>
+            <div className="co-bonus-sub">
+              Карта сохраняется для удобства — автосписаний не будет
+            </div>
+          </div>
+          <button
+            type="button"
+            className="co-bonus-switch"
+            role="switch"
+            aria-checked={savePaymentMethod}
+            aria-label="Сохранить карту для будущих оплат"
+            onClick={() => setSavePaymentMethod((v) => !v)}
+          >
+            <span className="co-bonus-knob" />
+          </button>
         </div>
 
         {/* Spacer for sticky paybar */}
