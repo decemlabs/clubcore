@@ -28,7 +28,7 @@ First of the staged v2.2→v2.6 sequence to bring the client PWA up to the mocku
 
 ### Handoff & verification (HND)
 
-- [ ] **HND-01**: Byte-stable регенерация `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` со всеми новыми client-путями v2.2 под тегом `Client-Portal`; CI drift-gate зелёный; staff-контракт байт-в-байт неизменён (byte-parity guard); golden TZ-тест на week-boundary (визит 21:30 UTC → следующий московский календарный день, паттерн v1.8 VER-02).
+- [x] **HND-01**: Byte-stable регенерация `apps/backend/openapi.json` + `packages/api-client/src/schema.d.ts` со всеми новыми client-путями v2.2 под тегом `Client-Portal`; CI drift-gate зелёный; staff-контракт байт-в-байт неизменён (byte-parity guard); golden TZ-тест на week-boundary (визит 21:30 UTC → следующий московский календарный день, паттерн v1.8 VER-02).
 
 ## v2 Requirements
 
@@ -75,7 +75,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RESCH-03 | Phase 80 | Complete |
 | WACT-01 | Phase 81 | Complete |
 | WACT-02 | Phase 81 | Complete |
-| HND-01 | Phase 81 | Pending |
+| HND-01 | Phase 81 | Complete |
 
 **Coverage:**
 - v1 requirements: 11 total
