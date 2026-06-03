@@ -3,20 +3,34 @@ import { Avatar } from '@/components/Avatar.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { BUSY_SLOTS, CALENDAR, TIME_SLOTS, UPCOMING_BOOKING, useCancelBooking } from '@/data';
+import { UPCOMING_BOOKING, useCancelBooking, useClientAvailableSlots, useRescheduleBooking } from '@/data';
 import { monthName } from '@/utils/format.js';
 
 export const BookingManageSheet = ({ booking, onClose, onCancelled, onRescheduled, onChat, onRules }) => {
   const [view, setView] = React.useState('overview'); // overview | cancel | reschedule | done-cancel | done-reschedule
-  const [newDay, setNewDay] = React.useState(null);
-  const [newSlot, setNewSlot] = React.useState(null);
+  const [selectedSlot, setSelectedSlot] = React.useState(null); // AvailableSlotItem
   const [cancelError, setCancelError] = React.useState(null);
+  const [rescheduleError, setRescheduleError] = React.useState(null);
   const cancelMutation = useCancelBooking();
+  const rescheduleMutation = useRescheduleBooking();
+  const { data: slotsPage } = useClientAvailableSlots();
 
   const b = booking || UPCOMING_BOOKING;
   const freeCancel = b.hoursTo >= 6;
   const refundPct = freeCancel ? 100 : 50;
   const refundAmount = Math.round(b.price * refundPct / 100);
+
+  // ─── Derive candidate reschedule slots ───────────────
+  // Filter to same trainer (by trainerName) + future start times.
+  // Server already returns only active slots; trainer filter is UX-only
+  // (authoritative same-trainer guard is server-side: T-80-16 / slot_trainer_mismatch).
+  const now = Date.now();
+  const candidateSlots = React.useMemo(() => {
+    if (!slotsPage?.items) return [];
+    return slotsPage.items.filter(
+      s => s.trainerName === b.trainerName && new Date(s.startTime).getTime() > now,
+    );
+  }, [slotsPage, b.trainerName, now]);
 
   // ─── Done states ─────────────────────────────────────
   if (view === 'done-cancel') {
@@ -34,15 +48,20 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
     );
   }
   if (view === 'done-reschedule') {
-    const day = CALENDAR.find(d => d.key === newDay);
+    const slotLabel = selectedSlot
+      ? new Date(selectedSlot.startTime).toLocaleString('ru-RU', {
+          weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+          timeZone: 'Europe/Moscow',
+        })
+      : '';
     return (
       <DoneState
         icon="check"
         accentBg="var(--accent-soft)"
         accentColor="var(--accent-deep)"
         title="Перенесли"
-        body={`Новое время: ${day?.dow}, ${day?.num} ${monthName(day?.month)} в ${newSlot}.`}
-        onClose={() => { onRescheduled && onRescheduled({ day: newDay, slot: newSlot }); onClose(); }}
+        body={`Новое время: ${slotLabel}.`}
+        onClose={() => { onRescheduled && onRescheduled({ slot: selectedSlot }); onClose(); }}
       />
     );
   }
@@ -178,10 +197,6 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
 
   // ─── Reschedule ──────────────────────────────────────
   if (view === 'reschedule') {
-    const day = newDay ? CALENDAR.find(d => d.key === newDay) : null;
-    const trainerKey = 't1'; // Аня in mock
-    const busy = BUSY_SLOTS[trainerKey] || [];
-
     return (
       <div className="sheet" style={{ background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
         <StatusBar />
@@ -195,89 +210,45 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
             </div>
           </div>
 
-          {/* Date strip */}
           <div style={{ padding: '8px 20px 4px' }}>
-            <div className="t-mini" style={{ color: 'var(--text-3)' }}>1 · Дата</div>
-          </div>
-          <div style={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: `repeat(${CALENDAR.length}, 60px)`,
-              gap: 8, padding: '4px 20px 8px',
-            }}>
-              {CALENDAR.slice(1).map(d => (
-                <button
-                  key={d.key}
-                  onClick={() => { if (d.hasSlot) { setNewDay(d.key); setNewSlot(null); } }}
-                  disabled={!d.hasSlot}
-                  className={`cal-day ${newDay === d.key ? 'selected' : ''} ${d.hasSlot ? 'has-slot' : 'disabled'}`}
-                >
-                  <span className="dow">{d.dow}</span>
-                  <span className="num">{d.num}</span>
-                </button>
-              ))}
-            </div>
+            <div className="t-mini" style={{ color: 'var(--text-3)' }}>Доступные слоты · {b.trainer || b.trainerName}</div>
           </div>
 
-          {/* Time grid */}
-          {newDay && (
-            <div className="fade-up">
-              <div style={{ padding: '14px 20px 4px' }}>
-                <div className="t-mini" style={{ color: 'var(--text-3)' }}>2 · Время</div>
-                <div className="t-small" style={{ marginTop: 4 }}>
-                  {day?.dow}, {day?.num} {monthName(day?.month)} · {b.trainer}
-                </div>
+          {candidateSlots.length === 0 ? (
+            <div style={{ padding: '16px 20px' }}>
+              <div className="t-small" style={{ color: 'var(--text-2)' }}>
+                Нет доступных слотов. Попробуйте позже или обратитесь на ресепшн.
               </div>
-              {(() => {
-                const periods = [
-                  { id: 'morning', label: 'Утро',  hint: 'до 11:00',   icon: 'sunrise', range: [0, 11] },
-                  { id: 'day',     label: 'День',  hint: '11:00–17:00', icon: 'sun',     range: [11, 17] },
-                  { id: 'evening', label: 'Вечер', hint: 'после 17:00', icon: 'moon',    range: [17, 24] },
-                ];
-                return periods.map(p => {
-                  const slots = TIME_SLOTS.filter(s => {
-                    const h = parseInt(s.split(':')[0], 10);
-                    return h >= p.range[0] && h < p.range[1];
-                  });
-                  if (!slots.length) return null;
-                  const freeCount = slots.filter(s => !busy.includes(s)).length;
-                  const allBusy = freeCount === 0;
-                  return (
-                    <div key={p.id} style={{ padding: '10px 16px 0' }}>
-                      <div className="period-card" data-empty={allBusy ? 'true' : 'false'}>
-                        <div className="period-card__head">
-                          <Icon name={p.icon} size={16} color="var(--text-2)" strokeWidth={1.8} />
-                          <div className="t-h3" style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-                            {p.label}
-                          </div>
-                          <div className="t-mini" style={{ color: 'var(--text-3)', flex: 1 }}>{p.hint}</div>
-                          <div className="t-mini" style={{
-                            color: allBusy ? 'var(--text-3)' : 'var(--accent-deep)',
-                            fontVariantNumeric: 'tabular-nums', fontWeight: 600,
-                          }}>
-                            {freeCount} свободно
-                          </div>
-                        </div>
-                        <div className="period-card__grid">
-                          {slots.map(s => {
-                            const isBusy = busy.includes(s);
-                            return (
-                              <div key={s}>
-                                <button
-                                  disabled={isBusy}
-                                  onClick={() => !isBusy && setNewSlot(s)}
-                                  className={`slot-chip ${newSlot === s ? 'selected' : ''} ${isBusy ? 'busy' : ''}`}
-                                >
-                                  {s}
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
+            </div>
+          ) : (
+            <div style={{ padding: '4px 16px 0' }}>
+              {candidateSlots.map(s => {
+                const dt = new Date(s.startTime);
+                const label = dt.toLocaleString('ru-RU', {
+                  weekday: 'short', day: 'numeric', month: 'short',
+                  hour: '2-digit', minute: '2-digit',
+                  timeZone: 'Europe/Moscow',
                 });
-              })()}
+                const isSelected = selectedSlot?.slotId === s.slotId;
+                return (
+                  <button
+                    key={s.slotId}
+                    onClick={() => setSelectedSlot(s)}
+                    className={`slot-chip${isSelected ? ' selected' : ''}`}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      marginBottom: 8, padding: '12px 14px',
+                      border: isSelected ? '1.5px solid var(--accent-deep)' : '1px solid var(--border)',
+                      borderRadius: 12,
+                      background: isSelected ? 'var(--accent-soft)' : 'var(--surface)',
+                      color: 'var(--text)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span className="t-h3" style={{ fontSize: 14 }}>{label}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -290,18 +261,78 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
           <div style={{ height: 140 }} />
         </div>
 
-        {newSlot && (
+        {rescheduleError && (
+          <div
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              position: 'absolute', left: 16, right: 16, bottom: 102,
+              zIndex: 10,
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
+              border: '1px solid var(--danger)',
+              borderRadius: 14,
+              padding: '11px 13px',
+              display: 'flex', alignItems: 'center', gap: 11,
+              boxShadow: '0 8px 24px rgba(28, 25, 23, 0.12)',
+            }}
+          >
+            <span style={{
+              width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+              background: 'var(--danger)', color: '#fff',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }} aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}
+                   strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 650, lineHeight: 1.25 }}>
+              {rescheduleError}
+            </span>
+          </div>
+        )}
+
+        {selectedSlot && (
           <div style={{
             position: 'absolute', left: 0, right: 0, bottom: 0,
             padding: '12px 16px 20px',
             background: 'linear-gradient(to top, var(--bg) 70%, transparent)',
           }}>
             <button
-              onClick={() => setView('done-reschedule')}
+              disabled={rescheduleMutation.isPending}
+              onClick={async () => {
+                setRescheduleError(null);
+                const idempotencyKey = typeof crypto !== 'undefined'
+                  ? crypto.randomUUID()
+                  : Math.random().toString(36).slice(2);
+                try {
+                  await rescheduleMutation.mutateAsync({
+                    bookingId: b.id,
+                    newSlotId: selectedSlot.slotId,
+                    idempotencyKey,
+                  });
+                  setView('done-reschedule');
+                } catch (err) {
+                  const code = err && typeof err === 'object' && 'code' in err ? err.code : null;
+                  if (code === 'reschedule_window_expired') {
+                    setRescheduleError('Окно переноса истекло — обратитесь на ресепшн');
+                  } else if (code === 'slot_already_booked') {
+                    setRescheduleError('Этот слот уже занят. Выберите другое время.');
+                  } else if (code === 'slot_trainer_mismatch') {
+                    setRescheduleError('Слот другого тренера — перенос только к тому же тренеру.');
+                  } else {
+                    setRescheduleError('Не удалось перенести запись. Попробуйте ещё раз.');
+                  }
+                }
+              }}
               className="btn btn-accent fade-up"
-              style={{ width: '100%', height: 54 }}
+              style={{
+                width: '100%', height: 54,
+                opacity: rescheduleMutation.isPending ? 0.7 : 1,
+              }}
             >
-              Перенести на {day?.num} {monthName(day?.month)}, {newSlot}
+              {rescheduleMutation.isPending ? 'Переносим…' : 'Перенести запись'}
             </button>
           </div>
         )}
@@ -480,4 +511,3 @@ function ManageTopBar({ title, onClose, onBack }) {
     </div>
   );
 }
-
