@@ -16,9 +16,34 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
   const { data: slotsPage } = useClientAvailableSlots();
 
   const b = booking || UPCOMING_BOOKING;
-  const freeCancel = b.hoursTo >= 6;
+  // Real /client/home + /client/bookings bookings carry only
+  // {id, trainerName, startTime, status}. This sheet was authored against the richer
+  // UPCOMING_BOOKING mock (price, hoursTo, date, time, duration, trainer*), so any
+  // field beyond those four is undefined on a real booking — and `b.price.toLocaleString()`
+  // crashed the whole sheet on open. Normalize with safe fallbacks derived from startTime.
+  const startMs = b.startTime ? new Date(b.startTime).getTime() : null;
+  const hoursTo = Number.isFinite(b.hoursTo)
+    ? b.hoursTo
+    : (startMs != null ? Math.max(0, (startMs - Date.now()) / 3_600_000) : null);
+  const hasPrice = Number.isFinite(b.price);
+  // Unknown cancel window (no hoursTo, no startTime) → treat as free (no penalty) — safest
+  // for the user; the server is the authoritative cancel-window gate regardless.
+  const freeCancel = hoursTo == null ? true : hoursTo >= 6;
   const refundPct = freeCancel ? 100 : 50;
-  const refundAmount = Math.round(b.price * refundPct / 100);
+  const refundAmount = hasPrice ? Math.round(b.price * refundPct / 100) : null;
+  const refundAmountLabel = refundAmount != null ? `${refundAmount.toLocaleString('ru-RU')} ₽` : null;
+  const priceLabel = hasPrice ? `${b.price.toLocaleString('ru-RU')} ₽` : null;
+  const hoursToWhole = hoursTo != null ? Math.floor(hoursTo) : null;
+  const trainerLabel = b.trainer ?? b.trainerName ?? 'Тренер';
+  const whenLabel = (b.date && b.time)
+    ? `${b.date}, ${b.time}`
+    : (startMs != null
+        ? new Date(startMs).toLocaleString('ru-RU', {
+            weekday: 'short', day: 'numeric', month: 'long',
+            hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow',
+          })
+        : '—');
+  const whenSub = b.duration ? `${b.duration} мин` : null;
 
   // ─── Derive candidate reschedule slots ───────────────
   // Filter to same trainer + future start times.
@@ -49,7 +74,9 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
         title="Запись отменена"
         body={refundPct === 100
           ? 'Деньги вернутся на карту в течение 1–3 рабочих дней.'
-          : `Возврат ${refundAmount.toLocaleString('ru-RU')} ₽ (50%) — отмена позже чем за 6 часов.`}
+          : refundAmountLabel
+            ? `Возврат ${refundAmountLabel} (50%) — отмена позже чем за 6 часов.`
+            : 'Возврат 50% — отмена позже чем за 6 часов.'}
         onClose={() => { onCancelled && onCancelled(); onClose(); }}
       />
     );
@@ -92,17 +119,17 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
 
           <div style={{ padding: '4px 16px 0' }}>
             <div className="card" style={{ padding: 4 }}>
-              <RowItem icon="user" label="Тренер" value={b.trainer} sub={b.focus}
+              <RowItem icon="user" label="Тренер" value={trainerLabel} sub={b.focus}
                        avatar={<Avatar initials={b.trainerInitials} bg={b.trainerBg} color={b.trainerColor} size={36} />} />
               <Divider />
               <RowItem icon="calendar" label="Когда"
-                       value={`${b.date}, ${b.time}`} sub={`${b.duration} мин`} />
+                       value={whenLabel} sub={whenSub} />
               <Divider />
               <RowItem
                 icon="card"
                 label="Возврат"
-                value={`${refundAmount.toLocaleString('ru-RU')} ₽`}
-                sub={`${refundPct}% от ${b.price.toLocaleString('ru-RU')} ₽ · на карту •••• 4821`}
+                value={refundAmountLabel ?? `${refundPct}%`}
+                sub={priceLabel ? `${refundPct}% от ${priceLabel}` : 'Возврат на карту по правилам отмены'}
                 accent={freeCancel}
               />
             </div>
@@ -388,8 +415,10 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
               <div style={{ flex: 1 }}>
                 <div className="t-h3" style={{ fontSize: 14 }}>
                   {freeCancel
-                    ? `Бесплатная отмена ещё ${b.hoursTo - 6} ч`
-                    : `До тренировки ${b.hoursTo} ч`}
+                    ? (hoursToWhole != null
+                        ? `Бесплатная отмена ещё ${Math.max(0, hoursToWhole - 6)} ч`
+                        : 'Отмена и перенос — без штрафа')
+                    : `До тренировки ${hoursToWhole} ч`}
                 </div>
                 <div className="t-small" style={{ marginTop: 2 }}>
                   {freeCancel
@@ -424,7 +453,11 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
           <ActionRow
             icon="close"
             title="Отменить запись"
-            sub={freeCancel ? 'Полный возврат на карту' : `Вернётся ${refundAmount.toLocaleString('ru-RU')} ₽ из ${b.price.toLocaleString('ru-RU')} ₽`}
+            sub={freeCancel
+              ? 'Полный возврат на карту'
+              : (refundAmountLabel && priceLabel
+                  ? `Вернётся ${refundAmountLabel} из ${priceLabel}`
+                  : 'Вернётся 50% по правилам отмены')}
             danger
             onClick={() => setView('cancel')}
           />

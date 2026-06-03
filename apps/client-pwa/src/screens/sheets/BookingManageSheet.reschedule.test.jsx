@@ -134,6 +134,32 @@ async function pickFirstSlot() {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('BookingManageSheet reschedule wiring (RESCH-03 / Plan 80-03)', () => {
+  // Regression: real /client/home nextBooking carries ONLY {id, trainerName, startTime,
+  // status} — no price/hoursTo/date/time/duration. The sheet previously read
+  // `b.price.toLocaleString()` unconditionally and crashed the whole sheet on open.
+  // Found during v2.2 browser verification. The overview must render (and reschedule
+  // must be reachable) from a real-shaped booking without throwing.
+  it('renders overview from a REAL backend booking shape (no price/hoursTo) without crashing', async () => {
+    const realBooking = {
+      id: 'bk-real-1',
+      trainerName: TRAINER_NAME,
+      startTime: new Date(Date.now() + 47 * 60 * 60 * 1000).toISOString(), // ~47h out → freeCancel
+      status: 'confirmed',
+    }
+    expect(() =>
+      render(<BookingManageSheet {...baseProps} booking={realBooking} />),
+    ).not.toThrow()
+    // Overview actions are present (sheet did not white-screen)
+    expect(screen.getByText('Перенести')).toBeInTheDocument()
+    expect(screen.getByText('Отменить запись')).toBeInTheDocument()
+    // Free-cancel copy renders (window derived from startTime), no "undefined"/"NaN" leaks
+    expect(screen.getByText('Полный возврат на карту')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/undefined|NaN/)
+    // Reschedule view is reachable from the real-shaped booking
+    await enterRescheduleView()
+    expect(screen.getByText('Перенос')).toBeInTheDocument()
+  })
+
   it('slot list is rendered from stubbed useClientAvailableSlots (mock CALENDAR not used)', async () => {
     render(<BookingManageSheet {...baseProps} />)
     await enterRescheduleView()
