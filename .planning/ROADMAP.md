@@ -149,8 +149,11 @@ Plans:
   2. `useClientCheckoutMembership` и `useClientCheckoutPtPackage` принимают `savePaymentMethod?: boolean` и кладут `save_payment_method` в body (default false — байт-идентично при выключенном)
   3. openapi.json + schema.d.ts остаются byte-stable (поле уже в замороженном контракте с Phase 79); drift gates зелёные
   4. Vitest покрывает: opt-in выключен → флаг не отправляется; opt-in включён → `savePaymentMethod:true` уходит в мутацию
-**Plans**: TBD
+**Plans**: 1 plan
 **UI hint**: yes
+
+Plans:
+- [ ] 81.1-01-checkout-save-card-capture-PLAN.md — Thread savePaymentMethod through both checkout hooks (default OFF, byte-identical body) + save-card opt-in in CheckoutSheet wired into both mutateAsync calls + vitest off/on coverage + byte-stable contract regen (PAYM-01)
 
 ## Backlog
 
@@ -193,10 +196,11 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 79 → 80 → 81
+**Execution Order:** 79 → 80 → 81 → 81.1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
+| 81.1. Checkout Save-Card Capture | 0/1 | Planned    | — |
