@@ -1705,3 +1705,55 @@ async def invoke_client_checkout_core(
             "app/main.py:create_app() (HTTP-only single-wire; see Phase 71 D-20-MODULE)."
         )
     return await _client_checkout_core(session, **kwargs)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 80 RESCH-01 / D-20-MODULE — BookingForClientRescheduler slot.
+#
+# Allows client_portal to invoke bookings.service.reschedule_booking_for_client
+# WITHOUT importing bookings directly (D-20-MODULE: zero new ignore_imports).
+# Value-returning callable; mirrors BookingForClientCanceller shape above.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+BookingForClientRescheduler = Callable[..., Awaitable[Any]]
+"""Async callable: (session, *, client_id, booking_id, new_slot_id) -> BookingResponse.
+
+Return type is ``Any`` at this scope (same rationale as BookingForClientCreator).
+"""
+
+_booking_for_client_rescheduler: BookingForClientRescheduler | None = None
+
+
+def register_booking_for_client_rescheduler(rescheduler: BookingForClientRescheduler) -> None:
+    """Composition-root setter — called by ``app.main.create_app()`` (Phase 80 RESCH-01).
+
+    HTTP-only single-wire. Idempotent: re-registering replaces the slot
+    (mirrors WR-05 reasoning).
+    """
+    global _booking_for_client_rescheduler
+    _booking_for_client_rescheduler = rescheduler
+
+
+async def reschedule_booking_for_client(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    booking_id: UUID,
+    new_slot_id: UUID,
+) -> Any:
+    """Consumer entry point — used by ``app.modules.client_portal`` (Phase 80 RESCH-01).
+
+    Defensive-raise when the slot is not registered (mirrors cancel/create pattern).
+    Return type is ``Any``; callers cast/type-narrow the result.
+    Zero new ``ignore_imports``.
+    """
+    if _booking_for_client_rescheduler is None:
+        raise RuntimeError(
+            "BookingForClientRescheduler slot not registered — register via "
+            "app.core.dependencies.register_booking_for_client_rescheduler() in "
+            "app/main.py:create_app() (HTTP-only single-wire; see Phase 80 D-20-MODULE)."
+        )
+    return await _booking_for_client_rescheduler(
+        session, client_id=client_id, booking_id=booking_id, new_slot_id=new_slot_id
+    )

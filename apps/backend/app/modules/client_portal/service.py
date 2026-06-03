@@ -43,6 +43,7 @@ from app.core.dependencies import (
     create_visit_client_qr,
     get_active_pt_package,
     invoke_client_checkout_core,
+    reschedule_booking_for_client,  # Phase 80 RESCH-01 — D-20-MODULE Protocol slot
 )
 from app.core.exceptions import (
     BadGatewayAppError,
@@ -510,6 +511,41 @@ async def cancel_client_booking(
         client_id=client_id,
         booking_id=booking_id,
         cancel_reason=cancel_reason,
+    )
+    r = cast(Any, result)
+    return ClientBookingResponse(
+        id=r.id,
+        slot_id=r.slot_id,
+        status=str(r.status),
+        start_time=r.slot_start_time,
+        trainer_name=str(r.trainer_full_name),
+    )
+
+
+async def reschedule_client_booking(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    booking_id: UUID,
+    new_slot_id: UUID,
+) -> ClientBookingResponse:
+    """Delegate reschedule to the Protocol-slot accessor (D-20-MODULE / RESCH-01).
+
+    Calls ``app.core.dependencies.reschedule_booking_for_client`` — the composition-root
+    slot wired to ``bookings.service.reschedule_booking_for_client`` in ``main.py``.
+    NO direct ``app.modules.bookings`` import (D-20-MODULE / zero new ignore_imports).
+
+    Propagates domain errors without catching:
+      - BookingNotFoundError → 404 booking_not_found (IDOR anti-oracle)
+      - RescheduleWindowExpiredError → 409 reschedule_window_expired
+      - SlotTrainerMismatchError → 409 slot_trainer_mismatch
+      - SlotAlreadyBookedError → 409 slot_already_booked (race)
+    """
+    result = await reschedule_booking_for_client(
+        session,
+        client_id=client_id,
+        booking_id=booking_id,
+        new_slot_id=new_slot_id,
     )
     r = cast(Any, result)
     return ClientBookingResponse(

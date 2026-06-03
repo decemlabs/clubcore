@@ -68,6 +68,7 @@ from app.modules.client_portal.schemas import (
     ClientPromoValidateResponse,
     ClientPtSessionItem,
     ClientQrTokenResponse,
+    ClientRescheduleBookingRequest,
     ClientVisitItem,
 )
 from app.modules.payment_methods.schemas import (
@@ -432,6 +433,66 @@ async def client_cancel_booking(
         booking_id=booking_id,
     )
     return envelope(booking)
+
+
+@router.post(
+    "/booking/{booking_id}/reschedule",
+    response_model=ResponseEnvelope[ClientBookingResponse],
+    status_code=status.HTTP_200_OK,
+    operation_id="client_reschedule_booking",
+    summary=(
+        "Reschedule the authenticated client's own confirmed booking to a new slot "
+        "of the same trainer (RESCH-01; requires Idempotency-Key — D-70-02; "
+        "409 slot_already_booked on race; 409 reschedule_window_expired if <24h; "
+        "409 slot_trainer_mismatch on cross-trainer; 404 on non-owned booking)"
+    ),
+)
+async def client_reschedule_booking(
+    booking_id: UUID,
+    payload: ClientRescheduleBookingRequest,
+    request: Request,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    idempotency_key: Annotated[str, Depends(verify_client_idempotency)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Reschedule the authenticated client's own confirmed booking (Phase 80 RESCH-01).
+
+    RBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency
+    → get_db / get_redis.
+
+    client.id is the IDOR-safe source (T-80-05): NO client_id in the body
+    (ClientRescheduleBookingRequest has no client_id field — extra='forbid' rejects any
+    injected client_id).
+
+    RESCH-01: atomic same-trainer reschedule; window guard (<24h → 409); cross-trainer
+    guard (409 slot_trainer_mismatch); TOCTOU race → 409 slot_already_booked.
+    PT-session credit preserved (T-80-11): reschedule is a slot MOVE, not cancel+rebook.
+
+    Two-phase Redis idempotency (D-70-02 / D-66-LIFECYCLE-HELPER): mirrors
+    client_create_booking with verify_client_idempotency instead of verify_idempotency.
+
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    incoming_body = await request.body()
+    client_id = client.id
+
+    async def _runner() -> tuple[int, bytes]:
+        booking = await service.reschedule_client_booking(
+            session,
+            client_id=client_id,
+            booking_id=booking_id,
+            new_slot_id=payload.new_slot_id,
+        )
+        body_bytes = json.dumps(
+            envelope(booking).model_dump(mode="json", by_alias=True),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return status.HTTP_200_OK, body_bytes
+
+    return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
 
 
 @router.get(

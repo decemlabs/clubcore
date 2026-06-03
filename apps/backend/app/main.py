@@ -63,6 +63,7 @@ from app.core.dependencies import (
     register_booking_completer,
     register_booking_for_client_canceller,  # Phase 70 D-70-05 — HTTP-only single-wire.
     register_booking_for_client_creator,  # Phase 70 D-70-01 — HTTP-only single-wire.
+    register_booking_for_client_rescheduler,  # Phase 80 RESCH-01 — HTTP-only single-wire.
     register_booking_slot_restorer,
     register_client_by_telegram_resolver,
     register_client_checkout_core,  # Phase 71 D-71-01 — HTTP-only single-wire.
@@ -600,6 +601,12 @@ def create_app() -> FastAPI:
     # reaches these writes ONLY through core.dependencies accessors.
     register_booking_for_client_creator(bookings_service.create_booking_for_client)
     register_booking_for_client_canceller(bookings_service.cancel_booking_for_client)
+
+    # Phase 80 RESCH-01 / D-20-MODULE — client booking reschedule Protocol slot.
+    # HTTP-only single-wire (reschedule endpoint has no ARQ or bot entry path;
+    # client portal does not run in the worker). Zero new ignore_imports —
+    # client_portal reaches this write ONLY through core.dependencies accessor.
+    register_booking_for_client_rescheduler(bookings_service.reschedule_booking_for_client)
 
     # Phase 70 D-70-11 / D-20-MODULE — client QR self check-in Protocol slot.
     # HTTP-only single-wire (QR scan endpoint is an HTTP POST; no ARQ or bot
