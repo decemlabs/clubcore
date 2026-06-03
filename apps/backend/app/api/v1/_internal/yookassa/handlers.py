@@ -541,7 +541,10 @@ async def handle_payment_succeeded(
                     " expiry_month, expiry_year, autopay_enabled) "
                     "VALUES (:client_id, :method_id, :last4, :brand, "
                     "        :expiry_month, :expiry_year, false) "
-                    "ON CONFLICT ON CONSTRAINT uq_client_payment_methods_client_id_alive "
+                    # Partial unique index uq_client_payment_methods_client_id_alive
+                    # is a CREATE INDEX (not a CONSTRAINT), so ON CONFLICT must use
+                    # the index predicate form — not ON CONFLICT ON CONSTRAINT.
+                    "ON CONFLICT (client_id) WHERE unlinked_at IS NULL "
                     "DO UPDATE SET "
                     "  yookassa_method_id = EXCLUDED.yookassa_method_id, "
                     "  last4 = EXCLUDED.last4, "
