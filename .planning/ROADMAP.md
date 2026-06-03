@@ -81,7 +81,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Milestone Goal:** Углубить client-PWA self-service до соответствия макету — клиент сам управляет привязанной картой и автоплатежом (UI-only: токен + preference + ФЗ-376 consent, без реальных списаний), переносит брони и видит свою недельную активность. Три флага включаются: `linkedCard`, `weeklyActivity`. Staff-сторона заморожена; всё под `require_client()`. Autopay cron (`charge_expiring_autopay`) деферируется в v2.3.
 
 - [x] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, новый модуль `payment_methods/`, webhook save-step, GET/DELETE/PATCH endpoints, ФЗ-376 consent capture (PAYM-01, PAYM-02, PAYM-03, PAYM-04) (completed 2026-06-03)
-- [ ] **Phase 80: Booking Reschedule** — атомарный cancel+create, `reschedule_booking_for_client` Protocol slot, migration 0053, `booking_rescheduled` audit event, DM-шаблон, PWA wiring (RESCH-01, RESCH-02, RESCH-03)
+- [x] **Phase 80: Booking Reschedule** — атомарный cancel+create, `reschedule_booking_for_client` Protocol slot, migration 0053, `booking_rescheduled` audit event, DM-шаблон, PWA wiring (RESCH-01, RESCH-02, RESCH-03) (completed 2026-06-03)
 - [ ] **Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff** — `GET /client/activity/weekly`, flip `linkedCard`/`weeklyActivity` ON, CardSheet wiring, byte-stable openapi.json regen, golden TZ test, milestone verification (WACT-01, WACT-02, PAYM-05, HND-01)
 
 ## Phase Details
@@ -119,7 +119,7 @@ Plans:
 Plans:
 - [x] 80-01-reschedule-foundation-PLAN.md — Migration 0053 (booking_notifications.kind CHECK +rescheduled) + booking_rescheduled audit event/payload + reschedule DM template + ClientRescheduleBookingRequest schema
 - [x] 80-02-reschedule-endpoint-PLAN.md — Atomic reschedule_booking_for_client (cancel+create, PT-credit preserved) + BookingForClientRescheduler Protocol slot + POST /client/booking/{id}/reschedule endpoint + integration tests (race/window/cross-trainer/IDOR/audit/PT-credit)
-- [ ] 80-03-reschedule-pwa-PLAN.md — useRescheduleBooking hook + BookingManageSheet wired to real available slots (mock calendar removed) + vitest wiring suite
+- [x] 80-03-reschedule-pwa-PLAN.md — useRescheduleBooking hook + BookingManageSheet wired to real available slots (mock calendar removed) + vitest wiring suite
 
 ### Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff
 **Goal**: Клиент видит недельную активность на ProfileScreen; CardSheet подключён к реальному backend; весь v2.2 API зафиксирован в openapi.json
@@ -180,5 +180,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
-| 80. Booking Reschedule | 2/3 | In Progress|  |
+| 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 0/TBD | Not started | - |
