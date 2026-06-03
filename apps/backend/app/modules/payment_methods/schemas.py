@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from app.core.schemas import ResponseData
+from app.core.schemas import BackendSchemaBase, ResponseData
 
 
 class ClientPaymentMethodResponse(ResponseData):
@@ -23,18 +23,23 @@ class ClientPaymentMethodResponse(ResponseData):
     id: UUID
     last4: str
     brand: str
-    expiry_month: int | None = None      # wire: expiryMonth
-    expiry_year: int | None = None       # wire: expiryYear
-    autopay_enabled: bool                # wire: autopayEnabled
+    expiry_month: int | None = None  # wire: expiryMonth
+    expiry_year: int | None = None  # wire: expiryYear
+    autopay_enabled: bool  # wire: autopayEnabled
     consent_recorded_at: datetime | None = None  # wire: consentRecordedAt
 
 
-class ClientAutopayPatchRequest(ResponseData):
+class ClientAutopayPatchRequest(BackendSchemaBase):
     """PATCH /client/payment-method/autopay body (PAYM-04).
 
     enabled=True requires consent_acknowledged=True (ФЗ-376 gate).
     enabled=False is ungated — no consent needed.
-    extra='forbid' (ResponseData base) rejects unknown keys.
+
+    Inbound request body → BackendSchemaBase (extra='forbid'): unknown keys are
+    REJECTED, not ignored. This is a consent-gated ФЗ-376 endpoint, so a client
+    typo (e.g. a misspelled ``consentAcknowleged``) must surface as a 422 rather
+    than silently defaulting ``consent_acknowledged`` to False and yielding a
+    confusing 409 (WR-79-01).
     """
 
     enabled: bool
