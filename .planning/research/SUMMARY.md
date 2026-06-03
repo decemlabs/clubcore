@@ -1,115 +1,135 @@
 # Project Research Summary
 
-**Project:** clubcore — v2.0 Frontend Integration — Client PWA
-**Domain:** Client-facing API + member PWA over an existing FastAPI modular-monolith gym CRM (RF/CIS)
-**Researched:** 2026-05-29
-**Confidence:** HIGH — all findings from direct codebase inspection (no speculation)
-
-> Synthesized from STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md (committed `d4cfac83`).
+**Project:** clubcore v2.2 — Membership self-service depth
+**Domain:** Gym CRM client PWA — card-on-file + autopay, booking reschedule, weekly-activity analytics
+**Researched:** 2026-06-03
+**Confidence:** HIGH
 
 ---
 
 ## Executive Summary
 
-v2.0 is the **first full-stack milestone** after a series of backend-only releases. The v1.11 *staff* OpenAPI contract is frozen; the task is to expose gym members as a **second principal** through a dedicated client-facing API and wire `apps/client-pwa` (React 18 + react-router v6, currently 100% mock data) to that backend. The core challenge: add a completely **orthogonal authentication principal** alongside a frozen, fully-tested staff RBAC system **without touching either the staff contract or the frozen `apps/admin-web`**.
+v2.2 deepens the already-shipped client PWA by unlocking three hidden UI components — `CardSheet`, `BookingManageSheet` reschedule view, and the weekly-activity bars on `ProfileScreen` — each gated by a feature flag (`linkedCard`, `weeklyActivity`) currently set to `false`. Two of the three features (reschedule, weekly activity) are almost entirely reuse of existing codebase patterns with no new dependencies. The third (card-on-file + autopay) introduces the only genuinely new infrastructure: a `client_payment_methods` table, extension of the `YooKassaClient` adapter, a webhook handler extension, and — depending on the scope decision — an ARQ cron for automated renewal charges.
 
-Four structural decisions must be settled before any domain work begins:
-1. **Separate `ClientPrincipal` + `require_client()`** dependency tree with a distinct JWT audience claim (`aud: "client"`) and distinct cookie names — **NOT** extending the staff `Role` enum.
-2. **`app/modules/client_portal/`** aggregator module with raw-SQL reads (the `reports/` D-54-08 read-only precedent) and Protocol-slot writes — preserves `modules-independent`.
-3. **Telegram-OTP-only** for v2.0 — reuse existing OTP infra; **no SMS provider**.
-4. **Single OpenAPI spec extended additively** with a `"Client-Portal"` tag and `client_` operationId prefix — frozen staff paths byte-identical.
+**The most consequential decision for this milestone: does "autopay" mean UI-only (store token + toggle + consent, NO actual recurring charges) or full execution (ARQ `charge_expiring_autopay` cron that charges the saved card N days before membership expiry)?** Researchers disagreed: STACK.md recommends deferring the cron to v2.3; FEATURES.md and ARCHITECTURE.md include it in v2.2 MVP. The answer affects migration schema, test surface, and phase count. This must be locked before requirements are written.
 
-The **#1 risk is cross-client data leakage (IDOR)**. Every client repository function must carry `client_id` as a mandatory parameter; every domain phase must ship a parametrized cross-client enumeration test. The **#2 risk is privilege-boundary collapse** — adding `Role.CLIENT` to `permissions.py` breaks the three-way RBAC byte-parity test against frozen `admin-web/can.ts` and must never happen.
+The key regulatory constraint is РФ ФЗ-376 (effective March 2026): `consent_recorded_at` column is mandatory in migration 0052 regardless of whether the cron ships in v2.2 or v2.3. Additionally, YooKassa autopay requires explicit account manager activation (TEST-ONLY by default) — an OPERATOR-PENDING item with no code equivalent. The `linkedCard` PWA flag stays OFF until the operator confirms production activation.
 
 ---
 
-## Reconciled Decision: Client Principal (IMPORTANT)
+## Key Findings
 
-STACK.md initially suggested `Role.CLIENT = "client"`. ARCHITECTURE.md and PITFALLS.md both independently argue against it: the three-way RBAC byte-parity test pins `permissions.py` against the **frozen** `admin-web/can.ts`/`registry.ts` (admin-web is out of scope and cannot be touched). **Resolution: the separate-principal design wins.**
+### Stack
 
-- New `ClientPrincipal` Protocol in `app/core/dependencies.py` (parallel to the staff `CurrentUser`; no `Role` field).
-- New `require_client()` dependency factory reading a `cc_client_access` cookie with an `aud: "client"` claim validated by an additive `decode_client_access_token()`.
-- New `register_client_loader` composition-root slot.
-- Staff `require_authenticated()` structurally rejects client tokens via the distinct cookie name + audience claim.
-- **Mandatory Phase 68 test:** client JWT → `GET /api/v1/clients` → 401; staff JWT → `GET /api/v1/client/me` → 401.
+No new Python libraries, no new frontend dependencies. The existing httpx-based `YooKassaClient` handles all new API calls via parameter extension. The `yookassa` SDK and any community async wrappers remain excluded.
 
----
+**Core changes (all reuse, no version bumps):**
+- `YooKassaClient` — extend `create_payment` with `save_payment_method: bool` + `payment_method_id: str | None`; add `get_payment_method()` method
+- Alembic — one new table `client_payment_methods` (migration `0052`, next after confirmed-last `0051_seed_fit15_promo`), one CHECK widening `booking_notifications.kind` (migration `0053`)
+- ARQ — new `charge_expiring_autopay` cron only if full-execution scope is chosen
+- `visits.gym_date` STORED GENERATED column — used directly as week-boundary anchor; no new TZ computation needed
 
-## Stack Recommendation (elevated, convergent)
+**What NOT to add:** `yookassa` SDK, `aioyookassa`, zero-amount binding flow (`payment_method.active` webhook), `duration_minutes` column on `pt_sessions`.
 
-- **Auth channel:** Telegram-OTP-only for v2.0 (Telegram Gateway API, ~$0.01/code, REST; reuses the existing `OtpChannel`-discriminated OTP infra). **SMS provider is an explicit DEFERRED backlog item** (SMS Aero / SMSC.ru / МТС Exolve — Twilio is blocked in RF). Cost/abuse surface is the reason to defer.
-- **`clients.phone`** is currently free-form `Text` — needs **E.164 normalization/validation** at OTP-request time for Telegram Gateway.
-- **PWA alignment:** delete `bun.lock` → `pnpm install`; Vite 5→6 (`@vitejs/plugin-react@^5`); TypeScript via `allowJs: true` + `strict` ramp, file-by-file rename (~20 files); reuse the **framework-agnostic** `@clubcore/api-client` `fetcher.ts` (add client auth paths to `AUTH_EXEMPT_PATHS`); **KEEP react-router v6** (no TanStack Router migration); add TanStack Query v5 + a thin `clientFetcher.ts` wrapper overriding only the client CSRF cookie name + refresh-endpoint URL. React 18/19 coexist in one pnpm workspace.
-- **Codegen:** single `openapi.json` → single `schema.d.ts`; client paths land additively. No multi-schema split.
+### Features
 
----
+**Must have (table stakes):**
+- `GET /client/payment-method` — display saved card or 200/null; `yookassa_method_id` token NEVER returned to client
+- `DELETE /client/payment-method` — local soft-delete only; no YooKassa API call (YooKassa has no DELETE endpoint)
+- `PATCH` autopay toggle — consent disclosure UI required before enabling; `consent_recorded_at` written to DB on opt-in
+- Card saved during first checkout (via `save_payment_method: true`; token extracted from `payment.succeeded` webhook when `payment_method.saved == true` — NEVER from the synchronous `create_payment` response)
+- `POST /client/booking/{id}/reschedule` — atomic cancel+create (NOT in-place `slot_id` UPDATE); same-trainer only; cancel-window cutoff enforced; partial-UNIQUE race guard reused
+- `GET /client/activity/weekly` — 7 items (Mon–Sun, Europe/Moscow), `workouts` count per day, `minutes: null`; uses `visits.gym_date` STORED column directly
 
-## Feature Landscape (6 IN-SCOPE areas over EXISTING domains)
+**Should have (only if full-execution scope):** `charge_expiring_autopay` cron (06:30 MSK), autopay failure DM, pre-charge DM 3 days before
 
-| Area | Backing domain | Client read/write surface | Notes / dependency |
-|---|---|---|---|
-| Client auth + `/me` | (new) client_portal + clients | phone+OTP login, `GET/PATCH /client/me` | unknown/duplicate/soft-deleted phone → identical anti-oracle response; phone↔`clients` match |
-| Home — my membership | memberships | active membership, days left, freeze status, expiring-soon | read-only |
-| My bookings + self-book | bookings + schedule + pt_packages | upcoming/past bookings, book a slot w/ trainer, cancel within policy | **`Booking.pt_package_id` is NOT NULL** → no active PT package = no self-book; route to Plans/Checkout |
-| QR self check-in | visits | signed short-lived QR token → 1/day check-in | `visits.channel` CHECK needs Alembic add of `'client_qr'`; must keep `gym_date` 1/day + active-membership |
-| Self checkout | online_payments (ЮKassa) | client-initiated membership/PT purchase + renewal | **email mandatory** for 54-ФЗ receipt → `PATCH /client/me` email; activation LOCKED to existing webhook |
-| History | visits, pt_sessions, payments | my visits / trainings / purchases (incl. refunds) | **`pt_sessions` has no direct `client_id`** → join via `pt_packages.client_id` (ownership guard) |
+**Defer to v2.3+:** PT session minutes on bars, zero-amount binding, autopay retry logic, card expiry warning, cross-trainer reschedule, reschedule count limit
 
-**OUT OF SCOPE (net-new domains NOT built — screens stay mock/placeholder):** Chat, Referral, trainer reviews/ratings, in-app notification inbox, gym-info-from-backend.
+**Remove from v2.2 MVP:** "Авто-оплата тренировок" per-booking toggle in CardSheet (double-billing risk with existing PT package credit model)
 
----
+### Architecture
 
-## Architecture Integration
+All three features live exclusively under `require_client()` in `app/modules/client_portal/`. Zero changes to frozen staff contract. One new module (`app/modules/payment_methods/`). Cross-module reads use raw SQL `text()` in `client_portal/repository.py` (D-54-08 discipline). Cross-module writes go through Protocol-slots.
 
-- **Placement:** `app/modules/client_portal/` with `/api/v1/client/*` prefix. Reads via raw-SQL `text()` (reports precedent, zero new `ignore_imports`); writes via Protocol slots wired at `app/main.py:create_app()`.
-- **Data-isolation chokepoint:** list endpoints take a **mandatory `client_id` parameter** in repository signatures (injected into every WHERE); get-by-ID does fetch-then-`assert_owns(principal, row.client_id)` raising `NotFoundError` (404 collapse, anti-oracle). A parametrized sweep test covers every client-owned resource type.
-- **Contract preservation:** new `"Client-Portal"` tag in `OPENAPI_TAGS`; `client_` operationId prefix (no staff collision); additive `_v20Checks` `AssertNonNever` block; staff `_v1xChecks` blocks untouched; drift gate confirms staff paths byte-identical to the `contract-freeze-v1.11.0` baseline.
-- **PWA data flow:** react-router v6 loaders + `queryClient.ensureQueryData` (TanStack Query v5) + reused `fetcher.ts` via thin wrapper; client auth/refresh/CSRF over the distinct cookie family.
+**Major components added/modified:**
+1. `app/modules/payment_methods/` (NEW) — token lifecycle; one new import-linter independence entry
+2. `YooKassaClient` (MODIFIED) — `save_payment_method` param, `payment_method_id` param, `get_payment_method()` method
+3. `online_payments/service.py` webhook handler (MODIFIED) — extra UoW step: raw SQL upsert when `payment_method.saved == true`
+4. `client_portal/` (MODIFIED) — new endpoints, repository raw SQL for payment-method GET + weekly activity aggregate
+5. `bookings/service.py` (MODIFIED) — `reschedule_booking_for_client` atomic-move
+6. `charge_expiring_autopay.py` (NEW, scope-gated) — ARQ cron
 
----
+**Pre-resolved architectural decisions:**
+- Reschedule = cancel-old + create-new (two rows, one transaction), NOT in-place `slot_id` UPDATE
+- Token save = inside `payment.succeeded` webhook UoW only, NOT from sync `create_payment` response
+- Unbind = local soft-delete only, no YooKassa API call
+- Weekly activity = use `gym_date` STORED column, never `DATE(checked_in_at)`
 
-## Watch Out For (convergent across all 4 files)
+**Researcher disagreements to resolve (decisions, not contradictions):**
+- Module placement: column on `client_portal` vs. new `payment_methods` module. Recommend new module (cleaner import-linter, consistent with `promo_codes` precedent).
+- Autopay toggle route: `PATCH /client/membership/autopay` vs. `PATCH /client/payment-method/autopay`. Recommend the payment-method route — autopay is a property of the saved card.
+- Cron timing: 06:10 vs. 06:30 MSK. Recommend 06:30 (safer buffer after `expire_memberships` at 06:05).
 
-| # | Risk | Prevention | Phase |
-|---|------|-----------|-------|
-| P-01 | **IDOR / cross-client leakage (TOP)** | mandatory `client_id` repo param; `assert_owns()` on get-by-ID; IDOR enumeration test per domain phase (mandatory success criterion) | every domain phase |
-| P-02 | Phone OTP enumeration oracle | `_constant_time_floor()` + uniform 200 across all branches; timing integration test | 68 |
-| P-03 | Client token on staff endpoints / `Role.CLIENT` parity break | separate `ClientPrincipal` + `aud:"client"` + distinct cookies; `Role.CLIENT` banned; route-introspection guard recognizes `require_client` | 68 |
-| P-04 | OTP bombing / SMS cost | per-IP 5/15min + per-phone 60s cooldown + per-phone daily cap; commit-before-raise on attempts | 68 |
-| P-05 | Checkout activated on redirect-back | activation LOCKED to existing `/_internal/yookassa/webhook`; no 2nd path; server-read price; "Ожидаем подтверждение" screen | 71 |
-| P-06 | QR replay / cross-client check-in | short-lived signed JWT QR (≈60s TTL); full `_create_visit_with_anti_fraud()` chain | 70 |
-| P-07 | Staff OpenAPI contract broken | `client_` operationId prefix; staff check-blocks unchanged; `git diff` additions-only | 68 + 72 |
-| P-08 | Cookie name collision (staff+client same origin) | distinct `cc_client_*` names + `Path=/api/v1/client`; never call `issue_session_cookies()` from client routes | 68 |
-| P-09 | Service-worker caching authed API data | scope SW caching away from `/api/*`; decide if PWA offline is in scope (else defer) | 69/70 |
-| P-10 | bun→pnpm / TS adoption breakage | isolated alignment phase with a verified build BEFORE any API wiring | 69 |
+### Critical Pitfalls (top 7)
 
----
-
-## Open Decisions for Plan Phase (do NOT resolve in research)
-
-1. `client_otp_codes` separate table **vs** `client_id` nullable FK on `otp_codes` (existing partial UNIQUE has no `client_id` slot — separate is cleaner).
-2. `client_refresh_tokens` separate table **vs** `purpose` column on `refresh_tokens` (separate isolates from staff `revoke_all_sessions`).
-3. `ClientBookingCreator` Protocol slot **vs** raw-SQL re-validation in `client_portal/service.py` (inspect `bookings/service.py` first).
-4. Single-spec `_v20Checks` extension **vs** split `client-openapi.json` (consensus: single-spec).
-5. `verify_client_idempotency` Redis key design scoped to `clients.id` (Phase 70 — needs one planning investigation).
+1. **Storing PAN instead of YooKassa token** — any `card_number`/`pan`/`cvv` column scopes the app into PCI DSS SAQ-D. Code-review the migration file first.
+2. **Activating membership in the autopay cron, not the webhook** — cron creates the payment only; `payment.succeeded` webhook activates (D-06 invariant).
+3. **Reschedule as in-place `slot_id` UPDATE** — breaks notification idempotency, audit trail, partial-UNIQUE race guard. Cancel+create is the only correct implementation.
+4. **Missing ФЗ-376 consent disclosure** — `consent_recorded_at` mandatory in migration 0052; autopay toggle must show charge amount + frequency + opt-out before enabling.
+5. **Timezone bug in weekly activity** — group by `visits.gym_date`, never `DATE(checked_in_at)`. Golden test: visit at 21:30 UTC must bucket to next Moscow calendar day (v1.8 VER-02 pattern).
+6. **Unbind-while-charge-in-flight race** — autopay cron must re-check `is_active` + `autopay_enabled` inside the same transaction as the `online_payments` INSERT, using `SELECT FOR UPDATE`.
+7. **YooKassa autopay not enabled in production** — TEST-ONLY by default; OPERATOR-PENDING runbook step; cron must distinguish `not_allowed` (operator gate, no retry) from `insufficient_funds`.
 
 ---
 
-## Suggested Phase Structure (roadmapper input; numbering continues at 68)
+## Implications for Roadmap
 
-- **Phase 68 — Client Auth Foundation** *(unconditional blocker)* — `ClientPrincipal`, `require_client()`, `decode_client_access_token()`, distinct cookies, `register_client_loader`, Telegram Gateway adapter, OTP request/verify/refresh/logout/me with full anti-oracle + rate limiting, route-introspection guard extension, `"Client-Portal"` OpenAPI tag, two-principal isolation test. No domain work until green.
-- **Phase 69 — Client Read Endpoints + PWA Stack Alignment** — ownership pattern across all read resources + parametrized IDOR sweep (ships before any write path); PWA pnpm/Vite6/TS/api-client/TanStack-Query alignment + `clientFetcher.ts`; Home + Profile history wired.
-- **Phase 70 — Client Bookings + QR Self Check-In** — booking create/cancel (idempotency-keyed, cross-client guarded) + signed QR token + self-checkin via `_create_visit_with_anti_fraud()` + `visits.channel` Alembic migration; Book + QR screens wired.
-- **Phase 71 — Client Checkout (ЮKassa)** — email update, membership/PT purchase via existing webhook (server-side price), status polling, 54-ФЗ email gate; Plans + Checkout screens wired.
-- **Phase 72 — OpenAPI Handoff + CI Integration** — byte-stable `schema.d.ts` regen, `_v20Checks` complete, client-pwa CI gates added, drift gate confirms staff paths byte-identical to v1.11 baseline.
+### Suggested phases: 4 (UI-only scope) or 5 (full-execution scope)
+
+**Phase 79 — Payment Methods Foundation + Card-on-File**
+Everything else depends on migration 0052 and the webhook extension. Highest regulatory/security surface area — ship foundation first, cron second.
+Delivers: migration 0052 (with `consent_recorded_at`), `payment_methods` module, YooKassa adapter extension, webhook save-step, GET/DELETE/PATCH payment-method endpoints, payment-method audit events.
+
+**Phase 80 — Autopay Cron [SCOPE-GATED: only if full-execution]**
+Highest-risk subfeature; isolating it makes the risk surface independently testable. If UI-only scope, defer to v2.3.
+Delivers: `charge_expiring_autopay` ARQ cron (06:30 MSK), charge path extended for `payment_method_id`, autopay failure path (DM + disable), pre-charge notification, deterministic idempotency key.
+
+**Phase 81 — Booking Reschedule**
+Fully independent from payment methods. Migration 0053 depends on 0052 for numbering only.
+Delivers: `reschedule_booking_for_client` Protocol slot, atomic-move orchestrator, `BOOKING_RESCHEDULED` locked audit event + DM template, migration 0053, `POST /client/booking/{id}/reschedule`, PWA wiring in `BookingManageSheet`.
+
+**Phase 82 — Weekly Activity + PWA Flag Flips + OpenAPI Handoff**
+Lowest risk; last so it captures all v2.2 endpoints in one OpenAPI regen.
+Delivers: `GET /client/activity/weekly`, raw SQL aggregate (7-item zero-filled), flip `linkedCard` + `weeklyActivity` flags ON, byte-stable `openapi.json` + `schema.d.ts` regen, milestone verification gate. Golden TZ test mandatory.
+
+### Research Flags
+
+- Needs deeper planning research: **Phase 80** — concurrency contract, idempotency key derivation, renewal strategy (`renew_membership` vs `sell_membership`)
+- Standard patterns (skip research-phase): Phases 79, 81, 82
 
 ---
 
-## Research Flags
+## Confidence Assessment
 
-- **Phase 70 client idempotency** — confirm `verify_client_idempotency` Redis key design (scope to `clients.id`) before writing the plan (~1 planning session).
-- All other phases follow standard patterns with direct codebase precedents — no per-phase research needed.
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | No new dependencies. YooKassa API fields confirmed from official docs + codebase inspection |
+| Features | HIGH | Derived directly from existing PWA component code + YooKassa docs |
+| Architecture | HIGH | All patterns verified against live codebase. Migration sequence confirmed |
+| Pitfalls | HIGH | YooKassa-specific + codebase-specific pitfalls confirmed from official docs and v1.5/v1.7/v1.8 precedents |
 
-## Confidence & Gaps
+**Overall: HIGH**
 
-**Overall: HIGH.** Every pitfall traces to a specific function (`_constant_time_floor`, `_create_visit_with_anti_fraud`, `issue_session_cookies`, `OWNER_ONLY`, `modules-independent` contract). Remaining gaps are all **plan-phase schema decisions** (OTP/refresh table shape, booking slot mechanism, idempotency key) — flagged above, not blockers for roadmapping.
+### Gaps to address before requirements
+
+1. **The autopay scope decision** (UI-only vs. full-execution cron) — blocking; affects phase count, schema, test surface
+2. **`save_payment_method` opt-in:** user-controlled checkbox vs. unconditional always-save at checkout
+3. **Autopay cron timing:** 06:10 vs. 06:30 MSK — recommend 06:30
+4. **Autopay renewal strategy:** `renew_membership` (chained, preserves `previous_membership_id`) vs. `sell_membership` (fresh sale) — recommend `renew_membership`
+5. **"Авто-оплата тренировок" toggle** — confirm removal from v2.2 before PWA wiring
+
+---
+
+### Ready for Requirements
+
+4 research files committed (`5c6d83fb`). Proceed to requirements once the autopay scope decision is resolved.
