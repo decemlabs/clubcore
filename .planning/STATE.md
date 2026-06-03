@@ -4,13 +4,13 @@ milestone: v2.2
 milestone_name: Membership self-service depth
 status: executing
 stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
-last_updated: "2026-06-03T14:33:14.704Z"
+last_updated: "2026-06-03T14:46:15.855Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 14
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 ## Current Position
 
 Phase: 80 (booking-reschedule) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-03
 
@@ -93,6 +93,6 @@ Items carried forward from v2.1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-03T14:33:14.699Z
+Last session: 2026-06-03T14:46:15.850Z
 Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
 Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually
