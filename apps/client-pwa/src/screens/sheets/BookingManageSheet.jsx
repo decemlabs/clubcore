@@ -21,16 +21,23 @@ export const BookingManageSheet = ({ booking, onClose, onCancelled, onReschedule
   const refundAmount = Math.round(b.price * refundPct / 100);
 
   // ─── Derive candidate reschedule slots ───────────────
-  // Filter to same trainer (by trainerName) + future start times.
+  // Filter to same trainer + future start times.
   // Server already returns only active slots; trainer filter is UX-only
   // (authoritative same-trainer guard is server-side: T-80-16 / slot_trainer_mismatch).
-  const now = Date.now();
+  // WR-80-06: the booking prop may carry only `trainer` (real backend bookings +
+  // the UPCOMING_BOOKING mock) and not `trainerName` — the label code already
+  // reads `b.trainer || b.trainerName` (line ~214). Keying the filter off
+  // `b.trainerName` alone compares against `undefined` and silently empties the
+  // list ("Нет доступных слотов") for any booking shaped with `trainer` only.
+  // Normalise to the same fallback used by the label.
+  const bookingTrainer = b.trainerName ?? b.trainer;
   const candidateSlots = React.useMemo(() => {
     if (!slotsPage?.items) return [];
+    const now = Date.now();
     return slotsPage.items.filter(
-      s => s.trainerName === b.trainerName && new Date(s.startTime).getTime() > now,
+      s => s.trainerName === bookingTrainer && new Date(s.startTime).getTime() > now,
     );
-  }, [slotsPage, b.trainerName, now]);
+  }, [slotsPage, bookingTrainer]);
 
   // ─── Done states ─────────────────────────────────────
   if (view === 'done-cancel') {
