@@ -148,6 +148,11 @@ textarea:focus-visible {
   scrollbar-width: none;
 }
 .scroller::-webkit-scrollbar { display: none; }
+/* Direct children of a flex-column scroller must NOT shrink — otherwise cards
+   collapse to fit the viewport and their own overflow:hidden clips content
+   (e.g. the checkout order-card price). Mirrors the reference's
+   `.body > * { flex-shrink: 0 }`. Harmless no-op when the scroller isn't a flex column. */
+.scroller > * { flex-shrink: 0; }
 
 /* Generic surface */
 .card {

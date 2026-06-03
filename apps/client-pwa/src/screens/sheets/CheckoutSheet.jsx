@@ -360,6 +360,13 @@ function ReviewStage({
   // Eyebrow label from ctx.kind
   const eyebrow = ctx.kind === 'pt' ? 'Тренировки' : 'Абонемент';
 
+  // Pass headline price (matches the «К оплате v2» reference: "X ₽ /мес").
+  // For a subscription the hero shows the per-month rate; the summary below shows
+  // the period total. PT packages show the total with no "/мес" suffix.
+  const isSub = ctx.kind !== 'pt';
+  const subMonths = isSub ? (parseInt(String(ctx.subtitle ?? ''), 10) || 1) : 0;
+  const passPriceKopecks = isSub && subMonths > 0 ? Math.round(ctx.amount / subMonths) : ctx.amount;
+
   // Hidden "Списать бонусы" toggle — local UI state only. Does NOT affect
   // total/discount (D-06): real redemption needs the deferred loyalty backend.
   const [bonusOn, setBonusOn] = React.useState(false);
@@ -400,8 +407,8 @@ function ReviewStage({
           <BarbellMark />
 
           <div className="co-pass-row">
+            {/* Brand is text-only per the «К оплате v2» reference — no logo square */}
             <div className="co-brand">
-              <span className="co-brand-mark" aria-hidden="true">МЗ</span>
               <span className="co-brand-name">
                 Мой зал
                 <span>Клубная карта</span>
@@ -419,19 +426,19 @@ function ReviewStage({
           <div className="co-pass-body">
             <div className="co-pass-eyebrow">{eyebrow}</div>
             <div className="co-pass-name">{ctx.title}</div>
-            {ctx.subtitle && (
-              <div className="co-pass-meta">
-                <span>{ctx.subtitle}</span>
-              </div>
-            )}
+            {/* Meta line: real plan features are not exposed by /client/plans
+                (the reference's "Зал 24/7 · Сауна · Групповые" is mock content),
+                so omit rather than duplicate the duration pill. */}
           </div>
 
           <div className="co-pass-foot">
             <div>
               <div className="co-pass-price-lbl">Стоимость</div>
-              {/* Base price — never discounted total (D-06) */}
+              {/* Per-month headline for subs (reference "X ₽ /мес"); total for PT.
+                  Never the discounted total (D-06) — discounts show in the summary. */}
               <div className="co-pass-price">
-                {formatMoney(ctx.amount)}
+                {formatMoney(passPriceKopecks)}
+                {isSub ? <small> /мес</small> : null}
               </div>
             </div>
             <span className="co-pass-secure">
