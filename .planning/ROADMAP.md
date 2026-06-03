@@ -83,7 +83,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, новый модуль `payment_methods/`, webhook save-step, GET/DELETE/PATCH endpoints, ФЗ-376 consent capture (PAYM-01, PAYM-02, PAYM-03, PAYM-04) (completed 2026-06-03)
 - [x] **Phase 80: Booking Reschedule** — атомарный cancel+create, `reschedule_booking_for_client` Protocol slot, migration 0053, `booking_rescheduled` audit event, DM-шаблон, PWA wiring (RESCH-01, RESCH-02, RESCH-03) (completed 2026-06-03)
 - [x] **Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff** — `GET /client/activity/weekly`, flip `linkedCard`/`weeklyActivity` ON, CardSheet wiring, byte-stable openapi.json regen, golden TZ test, milestone verification (WACT-01, WACT-02, PAYM-05, HND-01) (completed 2026-06-03)
-- [ ] **Phase 81.1: Checkout Save-Card Capture (audit gap closure)** — PWA-only: thread `savePaymentMethod` through checkout hooks + save-card opt-in in CheckoutSheet so a card can actually be linked through the UI; closes the PAYM-01 PWA-capture gap from the v2.2 milestone audit (PAYM-01)
+- [x] **Phase 81.1: Checkout Save-Card Capture (audit gap closure)** — PWA-only: thread `savePaymentMethod` through checkout hooks + save-card opt-in in CheckoutSheet so a card can actually be linked through the UI; closes the PAYM-01 PWA-capture gap from the v2.2 milestone audit (PAYM-01) (completed 2026-06-03)
 
 ## Phase Details
 
@@ -153,7 +153,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 81.1-01-checkout-save-card-capture-PLAN.md — Thread savePaymentMethod through both checkout hooks (default OFF, byte-identical body) + save-card opt-in in CheckoutSheet wired into both mutateAsync calls + vitest off/on coverage + byte-stable contract regen (PAYM-01)
+- [x] 81.1-01-checkout-save-card-capture-PLAN.md — Thread savePaymentMethod through both checkout hooks (default OFF, byte-identical body) + save-card opt-in in CheckoutSheet wired into both mutateAsync calls + vitest off/on coverage + byte-stable contract regen (PAYM-01)
 
 ## Backlog
 
@@ -203,4 +203,4 @@ Plans:
 | 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
-| 81.1. Checkout Save-Card Capture | 0/1 | Planned    | — |
+| 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |

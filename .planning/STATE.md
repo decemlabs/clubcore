@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: in_progress
-stopped_at: All v2.2 phases complete (79:5/5, 80:4/4, 81:5/5); entering milestone lifecycle (audit → complete → cleanup)
-last_updated: "2026-06-03T18:30:00.000Z"
+status: verifying
+stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
+last_updated: "2026-06-03T19:03:08.308Z"
 last_activity: 2026-06-03
 progress:
-  total_phases: 7
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
-  percent: 43
+  total_phases: 8
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 11
+  percent: 50
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v2.2 milestone lifecycle (audit → complete → cleanup)
+**Current focus:** Phase 81.1 — checkout-save-card-capture
 
 ## Current Position
 
-Phase: 81 ✅ COMPLETE — all v2.2 phases shipped (79, 80, 81)
-Plan: 3 of 3 (81 complete)
-Status: v2.2 feature work done & verified (79:5/5, 80:4/4, 81:5/5); OpenAPI contract frozen byte-stable, staff contract unchanged; entering milestone audit
+Phase: 81.1 (checkout-save-card-capture) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
 Last activity: 2026-06-03
 
 Milestone progress (real v2.2 = 3 phases): [██████████] 3/3 (100%)
@@ -98,6 +98,6 @@ Items carried forward from v2.1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-03T17:57:58.741Z
+Last session: 2026-06-03T19:03:08.304Z
 Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
 Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually
