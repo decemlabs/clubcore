@@ -4,8 +4,12 @@ Proves the three save_payment_method webhook path behaviors:
   1. save=true + bank_card payment_method in get_payment response → one client_payment_methods
      row with correct token/display fields, autopay_enabled=false, consent_recorded_at=NULL.
   2. save=false (or payment_method absent in response) → no client_payment_methods row.
-  3. Duplicate delivery of the same payment.succeeded → exactly one active row (upsert idempotency,
-     ON CONFLICT ON CONSTRAINT uq_client_payment_methods_client_id_alive).
+  3. Two distinct succeeded payments for the SAME client → exactly one active row (upsert
+     idempotency via the inference-predicate form
+     ``ON CONFLICT (client_id) WHERE unlinked_at IS NULL`` — the partial unique index
+     ``uq_client_payment_methods_client_id_alive`` is a CREATE INDEX, NOT a named constraint).
+  4. Re-saving the SAME card token preserves existing autopay/consent; a NEW token resets them
+     (CR-79-01).
 
 Token source: result.payment_method from get_payment re-fetch (PAYM-01 / D-06 / D-50-18 step 8.5).
 PAN/CVV never stored — only token + last4/brand/expiry display fields.
@@ -48,15 +52,24 @@ _FAKE_EXPIRY_MONTH = 11
 _FAKE_EXPIRY_YEAR = 2027
 
 
-def _build_get_payment_with_bank_card(yookassa_payment_id: str) -> dict[str, Any]:
-    """Return a get_payment succeeded response body with bank_card payment_method."""
+def _build_get_payment_with_bank_card(
+    yookassa_payment_id: str,
+    *,
+    token: str = _FAKE_TOKEN,
+) -> dict[str, Any]:
+    """Return a get_payment succeeded response body with bank_card payment_method.
+
+    ``token`` overrides the saved payment_method.id so tests can simulate a
+    same-token re-save (consent preserved) vs a new-token re-save (consent reset)
+    on the step-8.5 upsert (CR-79-01).
+    """
     return {
         "id": yookassa_payment_id,
         "status": "succeeded",
         "amount": {"value": "1000.00", "currency": "RUB"},
         "payment_method": {
             "type": "bank_card",
-            "id": _FAKE_TOKEN,
+            "id": token,
             "saved": True,
             "card": {
                 "first6": "424242",
@@ -171,6 +184,86 @@ async def _seed_save_payment_online_payment(
         audit_correlation_id=corr,
         amount_kopecks=100_000,
     )
+
+
+async def _seed_second_pending_for_client(
+    session: AsyncSession,
+    *,
+    client_id: object,
+) -> SeededOnlinePayment:
+    """Seed a SECOND pending OnlinePayment (save=True) for an existing client.
+
+    Used to drive the step-8.5 upsert path TWICE (WR-79-02): two distinct
+    succeeded payments for the same client each pass the FSM guard, so each one
+    reaches the ON CONFLICT upsert (unlike redelivering the same payment, which
+    short-circuits at the FSM guard before step 8.5).
+
+    Creates a FRESH membership plan so the second row does not collide with the
+    ``uq_online_payments_membership_double_tap`` unique index
+    ``(client_id, membership_plan_id, day)`` — the realistic scenario is a
+    second checkout for a DIFFERENT plan on the same day.
+    """
+    nonce = uuid4().hex[:8]
+    plan = MembershipPlan(
+        name=f"WH-Save-Plan2-{nonce}",
+        duration_days=30,
+        price_kopecks=100_000,
+        freeze_days_limit=7,
+        active=True,
+    )
+    session.add(plan)
+    await session.flush()
+
+    yk_id = f"yk-save2-{uuid4().hex[:24]}"
+    corr = uuid4()
+    op = OnlinePayment(
+        client_id=client_id,
+        membership_plan_id=plan.id,
+        pt_package_plan_id=None,
+        yookassa_payment_id=yk_id,
+        idempotency_key=uuid4().hex,
+        amount_kopecks=100_000,
+        status=STATUS_PENDING,
+        confirmation_url="https://example.com/confirm",
+        confirmation_type=CONFIRMATION_TYPE_REDIRECT,
+        audit_correlation_id=corr,
+        save_payment_method=True,
+    )
+    session.add(op)
+    await session.flush()
+    await session.commit()
+    return SeededOnlinePayment(
+        online_payment_id=op.id,
+        yookassa_payment_id=yk_id,
+        client_id=client_id,  # type: ignore[arg-type]
+        client_email="",
+        client_phone="",
+        membership_plan_id=plan.id,
+        pt_package_plan_id=None,
+        audit_correlation_id=corr,
+        amount_kopecks=100_000,
+    )
+
+
+async def _enable_autopay_directly(
+    session: AsyncSession,
+    client_id: object,
+) -> None:
+    """Stamp autopay_enabled=true + consent_recorded_at=now() on the active card.
+
+    Simulates a prior PATCH /autopay enable so the CR-79-01 re-save test can
+    assert the consent survives an identical-token re-save. Raw SQL (D-54-08),
+    commits so the webhook handler's per-request session sees it.
+    """
+    await session.execute(
+        text(
+            "UPDATE client_payment_methods "
+            "SET autopay_enabled = true, consent_recorded_at = now() "
+            "WHERE client_id = :client_id AND unlinked_at IS NULL"
+        ),
+        {"client_id": str(client_id)},
+    )
+    await session.commit()
 
 
 async def _fetch_payment_method_rows(
@@ -311,34 +404,48 @@ async def test_webhook_save_replay_idempotent(
     webhook_db_session: AsyncSession,
     webhook_payment_succeeded_body: Callable[[str], dict[str, Any]],
 ) -> None:
-    """T-79-09: delivering payment.succeeded twice with save=True → exactly one active row.
+    """T-79-09 / WR-79-02: the step-8.5 upsert runs TWICE → exactly one active row.
 
-    The ON CONFLICT ON CONSTRAINT uq_client_payment_methods_client_id_alive DO UPDATE
-    upsert ensures replay is idempotent — no duplicate rows, just an UPDATE in place.
+    Redelivering the SAME payment.succeeded would short-circuit at the FSM guard
+    (the row is already ``succeeded``) and NEVER reach step 8.5 — so it cannot
+    exercise the ON CONFLICT path. Instead this test seeds TWO distinct succeeded
+    payments for the SAME client, each carrying ``save=True`` and the SAME card
+    token. Both deliveries pass the FSM guard (distinct rows) and both reach the
+    upsert, so the second genuinely drives ``ON CONFLICT (client_id) WHERE
+    unlinked_at IS NULL DO UPDATE`` (the inference-predicate form — the partial
+    unique index is a CREATE INDEX, NOT a named constraint).
     """
     seeded = await _seed_save_payment_online_payment(
         webhook_db_session,
         save_payment_method=True,
     )
-    body = webhook_payment_succeeded_body(seeded.yookassa_payment_id)
+    assert seeded.membership_plan_id is not None
+    body1 = webhook_payment_succeeded_body(seeded.yookassa_payment_id)
 
     def _mock_get_payment(yk_id: str) -> httpx.Response:
         return httpx.Response(200, json=_build_get_payment_with_bank_card(yk_id))
 
-    # First delivery
+    # First delivery → INSERT (the active card row is created).
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
         mock.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
             return_value=_mock_get_payment(seeded.yookassa_payment_id)
         )
-        r1 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
+        r1 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body1)
     assert r1.status_code == 200, f"First webhook delivery failed: {r1.text}"
 
-    # Second delivery — FSM guard prevents double-activation; step 8.5 upsert is idempotent
+    # Seed a SECOND distinct succeeded payment for the same client → its
+    # payment.succeeded passes the FSM guard and reaches the step-8.5 upsert,
+    # genuinely driving the ON CONFLICT DO UPDATE branch.
+    seeded2 = await _seed_second_pending_for_client(
+        webhook_db_session,
+        client_id=seeded.client_id,
+    )
+    body2 = webhook_payment_succeeded_body(seeded2.yookassa_payment_id)
     with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock2:
         mock2.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
-            return_value=_mock_get_payment(seeded.yookassa_payment_id)
+            return_value=_mock_get_payment(seeded2.yookassa_payment_id)
         )
-        r2 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
+        r2 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body2)
     assert r2.status_code == 200, f"Second webhook delivery failed: {r2.text}"
 
     await webhook_db_session.commit()
@@ -347,16 +454,146 @@ async def test_webhook_save_replay_idempotent(
     rows = await _fetch_payment_method_rows(webhook_db_session, seeded.client_id)
     active_rows = [row for row in rows if row["unlinked_at"] is None]
     assert len(active_rows) == 1, (
-        f"Replay must produce exactly 1 active client_payment_methods row, "
-        f"found {len(active_rows)} (total rows: {len(rows)})"
+        f"Two distinct succeeded payments must produce exactly 1 active "
+        f"client_payment_methods row, found {len(active_rows)} (total rows: {len(rows)})"
     )
     # Token + display fields preserved from the (idempotent) second upsert
     assert active_rows[0]["yookassa_method_id"] == _FAKE_TOKEN, (
-        f"Token must be preserved after replay: {active_rows[0]['yookassa_method_id']!r}"
+        f"Token must be preserved after second upsert: {active_rows[0]['yookassa_method_id']!r}"
     )
     assert active_rows[0]["autopay_enabled"] is False, (
-        "autopay_enabled must remain false after replay"
+        "autopay_enabled must remain false after second upsert"
     )
     assert active_rows[0]["consent_recorded_at"] is None, (
-        "consent_recorded_at must be NULL after replay"
+        "consent_recorded_at must be NULL after second upsert"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 4: CR-79-01 — re-save preserves consent on same token, resets on new token
+# ---------------------------------------------------------------------------
+
+
+async def test_webhook_resave_same_token_preserves_autopay_consent(
+    webhook_client: AsyncClient,
+    webhook_db_session: AsyncSession,
+    webhook_payment_succeeded_body: Callable[[str], dict[str, Any]],
+) -> None:
+    """CR-79-01: re-saving the SAME card token must PRESERVE autopay + consent.
+
+    Sequence: save card → enable autopay (stamps consent) → a second payment
+    re-saves the SAME token. The step-8.5 upsert must NOT wipe the live
+    ФЗ-376 consent: autopay_enabled stays True and consent_recorded_at survives.
+    """
+    seeded = await _seed_save_payment_online_payment(
+        webhook_db_session,
+        save_payment_method=True,
+    )
+    assert seeded.membership_plan_id is not None
+
+    def _mock_get_payment(yk_id: str, *, token: str) -> httpx.Response:
+        return httpx.Response(200, json=_build_get_payment_with_bank_card(yk_id, token=token))
+
+    # 1. First payment saves the card (token=_FAKE_TOKEN).
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+            return_value=_mock_get_payment(seeded.yookassa_payment_id, token=_FAKE_TOKEN)
+        )
+        r1 = await webhook_client.post(
+            "/api/v1/_internal/yookassa/webhook",
+            json=webhook_payment_succeeded_body(seeded.yookassa_payment_id),
+        )
+    assert r1.status_code == 200, f"First delivery failed: {r1.text}"
+
+    # 2. Client later enables autopay (stamps consent_recorded_at).
+    await _enable_autopay_directly(webhook_db_session, seeded.client_id)
+
+    # 3. A second payment re-saves the SAME token.
+    seeded2 = await _seed_second_pending_for_client(
+        webhook_db_session,
+        client_id=seeded.client_id,
+    )
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock2:
+        mock2.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+            return_value=_mock_get_payment(seeded2.yookassa_payment_id, token=_FAKE_TOKEN)
+        )
+        r2 = await webhook_client.post(
+            "/api/v1/_internal/yookassa/webhook",
+            json=webhook_payment_succeeded_body(seeded2.yookassa_payment_id),
+        )
+    assert r2.status_code == 200, f"Second delivery failed: {r2.text}"
+
+    await webhook_db_session.commit()
+    rows = await _fetch_payment_method_rows(webhook_db_session, seeded.client_id)
+    active = [row for row in rows if row["unlinked_at"] is None]
+    assert len(active) == 1, f"Expected 1 active row, found {len(active)}"
+    assert active[0]["yookassa_method_id"] == _FAKE_TOKEN
+    assert active[0]["autopay_enabled"] is True, (
+        "Re-saving the SAME token must PRESERVE autopay_enabled=true (CR-79-01)"
+    )
+    assert active[0]["consent_recorded_at"] is not None, (
+        "Re-saving the SAME token must PRESERVE consent_recorded_at (CR-79-01)"
+    )
+
+
+async def test_webhook_resave_new_token_resets_autopay_consent(
+    webhook_client: AsyncClient,
+    webhook_db_session: AsyncSession,
+    webhook_payment_succeeded_body: Callable[[str], dict[str, Any]],
+) -> None:
+    """CR-79-01: re-saving a DIFFERENT card token RESETS autopay + consent.
+
+    A new token means a new card, so the prior ФЗ-376 consent no longer applies
+    and must be cleared (re-consent required): autopay_enabled→false,
+    consent_recorded_at→NULL, and the stored token is the new one.
+    """
+    new_token = "fake-pm-token-9999-5000-a000-1d8b1d6e5c99"  # noqa: S105 — fake token, not a secret
+    seeded = await _seed_save_payment_online_payment(
+        webhook_db_session,
+        save_payment_method=True,
+    )
+    assert seeded.membership_plan_id is not None
+
+    def _mock_get_payment(yk_id: str, *, token: str) -> httpx.Response:
+        return httpx.Response(200, json=_build_get_payment_with_bank_card(yk_id, token=token))
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock:
+        mock.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+            return_value=_mock_get_payment(seeded.yookassa_payment_id, token=_FAKE_TOKEN)
+        )
+        r1 = await webhook_client.post(
+            "/api/v1/_internal/yookassa/webhook",
+            json=webhook_payment_succeeded_body(seeded.yookassa_payment_id),
+        )
+    assert r1.status_code == 200, f"First delivery failed: {r1.text}"
+
+    await _enable_autopay_directly(webhook_db_session, seeded.client_id)
+
+    # Second payment captures a DIFFERENT token (e.g. the client paid with a new card).
+    seeded2 = await _seed_second_pending_for_client(
+        webhook_db_session,
+        client_id=seeded.client_id,
+    )
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=False) as mock2:
+        mock2.get(url__regex=r"^https://api\.yookassa\.ru/v3/payments/[\w-]+$").mock(
+            return_value=_mock_get_payment(seeded2.yookassa_payment_id, token=new_token)
+        )
+        r2 = await webhook_client.post(
+            "/api/v1/_internal/yookassa/webhook",
+            json=webhook_payment_succeeded_body(seeded2.yookassa_payment_id),
+        )
+    assert r2.status_code == 200, f"Second delivery failed: {r2.text}"
+
+    await webhook_db_session.commit()
+    rows = await _fetch_payment_method_rows(webhook_db_session, seeded.client_id)
+    active = [row for row in rows if row["unlinked_at"] is None]
+    assert len(active) == 1, f"Expected 1 active row, found {len(active)}"
+    assert active[0]["yookassa_method_id"] == new_token, (
+        "New token must replace the stored token (CR-79-01)"
+    )
+    assert active[0]["autopay_enabled"] is False, (
+        "A NEW token must RESET autopay_enabled to false (CR-79-01)"
+    )
+    assert active[0]["consent_recorded_at"] is None, (
+        "A NEW token must CLEAR consent_recorded_at (CR-79-01)"
     )

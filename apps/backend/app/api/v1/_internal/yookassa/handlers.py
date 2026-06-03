@@ -425,9 +425,7 @@ async def handle_payment_succeeded(
         # traversal. OnlinePayment has no client relationship wired. D-10
         # (Phase 999.5): email-OR-phone — a phone-only client is valid, so a NULL
         # email no longer raises (only a genuinely orphaned client_id does).
-        customer_email, customer_phone = await _read_client_receipt_contact(
-            session, row.client_id
-        )
+        customer_email, customer_phone = await _read_client_receipt_contact(session, row.client_id)
 
         # Subject-kind dispatch. The 0034 CHECK constraint
         # `(membership_plan_id IS NOT NULL) <> (pt_package_plan_id IS NOT NULL)`
@@ -507,13 +505,17 @@ async def handle_payment_succeeded(
             else:
                 _plan_table = "pt_package_plans"
             _plan_price_row = (
-                await session.execute(
-                    text(
-                        f"SELECT price_kopecks FROM {_plan_table} WHERE id = :id"  # noqa: S608
-                    ),
-                    {"id": str(subject_id)},
+                (
+                    await session.execute(
+                        text(
+                            f"SELECT price_kopecks FROM {_plan_table} WHERE id = :id"  # noqa: S608
+                        ),
+                        {"id": str(subject_id)},
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
             plan_price_kopecks: int = (
                 int(_plan_price_row["price_kopecks"]) if _plan_price_row else row.amount_kopecks
             )
@@ -543,7 +545,9 @@ async def handle_payment_succeeded(
                     "        :expiry_month, :expiry_year, false) "
                     # Partial unique index uq_client_payment_methods_client_id_alive
                     # is a CREATE INDEX (not a CONSTRAINT), so ON CONFLICT must use
-                    # the index predicate form — not ON CONFLICT ON CONSTRAINT.
+                    # the index inference-predicate form
+                    # (ON CONFLICT (client_id) WHERE unlinked_at IS NULL) —
+                    # NOT ON CONFLICT ON CONSTRAINT.
                     "ON CONFLICT (client_id) WHERE unlinked_at IS NULL "
                     "DO UPDATE SET "
                     "  yookassa_method_id = EXCLUDED.yookassa_method_id, "
@@ -552,8 +556,22 @@ async def handle_payment_succeeded(
                     "  expiry_month = EXCLUDED.expiry_month, "
                     "  expiry_year = EXCLUDED.expiry_year, "
                     "  unlinked_at = NULL, "
-                    "  autopay_enabled = false, "
-                    "  consent_recorded_at = NULL, "
+                    # CR-79-01: only reset autopay/consent when the saved card
+                    # token actually CHANGES. Re-saving the SAME card (e.g. a
+                    # second membership checkout with savePaymentMethod=true)
+                    # MUST preserve the client's existing ФЗ-376 autopay consent
+                    # — wiping it silently is an unauthorised authorization-state
+                    # regression. A new token ⇒ a new card ⇒ re-consent required.
+                    "  autopay_enabled = CASE "
+                    "    WHEN client_payment_methods.yookassa_method_id "
+                    "         = EXCLUDED.yookassa_method_id "
+                    "    THEN client_payment_methods.autopay_enabled "
+                    "    ELSE false END, "
+                    "  consent_recorded_at = CASE "
+                    "    WHEN client_payment_methods.yookassa_method_id "
+                    "         = EXCLUDED.yookassa_method_id "
+                    "    THEN client_payment_methods.consent_recorded_at "
+                    "    ELSE NULL END, "
                     "  updated_at = now()"
                 ),
                 {
