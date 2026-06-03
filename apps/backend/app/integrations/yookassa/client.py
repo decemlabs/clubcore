@@ -269,8 +269,8 @@ class YooKassaClient:
                 qr_payload=qr_payload,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code, error_parameter = (
-                self._classify_http_status_error(exc)
+            classification, status, error_code, error_parameter = self._classify_http_status_error(
+                exc
             )
             _log.warning(
                 f"yookassa_create_payment_{classification}",
@@ -361,13 +361,45 @@ class YooKassaClient:
                         expiry_year = int(raw_year)
                     except (TypeError, ValueError):
                         expiry_year = None
-                payment_method_info = YooKassaPaymentMethodInfo(
-                    id=str(pm.get("id", "")),
-                    last4=str(card.get("last4", "")),
-                    card_type=str(card.get("card_type", "")),
-                    expiry_month=expiry_month,
-                    expiry_year=expiry_year,
-                )
+                # WR-79-05: normalize a 2-digit year ("27" → 2027) and drop any
+                # year outside the plausible 4-digit window. A malformed year
+                # would otherwise corrupt downstream expiry-eligibility checks
+                # (a later autopay-charge phase) by treating a live card as long
+                # expired. ЮKassa documents 4-digit years; this guards fixtures
+                # / future-provider drift.
+                if expiry_year is not None:
+                    if 0 <= expiry_year <= 99:
+                        expiry_year = 2000 + expiry_year
+                    if not (2000 <= expiry_year <= 2099):
+                        expiry_year = None
+                # WR-79-04: do NOT manufacture a saveable card from blanks. The
+                # token (id), last4, and card_type are the minimum usable set —
+                # an empty token is uncharge able and empty display fields render
+                # as a blank card in the PWA. last4/brand are NOT NULL in the
+                # schema but empty string satisfies that, so guard here instead
+                # of persisting meaningless rows. Missing fields ⇒ treat as "no
+                # saveable method": payment_method stays None and step-8.5 skips
+                # the upsert. Logged for operator reconciliation (PII discipline
+                # T-79-08: NO card fields in the log event).
+                token = str(pm.get("id", "")).strip()
+                last4 = str(card.get("last4", "")).strip()
+                card_type = str(card.get("card_type", "")).strip()
+                if token and last4 and card_type:
+                    payment_method_info = YooKassaPaymentMethodInfo(
+                        id=token,
+                        last4=last4,
+                        card_type=card_type,
+                        expiry_month=expiry_month,
+                        expiry_year=expiry_year,
+                    )
+                else:
+                    _log.warning(
+                        "yookassa_get_payment_unusable_card",
+                        payment_id=payload.get("id"),
+                        has_token=bool(token),
+                        has_last4=bool(last4),
+                        has_card_type=bool(card_type),
+                    )
             _log.info(
                 "yookassa_get_payment_ok",
                 payment_id=payload["id"],
@@ -385,8 +417,8 @@ class YooKassaClient:
                 payment_method=payment_method_info,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code, _error_parameter = (
-                self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = self._classify_http_status_error(
+                exc
             )
             _log.warning(
                 f"yookassa_get_payment_{classification}",
@@ -482,8 +514,8 @@ class YooKassaClient:
                 idempotency_key=idempotency_key,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code, _error_parameter = (
-                self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = self._classify_http_status_error(
+                exc
             )
             _log.warning(
                 f"yookassa_create_refund_{classification}",
@@ -624,8 +656,8 @@ class YooKassaClient:
                 receipt_id=payload["id"],
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code, _error_parameter = (
-                self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = self._classify_http_status_error(
+                exc
             )
             _log.warning(
                 f"yookassa_create_receipt_{classification}",
@@ -700,8 +732,8 @@ class YooKassaClient:
                 idempotency_key=None,
             )
         except httpx.HTTPStatusError as exc:
-            classification, status, error_code, _error_parameter = (
-                self._classify_http_status_error(exc)
+            classification, status, error_code, _error_parameter = self._classify_http_status_error(
+                exc
             )
             _log.warning(
                 f"yookassa_get_refund_{classification}",
