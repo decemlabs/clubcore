@@ -96,8 +96,14 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   3. `DELETE /client/payment-method` устанавливает `is_active=false` и `autopay_enabled=false`; YooKassa API не вызывается; повторный GET возвращает null
   4. `PATCH /client/payment-method/autopay` включает `autopay_enabled=true` только при наличии `consent_recorded_at` (ФЗ-376 consent); выключение работает без consent
   5. Все четыре endpoint'а IDOR-safe: клиент видит только свою карту; 404-collapse на чужом `client_id`
-**Plans**: TBD
+**Plans**: 4 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 79-01-PLAN.md — Data foundation: migration 0052 (client_payment_methods + save_payment_method column) + ClientPaymentMethod ORM model + migration-run/schema-verify
+- [ ] 79-02-PLAN.md — payment_methods module: raw-SQL repository + token-free schemas + consent-gated service + .importlinter registration
+- [ ] 79-03-PLAN.md — Checkout flag + webhook save-step: YooKassa types/parse, save_payment_method threading, handle_payment_succeeded step 8.5 token upsert + webhook test
+- [ ] 79-04-PLAN.md — Client endpoints: GET/DELETE/PATCH-autopay + ruff I001 fold + endpoint behavior tests + IDOR sweep
 
 ### Phase 80: Booking Reschedule
 **Goal**: Клиент может перенести подтверждённую бронь на другой слот того же тренера
@@ -168,6 +174,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 79. Payment Methods Foundation + Card-on-File | 0/TBD | Not started | - |
+| 79. Payment Methods Foundation + Card-on-File | 0/4 | Not started | - |
 | 80. Booking Reschedule | 0/TBD | Not started | - |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 0/TBD | Not started | - |
