@@ -39,6 +39,7 @@ import app.modules.pt_sessions.models  # Phase 34 PT-14 / 0015
 import app.modules.schedule.models  # Phase 38 SLOT-01 / 0016
 import app.modules.trainers.models  # Phase 31 TRN-01
 import app.modules.visits.models
+import app.modules.payment_methods.models  # Phase 79 PAYM-01..04 / 0052
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.

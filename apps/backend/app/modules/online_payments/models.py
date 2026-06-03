@@ -38,6 +38,7 @@ from datetime import datetime
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -119,6 +120,11 @@ class OnlinePayment(Base, UUIDPkMixin):
         nullable=True,
     )
     audit_correlation_id: Mapped[UUIDType] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    # Phase 79 PAYM-01: intent flag — if True, webhook step 8.5 upserts the card token.
+    # Server-default false; never client-writable post-checkout (T-79-02).
+    save_payment_method: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
 
     __table_args__ = (
         CheckConstraint(
