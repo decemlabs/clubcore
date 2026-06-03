@@ -12,13 +12,17 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 
-// ─── Stub only useCancelBooking; keep real calendar/booking mock data ────────
+// ─── Stub useCancelBooking + new Plan-80-03 hooks to avoid QueryClientProvider ─
 const useCancelBooking = vi.fn()
+const useRescheduleBooking = vi.fn()
+const useClientAvailableSlots = vi.fn()
 vi.mock('@/data', async () => {
   const actual = await vi.importActual('@/data')
   return {
     ...actual,
     useCancelBooking: (...args) => useCancelBooking(...args),
+    useRescheduleBooking: (...args) => useRescheduleBooking(...args),
+    useClientAvailableSlots: (...args) => useClientAvailableSlots(...args),
   }
 })
 
@@ -56,9 +60,18 @@ const idleMutation = {
   isPending: false,
 }
 
+const idleRescheduleMutation = {
+  mutateAsync: vi.fn().mockResolvedValue({}),
+  isPending: false,
+}
+
 beforeEach(() => {
   useCancelBooking.mockReset()
   useCancelBooking.mockReturnValue(idleMutation)
+  useRescheduleBooking.mockReset()
+  useRescheduleBooking.mockReturnValue(idleRescheduleMutation)
+  useClientAvailableSlots.mockReset()
+  useClientAvailableSlots.mockReturnValue({ data: { items: [], total: 0, page: 1, pageSize: 20 } })
 })
 
 /** Drive the sheet into the cancel-confirm view by clicking the overview ActionRow. */
