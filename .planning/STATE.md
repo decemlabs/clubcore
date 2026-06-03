@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: verifying
-stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
-last_updated: "2026-06-03T19:03:08.308Z"
+status: in_progress
+stopped_at: v2.2 audit gap closed (Phase 81.1 — save-card opt-in); milestone audit PASSED; completing milestone
+last_updated: "2026-06-03T19:10:00.000Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 81.1 — checkout-save-card-capture
+**Current focus:** v2.2 milestone completion (audit passed → complete → cleanup)
 
 ## Current Position
 
-Phase: 81.1 (checkout-save-card-capture) — EXECUTING
-Plan: 1 of 1
-Status: Phase complete — ready for verification
+Phase: 81.1 ✅ COMPLETE (audit gap closed) — all v2.2 work done
+Plan: 1 of 1 (81.1 complete)
+Status: Milestone audit PASSED (PAYM-01 PWA-capture gap closed by Phase 81.1, 1/1 verified); proceeding to complete-milestone
 Last activity: 2026-06-03
 
 Milestone progress (real v2.2 = 3 phases): [██████████] 3/3 (100%)
@@ -86,7 +86,7 @@ Items carried forward from v2.1 close:
 | correctness | WR-75-02: receipt-lookup join heuristic (repeat same-plan purchases) | deferred — out of v2.2 scope |
 | human-verify | Phase 76 PDATA-02 live persistence check | deferred by user |
 | human-verify | Phase 78 live checks (FIT15 chip + notif toggle) | deferred by user |
-| human-verify | Phase 79 live ЮKassa sandbox card-save round-trip | deferred (OPERATOR-PENDING; user "defer & continue" 2026-06-03) |
+| human-verify | Phase 79/81.1 live ЮKassa card-save round-trip (PWA checkout opt-in → webhook → CardSheet) | deferred (OPERATOR-PENDING; UI+flag wired & mock-tested in 81.1; live leg needs sandbox) |
 | human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | deferred (auto-defer per standing decision 2026-06-03) |
 | human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send) |
 | human-verify | Phase 81 activity-bars visual rendering (heights/colors/zero-day baseline) | deferred (browser check; auto-defer per standing decision) |
