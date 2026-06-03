@@ -72,6 +72,22 @@ Migration 0053 widens the booking_notifications.kind CHECK to admit 'rescheduled
 - **Files modified:** apps/backend/tests/integration/test_alembic_0053_booking_notif_rescheduled.py
 - **Commit:** ce018434
 
+## Owner Copy Sign-Off (OWNER-COPY-LOCK)
+
+**`BOOKING_RESCHEDULED_DM` — signed-off 2026-06-03.**
+
+Per the locked-copy convention (notifications.py module docstring + D-27 lineage),
+the Russian reschedule DM template requires a recorded owner sign-off before merge.
+The copy below is approved verbatim; the in-code marker was updated from
+`# OWNER-COPY-LOCK — requires owner sign-off before merge` to
+`# OWNER-COPY-LOCK signed-off 2026-06-03 — see 80-01-reschedule-foundation-SUMMARY.md`
+(mirroring the Phase 39/52 sign-off markers). Modifying this string post-merge
+requires a NEW sign-off entry.
+
+> Здравствуйте, {client_name}! Ваша запись к тренеру {trainer_name} перенесена. Новое время: {new_slot_start_msk} (МСК). Ждём вас в зале!
+
+(Resolves Phase 80 code-review finding WR-04.)
+
 ## Known Stubs
 
 None — all functionality is fully implemented. No placeholder data, no TODO stubs.

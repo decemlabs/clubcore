@@ -31,7 +31,7 @@ from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import app.modules.payment_methods.service as _payment_methods_service
 import app.modules.promo_codes.service as _promo_service
@@ -201,25 +201,17 @@ async def update_client_profile(
     """
     # --- Server-side validation ---
     if payload.goal is not None and payload.goal not in _VALID_GOALS:
-        raise _InvalidGoalError(
-            f"goal must be one of: {', '.join(sorted(_VALID_GOALS))}"
-        )
+        raise _InvalidGoalError(f"goal must be one of: {', '.join(sorted(_VALID_GOALS))}")
     if payload.height_cm is not None and not (_HEIGHT_MIN <= payload.height_cm <= _HEIGHT_MAX):
-        raise _InvalidHeightError(
-            f"height_cm must be between {_HEIGHT_MIN} and {_HEIGHT_MAX}"
-        )
+        raise _InvalidHeightError(f"height_cm must be between {_HEIGHT_MIN} and {_HEIGHT_MAX}")
     if payload.weight_kg is not None and not (_WEIGHT_MIN <= payload.weight_kg <= _WEIGHT_MAX):
-        raise _InvalidWeightError(
-            f"weight_kg must be between {_WEIGHT_MIN} and {_WEIGHT_MAX}"
-        )
+        raise _InvalidWeightError(f"weight_kg must be between {_WEIGHT_MIN} and {_WEIGHT_MAX}")
     if payload.email is not None and not _EMAIL_RE.match(payload.email):
         raise _InvalidEmailError("email format is invalid")
     if payload.first_name is not None:
         trimmed = payload.first_name.strip()
         if len(trimmed) > _FIRST_NAME_MAX:
-            raise _InvalidFirstNameError(
-                f"first_name must be at most {_FIRST_NAME_MAX} characters"
-            )
+            raise _InvalidFirstNameError(f"first_name must be at most {_FIRST_NAME_MAX} characters")
         # WR-04 (Phase 999.5): map empty-after-trim to None so the repository's
         # `if payload.first_name is not None` guard skips it instead of overwriting a
         # stored real name with "". Use model_copy so adding a field to
@@ -528,6 +520,7 @@ async def reschedule_client_booking(
     client_id: UUID,
     booking_id: UUID,
     new_slot_id: UUID,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> ClientBookingResponse:
     """Delegate reschedule to the Protocol-slot accessor (D-20-MODULE / RESCH-01).
 
@@ -546,6 +539,7 @@ async def reschedule_client_booking(
         client_id=client_id,
         booking_id=booking_id,
         new_slot_id=new_slot_id,
+        session_factory=session_factory,
     )
     r = cast(Any, result)
     return ClientBookingResponse(
@@ -721,14 +715,17 @@ async def client_checkout_membership(
         # CR-02 fix: validate_promo_code now returns promo_id as the 4th tuple element,
         # eliminating the separate SELECT id FROM promo_codes lookup that had a TOCTOU
         # window (promo could be soft-deleted between the two queries).
-        _discount_kopecks, price_override, _discount_type, applied_promo_code_id = (
-            await _promo_service.validate_promo_code(
-                session,
-                code=promo_code,
-                kind="sub",
-                plan_id=plan_id,
-                client_id=client.id,
-            )
+        (
+            _discount_kopecks,
+            price_override,
+            _discount_type,
+            applied_promo_code_id,
+        ) = await _promo_service.validate_promo_code(
+            session,
+            code=promo_code,
+            kind="sub",
+            plan_id=plan_id,
+            client_id=client.id,
         )
 
     # CR-01 (fix): generate a FRESH op_id (uuid4) for the redirect return_url,
@@ -792,14 +789,17 @@ async def client_checkout_pt_package(
     applied_promo_code_id: UUID | None = None
     if promo_code:
         # CR-02 fix: use the promo_id returned by validate_promo_code directly.
-        _discount_kopecks, price_override, _discount_type, applied_promo_code_id = (
-            await _promo_service.validate_promo_code(
-                session,
-                code=promo_code,
-                kind="pt",
-                plan_id=plan_id,
-                client_id=client.id,
-            )
+        (
+            _discount_kopecks,
+            price_override,
+            _discount_type,
+            applied_promo_code_id,
+        ) = await _promo_service.validate_promo_code(
+            session,
+            code=promo_code,
+            kind="pt",
+            plan_id=plan_id,
+            client_id=client.id,
         )
 
     op_id = uuid4()
@@ -870,9 +870,10 @@ async def get_client_payment_status(
     receipt_phone: str | None = None
     if op_status == "succeeded":
         fr_row = (
-            await session.execute(
-                _text(
-                    """
+            (
+                await session.execute(
+                    _text(
+                        """
                     SELECT fr.yookassa_receipt_id
                     FROM fiscal_receipts fr
                     INNER JOIN payments p ON p.id = fr.payment_id
@@ -899,10 +900,13 @@ async def get_client_payment_status(
                       )
                     LIMIT 1
                     """
-                ),
-                {"op_id": str(op_id)},
+                    ),
+                    {"op_id": str(op_id)},
+                )
             )
-        ).mappings().one_or_none()
+            .mappings()
+            .one_or_none()
+        )
 
         if fr_row is not None and fr_row["yookassa_receipt_id"] is not None:
             receipt_url = f"https://yookassa.ru/my/receipt/{fr_row['yookassa_receipt_id']}"
@@ -911,14 +915,18 @@ async def get_client_payment_status(
         # client_id is already validated by fetch_client_payment_status (D-20-IDOR).
         # Raw SQL — no ORM import of Client (D-54-08 discipline).
         contact_row = (
-            await session.execute(
-                _text(
-                    "SELECT email, phone FROM clients "
-                    "WHERE id = :client_id AND deleted_at IS NULL"
-                ),
-                {"client_id": str(client_id)},
+            (
+                await session.execute(
+                    _text(
+                        "SELECT email, phone FROM clients "
+                        "WHERE id = :client_id AND deleted_at IS NULL"
+                    ),
+                    {"client_id": str(client_id)},
+                )
             )
-        ).mappings().one_or_none()
+            .mappings()
+            .one_or_none()
+        )
 
         if contact_row is not None:
             # CR-01 (Phase 999.5): normalize empty-string email to None ONCE so both
@@ -956,14 +964,17 @@ async def validate_promo_code(
     Raises per-reason ValidationAppError subclasses (D-09 distinct error codes).
     No session.commit() — read-only path.
     """
-    discount_kopecks, new_amount_kopecks, discount_type, _promo_id = (
-        await _promo_service.validate_promo_code(
-            session,
-            code=code,
-            kind=kind,
-            plan_id=plan_id,
-            client_id=client_id,
-        )
+    (
+        discount_kopecks,
+        new_amount_kopecks,
+        discount_type,
+        _promo_id,
+    ) = await _promo_service.validate_promo_code(
+        session,
+        code=code,
+        kind=kind,
+        plan_id=plan_id,
+        client_id=client_id,
     )
     return ClientPromoValidateResponse(
         discount_kopecks=discount_kopecks,

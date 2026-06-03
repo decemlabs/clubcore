@@ -258,4 +258,37 @@ describe('BookingManageSheet reschedule wiring (RESCH-03 / Plan 80-03)', () => {
     expect(screen.queryByText('Перенесли')).not.toBeInTheDocument()
     expect(screen.getByText('Перенос')).toBeInTheDocument()
   })
+
+  // WR-80-06 regression: real backend bookings (and the UPCOMING_BOOKING mock)
+  // may carry only `trainer`, NOT `trainerName`. Keying the same-trainer slot
+  // filter off `b.trainerName` alone compared against `undefined` and silently
+  // returned an EMPTY list ("Нет доступных слотов") even when same-trainer slots
+  // existed. The filter now normalises to `b.trainerName ?? b.trainer`.
+  it('renders same-trainer slots when the booking carries only `trainer` (no trainerName)', async () => {
+    // Booking shaped like a real backend booking: `trainer` set, `trainerName` absent.
+    const trainerOnlyBooking = { ...TEST_BOOKING, trainerName: undefined }
+
+    render(<BookingManageSheet {...baseProps} booking={trainerOnlyBooking} />)
+    await enterRescheduleView()
+
+    // Reschedule view active.
+    expect(screen.getByText('Перенос')).toBeInTheDocument()
+    // The same-trainer slots are NOT silently filtered out — the empty-state
+    // copy must be absent and the slot buttons present.
+    expect(
+      screen.queryByText('Нет доступных слотов. Попробуйте позже или обратитесь на ресепшн.'),
+    ).not.toBeInTheDocument()
+    const slotButtons = screen.getAllByRole('button')
+    expect(slotButtons.length).toBeGreaterThanOrEqual(3)
+
+    // And the slot is actually selectable + reschedulable (filter matched).
+    const mutateAsync = idleMutation.mutateAsync
+    await pickFirstSlot()
+    const confirmBtn = screen.getByRole('button', { name: /Перенести запись/ })
+    await act(async () => {
+      fireEvent.click(confirmBtn)
+    })
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
+    expect(mutateAsync.mock.calls[0][0].newSlotId).toBe('slot-001')
+  })
 })

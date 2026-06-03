@@ -1415,9 +1415,7 @@ async def create_booking_for_client(
     # the returned BookingResponse carries trainer_full_name + slot_start_time.
     reloaded = await repository.get_booking_by_id(session, booking.id)
     if reloaded is None:
-        raise RuntimeError(
-            "create_booking_for_client: just-inserted booking disappeared on reload"
-        )
+        raise RuntimeError("create_booking_for_client: just-inserted booking disappeared on reload")
     return _booking_response_from_orm(reloaded)
 
 
@@ -1683,12 +1681,69 @@ async def cancel_booking_for_client(
 # ---------------------------------------------------------------------------
 
 
+async def _write_reschedule_evidence(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession] | None,
+    *,
+    booking_id: UUID,
+) -> None:
+    """Insert the post-send reschedule evidence row (Phase 80 CR-01 / WR-02).
+
+    Uses a FRESH session from ``session_factory`` when supplied (so the request
+    connection is not held across the preceding Telegram I/O — D-39-06b), else
+    falls back to the request ``session``. IntegrityError on
+    ``uq_booking_notifications_booking_kind_channel`` is an idempotency
+    collision — rollback (scoped to the evidence write) + INFO-log.
+
+    Best-effort: callers wrap the invocation so no exception escapes the
+    committed reschedule boundary.
+    """
+    if session_factory is not None:
+        async with session_factory() as evidence_session:
+            try:
+                evidence_session.add(
+                    BookingNotification(
+                        booking_id=booking_id,
+                        kind="rescheduled",
+                        channel="telegram",
+                    )
+                )
+                await evidence_session.commit()
+            except IntegrityError:
+                await evidence_session.rollback()
+                _log.info(
+                    "booking_reschedule_idempotency_collision",
+                    booking_id=str(booking_id),
+                    channel="telegram",
+                )
+        return
+
+    # Fallback: no session_factory provided — reuse the request session.
+    try:
+        session.add(
+            BookingNotification(
+                booking_id=booking_id,
+                kind="rescheduled",
+                channel="telegram",
+            )
+        )
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        _log.info(
+            "booking_reschedule_idempotency_collision",
+            booking_id=str(booking_id),
+            channel="telegram",
+        )
+
+
 async def reschedule_booking_for_client(
     session: AsyncSession,
     *,
     client_id: UUID,
     booking_id: UUID,
     new_slot_id: UUID,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> BookingResponse:
     """Atomic reschedule: cancel-old-slot + create-new-booking in one UoW (RESCH-01).
 
@@ -1698,6 +1753,22 @@ async def reschedule_booking_for_client(
     force-cancel restore path that explicitly restores credit).
 
     SVC001 caller-owns-txn: this function commits its own UoW.
+
+    Post-commit DM is genuinely fire-and-forget (D-39-09 / Phase 80 CR-01):
+    the authoritative cancel-old + create-new + audit commit at Step 11 is the
+    operation's success boundary. Everything after it — the reschedule DM send
+    and the ``booking_notifications`` evidence INSERT — is wrapped in a broad
+    try/except that logs a WARNING and NEVER re-raises into the endpoint. A
+    DM-send failure (or any post-commit error) MUST NOT turn a durably-committed
+    reschedule into a 500, because that would (a) break the fire-and-forget DM
+    contract and (b) corrupt the idempotency envelope so a retry re-runs the
+    full reschedule against the already-cancelled old booking (Phase 80 CR-02).
+
+    ``session_factory`` (Phase 80 CR-01 / WR-02): when supplied, the evidence
+    INSERT runs on a FRESH session so the request's pooled DB connection is not
+    held across the Telegram HTTPS round-trip (mirrors ``_send_booking_reminders``
+    / D-39-06b). When ``None`` (e.g. some tests), the request ``session`` is used
+    as a fallback — still safe because the whole block is best-effort.
     """
     now_utc = datetime.now(UTC)
 
@@ -1713,6 +1784,23 @@ async def reschedule_booking_for_client(
 
     # Step 2 — FSM guard (booking must be 'confirmed').
     _assert_can_transition(booking, target="cancelled")
+
+    # Step 2b — Same-slot no-op (Phase 80 WR-01). Rescheduling to the slot the
+    # booking already holds is a degenerate request: the old slot resolves as
+    # "booked" (this booking holds it), so the Step 4 availability guard would
+    # otherwise raise SlotNotAvailableError("slot_not_available") — an UNMAPPED
+    # code in the PWA (BookingManageSheet only maps window/slot_already_booked/
+    # trainer), surfacing the generic reschedule-failed copy for what is
+    # really "you picked your current slot". Short-circuit to an idempotent
+    # no-op that returns 200 + the current confirmed booking unchanged. Reload
+    # via get_booking_by_id so slot + slot.trainer are eager-loaded for the
+    # response projection (the row-lock loader joinedloads slot only, not
+    # slot.trainer).
+    if new_slot_id == booking.slot_id:
+        current = await repository.get_booking_by_id(session, booking_id)
+        if current is None:  # pragma: no cover — row was just locked above
+            raise BookingNotFoundError("booking_not_found")
+        return _booking_response_from_orm(current)
 
     # Step 3 — Reschedule window: 24h against ORIGINAL slot start (RESCH-01 / T-80-07).
     # Unlike the client cancel path, the window is measured against the original
@@ -1794,37 +1882,67 @@ async def reschedule_booking_for_client(
     )
 
     # Step 11 — Commit (SVC001 gate). Slot implementation owns commit.
+    # THIS IS THE OPERATION'S SUCCESS BOUNDARY (Phase 80 CR-01/CR-02): the
+    # cancel-old + create-new + audit is now durable. Everything below is
+    # best-effort and MUST NOT be able to fail the HTTP response, or:
+    #   - a transient DB / Telegram error would 500 an operation that already
+    #     succeeded (breaking the fire-and-forget DM contract D-39-09), and
+    #   - idempotent_execute would store a wrong envelope / delete the
+    #     placeholder, so a retry would re-run the full reschedule against the
+    #     now-cancelled old booking → InvalidBookingTransitionError 409
+    #     invalid_transition (unmapped in the PWA) for a user whose reschedule
+    #     actually succeeded (Phase 80 CR-02).
     await session.commit()
 
     # Step 12 — Reload new booking with client + slot.trainer joinedload
-    # (Phase 40 BLOCKER-2 / D-40-07) so the returned response + DM dispatch
-    # both see eager-loaded relationships. Mirrors _load_booking_with_relationships
-    # but uses the repository get_booking_by_id which already eager-loads slot +
-    # slot.trainer. Client join is needed for the DM; use _load_booking_with_relationships
-    # to get client too.
+    # (Phase 40 BLOCKER-2 / D-40-07) for BOTH the response projection AND the
+    # DM dispatch (WR-03: this single eager-load replaces the old redundant
+    # Step 15 get_booking_by_id reload — _load_booking_with_relationships
+    # already eager-loads slot + slot.trainer, satisfying
+    # _booking_response_from_orm's projection contract). A reload failure here
+    # would mean the just-committed row vanished — a genuine invariant
+    # violation, so it is allowed to raise (it cannot be caused by the DM).
     reloaded = await _load_booking_with_relationships(session, new_booking.id)
     if reloaded is None:
-        raise RuntimeError(
-            "reschedule_booking_for_client: new booking disappeared on reload"
-        )
+        raise RuntimeError("reschedule_booking_for_client: new booking disappeared on reload")
 
-    # Step 13 — Send the reschedule DM so the client RECEIVES the notification
-    # (ROADMAP success criterion 3 / T-80-14). Fire-and-forget semantics per D-39-09:
-    # NEVER let a send failure raise out of the endpoint.
+    # Build the authoritative success response NOW, from the committed reload,
+    # BEFORE any best-effort post-commit work. The response is what
+    # idempotent_execute records as the success envelope; it must not depend on
+    # the DM outcome.
+    response = _booking_response_from_orm(reloaded)
+
+    # Step 13 — Fire-and-forget reschedule DM + evidence INSERT (D-39-09 /
+    # Phase 80 CR-01 / WR-02). The ENTIRE block is wrapped so no exception can
+    # escape past the committed Step 11 boundary. The evidence INSERT runs on a
+    # FRESH session (when session_factory is supplied) so the request's pooled
+    # DB connection is not held across the Telegram HTTPS round-trip — mirrors
+    # _send_booking_reminders (D-39-06b).
     #
     # Cannot reuse _dispatch_booking_dm (renders via BOOKING_CONFIRMED_DM's
-    # slot_start_msk placeholder; render_booking_rescheduled_dm uses new_slot_start_msk).
-    # Cannot reuse _dispatch_booking_lifecycle_notification (its email-fallback branch
-    # has NO 'rescheduled' case — enqueue_booking_email_fallback's Literal kind set
-    # excludes 'rescheduled'; calling it would raise ValueError).
-    chat_id = None
-    if reloaded.client is not None:
-        chat_id = reloaded.client.telegram_user_id
+    # slot_start_msk placeholder; render_booking_rescheduled_dm uses
+    # new_slot_start_msk). Cannot reuse _dispatch_booking_lifecycle_notification
+    # (its email-fallback branch has NO 'rescheduled' case —
+    # enqueue_booking_email_fallback's Literal kind set excludes 'rescheduled';
+    # calling it would raise ValueError). See WR-05 note below re: email-only
+    # clients.
+    try:
+        chat_id = None
+        if reloaded.client is not None:
+            chat_id = reloaded.client.telegram_user_id
 
-    if chat_id is None:
-        _log.info("booking_dm_skipped_unlinked", booking_id=str(new_booking.id))
-    else:
-        if reloaded.slot is None or reloaded.slot.trainer is None:
+        if chat_id is None:
+            # WR-05: Telegram-unlinked clients receive no reschedule
+            # notification and no email fallback. This DM-only behaviour is a
+            # DELIBERATE divergence from confirm/cancel (whose lifecycle helper
+            # fans out to email) — extending email fallback to 'rescheduled'
+            # would require widening enqueue_booking_email_fallback's Literal
+            # kind set + an EMAIL_BOOKING_RESCHEDULED template, deferred to a
+            # later phase. Consistent with all other booking DMs, an unlinked
+            # client simply gets no reschedule notification (the reschedule
+            # itself is durable and visible in the PWA).
+            _log.info("booking_dm_skipped_unlinked", booking_id=str(new_booking.id))
+        elif reloaded.slot is None or reloaded.slot.trainer is None:
             _log.error(
                 "booking_dm_missing_joinedload",
                 booking_id=str(new_booking.id),
@@ -1833,11 +1951,9 @@ async def reschedule_booking_for_client(
             new_slot_start_msk = new_slot.start_time.astimezone(MOSCOW_TZ).strftime(
                 "%d.%m.%Y %H:%M"
             )
-            client_name = reloaded.client.first_name
-            trainer_name = reloaded.slot.trainer.full_name
             text_body = render_booking_rescheduled_dm(
-                client_name=client_name,
-                trainer_name=trainer_name,
+                client_name=reloaded.client.first_name,
+                trainer_name=reloaded.slot.trainer.full_name,
                 new_slot_start_msk=new_slot_start_msk,
             )
             bot = build_bot(token=get_settings().telegram_bot_token.get_secret_value())
@@ -1845,29 +1961,17 @@ async def reschedule_booking_for_client(
 
             if send_result.ok:
                 # Step 14 — Insert send-evidence row (post-send) mirroring the
-                # reminder_24h cron Telegram-success branch (~lines 757-786).
-                # After the main commit the session is still open (asyncpg connection
-                # pooled). Reuse the same session for the evidence INSERT — simpler
-                # than spawning a fresh sessionmaker in the HTTP context, and correct
-                # because no DB I/O is in-flight between send and insert.
-                # IntegrityError on uq_booking_notifications_booking_kind_channel
-                # means idempotency collision — rollback + INFO-log.
-                try:
-                    session.add(
-                        BookingNotification(
-                            booking_id=new_booking.id,
-                            kind="rescheduled",
-                            channel="telegram",
-                        )
-                    )
-                    await session.commit()
-                except IntegrityError:
-                    await session.rollback()
-                    _log.info(
-                        "booking_reschedule_idempotency_collision",
-                        booking_id=str(new_booking.id),
-                        channel="telegram",
-                    )
+                # reminder_24h cron Telegram-success branch (~lines 757-799).
+                # Use a FRESH session (when session_factory is supplied) so the
+                # request connection is freed across the Telegram I/O above
+                # (D-39-06b / WR-02). IntegrityError on
+                # uq_booking_notifications_booking_kind_channel means idempotency
+                # collision — rollback + INFO-log.
+                await _write_reschedule_evidence(
+                    session,
+                    session_factory,
+                    booking_id=new_booking.id,
+                )
             else:
                 reason = "bot_blocked" if send_result.blocked else "transient"
                 _log.warning(
@@ -1877,15 +1981,17 @@ async def reschedule_booking_for_client(
                     telegram_chat_id=chat_id,
                     error_msg=send_result.error,
                 )
-
-    # Step 15 — Reload once more with standard get_booking_by_id for the response
-    # (the response projection only needs slot + slot.trainer, not client).
-    response_booking = await repository.get_booking_by_id(session, new_booking.id)
-    if response_booking is None:
-        raise RuntimeError(
-            "reschedule_booking_for_client: new booking disappeared on response reload"
+    except Exception as exc:  # fire-and-forget envelope (D-39-09)
+        # NEVER re-raise: the reschedule already committed at Step 11. A
+        # post-commit DM/notification failure must not 500 the request nor flip
+        # the idempotency envelope (Phase 80 CR-01 / CR-02).
+        _log.warning(
+            "booking_reschedule_dm_post_commit_failed",
+            booking_id=str(new_booking.id),
+            error_msg=str(exc),
         )
-    return _booking_response_from_orm(response_booking)
+
+    return response
 
 
 # ---------------------------------------------------------------------------
