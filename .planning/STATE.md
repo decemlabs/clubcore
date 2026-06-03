@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: in_progress
-stopped_at: Phase 79 complete (verified 5/5, live-YooKassa leg deferred); autonomous advancing to Phase 80
-last_updated: "2026-06-03T14:00:00.000Z"
+status: executing
+stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
+last_updated: "2026-06-03T14:33:14.704Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 7
+  completed_plans: 5
   percent: 14
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 80 — Booking Reschedule (Phase 79 shipped)
+**Current focus:** Phase 80 — booking-reschedule
 
 ## Current Position
 
-Phase: 79 ✅ COMPLETE → advancing to Phase 80 (Booking Reschedule)
-Plan: 4 of 4 (79 complete)
-Status: Phase 79 verified 5/5 must-haves (human_needed live-YooKassa leg deferred OPERATOR-PENDING); CR-01 blocker + 6 review warnings fixed
+Phase: 80 (booking-reschedule) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-06-03
 
 Milestone progress (real v2.2 = 3 phases): [███░░░░░░░] 1/3 (33%)
@@ -93,6 +93,6 @@ Items carried forward from v2.1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-03 (autonomous run)
+Last session: 2026-06-03T14:33:14.699Z
 Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
 Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually

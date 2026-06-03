@@ -117,7 +117,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 80-01-reschedule-foundation-PLAN.md — Migration 0053 (booking_notifications.kind CHECK +rescheduled) + booking_rescheduled audit event/payload + reschedule DM template + ClientRescheduleBookingRequest schema
+- [x] 80-01-reschedule-foundation-PLAN.md — Migration 0053 (booking_notifications.kind CHECK +rescheduled) + booking_rescheduled audit event/payload + reschedule DM template + ClientRescheduleBookingRequest schema
 - [ ] 80-02-reschedule-endpoint-PLAN.md — Atomic reschedule_booking_for_client (cancel+create, PT-credit preserved) + BookingForClientRescheduler Protocol slot + POST /client/booking/{id}/reschedule endpoint + integration tests (race/window/cross-trainer/IDOR/audit/PT-credit)
 - [ ] 80-03-reschedule-pwa-PLAN.md — useRescheduleBooking hook + BookingManageSheet wired to real available slots (mock calendar removed) + vitest wiring suite
 
@@ -180,5 +180,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
-| 80. Booking Reschedule | 0/TBD | Not started | - |
+| 80. Booking Reschedule | 1/3 | In Progress|  |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 0/TBD | Not started | - |

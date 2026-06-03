@@ -18,7 +18,7 @@ First of the staged v2.2→v2.6 sequence to bring the client PWA up to the mocku
 ### Booking reschedule (RESCH)
 
 - [ ] **RESCH-01**: Клиент может перенести существующую бронь через `POST /client/booking/{id}/reschedule` — атомарный cancel+create в одной транзакции (НЕ in-place `slot_id` UPDATE), тот же тренер, повторная проверка доступности целевого слота, cancel-window cutoff на исходном слоте, IDOR-safe (404-collapse на чужой брони).
-- [ ] **RESCH-02**: Перенос пишет audit-событие `booking_rescheduled` (предварительно добавлено в `LOCKED_AUDIT_EVENTS`) + локализованный DM-шаблон уведомления.
+- [x] **RESCH-02**: Перенос пишет audit-событие `booking_rescheduled` (предварительно добавлено в `LOCKED_AUDIT_EVENTS`) + локализованный DM-шаблон уведомления.
 - [ ] **RESCH-03**: `BookingManageSheet` reschedule-вид подключён к реальным available-slots + reschedule endpoint (заменяет mock-календарь/слоты).
 
 ### Weekly activity (WACT)
@@ -71,7 +71,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PAYM-04 | Phase 79 | Complete |
 | PAYM-05 | Phase 81 | Pending |
 | RESCH-01 | Phase 80 | Pending |
-| RESCH-02 | Phase 80 | Pending |
+| RESCH-02 | Phase 80 | Complete |
 | RESCH-03 | Phase 80 | Pending |
 | WACT-01 | Phase 81 | Pending |
 | WACT-02 | Phase 81 | Pending |
