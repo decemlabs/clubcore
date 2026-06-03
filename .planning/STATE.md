@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Membership self-service depth
-status: in_progress
-stopped_at: Phase 80 complete (verified 4/4; CR-01/CR-02 fixed); autonomous advancing to Phase 81
-last_updated: "2026-06-03T16:10:00.000Z"
+status: executing
+stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
+last_updated: "2026-06-03T17:39:21.305Z"
 last_activity: 2026-06-03
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
   percent: 29
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 81 — Weekly Activity + PWA Flag Flips + OpenAPI Handoff (Phases 79-80 shipped)
+**Current focus:** Phase 81 — weekly-activity-pwa-flags-openapi-handoff
 
 ## Current Position
 
-Phase: 80 ✅ COMPLETE → advancing to Phase 81 (final v2.2 phase)
-Plan: 3 of 3 (80 complete)
-Status: Phase 80 verified 4/4 must-haves (2 live-infra checks deferred per standing decision); code-review CR-01 (post-commit fire-and-forget DM) + CR-02 (idempotency-envelope integrity) + 6 warnings fixed & merged
+Phase: 81 (weekly-activity-pwa-flags-openapi-handoff) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-06-03
 
 Milestone progress (real v2.2 = 3 phases): [███████░░░] 2/3 (67%)
@@ -95,6 +95,6 @@ Items carried forward from v2.1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-03T14:54:46.199Z
+Last session: 2026-06-03T17:39:21.301Z
 Stopped at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
 Resume: Autonomous continues with Phase 80; or run `/gsd:plan-phase 80` manually

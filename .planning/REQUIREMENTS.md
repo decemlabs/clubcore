@@ -23,7 +23,7 @@ First of the staged v2.2→v2.6 sequence to bring the client PWA up to the mocku
 
 ### Weekly activity (WACT)
 
-- [ ] **WACT-01**: `GET /client/activity/weekly` возвращает 7 объектов (Пн–Вс текущей недели, Europe/Moscow, zero-fill) с количеством тренировок за день; raw-SQL агрегат по `visits.gym_date` STORED-колонке (+ pt_sessions); `minutes` = null (отложено — нет duration-колонки).
+- [x] **WACT-01**: `GET /client/activity/weekly` возвращает 7 объектов (Пн–Вс текущей недели, Europe/Moscow, zero-fill) с количеством тренировок за день; raw-SQL агрегат по `visits.gym_date` STORED-колонке (+ pt_sessions); `minutes` = null (отложено — нет duration-колонки).
 - [ ] **WACT-02**: PWA-флаг `weeklyActivity` включён; недельные бары на `ProfileScreen` подключены к реальному endpoint'у (вместо mock).
 
 ### Handoff & verification (HND)
@@ -73,7 +73,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RESCH-01 | Phase 80 | Complete |
 | RESCH-02 | Phase 80 | Complete |
 | RESCH-03 | Phase 80 | Complete |
-| WACT-01 | Phase 81 | Pending |
+| WACT-01 | Phase 81 | Complete |
 | WACT-02 | Phase 81 | Pending |
 | HND-01 | Phase 81 | Pending |
 
