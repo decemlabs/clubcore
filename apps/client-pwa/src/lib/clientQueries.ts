@@ -586,17 +586,30 @@ export function useClientPaymentStatus(paymentId: string | null, enabled: boolea
  * POST /api/v1/client/checkout/memberships/{plan_id}
  * Server-derived idempotency key (D-71-04 — per-day sha256, no client header needed).
  * onSettled invalidates clientPortalKeys.membership() so home + profile refresh.
+ * Optional savePaymentMethod flag: when true, body includes savePaymentMethod:true so the
+ * backend (Phase 79 webhook step 8.5) captures the card token. Default OFF → byte-identical body.
  */
 export function useClientCheckoutMembership() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ planId, promoCode }: { planId: string; promoCode?: string }) => {
+    mutationFn: async ({
+      planId,
+      promoCode,
+      savePaymentMethod,
+    }: {
+      planId: string
+      promoCode?: string
+      savePaymentMethod?: boolean
+    }) => {
       const res = await clientRequest(
         'post',
         '/api/v1/client/checkout/memberships/{plan_id}',
         {
           params: { plan_id: planId },
-          body: promoCode ? { promoCode } : {},
+          body: {
+            ...(promoCode ? { promoCode } : {}),
+            ...(savePaymentMethod ? { savePaymentMethod: true } : {}),
+          },
         },
       )
       return (res as { data: CheckoutResult }).data
@@ -612,6 +625,8 @@ export function useClientCheckoutMembership() {
  * Client-supplied Idempotency-Key header (D-71-04 — PT allows same-day repurchase).
  * PWA generates a UUID per checkout intent and passes it here; reuses on retry.
  * onSettled invalidates clientPortalKeys.membership() so membership cache refreshes.
+ * Optional savePaymentMethod flag: when true, body includes savePaymentMethod:true so the
+ * backend (Phase 79 webhook step 8.5) captures the card token. Default OFF → byte-identical body.
  */
 export function useClientCheckoutPtPackage() {
   const qc = useQueryClient()
@@ -620,17 +635,22 @@ export function useClientCheckoutPtPackage() {
       planId,
       idempotencyKey,
       promoCode,
+      savePaymentMethod,
     }: {
       planId: string
       idempotencyKey: string
       promoCode?: string
+      savePaymentMethod?: boolean
     }) => {
       const res = await clientRequest(
         'post',
         '/api/v1/client/checkout/pt-packages/{plan_id}',
         {
           params: { plan_id: planId },
-          body: promoCode ? { promoCode } : {},
+          body: {
+            ...(promoCode ? { promoCode } : {}),
+            ...(savePaymentMethod ? { savePaymentMethod: true } : {}),
+          },
           headers: { 'Idempotency-Key': idempotencyKey },
         },
       )
