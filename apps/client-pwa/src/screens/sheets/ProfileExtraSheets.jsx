@@ -2,7 +2,7 @@ import React from 'react';
 import { Avatar } from '@/components/Avatar.jsx';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { useClientMe, useUpdateClientProfile } from '@/data';
+import { useClientMe, useUpdateClientProfile, useClientPaymentMethod, useUnlinkPaymentMethod, usePatchAutopay } from '@/data';
 
 // ─── Generic sheet header ──────────────────────────────────────
 export function SubSheetHeader({ title, onClose, action }) {
@@ -323,11 +323,71 @@ export function Divider3() {
 // ─── Card management ──────────────────────────────────────────
 export const CardSheet = ({ onClose }) => {
   const [unbindConfirm, setUnbindConfirm] = React.useState(false);
-  const [unbound, setUnbound] = React.useState(false);
+  const [unbindError, setUnbindError] = React.useState(null);
+  const [autopayConsentOpen, setAutopayConsentOpen] = React.useState(false);
+  const [autopayError, setAutopayError] = React.useState(null);
+
+  const { data: cardData } = useClientPaymentMethod();
+  const patchAutopay = usePatchAutopay();
+  const unlinkCard = useUnlinkPaymentMethod();
+
   const openPaymentMethods = () => {
     onClose();
     setTimeout(() => window.__openPaymentMethods?.(), 280);
   };
+
+  // Wire: enable autopay with ФЗ-376 consent (T-81-06)
+  const handleEnableAutopayWithConsent = async () => {
+    setAutopayError(null);
+    try {
+      await patchAutopay.mutateAsync({ enabled: true, consentAcknowledged: true });
+      setAutopayConsentOpen(false);
+    } catch (err) {
+      const code = err && typeof err === 'object' && 'code' in err ? err.code : null;
+      setAutopayConsentOpen(false);
+      if (code === 'consent_required') {
+        // Re-surface consent modal — backend rejected without acknowledged flag
+        setAutopayConsentOpen(true);
+      } else {
+        setAutopayError('Не удалось включить автопродление. Попробуйте ещё раз.');
+      }
+    }
+  };
+
+  // Wire: disable autopay — no consent needed (T-81-06)
+  const handleDisableAutopay = async () => {
+    setAutopayError(null);
+    try {
+      await patchAutopay.mutateAsync({ enabled: false, consentAcknowledged: false });
+    } catch (err) {
+      const code = err && typeof err === 'object' && 'code' in err ? err.code : null;
+      if (code === 'consent_required') {
+        setAutopayConsentOpen(true);
+      } else {
+        setAutopayError('Не удалось изменить автопродление. Попробуйте ещё раз.');
+      }
+    }
+  };
+
+  // Wire: unlink card — DELETE /client/payment-method (PAYM-03, T-81-10)
+  const handleUnlinkConfirmed = async () => {
+    setUnbindError(null);
+    try {
+      await unlinkCard.mutateAsync();
+      setUnbindConfirm(false);
+      onClose();
+    } catch (err) {
+      setUnbindConfirm(false);
+      const code = err && typeof err === 'object' && 'code' in err ? err.code : null;
+      setUnbindError(code ? `Ошибка: ${String(code)}` : 'Не удалось отвязать карту. Попробуйте ещё раз.');
+    }
+  };
+
+  // Expiry display helpers
+  const expiryStr = cardData
+    ? `${String(cardData.expiryMonth).padStart(2, '0')} / ${String(cardData.expiryYear).slice(-2)}`
+    : '—— / ——';
+
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 220, background: 'var(--bg)',
@@ -338,7 +398,7 @@ export const CardSheet = ({ onClose }) => {
       <SubSheetHeader title="Привязанная карта" onClose={onClose} />
 
       <div className="scroller" style={{ paddingTop: 0 }}>
-        {/* Card visual */}
+        {/* Card visual — real data from GET /client/payment-method (T-81-07) */}
         <div style={{ padding: '8px 16px 18px' }}>
           <div style={{
             position: 'relative', aspectRatio: '1.6 / 1',
@@ -358,22 +418,23 @@ export const CardSheet = ({ onClose }) => {
               Карта для оплаты
             </div>
             <div style={{ flex: 1 }} />
+            {/* last4 from API — no PAN/CVV, no cardholder name (T-81-07) */}
             <div className="t-h2" style={{
               color: '#fafaf9', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               letterSpacing: 2, fontSize: 20, marginBottom: 12, position: 'relative',
             }}>
-              •••• •••• •••• 4821
+              {cardData ? `•••• •••• •••• ${cardData.last4}` : '•••• •••• •••• ————'}
             </div>
             <div className="row-between" style={{ position: 'relative' }}>
               <div>
-                <div className="t-mini" style={{ color: 'rgba(250,250,249,0.6)', fontSize: 9 }}>ВЛАДЕЛЕЦ</div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>ALEXANDRA Z.</div>
+                <div className="t-mini" style={{ color: 'rgba(250,250,249,0.6)', fontSize: 9 }}>КАРТА</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>CLUBCORE</div>
               </div>
               <div>
                 <div className="t-mini" style={{ color: 'rgba(250,250,249,0.6)', fontSize: 9 }}>ДО</div>
                 <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2,
                               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  09 / 28
+                  {expiryStr}
                 </div>
               </div>
               <div style={{
@@ -384,14 +445,25 @@ export const CardSheet = ({ onClose }) => {
           </div>
         </div>
 
+        {/* Autopay toggles — only «Авто-продление абонемента» remains (anti-feature removed per locked decision) */}
         <div style={{ padding: '0 16px 12px' }}>
           <div className="t-mini" style={{ color: 'var(--text-3)', padding: '4px 4px 8px' }}>Автоплатежи</div>
           <div className="card" style={{ padding: 0 }}>
-            <ToggleRow label="Авто-продление абонемента" sub="Спишется за 3 дня до конца"
-                        defaultOn />
-            <Divider3 />
-            <ToggleRow label="Авто-оплата тренировок" sub="Сразу после записи" defaultOn />
+            {/* Авто-продление абонемента — wired to PATCH /autopay with ФЗ-376 consent (T-81-06, T-81-08) */}
+            <AutopayToggleRow
+              label="Авто-продление абонемента"
+              sub="Спишется за 3 дня до конца"
+              enabled={cardData?.autopayEnabled ?? false}
+              isPending={patchAutopay.isPending}
+              onEnable={() => setAutopayConsentOpen(true)}
+              onDisable={handleDisableAutopay}
+            />
           </div>
+          {autopayError && (
+            <div className="t-small" style={{ color: 'var(--danger)', marginTop: 6, paddingLeft: 4 }}>
+              {autopayError}
+            </div>
+          )}
         </div>
 
         <div style={{ padding: '0 16px 12px' }}>
@@ -403,14 +475,20 @@ export const CardSheet = ({ onClose }) => {
             <Divider3 />
             <MiniActionRow
               icon="alert"
-              label={unbound ? 'Карта отвязана' : 'Отвязать карту'}
-              danger={!unbound}
-              onClick={() => { if (!unbound) setUnbindConfirm(true); }}
+              label="Отвязать карту"
+              danger
+              onClick={() => setUnbindConfirm(true)}
             />
           </div>
+          {unbindError && (
+            <div className="t-small" style={{ color: 'var(--danger)', marginTop: 6, paddingLeft: 4 }}>
+              {unbindError}
+            </div>
+          )}
         </div>
 
-        {unbindConfirm && !unbound && (
+        {/* Unbind confirmation modal */}
+        {unbindConfirm && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 30,
             background: 'rgba(0,0,0,0.45)',
@@ -433,11 +511,65 @@ export const CardSheet = ({ onClose }) => {
                   background: 'transparent', color: 'var(--text)',
                   fontFamily: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer',
                 }}>Отмена</button>
-                <button onClick={() => { setUnbindConfirm(false); setUnbound(true); }} className="press" style={{
-                  flex: 1, height: 46, borderRadius: 999, border: 0,
-                  background: 'var(--danger)', color: '#fff',
+                <button
+                  onClick={handleUnlinkConfirmed}
+                  disabled={unlinkCard.isPending}
+                  className="press"
+                  style={{
+                    flex: 1, height: 46, borderRadius: 999, border: 0,
+                    background: 'var(--danger)', color: '#fff',
+                    fontFamily: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                    opacity: unlinkCard.isPending ? 0.7 : 1,
+                  }}
+                >
+                  {unlinkCard.isPending ? 'Отвязываем…' : 'Отвязать'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ФЗ-376 autopay consent disclosure modal (T-81-06) */}
+        {autopayConsentOpen && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 30,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            animation: 'ctx-fade 0.2s ease-out',
+          }} onClick={() => setAutopayConsentOpen(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={{
+              width: 'calc(100% - 24px)', margin: '0 12px 12px',
+              background: 'var(--surface)', borderRadius: 20, padding: 20,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              animation: 'sheet-up 0.28s cubic-bezier(0.32, 0.72, 0.2, 1)',
+            }}>
+              <div className="t-h2" style={{ fontSize: 18 }}>Подключить автопродление?</div>
+              {/* ФЗ-376 required disclosure: amount + periodicity + cancellation method */}
+              <div className="t-small" style={{ marginTop: 6, color: 'var(--text-2)', lineHeight: 1.6 }}>
+                Сумма списания — стоимость текущего тарифа. Списывается за 3 дня до окончания
+                абонемента. Отключить можно в любой момент в настройках карты.
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button onClick={() => setAutopayConsentOpen(false)} className="press" style={{
+                  flex: 1, height: 46, borderRadius: 999, border: '0.5px solid var(--border-strong)',
+                  background: 'transparent', color: 'var(--text)',
                   fontFamily: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-                }}>Отвязать</button>
+                }}>
+                  Отмена
+                </button>
+                <button
+                  onClick={handleEnableAutopayWithConsent}
+                  disabled={patchAutopay.isPending}
+                  className="press"
+                  style={{
+                    flex: 2, height: 46, borderRadius: 999, border: 'none',
+                    background: 'var(--accent)', color: '#06120c',
+                    fontFamily: 'inherit', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                    opacity: patchAutopay.isPending ? 0.7 : 1,
+                  }}
+                >
+                  {patchAutopay.isPending ? 'Подключаем…' : 'Подключить'}
+                </button>
               </div>
             </div>
           </div>
@@ -455,6 +587,38 @@ export const CardSheet = ({ onClose }) => {
     </div>
   );
 };
+
+// Controlled autopay toggle row — wired to real usePatchAutopay + ФЗ-376 consent (PAYM-05)
+function AutopayToggleRow({ label, sub, enabled, isPending, onEnable, onDisable }) {
+  return (
+    <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ flex: 1 }}>
+        <div className="t-h3" style={{ fontSize: 14 }}>{label}</div>
+        {sub && <div className="t-small" style={{ marginTop: 2 }}>{sub}</div>}
+      </div>
+      <button
+        aria-label={label}
+        aria-checked={enabled}
+        role="switch"
+        disabled={isPending}
+        onClick={() => { if (enabled) { void onDisable(); } else { onEnable(); } }}
+        style={{
+          width: 44, height: 26, borderRadius: 999, border: 0, padding: 0,
+          background: enabled ? 'var(--accent)' : 'var(--border-strong)',
+          cursor: isPending ? 'not-allowed' : 'pointer',
+          position: 'relative', transition: 'background 0.15s',
+          flexShrink: 0, opacity: isPending ? 0.6 : 1,
+        }}
+      >
+        <span style={{
+          position: 'absolute', top: 2, left: enabled ? 20 : 2,
+          width: 22, height: 22, borderRadius: 999, background: '#fff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.25)', transition: 'left 0.18s ease',
+        }} />
+      </button>
+    </div>
+  );
+}
 
 function ToggleRow({ label, sub, defaultOn }) {
   const [on, setOn] = React.useState(!!defaultOn);
