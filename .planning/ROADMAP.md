@@ -114,7 +114,12 @@ Plans:
   2. Перенос невозможен, если до начала исходного слота меньше 24 часов (409 `reschedule_window_expired`); чужая бронь → 404 (IDOR anti-oracle)
   3. После переноса в audit_log появляется событие `booking_rescheduled`; клиент получает DM-уведомление с новым временем
   4. `BookingManageSheet` в PWA показывает реальные доступные слоты и выполняет перенос через новый endpoint; mock-календарь удалён
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 80-01-reschedule-foundation-PLAN.md — Migration 0053 (booking_notifications.kind CHECK +rescheduled) + booking_rescheduled audit event/payload + reschedule DM template + ClientRescheduleBookingRequest schema
+- [ ] 80-02-reschedule-endpoint-PLAN.md — Atomic reschedule_booking_for_client (cancel+create, PT-credit preserved) + BookingForClientRescheduler Protocol slot + POST /client/booking/{id}/reschedule endpoint + integration tests (race/window/cross-trainer/IDOR/audit/PT-credit)
+- [ ] 80-03-reschedule-pwa-PLAN.md — useRescheduleBooking hook + BookingManageSheet wired to real available slots (mock calendar removed) + vitest wiring suite
 
 ### Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff
 **Goal**: Клиент видит недельную активность на ProfileScreen; CardSheet подключён к реальному backend; весь v2.2 API зафиксирован в openapi.json
