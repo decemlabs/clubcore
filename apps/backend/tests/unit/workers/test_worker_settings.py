@@ -70,8 +70,12 @@ def test_worker_settings_cron_resolves_to_registered_function() -> None:
     Phase 59 (Plan 59-05 REC-02) appended generate_recurring_slots
     (index 8) — daily 07:00 MSK slot materialization cron. cron_jobs
     now has 9 entries total. Earlier indices preserved.
+
+    Phase 84 (Plan 84-02 APAY-01) appended charge_expiring_autopay
+    (index 9) — daily 05:00 MSK autopay charge cron. cron_jobs now
+    has 10 entries total.
     """
-    assert len(WorkerSettings.cron_jobs) == 9
+    assert len(WorkerSettings.cron_jobs) == 10
     cron_entry = WorkerSettings.cron_jobs[0]
     assert cron_entry.coroutine.__name__ == "expire_memberships"
     assert cron_entry.coroutine is expire_memberships, (
@@ -93,6 +97,30 @@ def test_worker_settings_cron_locked_args() -> None:
     assert c.minute == 5, c.minute
     assert c.unique is True
     assert c.keep_result_s == 60
+
+
+def test_charge_expiring_autopay_cron_registered() -> None:
+    """Phase 84 APAY-01: charge_expiring_autopay cron registered with unique=True at distinct hour.
+
+    Verifies T-84-05 (SQL-level idempotency second line of defence):
+    - unique=True prevents concurrent ARQ ticks from double-initiating charges.
+    - The hour is NOT 3:05 (expire_memberships slot) — no collision.
+    - hour=2, minute=0 = 05:00 Europe/Moscow (container TZ=UTC).
+    """
+    from app.workers.scheduled.charge_expiring_autopay import charge_expiring_autopay
+
+    # Find the charge_expiring_autopay cron entry (index 9 in the current list).
+    autopay_cron = next(
+        (c for c in WorkerSettings.cron_jobs if c.coroutine.__name__ == "charge_expiring_autopay"),
+        None,
+    )
+    assert autopay_cron is not None, "charge_expiring_autopay not found in cron_jobs"
+    assert autopay_cron.coroutine is charge_expiring_autopay
+    assert autopay_cron.unique is True
+    assert autopay_cron.keep_result_s == 60
+    # Distinct hour — NOT 3 (expire_memberships) or 4 (generate_recurring_slots).
+    assert autopay_cron.hour == 2, f"Expected hour=2 (05:00 MSK), got {autopay_cron.hour}"
+    assert autopay_cron.minute == 0
 
 
 def test_worker_settings_functions_registered() -> None:
@@ -124,9 +152,15 @@ def test_worker_settings_functions_registered() -> None:
 
     Phase 59 (Plan 59-05 REC-02) appended ``generate_recurring_slots`` — the
     daily slot materialization cron. List now has 12 entries.
+
+    Phase 84 (Plan 84-02 APAY-01) appended ``charge_expiring_autopay`` — the
+    daily off-session autopay charge cron. List now has 13 entries.
     """
+    from app.workers.scheduled.charge_expiring_autopay import charge_expiring_autopay
+
     assert expire_memberships in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 12
+    assert charge_expiring_autopay in WorkerSettings.functions
+    assert len(WorkerSettings.functions) == 13
 
 
 def test_worker_settings_redis_settings_resolved() -> None:

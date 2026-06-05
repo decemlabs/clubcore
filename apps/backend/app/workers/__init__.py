@@ -95,6 +95,9 @@ from app.integrations.email.models import (  # noqa: F401
 from app.modules.auth.password_reset_token_model import (  # noqa: F401
     PasswordResetToken,  # Phase 41 INFRA-38 / D-41-29 — password_reset_tokens
 )
+from app.modules.autopay_charges.models import (  # noqa: F401
+    AutopayCharge,  # Phase 84 APAY-03 — autopay_charges eager-import (REG-29-04)
+)
 from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt
 from app.modules.online_payments.models import (  # noqa: F401
     PaymentNotification,  # Phase 52 — payment_notifications eager-import (REG-29-04)
@@ -107,6 +110,7 @@ from app.modules.schedule.models import (  # noqa: F401
     RecurringSlotTemplate,  # Phase 59 REC-02 — recurring_slot_templates eager-import (REG-29-04)
     TrainerTimeOff,  # Phase 59 REC-03 — trainer_time_off eager-import (REG-29-04)
 )
+from app.workers.scheduled.charge_expiring_autopay import charge_expiring_autopay
 from app.workers.scheduled.cleanup_password_reset_tokens import cleanup_password_reset_tokens
 from app.workers.scheduled.expire_memberships import expire_memberships
 from app.workers.scheduled.expire_pt_packages import expire_pt_packages
@@ -158,6 +162,12 @@ class WorkerSettings:
         # recurring slot materialization cron. Generates trainer_availability_slots
         # from active recurring templates for the next RECURRING_SLOT_HORIZON_DAYS ahead.
         generate_recurring_slots,
+        # Phase 84 APAY-01 — off-session autopay charge cron.
+        # NOT a request-handler-driven task (unlike dispatch_email, dispatch_fiscal_receipt);
+        # it IS a cron job registered below with unique=True at 05:00 MSK (hour=2 UTC).
+        # SQL-level idempotency: ON CONFLICT (membership_id, period_end) DO NOTHING is the
+        # real double-charge gate; unique=True is the second line of defence (Pitfall 4).
+        charge_expiring_autopay,
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -275,6 +285,22 @@ class WorkerSettings:
         cron(
             generate_recurring_slots,
             hour=4,
+            minute=0,
+            unique=True,
+            keep_result=60,
+        ),
+        # Phase 84 APAY-01 — 05:00 Europe/Moscow daily (container TZ=UTC → hour=2,
+        # minute=0). Initiates off-session autopay charges for memberships expiring
+        # within the next 3 days. SQL-level idempotency: ON CONFLICT(membership_id,
+        # period_end) DO NOTHING is the primary double-charge guard (T-84-01/T-84-05);
+        # unique=True is the second line of defence (PITFALLS Pitfall 4).
+        # Time slot: 02:00 UTC = 05:00 MSK — clear of the 00:30 (cleanup_tokens),
+        # 03:05-03:35 (memberships/notifs/pt_packages/reminders), 04:00 (recurring_slots),
+        # and 20:10 (no-show) buckets; well before the 06:xx MSK morning notification
+        # window so charge results are available for morning DM delivery.
+        cron(
+            charge_expiring_autopay,
+            hour=2,
             minute=0,
             unique=True,
             keep_result=60,
