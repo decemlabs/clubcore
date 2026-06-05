@@ -447,6 +447,15 @@ async def handle_payment_succeeded(
                 f"pt_package_plan_id — DB CHECK constraint violated"
             )
 
+        # Phase 84 APAY-02: autopay discriminator — confirmation_type='autopay' on the
+        # online_payments row signals that this payment was initiated by the off-session
+        # charge cron, not an interactive redirect/QR checkout. The discriminator drives:
+        #   1. method='autopay' vs 'online' in the charge-ledger record (plan 02 arch note).
+        #   2. kind='autopay_charge_succeeded' vs 'payment_succeeded' in the success DM.
+        # D-06 (webhook-locked activation): the membership renewal is ALWAYS activated here
+        # regardless of is_autopay — activation path is unchanged.
+        is_autopay: bool = row.confirmation_type == "autopay"
+
         # Blocker #2 — widened Protocol from Plan 50-03; webhook passes
         # audit_actor=None + received_by_user_id=None (anonymous flow).
         payment_row = await get_payment_recorder()(
@@ -454,7 +463,7 @@ async def handle_payment_succeeded(
             subject_kind=subject_kind,
             subject_id=subject_id,
             amount_kopecks=row.amount_kopecks,
-            method="online",
+            method="autopay" if is_autopay else "online",
             received_by_user_id=None,
             audit_actor=None,
         )
@@ -652,6 +661,7 @@ async def handle_payment_succeeded(
         subject_kind_local: Literal["membership", "pt_package"] = subject_kind
         subject_id_local: UUID = subject_id
         fiscal_receipt_row_id_local: UUID = fiscal_receipt_row_id
+        is_autopay_local: bool = is_autopay
 
     # Phase 51 D-51-15 — runs AFTER the ``async with session.begin():`` commit
     # boundary so an enqueue failure cannot poison the UoW. ``arq_pool`` is
@@ -660,6 +670,12 @@ async def handle_payment_succeeded(
     # a no-op. ``fiscal_receipt_row_id_local`` is the just-INSERTed
     # fiscal_receipts row id; the worker reads the full row at task entry
     # (plan 51-05).
+    # Phase 84 APAY-02: discriminator — use literal strings at the enqueue site
+    # so both branches are structurally unambiguous (plan 02 arch note).
+    if is_autopay_local:
+        notification_kind: str = "autopay_charge_succeeded"
+    else:
+        notification_kind = "payment_succeeded"
     await _post_commit_enqueue(
         arq_pool,
         online_payment_id=op_row_id,
@@ -667,7 +683,7 @@ async def handle_payment_succeeded(
         subject_id=subject_id_local,
         fiscal_receipt_id=fiscal_receipt_row_id_local,
         payment_id=ledger_payment_id,
-        kind="payment_succeeded",
+        kind=notification_kind,
     )
 
 
