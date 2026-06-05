@@ -38,22 +38,33 @@ React/Vite/Tailwind/shadcn app. It uses plain CSS with custom tokens. No shadcn 
 
 ## Spacing Scale
 
-The PWA uses inline pixel values matching an 8-point grid. All layout values below are
-observed from existing components and must be matched exactly to conform to the visual language.
+> **Inherited vs New note:** The PWA has an established inline-pixel spacing convention.
+> Values below that originate from pre-existing components are annotated as inherited — they
+> are constraints this phase must conform to, not new declarations. Only the BonusRow
+> padding and LoyaltyBalanceCard padding are new declarations for this phase.
+
+All new-element spacing declared in this phase must be multiples of 4. The PWA does not
+use a named token system; values are written as inline pixels matching the convention.
+
+**New-element spacing scale for this phase (pure 4-multiples):**
 
 | Token | Value | Usage |
 |-------|-------|-------|
 | xs | 4px | Icon gaps, dot separators |
 | sm | 8px | Compact element spacing (between icon and label, chip gap) |
-| md | 12px | Row internal padding (VisitRow: `gap: 12px`) |
-| md+ | 14px | Card internal padding (HistorySheet card: `padding: '12px 14px'`) |
-| lg | 16px | Screen horizontal gutter (`padding: '0 16px'`), standard section padding |
+| md | 12px | Row internal padding (matches existing VisitRow gap: 12px) |
+| lg | 16px | Screen horizontal gutter (`padding: '0 16px'`), card padding, BonusRow horizontal padding |
 | xl | 24px | Bottom spacer, section breaks |
 | 2xl | 40px | Empty-state top padding (`padding: '40px 24px'`) |
 
-Exceptions:
-- Top status bar area: `padding-top: 50px` (SubSheetHeader standard: `padding: '50px 12px 8px'`)
+**Inherited spacing constraints (pre-existing components reused unchanged — excluded from
+this phase's new-spacing budget):**
+
+- `SubSheetHeader` top padding: **50px** — inherited from the existing `SubSheetHeader`
+  component, reused as-is. This is a safe-area/status-bar offset baked into that component.
+  It is NOT introduced by this phase and is not subject to the 4-multiple rule for new tokens.
 - Touch targets: minimum 36×36px for icon buttons (close/back), 44px height for slot chips
+  — both inherited from the established PWA interaction baseline.
 
 **Source:** observed from `HistorySheets.jsx`, `ProfileExtraSheets.jsx` — pre-populated, not asked.
 
@@ -61,22 +72,44 @@ Exceptions:
 
 ## Typography
 
-All type classes come from `styles.css`. Use existing CSS classes where they match; for one-off
-sizes, write inline `font-size`/`font-weight` following the observed inline-style patterns.
+> **Inherited vs New note:** The PWA ships a full type scale in `styles.css` via `.t-*`
+> classes. Several of these classes (`.t-h3`, `.t-mini`) have weight 600 — a value that
+> is locked in the existing CSS and is NOT a new weight declaration for this phase.
+> New elements introduced by Phase 82 use a binary 400 / 700 weight system only.
+> Inherited classes are used as-is; their internal weights are not overridden.
 
-| Role | Size | Weight | Line Height | CSS class |
-|------|------|--------|-------------|-----------|
-| Body | 15px | 400 | 1.4 | `.t-body` |
-| Label / small | 13px | 400 | 1.4 | `.t-small` (color: var(--text-2)) |
-| Heading (card title) | 15–17px | 600 | 1.25 | `.t-h3` |
-| Balance display (large number) | 28px | 700 | 1.15 | `.t-h1` or inline (mirrors `.state-title` at 28px) |
-| Eyebrow / timestamp / section label | 11px | 600–700 | — | `.t-mini` (uppercase, var(--text-3)) |
+### New-element type scale (max 4 sizes, 2 weights)
+
+This phase introduces `LoyaltyBalanceCard` and `BonusHistorySheet`. All text in those
+components maps to one of these four sizes:
+
+| Role | Size | Weight | Line Height | Notes |
+|------|------|--------|-------------|-------|
+| Eyebrow / timestamp / section label | 11px | 700 | — | Via `.t-mini` (uppercase, `var(--text-3)`). `.t-mini` is inherited at weight 600; new inline overrides for Phase 82 eyebrows use weight 700 consistent with `.state-title` eyebrow pattern. |
+| Label / small metadata | 13px | 400 | 1.4 | Via `.t-small` (`color: var(--text-2)`) — inherited class, used as-is |
+| Body / card heading | 15px | 400 or 700 | 1.4 | Via `.t-body` at weight 400. Where a heading must stand out from body text, distinguish with weight 700 (not a new size — weight is the differentiator) |
+| Balance display (large number) | 28px | 700 | 1.15 | Inline `font-size: 28px; font-weight: 700` mirroring `.state-title` (already in CSS at 28px/700). Annotated: inherited from existing `.state-title` — not modified this phase |
+
+**Sizes NOT used in new Phase 82 elements:** 14px, 17px (these exist in the codebase for
+other components but are not introduced here).
+
+### Inherited classes reused without modification
+
+The following existing CSS classes are reused in new components. Their internal weight or
+size values are pre-existing constraints, not new declarations:
+
+| Class | Size | Weight in CSS | Status |
+|-------|------|--------------|--------|
+| `.t-mini` | 11px | 600 (inherited from existing `.t-mini` rule) | Reused unchanged |
+| `.t-small` | 13px | 400 | Reused unchanged |
+| `.t-body` | 15px | 400 | Reused unchanged |
+| `.t-h3` | 17px | 600 (inherited from existing `.t-h3` rule) | Reused in `SubSheetHeader` title only — inherited, not a new Phase 82 declaration |
 
 **Rule:** Never introduce new font sizes. Reuse the existing 5-level scale:
 34 / 26 / 20 / 17 / 15 / 13 / 11px (display → body → mini).
 The balance number uses 28px (`.state-title` size — already in CSS), weight 700.
 
-**Source:** `styles.css` `.t-*` classes — pre-populated, not asked.
+**Source:** `styles.css` `.t-*` classes + `.state-title` — pre-populated from codebase.
 
 ---
 
@@ -124,16 +157,16 @@ the existing tab panels. Renders only when the `clubBonuses` feature flag is ON 
 **Structure:**
 ```
 .card (background: var(--surface), border-radius: var(--r-lg), border: 0.5px solid var(--border))
-  ├── top-row: [coin icon 32px in accent-soft bg] [label "Бонусный счёт" t-h3] [chevronRight → opens BonusHistorySheet]
+  ├── top-row: [coin icon 32px in accent-soft bg] [label "Бонусный счёт" t-body weight:700] [chevronRight → opens BonusHistorySheet]
   ├── balance-row: ["500 ₽" in 28px/700 var(--text)] [t-mini eyebrow "доступно бонусов" var(--text-3)]
   └── sub-row (optional): t-small "История начислений" in var(--text-2) — tap target for sheet
 ```
 
 **Exact layout values:**
-- Card padding: `16px`
+- Card padding: `16px` (lg token — multiple of 4)
 - Icon container: `32×32px`, `border-radius: 8px`, `background: var(--accent-soft)`, `color: var(--accent-deep)`
 - Icon name: `"gift"` or `"star"` (whichever is available in `Icon.jsx`)
-- Balance amount: `font-size: 28px`, `font-weight: 700`, `letter-spacing: -0.6px`, `color: var(--text)`
+- Balance amount: `font-size: 28px`, `font-weight: 700`, `letter-spacing: -0.6px`, `color: var(--text)` — mirrors existing `.state-title`
 - Eyebrow above amount: `font-size: 11px`, `font-weight: 700`, `letter-spacing: 0.5px`, `text-transform: uppercase`, `color: var(--text-3)`
 - Tap entire card (or chevron) → opens `BonusHistorySheet`
 - Loading state: skeleton block `.sk` at balance position (same `.sk-line` pattern as elsewhere)
@@ -153,13 +186,13 @@ the existing tab panels. Renders only when the `clubBonuses` feature flag is ON 
 
 **Pattern:** Mirrors `VisitHistorySheet` exactly (full-screen sheet, `position: absolute; inset: 0; z-index: 220`, `animation: sheet-up`).
 
-**Header:** `SubSheetHeader` (already exists in `ProfileExtraSheets.jsx`) with `title="История бонусов"` and a back-chevron.
+**Header:** `SubSheetHeader` (already exists in `ProfileExtraSheets.jsx`) with `title="История бонусов"` and a back-chevron. Reused unchanged — including its 50px top padding (safe-area/status-bar offset baked into the component).
 
 **Content layout:**
 
 ```
 StatusBar
-SubSheetHeader title="История бонусов"
+SubSheetHeader title="История бонусов"   ← pre-existing component, reused unchanged
 PullToRefresh
   ├── Balance summary card (sticky-feel, not fixed)
   │     .card padding:16px
@@ -179,20 +212,20 @@ list if `items.length < total`. Default page size matches API default (10).
 
 **BonusRow structure:**
 ```
-padding: '12px 14px'
+padding: '12px 16px'    ← lg token (16px) for horizontal, md token (12px) for vertical — both multiples of 4
 display: flex, gap: 12px, alignItems: center
 
 [icon container 32×32px, borderRadius: 8px]
-  accrual   → background: var(--accent-soft), color: var(--accent-deep), icon: "gift" or "arrowDown"
+  accrual    → background: var(--accent-soft), color: var(--accent-deep), icon: "gift" or "arrowDown"
   redemption → background: var(--danger-soft), color: var(--danger), icon: "arrowUp" (Phase 83 reserved)
 
 [content flex:1]
-  t-h3 fontSize:14px  → entry type label (see Copywriting §Type Labels)
-  t-small fontSize:12px, color:var(--text-2) → formatted date
+  t-small (13px/400) color:var(--text), fontWeight:700  → entry type label (see Copywriting §Type Labels)
+  t-small (13px/400) color:var(--text-2)                → formatted date
 
 [amount t-num]
-  accrual   → "+500 ₽", color: var(--accent-deep), fontWeight: 700, fontSize: 14px
-  redemption → "−200 ₽", color: var(--danger), fontWeight: 700, fontSize: 14px
+  accrual    → "+500 ₽", color: var(--accent-deep), fontWeight: 700, fontSize: 13px
+  redemption → "−200 ₽", color: var(--danger),     fontWeight: 700, fontSize: 13px
 ```
 
 **Amount formatting:** Always format from `amountKopecks` using `formatMoney(Math.abs(amountKopecks))` (already in `@/utils/format.js`). Derive sign from the signed integer: `amountKopecks > 0` → prefix "+", `< 0` → prefix "−" (minus sign U+2212, not hyphen).
@@ -313,6 +346,8 @@ Registry vetting gate: not applicable.
 6. **Date formatting:** Use `date-fns` `format` + `parseISO` + `ru` locale (already in `package.json` as `date-fns 4.1.0`). Import `{ format, parseISO }` from `'date-fns'` and `{ ru }` from `'date-fns/locale/ru'`.
 
 7. **No new CSS classes needed.** All visual primitives (`.card`, `.t-*`, `.t-mini`, `.t-h3`, `.t-small`, `.sk`, `.sk-line`, `.press`, `.btn`, `.btn-ghost`, `.btn-sm`, `SubSheetHeader`, `PullToRefresh`, `StatusBar`) already exist.
+
+8. **BonusRow padding:** Use `padding: '12px 16px'` (12px vertical = md token, 16px horizontal = lg token — both multiples of 4). Do not use 14px horizontal padding.
 
 ---
 
