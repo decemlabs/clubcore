@@ -504,6 +504,34 @@ const _v20Checks: [
   true, true, true, true, true, true, true,
 ]
 
+// --- v2.3 surface (Loyalty + Redemption — Phases 82-84) -------------------
+// Three new v2.3 client/staff paths + the checkout-body loyaltyRedeemKopecks
+// field carrier (REDM-01). Phase 84 (autopay) adds no new client HTTP paths;
+// the only contract surface is the additive confirmation_type='autopay' enum
+// value — no additional path guard is required.
+//
+// Path set (verified against the regenerated openapi.json):
+//   GET  /api/v1/client/loyalty/balance       (Phase 82, LOYL-01)
+//   GET  /api/v1/client/loyalty/history       (Phase 82, LOYL-02)
+//   POST /api/v1/clients/{client_id}/loyalty/grant  (Phase 82, ACCR-02 — owner-only)
+//   POST /api/v1/client/checkout/memberships/{plan_id} requestBody (Phase 83, REDM-01)
+//     — proves ClientCheckoutRequest (carrying loyaltyRedeemKopecks) is realised
+type _ClientLoyaltyBalanceGet = AssertNonNever<paths['/api/v1/client/loyalty/balance']['get']>
+type _ClientLoyaltyHistoryGet = AssertNonNever<paths['/api/v1/client/loyalty/history']['get']>
+type _ClientLoyaltyGrantPost = AssertNonNever<
+  paths['/api/v1/clients/{client_id}/loyalty/grant']['post']
+>
+type _ClientCheckoutMembershipBody = AssertNonNever<
+  paths['/api/v1/client/checkout/memberships/{plan_id}']['post']['requestBody']
+>
+
+const _v23Checks: [
+  _ClientLoyaltyBalanceGet,
+  _ClientLoyaltyHistoryGet,
+  _ClientLoyaltyGrantPost,
+  _ClientCheckoutMembershipBody,
+] = [true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -545,5 +573,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v2.0 Client-Portal surface (Phases 68-71)', () => {
     expect(_v20Checks).toHaveLength(23)
+  })
+
+  it('compiles against the regenerated v2.3 Loyalty surface (Phases 82-84)', () => {
+    expect(_v23Checks).toHaveLength(4)
   })
 })
