@@ -106,10 +106,16 @@ EXCLUDED_PREFIXES: tuple[str, ...] = (
 # so the qualname is `require_payments_view_for_subject.<locals>._checker`.
 # Phase 68 D-08 — require_client() is the client principal gate; the closure
 # qualname is `require_client.<locals>._checker`.
+# Phase 82 ACCR-02 — loyalty.permissions.require_owner_for_loyalty_grant is a
+# module-local owner-only factory on POST /clients/{id}/loyalty/grant. It admits
+# ONLY Role.OWNER WITHOUT extending OWNER_ONLY/can.ts (CISO-01 parity stays green);
+# the closure name remains _checker so the qualname is
+# `require_owner_for_loyalty_grant.<locals>._checker`.
 _GATE_PREFIXES: tuple[str, ...] = (
     "require_permission.",
     "require_authenticated.",
     "require_payments_view_for_subject.",
+    "require_owner_for_loyalty_grant.",
     "require_client.",
 )
 
@@ -207,19 +213,23 @@ def test_gate_prefixes_match_factory_names() -> None:
     """
     from app.core.dependencies import require_authenticated, require_client, require_permission
     from app.core.permissions import Action, Resource
+    from app.modules.loyalty.permissions import require_owner_for_loyalty_grant
     from app.modules.payments.permissions import require_payments_view_for_subject
 
     ra = require_authenticated()
     rp = require_permission(Action.DELETE, Resource.CLIENTS)
     rpv = require_payments_view_for_subject()
+    rog = require_owner_for_loyalty_grant()
     rc = require_client()
     assert ra.__qualname__.startswith("require_authenticated."), ra.__qualname__
     assert rp.__qualname__.startswith("require_permission."), rp.__qualname__
     assert rpv.__qualname__.startswith("require_payments_view_for_subject."), rpv.__qualname__
+    assert rog.__qualname__.startswith("require_owner_for_loyalty_grant."), rog.__qualname__
     assert rc.__qualname__.startswith("require_client."), rc.__qualname__
     assert _GATE_PREFIXES == (
         "require_permission.",
         "require_authenticated.",
         "require_payments_view_for_subject.",
+        "require_owner_for_loyalty_grant.",
         "require_client.",
     )

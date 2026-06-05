@@ -16,13 +16,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_models import AuditLog
@@ -140,17 +140,21 @@ async def test_create_client_produces_one_welcome_ledger_row(
 
     # Assert exactly 1 welcome ledger row with correct amount.
     row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt, "
-                "MAX(amount_kopecks) AS amount, "
-                "MAX(entry_type) AS etype "
-                "FROM loyalty_ledger "
-                "WHERE client_id = :cid AND entry_type = 'welcome'"
-            ),
-            {"cid": str(client_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt, "
+                    "MAX(amount_kopecks) AS amount, "
+                    "MAX(entry_type) AS etype "
+                    "FROM loyalty_ledger "
+                    "WHERE client_id = :cid AND entry_type = 'welcome'"
+                ),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert int(row["cnt"]) == 1, f"Expected 1 welcome row, got {row['cnt']}"
     assert int(row["amount"]) == 50_000, f"Expected 50000 kopecks, got {row['amount']}"
     assert row["etype"] == "welcome"
@@ -177,12 +181,9 @@ async def test_create_client_produces_one_loyalty_accrued_audit_row(
     ).all()
 
     # Filter to this specific client (payload.client_id)
-    client_audits = [
-        r for r in audit_rows if r.payload.get("client_id") == str(client_id)
-    ]
+    client_audits = [r for r in audit_rows if r.payload.get("client_id") == str(client_id)]
     assert len(client_audits) == 1, (
-        f"Expected 1 loyalty_accrued audit row for client {client_id}, "
-        f"got {len(client_audits)}"
+        f"Expected 1 loyalty_accrued audit row for client {client_id}, got {len(client_audits)}"
     )
     payload = client_audits[0].payload
     assert payload["entry_type"] == "welcome"
@@ -207,14 +208,18 @@ async def test_welcome_accrual_idempotent_replay_no_extra_ledger_row(
 
     # Still exactly 1 ledger row.
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
-                "WHERE client_id = :cid AND entry_type = 'welcome'"
-            ),
-            {"cid": str(client_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
+                    "WHERE client_id = :cid AND entry_type = 'welcome'"
+                ),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert int(count_row["cnt"]) == 1, (
         f"Idempotency broken: expected 1 welcome row after replay, got {count_row['cnt']}"
     )
@@ -228,9 +233,7 @@ async def test_welcome_accrual_idempotent_replay_no_extra_ledger_row(
             )
         )
     ).all()
-    client_audits = [
-        r for r in audit_rows if r.payload.get("client_id") == str(client_id)
-    ]
+    client_audits = [r for r in audit_rows if r.payload.get("client_id") == str(client_id)]
     assert len(client_audits) == 1, (
         f"Idempotency broken: expected 1 audit row after replay, "
         f"got {len(client_audits)} (replay should not emit)"

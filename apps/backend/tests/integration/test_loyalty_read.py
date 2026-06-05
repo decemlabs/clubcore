@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -287,7 +287,9 @@ async def test_history_pagination_honored(
     await accrue_welcome_bonus(db_session, client_id=client.id)
     # Insert a second row directly (owner_grant, no conflict guard).
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     from app.modules.loyalty.models import LoyaltyLedger
+
     await db_session.execute(
         pg_insert(LoyaltyLedger).values(
             client_id=client.id,
@@ -358,12 +360,8 @@ async def test_idor_history_client_a_does_not_see_client_b_rows(
     resp = await http_client.get("/api/v1/client/loyalty/history")
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
-    assert data["total"] == 0, (
-        f"IDOR: client A saw client B's rows: total={data['total']}"
-    )
-    assert data["items"] == [], (
-        f"IDOR: client A received items from client B's ledger"
-    )
+    assert data["total"] == 0, f"IDOR: client A saw client B's rows: total={data['total']}"
+    assert data["items"] == [], "IDOR: client A received items from client B's ledger"
 
 
 async def test_idor_balance_client_b_sees_only_own_rows(
@@ -386,6 +384,5 @@ async def test_idor_balance_client_b_sees_only_own_rows(
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
     assert data["balanceKopecks"] == 0, (
-        f"IDOR (reverse): client B saw client A's accrual: "
-        f"balanceKopecks={data['balanceKopecks']}"
+        f"IDOR (reverse): client B saw client A's accrual: balanceKopecks={data['balanceKopecks']}"
     )

@@ -201,14 +201,18 @@ async def test_owner_grant_creates_ledger_row(
     await _post_grant(http_client_owner, test_client.id, amount_kopecks=30_000)
 
     row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
-                "WHERE client_id = :cid AND entry_type = 'owner_grant'"
-            ),
-            {"cid": str(test_client.id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
+                    "WHERE client_id = :cid AND entry_type = 'owner_grant'"
+                ),
+                {"cid": str(test_client.id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert int(row["cnt"]) == 1, f"Expected 1 owner_grant row, got {row['cnt']}"
 
 
@@ -230,9 +234,7 @@ async def test_owner_grant_emits_loyalty_accrued_audit_row(
             )
         )
     ).all()
-    client_audits = [
-        a for a in audit_rows if a.payload.get("client_id") == str(test_client.id)
-    ]
+    client_audits = [a for a in audit_rows if a.payload.get("client_id") == str(test_client.id)]
     assert len(client_audits) == 1, (
         f"Expected 1 loyalty_accrued audit row for grant, got {len(client_audits)}"
     )
@@ -263,22 +265,20 @@ async def test_reception_grant_returns_403_and_rbac_audit(
         )
     ).all()
     # At least 1 rbac_forbidden row with loyalty target.
-    loyalty_forbidden = [
-        a for a in audit_rows
-        if a.payload.get("target_resource") == "loyalty"
-    ]
+    loyalty_forbidden = [a for a in audit_rows if a.payload.get("target_resource") == "loyalty"]
     assert len(loyalty_forbidden) >= 1, "Expected rbac_forbidden audit row for loyalty grant"
 
     # No ledger row created.
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
-                "WHERE client_id = :cid"
-            ),
-            {"cid": str(test_client.id)},
+        (
+            await db_session.execute(
+                text("SELECT COUNT(*) AS cnt FROM loyalty_ledger WHERE client_id = :cid"),
+                {"cid": str(test_client.id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert int(count_row["cnt"]) == 0, "Reception 403 should not create any ledger row"
 
 
@@ -294,14 +294,15 @@ async def test_grant_zero_amount_returns_422(
     assert r.json()["code"] == "grant_amount_must_be_positive"
 
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
-                "WHERE client_id = :cid"
-            ),
-            {"cid": str(test_client.id)},
+        (
+            await db_session.execute(
+                text("SELECT COUNT(*) AS cnt FROM loyalty_ledger WHERE client_id = :cid"),
+                {"cid": str(test_client.id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert int(count_row["cnt"]) == 0, "Zero amount should not create ledger row"
 
 

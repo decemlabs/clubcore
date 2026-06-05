@@ -16,7 +16,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from sqlalchemy import literal_column, text
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,7 +93,13 @@ async def accrue_welcome_bonus(
         )
         .on_conflict_do_nothing(
             index_elements=["client_id"],
-            index_where=literal_column("entry_type") == "welcome",
+            # Inline SQL literal (NOT a bound param) so PostgreSQL can match this
+            # predicate against the partial UNIQUE INDEX uq_loyalty_ledger_welcome
+            # during ON CONFLICT arbiter inference. `literal_column(...) == "welcome"`
+            # renders `entry_type = $param`, which Postgres refuses to match against
+            # the index's `WHERE entry_type = 'welcome'` predicate (raises
+            # InvalidColumnReferenceError). Mirror the migration's text() predicate.
+            index_where=text("entry_type = 'welcome'"),
         )
         .returning(LoyaltyLedger.id)
     )
@@ -231,33 +237,38 @@ async def list_client_loyalty_history(
     D-20-IDOR: client_id always from the caller's principal, never from the URL.
     """
     count_row = (
-        await session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM loyalty_ledger "
-                "WHERE client_id = :cid"
-            ),
-            {"cid": str(client_id)},
+        (
+            await session.execute(
+                text("SELECT COUNT(*) AS cnt FROM loyalty_ledger WHERE client_id = :cid"),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     total = int(count_row["cnt"])
 
     offset = (query.page - 1) * query.page_size
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, entry_type, amount_kopecks, created_at "
-                "FROM loyalty_ledger "
-                "WHERE client_id = :cid "
-                "ORDER BY created_at DESC "
-                "LIMIT :limit OFFSET :offset"
-            ),
-            {
-                "cid": str(client_id),
-                "limit": query.page_size,
-                "offset": offset,
-            },
+        (
+            await session.execute(
+                text(
+                    "SELECT id, entry_type, amount_kopecks, created_at "
+                    "FROM loyalty_ledger "
+                    "WHERE client_id = :cid "
+                    "ORDER BY created_at DESC "
+                    "LIMIT :limit OFFSET :offset"
+                ),
+                {
+                    "cid": str(client_id),
+                    "limit": query.page_size,
+                    "offset": offset,
+                },
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     items = [
         ClientLoyaltyHistoryItem(
@@ -284,12 +295,16 @@ async def list_client_loyalty_history(
 async def _sum_balance(session: AsyncSession, client_id: UUID) -> int:
     """SUM(amount_kopecks) COALESCE 0 for the given client_id (LOYL-03)."""
     row = (
-        await session.execute(
-            text(
-                "SELECT COALESCE(SUM(amount_kopecks), 0) AS balance "
-                "FROM loyalty_ledger WHERE client_id = :cid"
-            ),
-            {"cid": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT COALESCE(SUM(amount_kopecks), 0) AS balance "
+                    "FROM loyalty_ledger WHERE client_id = :cid"
+                ),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return int(row["balance"])
