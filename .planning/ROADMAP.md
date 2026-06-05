@@ -113,7 +113,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 Plans:
 **Wave 1**
 
-- [ ] 82-01-PLAN.md — Append-only loyalty_ledger schema (migration 0054) + loyalty_accrued LOCKED audit event registered before callsites (count-lock → 102)
+- [x] 82-01-PLAN.md — Append-only loyalty_ledger schema (migration 0054) + loyalty_accrued LOCKED audit event registered before callsites (count-lock → 102)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -217,7 +217,7 @@ Plans:
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
-| 82. Loyalty Foundation — Ledger + Balance + Accrual | 0/3 | Not started | - |
+| 82. Loyalty Foundation — Ledger + Balance + Accrual | 1/3 | In Progress|  |
 | 83. Bonus Redemption at Checkout | 0/TBD | Not started | - |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |

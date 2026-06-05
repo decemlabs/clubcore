@@ -11,13 +11,13 @@ Requirements for this milestone. Each maps to a roadmap phase. All client-facing
 
 - [ ] **LOYL-01**: Клиент видит текущий бонусный баланс через `GET /client/loyalty/balance`
 - [ ] **LOYL-02**: Клиент видит историю бонусов (начисления + списания) с датой, типом и суммой
-- [ ] **LOYL-03**: Баланс выводится из append-only ledger (integer units; без деструктивных UPDATE — баланс = свёртка строк)
+- [x] **LOYL-03**: Баланс выводится из append-only ledger (integer units; без деструктивных UPDATE — баланс = свёртка строк)
 
 ### Bonus Accrual (ACCR)
 
 - [ ] **ACCR-01**: Новый клиент автоматически получает приветственный бонус (one-time, идемпотентно по событию онбординга/регистрации — без повторного начисления)
 - [ ] **ACCR-02**: Owner начисляет бонус клиенту вручную через owner-only backend API (покрывает акционные + реферальные гранты; admin-web UI НЕ строится — прецедент: засеянные промокоды)
-- [ ] **ACCR-03**: Каждое начисление пишется как аудируемое ledger-событие (новый LOCKED audit event, зарегистрирован ДО любого callsite per INFRA-15)
+- [x] **ACCR-03**: Каждое начисление пишется как аудируемое ledger-событие (новый LOCKED audit event, зарегистрирован ДО любого callsite per INFRA-15)
 
 ### Bonus Redemption (REDM)
 
@@ -74,10 +74,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | LOYL-01 | Phase 82 | Pending |
 | LOYL-02 | Phase 82 | Pending |
-| LOYL-03 | Phase 82 | Pending |
+| LOYL-03 | Phase 82 | Complete |
 | ACCR-01 | Phase 82 | Pending |
 | ACCR-02 | Phase 82 | Pending |
-| ACCR-03 | Phase 82 | Pending |
+| ACCR-03 | Phase 82 | Complete |
 | REDM-01 | Phase 83 | Pending |
 | REDM-02 | Phase 83 | Pending |
 | REDM-03 | Phase 83 | Pending |
