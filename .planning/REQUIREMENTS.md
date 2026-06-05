@@ -21,8 +21,8 @@ Requirements for this milestone. Each maps to a roadmap phase. All client-facing
 
 ### Bonus Redemption (REDM)
 
-- [ ] **REDM-01**: Клиент списывает бонусы в чекауте для уменьшения суммы к оплате; сервер авторитетно пересчитывает `discount_kopecks` (клиент не задаёт размер скидки) — D-06 не подрывается (скидка только server-side)
-- [ ] **REDM-02**: Списание бонусов записывается атомарно на `payment.succeeded` webhook, идемпотентно по `(online_payment_id)` (нет списания при неоплате/отмене; образец `promo_codes`)
+- [x] **REDM-01**: Клиент списывает бонусы в чекауте для уменьшения суммы к оплате; сервер авторитетно пересчитывает `discount_kopecks` (клиент не задаёт размер скидки) — D-06 не подрывается (скидка только server-side)
+- [x] **REDM-02**: Списание бонусов записывается атомарно на `payment.succeeded` webhook, идемпотентно по `(online_payment_id)` (нет списания при неоплате/отмене; образец `promo_codes`)
 - [ ] **REDM-03**: PWA `CheckoutSheet` показывает реальный баланс + контрол списания за флагом `clubBonuses` ON (mock `BONUS_PLACEHOLDER = { balance: 1080, toGold: 220 }` удалён)
 
 ### Real Autopay Charge (APAY)
@@ -78,8 +78,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACCR-01 | Phase 82 | Complete |
 | ACCR-02 | Phase 82 | Complete |
 | ACCR-03 | Phase 82 | Complete |
-| REDM-01 | Phase 83 | Pending |
-| REDM-02 | Phase 83 | Pending |
+| REDM-01 | Phase 83 | Complete |
+| REDM-02 | Phase 83 | Complete |
 | REDM-03 | Phase 83 | Pending |
 | APAY-01 | Phase 84 | Pending |
 | APAY-02 | Phase 84 | Pending |

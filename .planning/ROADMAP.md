@@ -142,7 +142,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 83-01-PLAN.md — Migration 0055 (loyalty_ledger.online_payment_id + partial UNIQUE + online_payments.loyalty_redeem_kopecks) + loyalty_redeemed LOCKED audit event pre-registered (count-lock → 103)
+- [x] 83-01-PLAN.md — Migration 0055 (loyalty_ledger.online_payment_id + partial UNIQUE + online_payments.loyalty_redeem_kopecks) + loyalty_redeemed LOCKED audit event pre-registered (count-lock → 103)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -232,6 +232,6 @@ Plans:
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
 | 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
-| 83. Bonus Redemption at Checkout | 0/3 | Planned | - |
+| 83. Bonus Redemption at Checkout | 1/3 | In Progress|  |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
