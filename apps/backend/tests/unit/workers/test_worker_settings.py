@@ -154,13 +154,18 @@ def test_worker_settings_functions_registered() -> None:
     daily slot materialization cron. List now has 12 entries.
 
     Phase 84 (Plan 84-02 APAY-01) appended ``charge_expiring_autopay`` — the
-    daily off-session autopay charge cron. List now has 13 entries.
+    daily off-session autopay charge cron. List had 13 entries.
+
+    Phase 84 (Plan 84-03 APAY-04) appended ``dispatch_autopay_failure_notification`` —
+    the decline-path failure notification ARQ task. List now has 14 entries.
     """
+    from app.modules.autopay_charges.tasks import dispatch_autopay_failure_notification
     from app.workers.scheduled.charge_expiring_autopay import charge_expiring_autopay
 
     assert expire_memberships in WorkerSettings.functions
     assert charge_expiring_autopay in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 13
+    assert dispatch_autopay_failure_notification in WorkerSettings.functions
+    assert len(WorkerSettings.functions) == 14
 
 
 def test_worker_settings_redis_settings_resolved() -> None:

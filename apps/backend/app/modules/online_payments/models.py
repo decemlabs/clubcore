@@ -246,8 +246,9 @@ class PaymentNotification(Base, UUIDPkMixin, TimestampMixin):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('payment_succeeded', 'refund_succeeded', "
-            "'payment_canceled', 'fiscal_failed')",
+            "'payment_canceled', 'fiscal_failed', 'autopay_charge_succeeded')",
             # NAMING_CONVENTION expands to ck_payment_notifications_kind
+            # Phase 84 APAY-04: 'autopay_charge_succeeded' added (migration 0057).
             name="kind",
         ),
         CheckConstraint(

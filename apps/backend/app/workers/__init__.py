@@ -97,7 +97,9 @@ from app.modules.auth.password_reset_token_model import (  # noqa: F401
 )
 from app.modules.autopay_charges.models import (  # noqa: F401
     AutopayCharge,  # Phase 84 APAY-03 — autopay_charges eager-import (REG-29-04)
+    AutopayChargeNotification,  # Phase 84 APAY-04 — autopay_charge_notifications (REG-29-04)
 )
+from app.modules.autopay_charges.tasks import dispatch_autopay_failure_notification
 from app.modules.fiscal_receipts.tasks import dispatch_fiscal_receipt
 from app.modules.online_payments.models import (  # noqa: F401
     PaymentNotification,  # Phase 52 — payment_notifications eager-import (REG-29-04)
@@ -168,6 +170,11 @@ class WorkerSettings:
         # SQL-level idempotency: ON CONFLICT (membership_id, period_end) DO NOTHING is the
         # real double-charge gate; unique=True is the second line of defence (Pitfall 4).
         charge_expiring_autopay,
+        # Phase 84 APAY-04 — decline-path failure notification task.
+        # Enqueued by charge_expiring_autopay post-commit for each declined charge.
+        # Keyed on autopay_charges.id (NOT online_payment_id — decline has no online_payments row).
+        # Idempotent via AutopayChargeNotification UNIQUE(autopay_charge_id, kind, channel).
+        dispatch_autopay_failure_notification,
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked

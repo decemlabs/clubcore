@@ -502,6 +502,9 @@ LOCKED_EMAIL_TEMPLATES: frozenset[str] = frozenset(
         "EMAIL_ONLINE_PAYMENT_REFUNDED",
         "EMAIL_ONLINE_PAYMENT_CANCELED",  # owner operator alert
         "EMAIL_FISCAL_RECEIPT_FAILED",  # owner operator alert
+        # Phase 84 — autopay outcome notifications (APAY-04):
+        "EMAIL_AUTOPAY_CHARGE_SUCCEEDED",
+        "EMAIL_AUTOPAY_CHARGE_FAILED",
     }
 )
 """Locked email template identifiers (Phase 41 INFRA-36 / D-41-11 / D-41-12).
