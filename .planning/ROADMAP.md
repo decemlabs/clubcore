@@ -105,7 +105,13 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   3. Новый клиент автоматически получает приветственный бонус ровно один раз (идемпотентно по событию онбординга/регистрации — повторное событие не начисляет повторно)
   4. Owner начисляет бонус произвольному клиенту через owner-only backend API (reception 403; admin-web UI отсутствует — прецедент засеянных промокодов); покрывает акционные + реферальные гранты
   5. Каждое начисление пишет аудируемое ledger-событие через новый LOCKED audit event, зарегистрированный ДО любого callsite (INFRA-15); count-lock guard-тесты обновлены
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 82-01-PLAN.md — Append-only loyalty_ledger schema (migration 0054) + loyalty_accrued LOCKED audit event registered before callsites (count-lock → 102)
+- [ ] 82-02-PLAN.md — Loyalty service + owner-only grant API + IDOR-safe client balance/history reads + welcome accrual callsite + integration tests
+- [ ] 82-03-PLAN.md — PWA LoyaltyBalanceCard + BonusHistorySheet behind clubBonuses flag + query hooks + Vitest
+
 **UI hint**: yes
 
 #### Phase 83: Bonus Redemption at Checkout
@@ -183,7 +189,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 79 → 80 → 81 → 81.1
+**Execution Order:** 79 → 80 → 81 → 81.1 → 82 → 83 → 84 → 85
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -191,7 +197,7 @@ Plans:
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
-| 82. Loyalty Foundation — Ledger + Balance + Accrual | 0/TBD | Not started | - |
+| 82. Loyalty Foundation — Ledger + Balance + Accrual | 0/3 | Not started | - |
 | 83. Bonus Redemption at Checkout | 0/TBD | Not started | - |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
