@@ -146,7 +146,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 83-02-PLAN.md — record_loyalty_redemption (idempotent + overdraft-clamped) + checkout clamp + webhook redemption write + promo-attribution fix + regression tests
+- [x] 83-02-PLAN.md — record_loyalty_redemption (idempotent + overdraft-clamped) + checkout clamp + webhook redemption write + promo-attribution fix + regression tests
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -232,6 +232,6 @@ Plans:
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
 | 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
-| 83. Bonus Redemption at Checkout | 1/3 | In Progress|  |
+| 83. Bonus Redemption at Checkout | 2/3 | In Progress|  |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
