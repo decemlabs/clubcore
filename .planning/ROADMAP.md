@@ -137,7 +137,21 @@ Plans:
   3. Anti-oracle return-screen invariant сохранён — return-экран не подтверждает результат списания/оплаты раньше webhook (D-06)
   4. PWA `CheckoutSheet` за флагом `clubBonuses` ON показывает реальный баланс + контрол списания; mock `BONUS_PLACEHOLDER = { balance: 1080, toGold: 220 }` удалён
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 83-01-PLAN.md — Migration 0055 (loyalty_ledger.online_payment_id + partial UNIQUE + online_payments.loyalty_redeem_kopecks) + loyalty_redeemed LOCKED audit event pre-registered (count-lock → 103)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 83-02-PLAN.md — record_loyalty_redemption (idempotent + overdraft-clamped) + checkout clamp + webhook redemption write + promo-attribution fix + regression tests
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 83-03-PLAN.md — PWA CheckoutSheet real-balance redemption wiring + clubBonuses flag ON + additive openapi.json/schema.d.ts regen
+
 **UI hint**: yes
 
 #### Phase 84: Real Autopay Charge
@@ -218,6 +232,6 @@ Plans:
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
 | 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
-| 83. Bonus Redemption at Checkout | 0/TBD | Not started | - |
+| 83. Bonus Redemption at Checkout | 0/3 | Planned | - |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
