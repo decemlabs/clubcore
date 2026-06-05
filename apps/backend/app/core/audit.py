@@ -237,6 +237,18 @@ The frozenset size grows 53 → 58.
   - trainer_time_off_cancelled          {time_off_id, trainer_id}
                                         # 'trainer' — emitted on time-off block deletion
 
+  ## v2.3 (Phase 82 lock — INFRA-15; emitted in Phase 82 loyalty service)
+  Loyalty accrual lifecycle (ACCR-01 welcome + ACCR-02 owner_grant):
+  Pre-registered BEFORE any callsite per INFRA-15 discipline.
+  Single event covers welcome + owner_grant (distinguished by entry_type/actor in payload).
+  - loyalty_accrued                     {client_id, entry_id, amount_kopecks,
+                                         entry_type, actor}
+                                        # 'loyalty' — `LoyaltyAccruedPayload`;
+                                        # entry_type: 'welcome' | 'owner_grant'
+                                        # actor: "welcome" (system) | "owner:<uuid>" (staff);
+                                        # emitted co-transactionally with the ledger INSERT.
+                                        # 'redemption' entry_type NOT emitted here (Phase 83).
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -443,6 +455,11 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("client_family_reuse_detected", "session"),
         ("client_session_revoked", "session"),
         ("client_me_updated", "client"),
+        # v2.3 (Phase 82 lock — INFRA-15; emitted in Phase 82 loyalty service)
+        # Loyalty accrual lifecycle (ACCR-01 welcome + ACCR-02 owner_grant):
+        # Pre-registered BEFORE any callsite per INFRA-15 discipline.
+        # Single event covers welcome + owner_grant (distinguished by entry_type/actor in payload).
+        ("loyalty_accrued", "loyalty"),
     }
 )
 

@@ -1266,6 +1266,32 @@ class TrainerTimeOffCancelledPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# v2.3 (Phase 82 lock — INFRA-15; emitted in Phase 82 loyalty service)
+# ---------------------------------------------------------------------------
+
+
+class LoyaltyAccruedPayload(BaseModel):
+    """Payload schema for ("loyalty_accrued", "loyalty") — Phase 82 ACCR-01/ACCR-02.
+
+    Single event for both welcome accrual and owner_grant (distinguished by
+    entry_type and actor fields in payload). Pre-registered BEFORE callsite
+    per INFRA-15 discipline.
+
+    actor: "welcome" for system-initiated welcome bonus (ACCR-01),
+           "owner:<uuid>" for owner-granted bonus (ACCR-02).
+    entry_type: 'redemption' NOT emitted here — Phase 83 owns the debit writer.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: UUID
+    entry_id: UUID
+    amount_kopecks: int
+    entry_type: Literal["welcome", "owner_grant"]  # 'redemption' not emitted here
+    actor: str  # "welcome" | "owner:<user_uuid>"
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -1359,4 +1385,6 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("recurring_slot_template_cancelled", "schedule_slot"): RecurringSlotTemplateCancelledPayload,
     ("trainer_time_off_created", "trainer"): TrainerTimeOffCreatedPayload,
     ("trainer_time_off_cancelled", "trainer"): TrainerTimeOffCancelledPayload,
+    # v2.3 (Phase 82 loyalty accrual — ACCR-01/ACCR-02):
+    ("loyalty_accrued", "loyalty"): LoyaltyAccruedPayload,
 }
