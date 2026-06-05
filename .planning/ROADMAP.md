@@ -166,7 +166,22 @@ Plans:
   3. Автосписание идемпотентно — повторные тики cron / рестарты контейнера не приводят к двойному charge; пропускаются неподходящие (нет consent / autopay off / нет активной карты / уже продлён)
   4. Исход автосписания (успех/ошибка) аудируется новым LOCKED audit event (зарегистрирован ДО callsite, INFRA-15) и клиент уведомляется через Telegram/email mirror с идемпотентностью через `channel` discriminator
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 84-01-PLAN.md — autopay_charges table (migration 0056) + YooKassa off-session create_payment extension + 2 LOCKED audit events pre-registered (INFRA-15, count-lock 103→105)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 84-02-PLAN.md — charge_expiring_autopay cron + eligibility/claim/off-session-charge service helper + WorkerSettings registration + webhook method='autopay' discriminator + full skip-matrix/double-charge/crash-idempotency/no-consent tests
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 84-03-PLAN.md — autopay success/failure notifications (Telegram + email mirror) channel-idempotent via claim_payment_notification + owner-signed copy/templates
+
+**UI hint**: no (pure backend)
 
 #### Phase 85: OpenAPI Handoff + Milestone Verification
 
