@@ -164,6 +164,7 @@ class YooKassaClient:
         return_url: str | None = None,
         metadata: dict[str, str] | None = None,
         save_payment_method: bool = False,
+        payment_method_id: str | None = None,
     ) -> YooKassaPaymentResult:
         """POST /v3/payments — caller-owned idempotency_key (D-48-11 + D-49-08).
 
@@ -208,36 +209,54 @@ class YooKassaClient:
                 "create_payment requires either customer_email or customer_phone; "
                 "neither was provided (invariant violation — phone is NOT NULL)"
             )
-        # CR-01/CR-02: caller can supply a per-payment return_url (client path bakes
-        # payment_id into the URL so PWA can poll status). Staff callers pass nothing
-        # → falls back to the shared settings.return_url (byte-identical behaviour).
-        confirmation_body: dict[str, Any]
-        if confirmation_type == "redirect":
-            confirmation_body = {
-                "type": "redirect",
-                "return_url": (
-                    return_url if return_url is not None else str(self._settings.return_url)
-                ),
+        body: dict[str, Any]
+        if payment_method_id is not None:
+            # Phase 84 APAY-02: off-session recurring charge body.
+            # ЮKassa requires payment_method_id + capture=True; NO confirmation block.
+            # NO save_payment_method key (byte-identical-when-absent discipline).
+            # The card token is NEVER logged (T-84-02 PII discipline).
+            body = {
+                "amount": {"value": kopecks_to_yookassa(amount_kopecks), "currency": "RUB"},
+                "description": description,
+                "capture": True,
+                "payment_method_id": payment_method_id,
+                "receipt": {
+                    "customer": customer_obj,
+                    "items": receipt_items,
+                    "tax_system_code": int(self._settings.tax_system_code),
+                },
             }
-        else:  # "qr"
-            confirmation_body = {"type": "qr"}
-        body: dict[str, Any] = {
-            "amount": {"value": kopecks_to_yookassa(amount_kopecks), "currency": "RUB"},
-            "description": description,
-            "capture": True,
-            "confirmation": confirmation_body,
-            "receipt": {
-                "customer": customer_obj,
-                "items": receipt_items,
-                "tax_system_code": int(self._settings.tax_system_code),
-            },
-        }
-        if metadata:
-            body["metadata"] = metadata
-        # Phase 79 PAYM-01: opt-in card saving — only add the key when True so
-        # the request body is byte-identical to today when False (no sentinel key).
-        if save_payment_method:
-            body["save_payment_method"] = True
+        else:
+            # CR-01/CR-02: caller can supply a per-payment return_url (client path bakes
+            # payment_id into the URL so PWA can poll status). Staff callers pass nothing
+            # → falls back to the shared settings.return_url (byte-identical behaviour).
+            confirmation_body: dict[str, Any]
+            if confirmation_type == "redirect":
+                confirmation_body = {
+                    "type": "redirect",
+                    "return_url": (
+                        return_url if return_url is not None else str(self._settings.return_url)
+                    ),
+                }
+            else:  # "qr"
+                confirmation_body = {"type": "qr"}
+            body = {
+                "amount": {"value": kopecks_to_yookassa(amount_kopecks), "currency": "RUB"},
+                "description": description,
+                "capture": True,
+                "confirmation": confirmation_body,
+                "receipt": {
+                    "customer": customer_obj,
+                    "items": receipt_items,
+                    "tax_system_code": int(self._settings.tax_system_code),
+                },
+            }
+            if metadata:
+                body["metadata"] = metadata
+            # Phase 79 PAYM-01: opt-in card saving — only add the key when True so
+            # the request body is byte-identical to today when False (no sentinel key).
+            if save_payment_method:
+                body["save_payment_method"] = True
         try:
             # idempotency_key may be a UUID (Phase 48 callsite) or a sha256 hex
             # string (Phase 49 D-49-08 deterministic key). ЮKassa Idempotence-Key
