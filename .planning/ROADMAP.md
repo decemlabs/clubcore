@@ -195,7 +195,12 @@ Plans:
   3. Staff-пути байт-идентичны `contract-freeze-v1.11.0` — `git diff --exit-code` drift gate зелёный на обоих артефактах; Redocly lint clean
   4. Milestone-gate green: backend pytest (incl. новые ledger/redemption/autopay race + idempotency тесты), mypy --strict, lint-imports (zero new `ignore_imports` где возможно, per D-20-MODULE), PWA vitest, no-edit guard на `permissions.py`/`can.ts`/`registry.ts`
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+**Wave 1**
+
+- [ ] 85-01-PLAN.md — Byte-stable openapi.json + schema.d.ts regen + `_v23Checks` forward-guards (3 new loyalty paths + checkout `loyaltyRedeemKopecks`) + full milestone-gate run (drift/Redocly/pytest/mypy/lint-imports/PWA/no-edit guard) with pre-existing-failure documentation
 
 ## Backlog
 
@@ -249,4 +254,4 @@ Plans:
 | 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
 | 83. Bonus Redemption at Checkout | 3/3 | Complete    | 2026-06-05 |
 | 84. Real Autopay Charge | 3/3 | Complete    | 2026-06-05 |
-| 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
+| 85. OpenAPI Handoff + Milestone Verification | 0/1 | Not started | - |
