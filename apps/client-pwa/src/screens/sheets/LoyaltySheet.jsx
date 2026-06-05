@@ -17,8 +17,23 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx'
 import { SubSheetHeader } from '@/screens/sheets/ProfileExtraSheets.jsx'
 import { useClientLoyaltyBalance, useClientLoyaltyHistory } from '@/data'
 import { formatMoney } from '@/utils/format.js'
-import { format, parseISO } from 'date-fns'
-import { ru } from 'date-fns/locale/ru'
+
+// ─── Date formatter — ISO datetime → Russian long date (no date-fns, D-82-01) ─
+// Uses Intl.DateTimeFormat with ru locale, timezone Europe/Moscow.
+// Accepts full ISO datetime strings (e.g. "2026-06-01T10:00:00Z").
+function formatBonusDate(isoString) {
+  if (!isoString) return ''
+  try {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Europe/Moscow',
+    }).format(new Date(isoString))
+  } catch {
+    return isoString
+  }
+}
 
 // ─── Type label map ───────────────────────────────────────────────────────────
 const ENTRY_TYPE_LABELS = {
@@ -45,7 +60,7 @@ function BonusRow({ item }) {
           {ENTRY_TYPE_LABELS[item.type] ?? item.type}
         </div>
         <div className="t-small" style={{ marginTop: 1, color: 'var(--text-2)' }}>
-          {format(parseISO(item.createdAt), 'd MMMM yyyy', { locale: ru })}
+          {formatBonusDate(item.createdAt)}
         </div>
       </div>
       <div style={{ fontSize: 13, fontWeight: 700, color: isAccrual ? 'var(--accent-deep)' : 'var(--danger)' }}>
@@ -150,12 +165,21 @@ export function BonusHistorySheet({ onClose }) {
     setPage(p => p + 1)
   }
 
-  // Group items by month for display
+  // Group items by month for display (Intl-based, no date-fns)
   const groups = React.useMemo(() => {
     if (allItems.length === 0) return []
     const map = new Map()
     allItems.forEach(item => {
-      const monthKey = format(parseISO(item.createdAt), 'LLLL yyyy', { locale: ru })
+      let monthKey = ''
+      try {
+        monthKey = new Intl.DateTimeFormat('ru-RU', {
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'Europe/Moscow',
+        }).format(new Date(item.createdAt))
+      } catch {
+        monthKey = item.createdAt.slice(0, 7)
+      }
       if (!map.has(monthKey)) map.set(monthKey, [])
       map.get(monthKey).push(item)
     })
