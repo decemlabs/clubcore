@@ -34,6 +34,7 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     SmallInteger,
@@ -124,6 +125,7 @@ class Client(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
         nullable=True,
     )
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
     notif_prefs: Mapped[dict[str, Any] | None] = mapped_column(

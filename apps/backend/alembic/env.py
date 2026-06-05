@@ -40,6 +40,8 @@ import app.modules.schedule.models  # Phase 38 SLOT-01 / 0016
 import app.modules.trainers.models  # Phase 31 TRN-01
 import app.modules.visits.models
 import app.modules.payment_methods.models  # Phase 79 PAYM-01..04 / 0052
+import app.modules.promo_codes.models  # Phase 999.4 D-04/D-07 / 0046 — pre-existing env.py gap fixed here
+import app.modules.loyalty.models  # Phase 82 LOYL-03 / 0054
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
@@ -91,6 +93,11 @@ def _include_object(
             # column at the ORM layer, so autogenerate sees a column-vs-expr
             # mismatch. Skip — same D-25-05 lineage as the partial-index entries.
             "ix_email_send_log_to_addr_recorded",
+            # Phase 82 LOYL-03 / 0054: loyalty_ledger partial UNIQUE + plain index.
+            # Both declared with literal names (no op.f()) per 0034/0037/0046 precedent;
+            # autogenerate cannot reconcile literal vs. convention names, so we skip them.
+            "uq_loyalty_ledger_welcome",
+            "ix_loyalty_ledger_client_id",
         )
     )
 

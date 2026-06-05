@@ -50,6 +50,11 @@ modules =
     # layer). Router endpoints live in client_portal/router.py; service + repository
     # under payment_methods/. unmatched_ignore_imports_alerting = warn keeps the build
     # green for ignore edges registered before Phase 79 follow-on plans ship bodies.
+    app.modules.loyalty
+    # Phase 82 LOYL-03 — loyalty module registered per INFRA-15 discipline.
+    # Welcome accrual (ACCR-01) called from clients.service via ignore_imports edge in Plan 02.
+    # Client read endpoints and owner-grant endpoint registered in Plan 02.
+    # Zero new ignore_imports edges in Plan 01 per D-20-MODULE.
     app.modules.client_auth
     # Phase 68 CAUTH-01..06 / CISO-01..05 — client auth module registered here.
     # Cross-module reads (auth.exceptions, auth.models for OtpCode, clients.models
