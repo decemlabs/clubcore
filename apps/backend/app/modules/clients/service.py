@@ -59,6 +59,7 @@ from app.modules.clients.schemas import (
     ClientResponse,
     ClientUpdateRequest,
 )
+from app.modules.loyalty import service as loyalty_service
 
 
 async def list_clients(
@@ -140,6 +141,12 @@ async def create_client(
         has_email=client.email is not None,
         has_telegram=client.telegram_user_id is not None,
     )
+
+    # Phase 82 ACCR-01 — welcome bonus accrual co-transactionally with client_created.
+    # Placed AFTER client_created audit emit, BEFORE session.commit() (same UoW).
+    # Idempotent: pg_insert on_conflict_do_nothing on uq_loyalty_ledger_welcome.
+    await loyalty_service.accrue_welcome_bonus(session, client_id=client.id)
+
     await session.commit()
     return ClientResponse.model_validate(client)
 

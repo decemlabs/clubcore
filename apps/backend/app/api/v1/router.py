@@ -102,6 +102,14 @@ from app.modules.client_portal.router import router as client_portal_router  # n
 
 v1.include_router(client_portal_router, prefix="/client")
 
+# Phase 82 LOYL-01/LOYL-02 — loyalty client reads.
+# Mounted at /api/v1/client (same prefix as client_portal_router) to expose
+# /api/v1/client/loyalty/balance and /api/v1/client/loyalty/history.
+# Separate router avoids a client_portal→loyalty cross-module edge (D-20-MODULE).
+from app.modules.loyalty.router import router as loyalty_router  # noqa: E402
+
+v1.include_router(loyalty_router, prefix="/client")
+
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
 # /api/v1/_internal/* with their own auth model (HMAC signature in

@@ -45,6 +45,9 @@ from app.modules.clients.schemas import (
     ClientResponse,
     ClientUpdateRequest,
 )
+from app.modules.loyalty import service as loyalty_service
+from app.modules.loyalty.permissions import require_owner_for_loyalty_grant
+from app.modules.loyalty.schemas import ClientLoyaltyGrantResponse, LoyaltyGrantRequest
 
 router = APIRouter(tags=["Clients"])
 
@@ -132,3 +135,29 @@ async def soft_delete_client(
     """
     await service.soft_delete_client(session, actor, client_id)
     return None
+
+
+@router.post(
+    "/{client_id}/loyalty/grant",
+    response_model=ResponseEnvelope[ClientLoyaltyGrantResponse],
+    status_code=status.HTTP_201_CREATED,
+    operation_id="owner_grant_loyalty",
+    summary="Owner-only: manually grant bonus kopecks to a client (ACCR-02)",
+)
+async def owner_grant_loyalty(
+    client_id: UUID,
+    payload: LoyaltyGrantRequest,
+    actor: Annotated[CurrentUser, Depends(require_owner_for_loyalty_grant())],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientLoyaltyGrantResponse]:
+    """Grant loyalty bonus to a client (owner-only, ACCR-02).
+
+    Reception → 403 via require_owner_for_loyalty_grant (+ rbac_forbidden audit).
+    RBAC-04 ordering: auth → custom_perm → verify_csrf → get_db.
+    Router owns session.commit() (caller-owns-txn discipline — service flushes only).
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await loyalty_service.owner_grant_loyalty(session, actor, client_id, payload)
+    await session.commit()
+    return envelope(result)

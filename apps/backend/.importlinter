@@ -208,6 +208,14 @@ ignore_imports =
     # for type annotations on the three payment-method endpoints (GET/DELETE/PATCH).
     # Schemas-only import: no service/repository logic crosses the boundary here.
     app.modules.client_portal.router -> app.modules.payment_methods.schemas
+    # Phase 82 ACCR-01 — welcome bonus callsite in clients.service (co-transactional UoW).
+    # clients.service → loyalty.service: accrue_welcome_bonus called after client_created audit.
+    app.modules.clients.service -> app.modules.loyalty.service
+    # Phase 82 ACCR-02 — owner-grant endpoint on clients.router imports loyalty module.
+    # Narrow-scope: only router + schemas + permissions cross the boundary (D-20-MODULE).
+    app.modules.clients.router -> app.modules.loyalty.permissions
+    app.modules.clients.router -> app.modules.loyalty.service
+    app.modules.clients.router -> app.modules.loyalty.schemas
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear
