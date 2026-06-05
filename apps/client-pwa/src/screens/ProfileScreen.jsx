@@ -15,6 +15,7 @@ import {
   useClientPaymentHistory,
   useClientWeeklyActivity,
 } from '@/data';
+import { LoyaltyBalanceCard, BonusHistorySheet } from './sheets/LoyaltySheet.jsx';
 
 // ─── Deferred-feature scaffolding (BUILT, HIDDEN) ─────────────────────────
 // Flip a flag to true when the corresponding backend data lands.
@@ -28,6 +29,7 @@ const PROFILE_FEATURE_FLAGS = {
   tenureBadge:    false,
   weeksStat:      false,
   linkedCard:     true,   // PAYM-05: wired to CardSheet + payment-method API
+  clubBonuses:    true,   // LOYL-01/02 (Phase 82): wired to GET /client/loyalty/balance + history
 };
 
 // ─── Membership adapter — shared single source of truth (WR-05) ────────────
@@ -71,6 +73,7 @@ function useCountUp(target) {
 
 export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenReferral, onOpenGymInfo, onOpenVisitHistory, onOpenTrainingHistory }) => {
   const [tab, setTab] = React.useState('visits');
+  const [bonusHistoryOpen, setBonusHistoryOpen] = React.useState(false);
 
   const { data: homeData } = useClientHome();
   const { data: me } = useClientMe();
@@ -300,6 +303,13 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
           </div>
         )}
 
+        {/* Loyalty balance card — wired to GET /client/loyalty/balance (LOYL-01, Phase 82) */}
+        {PROFILE_FEATURE_FLAGS.clubBonuses && (
+          <div style={{ padding: '0 16px 18px' }}>
+            <LoyaltyBalanceCard onOpen={() => setBonusHistoryOpen(true)} />
+          </div>
+        )}
+
         {/* Quick action tiles */}
         <div style={{ padding: '0 16px 18px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {/* Referral tile — coupon style with dashed divider */}
@@ -378,6 +388,11 @@ export const ProfileScreen = ({ tweaks, onOpenSettings, onOpenPlans, onOpenRefer
 
         <div style={{ height: 24 }} />
       </div>
+
+      {/* Bonus history sub-sheet — LOYL-02 (Phase 82) */}
+      {bonusHistoryOpen && (
+        <BonusHistorySheet onClose={() => setBonusHistoryOpen(false)} />
+      )}
     </div>
   );
 };
