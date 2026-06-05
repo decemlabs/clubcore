@@ -58,20 +58,14 @@ class AutopayCharge(Base, UUIDPkMixin, TimestampMixin):
         nullable=False,
     )
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
-    status: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default=text("'pending'")
-    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
     amount_kopecks: Mapped[int] = mapped_column(Integer, nullable=False)
     yookassa_payment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Links the off-session online_payments row (Plan 02 writes this column on ok path).
     # NO FK to keep modules-independent (D-54-08 — cross-module column, raw SQL reads).
-    online_payment_id: Mapped[UUIDType | None] = mapped_column(
-        PgUUID(as_uuid=True), nullable=True
-    )
+    online_payment_id: Mapped[UUIDType | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    charged_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    charged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(

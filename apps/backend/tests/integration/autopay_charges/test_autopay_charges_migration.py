@@ -30,7 +30,6 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 # ---------------------------------------------------------------------------
 # Seed helpers
 # ---------------------------------------------------------------------------
@@ -204,7 +203,10 @@ async def test_0056_autopay_charge_notifications_table_exists_with_expected_colu
 async def test_0056_autopay_charge_notifications_unique_guard(
     db_session: AsyncSession,
 ) -> None:
-    """UNIQUE(autopay_charge_id, kind, channel) must raise IntegrityError on duplicate (T-84-04b)."""
+    """UNIQUE(autopay_charge_id, kind, channel) must raise IntegrityError on duplicate.
+
+    T-84-04b: dedup guard for the per-channel failure-notification claim store.
+    """
     membership_id = await _seed_membership(db_session)
 
     # Insert the parent charge row
