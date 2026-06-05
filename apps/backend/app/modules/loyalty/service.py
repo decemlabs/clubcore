@@ -2,6 +2,13 @@
 
 No session.commit() — caller-owns-txn (D-32-10/D-49-19).
 All reads use raw SQL text() — no cross-module ORM import of Client (D-54-08).
+
+Idempotency note (welcome accrual):
+  uq_loyalty_ledger_welcome is a partial UNIQUE INDEX (not a named UNIQUE CONSTRAINT).
+  PostgreSQL ON CONFLICT ON CONSTRAINT works only for named constraints; for partial
+  unique indexes we must use index_elements + index_where. We conflict on
+  (client_id) WHERE entry_type = 'welcome' — exactly matching the migration's
+  op.create_index partial predicate.
 """
 
 from __future__ import annotations
@@ -9,7 +16,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from sqlalchemy import text
+from sqlalchemy import literal_column, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,9 +71,12 @@ async def accrue_welcome_bonus(
 ) -> None:
     """Insert a one-time welcome accrual of WELCOME_BONUS_KOPECKS (ACCR-01).
 
-    Idempotency: uses pg_insert on_conflict_do_nothing on constraint
-    "uq_loyalty_ledger_welcome" (partial UNIQUE on client_id WHERE
-    entry_type='welcome'). The RETURNING clause gating ensures we only emit
+    Idempotency: uses pg_insert on_conflict_do_nothing with index_elements +
+    index_where matching the partial UNIQUE INDEX uq_loyalty_ledger_welcome
+    (client_id WHERE entry_type='welcome'). Using index_elements instead of
+    constraint= because the migration creates a partial UNIQUE INDEX (not a
+    named UNIQUE CONSTRAINT) — PostgreSQL ON CONFLICT ON CONSTRAINT only works
+    for named constraints. The RETURNING clause gating ensures we only emit
     the loyalty_accrued audit event when a row was actually inserted — replay
     calls return None from scalar_one_or_none() and emit nothing.
 
@@ -81,7 +91,10 @@ async def accrue_welcome_bonus(
             category=None,
             reason=None,
         )
-        .on_conflict_do_nothing(constraint="uq_loyalty_ledger_welcome")
+        .on_conflict_do_nothing(
+            index_elements=["client_id"],
+            index_where=literal_column("entry_type") == "welcome",
+        )
         .returning(LoyaltyLedger.id)
     )
     result = await session.execute(stmt)
