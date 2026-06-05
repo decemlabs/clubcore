@@ -464,6 +464,12 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # Loyalty redemption debit (REDM-02): emitted when the payment.succeeded webhook writes
         # the negative ledger row. amount_kopecks is always negative in the payload.
         ("loyalty_redeemed", "loyalty"),
+        # v2.3 (Phase 84 lock — INFRA-15; registered BEFORE any callsite in
+        # charge_expiring_autopay / autopay service — callsites land in Plan 02)
+        # Autopay charge lifecycle (APAY-01 cron initiated + APAY-03 failure):
+        # Pre-registered BEFORE any callsite per INFRA-15 discipline.
+        ("autopay_charge_initiated", "autopay"),
+        ("autopay_charge_failed", "autopay"),
     }
 )
 

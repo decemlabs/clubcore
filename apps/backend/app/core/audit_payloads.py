@@ -1311,6 +1311,44 @@ class LoyaltyRedeemedPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Autopay charge lifecycle (Phase 84 APAY-01/APAY-03)
+# Pre-registered BEFORE any callsite per INFRA-15 discipline.
+# Callsites land in Plan 84-02 (charge_expiring_autopay cron).
+# ---------------------------------------------------------------------------
+
+
+class AutopayChargeInitiatedPayload(BaseModel):
+    """Payload schema for ("autopay_charge_initiated", "autopay") — Phase 84 APAY-01.
+
+    Emitted by the charge_expiring_autopay cron when a charge claim is inserted
+    and the YooKassa call is made. resource_id = autopay_charges.id.
+    Pre-registered BEFORE callsite per INFRA-15 discipline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    membership_id: UUID
+    amount_kopecks: int
+    period_end: str  # ISO date string (JSONB-serialisable, no date type)
+
+
+class AutopayChargeFailedPayload(BaseModel):
+    """Payload schema for ("autopay_charge_failed", "autopay") — Phase 84 APAY-03.
+
+    Emitted on a synchronous YooKassa decline/error.
+    failure_reason carries the YooKassaPaymentResult.classification or error_code.
+    Pre-registered BEFORE callsite per INFRA-15 discipline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    membership_id: UUID
+    amount_kopecks: int
+    period_end: str  # ISO date string
+    failure_reason: str
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -1409,4 +1447,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # v2.3 (Phase 83 loyalty redemption debit — REDM-02 / INFRA-15):
     # Pre-registered BEFORE the webhook callsite (Plan 83-02).
     ("loyalty_redeemed", "loyalty"): LoyaltyRedeemedPayload,
+    # v2.3 (Phase 84 autopay charge lifecycle — APAY-01/APAY-03 / INFRA-15):
+    # Pre-registered BEFORE any callsite (callsites land in Plan 84-02).
+    ("autopay_charge_initiated", "autopay"): AutopayChargeInitiatedPayload,
+    ("autopay_charge_failed", "autopay"): AutopayChargeFailedPayload,
 }
