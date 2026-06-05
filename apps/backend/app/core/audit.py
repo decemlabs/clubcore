@@ -460,6 +460,10 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # Pre-registered BEFORE any callsite per INFRA-15 discipline.
         # Single event covers welcome + owner_grant (distinguished by entry_type/actor in payload).
         ("loyalty_accrued", "loyalty"),
+        # v2.3 (Phase 83 lock — INFRA-15; registered BEFORE the webhook callsite written in Plan 02)
+        # Loyalty redemption debit (REDM-02): emitted when the payment.succeeded webhook writes
+        # the negative ledger row. amount_kopecks is always negative in the payload.
+        ("loyalty_redeemed", "loyalty"),
     }
 )
 

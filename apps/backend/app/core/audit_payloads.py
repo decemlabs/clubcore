@@ -1291,6 +1291,25 @@ class LoyaltyAccruedPayload(BaseModel):
     actor: str  # "welcome" | "owner:<user_uuid>"
 
 
+class LoyaltyRedeemedPayload(BaseModel):
+    """Payload schema for ("loyalty_redeemed", "loyalty") — Phase 83 REDM-02.
+
+    Emitted from the payment.succeeded webhook when the loyalty redemption debit row
+    is written to loyalty_ledger. Pre-registered BEFORE the webhook callsite per
+    INFRA-15 discipline (callsite written in Plan 83-02).
+
+    amount_kopecks is ALWAYS negative — it is the signed debit amount.
+    online_payment_id links the debit to the specific payment (idempotency anchor).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: UUID
+    entry_id: UUID
+    amount_kopecks: int  # always negative — the debit; positive values are a bug
+    online_payment_id: UUID
+
+
 # ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
@@ -1387,4 +1406,7 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     ("trainer_time_off_cancelled", "trainer"): TrainerTimeOffCancelledPayload,
     # v2.3 (Phase 82 loyalty accrual — ACCR-01/ACCR-02):
     ("loyalty_accrued", "loyalty"): LoyaltyAccruedPayload,
+    # v2.3 (Phase 83 loyalty redemption debit — REDM-02 / INFRA-15):
+    # Pre-registered BEFORE the webhook callsite (Plan 83-02).
+    ("loyalty_redeemed", "loyalty"): LoyaltyRedeemedPayload,
 }
