@@ -889,6 +889,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/loyalty/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current bonus balance for the authenticated client (LOYL-01; IDOR-safe)
+         * @description Return the SUM fold balance for the principal's client only.
+         *
+         *     D-20-IDOR: client_id sourced from require_client() principal — never from URL.
+         *     D-69-03: empty ledger returns 200/{ balanceKopecks: 0 }, never 404.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_loyalty_balance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/loyalty/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated loyalty ledger history for the authenticated client (LOYL-02)
+         * @description Return paginated loyalty rows (signed amountKopecks, DESC order) for the principal.
+         *
+         *     D-20-IDOR: client_id from require_client() principal only.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_list_loyalty_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/me": {
         parameters: {
             query?: never;
@@ -1377,6 +1424,31 @@ export interface paths {
         get: operations["list_bookings_for_client"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{client_id}/loyalty/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner-only: manually grant bonus kopecks to a client (ACCR-02)
+         * @description Grant loyalty bonus to a client (owner-only, ACCR-02).
+         *
+         *     Reception → 403 via require_owner_for_loyalty_grant (+ rbac_forbidden audit).
+         *     RBAC-04 ordering: auth → custom_perm → verify_csrf → get_db.
+         *     Router owns session.commit() (caller-owns-txn discipline — service flushes only).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["owner_grant_loyalty"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3703,6 +3775,56 @@ export interface components {
             nextBooking: components["schemas"]["ClientNextBookingResponse"] | null;
         };
         /**
+         * ClientLoyaltyBalanceResponse
+         * @description GET /client/loyalty/balance payload (LOYL-01).
+         *
+         *     Wire: { balanceKopecks: int } — SUM fold over loyalty_ledger for the principal.
+         *     Returns 0 when no rows exist (D-69-03: empty own-scope is 200/0, never 404).
+         */
+        ClientLoyaltyBalanceResponse: {
+            /** Balancekopecks */
+            balanceKopecks: number;
+        };
+        /**
+         * ClientLoyaltyGrantResponse
+         * @description POST /clients/{id}/loyalty/grant response payload (ACCR-02).
+         *
+         *     Wire: { entryId, balanceKopecks }
+         *     balanceKopecks is the new client balance after the grant.
+         */
+        ClientLoyaltyGrantResponse: {
+            /** Balancekopecks */
+            balanceKopecks: number;
+            /**
+             * Entryid
+             * Format: uuid
+             */
+            entryId: string;
+        };
+        /**
+         * ClientLoyaltyHistoryItem
+         * @description Single ledger row for the paginated history endpoint (LOYL-02).
+         *
+         *     Wire: { id, type, amountKopecks, createdAt }
+         *     amountKopecks is signed: positive = accrual, negative = redemption (Phase 83).
+         */
+        ClientLoyaltyHistoryItem: {
+            /** Amountkopecks */
+            amountKopecks: number;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+        };
+        /**
          * ClientMeResponse
          * @description GET /client/me profile payload — includes onboarding + body-metrics fields (Phase 999.5).
          *
@@ -4232,6 +4354,25 @@ export interface components {
             user: components["schemas"]["UserPublic"];
         };
         /**
+         * LoyaltyGrantRequest
+         * @description Owner-only manual loyalty grant request body (ACCR-02).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     amount_kopecks must be > 0 (service raises 422 on <= 0).
+         *     category covers promotional, referral (manual, not automated), or manual grants.
+         */
+        LoyaltyGrantRequest: {
+            /** Amountkopecks */
+            amountKopecks: number;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "promo" | "referral" | "manual";
+            /** Reason */
+            reason: string;
+        };
+        /**
          * MeResponse
          * @description GET /api/v1/auth/me response body (wrapped in ResponseEnvelope).
          */
@@ -4581,6 +4722,17 @@ export interface components {
         PaginatedData_ClientAvailableSlotItem_: {
             /** Items */
             items: components["schemas"]["ClientAvailableSlotItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedData[ClientLoyaltyHistoryItem] */
+        PaginatedData_ClientLoyaltyHistoryItem_: {
+            /** Items */
+            items: components["schemas"]["ClientLoyaltyHistoryItem"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -5368,6 +5520,14 @@ export interface components {
         ResponseEnvelope_ClientHomeResponse_: {
             data: components["schemas"]["ClientHomeResponse"];
         };
+        /** ResponseEnvelope[ClientLoyaltyBalanceResponse] */
+        ResponseEnvelope_ClientLoyaltyBalanceResponse_: {
+            data: components["schemas"]["ClientLoyaltyBalanceResponse"];
+        };
+        /** ResponseEnvelope[ClientLoyaltyGrantResponse] */
+        ResponseEnvelope_ClientLoyaltyGrantResponse_: {
+            data: components["schemas"]["ClientLoyaltyGrantResponse"];
+        };
         /** ResponseEnvelope[ClientMeResponse] */
         ResponseEnvelope_ClientMeResponse_: {
             data: components["schemas"]["ClientMeResponse"];
@@ -5436,6 +5596,10 @@ export interface components {
         /** ResponseEnvelope[PaginatedData[ClientAvailableSlotItem]] */
         ResponseEnvelope_PaginatedData_ClientAvailableSlotItem__: {
             data: components["schemas"]["PaginatedData_ClientAvailableSlotItem_"];
+        };
+        /** ResponseEnvelope[PaginatedData[ClientLoyaltyHistoryItem]] */
+        ResponseEnvelope_PaginatedData_ClientLoyaltyHistoryItem__: {
+            data: components["schemas"]["PaginatedData_ClientLoyaltyHistoryItem_"];
         };
         /** ResponseEnvelope[PaginatedData[ClientNextBookingResponse]] */
         ResponseEnvelope_PaginatedData_ClientNextBookingResponse__: {
@@ -7227,6 +7391,50 @@ export interface operations {
             };
         };
     };
+    client_get_loyalty_balance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientLoyaltyBalanceResponse_"];
+                };
+            };
+        };
+    };
+    client_list_loyalty_history: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_ClientLoyaltyHistoryItem__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
     client_get_me: {
         parameters: {
             query?: never;
@@ -7748,6 +7956,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_BookingResponse__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    owner_grant_loyalty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoyaltyGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientLoyaltyGrantResponse_"];
                 };
             };
             422: components["responses"]["422_ValidationError"];

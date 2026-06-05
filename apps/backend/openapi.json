@@ -1087,6 +1087,71 @@
         "title": "ClientHomeResponse",
         "type": "object"
       },
+      "ClientLoyaltyBalanceResponse": {
+        "description": "GET /client/loyalty/balance payload (LOYL-01).\n\nWire: { balanceKopecks: int } — SUM fold over loyalty_ledger for the principal.\nReturns 0 when no rows exist (D-69-03: empty own-scope is 200/0, never 404).",
+        "properties": {
+          "balanceKopecks": {
+            "title": "Balancekopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "balanceKopecks"
+        ],
+        "title": "ClientLoyaltyBalanceResponse",
+        "type": "object"
+      },
+      "ClientLoyaltyGrantResponse": {
+        "description": "POST /clients/{id}/loyalty/grant response payload (ACCR-02).\n\nWire: { entryId, balanceKopecks }\nbalanceKopecks is the new client balance after the grant.",
+        "properties": {
+          "balanceKopecks": {
+            "title": "Balancekopecks",
+            "type": "integer"
+          },
+          "entryId": {
+            "format": "uuid",
+            "title": "Entryid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entryId",
+          "balanceKopecks"
+        ],
+        "title": "ClientLoyaltyGrantResponse",
+        "type": "object"
+      },
+      "ClientLoyaltyHistoryItem": {
+        "description": "Single ledger row for the paginated history endpoint (LOYL-02).\n\nWire: { id, type, amountKopecks, createdAt }\namountKopecks is signed: positive = accrual, negative = redemption (Phase 83).",
+        "properties": {
+          "amountKopecks": {
+            "title": "Amountkopecks",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "amountKopecks",
+          "createdAt"
+        ],
+        "title": "ClientLoyaltyHistoryItem",
+        "type": "object"
+      },
       "ClientMeResponse": {
         "description": "GET /client/me profile payload — includes onboarding + body-metrics fields (Phase 999.5).\n\ncamelCase wire via alias_generator=to_camel on ResponseData base:\n  first_name → firstName, last_name → lastName, height_cm → heightCm,\n  weight_kg → weightKg, onboarding_completed_at → onboardingCompletedAt.",
         "properties": {
@@ -2234,6 +2299,36 @@
         "title": "LoginResponse",
         "type": "object"
       },
+      "LoyaltyGrantRequest": {
+        "additionalProperties": false,
+        "description": "Owner-only manual loyalty grant request body (ACCR-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\namount_kopecks must be > 0 (service raises 422 on <= 0).\ncategory covers promotional, referral (manual, not automated), or manual grants.",
+        "properties": {
+          "amountKopecks": {
+            "title": "Amountkopecks",
+            "type": "integer"
+          },
+          "category": {
+            "enum": [
+              "promo",
+              "referral",
+              "manual"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amountKopecks",
+          "reason",
+          "category"
+        ],
+        "title": "LoyaltyGrantRequest",
+        "type": "object"
+      },
       "MeResponse": {
         "description": "GET /api/v1/auth/me response body (wrapped in ResponseEnvelope).",
         "properties": {
@@ -2925,6 +3020,37 @@
           "pageSize"
         ],
         "title": "PaginatedData[ClientAvailableSlotItem]",
+        "type": "object"
+      },
+      "PaginatedData_ClientLoyaltyHistoryItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientLoyaltyHistoryItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[ClientLoyaltyHistoryItem]",
         "type": "object"
       },
       "PaginatedData_ClientNextBookingResponse_": {
@@ -4563,6 +4689,30 @@
         "title": "ResponseEnvelope[ClientHomeResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_ClientLoyaltyBalanceResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientLoyaltyBalanceResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientLoyaltyBalanceResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientLoyaltyGrantResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientLoyaltyGrantResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientLoyaltyGrantResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientMeResponse_": {
         "properties": {
           "data": {
@@ -4766,6 +4916,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PaginatedData[ClientAvailableSlotItem]]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PaginatedData_ClientLoyaltyHistoryItem__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_ClientLoyaltyHistoryItem_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[ClientLoyaltyHistoryItem]]",
         "type": "object"
       },
       "ResponseEnvelope_PaginatedData_ClientNextBookingResponse__": {
@@ -8052,6 +8214,78 @@
         ]
       }
     },
+    "/api/v1/client/loyalty/balance": {
+      "get": {
+        "description": "Return the SUM fold balance for the principal's client only.\n\nD-20-IDOR: client_id sourced from require_client() principal — never from URL.\nD-69-03: empty ledger returns 200/{ balanceKopecks: 0 }, never 404.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_loyalty_balance",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientLoyaltyBalanceResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Current bonus balance for the authenticated client (LOYL-01; IDOR-safe)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/loyalty/history": {
+      "get": {
+        "description": "Return paginated loyalty rows (signed amountKopecks, DESC order) for the principal.\n\nD-20-IDOR: client_id from require_client() principal only.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_list_loyalty_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_ClientLoyaltyHistoryItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Paginated loyalty ledger history for the authenticated client (LOYL-02)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
     "/api/v1/client/me": {
       "get": {
         "description": "GET /client/me — own profile read (Phase 999.5 D-08).\n\nD-20-IDOR: write is scoped to client.id from require_client() — never reads\na client_id from the request. Soft-deleted client → 404-collapse (D-20-IDOR).\nNo CSRF dep — GET is a safe method (RBAC-04).\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
@@ -8936,6 +9170,53 @@
         "summary": "List bookings for a single client (reception+owner; paginated; from/to/status filters; default ±30d Moscow)",
         "tags": [
           "Bookings"
+        ]
+      }
+    },
+    "/api/v1/clients/{client_id}/loyalty/grant": {
+      "post": {
+        "description": "Grant loyalty bonus to a client (owner-only, ACCR-02).\n\nReception → 403 via require_owner_for_loyalty_grant (+ rbac_forbidden audit).\nRBAC-04 ordering: auth → custom_perm → verify_csrf → get_db.\nRouter owns session.commit() (caller-owns-txn discipline — service flushes only).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_grant_loyalty",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoyaltyGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientLoyaltyGrantResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Owner-only: manually grant bonus kopecks to a client (ACCR-02)",
+        "tags": [
+          "Clients"
         ]
       }
     },

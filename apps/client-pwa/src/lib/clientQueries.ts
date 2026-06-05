@@ -778,7 +778,9 @@ export function useClientLoyaltyHistory(page = 1) {
   return useQuery({
     queryKey: clientPortalKeys.loyaltyHistory(page),
     queryFn: async () => {
-      const res = await clientRequest('get', `/api/v1/client/loyalty/history?page=${page}`)
+      const res = await clientRequest('get', '/api/v1/client/loyalty/history', {
+        query: { page },
+      })
       return (res as { data: PaginatedResult<LoyaltyHistoryItem> }).data
     },
     staleTime: 30_000,
