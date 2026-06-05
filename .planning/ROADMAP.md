@@ -17,6 +17,7 @@
 - ✅ **v2.0 Frontend Integration — Client PWA** — Phases 68-74 + 999.3/999.4/999.5 (shipped 2026-06-02) — see [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md)
 - ✅ **v2.1 Client PWA — Fill the Gaps** — Phases 75-78 (shipped 2026-06-02) — see [milestones/v2.1-ROADMAP.md](milestones/v2.1-ROADMAP.md)
 - ✅ **v2.2 Membership self-service depth** — Phases 79-81 + 81.1 (shipped 2026-06-03) — see [milestones/v2.2-ROADMAP.md](milestones/v2.2-ROADMAP.md)
+- 🚧 **v2.3 Loyalty / Club Bonuses + Real Autopay** — Phases 82-85 (in progress)
 
 ## Phases
 
@@ -88,6 +89,59 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
+### 🚧 v2.3 Loyalty / Club Bonuses + Real Autopay (In Progress)
+
+**Milestone Goal:** Дать клиенту бонусный баланс (event-based начисление + server-authoritative списание скидкой в чекауте) и закрыть реальный off-session autopay-leg, отложенный из v2.2 (off-session charge по сохранённой карте на cron для истекающих абонементов). Всё под `require_client()`; frozen `apps/admin-web` staff-контракт байт-в-байт цел (drift gate зелёный). Earning-модель: welcome/promo + ручной owner-грант через owner-only backend API (NO admin-web UI). APAY (recurring real-money charges) — highest-risk, наиболее независимый блок, изолирован в отдельную фазу для верификации в одиночку.
+
+**Coverage:** 14/14 v2.3 requirements mapped (zero orphans, zero duplicates). Phase numbering continues from v2.2 (last phase 81) → v2.3 starts at Phase 82.
+
+#### Phase 82: Loyalty Foundation — Ledger + Balance + Accrual
+**Goal**: Клиент имеет бонусный баланс, выведенный из append-only ledger, видит его и историю; бонусы начисляются автоматически новому клиенту и вручную owner'ом через backend API; каждое начисление аудируется.
+**Depends on**: Nothing (first phase of v2.3; builds on existing `client_portal` + audit infra)
+**Requirements**: LOYL-01, LOYL-02, LOYL-03, ACCR-01, ACCR-02, ACCR-03
+**Success Criteria** (what must be TRUE):
+  1. Клиент получает текущий бонусный баланс через `GET /client/loyalty/balance` (баланс = свёртка append-only ledger-строк в integer kopecks; никаких деструктивных UPDATE)
+  2. Клиент видит историю бонусов (начисления + списания) с датой, типом и суммой по каждой строке, IDOR-safe (`client_id` только из `require_client()` principal per D-20-IDOR)
+  3. Новый клиент автоматически получает приветственный бонус ровно один раз (идемпотентно по событию онбординга/регистрации — повторное событие не начисляет повторно)
+  4. Owner начисляет бонус произвольному клиенту через owner-only backend API (reception 403; admin-web UI отсутствует — прецедент засеянных промокодов); покрывает акционные + реферальные гранты
+  5. Каждое начисление пишет аудируемое ledger-событие через новый LOCKED audit event, зарегистрированный ДО любого callsite (INFRA-15); count-lock guard-тесты обновлены
+**Plans**: TBD
+**UI hint**: yes
+
+#### Phase 83: Bonus Redemption at Checkout
+**Goal**: Клиент списывает бонусы скидкой в чекауте; сервер авторитетно пересчитывает `discount_kopecks`, redemption записывается атомарно и идемпотентно на `payment.succeeded` webhook; PWA `CheckoutSheet` показывает реальный баланс за флагом `clubBonuses`.
+**Depends on**: Phase 82 (нужен ledger + balance read для расчёта доступной скидки)
+**Requirements**: REDM-01, REDM-02, REDM-03
+**Success Criteria** (what must be TRUE):
+  1. Клиент в чекауте уменьшает сумму к оплате списанием бонусов; `discount_kopecks` пересчитывается сервером — клиент не задаёт размер скидки сам (D-06 цел, скидка только server-side)
+  2. Списание бонусов записывается в ledger атомарно на `payment.succeeded` webhook, идемпотентно по `(online_payment_id)` (образец `promo_codes`); при неоплате/отмене списания не происходит
+  3. Anti-oracle return-screen invariant сохранён — return-экран не подтверждает результат списания/оплаты раньше webhook (D-06)
+  4. PWA `CheckoutSheet` за флагом `clubBonuses` ON показывает реальный баланс + контрол списания; mock `BONUS_PLACEHOLDER = { balance: 1080, toGold: 220 }` удалён
+**Plans**: TBD
+**UI hint**: yes
+
+#### Phase 84: Real Autopay Charge
+**Goal**: Cron `charge_expiring_autopay` реально списывает с сохранённой карты off-session для истекающих абонементов с `autopay_enabled=true` + `consent_recorded_at`; списание идёт в charge-ledger, активация продления locked на webhook, исход аудируется и клиент уведомляется.
+**Depends on**: Phase 82 (audit-event discipline established). Independent of Phase 83 — изолированный highest-risk блок, верифицируется в одиночку. Строится на v2.2 card-on-file инфраструктуре (`client_payment_methods`).
+**Requirements**: APAY-01, APAY-02, APAY-03, APAY-04
+**Success Criteria** (what must be TRUE):
+  1. Cron `charge_expiring_autopay` (ARQ, `expire_memberships` shape — caller-owns-txn, `cron(..., unique=True)`, fn в `WorkerSettings.functions`) находит истекающие в окне абонементы с `autopay_enabled=true` + записанным `consent_recorded_at` и инициирует off-session charge
+  2. YooKassa-адаптер выполняет off-session charge по сохранённому `payment_method_id`; списание пишется в charge-ledger по дисциплине v1.4 `payments`; активация продления locked на `payment.succeeded` webhook
+  3. Автосписание идемпотентно — повторные тики cron / рестарты контейнера не приводят к двойному charge; пропускаются неподходящие (нет consent / autopay off / нет активной карты / уже продлён)
+  4. Исход автосписания (успех/ошибка) аудируется новым LOCKED audit event (зарегистрирован ДО callsite, INFRA-15) и клиент уведомляется через Telegram/email mirror с идемпотентностью через `channel` discriminator
+**Plans**: TBD
+
+#### Phase 85: OpenAPI Handoff + Milestone Verification
+**Goal**: Контракт v2.3 заморожен — byte-stable regen `openapi.json` + `schema.d.ts` со всеми новыми loyalty/autopay client-путями + `_v23Checks` forward-guards; staff-пути байт-идентичны `contract-freeze-v1.11.0` (drift gate зелёный); milestone-gate проверен.
+**Depends on**: Phase 84 (все новые пути должны существовать перед regen)
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+  1. `openapi.json` + `schema.d.ts` регенерированы byte-stably со всеми новыми loyalty/autopay client-путями (loyalty balance/history, redemption surface, autopay-relevant client routes)
+  2. `_v23Checks` `AssertNonNever` forward-guards добавлены для каждого нового path×method combo + runtime `toHaveLength` assertion; `_v1x`/`_v20`/`_v22` guards не тронуты
+  3. Staff-пути байт-идентичны `contract-freeze-v1.11.0` — `git diff --exit-code` drift gate зелёный на обоих артефактах; Redocly lint clean
+  4. Milestone-gate green: backend pytest (incl. новые ledger/redemption/autopay race + idempotency тесты), mypy --strict, lint-imports (zero new `ignore_imports` где возможно, per D-20-MODULE), PWA vitest, no-edit guard на `permissions.py`/`can.ts`/`registry.ts`
+**Plans**: TBD
+
 ## Backlog
 
 ### Phase 999.1: WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -137,3 +191,7 @@ Plans:
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
+| 82. Loyalty Foundation — Ledger + Balance + Accrual | 0/TBD | Not started | - |
+| 83. Bonus Redemption at Checkout | 0/TBD | Not started | - |
+| 84. Real Autopay Charge | 0/TBD | Not started | - |
+| 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |

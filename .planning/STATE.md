@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-05T09:51:56.175Z"
 last_activity: 2026-06-05
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v2.2 milestone completion (audit passed → complete → cleanup)
+**Current focus:** v2.3 roadmap created (Phases 82-85) → ready to plan Phase 82 (loyalty foundation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 82 (not started — roadmap created)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-05 — Milestone v2.3 started
+Status: Roadmap created, ready to plan Phase 82
+Last activity: 2026-06-05 — v2.3 roadmap created (Phases 82-85, 14/14 requirements mapped)
 
-## v2.2 Roadmap Summary
+## v2.3 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 82. Loyalty Foundation — Ledger + Balance + Accrual | Append-only бонус-ledger, balance + history read API, welcome auto-credit, owner-grant API, audit events | LOYL-01, LOYL-02, LOYL-03, ACCR-01, ACCR-02, ACCR-03 |
+| 83. Bonus Redemption at Checkout | Server-authoritative `discount_kopecks` recompute + webhook-locked redemption (образец `promo_codes`) + PWA `clubBonuses` flag flip | REDM-01, REDM-02, REDM-03 |
+| 84. Real Autopay Charge | Off-session YooKassa charge cron для истекающих autopay-абонементов + charge-ledger + notifications (изолированный highest-risk блок) | APAY-01, APAY-02, APAY-03, APAY-04 |
+| 85. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts regen + `_v23Checks` forward-guards + staff drift gate | HND-01 |
+
+**Coverage:** 14/14 v2.3 requirements mapped (zero orphans, zero duplicates). Execution order: 82 → 83 → 84 → 85.
+
+<details>
+<summary>v2.2 Roadmap Summary (shipped)</summary>
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -38,6 +50,8 @@ Last activity: 2026-06-05 — Milestone v2.3 started
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | Недельная активность + linkedCard/weeklyActivity ON + openapi regen | WACT-01, WACT-02, PAYM-05, HND-01 |
 
 **Coverage:** 11/11 v2.2 requirements mapped (zero orphans, zero duplicates).
+
+</details>
 
 ## Accumulated Context
 

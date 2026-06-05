@@ -72,26 +72,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOYL-01 | TBD | Pending |
-| LOYL-02 | TBD | Pending |
-| LOYL-03 | TBD | Pending |
-| ACCR-01 | TBD | Pending |
-| ACCR-02 | TBD | Pending |
-| ACCR-03 | TBD | Pending |
-| REDM-01 | TBD | Pending |
-| REDM-02 | TBD | Pending |
-| REDM-03 | TBD | Pending |
-| APAY-01 | TBD | Pending |
-| APAY-02 | TBD | Pending |
-| APAY-03 | TBD | Pending |
-| APAY-04 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| LOYL-01 | Phase 82 | Pending |
+| LOYL-02 | Phase 82 | Pending |
+| LOYL-03 | Phase 82 | Pending |
+| ACCR-01 | Phase 82 | Pending |
+| ACCR-02 | Phase 82 | Pending |
+| ACCR-03 | Phase 82 | Pending |
+| REDM-01 | Phase 83 | Pending |
+| REDM-02 | Phase 83 | Pending |
+| REDM-03 | Phase 83 | Pending |
+| APAY-01 | Phase 84 | Pending |
+| APAY-02 | Phase 84 | Pending |
+| APAY-03 | Phase 84 | Pending |
+| APAY-04 | Phase 84 | Pending |
+| HND-01 | Phase 85 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 14 ⚠️ (resolved by roadmapper)
+- Mapped to phases: 14 ✓ (Phase 82: LOYL-01..03 + ACCR-01..03; Phase 83: REDM-01..03; Phase 84: APAY-01..04; Phase 85: HND-01)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-05*
-*Last updated: 2026-06-05 after initial v2.3 definition*
+*Last updated: 2026-06-05 after v2.3 roadmap creation (Phases 82-85, 14/14 mapped)*
