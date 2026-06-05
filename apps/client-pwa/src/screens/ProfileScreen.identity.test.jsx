@@ -25,6 +25,9 @@ vi.mock('@/data', () => ({
   useClientPtHistory: () => emptyList,
   useClientPaymentHistory: () => emptyList,
   useClientWeeklyActivity: () => ({ data: undefined }),
+  // Phase-82 loyalty hooks — stub so LoyaltyBalanceCard renders without error
+  useClientLoyaltyBalance: () => ({ data: undefined, isLoading: false, isError: false }),
+  useClientLoyaltyHistory: () => ({ data: undefined, isLoading: false, isError: false, isFetching: false, refetch: () => {} }),
 }))
 vi.mock('@/context/AuthContext.jsx', () => ({
   useAuth: () => ({ logout: () => {} }),

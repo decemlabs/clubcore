@@ -89,6 +89,9 @@ describe('Feature flags (Phase 81-02 flip)', () => {
       useClientPtHistory: () => ({ data: { items: [], total: 0 } }),
       useClientPaymentHistory: () => ({ data: { items: [], total: 0 } }),
       useClientWeeklyActivity: () => ({ data: undefined }),
+      // Phase-82 loyalty hooks — stub so LoyaltyBalanceCard renders without error
+      useClientLoyaltyBalance: () => ({ data: undefined, isLoading: false, isError: false }),
+      useClientLoyaltyHistory: () => ({ data: undefined, isLoading: false, isError: false, isFetching: false, refetch: () => {} }),
     }))
 
     const { ProfileScreen } = await import('../ProfileScreen.jsx')
