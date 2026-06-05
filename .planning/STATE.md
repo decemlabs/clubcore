@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Membership self-service depth
-status: Awaiting next milestone
-stopped_at: Phase 79 shipped & verified (5/5); autonomous mode advancing to Phase 80 (Booking Reschedule)
-last_updated: "2026-06-03T19:05:55.181Z"
-last_activity: 2026-06-03 — Milestone v2.2 completed and archived
+milestone: v2.3
+milestone_name: Loyalty / Club Bonuses + Real Autopay
+status: planning
+last_updated: "2026-06-05T09:51:56.175Z"
+last_activity: 2026-06-05
 progress:
-  total_phases: 8
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 
 ## Current Position
 
-Phase: Milestone v2.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-03 — Milestone v2.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-05 — Milestone v2.3 started
 
 ## v2.2 Roadmap Summary
 
@@ -103,6 +102,7 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 **Browser (real PWA + live YooKassa test shop):** weekly-activity bars, CardSheet (display + ФЗ-376 autopay consent + unlink), booking reschedule (atomic + audit + PT-credit), and the full save-card checkout round-trip (test card → 3DS → webhook step-8.5 → real token in CardSheet) — all PASS.
 
 **Two bugs found & fixed during verification (committed):**
+
 1. `fix(v2.2)` — Phase 80 added `booking_rescheduled` to LOCKED_AUDIT_EVENTS but left the count-lock guard tests at 100; full-suite run caught it → bumped to 101 (`test_audit_taxonomy`, `test_phase51_audit_chain_invariants`).
 2. `fix(client-pwa)` — **BookingManageSheet white-screened on any real booking** (`b.price.toLocaleString()` on undefined; real `/client/home` nextBooking has no price/hoursTo) → made reschedule+cancel unreachable in the live PWA despite passing mock-based Vitest. Derived hoursTo/date/time from startTime, guarded price/refund, added a real-shape regression test.
 
