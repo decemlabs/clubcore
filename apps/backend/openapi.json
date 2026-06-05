@@ -866,6 +866,7 @@
           "loyaltyRedeemKopecks": {
             "anyOf": [
               {
+                "minimum": 0.0,
                 "type": "integer"
               },
               {
