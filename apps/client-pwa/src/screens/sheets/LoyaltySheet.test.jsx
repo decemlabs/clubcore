@@ -13,6 +13,15 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+// BonusHistorySheet calls useQueryClient() for pull-to-refresh invalidation,
+// so it must render inside a QueryClientProvider. The loyalty data hooks
+// themselves are mocked, so this client only backs the invalidateQueries call.
+function renderSheet(ui) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 // ─── Mock @/data hooks ────────────────────────────────────────────────────────
 const useClientLoyaltyBalance = vi.fn()
@@ -147,7 +156,7 @@ describe('BonusHistorySheet', () => {
     useClientLoyaltyHistory.mockReturnValue(
       makeQuery({ data: PAGE_ONE })
     )
-    render(<BonusHistorySheet onClose={vi.fn()} />)
+    renderSheet(<BonusHistorySheet onClose={vi.fn()} />)
 
     expect(screen.getByText('Приветственный бонус')).toBeInTheDocument()
     // Amount: '+' prefix followed by formatted money substring
@@ -162,7 +171,7 @@ describe('BonusHistorySheet', () => {
     useClientLoyaltyHistory.mockReturnValue(
       makeQuery({ data: { items: [REDEMPTION_ITEM], total: 1, page: 1, pageSize: 10 } })
     )
-    render(<BonusHistorySheet onClose={vi.fn()} />)
+    renderSheet(<BonusHistorySheet onClose={vi.fn()} />)
 
     expect(screen.getByText('Списание за оплату')).toBeInTheDocument()
     // Amount should start with U+2212 (−) not hyphen (-)
@@ -174,7 +183,7 @@ describe('BonusHistorySheet', () => {
     useClientLoyaltyHistory.mockReturnValue(
       makeQuery({ data: { items: [], total: 0, page: 1, pageSize: 10 } })
     )
-    render(<BonusHistorySheet onClose={vi.fn()} />)
+    renderSheet(<BonusHistorySheet onClose={vi.fn()} />)
     expect(screen.getByText('Бонусов пока нет')).toBeInTheDocument()
     expect(screen.getByText(/После первой активности/)).toBeInTheDocument()
   })
@@ -189,7 +198,7 @@ describe('BonusHistorySheet', () => {
     useClientLoyaltyHistory.mockReturnValue(
       makeQuery({ data: twoItemPage })
     )
-    render(<BonusHistorySheet onClose={vi.fn()} />)
+    renderSheet(<BonusHistorySheet onClose={vi.fn()} />)
     expect(screen.getByText('Загрузить ещё')).toBeInTheDocument()
   })
 
@@ -203,7 +212,7 @@ describe('BonusHistorySheet', () => {
       return makeQuery({ data: firstPage })
     })
 
-    render(<BonusHistorySheet onClose={vi.fn()} />)
+    renderSheet(<BonusHistorySheet onClose={vi.fn()} />)
     const loadMoreBtn = screen.getByText('Загрузить ещё')
     fireEvent.click(loadMoreBtn)
 
@@ -215,7 +224,7 @@ describe('BonusHistorySheet', () => {
     useClientLoyaltyHistory.mockReturnValue(
       makeQuery({ isError: true, data: undefined })
     )
-    render(<BonusHistorySheet onClose={vi.fn()} />)
+    renderSheet(<BonusHistorySheet onClose={vi.fn()} />)
     expect(screen.getByText(/Не удалось загрузить историю/)).toBeInTheDocument()
   })
 })

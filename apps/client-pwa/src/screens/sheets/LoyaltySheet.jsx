@@ -11,11 +11,13 @@
  * Signs: derived from signed amountKopecks (+accrual / −redemption U+2212).
  */
 import React from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/Icon.jsx'
 import { StatusBar } from '@/components/StatusBar.jsx'
 import { PullToRefresh } from '@/components/PullToRefresh.jsx'
 import { SubSheetHeader } from '@/screens/sheets/ProfileExtraSheets.jsx'
 import { useClientLoyaltyBalance, useClientLoyaltyHistory } from '@/data'
+import { clientPortalKeys } from '@/lib/clientQueries'
 import { formatMoney } from '@/utils/format.js'
 
 // ─── Date formatter — ISO datetime → Russian long date (no date-fns, D-82-01) ─
@@ -127,6 +129,7 @@ export function LoyaltyBalanceCard({ onOpen }) {
 // ─── BonusHistorySheet ────────────────────────────────────────────────────────
 // Full-screen sub-sheet mirroring VisitHistorySheet (z-index 220, sheet-up anim).
 export function BonusHistorySheet({ onClose }) {
+  const queryClient = useQueryClient()
   const [page, setPage] = React.useState(1)
   const [allItems, setAllItems] = React.useState([])
 
@@ -155,10 +158,15 @@ export function BonusHistorySheet({ onClose }) {
   const hasMore = allItems.length < total
 
   const handleRefresh = async () => {
+    // Reset to page 1 and invalidate the loyalty-history key family so the
+    // refresh refetches page 1 regardless of which page the user was on —
+    // calling historyQuery.refetch() would fire on the stale page>1 key (WR-02).
     setPage(1)
     setAllItems([])
-    await balanceQuery.refetch()
-    await historyQuery.refetch()
+    await Promise.all([
+      balanceQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'loyalty-history'] }),
+    ])
   }
 
   const handleLoadMore = () => {

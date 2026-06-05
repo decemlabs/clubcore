@@ -5,7 +5,7 @@ Proves:
     → 201, balanceKopecks reflects SUM after grant, one owner_grant ledger row +
     one loyalty_accrued audit row (actor="owner:<id>").
   - Reception POST grant → 403 + one rbac_forbidden audit row; no ledger row created.
-  - amount_kopecks=0 or negative → 422 grant_amount_must_be_positive; no ledger row.
+  - amount_kopecks=0 or negative → 422 validation_error (schema Field(gt=0)); no ledger row.
   - Unknown client_id → 404 client_not_found.
 
 Harness: SAVEPOINT db_session + ASGITransport (no real network).
@@ -288,10 +288,10 @@ async def test_grant_zero_amount_returns_422(
     seeded_owner: User,
     test_client: Client,
 ) -> None:
-    """amount_kopecks=0 → 422 grant_amount_must_be_positive; no ledger row."""
+    """amount_kopecks=0 → 422 validation_error (schema Field(gt=0)); no ledger row."""
     r = await _post_grant(http_client_owner, test_client.id, amount_kopecks=0)
     assert r.status_code == 422, r.text
-    assert r.json()["code"] == "grant_amount_must_be_positive"
+    assert r.json()["code"] == "validation_error"
 
     count_row = (
         (
@@ -312,10 +312,10 @@ async def test_grant_negative_amount_returns_422(
     seeded_owner: User,
     test_client: Client,
 ) -> None:
-    """amount_kopecks=-1 → 422 grant_amount_must_be_positive; no ledger row."""
+    """amount_kopecks=-1 → 422 validation_error (schema Field(gt=0)); no ledger row."""
     r = await _post_grant(http_client_owner, test_client.id, amount_kopecks=-1)
     assert r.status_code == 422, r.text
-    assert r.json()["code"] == "grant_amount_must_be_positive"
+    assert r.json()["code"] == "validation_error"
 
 
 async def test_grant_unknown_client_returns_404(

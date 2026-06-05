@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from pydantic import Field
+
 from app.core.schemas import BackendSchemaBase, ResponseData
 
 
@@ -28,6 +30,8 @@ class ClientLoyaltyHistoryItem(ResponseData):
 
     Wire: { id, type, amountKopecks, createdAt }
     amountKopecks is signed: positive = accrual, negative = redemption (Phase 83).
+    category/reason are deliberately NOT exposed here — they are owner-grant
+    bookkeeping context (admin-only), not client-facing (IN-01).
     """
 
     id: UUID
@@ -51,10 +55,13 @@ class LoyaltyGrantRequest(BackendSchemaBase):
     """Owner-only manual loyalty grant request body (ACCR-02).
 
     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
-    amount_kopecks must be > 0 (service raises 422 on <= 0).
+    amount_kopecks must be > 0 (schema-layer Field(gt=0); service keeps a
+    belt-and-suspenders check). reason is capped at 255 to match the
+    loyalty_ledger.reason VARCHAR(255) column — without this a longer value
+    yields an unhandled 500 DataError instead of a clean 422 (CR-01).
     category covers promotional, referral (manual, not automated), or manual grants.
     """
 
-    amount_kopecks: int  # wire: amountKopecks; must be > 0 (validated in service)
-    reason: str
+    amount_kopecks: int = Field(gt=0)  # wire: amountKopecks
+    reason: str = Field(max_length=255)
     category: Literal["promo", "referral", "manual"]
