@@ -50,6 +50,9 @@ export {
   useClientPaymentMethod,
   useUnlinkPaymentMethod,
   usePatchAutopay,
+  // Phase-82 LOYL-01 + LOYL-02: loyalty balance + history hooks
+  useClientLoyaltyBalance,
+  useClientLoyaltyHistory,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────

@@ -38,6 +38,8 @@ export const clientPortalKeys = {
   promoValidate: (code: string) => [...clientPortalKeys.all, 'promo-validate', code] as const,
   weeklyActivity: () => [...clientPortalKeys.all, 'weekly-activity'] as const,
   paymentMethod: () => [...clientPortalKeys.all, 'payment-method'] as const,
+  loyaltyBalance: () => [...clientPortalKeys.all, 'loyalty-balance'] as const,
+  loyaltyHistory: (page: number) => [...clientPortalKeys.all, 'loyalty-history', page] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -741,6 +743,45 @@ export function useUnlinkPaymentMethod() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: clientPortalKeys.paymentMethod() })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-82 LOYL-01 + LOYL-02: loyalty balance + history hooks
+// ---------------------------------------------------------------------------
+
+interface LoyaltyBalanceData {
+  balanceKopecks: number
+}
+
+interface LoyaltyHistoryItem {
+  id: string
+  type: 'welcome' | 'owner_grant' | 'redemption'
+  amountKopecks: number
+  createdAt: string
+}
+
+/** GET /api/v1/client/loyalty/balance — current bonus balance (LOYL-01) */
+export function useClientLoyaltyBalance() {
+  return useQuery({
+    queryKey: clientPortalKeys.loyaltyBalance(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/loyalty/balance')
+      return (res as { data: LoyaltyBalanceData }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/** GET /api/v1/client/loyalty/history?page=N — paginated bonus history (LOYL-02) */
+export function useClientLoyaltyHistory(page = 1) {
+  return useQuery({
+    queryKey: clientPortalKeys.loyaltyHistory(page),
+    queryFn: async () => {
+      const res = await clientRequest('get', `/api/v1/client/loyalty/history?page=${page}`)
+      return (res as { data: PaginatedResult<LoyaltyHistoryItem> }).data
+    },
+    staleTime: 30_000,
   })
 }
 
