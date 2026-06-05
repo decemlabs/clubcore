@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
 status: executing
-stopped_at: Phase 83 Plan 02 complete — loyalty redemption end-to-end (record_loyalty_redemption, checkout clamp, webhook debit, promo attribution fix, 5 regression tests)
-last_updated: "2026-06-05T15:00:00.000Z"
-last_activity: 2026-06-05 -- Phase 83 Plan 02 complete (server-authoritative bonus redemption end-to-end)
+stopped_at: Phase 83 Plan 03 complete — CheckoutSheet bonus wiring + openapi regen (REDM-03 closed; Phase 83 fully complete)
+last_updated: "2026-06-05T17:15:00.000Z"
+last_activity: 2026-06-05 -- Phase 83 Plan 03 complete (CheckoutSheet bonus wiring + openapi regen, REDM-03 closed)
 progress:
   total_phases: 8
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 13
+  completed_plans: 6
+  percent: 25
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 ## Current Position
 
 Phase: 83
-Plan: 02 complete, starting 03
+Plan: 03 complete — Phase 83 (REDM-01/02/03) fully complete
 Status: Executing
-Last activity: 2026-06-05 -- Phase 83 Plan 02 complete (server-authoritative bonus redemption end-to-end)
+Last activity: 2026-06-05 -- Phase 83 Plan 03 complete (CheckoutSheet bonus wiring + openapi regen, REDM-03 closed)
 
 ## v2.3 Roadmap Summary
 
@@ -66,6 +66,12 @@ Last activity: 2026-06-05 -- Phase 83 Plan 02 complete (server-authoritative bon
 - **Weekly activity**: group by `visits.gym_date` STORED column; never `DATE(checked_in_at)`; `minutes=null` (no duration column in schema)
 - **Migration sequence**: 0052 = `client_payment_methods`; 0053 = widen `booking_notifications.kind` CHECK for `'rescheduled'`
 - **Per-booking autopay toggle removed**: «Авто-оплата тренировок» is an anti-feature (double-billing vs PT-package credit model)
+
+### Key v2.3 Phase 83 Decisions
+
+- **REDM-03 PWA wiring**: `bonusOn` + `balanceKopecks` lifted to `CheckoutSheet` scope (mirrors `savePaymentMethod` pattern) so `launchCheckout` can include `loyaltyRedeemKopecks` in request body; `bonusEstimateKopecks` is display-only (D-06 invariant — never mutates server-derived `total`/`discount`)
+- **Bonus section hidden on zero/loading/error**: mirrors CardSheet "no card = no section" pattern — no empty state copy shown
+- **openapi.json regen**: additive only; Phase 85 owns byte-stable freeze
 
 ### Key v2.0/v2.1 Decisions (carry-forward)
 
@@ -123,7 +129,7 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-05T14:05:37.408Z
+Last session: 2026-06-05T14:14:51.362Z
 Stopped at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
 Resume: Start the next milestone with `/gsd:new-milestone`
 
