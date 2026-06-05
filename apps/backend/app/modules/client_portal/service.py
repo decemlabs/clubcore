@@ -746,7 +746,10 @@ async def client_checkout_membership(
             _plan_row = (
                 (
                     await session.execute(
-                        text("SELECT price_kopecks FROM membership_plans WHERE id = :id"),
+                        text(
+                            "SELECT price_kopecks FROM membership_plans "
+                            "WHERE id = :id AND deleted_at IS NULL"
+                        ),
                         {"id": str(plan_id)},
                     )
                 )
@@ -762,8 +765,13 @@ async def client_checkout_membership(
                 post_promo_price - 1,
             )
             if clamped > 0:
+                # REDM-01 (CR-01 fix): pass the clamped redeem amount ONLY. Do NOT
+                # pre-subtract it from price_override — the core (_sell_subject_core)
+                # applies price_override (promo) and THEN subtracts
+                # loyalty_redeem_kopecks once. Pre-subtracting here double-counts the
+                # discount (client charged post_promo - 2*clamped). price_override
+                # stays the promo price (or None -> core reads the plan price).
                 actual_loyalty_redeem = clamped
-                price_override = post_promo_price - clamped
 
     # CR-01 (fix): generate a FRESH op_id (uuid4) for the redirect return_url,
     # mirroring the PT path. Deriving the PK from the per-day idem_key collided
@@ -852,7 +860,10 @@ async def client_checkout_pt_package(
             _pt_plan_row = (
                 (
                     await session.execute(
-                        text("SELECT price_kopecks FROM pt_package_plans WHERE id = :id"),
+                        text(
+                            "SELECT price_kopecks FROM pt_package_plans "
+                            "WHERE id = :id AND deleted_at IS NULL"
+                        ),
                         {"id": str(plan_id)},
                     )
                 )
@@ -868,8 +879,10 @@ async def client_checkout_pt_package(
                 post_promo_price_pt - 1,
             )
             if clamped_pt > 0:
+                # REDM-01 (CR-01 fix): pass the clamped redeem amount ONLY — the core
+                # applies price_override (promo) then subtracts loyalty_redeem_kopecks
+                # once. Pre-subtracting here double-counts (see membership path).
                 actual_loyalty_redeem_pt = clamped_pt
-                price_override = post_promo_price_pt - clamped_pt
 
     op_id = uuid4()
     return_url = (

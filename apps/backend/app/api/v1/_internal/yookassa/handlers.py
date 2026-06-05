@@ -509,6 +509,9 @@ async def handle_payment_succeeded(
             _plan_price_row = (
                 (
                     await session.execute(
+                        # S608 below is safe: _plan_table is a server-only Literal
+                        # ("membership_plans" | "pt_package_plans") chosen by subject_kind,
+                        # never user input; no injection surface. The id is a bound param.
                         text(
                             f"SELECT price_kopecks FROM {_plan_table} WHERE id = :id"  # noqa: S608
                         ),

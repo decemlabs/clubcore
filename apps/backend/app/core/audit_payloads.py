@@ -1306,7 +1306,7 @@ class LoyaltyRedeemedPayload(BaseModel):
 
     client_id: UUID
     entry_id: UUID
-    amount_kopecks: int  # always negative — the debit; positive values are a bug
+    amount_kopecks: int = Field(lt=0)  # always negative — the signed debit (enforced)
     online_payment_id: UUID
 
 

@@ -39,6 +39,7 @@ from app.core.permissions import Role
 from app.core.security import generate_otp_code, hash_password
 from app.modules.auth.models import OtpCode, User
 from app.modules.clients.models import Client
+from app.modules.loyalty.models import LoyaltyLedger
 from app.modules.memberships.models import Membership, MembershipPlan
 from app.modules.online_payments.constants import (
     CONFIRMATION_TYPE_REDIRECT,
@@ -55,9 +56,7 @@ pytestmark = pytest.mark.asyncio
 # ---------------------------------------------------------------------------
 
 _YOOKASSA_BASE_URL = "https://api.yookassa.ru/v3/"
-_FAKE_CONFIRMATION_URL = (
-    "https://yoomoney.ru/checkout/payments/v2/contract?orderId=fake-test-id"
-)
+_FAKE_CONFIRMATION_URL = "https://yoomoney.ru/checkout/payments/v2/contract?orderId=fake-test-id"
 
 
 # ---------------------------------------------------------------------------
@@ -866,9 +865,7 @@ async def test_membership_replay_returns_original_confirmation_url(
     # Clear the client's email to simulate WR-01 scenario.
     from sqlalchemy import update
 
-    await db_session.execute(
-        update(Client).where(Client.id == client.id).values(email=None)
-    )
+    await db_session.execute(update(Client).where(Client.id == client.id).values(email=None))
     await db_session.commit()
 
     # Replay POST — same-day server-derived key. Must NOT raise 422 email gate.
@@ -1078,9 +1075,7 @@ async def test_membership_checkout_row_committed_to_db(
     await checkout_commit_db_session.refresh(plan)
 
     # --- Authenticate via real-commit OTP flow ---
-    await _auth_as_client_real_commit(
-        checkout_commit_client, checkout_commit_db_session, client
-    )
+    await _auth_as_client_real_commit(checkout_commit_client, checkout_commit_db_session, client)
 
     # --- Call the checkout endpoint (ЮKassa mocked via respx) ---
     fake_url = f"https://yoomoney.ru/checkout/commit-reg-{uuid4().hex[:8]}"
@@ -1120,10 +1115,9 @@ async def test_membership_checkout_row_committed_to_db(
     fresh_session_factory = async_sessionmaker(checkout_commit_engine, expire_on_commit=False)
     async with fresh_session_factory() as fresh_session:
         from uuid import UUID as _UUID
+
         row = await fresh_session.scalar(
-            select(OnlinePayment).where(
-                OnlinePayment.id == _UUID(online_payment_id)
-            )
+            select(OnlinePayment).where(OnlinePayment.id == _UUID(online_payment_id))
         )
 
     assert row is not None, (
@@ -1131,9 +1125,7 @@ async def test_membership_checkout_row_committed_to_db(
         "the INSERT was rolled back (commit owner missing). "
         "Add await session.commit() in the router endpoint."
     )
-    assert row.status == "pending", (
-        f"Expected status=pending, got: {row.status!r}"
-    )
+    assert row.status == "pending", f"Expected status=pending, got: {row.status!r}"
     assert row.client_id == client.id, (
         f"Row client_id mismatch: expected {client.id!r}, got {row.client_id!r}"
     )
@@ -1190,9 +1182,7 @@ async def test_pt_checkout_row_committed_to_db(
     await checkout_commit_db_session.commit()
     await checkout_commit_db_session.refresh(pt_plan)
 
-    await _auth_as_client_real_commit(
-        checkout_commit_client, checkout_commit_db_session, client
-    )
+    await _auth_as_client_real_commit(checkout_commit_client, checkout_commit_db_session, client)
 
     idem_key = uuid4().hex
     fake_url = f"https://yoomoney.ru/checkout/pt-commit-{uuid4().hex[:8]}"
@@ -1220,18 +1210,14 @@ async def test_pt_checkout_row_committed_to_db(
             json={},
         )
 
-    assert r.status_code == 201, (
-        f"PT checkout must return 201; got {r.status_code}: {r.text}"
-    )
+    assert r.status_code == 201, f"PT checkout must return 201; got {r.status_code}: {r.text}"
     data = r.json()["data"]
     online_payment_id = data["onlinePaymentId"]
 
     fresh_session_factory = _async_sessionmaker(checkout_commit_engine, expire_on_commit=False)
     async with fresh_session_factory() as fresh_session:
         row = await fresh_session.scalar(
-            select(OnlinePayment).where(
-                OnlinePayment.id == _UUID(online_payment_id)
-            )
+            select(OnlinePayment).where(OnlinePayment.id == _UUID(online_payment_id))
         )
 
     assert row is not None, (
@@ -1239,9 +1225,92 @@ async def test_pt_checkout_row_committed_to_db(
         "the INSERT was rolled back (commit owner missing). "
         "Add await session.commit() in the router endpoint."
     )
-    assert row.status == "pending", (
-        f"Expected status=pending, got: {row.status!r}"
-    )
+    assert row.status == "pending", f"Expected status=pending, got: {row.status!r}"
     assert row.client_id == client.id, (
         f"Row client_id mismatch: expected {client.id!r}, got {row.client_id!r}"
+    )
+
+
+# ===========================================================================
+# REDM-01 CR-01 regression — loyalty discount must be subtracted EXACTLY ONCE
+# ===========================================================================
+
+
+async def test_membership_checkout_loyalty_discount_applied_once(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    redis_clean: Redis,
+) -> None:
+    """CR-01 regression: the loyalty redeem amount is subtracted ONE time, not twice.
+
+    Exercises the full client_portal.service -> core path (NOT a pre-seeded
+    online_payments row) — the only path that exposes the double-subtraction bug
+    (client_portal pre-subtracted into price_override AND the core subtracted
+    loyalty_redeem_kopecks again).
+
+    Plan 2500 RUB, balance 1000 RUB, redeem 1000 RUB -> charged 1500 RUB (single
+    subtraction). The bug would charge 500 RUB (2500 - 2x1000).
+    """
+    import json
+    from uuid import UUID as _UUID
+
+    client = await _seed_client_with_email(
+        db_session,
+        phone=f"+7916{uuid4().int % 10_000_000:07d}",
+    )
+    plan = await _seed_membership_plan(db_session, price_kopecks=250_000)
+    db_session.add(
+        LoyaltyLedger(
+            client_id=client.id,
+            entry_type="owner_grant",
+            amount_kopecks=100_000,
+            category="manual",
+            reason="test seed",
+        )
+    )
+    await db_session.flush()
+
+    await _auth_as_client(async_client, db_session, client)
+
+    with respx.mock(base_url=_YOOKASSA_BASE_URL, assert_all_called=True) as mock:
+        route = mock.post("payments").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": f"yk-{uuid4().hex[:24]}",
+                    "status": "pending",
+                    "amount": {"value": "1500.00", "currency": "RUB"},
+                    "confirmation": {
+                        "type": "redirect",
+                        "confirmation_url": f"https://yoomoney.ru/checkout/test-{uuid4().hex[:8]}",
+                    },
+                },
+            )
+        )
+
+        r = await async_client.post(
+            f"/api/v1/client/checkout/memberships/{plan.id}",
+            headers=_checkout_headers(async_client),
+            json={"loyaltyRedeemKopecks": 100_000},
+        )
+
+    assert r.status_code == 201, r.text
+
+    # The amount SENT to YooKassa must be the single-discounted total: 2500 - 1000 = 1500.
+    sent_body = json.loads(route.calls.last.request.content)
+    assert sent_body["amount"]["value"] == "1500.00", (
+        f"CR-01: YooKassa charged amount must be 1500.00 (single loyalty subtraction), "
+        f"got {sent_body['amount']['value']!r} (500.00 would prove the double-subtraction bug)"
+    )
+
+    op_id = _UUID(r.json()["data"]["onlinePaymentId"])
+    row = (
+        await db_session.execute(select(OnlinePayment).where(OnlinePayment.id == op_id))
+    ).scalar_one()
+    assert row.amount_kopecks == 150_000, (
+        f"CR-01: row.amount_kopecks must be 150000 (single subtraction), got {row.amount_kopecks}"
+    )
+    assert row.loyalty_redeem_kopecks == 100_000, (
+        f"loyalty_redeem_kopecks must persist the clamped redeem (100000), "
+        f"got {row.loyalty_redeem_kopecks}"
     )

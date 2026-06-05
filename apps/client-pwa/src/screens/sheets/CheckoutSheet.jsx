@@ -375,7 +375,9 @@ function ReviewStage({
   loyaltyLoading,
 }) {
   // Phase 83 REDM-03: estimate-only bonus discount (D-06 — never mutates server-derived total/discount).
-  const bonusEstimateKopecks = bonusOn ? Math.min(balanceKopecks, total) : 0;
+  // Mirror the server floor: the charged amount is always >= 1 kopeck (ЮKassa minimum),
+  // so the estimate can reduce the total to at most (total - 1), never to 0 (WR-03).
+  const bonusEstimateKopecks = bonusOn ? Math.min(balanceKopecks, Math.max(0, total - 1)) : 0;
   const estimatedTotal = total - bonusEstimateKopecks;
 
   // Count-up for pay-bar total — animates whenever estimatedTotal or bonus state changes

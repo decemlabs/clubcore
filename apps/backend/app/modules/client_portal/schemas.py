@@ -18,6 +18,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
+from pydantic import Field
+
 from app.core.schemas import BackendSchemaBase, ResponseData
 
 
@@ -264,8 +266,9 @@ class ClientCheckoutRequest(ResponseData):
 
     promo_code: str | None = None  # wire: promoCode (D-06); None = no promo applied
     save_payment_method: bool = False  # wire: savePaymentMethod (PAYM-01); False = don't save
-    loyalty_redeem_kopecks: int | None = None  # wire: loyaltyRedeemKopecks (REDM-01 D-06);
-    # desired bonus debit; server caps authoritatively — client never sets the final discount
+    # wire: loyaltyRedeemKopecks (REDM-01 D-06); desired bonus debit. ge=0 rejects
+    # negative tampering; server caps authoritatively — client never sets the final discount.
+    loyalty_redeem_kopecks: int | None = Field(default=None, ge=0)
 
 
 class ClientCheckoutResponse(ResponseData):
