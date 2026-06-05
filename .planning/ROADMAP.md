@@ -171,15 +171,15 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 84-01-PLAN.md — autopay_charges table (migration 0056) + YooKassa off-session create_payment extension + 2 LOCKED audit events pre-registered (INFRA-15, count-lock 103→105)
+- [x] 84-01-PLAN.md — autopay_charges table (migration 0056) + YooKassa off-session create_payment extension + 2 LOCKED audit events pre-registered (INFRA-15, count-lock 103→105)
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 84-02-PLAN.md — charge_expiring_autopay cron + eligibility/claim/off-session-charge service helper + WorkerSettings registration + webhook method='autopay' discriminator + full skip-matrix/double-charge/crash-idempotency/no-consent tests
+- [x] 84-02-PLAN.md — charge_expiring_autopay cron + eligibility/claim/off-session-charge service helper + WorkerSettings registration + webhook method='autopay' discriminator + full skip-matrix/double-charge/crash-idempotency/no-consent tests
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 84-03-PLAN.md — autopay success/failure notifications (Telegram + email mirror) channel-idempotent via claim_payment_notification + owner-signed copy/templates
+- [x] 84-03-PLAN.md — autopay success/failure notifications (Telegram + email mirror) channel-idempotent via claim_payment_notification + owner-signed copy/templates
 
 **UI hint**: no (pure backend)
 
@@ -248,5 +248,5 @@ Plans:
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
 | 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
 | 83. Bonus Redemption at Checkout | 3/3 | Complete    | 2026-06-05 |
-| 84. Real Autopay Charge | 0/TBD | Not started | - |
+| 84. Real Autopay Charge | 3/3 | Complete    | 2026-06-05 |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
