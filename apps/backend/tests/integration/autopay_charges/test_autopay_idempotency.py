@@ -21,18 +21,20 @@ Tests:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from datetime import date, timedelta
-from typing import Any, AsyncIterator
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 import respx
 from httpx import Response
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.autopay_charges.service import _charge_expiring_autopay_memberships, _idempotency_key
+from app.modules.autopay_charges.service import (
+    _charge_expiring_autopay_memberships,
+    _idempotency_key,
+)
 from app.workers.scheduled.charge_expiring_autopay import charge_expiring_autopay
 
 # ---------------------------------------------------------------------------
@@ -109,9 +111,7 @@ async def _seed_autopay_membership(
         {"pm_id": cpm_id, "pm_cid": client_id, "pm_mid": method_id},
     )
     await session.execute(
-        text(
-            "UPDATE client_payment_methods SET consent_recorded_at = now() WHERE id = :pm_id"
-        ),
+        text("UPDATE client_payment_methods SET consent_recorded_at = now() WHERE id = :pm_id"),
         {"pm_id": cpm_id},
     )
     await session.flush()
@@ -235,7 +235,10 @@ async def test_crash_between_claim_and_provider_no_double_charge(db_session: Asy
     yk_calls: list[int] = []
     with respx.mock(base_url="https://api.yookassa.ru/v3/", assert_all_called=False) as router:
         router.post("payments").mock(
-            side_effect=lambda *a, **k: (yk_calls.append(1), Response(200, json=_ok_response("pay-crash-0001")))[1]
+            side_effect=lambda *a, **k: (
+                yk_calls.append(1),
+                Response(200, json=_ok_response("pay-crash-0001")),
+            )[1]
         )
 
         count, declined_ids = await _charge_expiring_autopay_memberships(
@@ -292,7 +295,10 @@ async def test_failed_claim_no_retry_on_next_tick(db_session: AsyncSession) -> N
     yk_calls: list[int] = []
     with respx.mock(base_url="https://api.yookassa.ru/v3/", assert_all_called=False) as router:
         router.post("payments").mock(
-            side_effect=lambda *a, **k: (yk_calls.append(1), Response(200, json=_ok_response("pay-retry-0001")))[1]
+            side_effect=lambda *a, **k: (
+                yk_calls.append(1),
+                Response(200, json=_ok_response("pay-retry-0001")),
+            )[1]
         )
 
         count, declined_ids = await _charge_expiring_autopay_memberships(
@@ -308,9 +314,7 @@ async def test_failed_claim_no_retry_on_next_tick(db_session: AsyncSession) -> N
     charge_row = (
         (
             await db_session.execute(
-                text(
-                    "SELECT status FROM autopay_charges WHERE membership_id = :m_id"
-                ),
+                text("SELECT status FROM autopay_charges WHERE membership_id = :m_id"),
                 {"m_id": str(membership_id)},
             )
         )
@@ -363,7 +367,9 @@ async def test_decline_enqueues_failure_notification(db_session: AsyncSession) -
     enqueued_jobs: list[dict[str, Any]] = []
 
     class _FakeArqPool:
-        async def enqueue_job(self, fn_name: str, *, _kwargs: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        async def enqueue_job(
+            self, fn_name: str, *, _kwargs: dict[str, Any] | None = None, **kwargs: Any
+        ) -> None:
             enqueued_jobs.append({"fn_name": fn_name, "kwargs": _kwargs or kwargs})
 
     ctx: dict[str, Any] = {
@@ -374,9 +380,7 @@ async def test_decline_enqueues_failure_notification(db_session: AsyncSession) -
     }
 
     with respx.mock(base_url="https://api.yookassa.ru/v3/", assert_all_called=False) as router:
-        router.post("payments").mock(
-            return_value=Response(402, json=_decline_response())
-        )
+        router.post("payments").mock(return_value=Response(402, json=_decline_response()))
 
         returned_count = await charge_expiring_autopay(ctx)
 
@@ -384,7 +388,9 @@ async def test_decline_enqueues_failure_notification(db_session: AsyncSession) -
     assert returned_count == 1
 
     # Exactly one dispatch_autopay_failure_notification enqueued AFTER commit
-    failure_notifs = [j for j in enqueued_jobs if j["fn_name"] == "dispatch_autopay_failure_notification"]
+    failure_notifs = [
+        j for j in enqueued_jobs if j["fn_name"] == "dispatch_autopay_failure_notification"
+    ]
     assert len(failure_notifs) == 1, (
         f"Expected 1 failure notification enqueue, got {len(failure_notifs)}: {enqueued_jobs}"
     )

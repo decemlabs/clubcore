@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
@@ -260,8 +261,13 @@ async def _charge_expiring_autopay_memberships(  # noqa: SVC001 caller-owns-txn
         if result.classification == "ok":
             # Success path: create the online_payments row so the payment.succeeded
             # webhook can discover it and activate the renewal (D-06 webhook-locked).
-            assert result.payment_id is not None  # guaranteed by classification='ok'
-            assert result.amount_kopecks is not None
+            # IN-01: explicit guard (NOT assert — asserts are stripped under python -O,
+            # and these are money-path provider-contract invariants).
+            if result.payment_id is None or result.amount_kopecks is None:
+                raise RuntimeError(
+                    "YooKassa classification='ok' but payment_id/amount_kopecks is None "
+                    f"(membership_id={membership_id}, period_end={period_end})"
+                )
 
             audit_correlation_id = uuid4()
             online_payment_id = uuid4()
@@ -270,31 +276,55 @@ async def _charge_expiring_autopay_memberships(  # noqa: SVC001 caller-owns-txn
             # confirmation_type='autopay' is the webhook discriminator (Task 3 / Plan 02
             # architecture note) — the webhook reads this value to choose:
             #   method='autopay' (charge-ledger) + kind='autopay_charge_succeeded' (notification).
-            await session.execute(
-                text(
-                    "INSERT INTO online_payments "
-                    "(id, client_id, membership_plan_id, pt_package_plan_id, "
-                    " yookassa_payment_id, idempotency_key, amount_kopecks, "
-                    " status, confirmation_url, confirmation_type, "
-                    " created_by_user_id, audit_correlation_id, save_payment_method, "
-                    " initiated_at) "
-                    "VALUES "
-                    "(:id, :client_id, :membership_plan_id, NULL, "
-                    " :yookassa_payment_id, :idempotency_key, :amount_kopecks, "
-                    " 'pending', NULL, 'autopay', "
-                    " NULL, :audit_correlation_id, false, "
-                    " now())"
-                ),
-                {
-                    "id": str(online_payment_id),
-                    "client_id": str(client_id),
-                    "membership_plan_id": str(plan_id),
-                    "yookassa_payment_id": result.payment_id,
-                    "idempotency_key": idem_key,
-                    "amount_kopecks": result.amount_kopecks,
-                    "audit_correlation_id": str(audit_correlation_id),
-                },
-            )
+            # WR-01: wrap in a SAVEPOINT. The partial unique index
+            # uq_online_payments_membership_double_tap (client_id, membership_plan_id,
+            # MSK-date) WHERE status != 'canceled' fires if an interactive checkout for the
+            # same plan/day is already in flight. Without the savepoint an IntegrityError
+            # would poison the whole cron transaction and roll back every other membership's
+            # charge in the batch. Isolate it: roll back just this row, drop the claim so the
+            # period stays retryable, and continue. The card was already charged at the
+            # provider, but the deterministic idempotency_key dedupes the retry (no
+            # double-charge), and the in-flight manual checkout will itself renew the membership.
+            try:
+                async with session.begin_nested():
+                    await session.execute(
+                        text(
+                            "INSERT INTO online_payments "
+                            "(id, client_id, membership_plan_id, pt_package_plan_id, "
+                            " yookassa_payment_id, idempotency_key, amount_kopecks, "
+                            " status, confirmation_url, confirmation_type, "
+                            " created_by_user_id, audit_correlation_id, save_payment_method, "
+                            " initiated_at) "
+                            "VALUES "
+                            "(:id, :client_id, :membership_plan_id, NULL, "
+                            " :yookassa_payment_id, :idempotency_key, :amount_kopecks, "
+                            " 'pending', NULL, 'autopay', "
+                            " NULL, :audit_correlation_id, false, "
+                            " now())"
+                        ),
+                        {
+                            "id": str(online_payment_id),
+                            "client_id": str(client_id),
+                            "membership_plan_id": str(plan_id),
+                            "yookassa_payment_id": result.payment_id,
+                            "idempotency_key": idem_key,
+                            "amount_kopecks": result.amount_kopecks,
+                            "audit_correlation_id": str(audit_correlation_id),
+                        },
+                    )
+            except IntegrityError:
+                await session.execute(
+                    text("DELETE FROM autopay_charges WHERE id = :claim_id"),
+                    {"claim_id": str(claim_id)},
+                )
+                _log.warning(
+                    "autopay_charge_skipped_double_tap",
+                    membership_id=str(membership_id),
+                    period_end=str(period_end),
+                    claim_id=str(claim_id),
+                    reason="in-flight online_payments row for same client+plan+day",
+                )
+                continue
 
             # UPDATE claim row: link to online_payments row + store yookassa_payment_id.
             # status stays 'pending' — the webhook flips it to 'succeeded'.
@@ -335,9 +365,34 @@ async def _charge_expiring_autopay_memberships(  # noqa: SVC001 caller-owns-txn
             )
             count += 1
 
+        elif result.classification == "transient_error":
+            # CR-02 fix: transient provider failures (5xx / timeout / network) are NOT
+            # a customer-facing decline — the card may be fine and the charge may even
+            # have gone through provider-side. DELETE the claim so the NEXT cron tick
+            # re-attempts (a persisting claim in ANY status is blocked by the ON CONFLICT
+            # DO NOTHING guard above → permanent non-renewal otherwise). The retry re-uses
+            # the SAME deterministic idempotency_key, so YooKassa dedupes: if the original
+            # call actually succeeded, the retry returns that same payment and classifies
+            # 'ok' (no double-charge). No failure audit/notification for a transient blip.
+            await session.execute(
+                text("DELETE FROM autopay_charges WHERE id = :claim_id"),
+                {"claim_id": str(claim_id)},
+            )
+            _log.warning(
+                "autopay_charge_transient_retry",
+                membership_id=str(membership_id),
+                period_end=str(period_end),
+                claim_id=str(claim_id),
+                reason=result.classification,
+            )
+            # Do NOT increment count or enqueue a failure notification — this period
+            # is left un-charged and fully eligible again on the next tick.
+            continue
+
         else:
-            # Failure path: NO online_payments row (yookassa_payment_id is NOT NULL —
-            # a provider decline has no payment id, so we cannot insert the row).
+            # Permanent-failure path (validation_error / permanent_error): a genuine
+            # decline. NO online_payments row (yookassa_payment_id is NOT NULL — a
+            # decline has no payment id, so we cannot insert the row).
             # UPDATE claim status='failed' so the next tick does NOT retry (T-84-12).
             failure_reason = result.classification
             if result.error_code:

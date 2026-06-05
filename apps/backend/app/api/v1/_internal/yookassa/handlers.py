@@ -672,17 +672,25 @@ async def handle_payment_succeeded(
     # (plan 51-05).
     # Phase 84 APAY-02: discriminator — use literal strings at the enqueue site
     # so both branches are structurally unambiguous (plan 02 arch note).
+    # CR-01 fix: dispatch_payment_notification looks the subject up by the
+    # `payment_id` it receives. For 'payment_succeeded' the task reads the
+    # `payments` ledger row (→ ledger_payment_id); for 'autopay_charge_succeeded'
+    # it reads the `online_payments` row + claims on online_payment_id (→ op_row_id).
+    # Passing ledger_payment_id for autopay made the lookup miss (payments.id !=
+    # online_payments.id) and the success DM was silently dropped.
     if is_autopay_local:
         notification_kind: str = "autopay_charge_succeeded"
+        notification_payment_id: UUID = op_row_id
     else:
         notification_kind = "payment_succeeded"
+        notification_payment_id = ledger_payment_id
     await _post_commit_enqueue(
         arq_pool,
         online_payment_id=op_row_id,
         subject_kind=subject_kind_local,
         subject_id=subject_id_local,
         fiscal_receipt_id=fiscal_receipt_row_id_local,
-        payment_id=ledger_payment_id,
+        payment_id=notification_payment_id,
         kind=notification_kind,
     )
 

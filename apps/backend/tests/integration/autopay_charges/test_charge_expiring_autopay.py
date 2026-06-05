@@ -262,9 +262,7 @@ async def test_charge_decline_path(db_session: AsyncSession) -> None:
     membership_id: UUID = seed["membership_id"]
 
     with respx.mock(base_url=_YK_BASE, assert_all_called=False) as router:
-        router.post("payments").mock(
-            return_value=Response(402, json=_decline_response())
-        )
+        router.post("payments").mock(return_value=Response(402, json=_decline_response()))
 
         count, declined_ids = await _charge_expiring_autopay_memberships(
             db_session, today=today, window_days=3
@@ -318,6 +316,80 @@ async def test_charge_decline_path(db_session: AsyncSession) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Test 2b (CR-02 regression): transient provider error → claim DELETED → retryable
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_charge_transient_error_is_retryable(db_session: AsyncSession) -> None:
+    """Provider 5xx (transient) → claim DELETED, NO failure, period re-eligible next tick.
+
+    CR-02: a transient blip must NOT permanently mark the period 'failed' (which the
+    ON CONFLICT DO NOTHING guard would then skip forever). The claim row is deleted so
+    a later tick re-attempts; a subsequent 'ok' response charges normally.
+    """
+    today = date.today()
+    seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=1))
+    membership_id: UUID = seed["membership_id"]
+
+    # First tick: provider 503 (transient).
+    with respx.mock(base_url=_YK_BASE, assert_all_called=False) as router:
+        router.post("payments").mock(return_value=Response(503, json={"type": "error"}))
+        count, declined_ids = await _charge_expiring_autopay_memberships(
+            db_session, today=today, window_days=3
+        )
+    await db_session.flush()
+
+    assert count == 0, "transient error must NOT count as an initiated/failed charge"
+    assert declined_ids == [], "transient error must NOT enqueue a failure notification"
+
+    # Claim row DELETED (not left as 'failed' → period stays fully eligible).
+    charge_count = (
+        await db_session.execute(
+            text("SELECT COUNT(*) FROM autopay_charges WHERE membership_id = :m_id"),
+            {"m_id": str(membership_id)},
+        )
+    ).scalar_one()
+    assert charge_count == 0, "transient error must DELETE the claim so the next tick retries"
+
+    # No failure audit emitted for a transient blip.
+    fail_audits = (
+        await db_session.execute(
+            text("SELECT COUNT(*) FROM audit_log WHERE action = 'autopay_charge_failed'")
+        )
+    ).scalar_one()
+    assert fail_audits == 0
+
+    # Second tick: provider recovers (200 ok) → charges normally (proves retryability).
+    with respx.mock(base_url=_YK_BASE, assert_all_called=False) as router:
+        router.post("payments").mock(
+            return_value=Response(200, json=_ok_payment_response(_FAKE_PAYMENT_ID, "1990.00"))
+        )
+        count2, declined2 = await _charge_expiring_autopay_memberships(
+            db_session, today=today, window_days=3
+        )
+    await db_session.flush()
+
+    assert count2 == 1, "after a transient failure the period must be re-chargeable"
+    assert declined2 == []
+    retry_row = (
+        (
+            await db_session.execute(
+                text(
+                    "SELECT status, online_payment_id FROM autopay_charges"
+                    " WHERE membership_id = :m_id"
+                ),
+                {"m_id": str(membership_id)},
+            )
+        )
+        .mappings()
+        .one()
+    )
+    assert retry_row["status"] == "pending"
+    assert retry_row["online_payment_id"] is not None
+
+
+# ---------------------------------------------------------------------------
 # Test 3: Amount equals plan's current price_kopecks
 # ---------------------------------------------------------------------------
 
@@ -352,10 +424,7 @@ async def test_charge_amount_matches_plan_price(db_session: AsyncSession) -> Non
     charge_row = (
         (
             await db_session.execute(
-                text(
-                    "SELECT amount_kopecks FROM autopay_charges"
-                    " WHERE membership_id = :am_mid"
-                ),
+                text("SELECT amount_kopecks FROM autopay_charges WHERE membership_id = :am_mid"),
                 {"am_mid": str(seed["membership_id"])},
             )
         )

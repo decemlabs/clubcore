@@ -29,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.autopay_charges.service import _charge_expiring_autopay_memberships
 
-
 # ---------------------------------------------------------------------------
 # Seed helpers (no-card, no-consent, not-in-window variants)
 # ---------------------------------------------------------------------------
@@ -123,18 +122,12 @@ async def _seed_payment_method(
     )
     if consent:
         await session.execute(
-            text(
-                "UPDATE client_payment_methods SET consent_recorded_at = now()"
-                " WHERE id = :pm_id"
-            ),
+            text("UPDATE client_payment_methods SET consent_recorded_at = now() WHERE id = :pm_id"),
             {"pm_id": cpm_id},
         )
     if not alive:
         await session.execute(
-            text(
-                "UPDATE client_payment_methods SET unlinked_at = now()"
-                " WHERE id = :pm_id"
-            ),
+            text("UPDATE client_payment_methods SET unlinked_at = now() WHERE id = :pm_id"),
             {"pm_id": cpm_id},
         )
     await session.flush()
@@ -148,7 +141,9 @@ async def _assert_zero_charges(session: AsyncSession, membership_id: Any) -> Non
             {"m_id": str(membership_id)},
         )
     ).scalar_one()
-    assert ac_count == 0, f"Expected 0 autopay_charges rows for membership {membership_id}, got {ac_count}"
+    assert ac_count == 0, (
+        f"Expected 0 autopay_charges rows for membership {membership_id}, got {ac_count}"
+    )
 
 
 def _no_charge_mock(call_count_holder: list[int]) -> Any:
