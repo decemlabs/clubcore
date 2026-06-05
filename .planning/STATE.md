@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
-status: verifying
-stopped_at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
-last_updated: "2026-06-05T11:12:49.743Z"
+status: ready_to_plan
+stopped_at: Phase 82 complete (3/3) — ready to discuss Phase 83
+last_updated: 2026-06-05T11:48:58.222Z
 last_activity: 2026-06-05
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 82 — Loyalty Foundation — Ledger + Balance + Accrual
+**Current focus:** Phase 83 — bonus redemption at checkout
 
 ## Current Position
 
-Phase: 82 (Loyalty Foundation — Ledger + Balance + Accrual) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 83
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-05
 
 ## v2.3 Roadmap Summary
