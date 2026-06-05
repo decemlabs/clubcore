@@ -55,6 +55,9 @@ EMAIL_ONLINE_PAYMENT_REFUNDED: Final[str] = "EMAIL_ONLINE_PAYMENT_REFUNDED"  # O
 EMAIL_ONLINE_PAYMENT_CANCELED: Final[str] = "EMAIL_ONLINE_PAYMENT_CANCELED"  # OWNER-COPY-LOCK
 # owner-alert (NOT-04): fiscal-failed operator notification
 EMAIL_FISCAL_RECEIPT_FAILED: Final[str] = "EMAIL_FISCAL_RECEIPT_FAILED"  # OWNER-COPY-LOCK
+# Phase 84 APAY-04 — autopay outcome notifications (client-facing, owner-signed)
+EMAIL_AUTOPAY_CHARGE_SUCCEEDED: Final[str] = "EMAIL_AUTOPAY_CHARGE_SUCCEEDED"  # OWNER-COPY-LOCK
+EMAIL_AUTOPAY_CHARGE_FAILED: Final[str] = "EMAIL_AUTOPAY_CHARGE_FAILED"  # OWNER-COPY-LOCK
 
 # Two sandboxed Jinja environments: HTML side autoescapes user-supplied
 # variables; text/plain side is explicit passthrough. Mirrors payments/email_templates.py
@@ -147,6 +150,42 @@ TEMPLATES: Final[dict[str, EmailTemplate]] = {
             "[ОПОВЕЩЕНИЕ ВЛАДЕЛЬЦА] Ошибка формирования фискального чека.\n"  # noqa: RUF001
             "payment_id: {{ payment_id }}, причина: {{ failure_reason }}.\n"  # noqa: RUF001
             "Требуется ручная проверка в ЮKassa.\n\n"  # noqa: RUF001
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"  # noqa: RUF001
+        ),
+    ),
+    # Phase 84 APAY-04 — autopay outcome emails. Owner-signed-off APAY-04.
+    # Copy mirrors the Telegram DM templates in autopay_charges/notifications.py (999.2 precedent).
+    "EMAIL_AUTOPAY_CHARGE_SUCCEEDED": EmailTemplate(  # noqa: RUF001
+        subject="Абонемент продлён автосписанием",  # noqa: RUF001
+        html=_ENV.from_string(
+            "<h1>Абонемент продлён автосписанием</h1>"  # noqa: RUF001
+            "<p>Здравствуйте, {{ first_name }}!"  # noqa: RUF001
+            " Ваш абонемент продлён автосписанием на сумму {{ amount_rub }}.</p>"  # noqa: RUF001
+            "<p>Абонемент действует до {{ end_date }}. Ждём вас в зале!</p>"  # noqa: RUF001
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"  # noqa: RUF001
+        ),
+        text=_ENV_TEXT.from_string(
+            "Абонемент продлён автосписанием\n\n"  # noqa: RUF001
+            "Здравствуйте, {{ first_name }}!"  # noqa: RUF001
+            " Ваш абонемент продлён автосписанием на сумму {{ amount_rub }}.\n"  # noqa: RUF001
+            "Абонемент действует до {{ end_date }}. Ждём вас в зале!\n\n"  # noqa: RUF001
+            f"{CLUB_BRAND} · noreply@mail.clubcore.ru"  # noqa: RUF001
+        ),
+    ),
+    "EMAIL_AUTOPAY_CHARGE_FAILED": EmailTemplate(  # noqa: RUF001
+        subject="Автосписание не прошло — обновите карту",  # noqa: RUF001
+        html=_ENV.from_string(
+            "<h1>Автосписание не прошло</h1>"  # noqa: RUF001
+            "<p>Здравствуйте, {{ first_name }}!"  # noqa: RUF001
+            " Автосписание за продление абонемента на сумму {{ amount_rub }} не прошло.</p>"  # noqa: RUF001
+            "<p>Пожалуйста, обновите карту в приложении или обратитесь к администратору.</p>"  # noqa: RUF001
+            f"<p>{CLUB_BRAND} · noreply@mail.clubcore.ru</p>"  # noqa: RUF001
+        ),
+        text=_ENV_TEXT.from_string(
+            "Автосписание не прошло\n\n"  # noqa: RUF001
+            "Здравствуйте, {{ first_name }}!"  # noqa: RUF001
+            " Автосписание за продление абонемента на сумму {{ amount_rub }} не прошло.\n"  # noqa: RUF001
+            "Пожалуйста, обновите карту в приложении или обратитесь к администратору.\n\n"  # noqa: RUF001
             f"{CLUB_BRAND} · noreply@mail.clubcore.ru"  # noqa: RUF001
         ),
     ),

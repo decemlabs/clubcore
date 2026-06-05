@@ -225,6 +225,13 @@ ignore_imports =
     # clamp loyaltyRedeemKopecks server-authoritatively (T-83-04 / D-06).
     # Direct edge mirrors client_portal.service -> promo_codes.service precedent.
     app.modules.client_portal.service -> app.modules.loyalty.service
+    # Phase 84 APAY-04 — online_payments.tasks dispatches the autopay_charge_succeeded
+    # notification using autopay_charges.notifications DM copy renderers (owner-signed).
+    # The success path is routed through dispatch_payment_notification (existing task)
+    # because the webhook enqueues it with an online_payments row (D-52-10 pattern).
+    # Narrow scope: only tasks.py consumes the cross-module DM renderers (not
+    # repository, service, or router). Mirror of Phase 45 memberships.service edge.
+    app.modules.online_payments.tasks -> app.modules.autopay_charges.notifications
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear

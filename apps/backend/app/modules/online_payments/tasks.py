@@ -53,6 +53,7 @@ from app.core.dependencies import get_email_dispatcher
 from app.core.formatters import format_money
 from app.integrations.telegram import sender as telegram_sender
 from app.integrations.telegram.bot import build_bot
+from app.modules.autopay_charges import notifications as autopay_notifications
 from app.modules.online_payments import notifications as payment_notifications
 from app.modules.online_payments import repository as payment_repo
 
@@ -238,6 +239,57 @@ async def _resolve_yookassa_payment_id(session: AsyncSession, online_payment_uui
 # ---------------------------------------------------------------------------
 
 
+async def _resolve_autopay_membership_end_date(
+    session: AsyncSession,
+    online_payment_uuid: UUID,
+) -> str:
+    """Resolve the new membership end_date for an autopay-confirmed renewal.
+
+    Looks up the newest active membership for the client associated with the
+    online_payments row (via membership_plan_id → memberships). Returns the
+    end_date as a formatted "DD.MM.YYYY" string, or "" if not resolvable.
+
+    Cross-module tables accessed via ``Base.metadata.tables[<name>]``
+    (D-54-08 modules-independent pattern).
+    """
+    from app.core.database import Base
+
+    online_payments = Base.metadata.tables["online_payments"]
+    memberships = _memberships_table()
+
+    # Fetch (client_id, membership_plan_id) from the online_payments row.
+    op_row = await session.execute(
+        select(
+            online_payments.c.client_id,
+            online_payments.c.membership_plan_id,
+        ).where(online_payments.c.id == online_payment_uuid)
+    )
+    op = op_row.first()
+    if op is None or op.membership_plan_id is None:
+        return ""
+
+    # Pick the newest active membership for this client + plan (webhook just activated it).
+    mem_row = await session.execute(
+        select(memberships.c.end_date)
+        .where(memberships.c.client_id == op.client_id)
+        .where(memberships.c.plan_id == op.membership_plan_id)
+        .where(memberships.c.status == "active")
+        .order_by(memberships.c.end_date.desc())
+        .limit(1)
+    )
+    mem = mem_row.first()
+    if mem is None:
+        return ""
+
+    end_date: Any = mem.end_date
+    # Format as "DD.MM.YYYY" (Russian date display convention).
+    try:
+        formatted: str = end_date.strftime("%d.%m.%Y")
+        return formatted
+    except AttributeError:
+        return str(end_date)
+
+
 async def _dispatch_email(
     kind: str,
     to: str,
@@ -247,6 +299,7 @@ async def _dispatch_email(
     payment_id: str = "",
     yookassa_payment_id: str = "",
     failure_reason: str = "",
+    end_date: str = "",
 ) -> None:
     """Dispatch an email for the given payment notification kind.
 
@@ -262,6 +315,18 @@ async def _dispatch_email(
             audit_correlation_id=audit_correlation_id,
             first_name=first_name,
             amount_rub=amount_rub,
+        )
+    elif kind == "autopay_charge_succeeded":
+        # Phase 84 APAY-04: autopay renewal success email (client-facing, owner-signed).
+        # Keyed on online_payment_id (the webhook created the online_payments row).
+        # STRING LITERAL template_id required by AST gate (D-52-07).
+        await dispatcher(
+            template_id="EMAIL_AUTOPAY_CHARGE_SUCCEEDED",
+            to=to,
+            audit_correlation_id=audit_correlation_id,
+            first_name=first_name,
+            amount_rub=amount_rub,
+            end_date=end_date,
         )
     elif kind == "refund_succeeded":
         await dispatcher(
@@ -328,17 +393,68 @@ async def dispatch_payment_notification(ctx: dict[str, Any], *, payment_id: str,
 
     if not is_owner_alert:
         # Client kinds — resolve from the payments ledger row.
+        # autopay_charge_succeeded uses online_payments.id as payment_uuid;
+        # other client kinds use payments.id.
         async with session_factory() as session:
-            client_result = await _resolve_client_row(session, payment_uuid)
-            if client_result is None:
-                _log.error(
-                    "payment_notification_client_not_resolvable",
-                    payment_id=payment_id,
-                    kind=kind,
+            if kind == "autopay_charge_succeeded":
+                # Recipient resolution for autopay success: online_payments row →
+                # memberships → clients (via client_id on online_payments directly).
+                op_clients = _clients_table()
+                from app.core.database import Base as _Base
+
+                _online_payments_tbl = _Base.metadata.tables["online_payments"]
+                op_row = await session.execute(
+                    select(
+                        _online_payments_tbl.c.client_id,
+                    ).where(_online_payments_tbl.c.id == payment_uuid)
                 )
-                return "skipped"
-            client_first_name, client_email, client_telegram_user_id = client_result
-            amount_kopecks = await _resolve_payment_amount(session, payment_uuid)
+                op = op_row.first()
+                if op is None:
+                    _log.error(
+                        "payment_notification_client_not_resolvable",
+                        payment_id=payment_id,
+                        kind=kind,
+                    )
+                    return "skipped"
+                client_row_result = await session.execute(
+                    select(
+                        op_clients.c.first_name,
+                        op_clients.c.email,
+                        op_clients.c.telegram_user_id,
+                    ).where(op_clients.c.id == op.client_id)
+                )
+                client_data = client_row_result.first()
+                if client_data is None:
+                    _log.error(
+                        "payment_notification_client_not_resolvable",
+                        payment_id=payment_id,
+                        kind=kind,
+                    )
+                    return "skipped"
+                client_first_name = client_data.first_name
+                client_email = client_data.email
+                client_telegram_user_id = client_data.telegram_user_id
+                # Resolve the online_payments amount_kopecks.
+                op_amount_row = await session.execute(
+                    select(_online_payments_tbl.c.amount_kopecks).where(
+                        _online_payments_tbl.c.id == payment_uuid
+                    )
+                )
+                amount_kopecks = abs(op_amount_row.scalar_one_or_none() or 0)
+                # Resolve new membership end date for the success DM.
+                autopay_end_date = await _resolve_autopay_membership_end_date(session, payment_uuid)
+            else:
+                client_result = await _resolve_client_row(session, payment_uuid)
+                if client_result is None:
+                    _log.error(
+                        "payment_notification_client_not_resolvable",
+                        payment_id=payment_id,
+                        kind=kind,
+                    )
+                    return "skipped"
+                client_first_name, client_email, client_telegram_user_id = client_result
+                amount_kopecks = await _resolve_payment_amount(session, payment_uuid)
+                autopay_end_date = ""
         amount_rub = format_money(amount_kopecks)
     else:
         # Owner-alert kinds — context data fetched per channel below.
@@ -346,6 +462,7 @@ async def dispatch_payment_notification(ctx: dict[str, Any], *, payment_id: str,
         client_email = None
         client_telegram_user_id = None
         amount_rub = ""
+        autopay_end_date = ""
 
     channels_sent: list[str] = []
 
@@ -397,10 +514,13 @@ async def dispatch_payment_notification(ctx: dict[str, Any], *, payment_id: str,
                 email_addr = client_email
 
         # ── STEP 2: CLAIM via idempotency INSERT (claim-before-send, D-52-02) ──
-        # D-52-10 polymorphic subject routing: payment_canceled keys on
-        # online_payment_id (no payments ledger row for canceled payments);
-        # all other kinds key on payment_id (the payments.id ledger row exists).
-        if kind == "payment_canceled":
+        # D-52-10 polymorphic subject routing:
+        #   - payment_canceled: online_payment_id (no payments ledger row for canceled)
+        #   - autopay_charge_succeeded: online_payment_id (the webhook created the
+        #     online_payments row; there is a payments row too, but the task is enqueued
+        #     with the online_payments.id so we key on that for unambiguous idempotency)
+        #   - all other kinds: payment_id (the payments.id ledger row exists)
+        if kind in ("payment_canceled", "autopay_charge_succeeded"):
             claimed = await payment_repo.claim_payment_notification(
                 session_factory,
                 kind=kind,
@@ -431,6 +551,13 @@ async def dispatch_payment_notification(ctx: dict[str, Any], *, payment_id: str,
                         client_name=client_first_name,
                         amount_rub=amount_rub,
                     )
+                elif kind == "autopay_charge_succeeded":
+                    # Phase 84 APAY-04: autopay renewal success DM (client-facing).
+                    text = autopay_notifications.render_autopay_charge_succeeded_dm(
+                        client_name=client_first_name,
+                        amount_rub=amount_rub,
+                        end_date=autopay_end_date,
+                    )
                 elif kind == "refund_succeeded":
                     text = payment_notifications.render_online_payment_refunded_dm(
                         client_name=client_first_name,
@@ -456,7 +583,19 @@ async def dispatch_payment_notification(ctx: dict[str, Any], *, payment_id: str,
                 await telegram_sender.send_text_dm(bot, chat_id=chat_id, text=text)
             else:  # email
                 kwargs: dict[str, str] = {}
-                if kind in ("payment_succeeded", "refund_succeeded"):
+                if kind == "payment_succeeded":
+                    kwargs = {
+                        "first_name": client_first_name,
+                        "amount_rub": amount_rub,
+                    }
+                elif kind == "autopay_charge_succeeded":
+                    # Phase 84 APAY-04: autopay success email (client-facing).
+                    kwargs = {
+                        "first_name": client_first_name,
+                        "amount_rub": amount_rub,
+                        "end_date": autopay_end_date,
+                    }
+                elif kind == "refund_succeeded":
                     kwargs = {
                         "first_name": client_first_name,
                         "amount_rub": amount_rub,
