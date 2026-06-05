@@ -40,7 +40,7 @@ import app.modules.schedule.models  # Phase 38 SLOT-01 / 0016
 import app.modules.trainers.models  # Phase 31 TRN-01
 import app.modules.visits.models
 import app.modules.payment_methods.models  # Phase 79 PAYM-01..04 / 0052
-import app.modules.promo_codes.models  # Phase 999.4 D-04/D-07 / 0046 — pre-existing env.py gap fixed here
+import app.modules.promo_codes.models  # Phase 999.4 D-04/D-07 / 0046 (env.py gap fixed)
 import app.modules.loyalty.models  # Phase 82 LOYL-03 / 0054
 import app.core.audit_models  # noqa: F401
 
