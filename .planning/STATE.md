@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
-status: ready_to_plan
-stopped_at: Phase 83 complete (3/3) — ready to discuss Phase 84
-last_updated: 2026-06-05T14:39:03.518Z
-last_activity: 2026-06-05 -- Phase 83 Plan 03 complete (CheckoutSheet bonus wiring + openapi regen, REDM-03 closed)
+status: executing
+stopped_at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
+last_updated: "2026-06-05T19:10:19.493Z"
+last_activity: 2026-06-05 -- Phase 84 planning complete
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 6
+  total_plans: 9
   completed_plans: 6
   percent: 25
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 
 Phase: 84
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-05
+Status: Ready to execute
+Last activity: 2026-06-05 -- Phase 84 planning complete
 
 ## v2.3 Roadmap Summary
 
