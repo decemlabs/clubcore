@@ -209,6 +209,7 @@ async def _sell_subject_core(
     price_override_kopecks: int | None = None,
     applied_promo_code_id: UUID | None = None,
     save_payment_method: bool = False,
+    loyalty_redeem_kopecks: int | None = None,
 ) -> SellResponse:
     """Actor-agnostic sell flow (Phase 71 D-71-01).
 
@@ -344,6 +345,14 @@ async def _sell_subject_core(
     if price_override_kopecks is not None:
         price_kopecks = price_override_kopecks
 
+    # Phase 83 REDM-01: apply bonus redemption AFTER promo override (D-06).
+    # loyalty_redeem_kopecks is already server-clamped by client_portal.service
+    # (min(requested, balance, post_promo_price - 1)); here we apply a final
+    # floor of 1 kopeck as a belt-and-suspenders guard (ЮKassa requires amount≥1).
+    # Staff callers never pass this param → byte-identical to before.
+    if loyalty_redeem_kopecks and loyalty_redeem_kopecks > 0:
+        price_kopecks = max(1, price_kopecks - loyalty_redeem_kopecks)
+
     # 5. Build receipt + 6. call ЮKassa.
     receipt_items = [
         build_receipt_item(
@@ -432,6 +441,7 @@ async def _sell_subject_core(
             id_override=online_payment_id_override,  # CR-01/CR-02: None for staff path
             promo_code_id=applied_promo_code_id,  # Phase 999.4 D-06/D-07: None for non-promo
             save_payment_method=save_payment_method,  # Phase 79 PAYM-01
+            loyalty_redeem_kopecks=loyalty_redeem_kopecks,  # Phase 83 REDM-01: None for non-redeem
         )
         # surface FK + CHECK + UNIQUE conflicts BEFORE audit emit (D-49-19)
         await session.flush()

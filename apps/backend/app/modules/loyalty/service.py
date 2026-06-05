@@ -287,6 +287,105 @@ async def list_client_loyalty_history(
     )
 
 
+async def record_loyalty_redemption(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    online_payment_id: UUID,
+    requested_redeem_kopecks: int,
+) -> None:
+    """Write one negative redemption ledger row on payment.succeeded (REDM-02).
+
+    Clamps actual_debit = min(requested_redeem_kopecks, current_balance) so the
+    ledger SUM never goes negative (T-83-05 overdraft guard).  Idempotent: uses
+    pg_insert on_conflict_do_nothing targeting the partial UNIQUE INDEX
+    uq_loyalty_ledger_online_payment_id (online_payment_id WHERE
+    entry_type='redemption') — a webhook replay inserts nothing and emits no
+    second audit event (T-83-06).
+
+    Emits loyalty_redeemed audit event only when a row is actually inserted
+    (RETURNING-gated, INFRA-15 pre-registered before callsite).
+
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    """
+    current_balance = await _sum_balance(session, client_id)
+    actual_debit = min(requested_redeem_kopecks, current_balance)
+
+    if actual_debit <= 0:
+        _log.warning(
+            "loyalty_redemption_clamped_to_zero",
+            client_id=str(client_id),
+            online_payment_id=str(online_payment_id),
+            requested_redeem_kopecks=requested_redeem_kopecks,
+            current_balance=current_balance,
+        )
+        return
+
+    if actual_debit < requested_redeem_kopecks:
+        # Partial overdraft absorbed — log the discrepancy.
+        _log.warning(
+            "loyalty_redemption_overdraft_clamped",
+            client_id=str(client_id),
+            online_payment_id=str(online_payment_id),
+            requested_redeem_kopecks=requested_redeem_kopecks,
+            actual_debit=actual_debit,
+            current_balance=current_balance,
+        )
+
+    stmt = (
+        pg_insert(LoyaltyLedger)
+        .values(
+            client_id=client_id,
+            entry_type="redemption",
+            amount_kopecks=-actual_debit,
+            online_payment_id=online_payment_id,
+            category=None,
+            reason=None,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["online_payment_id"],
+            # Inline SQL literal (NOT a bound param) so PostgreSQL can match
+            # this predicate against the partial UNIQUE INDEX
+            # uq_loyalty_ledger_online_payment_id during ON CONFLICT arbiter
+            # inference — mirrors the accrue_welcome_bonus pattern.
+            index_where=text("entry_type = 'redemption'"),
+        )
+        .returning(LoyaltyLedger.id)
+    )
+    result = await session.execute(stmt)
+    inserted_id = result.scalar_one_or_none()
+
+    if inserted_id is None:
+        # Conflict path — idempotent replay (same online_payment_id).
+        _log.info(
+            "loyalty_redemption_conflict",
+            client_id=str(client_id),
+            online_payment_id=str(online_payment_id),
+            msg="redemption already recorded for this payment — no-op",
+        )
+        return
+
+    await session.flush()
+    await audit.emit(
+        session,
+        "loyalty_redeemed",
+        actor_user_id=None,  # webhook-initiated; no staff actor
+        resource_type="loyalty",
+        resource_id=inserted_id,
+        client_id=str(client_id),
+        entry_id=str(inserted_id),
+        amount_kopecks=-actual_debit,
+        online_payment_id=str(online_payment_id),
+    )
+    _log.info(
+        "loyalty_redemption_recorded",
+        client_id=str(client_id),
+        online_payment_id=str(online_payment_id),
+        entry_id=str(inserted_id),
+        amount_kopecks=-actual_debit,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

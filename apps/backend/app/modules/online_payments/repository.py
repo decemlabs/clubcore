@@ -43,6 +43,7 @@ async def insert_online_payment(
     id_override: UUID | None = None,
     promo_code_id: UUID | None = None,
     save_payment_method: bool = False,
+    loyalty_redeem_kopecks: int | None = None,
 ) -> OnlinePayment:
     """Insert OnlinePayment row; caller owns flush + commit (D-49-07).
 
@@ -59,6 +60,10 @@ async def insert_online_payment(
     ``save_payment_method`` (Phase 79 PAYM-01): intent flag — when True the
     webhook step 8.5 upserts the returned card token. Defaults False (server_default
     also false); never client-writable post-checkout (T-79-02).
+
+    ``loyalty_redeem_kopecks`` (Phase 83 REDM-01): server-computed bonus debit
+    amount persisted at checkout; clamped by client_portal.service before
+    reaching here.  NULL for non-redemption payments; never client-writable.
     """
     kwargs: dict[str, Any] = dict(
         client_id=client_id,
@@ -78,6 +83,8 @@ async def insert_online_payment(
         kwargs["id"] = id_override
     if promo_code_id is not None:
         kwargs["promo_code_id"] = promo_code_id
+    if loyalty_redeem_kopecks is not None:
+        kwargs["loyalty_redeem_kopecks"] = loyalty_redeem_kopecks
     row = OnlinePayment(**kwargs)
     session.add(row)
     return row
