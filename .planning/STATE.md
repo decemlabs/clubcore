@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
 status: executing
-stopped_at: Phase 84 Plan 02 complete — cron + webhook discriminator
-last_updated: "2026-06-05T21:20:00Z"
-last_activity: 2026-06-05 -- Phase 84 Plan 02 complete
+stopped_at: Phase 84 Plan 03 complete — autopay success+failure notifications, channel-idempotent, 3 tests
+last_updated: "2026-06-05T22:15:00Z"
+last_activity: 2026-06-05 -- Phase 84 Plan 03 complete
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
   completed_plans: 9
-  percent: 28
+  percent: 38
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 ## Current Position
 
 Phase: 84
-Plan: 02 complete (02/3)
+Plan: 03 complete (03/3) — Phase 84 COMPLETE
 Status: Executing
-Last activity: 2026-06-05 -- Phase 84 Plan 02 complete
+Last activity: 2026-06-05 -- Phase 84 Plan 03 complete
 
 ## v2.3 Roadmap Summary
 
@@ -72,6 +72,12 @@ Last activity: 2026-06-05 -- Phase 84 Plan 02 complete
 - **REDM-03 PWA wiring**: `bonusOn` + `balanceKopecks` lifted to `CheckoutSheet` scope (mirrors `savePaymentMethod` pattern) so `launchCheckout` can include `loyaltyRedeemKopecks` in request body; `bonusEstimateKopecks` is display-only (D-06 invariant — never mutates server-derived `total`/`discount`)
 - **Bonus section hidden on zero/loading/error**: mirrors CardSheet "no card = no section" pattern — no empty state copy shown
 - **openapi.json regen**: additive only; Phase 85 owns byte-stable freeze
+
+### Key v2.3 Phase 84 Plan 03 Decisions
+
+- **D-84-09 Migration 0057 widen payment_notifications.kind CHECK**: 'autopay_charge_succeeded' added (4→5 kinds); raw DDL per D-84-01; Rule 2 auto-fix (missing constraint for correctness)
+- **D-84-10 Autopay success recipient via online_payments.client_id**: direct column read instead of payments-ledger chain (_resolve_client_row not applicable for online_payment_id-keyed kind)
+- **D-84-11 import-linter edge online_payments.tasks → autopay_charges.notifications**: one narrow ignore edge for success DM renderer import; scoped to tasks.py only
 
 ### Key v2.3 Phase 84 Plan 02 Decisions
 
@@ -145,9 +151,9 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-05T21:20:00Z
-Stopped at: Phase 84 Plan 02 complete — cron + service helper + webhook discriminator + 41 tests
-Resume: Continue with Phase 84 Plan 03 (failure notifications)
+Last session: 2026-06-05T22:15:00Z
+Stopped at: Phase 84 Plan 03 complete — autopay success+failure notifications, channel-idempotent, 3 tests; Phase 84 COMPLETE
+Resume: Continue with Phase 85 (OpenAPI Handoff + Milestone Verification)
 
 ## Operator Next Steps
 
