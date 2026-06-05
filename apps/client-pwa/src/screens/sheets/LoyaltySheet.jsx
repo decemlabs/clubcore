@@ -88,7 +88,7 @@ export function LoyaltyBalanceCard({ onOpen }) {
       aria-label="Бонусный счёт"
     >
       {/* Top row: icon + label + chevron */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{
           width: 32, height: 32, borderRadius: 8, flexShrink: 0,
           background: 'var(--accent-soft)', color: 'var(--accent-deep)',
@@ -224,7 +224,7 @@ export function BonusHistorySheet({ onClose }) {
 
         {/* Section label */}
         <div className="t-mini" style={{
-          color: 'var(--text-3)', padding: '0 20px 8px',
+          color: 'var(--text-3)', padding: '0 16px 8px',
           fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
         }}>
           Операции
