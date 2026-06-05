@@ -216,6 +216,10 @@ ignore_imports =
     app.modules.clients.router -> app.modules.loyalty.permissions
     app.modules.clients.router -> app.modules.loyalty.service
     app.modules.clients.router -> app.modules.loyalty.schemas
+    # Phase 83 REDM-01 — client_portal.service reads loyalty balance at checkout to
+    # clamp loyaltyRedeemKopecks server-authoritatively (T-83-04 / D-06).
+    # Direct edge mirrors client_portal.service -> promo_codes.service precedent.
+    app.modules.client_portal.service -> app.modules.loyalty.service
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear

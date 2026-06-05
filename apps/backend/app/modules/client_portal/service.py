@@ -32,8 +32,10 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+import app.modules.loyalty.service as _loyalty_service
 import app.modules.payment_methods.service as _payment_methods_service
 import app.modules.promo_codes.service as _promo_service
 from app.core.config import get_settings
@@ -687,6 +689,7 @@ async def client_checkout_membership(
     yookassa_settings: YooKassaSettings,
     promo_code: str | None = None,
     save_payment_method: bool = False,
+    loyalty_redeem_kopecks: int | None = None,
 ) -> ClientCheckoutResponse:
     """Client-initiated membership checkout via ЮKassa redirect (CPAY-01).
 
@@ -731,6 +734,37 @@ async def client_checkout_membership(
             client_id=client.id,
         )
 
+    # Phase 83 REDM-01 D-06: server-authoritative bonus clamp AFTER promo validation.
+    # T-83-04: client sends loyaltyRedeemKopecks as desired amount; server caps it to
+    # min(requested, balance, post_promo_price - 1) so ЮKassa amount_kopecks >= 1.
+    actual_loyalty_redeem: int | None = None
+    if loyalty_redeem_kopecks and loyalty_redeem_kopecks > 0:
+        if price_override is not None:
+            post_promo_price = price_override
+        else:
+            # Read the plan price via raw SQL (D-54-08 — no ORM import).
+            _plan_row = (
+                (
+                    await session.execute(
+                        text("SELECT price_kopecks FROM membership_plans WHERE id = :id"),
+                        {"id": str(plan_id)},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            post_promo_price = int(_plan_row["price_kopecks"]) if _plan_row else 0
+        if post_promo_price > 1:
+            balance_resp = await _loyalty_service.get_client_loyalty_balance(session, client.id)
+            clamped = min(
+                loyalty_redeem_kopecks,
+                balance_resp.balance_kopecks,
+                post_promo_price - 1,
+            )
+            if clamped > 0:
+                actual_loyalty_redeem = clamped
+                price_override = post_promo_price - clamped
+
     # CR-01 (fix): generate a FRESH op_id (uuid4) for the redirect return_url,
     # mirroring the PT path. Deriving the PK from the per-day idem_key collided
     # on the same-day cancel-then-retry path (the replay short-circuit skips
@@ -751,6 +785,7 @@ async def client_checkout_membership(
         price_override_kopecks=price_override,
         applied_promo_code_id=applied_promo_code_id,
         save_payment_method=save_payment_method,
+        loyalty_redeem_kopecks=actual_loyalty_redeem,
     )
     r = cast(Any, result)
     # WR-02: confirmation_url must not be None for a redirect response.
@@ -771,6 +806,7 @@ async def client_checkout_pt_package(
     yookassa_settings: YooKassaSettings,
     promo_code: str | None = None,
     save_payment_method: bool = False,
+    loyalty_redeem_kopecks: int | None = None,
 ) -> ClientCheckoutResponse:
     """Client-initiated PT-package checkout via ЮKassa redirect (CPAY-02).
 
@@ -805,6 +841,36 @@ async def client_checkout_pt_package(
             client_id=client.id,
         )
 
+    # Phase 83 REDM-01 D-06: server-authoritative bonus clamp AFTER promo validation.
+    # Mirror of the membership checkout path (T-83-04).
+    actual_loyalty_redeem_pt: int | None = None
+    if loyalty_redeem_kopecks and loyalty_redeem_kopecks > 0:
+        if price_override is not None:
+            post_promo_price_pt = price_override
+        else:
+            # Read the plan price via raw SQL (D-54-08 — no ORM import).
+            _pt_plan_row = (
+                (
+                    await session.execute(
+                        text("SELECT price_kopecks FROM pt_package_plans WHERE id = :id"),
+                        {"id": str(plan_id)},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            post_promo_price_pt = int(_pt_plan_row["price_kopecks"]) if _pt_plan_row else 0
+        if post_promo_price_pt > 1:
+            balance_resp_pt = await _loyalty_service.get_client_loyalty_balance(session, client.id)
+            clamped_pt = min(
+                loyalty_redeem_kopecks,
+                balance_resp_pt.balance_kopecks,
+                post_promo_price_pt - 1,
+            )
+            if clamped_pt > 0:
+                actual_loyalty_redeem_pt = clamped_pt
+                price_override = post_promo_price_pt - clamped_pt
+
     op_id = uuid4()
     return_url = (
         f"{yookassa_settings.client_return_url}"
@@ -825,6 +891,7 @@ async def client_checkout_pt_package(
         price_override_kopecks=price_override,
         applied_promo_code_id=applied_promo_code_id,
         save_payment_method=save_payment_method,
+        loyalty_redeem_kopecks=actual_loyalty_redeem_pt,
     )
     r = cast(Any, result)
     # WR-02: confirmation_url must not be None for a redirect response.

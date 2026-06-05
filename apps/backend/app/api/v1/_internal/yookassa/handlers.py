@@ -108,6 +108,7 @@ from app.modules.fiscal_receipts.constants import (
 )
 from app.modules.fiscal_receipts.models import FiscalReceipt
 from app.modules.fiscal_receipts.repository import insert_fiscal_receipt
+from app.modules.loyalty.service import record_loyalty_redemption
 from app.modules.online_payments.constants import (
     ONLINE_PAYMENT_STATUS_TRANSITIONS,
     STATUS_CANCELED,
@@ -491,15 +492,16 @@ async def handle_payment_succeeded(
         await session.flush()
         fiscal_receipt_row_id: UUID = fr_row.id
 
-        # Phase 999.4 D-07: record promo redemption if payment used a promo code.
-        # row.promo_code_id was set at checkout (migration 0047 + ORM column).
-        # record_promo_redemption is idempotent (on_conflict_do_nothing on
-        # uq_promo_redemptions_online_payment_id) so webhook replay is safe.
-        # discount_kopecks is derived from the plan price minus the stored amount.
-        if row.promo_code_id is not None:
-            # Determine the plan price to compute the discount granted.
-            # subject_kind + subject_id already resolved above; use raw SQL
-            # (D-54-08 — no cross-module ORM import from handlers.py).
+        # Phase 999.4 D-07 / Phase 83 REDM-02: record promo redemption and/or loyalty
+        # redemption when this payment carried either (or both).  Plan price lookup is
+        # hoisted so it runs whenever EITHER promo_code_id OR loyalty_redeem_kopecks is
+        # set — both branches need the plan price for correct attribution (T-83-08).
+        # raw SQL only (D-54-08 — no cross-module ORM import from handlers.py).
+        _need_plan_price = row.promo_code_id is not None or (
+            row.loyalty_redeem_kopecks is not None and row.loyalty_redeem_kopecks > 0
+        )
+        plan_price_kopecks: int = row.amount_kopecks  # default: attribution == 0
+        if _need_plan_price:
             if subject_kind == SUBJECT_KIND_MEMBERSHIP:
                 _plan_table = "membership_plans"
             else:
@@ -516,10 +518,17 @@ async def handle_payment_succeeded(
                 .mappings()
                 .one_or_none()
             )
-            plan_price_kopecks: int = (
-                int(_plan_price_row["price_kopecks"]) if _plan_price_row else row.amount_kopecks
+            if _plan_price_row is not None:
+                plan_price_kopecks = int(_plan_price_row["price_kopecks"])
+
+        if row.promo_code_id is not None:
+            # T-83-08 attribution fix: subtract loyalty_redeem_kopecks so that promo
+            # discount + loyalty debit together equal plan_price - amount_kopecks.
+            # Without this fix a stacked promo+bonus payment over-attributes to promo.
+            discount_kopecks_for_redemption = max(
+                0,
+                plan_price_kopecks - row.amount_kopecks - (row.loyalty_redeem_kopecks or 0),
             )
-            discount_kopecks_for_redemption = max(0, plan_price_kopecks - row.amount_kopecks)
             if discount_kopecks_for_redemption > 0:
                 await record_promo_redemption(
                     session,
@@ -528,6 +537,18 @@ async def handle_payment_succeeded(
                     online_payment_id=row.id,
                     discount_kopecks=discount_kopecks_for_redemption,
                 )
+
+        # Phase 83 REDM-02: write loyalty redemption ledger row on payment.succeeded.
+        # record_loyalty_redemption is idempotent (partial UNIQUE on online_payment_id
+        # WHERE entry_type='redemption') + overdraft-clamped — webhook replay is safe
+        # (T-83-05 / T-83-06).  Debit only on succeeded; D-06 holds.
+        if row.loyalty_redeem_kopecks is not None and row.loyalty_redeem_kopecks > 0:
+            await record_loyalty_redemption(
+                session,
+                client_id=row.client_id,
+                online_payment_id=row.id,
+                requested_redeem_kopecks=row.loyalty_redeem_kopecks,
+            )
 
         # PAYM-01 / Phase 79 step 8.5: upsert saved card token if save_payment_method=True.
         # Token source: result.payment_method (YooKassaPaymentResult field added in phase 79).

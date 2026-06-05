@@ -264,6 +264,8 @@ class ClientCheckoutRequest(ResponseData):
 
     promo_code: str | None = None  # wire: promoCode (D-06); None = no promo applied
     save_payment_method: bool = False  # wire: savePaymentMethod (PAYM-01); False = don't save
+    loyalty_redeem_kopecks: int | None = None  # wire: loyaltyRedeemKopecks (REDM-01 D-06);
+    # desired bonus debit; server caps authoritatively — client never sets the final discount
 
 
 class ClientCheckoutResponse(ResponseData):
@@ -283,7 +285,7 @@ class ClientPaymentStatusResponse(ResponseData):
 
     id: UUID
     status: str  # Literal['pending', 'succeeded', 'canceled'] at runtime
-    receipt_url: str | None = None    # wire: receiptUrl; None if not yet available (D-11 honest)
+    receipt_url: str | None = None  # wire: receiptUrl; None if not yet available (D-11 honest)
     receipt_email: str | None = None  # wire: receiptEmail — D-09 info display
     receipt_phone: str | None = None  # wire: receiptPhone — D-10 phone-fallback receipt contact
 
@@ -323,13 +325,13 @@ class ClientProfileUpdateRequest(ResponseData):
     in Plan 02 service layer. Wire-shape schema only.
     """
 
-    first_name: str | None = None            # wire: firstName — D-06
-    goal: str | None = None                  # wire: goal — D-07 (4-value enum enforced in service)
-    height_cm: int | None = None             # wire: heightCm
-    weight_kg: int | None = None             # wire: weightKg
+    first_name: str | None = None  # wire: firstName — D-06
+    goal: str | None = None  # wire: goal — D-07 (4-value enum enforced in service)
+    height_cm: int | None = None  # wire: heightCm
+    weight_kg: int | None = None  # wire: weightKg
     onboarding_completed: bool | None = None  # wire: onboardingCompleted — D-05
-    email: str | None = None                 # wire: email — D-02/D-10 receipt-email gate
-    notif_prefs: NotifPrefs | None = None    # wire: notifPrefs — D-05 full replace (NOTIF-01)
+    email: str | None = None  # wire: email — D-02/D-10 receipt-email gate
+    notif_prefs: NotifPrefs | None = None  # wire: notifPrefs — D-05 full replace (NOTIF-01)
 
 
 class ClientMeResponse(ResponseData):
@@ -345,9 +347,9 @@ class ClientMeResponse(ResponseData):
     last_name: str
     phone: str
     email: str | None = None
-    goal: str | None = None                          # wire: goal
-    height_cm: int | None = None                     # wire: heightCm
-    weight_kg: int | None = None                     # wire: weightKg
+    goal: str | None = None  # wire: goal
+    height_cm: int | None = None  # wire: heightCm
+    weight_kg: int | None = None  # wire: weightKg
     onboarding_completed_at: datetime | None = None  # wire: onboardingCompletedAt (D-05)
     notif_prefs: NotifPrefs  # wire: notifPrefs — D-06 defaults applied server-side (NOTIF-01)
 
@@ -365,8 +367,8 @@ class ClientPromoValidateRequest(ResponseData):
     Server reads plan price and computes authoritative discounted amount.
     """
 
-    code: str      # raw promo code (server normalizes to upper)
-    kind: str      # 'sub' | 'pt' (maps to 'membership' | 'pt_package' server-side)
+    code: str  # raw promo code (server normalizes to upper)
+    kind: str  # 'sub' | 'pt' (maps to 'membership' | 'pt_package' server-side)
     plan_id: UUID  # wire: planId
 
 
@@ -377,9 +379,9 @@ class ClientPromoValidateResponse(ResponseData):
     All amounts in integer kopecks (BigInteger discipline — no float, no Decimal).
     """
 
-    discount_kopecks: int    # wire: discountKopecks — computed discount
+    discount_kopecks: int  # wire: discountKopecks — computed discount
     new_amount_kopecks: int  # wire: newAmountKopecks — authoritative final amount
-    discount_type: str       # wire: discountType — 'percentage' | 'fixed'
+    discount_type: str  # wire: discountType — 'percentage' | 'fixed'
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +397,6 @@ class ClientWeeklyActivityItem(ResponseData):
     date wire: ISO date string (date type serialises as YYYY-MM-DD via ResponseData).
     """
 
-    date: date          # wire: date (ISO YYYY-MM-DD)
-    workouts: int       # count of visits on this day (0 for days with no visits)
+    date: date  # wire: date (ISO YYYY-MM-DD)
+    workouts: int  # count of visits on this day (0 for days with no visits)
     minutes: int | None = None  # always None in v2.2 (no duration column — WACT-03)

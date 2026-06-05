@@ -664,6 +664,7 @@ async def client_checkout_membership(
         yookassa_settings=yookassa_settings,
         promo_code=payload.promo_code,
         save_payment_method=payload.save_payment_method,
+        loyalty_redeem_kopecks=payload.loyalty_redeem_kopecks,
     )
     await session.commit()
     return envelope(result)
@@ -708,6 +709,7 @@ async def client_checkout_pt_package(
         yookassa_settings=yookassa_settings,
         promo_code=payload.promo_code,
         save_payment_method=payload.save_payment_method,
+        loyalty_redeem_kopecks=payload.loyalty_redeem_kopecks,
     )
     await session.commit()
     return envelope(result)
