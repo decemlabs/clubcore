@@ -121,7 +121,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 82-03-PLAN.md — PWA LoyaltyBalanceCard + BonusHistorySheet behind clubBonuses flag + query hooks + Vitest
+- [x] 82-03-PLAN.md — PWA LoyaltyBalanceCard + BonusHistorySheet behind clubBonuses flag + query hooks + Vitest
 
 **UI hint**: yes
 
@@ -217,7 +217,7 @@ Plans:
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
-| 82. Loyalty Foundation — Ledger + Balance + Accrual | 2/3 | In Progress|  |
+| 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete   | 2026-06-05 |
 | 83. Bonus Redemption at Checkout | 0/TBD | Not started | - |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
