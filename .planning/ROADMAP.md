@@ -117,7 +117,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 82-02-PLAN.md — Loyalty service + owner-only grant API + IDOR-safe client balance/history reads + welcome accrual callsite + integration tests
+- [x] 82-02-PLAN.md — Loyalty service + owner-only grant API + IDOR-safe client balance/history reads + welcome accrual callsite + integration tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -217,7 +217,7 @@ Plans:
 | 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
 | 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
 | 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
-| 82. Loyalty Foundation — Ledger + Balance + Accrual | 1/3 | In Progress|  |
+| 82. Loyalty Foundation — Ledger + Balance + Accrual | 2/3 | In Progress|  |
 | 83. Bonus Redemption at Checkout | 0/TBD | Not started | - |
 | 84. Real Autopay Charge | 0/TBD | Not started | - |
 | 85. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
