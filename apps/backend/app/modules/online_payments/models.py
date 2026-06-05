@@ -38,6 +38,7 @@ from datetime import datetime
 from uuid import UUID as UUIDType  # noqa: N811
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -124,6 +125,13 @@ class OnlinePayment(Base, UUIDPkMixin):
     # Server-default false; never client-writable post-checkout (T-79-02).
     save_payment_method: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
+    )
+    # Phase 83 REDM-01: server-computed redeem amount stored at checkout.
+    # NULL = no bonus applied; never client-writable (T-83-03).
+    # The webhook reads this value to write the exact loyalty_ledger debit row.
+    loyalty_redeem_kopecks: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
     )
 
     __table_args__ = (

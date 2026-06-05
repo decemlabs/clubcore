@@ -98,6 +98,10 @@ def _include_object(
             # autogenerate cannot reconcile literal vs. convention names, so we skip them.
             "uq_loyalty_ledger_welcome",
             "ix_loyalty_ledger_client_id",
+            # Phase 83 REDM-02 / 0055: loyalty_ledger partial UNIQUE on online_payment_id
+            # WHERE entry_type='redemption'. Literal-named partial index (same lineage as
+            # uq_loyalty_ledger_welcome above); autogenerate cannot reconcile it.
+            "uq_loyalty_ledger_online_payment_id",
         )
     )
 

@@ -82,6 +82,21 @@ class LoyaltyLedger(Base, UUIDPkMixin):
         nullable=True,
         # owner_grant rows only: free-text reason for audit trail (ACCR-02)
     )
+    # Phase 83 REDM-02: nullable FK → online_payments.id (RESTRICT).
+    # Idempotency anchor for the webhook-locked redemption write.
+    # NULL for welcome/owner_grant rows; set for redemption rows only.
+    # Partial UNIQUE index uq_loyalty_ledger_online_payment_id is declared
+    # in migration 0055 (not as an ORM Index) — same pattern as
+    # uq_loyalty_ledger_welcome (0054) and uq_promo_codes_code_alive.
+    online_payment_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "online_payments.id",
+            ondelete="RESTRICT",
+            name="fk_loyalty_ledger_online_payment_id_online_payments",
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -96,6 +111,8 @@ class LoyaltyLedger(Base, UUIDPkMixin):
             name="entry_type",
         ),
     )
-    # Partial UNIQUE index uq_loyalty_ledger_welcome and plain index
-    # ix_loyalty_ledger_client_id are declared in migration 0054 (not here)
-    # — mirrors PromoCode's uq_promo_codes_code_alive partial-index pattern.
+    # Partial UNIQUE index uq_loyalty_ledger_welcome, partial UNIQUE index
+    # uq_loyalty_ledger_online_payment_id (Phase 83 / migration 0055), and
+    # plain index ix_loyalty_ledger_client_id are declared in migrations
+    # (not as ORM Indexes) — mirrors PromoCode's uq_promo_codes_code_alive
+    # partial-index pattern.
