@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
 status: executing
-stopped_at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
-last_updated: "2026-06-05T19:25:15.719Z"
-last_activity: 2026-06-05 -- Phase 84 planning complete
+stopped_at: Phase 84 Plan 02 complete — cron + webhook discriminator
+last_updated: "2026-06-05T21:20:00Z"
+last_activity: 2026-06-05 -- Phase 84 Plan 02 complete
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
-  percent: 25
+  completed_plans: 9
+  percent: 28
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 ## Current Position
 
 Phase: 84
-Plan: 01 complete (01/3)
+Plan: 02 complete (02/3)
 Status: Executing
-Last activity: 2026-06-05 -- Phase 84 Plan 01 complete
+Last activity: 2026-06-05 -- Phase 84 Plan 02 complete
 
 ## v2.3 Roadmap Summary
 
@@ -72,6 +72,13 @@ Last activity: 2026-06-05 -- Phase 84 Plan 01 complete
 - **REDM-03 PWA wiring**: `bonusOn` + `balanceKopecks` lifted to `CheckoutSheet` scope (mirrors `savePaymentMethod` pattern) so `launchCheckout` can include `loyaltyRedeemKopecks` in request body; `bonusEstimateKopecks` is display-only (D-06 invariant — never mutates server-derived `total`/`discount`)
 - **Bonus section hidden on zero/loading/error**: mirrors CardSheet "no card = no section" pattern — no empty state copy shown
 - **openapi.json regen**: additive only; Phase 85 owns byte-stable freeze
+
+### Key v2.3 Phase 84 Plan 02 Decisions
+
+- **D-84-05 Webhook discriminator test location**: plan specified test_charge_expiring_autopay.py but `async with session.begin()` in handler conflicts with SAVEPOINT db_session; moved to webhook_yookassa/ (real-commit fixtures)
+- **D-84-06 UUID→str at audit emit**: AutopayCharge audit payloads require str for JSONB; Pydantic validates UUID from str (matches all other v1.4 emit callsites)
+- **D-84-07 is_autopay_local capture**: row is detached after session.begin() exits; capture discriminator before commit boundary
+- **D-84-08 Literal kind via if/else**: notification_kind local var with if/else produces literal 'autopay_charge_succeeded'/'payment_succeeded' at assignment site
 
 ### Key v2.3 Phase 84 Plan 01 Decisions
 
@@ -138,9 +145,9 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-05T19:25:15.714Z
-Stopped at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
-Resume: Start the next milestone with `/gsd:new-milestone`
+Last session: 2026-06-05T21:20:00Z
+Stopped at: Phase 84 Plan 02 complete — cron + service helper + webhook discriminator + 41 tests
+Resume: Continue with Phase 84 Plan 03 (failure notifications)
 
 ## Operator Next Steps
 
