@@ -146,8 +146,12 @@ class OnlinePayment(Base, UUIDPkMixin):
             name="status",
         ),
         CheckConstraint(
-            "confirmation_type IN ('redirect','qr')",
+            "confirmation_type IN ('redirect','qr','autopay')",
             # NAMING_CONVENTION expands to ck_online_payments_confirmation_type
+            # 'autopay' added by 0056_autopay_charges (Phase 84 APAY-02) — required for
+            # the off-session insert that writes confirmation_type='autopay' as the
+            # webhook discriminator (Plan 02). Accepts redirect/QR interactive flows
+            # unchanged.
             name="confirmation_type",
         ),
         CheckConstraint(

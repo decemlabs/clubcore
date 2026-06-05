@@ -42,6 +42,7 @@ import app.modules.visits.models
 import app.modules.payment_methods.models  # Phase 79 PAYM-01..04 / 0052
 import app.modules.promo_codes.models  # Phase 999.4 D-04/D-07 / 0046 (env.py gap fixed)
 import app.modules.loyalty.models  # Phase 82 LOYL-03 / 0054
+import app.modules.autopay_charges.models  # Phase 84 APAY-03/APAY-04 / 0056
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
@@ -102,6 +103,11 @@ def _include_object(
             # WHERE entry_type='redemption'. Literal-named partial index (same lineage as
             # uq_loyalty_ledger_welcome above); autogenerate cannot reconcile it.
             "uq_loyalty_ledger_online_payment_id",
+            # Phase 84 APAY-03 / 0056: autopay_charges + autopay_charge_notifications
+            # plain indexes (created via op.f() in the migration but not declared in
+            # __table_args__ of the ORM models). Autogenerate sees them as orphans.
+            "ix_autopay_charges_membership_id",
+            "ix_autopay_charge_notifications_autopay_charge_id",
         )
     )
 

@@ -50,6 +50,11 @@ modules =
     # layer). Router endpoints live in client_portal/router.py; service + repository
     # under payment_methods/. unmatched_ignore_imports_alerting = warn keeps the build
     # green for ignore edges registered before Phase 79 follow-on plans ship bodies.
+    app.modules.autopay_charges
+    # Phase 84 APAY-03/APAY-04 — autopay_charges module registered per INFRA-15 discipline.
+    # Idempotency ledger (autopay_charges) + per-channel claim store (autopay_charge_notifications).
+    # Cross-module reads (memberships, client_payment_methods, clients) go via raw SQL text() SELECTs
+    # (D-54-08), so ZERO new ignore_imports edges are needed in Plan 01.
     app.modules.loyalty
     # Phase 82 LOYL-03 — loyalty module registered per INFRA-15 discipline.
     # Welcome accrual (ACCR-01) called from clients.service via ignore_imports edge in Plan 02.
