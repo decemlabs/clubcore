@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icon } from '@/components/Icon.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { useClientCheckoutMembership, useClientCheckoutPtPackage, usePromoValidate, useClientMe } from '@/data';
+import { useClientCheckoutMembership, useClientCheckoutPtPackage, usePromoValidate, useClientMe, useClientLoyaltyBalance } from '@/data';
 import { formatMoney } from '@/utils/format.js';
 import { ReceiptEmailGate } from './ReceiptEmailGate.jsx';
 
@@ -44,12 +44,10 @@ const PROMO_ERROR_MESSAGES = {
 //    until that backend lands — flipping it true here only reveals the UI.
 const CHECKOUT_FEATURE_FLAGS = {
   recommendedPromo: true,
-  clubBonuses:      false,
+  clubBonuses:      true,
 };
 // Placeholder until a real "recommended promo" source exists on the backend.
 const RECOMMENDED_PROMO = { code: 'FIT15', label: '−15%' };
-// Placeholder loyalty display — replace with real balance data when the backend lands.
-const BONUS_PLACEHOLDER = { balance: 1080, toGold: 220 };
 
 // ─── Barbell SVG watermark (inline, accent-colored, aria-hidden) ─────────
 function BarbellMark() {
@@ -130,6 +128,9 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   // Save-card opt-in state lives here (NOT in ReviewStage) so it survives
   // the email-gate → launchCheckout transition. Default OFF: body byte-identical.
   const [savePaymentMethod, setSavePaymentMethod] = React.useState(false);
+  // Bonus redemption toggle state lives here alongside savePaymentMethod so
+  // launchCheckout (same scope) can include loyaltyRedeemKopecks in the request body.
+  const [bonusOn, setBonusOn] = React.useState(false);
 
   // Local in-sheet toast state
   const [toast, setToast] = React.useState(null); // { message: string } | null
@@ -145,6 +146,9 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
   const promoValidate = usePromoValidate();
   // D-03: read clientMe to decide whether to show the email-gate or skip it.
   const { data: clientMe } = useClientMe();
+  // Phase 83 REDM-03: real loyalty balance for bonus redemption at checkout.
+  const { data: loyaltyBalance, isLoading: loyaltyLoading } = useClientLoyaltyBalance();
+  const balanceKopecks = loyaltyBalance?.balanceKopecks ?? 0;
 
   if (!ctx) return null;
 
@@ -234,6 +238,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
           planId: ctx.planId,
           promoCode: appliedPromoCode,
           ...(savePaymentMethod ? { savePaymentMethod: true } : {}),
+          ...(bonusOn && balanceKopecks > 0 ? { loyaltyRedeemKopecks: balanceKopecks } : {}),
         });
         window.location.href = result.confirmationUrl;
       } else {
@@ -244,6 +249,7 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
           idempotencyKey: idemKey,
           promoCode: appliedPromoCode,
           ...(savePaymentMethod ? { savePaymentMethod: true } : {}),
+          ...(bonusOn && balanceKopecks > 0 ? { loyaltyRedeemKopecks: balanceKopecks } : {}),
         });
         window.location.href = result.confirmationUrl;
       }
@@ -335,6 +341,10 @@ export const CheckoutSheet = ({ ctx, onClose, onDone, forceOutcome }) => {
       showToast={showToast}
       savePaymentMethod={savePaymentMethod}
       setSavePaymentMethod={setSavePaymentMethod}
+      bonusOn={bonusOn}
+      setBonusOn={setBonusOn}
+      balanceKopecks={balanceKopecks}
+      loyaltyLoading={loyaltyLoading}
     />
   );
 };
@@ -359,13 +369,22 @@ function ReviewStage({
   showToast,
   savePaymentMethod,
   setSavePaymentMethod,
+  bonusOn,
+  setBonusOn,
+  balanceKopecks,
+  loyaltyLoading,
 }) {
-  // Count-up for pay-bar total — animates whenever `total` changes
-  const totalDisplay = useCountUp(total, [total]);
+  // Phase 83 REDM-03: estimate-only bonus discount (D-06 — never mutates server-derived total/discount).
+  const bonusEstimateKopecks = bonusOn ? Math.min(balanceKopecks, total) : 0;
+  const estimatedTotal = total - bonusEstimateKopecks;
 
-  // Savings bar widths
-  const savePct = total < ctx.amount
-    ? Math.round(discount / ctx.amount * 100)
+  // Count-up for pay-bar total — animates whenever estimatedTotal or bonus state changes
+  const totalDisplay = useCountUp(estimatedTotal, [estimatedTotal, bonusOn, bonusEstimateKopecks]);
+
+  // Savings bar widths — combined promo + bonus discount
+  const totalDiscount = discount + bonusEstimateKopecks;
+  const savePct = estimatedTotal < ctx.amount
+    ? Math.round(totalDiscount / ctx.amount * 100)
     : 0;
   const payPct = 100 - savePct;
 
@@ -378,10 +397,6 @@ function ReviewStage({
   const isSub = ctx.kind !== 'pt';
   const subMonths = isSub ? (parseInt(String(ctx.subtitle ?? ''), 10) || 1) : 0;
   const passPriceKopecks = isSub && subMonths > 0 ? Math.round(ctx.amount / subMonths) : ctx.amount;
-
-  // Hidden "Списать бонусы" toggle — local UI state only. Does NOT affect
-  // total/discount (D-06): real redemption needs the deferred loyalty backend.
-  const [bonusOn, setBonusOn] = React.useState(false);
 
   return (
     <div style={{
@@ -495,10 +510,10 @@ function ReviewStage({
           handlePromoRemove={handlePromoRemove}
         />
 
-        {/* ── 2b. Club bonuses ── BUILT, HIDDEN (CHECKOUT_FEATURE_FLAGS.clubBonuses).
-            UI only — toggling does NOT change the total (D-06). Real point redemption
-            requires the deferred loyalty backend (see 260601-sxf-CONTEXT.md <deferred>). */}
-        {CHECKOUT_FEATURE_FLAGS.clubBonuses && (
+        {/* ── 2b. Club bonuses ── Phase 83 REDM-03: real balance via useClientLoyaltyBalance.
+            Section hidden when balance = 0, loading, or errored (mirrors CardSheet pattern).
+            Toggle sends loyaltyRedeemKopecks in checkout request; UI shows estimate only (D-06). */}
+        {CHECKOUT_FEATURE_FLAGS.clubBonuses && !loyaltyLoading && balanceKopecks > 0 && (
           <>
             <div className="co-sec-label">Бонусы клуба<span className="co-ln" /></div>
             <div className="co-bonus">
@@ -512,8 +527,7 @@ function ReviewStage({
               <div className="co-bonus-text">
                 <div className="co-bonus-title">Списать бонусы</div>
                 <div className="co-bonus-sub">
-                  На счёте <b>{BONUS_PLACEHOLDER.balance.toLocaleString('ru-RU')}</b>
-                  {' · '}до Gold осталось <b>{BONUS_PLACEHOLDER.toGold}</b>
+                  На счёте <b>{formatMoney(balanceKopecks)}</b>
                 </div>
               </div>
               <button
@@ -523,12 +537,9 @@ function ReviewStage({
                 aria-checked={bonusOn}
                 aria-label="Списать бонусы"
                 onClick={() => {
-                  // TODO(loyalty-phase): wire server-authoritative redemption here.
-                  // MUST keep `total`/`discount` server-derived — do NOT subtract bonuses
-                  // on the client (D-06). For now this only flips local UI state.
                   const next = !bonusOn;
                   setBonusOn(next);
-                  showToast(next ? 'Бонусы будут списаны' : 'Списание бонусов отменено');
+                  showToast(next ? 'Бонусы будут списаны при оплате' : 'Списание бонусов отменено');
                 }}
               >
                 <span className="co-bonus-knob" />
@@ -557,6 +568,16 @@ function ReviewStage({
             </div>
           )}
 
+          {/* Bonus discount row — estimate only (D-06 / REDM-03). ~ chip signals approximation. */}
+          {bonusOn && bonusEstimateKopecks > 0 && (
+            <div className="co-sum-row discount">
+              <span className="co-sl-tag">
+                Бонусы<span className="co-mini">~</span>
+              </span>
+              <span className="co-sv">−{formatMoney(bonusEstimateKopecks)}</span>
+            </div>
+          )}
+
           {/* Total row */}
           <div className="co-sum-total">
             <div className="co-tt">
@@ -567,8 +588,8 @@ function ReviewStage({
               <span className="co-amount">{totalDisplay}</span>
             </div>
 
-            {/* Savings bar — only when there is a real discount */}
-            <div className={`co-save-wrap${total < ctx.amount ? ' show' : ''}`}>
+            {/* Savings bar — only when there is a real discount (promo and/or bonus estimate) */}
+            <div className={`co-save-wrap${estimatedTotal < ctx.amount ? ' show' : ''}`}>
               <div className="co-save-bar">
                 <span
                   className="co-pay-seg"
@@ -585,7 +606,7 @@ function ReviewStage({
                   Ваша выгода
                 </span>
                 <span className="co-sl">
-                  <b>{formatMoney(discount)}</b>
+                  <b>{formatMoney(totalDiscount)}</b>
                 </span>
               </div>
             </div>
@@ -660,7 +681,7 @@ function ReviewStage({
             cursor: (!ctx.planId && !forceOutcome) ? 'not-allowed' : 'pointer',
           }}
         >
-          Оплатить · {totalDisplay}
+          Оплатить · {bonusOn && bonusEstimateKopecks > 0 ? '~' : ''}{totalDisplay}
         </button>
         <div className="t-mini" style={{
           textAlign: 'center', marginTop: 8, color: 'var(--text-3)',

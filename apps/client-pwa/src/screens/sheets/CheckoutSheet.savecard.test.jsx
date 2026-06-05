@@ -15,6 +15,7 @@ const useClientCheckoutMembership = vi.fn()
 const useClientCheckoutPtPackage = vi.fn()
 const usePromoValidate = vi.fn()
 const useClientMe = vi.fn()
+const useClientLoyaltyBalance = vi.fn()
 
 vi.mock('@/data', async () => {
   const actual = await vi.importActual('@/data')
@@ -24,6 +25,7 @@ vi.mock('@/data', async () => {
     useClientCheckoutPtPackage: (...args) => useClientCheckoutPtPackage(...args),
     usePromoValidate: (...args) => usePromoValidate(...args),
     useClientMe: (...args) => useClientMe(...args),
+    useClientLoyaltyBalance: (...args) => useClientLoyaltyBalance(...args),
   }
 })
 
@@ -89,6 +91,8 @@ beforeEach(() => {
   useClientCheckoutMembership.mockReturnValue(makeMutation())
   useClientCheckoutPtPackage.mockReturnValue(makeMutation())
   usePromoValidate.mockReturnValue(makeMutation({ mutateAsync: vi.fn().mockResolvedValue({}) }))
+  // Phase 83: balance = 0 keeps the bonus section hidden so savecard tests are unaffected.
+  useClientLoyaltyBalance.mockReturnValue({ data: { balanceKopecks: 0 }, isLoading: false })
 })
 
 // ---------------------------------------------------------------------------
