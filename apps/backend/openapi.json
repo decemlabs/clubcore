@@ -863,6 +863,17 @@
       "ClientCheckoutRequest": {
         "description": "Request body for client-initiated checkout (CPAY-01/02).\n\nNo fields required for membership (plan_id in path); for PT the\nidempotency_key is supplied via Idempotency-Key header (D-71-04), not body.\nPhase 999.4 D-06: optional promo_code field (wire: promoCode).\nPhase 79 PAYM-01: optional save_payment_method flag (wire: savePaymentMethod).",
         "properties": {
+          "loyaltyRedeemKopecks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loyaltyredeemkopecks"
+          },
           "promoCode": {
             "anyOf": [
               {
@@ -1122,7 +1133,7 @@
         "type": "object"
       },
       "ClientLoyaltyHistoryItem": {
-        "description": "Single ledger row for the paginated history endpoint (LOYL-02).\n\nWire: { id, type, amountKopecks, createdAt }\namountKopecks is signed: positive = accrual, negative = redemption (Phase 83).",
+        "description": "Single ledger row for the paginated history endpoint (LOYL-02).\n\nWire: { id, type, amountKopecks, createdAt }\namountKopecks is signed: positive = accrual, negative = redemption (Phase 83).\ncategory/reason are deliberately NOT exposed here — they are owner-grant\nbookkeeping context (admin-only), not client-facing (IN-01).",
         "properties": {
           "amountKopecks": {
             "title": "Amountkopecks",
@@ -2301,9 +2312,10 @@
       },
       "LoyaltyGrantRequest": {
         "additionalProperties": false,
-        "description": "Owner-only manual loyalty grant request body (ACCR-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\namount_kopecks must be > 0 (service raises 422 on <= 0).\ncategory covers promotional, referral (manual, not automated), or manual grants.",
+        "description": "Owner-only manual loyalty grant request body (ACCR-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\namount_kopecks must be > 0 (schema-layer Field(gt=0); service keeps a\nbelt-and-suspenders check). reason is capped at 255 to match the\nloyalty_ledger.reason VARCHAR(255) column — without this a longer value\nyields an unhandled 500 DataError instead of a clean 422 (CR-01).\ncategory covers promotional, referral (manual, not automated), or manual grants.",
         "properties": {
           "amountKopecks": {
+            "exclusiveMinimum": 0.0,
             "title": "Amountkopecks",
             "type": "integer"
           },
@@ -2317,6 +2329,7 @@
             "type": "string"
           },
           "reason": {
+            "maxLength": 255,
             "title": "Reason",
             "type": "string"
           }
