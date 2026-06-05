@@ -1,14 +1,18 @@
-"""Phase 82 — LOCKED registry tests for loyalty_accrued audit event.
+"""Phase 82/83 — LOCKED registry tests for loyalty audit events.
 
 Mirrors test_locked_audit_events.py discipline (Phase 50 D-50-23).
 
-Three assertion groups:
+Phase 82 groups (loyalty_accrued):
   1. ("loyalty_accrued", "loyalty") is in LOCKED_AUDIT_EVENTS.
   2. LoyaltyAccruedPayload validates a welcome sample AND rejects extra fields.
   3. AUDIT_PAYLOAD_SCHEMAS maps ("loyalty_accrued", "loyalty") → LoyaltyAccruedPayload.
 
-Pre-registered BEFORE callsite per INFRA-15 (Phase 82 ACCR-01/ACCR-02).
-Single event covers welcome + owner_grant (distinguished by entry_type/actor).
+Phase 83 groups (loyalty_redeemed):
+  4. ("loyalty_redeemed", "loyalty") is in LOCKED_AUDIT_EVENTS.
+  5. LoyaltyRedeemedPayload validates a negative-amount sample AND rejects extra fields.
+  6. AUDIT_PAYLOAD_SCHEMAS maps ("loyalty_redeemed", "loyalty") → LoyaltyRedeemedPayload.
+
+Pre-registered BEFORE callsite per INFRA-15 (ACCR-01/ACCR-02, REDM-02).
 """
 
 from __future__ import annotations
@@ -19,7 +23,11 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.audit import LOCKED_AUDIT_EVENTS
-from app.core.audit_payloads import AUDIT_PAYLOAD_SCHEMAS, LoyaltyAccruedPayload
+from app.core.audit_payloads import (
+    AUDIT_PAYLOAD_SCHEMAS,
+    LoyaltyAccruedPayload,
+    LoyaltyRedeemedPayload,
+)
 
 # ---------------------------------------------------------------------------
 # Group 1: ("loyalty_accrued", "loyalty") is in LOCKED_AUDIT_EVENTS
@@ -97,3 +105,51 @@ def test_loyalty_accrued_payload_rejects_redemption_entry_type() -> None:
 def test_audit_payload_schemas_registers_loyalty_accrued() -> None:
     """AUDIT_PAYLOAD_SCHEMAS registry maps the loyalty_accrued pair correctly."""
     assert AUDIT_PAYLOAD_SCHEMAS[("loyalty_accrued", "loyalty")] is LoyaltyAccruedPayload
+
+
+# ---------------------------------------------------------------------------
+# Phase 83 Group 4: ("loyalty_redeemed", "loyalty") is in LOCKED_AUDIT_EVENTS
+# ---------------------------------------------------------------------------
+
+
+def test_loyalty_redeemed_event_locked() -> None:
+    """INFRA-15: loyalty_redeemed is locked BEFORE any callsite ships (REDM-02)."""
+    assert ("loyalty_redeemed", "loyalty") in LOCKED_AUDIT_EVENTS
+
+
+# ---------------------------------------------------------------------------
+# Phase 83 Group 5: LoyaltyRedeemedPayload validates + rejects extras
+# ---------------------------------------------------------------------------
+
+
+def test_loyalty_redeemed_payload_validates_negative_amount() -> None:
+    """Redemption debit sample passes validation (amount_kopecks is negative)."""
+    payload = LoyaltyRedeemedPayload(
+        client_id=uuid4(),
+        entry_id=uuid4(),
+        amount_kopecks=-5_000,
+        online_payment_id=uuid4(),
+    )
+    assert payload.amount_kopecks == -5_000
+
+
+def test_loyalty_redeemed_payload_rejects_extra_fields() -> None:
+    """extra='forbid' raises ValidationError when unknown fields are passed."""
+    with pytest.raises(ValidationError):
+        LoyaltyRedeemedPayload(
+            client_id=uuid4(),
+            entry_id=uuid4(),
+            amount_kopecks=-5_000,
+            online_payment_id=uuid4(),
+            foo="bar",  # type: ignore[call-arg]
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 83 Group 6: AUDIT_PAYLOAD_SCHEMAS maps the pair to LoyaltyRedeemedPayload
+# ---------------------------------------------------------------------------
+
+
+def test_audit_payload_schemas_registers_loyalty_redeemed() -> None:
+    """AUDIT_PAYLOAD_SCHEMAS registry maps the loyalty_redeemed pair correctly."""
+    assert AUDIT_PAYLOAD_SCHEMAS[("loyalty_redeemed", "loyalty")] is LoyaltyRedeemedPayload
