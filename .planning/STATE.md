@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
-status: executing
-stopped_at: Phase 83 Plan 03 complete — CheckoutSheet bonus wiring + openapi regen (REDM-03 closed; Phase 83 fully complete)
-last_updated: "2026-06-05T17:15:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 83 complete (3/3) — ready to discuss Phase 84
+last_updated: 2026-06-05T14:39:03.518Z
 last_activity: 2026-06-05 -- Phase 83 Plan 03 complete (CheckoutSheet bonus wiring + openapi regen, REDM-03 closed)
 progress:
   total_phases: 8
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 83 — bonus redemption at checkout
+**Current focus:** Phase 84 — real autopay charge
 
 ## Current Position
 
-Phase: 83
-Plan: 03 complete — Phase 83 (REDM-01/02/03) fully complete
-Status: Executing
-Last activity: 2026-06-05 -- Phase 83 Plan 03 complete (CheckoutSheet bonus wiring + openapi regen, REDM-03 closed)
+Phase: 84
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-05
 
 ## v2.3 Roadmap Summary
 
@@ -104,6 +104,8 @@ Items carried forward from v2.1 close:
 | correctness | WR-75-02: receipt-lookup join heuristic (repeat same-plan purchases) | deferred — out of v2.2 scope |
 | human-verify | Phase 76 PDATA-02 live persistence check | deferred by user |
 | human-verify | Phase 78 live checks (FIT15 chip + notif toggle) | deferred by user |
+| human-verify | Phase 83 live ЮKassa bonus-redemption end-to-end (checkout with loyaltyRedeemKopecks → webhook → loyalty_ledger redemption row + balance decrease) | deferred — OPERATOR-PENDING (live YooKassa); ASGITransport tests cover the logic path |
+| human-verify | Phase 83 PWA CheckoutSheet bonus UX (toggle, estimate row + ~ chip + pay-button prefix, section-hidden-on-zero) | deferred — browser-visual; 8 vitest behaviors + UI-REVIEW 24/24 cover structure |
 | human-verify | Phase 79/81.1 live ЮKassa card-save round-trip (PWA checkout opt-in → webhook → CardSheet) | ✅ VERIFIED in browser 2026-06-03 — test card 5555…4477 → 3DS → success → webhook step-8.5 saved real 36-char token; `online_payments.save_payment_method=t`, status succeeded |
 | human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | ✅ VERIFIED in browser 2026-06-03 — same-trainer slot listed + reschedule executed (atomic cancel+create, slot flip, PT-credit preserved, booking_rescheduled audit) |
 | human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send; no live Telegram chat) |
