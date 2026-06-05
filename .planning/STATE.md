@@ -4,13 +4,13 @@ milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
 status: executing
 stopped_at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
-last_updated: "2026-06-05T19:10:19.493Z"
+last_updated: "2026-06-05T19:25:15.719Z"
 last_activity: 2026-06-05 -- Phase 84 planning complete
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 ## Current Position
 
 Phase: 84
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-05 -- Phase 84 planning complete
+Plan: 01 complete (01/3)
+Status: Executing
+Last activity: 2026-06-05 -- Phase 84 Plan 01 complete
 
 ## v2.3 Roadmap Summary
 
@@ -72,6 +72,13 @@ Last activity: 2026-06-05 -- Phase 84 planning complete
 - **REDM-03 PWA wiring**: `bonusOn` + `balanceKopecks` lifted to `CheckoutSheet` scope (mirrors `savePaymentMethod` pattern) so `launchCheckout` can include `loyaltyRedeemKopecks` in request body; `bonusEstimateKopecks` is display-only (D-06 invariant — never mutates server-derived `total`/`discount`)
 - **Bonus section hidden on zero/loading/error**: mirrors CardSheet "no card = no section" pattern — no empty state copy shown
 - **openapi.json regen**: additive only; Phase 85 owns byte-stable freeze
+
+### Key v2.3 Phase 84 Plan 01 Decisions
+
+- **D-84-01 Raw DDL for CHECK modification**: `op.drop_constraint` passes name through naming convention template → double-prefix on already-expanded names. Use `op.execute("ALTER TABLE ... DROP/ADD CONSTRAINT ...")` for modifying constraints on existing locked tables (migration 0056 precedent for online_payments check widening)
+- **D-84-02 Alembic _include_object skip-list for plain indexes**: Indexes created via `op.f()` in migration but absent from ORM `__table_args__` appear as "removed" orphans in `alembic check` autogenerate diff. Must add literal names to skip-list (same lineage as loyalty_ledger indexes)
+- **D-84-03 Dedicated autopay_charge_notifications table**: Phase 52 `payment_notifications` XOR CHECK + partial-unique indexes cannot accommodate a third subject FK (decline path has no online_payments row). Separate additive table per-plan discipline
+- **D-84-04 online_payment_id without FK on autopay_charges**: Cross-module nullable UUID column (D-54-08) — Plan 02 writes it via raw SQL after successful YooKassa call; no declarative FK to keep modules-independent
 
 ### Key v2.0/v2.1 Decisions (carry-forward)
 
@@ -131,7 +138,7 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-05T14:14:51.362Z
+Last session: 2026-06-05T19:25:15.714Z
 Stopped at: v2.2 shipped, tagged, archived; all features browser-verified; 2 verification-found bugs fixed
 Resume: Start the next milestone with `/gsd:new-milestone`
 

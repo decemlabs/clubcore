@@ -30,9 +30,9 @@ Requirements for this milestone. Each maps to a roadmap phase. All client-facing
 > Закрывает реальный recurring-charge leg, отложенный из v2.2 (карта-на-файле + autopay-флаг + consent уже есть; реального списания ещё нет).
 
 - [ ] **APAY-01**: Cron `charge_expiring_autopay` списывает с сохранённой карты off-session для абонементов, истекающих в окне, у которых `autopay_enabled=true` + записан `consent_recorded_at`
-- [ ] **APAY-02**: YooKassa-адаптер умеет off-session charge по сохранённому `payment_method_id`; списание пишется в charge-ledger (дисциплина v1.4 `payments`); активация продления locked на `payment.succeeded` webhook
-- [ ] **APAY-03**: Автосписание идемпотентно (нет двойного charge при повторных тиках/рестартах контейнера) и пропускает неподходящих (нет consent / autopay off / нет активной карты / уже продлён)
-- [ ] **APAY-04**: Исход автосписания (успех/ошибка) аудируется + клиент уведомляется (Telegram/email mirror) по дисциплине cross-channel notifications (идемпотентность через `channel` discriminator)
+- [x] **APAY-02**: YooKassa-адаптер умеет off-session charge по сохранённому `payment_method_id`; списание пишется в charge-ledger (дисциплина v1.4 `payments`); активация продления locked на `payment.succeeded` webhook
+- [x] **APAY-03**: Автосписание идемпотентно (нет двойного charge при повторных тиках/рестартах контейнера) и пропускает неподходящих (нет consent / autopay off / нет активной карты / уже продлён)
+- [x] **APAY-04**: Исход автосписания (успех/ошибка) аудируется + клиент уведомляется (Telegram/email mirror) по дисциплине cross-channel notifications (идемпотентность через `channel` discriminator)
 
 ### OpenAPI Handoff (HND)
 
@@ -82,9 +82,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REDM-02 | Phase 83 | Complete |
 | REDM-03 | Phase 83 | Complete |
 | APAY-01 | Phase 84 | Pending |
-| APAY-02 | Phase 84 | Pending |
-| APAY-03 | Phase 84 | Pending |
-| APAY-04 | Phase 84 | Pending |
+| APAY-02 | Phase 84 | Complete |
+| APAY-03 | Phase 84 | Complete |
+| APAY-04 | Phase 84 | Complete |
 | HND-01 | Phase 85 | Pending |
 
 **Coverage:**
