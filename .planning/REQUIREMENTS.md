@@ -71,25 +71,25 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GYM-01 | TBD | Pending |
-| GYM-02 | TBD | Pending |
-| GYM-03 | TBD | Pending |
-| INBOX-01 | TBD | Pending |
-| INBOX-02 | TBD | Pending |
-| INBOX-03 | TBD | Pending |
-| INBOX-04 | TBD | Pending |
-| INBOX-05 | TBD | Pending |
-| TRNR-01 | TBD | Pending |
-| TRNR-02 | TBD | Pending |
-| TRNR-03 | TBD | Pending |
-| TRNR-04 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| GYM-01 | Phase 86 | Pending |
+| GYM-02 | Phase 86 | Pending |
+| GYM-03 | Phase 86 | Pending |
+| INBOX-01 | Phase 87 | Pending |
+| INBOX-02 | Phase 87 | Pending |
+| INBOX-03 | Phase 87 | Pending |
+| INBOX-04 | Phase 87 | Pending |
+| INBOX-05 | Phase 87 | Pending |
+| TRNR-01 | Phase 88 | Pending |
+| TRNR-02 | Phase 88 | Pending |
+| TRNR-03 | Phase 88 | Pending |
+| TRNR-04 | Phase 88 | Pending |
+| HND-01 | Phase 89 | Pending |
 
 **Coverage:**
 - v1 requirements: 13 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 13 ⚠️ (resolved at roadmap creation)
+- Mapped to phases: 13
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-06*
-*Last updated: 2026-06-06 after initial v2.4 definition*
+*Last updated: 2026-06-06 — traceability populated at roadmap creation*

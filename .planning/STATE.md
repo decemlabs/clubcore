@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-06T04:20:59.848Z"
 last_activity: 2026-06-06
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,19 +17,31 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service depth opened)
+See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 85 — openapi handoff + milestone verification
+**Current focus:** Phase 86 — Gym-Info / CMS (v2.4 first phase)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 86
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-06 — Milestone v2.4 started
+Status: Not started
+Last activity: 2026-06-06 — Milestone v2.4 roadmap created (4 phases: 86–89)
 
-## v2.3 Roadmap Summary
+## v2.4 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 86. Gym-Info / CMS | Клиент видит gym-info из БД; owner управляет через write-API; baseline засеян | GYM-01, GYM-02, GYM-03 |
+| 87. Notification Inbox | In-app лента уведомлений от системных событий; read/mark-all; push-token регистрация; PWA wired | INBOX-01, INBOX-02, INBOX-03, INBOX-04, INBOX-05 |
+| 88. Trainer Detail / Bio | Полный профиль тренера (bio/специализация/фото); owner write-API; seed; PWA TrainerDetailSheet wired | TRNR-01, TRNR-02, TRNR-03, TRNR-04 |
+| 89. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts regen + `_v24Checks` forward-guards + milestone gate зелёный | HND-01 |
+
+**Coverage:** 13/13 v2.4 requirements mapped (zero orphans, zero duplicates). Execution order: 86 → 87 → 88 → 89.
+
+<details>
+<summary>v2.3 Roadmap Summary (shipped)</summary>
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -39,6 +51,8 @@ Last activity: 2026-06-06 — Milestone v2.4 started
 | 85. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts regen + `_v23Checks` forward-guards + staff drift gate | HND-01 |
 
 **Coverage:** 14/14 v2.3 requirements mapped (zero orphans, zero duplicates). Execution order: 82 → 83 → 84 → 85.
+
+</details>
 
 <details>
 <summary>v2.2 Roadmap Summary (shipped)</summary>
@@ -54,6 +68,15 @@ Last activity: 2026-06-06 — Milestone v2.4 started
 </details>
 
 ## Accumulated Context
+
+### Key v2.4 Milestone Constraints (locked, D-86-STAFF)
+
+- **Staff gate**: owner-only write-API + seeds, NO admin-web UI; `apps/admin-web` frozen (не трогаем)
+- **Client-only**: все клиентские read-эндпоинты под `require_client()`, IDOR-safe (client_id только из principal)
+- **Staff contract**: байт-в-байт с `contract-freeze-v1.11.0` — drift gate должен быть зелёным
+- **Inbox source**: только системные события (бронь/платёж/autopay) — нет broadcast/ручного-composer
+- **Trainer reviews out of scope**: только bio/detail; REVW-* → v2
+- **Module discipline**: D-20-MODULE (raw-SQL reads / Protocol-slot writes; zero new `ignore_imports` по возможности) + D-20-IDOR
 
 ### Key v2.2 Scope Decisions (locked)
 
@@ -154,10 +177,10 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-05T22:15:00Z
-Stopped at: Phase 84 Plan 03 complete — autopay success+failure notifications, channel-idempotent, 3 tests; Phase 84 COMPLETE
-Resume: Continue with Phase 85 (OpenAPI Handoff + Milestone Verification)
+Last session: 2026-06-06
+Stopped at: v2.4 roadmap created — 4 phases (86–89), 13/13 requirements mapped
+Resume: Start Phase 86 with /gsd:plan-phase 86
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 86 with /gsd:plan-phase 86

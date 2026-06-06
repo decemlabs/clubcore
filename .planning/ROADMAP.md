@@ -18,6 +18,7 @@
 - ✅ **v2.1 Client PWA — Fill the Gaps** — Phases 75-78 (shipped 2026-06-02) — see [milestones/v2.1-ROADMAP.md](milestones/v2.1-ROADMAP.md)
 - ✅ **v2.2 Membership self-service depth** — Phases 79-81 + 81.1 (shipped 2026-06-03) — see [milestones/v2.2-ROADMAP.md](milestones/v2.2-ROADMAP.md)
 - ✅ **v2.3 Loyalty / Club Bonuses + Real Autopay** — Phases 82-85 (shipped 2026-06-06) — see [milestones/v2.3-ROADMAP.md](milestones/v2.3-ROADMAP.md)
+- 🚧 **v2.4 Content & Communication — Client-First** — Phases 86-89 (in progress)
 
 ## Phases
 
@@ -103,6 +104,62 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
+### 🚧 v2.4 Content & Communication — Client-First (Phases 86-89)
+
+**Milestone Goal:** Первый Group-B контент/коммуникационный слайс: gym-info/CMS, in-app notification inbox и trainer bio/detail — всё client-first под `require_client()`, IDOR-safe; owner-only write-API + seeds (без admin-web UI); staff-контракт байт-в-байт цел; `apps/admin-web` заморожен. В конце — byte-stable OpenAPI handoff + milestone gate.
+
+- [ ] **Phase 86: Gym-Info / CMS** — new `gym_info` module (`GET /client/gym`), owner-only write-API, seeded baseline record, PWA GymInfoScreen wired (GYM-01, GYM-02, GYM-03)
+- [ ] **Phase 87: Notification Inbox** — new `client_notifications` table + system-event fan-out (bookings/payments/autopay), IDOR-safe `GET /client/notifications` + `PATCH` read/mark-all, push-token registration endpoint, PWA NotificationsScreen wired (INBOX-01, INBOX-02, INBOX-03, INBOX-04, INBOX-05)
+- [ ] **Phase 88: Trainer Detail / Bio** — extend trainer module with bio fields (migration), owner-only write-API, seeded bio data, `GET /client/trainers/{id}` detail endpoint, PWA TrainerDetailSheet wired (TRNR-01, TRNR-02, TRNR-03, TRNR-04)
+- [ ] **Phase 89: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` regen + `_v24Checks` AssertNonNever forward-guards; staff paths byte-identical to `contract-freeze-v1.11.0`; full milestone gate green (HND-01)
+
+## Phase Details
+
+### Phase 86: Gym-Info / CMS
+**Goal**: Клиент видит актуальную информацию о зале из базы данных, а не захардкоженного файла
+**Depends on**: Phase 85 (v2.3 complete)
+**Requirements**: GYM-01, GYM-02, GYM-03
+**Success Criteria** (what must be TRUE):
+  1. Клиент открывает экран зала в PWA и видит адрес, часы, удобства и правила, которые хранятся в БД (не `data/gym.js`)
+  2. Owner может обновить gym-info через API (reception получает 403)
+  3. На свежем `docker compose up` + seed PWA рендерит реальный контент без ручного вмешательства
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 87: Notification Inbox
+**Goal**: Клиент видит in-app ленту уведомлений, генерируемых системными событиями, и управляет статусом прочтения
+**Depends on**: Phase 86
+**Requirements**: INBOX-01, INBOX-02, INBOX-03, INBOX-04, INBOX-05
+**Success Criteria** (what must be TRUE):
+  1. После подтверждения/отмены брони, успешного платежа или autopay-события в ленте `GET /client/notifications` клиента появляется запись
+  2. Клиент помечает уведомление прочитанным (одно или все), и счётчик непрочитанных на бейдже PWA уменьшается до нуля
+  3. Клиент регистрирует push-токен через API; ответ 200, токен сохранён; реальная доставка не требуется в этом milestone
+  4. Экран уведомлений в PWA загружает реальные данные (не заглушку) за feature-флагом
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 88: Trainer Detail / Bio
+**Goal**: Клиент читает полный профиль тренера (bio, специализация, фото) в PWA; owner управляет профилями через API
+**Depends on**: Phase 87
+**Requirements**: TRNR-01, TRNR-02, TRNR-03, TRNR-04
+**Success Criteria** (what must be TRUE):
+  1. `GET /client/trainers/{id}` возвращает bio, специализацию и ссылку на фото тренера
+  2. Owner обновляет bio через write-API; reception получает 403
+  3. На свежем окружении PWA TrainerDetailSheet показывает реальные seed-данные вместо заглушки ComingSoon
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 89: OpenAPI Handoff + Milestone Verification
+**Goal**: Контракт v2.4 заморожен byte-stable; все новые пути v2.4 покрыты forward-guards; milestone gate зелёный
+**Depends on**: Phase 88
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+  1. `openapi.json` и `schema.d.ts` регенерируются byte-stable (drift gate green в CI) со всеми новыми путями v2.4
+  2. Staff-пути байт-в-байт идентичны `contract-freeze-v1.11.0` (staff drift gate green)
+  3. `_v24Checks` `AssertNonNever` tuple с runtime `toHaveLength` — тест падает, если любой из новых путей исчезнет
+  4. Полный milestone gate зелёный (pytest + typecheck + lint-imports + drift gates)
+**Plans**: TBD
+
 ## Backlog
 
 ### Phase 999.1: WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -144,15 +201,11 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 79 → 80 → 81 → 81.1 → 82 → 83 → 84 → 85
+**Execution Order:** 86 → 87 → 88 → 89
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 79. Payment Methods Foundation + Card-on-File | 4/4 | Complete   | 2026-06-03 |
-| 80. Booking Reschedule | 3/3 | Complete   | 2026-06-03 |
-| 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | 3/3 | Complete   | 2026-06-03 |
-| 81.1. Checkout Save-Card Capture | 1/1 | Complete   | 2026-06-03 |
-| 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
-| 83. Bonus Redemption at Checkout | 3/3 | Complete    | 2026-06-05 |
-| 84. Real Autopay Charge | 3/3 | Complete    | 2026-06-05 |
-| 85. OpenAPI Handoff + Milestone Verification | 1/1 | Complete   | 2026-06-06 |
+| 86. Gym-Info / CMS | 0/TBD | Not started | - |
+| 87. Notification Inbox | 0/TBD | Not started | - |
+| 88. Trainer Detail / Bio | 0/TBD | Not started | - |
+| 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
