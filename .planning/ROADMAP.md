@@ -182,7 +182,20 @@ Plans:
   2. Owner обновляет bio через write-API; reception получает 403
   3. На свежем окружении PWA TrainerDetailSheet показывает реальные seed-данные вместо заглушки ComingSoon
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+**Wave 1**
+
+- [ ] 88-01-PLAN.md — Backend data layer: extend Trainer model + schemas (bio/specialization/photo_url) + migration 0062 DDL & 0063 idempotent seed backfill (TRNR-01, TRNR-02, TRNR-03)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 88-02-PLAN.md — client_portal GET /client/trainers/{id} (client-safe projection + 404-collapse) + owner PATCH bio integration tests (reception 403) (TRNR-01, TRNR-02)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 88-03-PLAN.md — PWA: useClientTrainerDetail hook + @/data export + D-71-09 ESLint de-list + TrainerDetailSheet rewrite (XSS-safe photo) + vitest (TRNR-04)
+
 **UI hint**: yes
 
 ### Phase 89: OpenAPI Handoff + Milestone Verification
@@ -246,5 +259,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
 | 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
-| 88. Trainer Detail / Bio | 0/TBD | Not started | - |
+| 88. Trainer Detail / Bio | 0/3 | Planned | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
