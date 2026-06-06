@@ -200,7 +200,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 85-01-PLAN.md — Byte-stable openapi.json + schema.d.ts regen + `_v23Checks` forward-guards (3 new loyalty paths + checkout `loyaltyRedeemKopecks`) + full milestone-gate run (drift/Redocly/pytest/mypy/lint-imports/PWA/no-edit guard) with pre-existing-failure documentation
+- [x] 85-01-PLAN.md — Byte-stable openapi.json + schema.d.ts regen + `_v23Checks` forward-guards (3 new loyalty paths + checkout `loyaltyRedeemKopecks`) + full milestone-gate run (drift/Redocly/pytest/mypy/lint-imports/PWA/no-edit guard) with pre-existing-failure documentation
 
 ## Backlog
 
@@ -254,4 +254,4 @@ Plans:
 | 82. Loyalty Foundation — Ledger + Balance + Accrual | 3/3 | Complete    | 2026-06-05 |
 | 83. Bonus Redemption at Checkout | 3/3 | Complete    | 2026-06-05 |
 | 84. Real Autopay Charge | 3/3 | Complete    | 2026-06-05 |
-| 85. OpenAPI Handoff + Milestone Verification | 0/1 | Not started | - |
+| 85. OpenAPI Handoff + Milestone Verification | 1/1 | Complete   | 2026-06-06 |
