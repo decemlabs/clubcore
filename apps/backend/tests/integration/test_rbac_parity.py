@@ -1,8 +1,10 @@
 """TEST-06: backend permissions ⇔ frontend can.ts/registry.ts parity (Phase 6 D-13, D-14, D-15).
 
-Three set-equalities (D-13; counts updated through Phase 54 INFRA-42):
-  1. OWNER_ONLY pairs (35 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
-     + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)) — backend
+Three set-equalities (D-13; counts updated through Phase 86 GYM-02):
+  1. OWNER_ONLY pairs (41 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
+     + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)
+     + 5 v1.9 Phase 58 INFRA-15/D-58-15 (payroll/compensation write pairs)
+     + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM)) — backend
      frozenset == frontend can.ts array.
   2. Resource StrEnum values — backend == frontend Resource union.
   3. Action StrEnum values — backend == frontend Action union.
