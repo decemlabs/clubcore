@@ -589,3 +589,24 @@ Card-on-file (migration 0052, `payment_methods/` module, webhook step-8.5 token 
 1. **`import-linter` from Phase A is non-negotiable** — saved real time in v1.1 by catching cross-module imports during Phase 4 + Phase 7. Keep enforcing.
 2. **Pin contract primitives before the first business migration** — v1.1 Phase 4 doing this proactively meant zero retrofit work in Phases 5/8. Apply to every future contract surface (e.g. multi-tenancy ContextVar, if it ever enters scope).
 3. **Verification artifacts gate milestone closure, not phase closure.** The audit-driven `/gsd-complete-milestone` workflow correctly forced the v1.1 close to wait for Phase 14 + the 70/70 REQ coverage instead of declaring done at Phase 11.
+
+## Milestone: v2.3 — Loyalty / Club Bonuses + Real Autopay
+
+**Shipped:** 2026-06-06 | **Phases:** 4 (82-85) | **Plans:** 10
+
+### What Was Built
+Loyalty surface + the real off-session autopay leg deferred from v2.2: append-only `loyalty_ledger` with balance as a non-destructive fold + welcome auto-credit + owner-only grant (P82); server-authoritative checkout redemption, idempotent on the `payment.succeeded` webhook, composing with promo codes on one UoW (P83); off-session `charge_expiring_autopay` cron with DB-claim idempotency + sha256 provider key + ФЗ-376-gated eligibility + webhook-locked renewal (P84); byte-stable `openapi.json`/`schema.d.ts` freeze + `_v23Checks` guards (P85). All staff-free under `require_client()`; staff contract byte-identical to `contract-freeze-v1.11.0`.
+
+### What Worked
+- **The milestone gate is genuinely deterministic.** Re-running export + codegen against the committed artifacts produced zero diff — the byte-stable contract freeze is a real, reproducible invariant, not a one-time snapshot. The drift gate independently re-run by the verifier confirmed it.
+- **Resuming an interrupted execute paid off over re-running it.** Phase 85's Tasks 1+2 were already committed but no SUMMARY existed (the `safe_resume_gate` case). Closing out by running only the remaining Task 3 (the gate) — rather than re-spawning an executor that would redo the deterministic regen — avoided churn and empty commits.
+- **Adversarial verification caught the right non-issue.** The full-suite `test_audit_taxonomy` failure looked like a v2.3 audit-event regression (the exact class of bug fixed during v2.2 close). Isolating it proved it passes alone, and that `LOCKED_AUDIT_EVENTS` is a frozenset with a pure-AST guard — it's a leaked-socket `PytestUnraisableExceptionWarning` misattribution, not a contract gap.
+
+### What Was Inefficient
+- **Local stack drift cost a detour at gate time.** Docker was down and the `migrate` image was stale (lacked Phase-84's migration 0057) — the documented "stale-image migrate" gotcha. The DB volume was already at head from a prior host run; running alembic from the host (not the stale image) was the fix. A pre-gate "is the stack current?" check would have surfaced this before the first failed `docker compose run migrate`.
+- **Code review on a contract-freeze phase is mostly noise.** Two of three changed files were machine-generated; only the 4-guard test addition was reviewable. Scoping the reviewer to the hand-written file (vs the 424KB generated JSON) was necessary to get signal.
+
+### Key Lessons
+1. **A `human_needed` phase verification is not a milestone blocker when it's operator-pending-by-design.** Phase 83's live-ЮKassa leg can't be verified without live creds; the audit correctly treated it as deferred (logic paths covered by ASGITransport/respx) rather than a gap — matching the standing auto-defer policy for live-payment legs.
+2. **Distinguish "deterministic regen" from "hand-edited artifact" when resuming.** The reason re-running Tasks 1+2 was safe-to-skip is that their output is a pure function of the source — re-running yields the committed bytes. A phase that hand-edits would not have this property and would need a different recovery path.
+3. **Flaky-by-misattribution failures need isolation, not a fix.** A test blamed for another test's leaked socket will "fail" non-deterministically in the full suite and pass alone. Documenting it as such (with the frozenset/AST evidence) is the correct disposition — never "fix" a green-in-isolation test.
