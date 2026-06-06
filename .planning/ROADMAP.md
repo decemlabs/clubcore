@@ -245,6 +245,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
-| 87. Notification Inbox | 4/4 | Complete   | 2026-06-06 |
+| 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
