@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Content & Communication — Client-First
-status: verifying
-stopped_at: "Phase 86 Plan 03 complete — GymInfoSheet wired to live backend (GYM-01)"
-last_updated: "2026-06-06T05:52:05.493Z"
+status: ready_to_plan
+stopped_at: Phase 86 complete (3/3) — ready to discuss Phase 87
+last_updated: 2026-06-06T06:16:56.229Z
 last_activity: 2026-06-06
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 86 — Gym-Info / CMS (all 3 plans complete)
+**Current focus:** Phase 87 — notification inbox
 
 ## Current Position
 
-Phase: 86 (Gym-Info / CMS) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 87
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-06
 
 ## v2.4 Roadmap Summary
