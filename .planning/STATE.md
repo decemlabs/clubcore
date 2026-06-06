@@ -154,7 +154,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260606-sqb | Pixel-perfect verbatim port of NotificationsScreen.jsx into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | ec675a9a | [260606-sqb-pixel-perfect-verbatim-port-of-notificat](./quick/260606-sqb-pixel-perfect-verbatim-port-of-notificat/) |
-| 260606-szy | Integrate new Notifications design into wired NotificationsSheet — no frame, shared tokens, real API, gestures→mark-read | 2026-06-06 | b67c4ce1 | [260606-szy-integrate-new-notifications-design-into](./quick/260606-szy-integrate-new-notifications-design-into/) |
+| 260606-szy | Integrate new Notifications design into wired NotificationsSheet — no frame, shared tokens, real API, gestures→mark-read | 2026-06-06 | bb5832ec | [260606-szy-integrate-new-notifications-design-into](./quick/260606-szy-integrate-new-notifications-design-into/) |
 
 ## Deferred Items
 
