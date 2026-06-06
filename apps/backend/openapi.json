@@ -660,7 +660,7 @@
         "type": "object"
       },
       "ClientAvailableSlotItem": {
-        "description": "Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).\n\nNO owner-only economics. Verified column sources:\n  trainer_availability_slots (app/modules/schedule/models.py:64-152):\n    id           UUID PK\n    trainer_id   UUID FK trainers.id\n    start_time   DateTime(timezone=True)\n    end_time     DateTime(timezone=True)\n    status       String(16)\n  trainers (app/modules/trainers/models.py:23-43):\n    full_name    Text NOT NULL\nspecialization is NOT on the Trainer model in v1 (reserved for future);\nomitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).",
+        "description": "Single bookable slot item — client-safe projection (CBOOK-02 / D-69-05 / T-70-13).\n\nNO owner-only economics. Verified column sources:\n  trainer_availability_slots (app/modules/schedule/models.py:64-152):\n    id           UUID PK\n    trainer_id   UUID FK trainers.id\n    start_time   DateTime(timezone=True)\n    end_time     DateTime(timezone=True)\n    status       String(16)\n  trainers (app/modules/trainers/models.py:23-43):\n    full_name    Text NOT NULL\nspecialization is available on Trainer since Phase 88 but is not included\nin the slot catalog projection per D-69-05 (slot list shows name only).",
         "properties": {
           "endTime": {
             "format": "date-time",
@@ -795,7 +795,7 @@
         "type": "object"
       },
       "ClientCatalogTrainerResponse": {
-        "description": "Active trainer — client-safe projection (CPLAN-03, D-69-05).\n\nNO rates, NO phone, NO is_active flag, NO audit fields.\nspecialization is not present in the Trainer model (reserved for future).",
+        "description": "Active trainer — client-safe projection (CPLAN-03, D-69-05).\n\nNO rates, NO phone, NO is_active flag, NO audit fields.",
         "properties": {
           "fullName": {
             "title": "Fullname",
@@ -1349,6 +1349,91 @@
         "title": "ClientNextBookingResponse",
         "type": "object"
       },
+      "ClientNotificationItem": {
+        "description": "Single inbox row for a client (INBOX-01 read path).\n\nread_at None = unread; read_at = timestamp = read.\ncreated_at used for ordering (newest first).",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "readAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readat"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "createdAt"
+        ],
+        "title": "ClientNotificationItem",
+        "type": "object"
+      },
+      "ClientNotificationsListResponse": {
+        "description": "Paginated notification list with server-computed unread_count (INBOX-01).\n\nField names mirror PaginatedData for wire consistency.\npage_size → pageSize camelCase via alias_generator=to_camel on ResponseData base.\nunread_count → unreadCount on the wire.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientNotificationItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "unreadCount"
+        ],
+        "title": "ClientNotificationsListResponse",
+        "type": "object"
+      },
       "ClientOtpRequestBody": {
         "additionalProperties": false,
         "description": "POST /client/otp/request — phone-first OTP trigger (D-01, CAUTH-03).",
@@ -1709,6 +1794,33 @@
         "title": "ClientPtSessionItem",
         "type": "object"
       },
+      "ClientPushTokenRegisterRequest": {
+        "additionalProperties": false,
+        "description": "Request body for POST /client/notifications/push-token (INBOX-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown fields (T-87-04).\ntoken: min_length=1 rejects empty/whitespace-only tokens; max_length=512 guards\nagainst oversized input (WR-05: unbounded token storage is a denial-of-storage vector).\nplatform: Literal enum enforces allow-list at Pydantic layer → 422 before DB hit.\nDB CheckConstraint 'ck_client_push_tokens_platform' provides a defence-in-depth\nsecond layer for any bypass paths (T-87-04, T-87-09).",
+        "properties": {
+          "platform": {
+            "enum": [
+              "web",
+              "android",
+              "ios"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "platform"
+        ],
+        "title": "ClientPushTokenRegisterRequest",
+        "type": "object"
+      },
       "ClientQrTokenResponse": {
         "description": "QR self check-in token response (CCHK-01 / D-70-09).\n\nReturned by GET /client/qr-token (require_client gated, ~60s TTL).\nThe PWA renders the token as a QR code for the gym scanner to scan.\nexpires_in is informational — the PWA may use it to display a countdown\nand refresh the token before it expires.",
         "properties": {
@@ -1884,6 +1996,59 @@
         ],
         "title": "ClientSort",
         "type": "string"
+      },
+      "ClientTrainerDetailResponse": {
+        "description": "Single trainer detail — client-safe projection (TRNR-01, Phase 88).\n\nClient-safe fields only: id, full_name, photo_url, specialization, bio.\nNO phone, NO is_active, NO rates, NO audit fields (D-20-IDOR / CPLAN convention).",
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "photoUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photourl"
+          },
+          "specialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specialization"
+          }
+        },
+        "required": [
+          "id",
+          "fullName"
+        ],
+        "title": "ClientTrainerDetailResponse",
+        "type": "object"
       },
       "ClientUpdateRequest": {
         "additionalProperties": false,
@@ -2206,6 +2371,247 @@
         ],
         "title": "Gender",
         "type": "string"
+      },
+      "GymInfoResponse": {
+        "description": "GET /client/gym and PUT /gym response payload (GYM-01/GYM-02).\n\nWire: camelCase via alias_generator=to_camel on ResponseData base.\nmodel_validate from ORM (from_attributes=True inherited from ContractModel).",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "amenities": {
+            "items": {},
+            "title": "Amenities",
+            "type": "array"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "hours": {
+            "items": {},
+            "title": "Hours",
+            "type": "array"
+          },
+          "metro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metro"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "social": {
+            "items": {},
+            "title": "Social",
+            "type": "array"
+          },
+          "tagline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tagline"
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ],
+        "title": "GymInfoResponse",
+        "type": "object"
+      },
+      "GymInfoUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Owner-only partial upsert request body (GYM-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\nScalar str fields capped via Field(max_length=255) — T-86-03 mitigation\n(unbounded payload DoS deferred to Plan 02 router validation; scalar cap here).\nAll fields are optional (partial upsert — exclude_unset semantics in repository).\n\nCR-02 / T-86-12: email validated via EmailStr — rejects query-string injection\n(e.g. \"user@gym.ru?cc=evil@x.com\") because the email grammar forbids '?', '#', '%'.\nSeed value \"tverskaya@mygym.ru\" passes EmailStr validation.\n\nWR-06 / T-86-11: social validated via SocialItem — rejects unknown kinds and\nhandles with embedded '@' sequences or non-username characters.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "amenities": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amenities"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          },
+          "metro": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metro"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          },
+          "social": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SocialItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Social"
+          },
+          "tagline": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tagline"
+          }
+        },
+        "title": "GymInfoUpdateRequest",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -4739,6 +5145,30 @@
         "title": "ResponseEnvelope[ClientMeResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_ClientNotificationItem_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientNotificationItem"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientNotificationItem]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ClientNotificationsListResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientNotificationsListResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientNotificationsListResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientPaymentMethodResponse_": {
         "properties": {
           "data": {
@@ -4799,6 +5229,18 @@
         "title": "ResponseEnvelope[ClientResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_ClientTrainerDetailResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClientTrainerDetailResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ClientTrainerDetailResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_ClientsReportResponse_": {
         "properties": {
           "data": {
@@ -4809,6 +5251,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[ClientsReportResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_GymInfoResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GymInfoResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[GymInfoResponse]",
         "type": "object"
       },
       "ResponseEnvelope_LoginResponse_": {
@@ -5830,6 +6284,38 @@
         "title": "SlotStatus",
         "type": "string"
       },
+      "SocialItem": {
+        "additionalProperties": false,
+        "description": "Per-item schema for social network entries (WR-06 — T-86-11 mitigation).\n\nkind is a closed enum so only tg/ig are accepted at PUT time.\nhandle is a simple @username pattern; encodeURIComponent in the PWA\ncovers any remaining URL-unsafe chars after @ stripping.",
+        "properties": {
+          "handle": {
+            "maxLength": 64,
+            "pattern": "^@[\\w.]+$",
+            "title": "Handle",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "tg",
+              "ig"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 64,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "handle"
+        ],
+        "title": "SocialItem",
+        "type": "object"
+      },
       "TelegramStartResponse": {
         "description": "POST /auth/telegram/start success body (AUTH-TG-01).\n\nsnake_case → camelCase auto: `deep_link_url` → `deepLinkUrl`,\n`deep_link_token` → `deepLinkToken`.",
         "properties": {
@@ -6107,6 +6593,17 @@
       "TrainerResponse": {
         "description": "Single trainer read DTO. `from_attributes=True` inherited via ContractModel.",
         "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
           "createdAt": {
             "format": "date-time",
             "title": "Createdat",
@@ -6136,6 +6633,28 @@
             ],
             "title": "Phone"
           },
+          "photoUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photourl"
+          },
+          "specialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specialization"
+          },
           "updatedAt": {
             "format": "date-time",
             "title": "Updatedat",
@@ -6156,6 +6675,17 @@
         "additionalProperties": false,
         "description": "PATCH /api/v1/trainers/{id} body.\n\nPATCH semantics: omit key to leave unchanged (D-01).\nis_active accepted on PATCH for deactivate/reactivate (D-31-11).",
         "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
           "fullName": {
             "anyOf": [
               {
@@ -6191,6 +6721,29 @@
               }
             ],
             "title": "Phone"
+          },
+          "photoUrl": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photourl"
+          },
+          "specialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specialization"
           }
         },
         "title": "TrainerUpdateRequest",
@@ -8056,6 +8609,28 @@
         ]
       }
     },
+    "/api/v1/client/gym": {
+      "get": {
+        "description": "Return the singleton gym-info row.\n\nrequire_client() gate: unauthenticated requests → 401; non-client tokens → 403.\nGym is a singleton — every authenticated client sees the same row (T-86-08 accepted).\nGymInfoNotFoundError (404) surfaces when the seed migration has not been run.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_gym_info",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_GymInfoResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gym facility info for the authenticated client (GYM-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
     "/api/v1/client/history/payments": {
       "get": {
         "description": "CHIST-03 — payment + refund history (signed-amount ledger). IDOR-safe.\n\nNo try/except — AppError bubbles to _app_error_handler.",
@@ -8379,6 +8954,108 @@
         ]
       }
     },
+    "/api/v1/client/notifications": {
+      "get": {
+        "description": "Return paginated inbox rows newest-first with unreadCount (INBOX-01).\n\nD-20-IDOR: client_id from require_client() principal only — never from URL.\nNo CSRF dep — GET is a safe method per RBAC-04.\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
+        "operationId": "client_list_notifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientNotificationsListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Paginated notification inbox for the authenticated client (INBOX-01; IDOR-safe; newest-first; includes unreadCount)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/notifications/read-all": {
+      "patch": {
+        "description": "Bulk mark-read scoped to the calling client (INBOX-01).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nT-87-06: client_id from principal only.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_mark_all_notifications_read",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mark all unread notifications read for the authenticated client (INBOX-01)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/notifications/{notification_id}/read": {
+      "patch": {
+        "description": "Mark a single notification read; 404-collapse on non-owned rows (INBOX-01).\n\nIDOR (T-87-07): UPDATE scoped by (client_id, notification_id) — caller cannot\ndistinguish \"wrong owner\" from \"already read\" from \"id doesn't exist\" (404-collapse).\nnotification_id from path only. client_id from require_client() principal ONLY.\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nNo try/except — AppError (including NotFoundError → 404) bubbles to _app_error_handler.",
+        "operationId": "client_mark_notification_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientNotificationItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Mark one notification read; 404-collapses on non-owned or absent id (INBOX-01; IDOR-safe via T-87-07)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
     "/api/v1/client/otp/request": {
       "post": {
         "description": "Trigger an OTP DM to the client's linked Telegram account (CAUTH-01/02/03).\n\nAlways returns 202 with a fixed ResponseEnvelope[None] body — the response\nis byte-identical for every phone (known/unknown/unlinked) so callers cannot\ninfer phone existence (T-68-22 / CAUTH-02 anti-oracle invariant).",
@@ -8637,6 +9314,34 @@
         ]
       }
     },
+    "/api/v1/client/push-tokens": {
+      "post": {
+        "description": "Idempotent push-token upsert; returns 204 with no body (INBOX-02).\n\nT-87-08: response body MUST NOT echo the token.\nT-87-09: extra='forbid' (ClientPushTokenRegisterRequest base) → 422 on unknown fields.\nplatform constrained to web/android/ios by DB CheckConstraint (T-87-09).\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nclient_id from principal only (D-20-IDOR).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_register_push_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientPushTokenRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Register (or revive) a push token for the authenticated client (INBOX-02; idempotent; no token echoed — T-87-08)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
     "/api/v1/client/qr-token": {
       "get": {
         "description": "Issue a signed QR self check-in JWT (Phase 70 CCHK-01 / D-70-09).\n\nRBAC-04: require_client() gates this endpoint — the client must be\nauthenticated (D-70-09). No CSRF dep — GET is safe.\n\nNO membership pre-check (D-70-09): gating on active membership happens\nat scan time inside _create_visit_with_anti_fraud. The PWA can display a\nQR code even before the client has an active membership, allowing the\nreception to activate one on their behalf while they wait.\n\nRate-limit (T-70-18): 20 req/min per IP (per _enforce_qr_token_rate_limit).\nLegitimate use: one refresh per ~50s. RateLimited(429) bubbles.\n\nNo try/except — AppError bubbles to _app_error_handler.",
@@ -8770,6 +9475,43 @@
           }
         },
         "summary": "Active trainers catalog for the authenticated client (CPLAN-03)",
+        "tags": [
+          "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/trainers/{trainer_id}": {
+      "get": {
+        "description": "TRNR-01 — client-safe trainer detail (id, name, photo_url, spec, bio).\n\n404 trainer_not_found for missing/soft-deleted/inactive trainers (D-20-IDOR).\nNo try/except — NotFoundError bubbles to _app_error_handler.",
+        "operationId": "client_get_trainer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ClientTrainerDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Single trainer profile for the authenticated client (TRNR-01); 404 trainer_not_found on unknown / soft-deleted / inactive",
         "tags": [
           "Client-Portal"
         ]
@@ -9231,6 +9973,41 @@
         "summary": "Owner-only: manually grant bonus kopecks to a client (ACCR-02)",
         "tags": [
           "Clients"
+        ]
+      }
+    },
+    "/api/v1/gym": {
+      "put": {
+        "description": "Partial upsert of the singleton gym-info row.\n\nRBAC-04 ordering: require_permission(EDIT, GYM) declared BEFORE verify_csrf.\nReception role → 403 from require_permission before reaching CSRF check (T-86-04).\nT-86-06: verify_csrf guards against cross-site forgery on the owner mutation.\nT-86-07: GymInfoUpdateRequest extra='forbid' → 422 on unknown keys.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_update_gym_info",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GymInfoUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_GymInfoResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Update gym facility info (owner-only; GYM-02)",
+        "tags": [
+          "Gym"
         ]
       }
     },

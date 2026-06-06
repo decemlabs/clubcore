@@ -800,6 +800,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/gym": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gym facility info for the authenticated client (GYM-01)
+         * @description Return the singleton gym-info row.
+         *
+         *     require_client() gate: unauthenticated requests → 401; non-client tokens → 403.
+         *     Gym is a singleton — every authenticated client sees the same row (T-86-08 accepted).
+         *     GymInfoNotFoundError (404) surfaces when the seed migration has not been run.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_gym_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/history/payments": {
         parameters: {
             query?: never;
@@ -881,100 +906,6 @@ export interface paths {
          *     No try/except — AppError bubbles to _app_error_handler.
          */
         get: operations["client_get_home"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/client/notifications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Paginated notification inbox for the authenticated client (INBOX-05; Phase 87)
-         * @description Return paginated notifications (newest-first) for the principal.
-         *     D-20-IDOR: client_id sourced from require_client() principal — never from URL.
-         */
-        get: operations["client_list_notifications"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/client/notifications/{notification_id}/read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: { notification_id: string };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Mark a single notification as read (INBOX-05; Phase 87) */
-        patch: operations["client_mark_notification_read"];
-        trace?: never;
-    };
-    "/api/v1/client/notifications/read-all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Mark all notifications as read (INBOX-05; Phase 87) */
-        patch: operations["client_mark_all_notifications_read"];
-        trace?: never;
-    };
-    "/api/v1/client/push-tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register (or revive) a push token for the authenticated client (INBOX-02; Phase 87) */
-        post: operations["client_register_push_token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/client/gym": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Gym info singleton for the authenticated client (GYM-01; Phase 86)
-         * @description Return singleton gym_info row. 404 if seed missing.
-         *     D-20-IDOR not applicable — gym_info is shared facility content.
-         *     No try/except — AppError bubbles to _app_error_handler.
-         */
-        get: operations["client_get_gym_info"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1096,6 +1027,81 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated notification inbox for the authenticated client (INBOX-01; IDOR-safe; newest-first; includes unreadCount)
+         * @description Return paginated inbox rows newest-first with unreadCount (INBOX-01).
+         *
+         *     D-20-IDOR: client_id from require_client() principal only — never from URL.
+         *     No CSRF dep — GET is a safe method per RBAC-04.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     No session.commit() — read path.
+         */
+        get: operations["client_list_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mark all unread notifications read for the authenticated client (INBOX-01)
+         * @description Bulk mark-read scoped to the calling client (INBOX-01).
+         *
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     T-87-06: client_id from principal only.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        patch: operations["client_mark_all_notifications_read"];
+        trace?: never;
+    };
+    "/api/v1/client/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mark one notification read; 404-collapses on non-owned or absent id (INBOX-01; IDOR-safe via T-87-07)
+         * @description Mark a single notification read; 404-collapse on non-owned rows (INBOX-01).
+         *
+         *     IDOR (T-87-07): UPDATE scoped by (client_id, notification_id) — caller cannot
+         *     distinguish "wrong owner" from "already read" from "id doesn't exist" (404-collapse).
+         *     notification_id from path only. client_id from require_client() principal ONLY.
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     No try/except — AppError (including NotFoundError → 404) bubbles to _app_error_handler.
+         */
+        patch: operations["client_mark_notification_read"];
         trace?: never;
     };
     "/api/v1/client/otp/request": {
@@ -1305,6 +1311,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/push-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register (or revive) a push token for the authenticated client (INBOX-02; idempotent; no token echoed — T-87-08)
+         * @description Idempotent push-token upsert; returns 204 with no body (INBOX-02).
+         *
+         *     T-87-08: response body MUST NOT echo the token.
+         *     T-87-09: extra='forbid' (ClientPushTokenRegisterRequest base) → 422 on unknown fields.
+         *     platform constrained to web/android/ios by DB CheckConstraint (T-87-09).
+         *     RBAC-04 ordering: require_client() → verify_client_csrf → get_db.
+         *     client_id from principal only (D-20-IDOR).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["client_register_push_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/qr-token": {
         parameters: {
             query?: never;
@@ -1440,13 +1473,11 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                trainer_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         /**
-         * Single trainer profile for the authenticated client (TRNR-01)
+         * Single trainer profile for the authenticated client (TRNR-01); 404 trainer_not_found on unknown / soft-deleted / inactive
          * @description TRNR-01 — client-safe trainer detail (id, name, photo_url, spec, bio).
          *
          *     404 trainer_not_found for missing/soft-deleted/inactive trainers (D-20-IDOR).
@@ -1583,9 +1614,13 @@ export interface paths {
         };
         get?: never;
         /**
-         * Owner-only: update gym info singleton (GYM-02; Phase 86)
-         * @description Full or partial upsert of the gym_info singleton (owner-only, GYM-02).
-         *     RBAC-04 ordering: require_permission(EDIT, GYM) → verify_csrf → get_db.
+         * Update gym facility info (owner-only; GYM-02)
+         * @description Partial upsert of the singleton gym-info row.
+         *
+         *     RBAC-04 ordering: require_permission(EDIT, GYM) declared BEFORE verify_csrf.
+         *     Reception role → 403 from require_permission before reaching CSRF check (T-86-04).
+         *     T-86-06: verify_csrf guards against cross-site forgery on the owner mutation.
+         *     T-86-07: GymInfoUpdateRequest extra='forbid' → 422 on unknown keys.
          *     No try/except — AppError bubbles to _app_error_handler.
          */
         put: operations["owner_update_gym_info"];
@@ -3662,8 +3697,8 @@ export interface components {
          *         status       String(16)
          *       trainers (app/modules/trainers/models.py:23-43):
          *         full_name    Text NOT NULL
-         *     specialization is NOT on the Trainer model in v1 (reserved for future);
-         *     omitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).
+         *     specialization is available on Trainer since Phase 88 but is not included
+         *     in the slot catalog projection per D-69-05 (slot list shows name only).
          */
         ClientAvailableSlotItem: {
             /**
@@ -3773,28 +3808,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-        };
-        /**
-         * ClientTrainerDetailResponse
-         * @description Single trainer detail — client-safe projection (TRNR-01, Phase 88).
-         *
-         *     Client-safe fields only: id, full_name, photo_url, specialization, bio.
-         *     NO phone, NO is_active, NO rates, NO audit fields.
-         */
-        ClientTrainerDetailResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Fullname */
-            fullName: string;
-            /** Photo Url */
-            photoUrl: string | null;
-            /** Specialization */
-            specialization: string | null;
-            /** Bio */
-            bio: string | null;
         };
         /**
          * ClientCheckInRequest
@@ -4079,6 +4092,53 @@ export interface components {
             trainerName: string;
         };
         /**
+         * ClientNotificationItem
+         * @description Single inbox row for a client (INBOX-01 read path).
+         *
+         *     read_at None = unread; read_at = timestamp = read.
+         *     created_at used for ordering (newest first).
+         */
+        ClientNotificationItem: {
+            /** Body */
+            body: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Readat */
+            readAt?: string | null;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ClientNotificationsListResponse
+         * @description Paginated notification list with server-computed unread_count (INBOX-01).
+         *
+         *     Field names mirror PaginatedData for wire consistency.
+         *     page_size → pageSize camelCase via alias_generator=to_camel on ResponseData base.
+         *     unread_count → unreadCount on the wire.
+         */
+        ClientNotificationsListResponse: {
+            /** Items */
+            items: components["schemas"]["ClientNotificationItem"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+            /** Unreadcount */
+            unreadCount: number;
+        };
+        /**
          * ClientOtpRequestBody
          * @description POST /client/otp/request — phone-first OTP trigger (D-01, CAUTH-03).
          */
@@ -4252,6 +4312,26 @@ export interface components {
             trainerNameSnapshot: string;
         };
         /**
+         * ClientPushTokenRegisterRequest
+         * @description Request body for POST /client/notifications/push-token (INBOX-02).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields (T-87-04).
+         *     token: min_length=1 rejects empty/whitespace-only tokens; max_length=512 guards
+         *     against oversized input (WR-05: unbounded token storage is a denial-of-storage vector).
+         *     platform: Literal enum enforces allow-list at Pydantic layer → 422 before DB hit.
+         *     DB CheckConstraint 'ck_client_push_tokens_platform' provides a defence-in-depth
+         *     second layer for any bypass paths (T-87-04, T-87-09).
+         */
+        ClientPushTokenRegisterRequest: {
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "web" | "android" | "ios";
+            /** Token */
+            token: string;
+        };
+        /**
          * ClientQrTokenResponse
          * @description QR self check-in token response (CCHK-01 / D-70-09).
          *
@@ -4337,6 +4417,28 @@ export interface components {
          * @enum {string}
          */
         ClientSort: "created_at_desc" | "last_name_asc";
+        /**
+         * ClientTrainerDetailResponse
+         * @description Single trainer detail — client-safe projection (TRNR-01, Phase 88).
+         *
+         *     Client-safe fields only: id, full_name, photo_url, specialization, bio.
+         *     NO phone, NO is_active, NO rates, NO audit fields (D-20-IDOR / CPLAN convention).
+         */
+        ClientTrainerDetailResponse: {
+            /** Bio */
+            bio?: string | null;
+            /** Fullname */
+            fullName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Photourl */
+            photoUrl?: string | null;
+            /** Specialization */
+            specialization?: string | null;
+        };
         /**
          * ClientUpdateRequest
          * @description PATCH /api/v1/clients/{id} body.
@@ -4467,6 +4569,77 @@ export interface components {
          * @enum {string}
          */
         Gender: "male" | "female";
+        /**
+         * GymInfoResponse
+         * @description GET /client/gym and PUT /gym response payload (GYM-01/GYM-02).
+         *
+         *     Wire: camelCase via alias_generator=to_camel on ResponseData base.
+         *     model_validate from ORM (from_attributes=True inherited from ContractModel).
+         */
+        GymInfoResponse: {
+            /** Address */
+            address: string;
+            /** Amenities */
+            amenities?: unknown[];
+            /** City */
+            city?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Hours */
+            hours?: unknown[];
+            /** Metro */
+            metro?: string | null;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone?: string | null;
+            /** Rules */
+            rules?: string[];
+            /** Social */
+            social?: unknown[];
+            /** Tagline */
+            tagline?: string | null;
+        };
+        /**
+         * GymInfoUpdateRequest
+         * @description Owner-only partial upsert request body (GYM-02).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     Scalar str fields capped via Field(max_length=255) — T-86-03 mitigation
+         *     (unbounded payload DoS deferred to Plan 02 router validation; scalar cap here).
+         *     All fields are optional (partial upsert — exclude_unset semantics in repository).
+         *
+         *     CR-02 / T-86-12: email validated via EmailStr — rejects query-string injection
+         *     (e.g. "user@gym.ru?cc=evil@x.com") because the email grammar forbids '?', '#', '%'.
+         *     Seed value "tverskaya@mygym.ru" passes EmailStr validation.
+         *
+         *     WR-06 / T-86-11: social validated via SocialItem — rejects unknown kinds and
+         *     handles with embedded '@' sequences or non-username characters.
+         */
+        GymInfoUpdateRequest: {
+            /** Address */
+            address?: string | null;
+            /** Amenities */
+            amenities?: unknown[] | null;
+            /** City */
+            city?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Hours */
+            hours?: unknown[] | null;
+            /** Metro */
+            metro?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Rules */
+            rules?: string[] | null;
+            /** Social */
+            social?: components["schemas"]["SocialItem"][] | null;
+            /** Tagline */
+            tagline?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5701,6 +5874,14 @@ export interface components {
         ResponseEnvelope_ClientMeResponse_: {
             data: components["schemas"]["ClientMeResponse"];
         };
+        /** ResponseEnvelope[ClientNotificationItem] */
+        ResponseEnvelope_ClientNotificationItem_: {
+            data: components["schemas"]["ClientNotificationItem"];
+        };
+        /** ResponseEnvelope[ClientNotificationsListResponse] */
+        ResponseEnvelope_ClientNotificationsListResponse_: {
+            data: components["schemas"]["ClientNotificationsListResponse"];
+        };
         /** ResponseEnvelope[ClientPaymentMethodResponse] */
         ResponseEnvelope_ClientPaymentMethodResponse_: {
             data: components["schemas"]["ClientPaymentMethodResponse"];
@@ -5721,9 +5902,17 @@ export interface components {
         ResponseEnvelope_ClientResponse_: {
             data: components["schemas"]["ClientResponse"];
         };
+        /** ResponseEnvelope[ClientTrainerDetailResponse] */
+        ResponseEnvelope_ClientTrainerDetailResponse_: {
+            data: components["schemas"]["ClientTrainerDetailResponse"];
+        };
         /** ResponseEnvelope[ClientsReportResponse] */
         ResponseEnvelope_ClientsReportResponse_: {
             data: components["schemas"]["ClientsReportResponse"];
+        };
+        /** ResponseEnvelope[GymInfoResponse] */
+        ResponseEnvelope_GymInfoResponse_: {
+            data: components["schemas"]["GymInfoResponse"];
         };
         /** ResponseEnvelope[LoginResponse] */
         ResponseEnvelope_LoginResponse_: {
@@ -5940,11 +6129,6 @@ export interface components {
         ResponseEnvelope_list_ClientCatalogTrainerResponse__: {
             /** Data */
             data: components["schemas"]["ClientCatalogTrainerResponse"][];
-        };
-        /** ResponseEnvelope[ClientTrainerDetailResponse] */
-        ResponseEnvelope_ClientTrainerDetailResponse_: {
-            /** Data */
-            data: components["schemas"]["ClientTrainerDetailResponse"];
         };
         /** ResponseEnvelope[list[ClientWeeklyActivityItem]] */
         ResponseEnvelope_list_ClientWeeklyActivityItem__: {
@@ -6198,6 +6382,25 @@ export interface components {
          */
         SlotStatus: "active" | "booked" | "cancelled";
         /**
+         * SocialItem
+         * @description Per-item schema for social network entries (WR-06 — T-86-11 mitigation).
+         *
+         *     kind is a closed enum so only tg/ig are accepted at PUT time.
+         *     handle is a simple @username pattern; encodeURIComponent in the PWA
+         *     covers any remaining URL-unsafe chars after @ stripping.
+         */
+        SocialItem: {
+            /** Handle */
+            handle: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tg" | "ig";
+            /** Label */
+            label: string;
+        };
+        /**
          * TelegramStartResponse
          * @description POST /auth/telegram/start success body (AUTH-TG-01).
          *
@@ -6361,6 +6564,8 @@ export interface components {
          * @description Single trainer read DTO. `from_attributes=True` inherited via ContractModel.
          */
         TrainerResponse: {
+            /** Bio */
+            bio?: string | null;
             /**
              * Createdat
              * Format: date-time
@@ -6377,6 +6582,10 @@ export interface components {
             isActive: boolean;
             /** Phone */
             phone?: string | null;
+            /** Photourl */
+            photoUrl?: string | null;
+            /** Specialization */
+            specialization?: string | null;
             /**
              * Updatedat
              * Format: date-time
@@ -6391,12 +6600,18 @@ export interface components {
          *     is_active accepted on PATCH for deactivate/reactivate (D-31-11).
          */
         TrainerUpdateRequest: {
+            /** Bio */
+            bio?: string | null;
             /** Fullname */
             fullName?: string | null;
             /** Isactive */
             isActive?: boolean | null;
             /** Phone */
             phone?: string | null;
+            /** Photourl */
+            photoUrl?: string | null;
+            /** Specialization */
+            specialization?: string | null;
         };
         /**
          * TrainerUsageReportResponse
@@ -7473,6 +7688,26 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    client_get_gym_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_GymInfoResponse_"];
+                };
+            };
+        };
+    };
     client_list_payment_history: {
         parameters: {
             query?: {
@@ -7561,93 +7796,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientHomeResponse_"];
-                };
-            };
-        };
-    };
-    owner_update_gym_info: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name?: string | null;
-                    address?: string | null;
-                    tagline?: string | null;
-                    city?: string | null;
-                    metro?: string | null;
-                    phone?: string | null;
-                    email?: string | null;
-                    hours?: { d: string; open: string; close: string }[] | null;
-                    amenities?: { icon: string; label: string }[] | null;
-                    rules?: string[] | null;
-                    social?: { kind: "tg" | "ig"; label: string; handle: string }[] | null;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        ok: boolean;
-                        data: {
-                            name: string;
-                            tagline: string | null;
-                            address: string;
-                            city: string | null;
-                            metro: string | null;
-                            phone: string | null;
-                            email: string | null;
-                            hours: { d: string; open: string; close: string }[];
-                            amenities: { icon: string; label: string }[];
-                            rules: string[];
-                            social: { kind: string; label: string; handle: string }[];
-                        };
-                    };
-                };
-            };
-            422: components["responses"]["422_ValidationError"];
-        };
-    };
-    client_get_gym_info: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        ok: boolean;
-                        data: {
-                            name: string;
-                            tagline: string | null;
-                            address: string;
-                            city: string | null;
-                            metro: string | null;
-                            phone: string | null;
-                            email: string | null;
-                            hours: { d: string; open: string; close: string }[];
-                            amenities: { icon: string; label: string }[];
-                            rules: string[];
-                            social: { kind: string; label: string; handle: string }[];
-                        };
-                    };
                 };
             };
         };
@@ -7759,6 +7907,71 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseEnvelope_Union_ClientMembershipResponse__NoneType__"];
                 };
             };
+        };
+    };
+    client_list_notifications: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientNotificationsListResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_mark_all_notifications_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    client_mark_notification_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientNotificationItem_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
         };
     };
     client_otp_request: {
@@ -7962,6 +8175,29 @@ export interface operations {
             };
         };
     };
+    client_register_push_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientPushTokenRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
     client_get_qr_token: {
         parameters: {
             query?: never;
@@ -8084,15 +8320,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientTrainerDetailResponse_"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -8276,6 +8503,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientLoyaltyGrantResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    owner_update_gym_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GymInfoUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_GymInfoResponse_"];
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -10226,129 +10478,6 @@ export interface operations {
                 };
             };
             422: components["responses"]["422_ValidationError"];
-        };
-    };
-    client_list_notifications: {
-        parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        ok: boolean;
-                        data: {
-                            items: {
-                                id: string;
-                                kind: string;
-                                title: string;
-                                body: string;
-                                readAt: string | null;
-                                createdAt: string;
-                            }[];
-                            total: number;
-                            page: number;
-                            pageSize: number;
-                            unreadCount: number;
-                        };
-                    };
-                };
-            };
-            422: components["responses"]["422_ValidationError"];
-        };
-    };
-    client_mark_notification_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: { notification_id: string };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        ok: boolean;
-                        data: {
-                            id: string;
-                            kind: string;
-                            title: string;
-                            body: string;
-                            readAt: string | null;
-                            createdAt: string;
-                        };
-                    };
-                };
-            };
-            422: components["responses"]["422_ValidationError"];
-        };
-    };
-    client_mark_all_notifications_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response — 204 No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    client_register_push_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    token: string;
-                    platform: "web" | "android" | "ios";
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response — 204 No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     health: {
