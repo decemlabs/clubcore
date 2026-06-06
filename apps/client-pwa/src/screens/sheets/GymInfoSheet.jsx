@@ -18,7 +18,7 @@ import { Icon } from '@/components/Icon.jsx'
 import { StatusBar } from '@/components/StatusBar.jsx'
 import { PullToRefresh } from '@/components/PullToRefresh.jsx'
 import { SubSheetHeader } from '@/screens/sheets/ProfileExtraSheets.jsx'
-import { useClientGymInfo } from '@/lib/clientQueries'
+import { useClientGymInfo } from '@/data'
 
 // ─── Static decorative photos (frontend-only — NOT from API) ─────────────────
 // Source shape from data/gym.js; photos are not stored in the DB (CONTEXT.md).

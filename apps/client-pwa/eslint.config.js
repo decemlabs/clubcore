@@ -16,15 +16,16 @@ export default tseslint.config(
       'node_modules',
       'coverage',
       // Pre-existing JSX/JS screens and utilities (D-69-06 allowJs ramp)
-      // Exceptions: the five net-new placeholder screens are NOT ignored here so
+      // Exceptions: the net-new placeholder screens are NOT ignored here so
       // the D-71-09 import-boundary block can lint them for the restricted-paths rule.
+      // GymInfoSheet graduated to a real data-backed screen in Phase 86 — removed
+      // from the placeholder zone, now ignored like other real .jsx screens.
       'src/**/*.jsx',
       'src/**/*.js',
       '!src/screens/ChatScreen.jsx',
       '!src/screens/sheets/ReferralSheet.jsx',
       '!src/screens/sheets/TrainerDetailSheet.jsx',
       '!src/screens/sheets/NotificationsSheet.jsx',
-      '!src/screens/sheets/GymInfoSheet.jsx',
     ],
   },
   {
@@ -68,7 +69,6 @@ export default tseslint.config(
       'src/screens/sheets/ReferralSheet.jsx',
       'src/screens/sheets/TrainerDetailSheet.jsx',
       'src/screens/sheets/NotificationsSheet.jsx',
-      'src/screens/sheets/GymInfoSheet.jsx',
     ],
     plugins: { import: importPlugin },
     languageOptions: {
@@ -94,7 +94,6 @@ export default tseslint.config(
                 './src/screens/sheets/ReferralSheet.jsx',
                 './src/screens/sheets/TrainerDetailSheet.jsx',
                 './src/screens/sheets/NotificationsSheet.jsx',
-                './src/screens/sheets/GymInfoSheet.jsx',
               ],
               from: [
                 './src/lib/clientFetcher.ts',

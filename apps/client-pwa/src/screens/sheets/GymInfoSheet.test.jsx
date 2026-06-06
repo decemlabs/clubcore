@@ -19,13 +19,14 @@ function renderSheet(ui) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
 }
 
-// ─── Mock @/lib/clientQueries: useClientGymInfo ──────────────────────────────
-// The sheet imports the hook directly from @/lib/clientQueries (D-71-09 swap-seam
-// boundary — net-new sheets must not import through the @/data barrel).
+// ─── Mock @/data: useClientGymInfo ────────────────────────────────────────────
+// The sheet imports the hook through the @/data swap seam (sibling convention,
+// e.g. LoyaltySheet). GymInfoSheet graduated from the D-71-09 placeholder zone in
+// Phase 86, so the swap-seam import is allowed and preserves mock-mode integrity.
 const useClientGymInfo = vi.fn()
 
-vi.mock('@/lib/clientQueries', async () => {
-  const actual = await vi.importActual('@/lib/clientQueries')
+vi.mock('@/data', async () => {
+  const actual = await vi.importActual('@/data')
   return {
     ...actual,
     useClientGymInfo: (...args) => useClientGymInfo(...args),
