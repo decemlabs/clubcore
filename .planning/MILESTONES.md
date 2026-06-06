@@ -1,5 +1,23 @@
 # Milestones
 
+## v2.3 Loyalty / Club Bonuses + Real Autopay (Shipped: 2026-06-06)
+
+**Phases completed:** 4 phases, 10 plans, 15 tasks
+
+**Key accomplishments:**
+
+- Append-only loyalty_ledger (migration 0054) with balance as a non-destructive integer-kopecks fold; loyalty_accrued LOCKED audit event registered before any callsite (count-lock → 102)
+- Loyalty service with owner-only grant API + IDOR-safe client balance/history reads (client_id from require_client() principal) + idempotent welcome-accrual callsite + integration tests (LOYL-01..03, ACCR-01..03)
+- PWA LoyaltyBalanceCard + BonusHistorySheet behind the clubBonuses feature flag with query hooks + Vitest
+- Server-authoritative bonus redemption: server-clamped checkout, idempotent overdraft-clamped webhook debit, promo attribution fix, and 5-case regression test suite proving D-06 / T-83-05 / T-83-06 / T-83-08
+- CheckoutSheet wired to real loyalty balance with estimate-only redemption behind clubBonuses=true; BONUS_PLACEHOLDER removed; loyaltyRedeemKopecks threaded into both checkout mutations; openapi.json + schema.d.ts additively regenerated so tsc -b passes (REDM-03)
+- Migration 0056 creates autopay_charges (double-charge UNIQUE guard + online_payment_id) + autopay_charge_notifications (per-channel decline dedup); YooKassa off-session payment_method_id param added; two LOCKED audit events pre-registered at count-lock 105
+- Off-session autopay cron (charge_expiring_autopay) with DB-claim idempotency + sha256 provider key + webhook discriminator for method='autopay' charge-ledger labeling + 41 new passing tests covering skip matrix, ФЗ-376, double-charge, crash-between-claim, and decline-enqueue
+- Channel-idempotent autopay outcome notifications: success DM + email mirror via existing dispatch_payment_notification (online_payment_id-keyed); failure DM + email mirror via new dispatch_autopay_failure_notification (autopay_charge_id-keyed); both owner-signed, best-effort, 3 passing integration tests
+- The v2.3 contract is frozen byte-stable — `openapi.json` + `schema.d.ts` regenerate to the committed bytes, all 3 new loyalty paths + the `loyaltyRedeemKopecks` checkout field are present and forward-guarded, and the full milestone gate is green except the documented pre-existing failures (none modified).
+
+---
+
 ## v2.2 Membership self-service depth (Shipped: 2026-06-03)
 
 **Phases completed:** 4 phases, 11 plans, 26 tasks

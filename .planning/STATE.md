@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Loyalty / Club Bonuses + Real Autopay
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 84 Plan 03 complete — autopay success+failure notifications, channel-idempotent, 3 tests; Phase 84 COMPLETE
-last_updated: "2026-06-06T03:42:59.662Z"
-last_activity: 2026-06-06 -- Phase 85 marked complete
+last_updated: "2026-06-06T03:57:32.499Z"
+last_activity: 2026-06-06 — Milestone v2.3 completed and archived
 progress:
   total_phases: 8
   completed_phases: 4
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 
 ## Current Position
 
-Phase: 85 — COMPLETE
-Plan: Not started
-Status: Phase 85 complete
-Last activity: 2026-06-06 -- Phase 85 marked complete
+Phase: Milestone v2.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-06 — Milestone v2.3 completed and archived
 
 ## v2.3 Roadmap Summary
 
@@ -109,6 +109,8 @@ Last activity: 2026-06-06 -- Phase 85 marked complete
 None.
 
 ## Deferred Items
+
+**v2.3 close (2026-06-06) — acknowledged open artifacts (10):** 8 quick-tasks with empty status fields (historical shipped work — the 999.x DONE/SHIPPED roadmap markers: `260529-ny2`, `260529-olc`, `260601-*` client-pwa tasks); 1 pending todo (`future-milestones-sequence` — intentional next-milestone planning); 1 verification gap (Phase 83 `human_needed` — live-ЮKassa bonus-redemption E2E, OPERATOR-PENDING by design, auto-deferred). None block v2.3 completion; logic paths covered by ASGITransport/respx suites.
 
 Items carried forward from v2.1 close:
 
