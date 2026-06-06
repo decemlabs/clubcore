@@ -515,21 +515,23 @@ const _v20Checks: [
 //   GET  /api/v1/client/loyalty/history       (Phase 82, LOYL-02)
 //   POST /api/v1/clients/{client_id}/loyalty/grant  (Phase 82, ACCR-02 — owner-only)
 //   POST /api/v1/client/checkout/memberships/{plan_id} requestBody (Phase 83, REDM-01)
-//     — proves ClientCheckoutRequest (carrying loyaltyRedeemKopecks) is realised
+//     — proves the REDM-01 loyaltyRedeemKopecks field is present on the checkout body
 type _ClientLoyaltyBalanceGet = AssertNonNever<paths['/api/v1/client/loyalty/balance']['get']>
 type _ClientLoyaltyHistoryGet = AssertNonNever<paths['/api/v1/client/loyalty/history']['get']>
 type _ClientLoyaltyGrantPost = AssertNonNever<
   paths['/api/v1/clients/{client_id}/loyalty/grant']['post']
 >
-type _ClientCheckoutMembershipBody = AssertNonNever<
-  paths['/api/v1/client/checkout/memberships/{plan_id}']['post']['requestBody']
+type _ClientCheckoutLoyaltyField = AssertNonNever<
+  NonNullable<
+    paths['/api/v1/client/checkout/memberships/{plan_id}']['post']['requestBody']
+  >['content']['application/json']['loyaltyRedeemKopecks']
 >
 
 const _v23Checks: [
   _ClientLoyaltyBalanceGet,
   _ClientLoyaltyHistoryGet,
   _ClientLoyaltyGrantPost,
-  _ClientCheckoutMembershipBody,
+  _ClientCheckoutLoyaltyField,
 ] = [true, true, true, true]
 
 describe('schema.contract', () => {
